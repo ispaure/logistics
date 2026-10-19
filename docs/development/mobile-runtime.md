@@ -199,6 +199,18 @@ tab selection mounts its root without recursively activating a destination;
 direct settings-detail actions initialize the root before pushing their detail.
 Navigation and resize callbacks reflow Settings only while that destination is
 visible. Selecting it again measures the retained controls at the current width.
+Settings itself retains its category menu and constructs/presents each category
+only when first selected (or when the initial wide layout displays App).
+`SettingsPages` preserves menu order and membership without constructing pages.
+Reflow fits only the sidebar and displayed category; hidden pages adopt the
+current width when revisited. Category highlights update only when their state
+changes, and Apple text fitting reuses a measurement label after checking the
+text/width/font cache. About's build-information lookup runs only on opening About.
+Reload preferences explicitly rebuilds category factories; ordinary visits reuse
+their controls. Saving preferences reads only the controls already constructed,
+preserving preference values belonging to unopened categories.
+Restore/clear-on-restart switches do not rebuild the unrelated Documents list;
+font changes retain their existing editor/overview refresh.
 
 A browser file tap publishes selection and opens the document directly. It does
 not first await the browser's detailed metadata callback; explicit information

@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import sys
+from collections.abc import Mapping
 
 import toga
 from toga.style import Pack
@@ -36,8 +37,9 @@ def fit_text(control, width):
     """Fit retained text to its pane using the actual native font on Apple."""
     control._settings_available_width = width
     previous = getattr(control, '_settings_rendered_text', None)
-    if control.text != previous:
-        control._settings_source_text = control.text
+    current = control.text
+    if current != previous:
+        control._settings_source_text = current
     source = control._settings_source_text
     button = isinstance(control, toga.Button)
     width = max(24, width - (24 if button else 0)
@@ -53,15 +55,18 @@ def fit_text(control, width):
         from rubicon.objc import ObjCClass, CGSize
         native = control._impl.native
         font = native.titleLabel.font if button else native.font
-        ruler = ObjCClass('UILabel').new()
+        line_height = float(font.lineHeight)
+    key = (source, width, line_height)
+    if getattr(control, '_settings_fit_key', None) == key and current == previous:
+        return
+    if type(control._impl).__module__.startswith('toga_iOS.'):
+        ruler = getattr(control, '_settings_ruler', None)
+        if ruler is None:
+            ruler = control._settings_ruler = ObjCClass('UILabel').new()
         ruler.font = font
         def measure(text):
             ruler.text = text
             return float(ruler.sizeThatFits(CGSize(100000, 100000)).width)
-        line_height = float(font.lineHeight)
-    key = (source, width, line_height)
-    if getattr(control, '_settings_fit_key', None) == key and control.text == previous:
-        return
     control._settings_fit_key = key
     rendered = wrap_text(source, width, measure)
     if rendered != control.text:
@@ -398,21 +403,43 @@ def speech_voice_setting(app):
         style=Pack(direction=COLUMN))
 
 
+class SettingsPages(Mapping):
+    """Retain category order while constructing each native page on demand."""
+    def __init__(self, factories):
+        self.factories, self.built = factories, {}
+
+    def __iter__(self):
+        return iter(self.factories)
+
+    def __len__(self):
+        return len(self.factories)
+
+    def __contains__(self, title):
+        return title in self.factories
+
+    def __getitem__(self, title):
+        if title not in self.built:
+            self.built[title] = self.factories[title]()
+        return self.built[title]
+
+
 class SettingsNavigation(toga.Box):
     """Window-local categories with native compact routes and retained wide panes."""
     def __init__(self, app, sections):
         super().__init__(style=Pack(direction=ROW, flex=1))
         self.owner = app
-        self.sections = sections
         from .appearance import surface, list_button
-        for section in sections.values():
+        def build(value):
+            section = value() if callable(value) else value
             surface(section, radius=0, background='settings_background', outlined=False, eink_outlined=False)
             settings_presentation(section)
+            return section
+        self.sections = SettingsPages({title: lambda value=value: build(value) for title, value in sections.items()})
         self.selected = next(iter(sections))
         self.wide = None
         self._reflowing = False
-        self.options = {title: toga.ScrollContainer(horizontal=False, content=section,
-                       style=Pack(flex=1)) for title, section in sections.items()}
+        self.options = SettingsPages({title: lambda title=title: toga.ScrollContainer(horizontal=False,
+            content=self.sections[title], style=Pack(flex=1)) for title in sections})
         self.buttons = {}
         from .control_icons import button_icons
         surface(self, radius=0, background='settings_background', outlined=False, eink_outlined=False)
@@ -451,7 +478,8 @@ class SettingsNavigation(toga.Box):
         if not self.owner.checkpoint():
             return
         self.selected = title
-        self.update_selection()
+        self.update_selection(show_detail=True)
+        fit_section(self.sections[title], self.detail_width)
         view = self.options[title]
         self.detach(view)
         if self.wide:
@@ -461,19 +489,23 @@ class SettingsNavigation(toga.Box):
         else:
             self.owner.show_view(view, destination='settings', route='settings-category', title=title)
 
-    def update_selection(self):
+    def update_selection(self, *, show_detail=False):
         from .folder_hub_style import source_tab
         from .appearance import surface
         status = self.owner.settings_status
-        section = self.sections[self.selected]
-        if status.parent is not section:
-            self.detach(status)
-            section.add(status)
+        if show_detail:
+            section = self.sections[self.selected]
+            if status.parent is not section:
+                self.detach(status)
+                section.add(status)
         for title, button in self.buttons.items():
             selected = bool(self.wide and title == self.selected)
+            if getattr(button, '_settings_selected', None) == selected:
+                continue
             source_tab(button, selected)
             surface(button, radius=8, background='hover' if selected else 'transparent',
                     foreground='text', outlined=False, eink_outlined=False, eink_selected=selected)
+            button._settings_selected = selected
 
     def reflow(self):
         if self._reflowing:
@@ -497,8 +529,7 @@ class SettingsNavigation(toga.Box):
         sidebar_width = (width * seam if seam is not None
                          else min(320, max(240, width * .32)))
         detail_width = width - sidebar_width if self.wide else width
-        for section in self.sections.values():
-            fit_section(section, detail_width)
+        self.detail_width = detail_width
         fit_section(self.sidebar.content, sidebar_width if self.wide else width)
         if self.wide:
             self.sidebar.style.flex = 0
@@ -528,4 +559,136 @@ class SettingsNavigation(toga.Box):
                 self.remove(self.detail)
             if was_wide and active and not screens:
                 self.choose(self.selected)
-        self.update_selection()
+        self.update_selection(show_detail=self.wide or category_on_top)
+        if self.wide or category_on_top:
+            fit_section(self.sections[self.selected], detail_width)
+
+
+def settings_sections(app):
+    """Create preference controls only when their category is first opened."""
+    from .hub_ui import heading
+    app.settings_status = SettingsLabel(app.preferences.error, style=Pack(margin_top=12))
+    def category(title):
+        box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        box.add(heading(title))
+        return box
+
+    def application():
+        box = category('App')
+        app.restore_choice = toga.Switch('Restore last document',
+            value=app.preferences.values['restore_last_document'] == 'true', style=Pack(height=48))
+        app.clear_documents_choice = toga.Switch('Clear on restart',
+            value=app.preferences.values['clear_unmodified_documents_on_restart'] == 'true',
+            style=Pack(height=48))
+        box.add(switch_row(app, 'Restore last document', app.restore_choice,
+            'Resume the last active document when the app starts, including ordinary EPUB and comic readers. '
+            'Private documents are never restored.'))
+        box.add(switch_row(app, 'Close saved documents on restart', app.clear_documents_choice,
+            'Closes documents with no pending changes in Open documents when the app restarts. '
+            'Stored documents, reading progress and unsaved drafts are kept.'))
+        box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
+        box.add(toga.Button('Reload preferences', on_press=app.reload_preferences, style=Pack(height=48)))
+        if app.scene_manager.supported:
+            box.add(toga.Button('New window', on_press=app.scene_manager.new_window, style=Pack(height=48)))
+            if app.window_id != 'primary':
+                box.add(toga.Button('Close window', on_press=lambda widget, **kw:
+                    app.scene_manager.close_window(app), style=Pack(height=48)))
+        app.restore_choice.on_change = app.save_preferences
+        app.clear_documents_choice.on_change = app.save_preferences
+        return box
+
+    def appearance():
+        box = category('Appearance')
+        app.android_eink_choice = toga.Switch('High contrast / E Ink',
+            value=app.preferences.values['android_eink'] == 'true', style=Pack(height=48))
+        box.add(switch_row(app, 'High contrast / E Ink', app.android_eink_choice,
+            'Use black text on white, strong borders and simpler controls. Overrides dark mode and reader colors '
+            'without changing images or files. Saved immediately. No BOOX hardware refresh control.'))
+        app.android_eink_choice.on_change = app.change_android_eink
+        return box
+
+    def speech():
+        box = category('Read aloud')
+        box.add(speech_voice_setting(app))
+        app.session_speech_choice = toga.Switch('Session-only speech while locked',
+            value=app.preferences.values['session_speech_when_locked'] == 'true',
+            on_change=app.change_session_speech, style=Pack(height=48))
+        box.add(switch_row(app, 'Session-only speech while locked', app.session_speech_choice,
+            'Allow already-started read-aloud from session-only credentials to keep playing '
+            'and show system playback controls while locked. Off by default. This choice is saved. '
+            'It does not unlock credentials or permit new file reads while locked.'))
+        return box
+
+    def text():
+        box = category('Text & Markdown')
+        box.add(toga.Label('Editor and preview font size'))
+        app.font_choice = toga.Selection(items=[str(size) for size in range(12, 33)],
+            value=app.preferences.values['font_size'], style=Pack(height=48))
+        app.font_choice.on_change = app.save_preferences
+        box.add(app.font_choice)
+        return box
+
+    def books():
+        box = category('Books & Comics')
+        from .magnifier import setting
+        box.add(toga.Label('Comic & PDF magnifier zoom'))
+        app.magnifier_choice = setting(app)
+        box.add(app.magnifier_choice)
+        box.add(toga.Label('Keep holding; tap −/+ just outside the lens’s upper corners.\nShared across comics and PDFs. Saved immediately.', style=Pack(font_size=12)))
+        box.add(toga.Button('Saved books & comics…', on_press=app.show_saved_files, style=Pack(height=48)))
+        box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
+        return box
+
+    def chat():
+        box = category('LM Chat')
+        box.add(toga.Button('Server & generation settings…', on_press=app.show_chat_configuration, style=Pack(height=48)))
+        return box
+
+    def workspaces():
+        box = category('Workspaces')
+        if type(app._impl).__module__.startswith('toga_android.'):
+            box.add(toga.Button('Local / LocalCrypt location…', on_press=app.show_collection_storage, style=Pack(height=48)))
+        app.show_legacy_choice = toga.Switch('Show Legacy',
+            value=getattr(app, 'show_legacy_session', False),
+            on_change=app.change_show_legacy, style=Pack(height=48))
+        box.add(switch_row(app, 'Show Legacy', app.show_legacy_choice,
+            'Show Legacy- folders in Workspaces, file browsers and library shortcuts, '
+            'and credential choices whose names start with Legacy. This choice lasts only until the app closes.'))
+        box.add(toga.Button('rclone connections…', on_press=app.show_cloud_connections, style=Pack(height=48)))
+        box.add(toga.Button('SMB shares…', on_press=app.show_smb_connection, style=Pack(height=48)))
+        return box
+
+    def reset():
+        box = category('Reset')
+        box.add(toga.Button('Erase all app data…', on_press=app.show_app_reset, style=Pack(height=48)))
+        box.add(SettingsLabel('Delete private files, local app data, settings and metadata. Review the full scope before confirming.'))
+        return box
+
+    def help():
+        box = category('Help')
+        if type(app._impl).__module__.startswith('toga_android.'):
+            box.add(toga.Button('Developer settings…', on_press=app.open_android_developer_settings, style=Pack(height=48)))
+        from .documentation_ui import show_documentation
+        box.add(toga.Button('Mobile documentation', on_press=lambda widget, **kw: show_documentation(app),
+                            style=Pack(height=48)))
+        return box
+
+    def about():
+        box = category('About')
+        app.build_version_label = toga.Label(build_information(app.version),
+            style=Pack(font_size=12, color='#808080'))
+        box.add(app.build_version_label)
+        return box
+
+    sections = {'App': application}
+    if type(app._impl).__module__.startswith('toga_android.'):
+        sections['Appearance'] = appearance
+    sections['Read aloud'] = speech
+    sections['Text & Markdown'] = text
+    sections['Books & Comics'] = books
+    sections['LM Chat'] = chat
+    sections['Workspaces'] = workspaces
+    sections['Reset'] = reset
+    sections['Help'] = help
+    sections['About'] = about
+    return sections

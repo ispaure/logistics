@@ -4,19 +4,99 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
 
 from logisticsmobile.app import LogisticsMobile
 from logisticsmobile.settings_ui import build_information
 
 
 class SettingsUITests(unittest.TestCase):
+    def make_app(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        LogisticsMobile.storage_root = Path(directory.name)
+        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+        app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.addCleanup(app.loop.close)
+        self.addCleanup(app.main_window.close)
+        return app
+
+    def test_phone_menu_defers_categories_and_about_and_reuses_existing_pages(self):
+        from logisticsmobile.preferences import Preferences
+        app = self.make_app()
+        with patch.object(app.adaptive, 'content_width', return_value=390), \
+                patch('logisticsmobile.settings_ui.build_information', return_value='Fixture build') as about:
+            app.show_settings()
+            nav = app.settings_navigation
+            self.assertEqual(nav.sections.built, {})
+            self.assertIn('About', nav.sections)
+            self.assertEqual(nav.sections.built, {})
+            nav.reflow()
+            about.assert_not_called()
+            app.show_settings()
+            self.assertIs(app.settings_navigation, nav)
+            nav.choose('Text & Markdown')
+            font = app.font_choice
+            font.value = '23'
+            self.assertFalse(hasattr(app, 'restore_choice'))
+            saved = Preferences(app.private_root).values
+            self.assertEqual(saved['font_size'], '23')
+            self.assertEqual(saved['restore_last_document'], 'true')
+            nav.choose('About')
+            about.assert_called_once()
+            nav.choose('Text & Markdown')
+            self.assertIs(app.font_choice, font)
+            nav.choose('About')
+            about.assert_called_once()
+            self.assertEqual(set(nav.sections.built), {'Text & Markdown', 'About'})
+            app.reload_preferences()
+            self.assertIsNot(app.settings_navigation, nav)
+            self.assertFalse(hasattr(app, 'font_choice'))
+            app.settings_navigation.choose('Text & Markdown')
+            self.assertEqual(app.font_choice.value, '23')
+
+    def test_apple_fitting_reuses_measurement_label_and_skips_unchanged_text(self):
+        import toga
+        from logisticsmobile.settings_ui import fit_text
+        label = toga.Label('A preference label that can wrap')
+        label._impl.native = SimpleNamespace(font=SimpleNamespace(lineHeight=22))
+        ruler = SimpleNamespace(text='', font=None)
+        ruler.sizeThatFits = lambda size: SimpleNamespace(width=len(ruler.text) * 8)
+        factory = Mock()
+        factory.return_value.new.return_value = ruler
+        objc = SimpleNamespace(ObjCClass=factory, CGSize=lambda width, height: (width, height))
+        with patch.object(type(label._impl), '__module__', 'toga_iOS.widgets.label'), \
+                patch.dict('sys.modules', {'rubicon.objc': objc}):
+            fit_text(label, 100)
+            factory.assert_called_once_with('UILabel')
+            first = label.text
+            fit_text(label, 100)
+            self.assertEqual(label.text, first)
+            fit_text(label, 200)
+            factory.assert_called_once()
+            self.assertLess(len(label.text.splitlines()), len(first.splitlines()))
+
+    def test_restore_settings_do_not_refresh_unrelated_document_lists(self):
+        app = self.make_app()
+        with patch.object(app.adaptive, 'content_width', return_value=390):
+            app.show_settings()
+            app.settings_navigation.choose('App')
+            with patch.object(app, 'refresh_document_overview') as documents:
+                app.restore_choice.value = False
+                app.clear_documents_choice.value = False
+                documents.assert_not_called()
+            self.assertEqual(app.preferences.values['restore_last_document'], 'false')
+            self.assertEqual(app.preferences.values['clear_unmodified_documents_on_restart'], 'false')
+
     def test_help_order_dialog_and_about_at_bottom(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile', version='0.1.5')
             app.show_settings()
+            app.settings_navigation.sections['App']
+            app.settings_navigation.sections['Text & Markdown']
             box = app.settings_navigation.sections['About']
             for switch, title in ((app.restore_choice, 'Restore last document'),
                                   (app.clear_documents_choice, 'Close saved documents on restart')):

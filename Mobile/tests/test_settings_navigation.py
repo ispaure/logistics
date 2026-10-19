@@ -103,7 +103,7 @@ class SettingsNavigationTests(unittest.TestCase):
     def test_android_and_ios_have_categories_and_only_android_has_appearance(self):
         for backend, appearance in (('toga_android.app', True), ('toga_iOS.app', False)):
             with self.subTest(backend=backend), patch.object(type(self.app._impl), '__module__', backend):
-                self.app.show_settings()
+                self.app.show_settings(rebuild=True)
                 nav = self.app.settings_navigation
                 self.assertEqual('Appearance' in nav.sections, appearance)
                 self.assertIn('Workspaces', nav.sections)
@@ -137,10 +137,12 @@ class SettingsNavigationTests(unittest.TestCase):
             self.assertGreater(len(hint.text.splitlines()), len(original.splitlines()))
         self.width.return_value = 1400
         nav.reflow()
-        self.assertEqual(button.text, 'Server & generation settings…')
-        self.assertEqual(button.style.height, 52)
         self.assertEqual(hint.text, original)
         self.assertEqual(nav.selected, 'Books & Comics')
+        # Hidden categories fit their new pane width when revisited.
+        nav.choose('LM Chat')
+        self.assertEqual(button.text, 'Server & generation settings…')
+        self.assertEqual(button.style.height, 52)
 
     def test_changed_status_is_rewrapped_from_the_new_message(self):
         self.width.return_value = 600

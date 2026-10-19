@@ -31,6 +31,8 @@ class MobileUITests(unittest.TestCase):
             self.assertEqual(app.native_host.state.destination, 'home')
             self.assertEqual(app.body.children[0].content.children[0].text, 'Your workspace')
             app.show_settings()
+            app.settings_navigation.sections['App']
+            app.settings_navigation.sections['Text & Markdown']
             app.font_choice.value = '20'
             app.restore_choice.value = False
             app.save_preferences()

@@ -601,97 +601,12 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             box.add(toga.Button(title, on_press=command, style=Pack(height=48)))
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), route='actions', title='Document actions')
 
-    def show_settings(self, widget=None, *, present=True, **kwargs):
-        from .hub_ui import heading
-        from .settings_ui import switch_row, build_information, speech_voice_setting, SettingsNavigation, SettingsLabel
-        sections = {}
-        def category(title):
-            section = toga.Box(style=Pack(direction=COLUMN, margin=16))
-            section.add(heading(title))
-            sections[title] = section
-            return section
-        box = category('App')
-        self.font_choice = toga.Selection(items=[str(size) for size in range(12, 33)],
-            value=self.preferences.values['font_size'], style=Pack(height=48))
-        self.restore_choice = toga.Switch('Restore last document',
-            value=self.preferences.values['restore_last_document'] == 'true', style=Pack(height=48))
-        self.clear_documents_choice = toga.Switch('Clear on restart',
-            value=self.preferences.values['clear_unmodified_documents_on_restart'] == 'true',
-            style=Pack(height=48))
-        self.settings_status = SettingsLabel(self.preferences.error, style=Pack(margin_top=12))
-        box.add(switch_row(self, 'Restore last document', self.restore_choice,
-            'Resume the last active document when the app starts, including ordinary EPUB and comic readers. '
-            'Private documents are never restored.'))
-        box.add(switch_row(self, 'Close saved documents on restart', self.clear_documents_choice,
-            'Closes documents with no pending changes in Open documents when the app restarts. '
-            'Stored documents, reading progress and unsaved drafts are kept.'))
-        if type(self._impl).__module__.startswith('toga_android.'):
-            box = category('Appearance')
-            self.android_eink_choice = toga.Switch('High contrast / E Ink',
-                value=self.preferences.values['android_eink'] == 'true', style=Pack(height=48))
-            box.add(switch_row(self, 'High contrast / E Ink', self.android_eink_choice,
-                'Use black text on white, strong borders and simpler controls. Overrides dark mode and reader colors '
-                'without changing images or files. Saved immediately. No BOOX hardware refresh control.'))
-            self.android_eink_choice.on_change = self.change_android_eink
-        box = category('Read aloud')
-        box.add(speech_voice_setting(self))
-        self.session_speech_choice = toga.Switch('Session-only speech while locked',
-            value=self.preferences.values['session_speech_when_locked'] == 'true',
-            on_change=self.change_session_speech, style=Pack(height=48))
-        box.add(switch_row(self, 'Session-only speech while locked', self.session_speech_choice,
-            'Allow already-started read-aloud from session-only credentials to keep playing '
-            'and show system playback controls while locked. Off by default. This choice is saved. '
-            'It does not unlock credentials or permit new file reads while locked.'))
-        box = category('Text & Markdown')
-        box.add(toga.Label('Editor and preview font size'))
-        box.add(self.font_choice)
-        box = category('Books & Comics')
-        from .magnifier import setting
-        box.add(toga.Label('Comic & PDF magnifier zoom'))
-        self.magnifier_choice = setting(self)
-        box.add(self.magnifier_choice)
-        box.add(toga.Label('Keep holding; tap −/+ just outside the lens’s upper corners.\nShared across comics and PDFs. Saved immediately.', style=Pack(font_size=12)))
-        box.add(toga.Button('Saved books & comics…', on_press=self.show_saved_files, style=Pack(height=48)))
-        box.add(toga.Label('Use Appearance in an open reader\nto adjust its pages.', style=Pack(font_size=12)))
-        box = category('LM Chat')
-        box.add(toga.Button('Server & generation settings…', on_press=self.show_chat_configuration, style=Pack(height=48)))
-        box = category('Workspaces')
-        if type(self._impl).__module__.startswith('toga_android.'):
-            box.add(toga.Button('Local / LocalCrypt location…', on_press=self.show_collection_storage, style=Pack(height=48)))
-        self.show_legacy_choice = toga.Switch('Show Legacy',
-            value=getattr(self, 'show_legacy_session', False),
-            on_change=self.change_show_legacy, style=Pack(height=48))
-        box.add(switch_row(self, 'Show Legacy', self.show_legacy_choice,
-            'Show Legacy- folders in Workspaces, file browsers and library shortcuts, '
-            'and credential choices whose names start with Legacy. This choice lasts only until the app closes.'))
-        box.add(toga.Button('rclone connections…', on_press=self.show_cloud_connections, style=Pack(height=48)))
-        box.add(toga.Button('SMB shares…', on_press=self.show_smb_connection, style=Pack(height=48)))
-        box = sections['App']
-        box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
-        box.add(toga.Button('Reload preferences', on_press=self.reload_preferences, style=Pack(height=48)))
-        box.add(self.settings_status)
-        if self.scene_manager.supported:
-            box.add(toga.Button('New window', on_press=self.scene_manager.new_window, style=Pack(height=48)))
-            if self.window_id != 'primary':
-                box.add(toga.Button('Close window', on_press=lambda widget, **kw:
-                    self.scene_manager.close_window(self), style=Pack(height=48)))
-        box = category('Reset')
-        box.add(toga.Button('Erase all app data…', on_press=self.show_app_reset, style=Pack(height=48)))
-        box.add(SettingsLabel('Delete private files, local app data, settings and metadata. Review the full scope before confirming.'))
-        box = category('Help')
-        if type(self._impl).__module__.startswith('toga_android.'):
-            box.add(toga.Button('Developer settings…', on_press=self.open_android_developer_settings, style=Pack(height=48)))
-        from .documentation_ui import show_documentation
-        box.add(toga.Button('Mobile documentation', on_press=lambda widget, **kw: show_documentation(self),
-                            style=Pack(height=48)))
-        box = category('About')
-        self.build_version_label = toga.Label(build_information(self.version),
-            style=Pack(font_size=12, color='#808080'))
-        box.add(self.build_version_label)
-        self.font_choice.on_change = self.save_preferences
-        self.restore_choice.on_change = self.save_preferences
-        self.clear_documents_choice.on_change = self.save_preferences
-        self.settings_navigation = SettingsNavigation(self, sections)
+    def show_settings(self, widget=None, *, present=True, rebuild=False, **kwargs):
+        from .settings_ui import SettingsNavigation, settings_sections
+        if rebuild or not hasattr(self, 'settings_navigation'):
+            for name in ('font_choice', 'restore_choice', 'clear_documents_choice'):
+                self.__dict__.pop(name, None)
+            self.settings_navigation = SettingsNavigation(self, settings_sections(self))
         if present:
             self.show_view(self.settings_navigation, destination='settings', root=True)
         else:
@@ -744,11 +659,18 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
 
     def save_preferences(self, widget=None, **kwargs):
         try:
-            self.preferences.save(font_size=self.font_choice.value,
-                clear_unmodified_documents_on_restart='true' if self.clear_documents_choice.value else 'false',
-                restore_last_document='true' if self.restore_choice.value else 'false')
-            self.editor.style.font_size = int(self.preferences.values['font_size'])
-            self.refresh_document_overview()
+            previous_font = self.preferences.values['font_size']
+            changes = {}
+            if hasattr(self, 'font_choice'):
+                changes['font_size'] = self.font_choice.value
+            for name, key in (('clear_documents_choice', 'clear_unmodified_documents_on_restart'),
+                              ('restore_choice', 'restore_last_document')):
+                if hasattr(self, name):
+                    changes[key] = 'true' if getattr(self, name).value else 'false'
+            self.preferences.save(**changes)
+            if self.preferences.values['font_size'] != previous_font:
+                self.editor.style.font_size = int(self.preferences.values['font_size'])
+                self.refresh_document_overview()
             self.settings_status.text = 'Preferences saved on this device.'
         except (OSError, ValueError) as error:
             self.settings_status.text = str(error)
@@ -764,7 +686,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.refresh_folder_visibility()
         self.editor.style.font_size = int(self.preferences.values['font_size'])
         self.refresh_document_overview()
-        self.show_settings()
+        self.show_settings(rebuild=True)
 
     def show_preview(self, widget=None, **kwargs):
         if self.current is None or not self.checkpoint():

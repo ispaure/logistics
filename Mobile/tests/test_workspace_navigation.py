@@ -91,6 +91,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertFalse(app.folder_path_visible('Legacy-old/book.cbz', directory=False))
             self.assertTrue(app.folder_path_visible('Books/Legacy-file.cbz', directory=False))
             app.show_settings()
+            app.settings_navigation.choose('Workspaces')
             app.show_legacy_choice.value = True
             self.assertTrue(app.folder_path_visible('Legacy-old'))
             self.assertEqual(Preferences(app.preferences.path.parent).values['show_legacy'], 'false')
@@ -100,6 +101,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertFalse(app.folder_path_visible('Legacy-old'))
             app.reload_preferences()
             self.assertFalse(app.folder_path_visible('Legacy-old'))
+            app.settings_navigation.choose('Workspaces')
             app.show_legacy_choice.value = True
             app.reload_preferences()
             self.assertTrue(app.folder_path_visible('Legacy-old'))
@@ -110,6 +112,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         from types import SimpleNamespace
         app = self.app
         app.show_settings()
+        app.settings_navigation.choose('Workspaces')
         self.assertIsNotNone(app.show_legacy_choice.parent)
         for backend in ('toga_android.app', 'toga_iOS.app'):
             with self.subTest(backend=backend), patch.object(type(app._impl), '__module__', backend):
