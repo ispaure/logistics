@@ -42,6 +42,7 @@ class StorageUI:
     def show_collection_storage(self, widget=None, **kwargs):
         from .settings_ui import SettingsLabel, fit_section
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        self.collection_storage_page = box
         box.add(SettingsLabel('Collection storage', style=Pack(font_size=22)))
         try:
             base = collection_base(self.private_root)

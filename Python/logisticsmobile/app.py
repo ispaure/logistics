@@ -258,11 +258,19 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.editor_view.session.view['markdown_mode'] = 'edit'
 
     def resize_workspace(self, widget=None, *args, **kwargs):
+        from .settings_ui import fit_section
+        if getattr(self, '_reset_scheduled', False):
+            fit_section(self.main_window.content, self.main_window.size.width)
+            return
         for overlay in tuple(getattr(self, '_speech_overlays', ())):
             overlay.reposition()
         self.adaptive.render()
         if hasattr(self, 'settings_navigation'):
             self.settings_navigation.reflow()
+        for name in ('collection_storage_page', 'reset_page'):
+            page = getattr(self, name, None)
+            if page is not None:
+                fit_section(page, max(280, self.adaptive.content_width('settings')))
         for name in ('cloud_connections_view', 'cloud_import_view', 'smb_view'):
             page = getattr(self, name, None)
             if page is not None:

@@ -2,6 +2,7 @@
 from pathlib import Path
 import plistlib
 import shutil
+import subprocess
 
 ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / 'privacy/OpenSSL.xcprivacy'
@@ -41,7 +42,12 @@ def configure_app_manifest(project):
     if len(projects) != 1:
         raise ValueError('Expected one generated Xcode project for the app privacy manifest.')
     path = projects[0]
-    data = plistlib.loads(path.read_bytes())
+    try:
+        data = plistlib.loads(path.read_bytes())
+    except plistlib.InvalidFileException:
+        # A newly generated project is OpenStep; older configured projects
+        # are XML. Apple's parser accepts both without guessing their syntax.
+        data = plistlib.loads(subprocess.check_output(['plutil', '-convert', 'xml1', '-o', '-', str(path)]))
     objects = data['objects']
     groups = [item for item in objects.values() if item.get('isa') == 'PBXGroup' and item.get('path') == 'LogisticsMobile']
     resources = [item for item in objects.values() if item.get('isa') == 'PBXResourcesBuildPhase']
