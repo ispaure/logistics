@@ -53,6 +53,11 @@ class Probe(LogisticsMobile):
             self.show_documents(edit=True)
             owner = self.editor_view
             web = owner.formatted.view
+            ios = type(self._impl).__module__.startswith('toga_iOS.')
+            if ios:
+                controller = self.native_host.adapter.controller
+                report['tabs_before_keyboard'] = bool(controller.isTabBarHidden())
+                assert not report['tabs_before_keyboard']
             await asyncio.sleep(.7)
             await web.evaluate_javascript("""(() => {
                 const root = document.getElementById('document');
@@ -74,6 +79,17 @@ class Probe(LogisticsMobile):
             if type(self._impl).__module__.startswith('toga_iOS.'):
                 report['markdown_keyboard_inset'] = self.native_host.adapter.keyboard_inset
                 assert report['markdown_keyboard_inset'] > 100, 'Markdown software keyboard did not open'
+                assert bool(controller.isTabBarHidden()), 'Destination tabs stayed above the keyboard'
+                # Measure the actual space recovered, not only a hidden flag.
+                controller.setTabBarHidden(False, animated=False)
+                await asyncio.sleep(.4)
+                with_tabs = json.loads(await web.evaluate_javascript(MEASURE))['height']
+                controller.setTabBarHidden(True, animated=False)
+                await asyncio.sleep(.4)
+                without_tabs = json.loads(await web.evaluate_javascript(MEASURE))['height']
+                report['writing_area'] = dict(with_tabs=with_tabs, without_tabs=without_tabs,
+                                              gained=without_tabs - with_tabs)
+                assert without_tabs >= with_tabs + 20, report['writing_area']
             for index in range(16):
                 await web.evaluate_javascript("document.execCommand('insertText', false, ' typing continues');")
                 await asyncio.sleep(.08)
@@ -92,6 +108,8 @@ class Probe(LogisticsMobile):
             if type(self._impl).__module__.startswith('toga_iOS.'):
                 self.main_window._impl.native.endEditing(True)
                 await asyncio.sleep(.4)
+                report['tabs_after_markdown_dismissal'] = bool(controller.isTabBarHidden())
+                assert not report['tabs_after_markdown_dismissal']
                 # Both plain text and Markdown Source use the same native input.
                 for name in ('Typing.txt', 'Source.md'):
                     document = self.store.create(name, ('A long editable line\n' * 150).encode())
@@ -107,6 +125,7 @@ class Probe(LogisticsMobile):
                     native.selectedRange = NSRange(len(owner.document.text), 0)
                     native.scrollRangeToVisible(native.selectedRange)
                     await asyncio.sleep(.7)
+                    assert bool(controller.isTabBarHidden()), (name, 'Destination tabs stayed visible')
                     for index in range(12):
                         native.insertText('Native typing\n')
                         await asyncio.sleep(.08)
@@ -121,6 +140,7 @@ class Probe(LogisticsMobile):
                     await capture_window(self, output / (name + '.png'))
                     self.main_window._impl.native.endEditing(True)
                     await asyncio.sleep(.3)
+                    assert not bool(controller.isTabBarHidden()), (name, 'Destination tabs did not restore')
             report['success'] = True
         except BaseException:
             report['error'] = traceback.format_exc()

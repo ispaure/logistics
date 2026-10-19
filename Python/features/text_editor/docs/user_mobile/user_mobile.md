@@ -99,3 +99,7 @@ Remote libraries have no search or recursive index; folders load only when
 expanded. Local filtering searches only loaded note names. Notes are read-only
 in this view and limited to 2 MiB. Hidden configuration is excluded and links
 stay inside the library.
+
+On iOS, Home, Workspaces and the other destination tabs hide while the software
+keyboard is open, giving the document more writing space. They return when the
+keyboard closes. This applies to formatted Markdown, Source and plain text.
