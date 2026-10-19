@@ -38,6 +38,19 @@ async def approve_transfer(app, *, timeout=60):
     assert await app.transfer_task, app.transfer_message
 
 
+async def wait_for_held_review(app, held, *, timeout=30):
+    """Do not click the early action until the native result is actually held."""
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        view = getattr(app, '_transfer_review_view', None)
+        if view is not None and 'incomplete' in view.children[3].value and held.is_set():
+            return view
+        if app.transfer_task.done():
+            raise AssertionError('Native held review exited before its result was held: ' + app.transfer_message)
+        await asyncio.sleep(.05)
+    raise AssertionError('Native comparison never reached the held-result fixture: ' + app.transfer_message)
+
+
 async def exercise_reviews(app):
     from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
     store, client = app.mirror_store(), app.cloud_client
@@ -98,11 +111,12 @@ async def exercise_reviews(app):
     assert (await remote_files(client, job, leaf))[leaf] == physical.read_bytes()
     # Hold delivery of an actual native comparison result so the early action
     # can be exercised deterministically. Cancellation must retire it first.
-    released, returned = Event(), Event()
+    released, returned, held = Event(), Event(), Event()
     request, cancel = client.request, client.cancel
     def delayed(action, **values):
         result = request(action, **values)
         if action == 'mirror_review':
+            held.set()
             if not released.wait(30):
                 raise RuntimeError('Native review fixture was not released')
             returned.set()
@@ -116,11 +130,7 @@ async def exercise_reviews(app):
     with patch.object(client, 'request', side_effect=delayed), patch.object(client, 'cancel', side_effect=stop):
         app.begin_transfer_review(remote=job['remote'], folder='mobile-mirror-fixture', storage='Local')
         try:
-            for _ in range(600):
-                view = getattr(app, '_transfer_review_view', None)
-                if view is not None and 'incomplete' in view.children[3].value:
-                    break
-                await asyncio.sleep(.05)
+            view = await wait_for_held_review(app, held)
             assert len(store.jobs) == count, 'Review published a mapping before approval'
             with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
                 await view.children[-2].on_press()

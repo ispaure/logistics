@@ -2,7 +2,7 @@
 import asyncio
 from types import SimpleNamespace as State
 import unittest
-from Mobile.native_tests.tests.logisticsmobile.review_checks import approve_transfer
+from Mobile.native_tests.tests.logisticsmobile.review_checks import approve_transfer, wait_for_held_review
 
 
 class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
@@ -42,4 +42,23 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
         app, _ = self.app(changes=0, finish=False)
         with self.assertRaisesRegex(AssertionError, 'Checking that the completed review is still current'):
             await approve_transfer(app, timeout=.01)
+        self.assertFalse(app.transfer_task.cancelled())
+
+    async def test_early_review_waits_for_actual_held_result_not_just_visible_incomplete(self):
+        from threading import Event
+        app, _ = self.app(changes=0, finish=False)
+        app._transfer_review_view.children[3] = State(value='Review incomplete')
+        held = Event()
+        task = asyncio.create_task(wait_for_held_review(app, held, timeout=2))
+        await asyncio.sleep(.06)
+        self.assertFalse(task.done())
+        held.set()
+        self.assertIs(await task, app._transfer_review_view)
+
+    async def test_missing_held_native_result_fails_with_a_bound(self):
+        from threading import Event
+        app, _ = self.app(changes=0, finish=False)
+        app._transfer_review_view.children[3] = State(value='Review incomplete')
+        with self.assertRaisesRegex(AssertionError, 'never reached the held-result fixture'):
+            await wait_for_held_review(app, Event(), timeout=.01)
         self.assertFalse(app.transfer_task.cancelled())
