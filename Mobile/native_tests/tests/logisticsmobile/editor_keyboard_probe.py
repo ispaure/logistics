@@ -53,6 +53,8 @@ class Probe(LogisticsMobile):
             self.show_documents(edit=True)
             owner = self.editor_view
             web = owner.formatted.view
+            from tests.logisticsmobile.web_checks import wait_for_text
+            await wait_for_text(web, 'Paragraph 99.')
             ios = type(self._impl).__module__.startswith('toga_iOS.')
             if ios:
                 controller = self.native_host.adapter.controller
