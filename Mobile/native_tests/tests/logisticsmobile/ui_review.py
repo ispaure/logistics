@@ -1,6 +1,5 @@
 """Actual workflow screenshots in a disposable synthetic native test workspace."""
 import asyncio
-from pathlib import Path
 from commonUtils.runtime.platform import get_os, OS
 
 
@@ -303,8 +302,6 @@ async def exercise_ui_review(app):
     def editor_contrast(widget):
         native = widget._impl.native
         if get_os() is OS.IOS:
-            from rubicon.objc import ObjCClass
-            colour = ObjCClass('UIColor')
             traits = native.traitCollection
             actual = native.textColor.resolvedColorWithTraitCollection(traits)
             from logisticsmobile.appearance import apple_color
