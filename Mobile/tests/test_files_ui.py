@@ -6,6 +6,34 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class FileUITests(unittest.TestCase):
+    def test_cold_files_open_waits_for_initial_restore_before_building_browser(self):
+        import asyncio
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory).resolve()
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.assertFalse(app.cloud_busy)
+            self.assertIsNone(app.cloud_client)
+            self.assertFalse(hasattr(app, 'cloud_view'))
+            restored = []
+            original = app.show_cloud
+            def initialize(*args, **kwargs):
+                original(*args, **kwargs)
+                async def restore():
+                    await asyncio.sleep(0)
+                    self.assertFalse(hasattr(app, 'files_view'))
+                    restored.append(True)
+                app.cloud_restore_task = asyncio.create_task(restore())
+            try:
+                with patch.object(app, 'show_cloud', side_effect=initialize):
+                    app.loop.run_until_complete(app.show_files())
+                self.assertEqual(restored, [True])
+                self.assertIn('Local files', [row.value for row in app.file_storage.items])
+                self.assertIsNotNone(app.file_browser)
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
     def test_encrypted_provider_reads_during_transfer_without_allowing_mutations(self):
         from features.rclone.localcrypt.mobile.resources import CryptFiles
         with TemporaryDirectory() as directory:

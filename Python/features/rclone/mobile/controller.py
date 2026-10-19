@@ -9,6 +9,9 @@ class CloudController(CloudUI):
 
     def __init__(self, app):
         self.app = app
+        self.cloud_busy = False
+        self.cloud_client = None
+        self.remote_read_busy = False
 
     _crypt_cancel = HostAttribute('_crypt_cancel')
     _folder_opening = HostAttribute('_folder_opening')

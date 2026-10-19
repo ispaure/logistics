@@ -88,6 +88,16 @@ class FilesUI:
             return False
 
     async def show_files(self, widget=None, *, local_root=False, **kwargs):
+        # Files can be opened directly from Home/Documents on a cold launch.
+        # Initial credential restoration clears private browser state; finish
+        # it before constructing/publishing the new local browser controls.
+        if not hasattr(self, 'cloud_view'):
+            self.show_cloud(present=False)
+        restore = getattr(self, 'cloud_restore_task', None)
+        if restore is not None and not restore.done():
+            await asyncio.shield(restore)
+        if not self.active_host or getattr(self, '_storage_changing', False):
+            return
         try:
             collection_path(self.private_root)
         except (OSError, ValueError) as error:

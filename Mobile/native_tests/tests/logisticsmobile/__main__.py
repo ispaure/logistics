@@ -36,6 +36,12 @@ async def exercise(app):
         assert app.native_host.state.destination == 'home'
         assert [tab.text for tab in app.navigation.content] == ['Home', 'Workspaces', 'Documents', 'Chat', 'Settings']
         passed.append('native_hub')
+        # Exercise the direct Files entry before Workspaces/cloud setup. The
+        # initial credential restore must not empty a newly built local picker.
+        await app.show_files()
+        assert 'Local files' in [row.value for row in app.file_storage.items]
+        assert app.file_provider is not None and not app.file_browser.closed
+        app.show_home()
         from .navigation_checks import exercise_navigation
         navigation_proof = await exercise_navigation(app)
         passed.append('native_navigation_foundation')
