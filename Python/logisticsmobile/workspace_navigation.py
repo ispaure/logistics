@@ -93,14 +93,20 @@ def sync_reader_toolbar(app, view):
     if getattr(app, '_reader_toolbar_state', None) != state:
         # One group prevents iPad's combined tab/navigation bar from moving
         # individual custom-view actions into an unlabeled overflow item.
-        group = ObjCClass('UIView').alloc().initWithFrame(CGRect((0, 0), (44 * len(buttons), 44)))
+        group = ObjCClass('UIStackView').alloc().initWithFrame(CGRect((0, 0), (44 * len(buttons), 44)))
+        group.axis = 0
+        group.distribution = 1  # fill equally
+        group.alignment = 0  # fill
+        group.spacing = 0
         item = ObjCClass('UIBarButtonItem').alloc().initWithCustomView(group)
-        for index, button in enumerate(buttons):
+        for button in buttons:
             detach(button)
             button.app, button.window = app, app.main_window
             native = button._impl.native
-            native.frame = CGRect((44 * index, 0), (44, 44))
-            group.addSubview(native)
+            # Toga can refresh a detached widget's frame back to (0, 0).
+            # UIKit owns arranged-subview geometry after toolbar mounting.
+            native.translatesAutoresizingMaskIntoConstraints = False
+            group.addArrangedSubview(native)
             button._native_reader_item = item
         controller.navigationItem.rightBarButtonItems = [item] if buttons else []
         app._reader_toolbar_group = group

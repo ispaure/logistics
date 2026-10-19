@@ -43,8 +43,22 @@ async def exercise_ui_review(app):
     assert comic.read_bytes() == original
     app.readers.close(app.readers.active.session.id)
     screenshots = []
+    toolbar_checks = []
     async def capture(name):
         await asyncio.sleep(.4)
+        if get_os() is OS.IOS:
+            group = getattr(app, '_reader_toolbar_group', None)
+            window = group.window if group is not None else None
+            window = window() if callable(window) else window
+            children = group.subviews if group is not None else []
+            children = children() if callable(children) else children
+            if window is not None and len(children):
+                group.layoutIfNeeded()
+                frames = [(float(button.frame.origin.x), float(button.frame.size.width))
+                          for button in children]
+                assert all(width >= 40 and abs(x - 44 * index) < 1
+                           for index, (x, width) in enumerate(frames)), (name, frames)
+                toolbar_checks.append(name)
         path = app.storage_root / ('ui-review-' + name + '.png')
         from .fixtures import capture_window
         await capture_window(app, path)
@@ -374,5 +388,5 @@ async def exercise_ui_review(app):
         app._impl.native.getSystemService(Context.UI_MODE_SERVICE).setApplicationNightMode(UiModeManager.MODE_NIGHT_AUTO)
     from .workspace_checks import exercise_workspace
     workspace = await exercise_workspace(app)
-    return {**workspace, 'screenshots': screenshots, 'tap_to_open_tested': True,
+    return {**workspace, 'screenshots': screenshots, 'reader_toolbar_checks': toolbar_checks, 'tap_to_open_tested': True,
             'provider_preview_cleanup_tested': True, 'light_dark_contrast_tested': True, 'theme_change_retains_drafts': True, 'synthetic_workspace': True}
