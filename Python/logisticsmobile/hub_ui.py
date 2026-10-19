@@ -396,8 +396,10 @@ class HubUI:
         if destination == 'files' and self.window_id == 'primary':
             self.show_cloud(present=False)
             view = self.folder_picker_or_error()
-            view = self.adaptive.prepare(view, 'files', root=True)
             root = self.routes.roots['files']
+            if list(root.children) == [view]:
+                return
+            view = self.adaptive.prepare(view, 'files', root=True)
             self.routes.trim('files', 0)
             for child in list(root.children):
                 root.remove(child)

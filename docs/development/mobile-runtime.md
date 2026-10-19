@@ -358,6 +358,30 @@ Samsung delay was not reproduced in this emulator. Device CPU speed, actual
 storage and application state remain unmeasured; do not attribute the entire
 reported delay to these emulator results.
 
+### Retained Workspaces implementation
+
+Workspaces now retains its root page and controls between visits. Tab entry still
+runs local discovery and `update_folder_list`; the existing snapshot covers
+folder choices, network-share ownership, loaded/crypt remote names and visibility.
+Changed snapshots invalidate every source's rows, including detached tabs. An
+unchanged source retains its native rows and does not repaint the source buttons.
+Source and credential selection survive returning to the page. Transfer actions
+are reevaluated even when folder rows are reused. Explicit Refresh also checks
+lock state when names are unchanged. Discovery errors replace the page with the
+existing recovery actions and discard the failed page for a fresh retry.
+
+The attached root is not removed and reattached on an unchanged tab return.
+Detail routes retain their previous browser/Back behavior. The same emulator
+fixture measured warm Local callbacks at 12–13 ms and Cloud at 9–12 ms, with the
+next native draw at 20–31 ms. The first build of a source remains more expensive
+(126–143 ms callback in this run). These are emulator results, not an estimate of
+Samsung A15 latency. Native checks verify page/source reuse, lock/unlock changes,
+hidden-source invalidation and folder creation/removal. The mobile regression
+suite also covers credential filters, transfer actions, discovery recovery and
+reader/browser return routes. Native iOS simulator checks also pass for retained
+view parenting, source/credential selection, lock indicators, folder discovery,
+workspace actions and Back navigation.
+
 The probe must run only in a disposable QA application on a simulator/emulator.
 Copy it into that application's isolated Python payload and replace only the QA
 launcher with `main().main_loop()`. It writes `performance-evidence/result.json`,

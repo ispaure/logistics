@@ -144,6 +144,41 @@ class Probe(LogisticsMobile):
                     await sample('files', 'retained-root-' + str(index))
             finally:
                 HubUI.refresh_hub = original
+            page = self.folder_picker_view
+            self.change_folder_source('Local')
+            local_rows = self.folder_list.children[0]
+            self.change_folder_source('rclone')
+            cloud_rows = self.folder_list.children[0]
+            self.change_folder_source('Local')
+            assert self.folder_list.children[0] is local_rows
+            self.change_folder_source('rclone')
+            assert self.folder_list.children[0] is cloud_rows
+            original_names = self.loaded_remote_names
+            try:
+                self.loaded_remote_names = lambda: list(names)
+                self.select_destination('files')
+                assert self.folder_picker_view is page
+                assert all(self.folder_buttons[name].parent.children[0].control_icon == 'folder_unlocked'
+                           for name in names)
+                self.loaded_remote_names = lambda: []
+                self.select_destination('files')
+                assert all(self.folder_buttons[name].parent.children[0].control_icon == 'folder_locked'
+                           for name in names)
+                self.change_folder_source('Local')
+                assert all(self.folder_buttons[name].parent.children[0].control_icon == 'folder_locked'
+                           for name in names)
+            finally:
+                self.loaded_remote_names = original_names
+            folder = collection_path(self.private_root) / 'Added folder'
+            folder.mkdir(parents=True)
+            self.select_destination('files')
+            assert 'Added folder' in self.folder_buttons
+            folder.rmdir()
+            self.select_destination('files')
+            assert 'Added folder' not in self.folder_buttons
+            assert self.folder_picker_view is page
+            report['regressions'] = ['retained page', 'source row reuse', 'unlock icons',
+                                     'lock invalidates hidden sources', 'folder addition', 'folder removal']
             report['success'] = True
         except BaseException:
             report['error'] = traceback.format_exc()

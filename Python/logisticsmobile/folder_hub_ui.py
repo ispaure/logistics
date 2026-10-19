@@ -71,9 +71,9 @@ class FolderHubUI:
                 box = self.build_folder_picker(choices=choices)
                 self.show_view(box, destination='files', root=True)
             else:
-                credentials = self.credential_groups(source_choices(choices, 'rclone', self.network_share_remotes()))
-                if choices != self.folder_picker_choices or credentials != self.folder_credentials:
-                    self.update_folder_list(choices)
+                # Lock state and crypt metadata can change without changing
+                # folder names. The list's snapshot cache covers those too.
+                self.update_folder_list(choices)
         except (OSError, ValueError, IndexError, KeyError) as error:
             self.folder_hub_error = str(error)[:300]
             if hasattr(self, 'folder_loading_status'):
@@ -176,8 +176,16 @@ class FolderHubUI:
     def folder_picker_or_error(self):
         """A discovery failure must leave a usable page, including on tab entry."""
         try:
-            return self.build_folder_picker()
+            choices = self.folder_choices()
+            view = getattr(self, 'folder_picker_view', None)
+            if view is None:
+                view = self.build_folder_picker(choices=choices)
+            else:
+                self.update_folder_list(choices)
+            self.folder_hub_error = ''
+            return view
         except (OSError, ValueError, IndexError, KeyError) as error:
+            self.folder_picker_view = None
             self.folder_hub_error = str(error)[:300]
             async def local(widget=None, **kwargs):
                 await self.show_files(local_root=True)
@@ -213,6 +221,7 @@ class FolderHubUI:
         # Finish discovery before replacing references to the visible controls.
         choices = self.folder_choices() if choices is None else choices
         self.folder_source = getattr(self, 'folder_source', 'Local')
+        self.folder_source_styled = None
         self.folder_source_buttons = {}
         self.folder_source_tabs = surface(toga.Box(
             style=Pack(direction=ROW, margin_bottom=12)),
@@ -262,6 +271,7 @@ class FolderHubUI:
         self.register_transfer_status(box, visible_when=lambda: host.folder_source == 'rclone'
             and (getattr(host, 'transfer_busy', False)
                  or (getattr(host, 'transfer_notification', False) and not getattr(host, 'transfer_complete', False))))
+        self.folder_picker_view = box
         return box
 
     def update_folder_list(self, choices):
@@ -280,9 +290,11 @@ class FolderHubUI:
         visible = source_choices(choices, self.folder_source, network_remotes)
         if self.folder_source == 'rclone' and selected is not None:
             visible = credential_choices(visible, selected)
-        for source, button in self.folder_source_buttons.items():
-            source_tab(button, source == self.folder_source)
-            accessible_name(button, SOURCE_LABELS[source] + (' selected' if source == self.folder_source else ''))
+        if self.folder_source_styled != self.folder_source:
+            for source, button in self.folder_source_buttons.items():
+                source_tab(button, source == self.folder_source)
+                accessible_name(button, SOURCE_LABELS[source] + (' selected' if source == self.folder_source else ''))
+            self.folder_source_styled = self.folder_source
         if self.folder_source == 'rclone' and not self.folder_picker_header.children:
             self.folder_picker_header.add(self.folder_credential_row)
         elif self.folder_source != 'rclone' and self.folder_picker_header.children:

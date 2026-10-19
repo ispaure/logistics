@@ -38,6 +38,99 @@ class ResponsivenessTests(unittest.TestCase):
         app.select_destination('settings')
         self.assertIs(app.settings_navigation, navigation)
 
+    def test_workspace_return_reuses_page_controls_and_source_rows(self):
+        from logisticsmobile.folder_hub_ui import FolderHubUI
+        app = self.app
+        local = app.private_root / 'LocalFiles' / 'Notes'
+        local.mkdir(parents=True)
+        app.select_destination('files')
+        app.native_host.activate('files')
+        page = app.folder_picker_view
+        root = app.routes.roots['files']
+        rows = app.folder_list.children[0]
+        buttons = dict(app.folder_buttons)
+        app.select_destination('home')
+        app.native_host.activate('home')
+        with patch.object(FolderHubUI, 'build_folder_picker', side_effect=AssertionError('Rebuilt page')), \
+                patch('logisticsmobile.folder_hub_ui.source_tab') as style, \
+                patch.object(app.adaptive, 'prepare') as prepare:
+            self.assertTrue(app.select_destination('files'))
+        self.assertIs(app.folder_picker_view, page)
+        self.assertEqual(root.children, [page])
+        self.assertIs(app.folder_list.children[0], rows)
+        self.assertEqual(app.folder_buttons, buttons)
+        style.assert_not_called()
+        prepare.assert_not_called()
+
+    def test_retained_workspace_refreshes_folder_creation_and_removal(self):
+        app = self.app
+        root = app.private_root / 'LocalFiles'
+        root.mkdir(exist_ok=True)
+        (root / 'Old').mkdir()
+        app.select_destination('files')
+        page = app.folder_picker_view
+        self.assertIn('Old', app.folder_buttons)
+        app.show_home()
+        (root / 'Old').rmdir()
+        (root / 'New').mkdir()
+        self.assertTrue(app.select_destination('files'))
+        self.assertIs(app.folder_picker_view, page)
+        self.assertNotIn('Old', app.folder_buttons)
+        self.assertIn('New', app.folder_buttons)
+
+    def test_retained_workspace_refreshes_lock_state_and_hidden_source_cache(self):
+        app = self.app
+        app.cloud_client = SimpleNamespace(generation=1, package_records=(), cancel=lambda: None)
+        retained = [dict(zip='Fixture.zip', remotes=['Secret'], crypt_remotes=['Secret'])]
+        root = app.private_root / 'LocalCryptFolders' / 'fixture'
+        root.mkdir(parents=True)
+        (root / 'file').write_bytes(b'fixture')
+        app.hub_crypt_roots = {'Secret': ('Secret', 'fixture')}
+        with patch.object(app, 'retained_credential_associations', return_value=retained):
+            app.select_destination('files')
+            app.change_folder_source('rclone')
+            def icon():
+                return app.folder_buttons['Secret'].parent.children[0].control_icon
+            self.assertEqual(icon(), 'folder_locked')
+            locked_rows = app.folder_list.children[0]
+            app.change_folder_source('Local')
+            app.cloud_client.package_records = (dict(package_name='Fixture.zip', remotes=['Secret']),)
+            app.show_home()
+            app.select_destination('files')
+            self.assertEqual(icon(), 'folder_unlocked')
+            app.change_folder_source('rclone')
+            self.assertIsNot(app.folder_list.children[0], locked_rows)
+            self.assertEqual(icon(), 'folder_unlocked')
+            # Explicit refresh must notice a lock even with unchanged names.
+            app.cloud_client.package_records = ()
+            app.loop.run_until_complete(app.refresh_folder_hub())
+            self.assertEqual(icon(), 'folder_locked')
+            app.change_folder_source('Local')
+            self.assertEqual(icon(), 'folder_locked')
+
+    def test_retained_workspace_keeps_credential_filter_and_transfer_actions(self):
+        app = self.app
+        app.cloud_client = SimpleNamespace(generation=1, package_records=(
+            dict(package_name='First.zip', remotes=['One']),
+            dict(package_name='Second.zip', remotes=['Two'])), cancel=lambda: None)
+        app.select_destination('files')
+        app.change_folder_source('rclone')
+        app.folder_credential.value = 'First'
+        self.assertEqual(set(app.folder_buttons), {'One'})
+        page = app.folder_picker_view
+        rows = app.folder_list.children[0]
+        app.show_home()
+        app.transfer_busy = True
+        app.select_destination('files')
+        self.assertIs(app.folder_picker_view, page)
+        self.assertIs(app.folder_list.children[0], rows)
+        self.assertEqual(app.folder_credential.value, 'First')
+        self.assertEqual(set(app.folder_buttons), {'One'})
+        self.assertEqual(app.folder_source_actions.children, [app.folder_transfers_button])
+        app.transfer_busy = False
+        app.loop.run_until_complete(app.refresh_folder_hub())
+        self.assertEqual(app.folder_source_actions.children, [])
+
     def test_file_tap_opens_without_loading_information_but_explicit_selection_keeps_it(self):
         selected, opened = [], []
         details = Mock(return_value=[('Title', 'A book')])

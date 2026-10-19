@@ -34,7 +34,8 @@ action screen. Mapping removal is not offered on this page.
 **Settings → rclone / Remote connections…** loads credentials. **Transfers** and
 **Refresh** stay above the scrolling list. Transfers opens progress and managed-copy
 options; Refresh has its own circular-arrow icon and updates folder discovery.
-Returning through the bottom Workspaces tab refreshes the same complete list.
+Returning through the bottom Workspaces tab refreshes available folders and lock
+indicators while preserving the selected source and credential filter.
 
 An ordinary local folder can also **Push…** before its first Pull. **Push whole
 folder…** infers the remote from the folder name: `Books` goes to `Books:` in the
