@@ -313,6 +313,59 @@ or cloud), adding a lock for encrypted providers/remotes. Local and remote
 browsing update it after a successful listing. Its navigation glyph becomes Back
 at the provider root and returns to Workspaces; nested folders retain Up.
 
+## Android Workspaces profiling — 2026-10-19
+
+The disposable [performance probe](../../Mobile/native_tests/tests/logisticsmobile/performance_probe.py)
+measures native Android navigation callbacks, the next native draw, nested workflow
+spans and cProfile call trees. It uses an isolated storage root and four synthetic
+locked LocalCrypt folders with matching retained remote metadata. Credentials are
+not loaded, and the association lookup returns fixture metadata. Discovery and UI
+construction otherwise use the normal application paths. This does not measure
+an external SD card or the user's credential vault.
+
+The measured source was Logistics `433c6038` and commonUtils `710bc341`, with a
+probe-only launcher. The API 35 ARM64 emulator ran on the development Mac; these
+times are not Samsung A15 hardware timings. Three unprofiled visits per source
+gave these medians:
+
+| Operation | Local | Cloud |
+| --- | ---: | ---: |
+| Navigation callback, including native activation | 173 ms | 156 ms |
+| Entry to next native draw | 191 ms | 168 ms |
+| Folder discovery | 4.8 ms | 4.3 ms |
+| Whole picker construction, including discovery and rows | 164 ms | 146 ms |
+| Row construction and styling, within picker construction | 118 ms | 102 ms |
+| Workspace save | 0.4 ms | 0.2 ms |
+
+Nested spans overlap and must not be added. cProfile adds overhead, so its elapsed
+times are used to locate work rather than as user-facing latency measurements.
+One Local visit constructed 74 widgets and 25 buttons, called `paint_surface`
+112 times and button `rehint` 221 times. Surface painting occupied 129 ms of a
+233 ms profiled visit, including native drawable/tint work and Java import
+resolution. It overlaps widget-construction time.
+
+`HubUI.refresh_hub('files')` rebuilds the picker on every root tab visit.
+`build_folder_picker` resets `folder_tab_views`, so that cache does not survive
+leaving and returning to Workspaces. A probe-only counterfactual that bypassed
+this rebuild reduced the callback median to 8 ms and next-draw median to 25 ms.
+It is not a production fix: retaining a page must still refresh discovery and
+invalidate rows when credentials, lock state, storage, mappings or visibility
+change.
+
+Other measured callbacks were Documents 41–43 ms; Settings 305 ms on first entry
+and 52 ms on return; Chat 239 ms on first entry and 14 ms on return. The four-second
+Samsung delay was not reproduced in this emulator. Device CPU speed, actual
+storage and application state remain unmeasured; do not attribute the entire
+reported delay to these emulator results.
+
+The probe must run only in a disposable QA application on a simulator/emulator.
+Copy it into that application's isolated Python payload and replace only the QA
+launcher with `main().main_loop()`. It writes `performance-evidence/result.json`,
+human-readable profiles and `.prof` call trees under that app's cache directory.
+Keep it out of normal launchers and signed tester releases. The draw listener is
+Android-specific. Results in this run are retained locally under
+`Mobile/build/performance-profile/android/`.
+
 ## App reset boundary
 
 `logisticsmobile.app_reset` owns reset operations. Android calls its own
