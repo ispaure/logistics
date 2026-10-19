@@ -323,9 +323,12 @@ class FolderSourceTests(QtTestCase):
         config, package = self.root / 'keys.session', self.root / 'keys.zip'
         connection = SimpleNamespace(data=cipher, remote='Private', context=config, package=package)
         self.addCleanup(session.forget, config)
+        second = SimpleNamespace(data=cipher, remote='Second', context=config, package=package)
+        second.data = self.root / 'second-cipher'
+        second.data.mkdir()
         self.locals.append(RegisteredContribution('rclone', 'Rclone',
             LocalFolderSourceContribution('LocalCrypt', lambda: [
-                LocalFolderSource('Private', lambda: [LocalCryptFolder(connection)])])))
+                LocalFolderSource('Private', lambda: [LocalCryptFolder(connection), LocalCryptFolder(second)])])))
         page = self.page()
         page.show()
         self.app.processEvents()
@@ -356,6 +359,9 @@ class FolderSourceTests(QtTestCase):
             self.assertEqual(session.credentials(config), {'Private': {'type': 'crypt'}})
             self.assertEqual(page.selected_entry_name, 'Private')
             factory.assert_called_once()
+            self.assertEqual(len(page._entry_items), 2)
+            for item in page._entry_items.values():
+                self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'LocalCrypt, unlocked')
 
     def test_leaving_unlock_discards_late_credentials(self):
         from threading import Event

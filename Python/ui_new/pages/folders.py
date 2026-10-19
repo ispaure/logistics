@@ -469,8 +469,8 @@ class FoldersPage(pyside.QWidget):
             self._clear_browser(f'Cannot browse this workspace: {error}')
             return
         self._browser_key = key
-        item = self.folder_tree.currentItem()
-        if item is not None:
+        # One credential ZIP can unlock several workspace roots at once.
+        for item in self._entry_items.values():
             entry = item.data(0, pyside.Qt.ItemDataRole.UserRole)
             if entry is not None:
                 self._style_folder_item(item, entry)
