@@ -262,6 +262,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.editor_view.session.view['markdown_mode'] = 'edit'
 
     def resize_workspace(self, widget=None, *args, **kwargs):
+        from .keyboard import fit_editors
+        fit_editors(self)
         from .settings_ui import fit_section
         if getattr(self, '_reset_scheduled', False):
             fit_section(self.main_window.content, self.main_window.size.width)

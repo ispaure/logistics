@@ -30,6 +30,17 @@ Opening the keyboard resizes that area; continuing to type scrolls only as neede
 to keep the caret visible. Plain text and Markdown Source use native text inputs.
 On short phone screens or with enlarged text, the space around the caret shrinks
 to keep the current line inside the writing area above the keyboard.
+On Android, a short keyboard-sized window temporarily hides the app title and
+destination navigation to leave room for editing; both return when the keyboard
+closes. Secondary mode/language controls and the status row also return when the
+keyboard closes; Save remains in the main toolbar while editing. Source mode stays
+inside the app in landscape. The formatting page is anchored to its viewport,
+and tight layouts reduce padding around the writing line.
+The main toolbar uses a compact row while the keyboard is open in a tight window.
+In the shortest writing areas, **Format** opens a popup containing the formatting
+commands, leaving the full height available for text.
+In very short formatted editing areas, headings use body-sized text so a line
+fits; their heading levels remain intact.
 Formatting and source share the same
 buffer, recovery and Save actions. There is no automatic preview split on phones
 or tablets. See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md)

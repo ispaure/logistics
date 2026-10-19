@@ -281,6 +281,12 @@ document.querySelector('nav').addEventListener('pointerdown', () => {
     const selection = getSelection();
     if (root.contains(document.activeElement) && selection.rangeCount && editableRange(selection.getRangeAt(0))) savedRange = selection.getRangeAt(0).cloneRange();
 }, true);
+document.querySelector('nav').addEventListener('click', event => {
+    if (event.target.closest('button')) {
+        document.querySelector('nav details').open = false;
+        scheduleCaretReveal();
+    }
+});
 function command(name, value=null) {
     restoreRange();
     document.execCommand(name, false, value);
@@ -416,7 +422,7 @@ def editor_html(text, bridge, font_size=16, *, image_source=None):
     table_glyphs = {'insert': 'table', 'row': 'row_add', 'column': 'column_add',
                     'delete-row': 'row_delete', 'delete-column': 'column_delete'}
     table_menu = ''.join(icon_button(name, table_glyphs[action], f'data-table="{action}"') for name, action in tables)
-    toolbar = buttons(common) + '<details><summary aria-label="Markdown formatting" title="Markdown formatting">' + formatting_svg('format') + '</summary><div class="format-menu">' + style_menu + buttons(more) + (
+    toolbar = buttons(common) + '<details><summary aria-label="Markdown formatting" title="Markdown formatting">' + formatting_svg('format') + '</summary><div class="format-menu"><div class="compact-formatting">' + buttons(common) + '</div>' + style_menu + buttons(more) + (
         icon_button('Inline code', 'code', 'id="inline-code"') +
         icon_button('Insert link', 'link', 'id="show-link" aria-haspopup="dialog"')) + table_menu + '</div></details>'
     link_dialog = ('<dialog id="link-dialog" aria-labelledby="link-title">'
@@ -430,12 +436,14 @@ def editor_html(text, bridge, font_size=16, *, image_source=None):
                    '<button type="button" id="apply-link">Insert link</button></div></dialog>')
     return (f'<!doctype html><html><head><meta charset="utf-8">'
             '<meta name="logistics-native-font" content="true">'
-            '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">'
             f'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
             f'script-src \'nonce-{nonce}\'; style-src \'unsafe-inline\'; img-src data:; base-uri \'none\'; form-action \'none\'">'
             f'<style>:root{{color-scheme:light dark}}html{{height:100%;overflow:hidden}}body{{font:{int(font_size)}px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;'
             'margin:0;padding:12px;box-sizing:border-box;background:Canvas;color:CanvasText;overflow-wrap:anywhere;'
-            'height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column}'
+            # Focus scrolling must not move the page containing the toolbar.
+            # Only #document may scroll when the IME reveals the caret.
+            'position:fixed;inset:0;min-height:0;overflow:hidden;display:flex;flex-direction:column}'
             'nav,#notice{flex-shrink:0}#notice:empty{display:none}#document{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scroll-padding:12px 0;display:flex;flex-direction:column}'
             # Keep the blank writing area a native contenteditable touch target.
             'section{flex-shrink:0}section[contenteditable=true]:last-child{flex:1;min-height:6em}'
@@ -443,10 +451,24 @@ def editor_html(text, bridge, font_size=16, *, image_source=None):
             'button,select,input,summary{min-height:44px;box-sizing:border-box}select,input{font:inherit;max-width:100%}'
             'summary{display:flex;align-items:center;justify-content:center;width:44px;padding:0;cursor:pointer;list-style:none}summary::-webkit-details-marker{display:none}.icon-button{width:44px;padding:0;display:inline-flex;align-items:center;justify-content:center}.icon-button svg,summary svg{pointer-events:none}.format-menu{display:flex;flex-wrap:wrap;gap:4px;padding:8px 0}.format-menu label{max-width:100%}'
             'button{min-height:44px;font:inherit;color:CanvasText;background:Canvas;border:1px solid GrayText;border-radius:6px}'
+            # Tight keyboard viewports still need a full formatting row.
+            # Reclaim padding without clipping the formatting buttons.
+            '@media(max-height:180px){body{padding:0}nav{max-height:44px}}'
+            '@media(max-height:100px){nav{max-height:40px}nav button,nav summary{min-height:40px;height:40px}'
+            '#document h1,#document h2,#document h3,#document h4,#document h5,#document h6{font-size:1em}}'
+            '.compact-formatting{display:none}'
+            '@media(max-height:120px){nav{position:absolute;top:0;right:0;width:44px;max-height:none;overflow:visible}'
+            'nav>button{display:none}#document{margin-right:48px}.compact-formatting{display:flex;flex-wrap:wrap;gap:4px}'
+            'nav details[open] .format-menu{position:fixed;inset:0 48px 0 0;overflow:auto;background:Canvas;'
+            'border:1px solid GrayText;box-sizing:border-box;padding:4px;align-content:flex-start}}'
             'dialog{color:CanvasText;background:Canvas;border:1px solid GrayText;border-radius:12px;padding:12px;max-width:calc(100vw - 24px);max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);box-sizing:border-box;width:360px}'
             'dialog[open]{display:flex;flex-direction:column}dialog::backdrop{background:#0008}dialog h2{flex-shrink:0;font-size:1.15em;margin:0 0 8px}dialog label,dialog input{display:block;width:100%}'
             '.link-fields{min-height:0;overflow:auto}.dialog-actions{flex-shrink:0;display:flex;justify-content:flex-end;gap:8px;margin-top:8px}.dialog-actions button{padding:0 12px}#link-error{color:CanvasText}#link-error:empty{display:none}'
             '@media(max-height:260px){dialog{padding:8px}dialog h2{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}dialog label{font-size:.85em}.dialog-actions{margin-top:4px}#link-error{font-size:.8em;margin:4px 0}}'
+            '@media(max-height:130px){dialog[open]{flex-direction:row;align-items:center;gap:4px;padding:0;'
+            'max-height:100dvh;max-width:100vw;font-size:16px}.link-fields{flex:1;min-width:0;max-height:100dvh}'
+            'dialog label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}'
+            '.dialog-actions{margin-top:0;gap:4px}}'
             'p[data-editor-boundary]{margin:0;line-height:.5em;min-height:.5em}section{outline:none;min-height:1em}section:empty{display:none}section[contenteditable=true]:focus{outline:1px solid Highlight}'
             'section[contenteditable=false]{opacity:.8}section[data-source-only]::after{content:"Edit this block in Source";display:block;font-size:.8em;color:GrayText}pre{white-space:pre-wrap}blockquote{border-left:3px solid GrayText;padding-left:1em}'
             'table{border-collapse:collapse;max-width:100%;display:block;overflow-x:auto}td,th{border:1px solid GrayText;padding:4px}#notice{color:MarkText;background:Mark}'
