@@ -422,7 +422,9 @@ class FoldersPage(pyside.QWidget):
                 location = entry.local.path
             else:
                 raise ValueError('This workspace has no available local copy.')
-            view = self.open_browser_location(location)
+            association = getattr(entry.remote_context, 'item', None) if online else None
+            view = (self.open_browser_location(location, package=association.package) if association
+                    else self.open_browser_location(location))
             if view is not None:
                 self._browser_key = key
                 item = self._entry_items.get(self._entry_key(entry))

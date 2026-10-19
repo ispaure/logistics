@@ -363,6 +363,22 @@ class FolderSourceTests(QtTestCase):
             for item in page._entry_items.values():
                 self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'LocalCrypt, unlocked')
 
+    def test_cloud_browser_keeps_associated_package_for_inline_unlock(self):
+        from types import SimpleNamespace
+        from features.rclone.ui_contributions import CopyContext
+        from features.rclone.ui.remote_browser import RemoteLocation
+        from models.folder_entry import FolderEntry
+        config, package = self.root / 'cloud.session', self.root / 'cloud.zip'
+        association = SimpleNamespace(context=config, package=package, data=self.root / 'copy')
+        page = self.page()
+        page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
+        self.wait(page)
+        entry = FolderEntry(name='Cloud', remote_name='Cloud', remote_source='rclone',
+                            remote_context=CopyContext(association))
+        page._browse_entry(entry)
+        self.assertEqual(self.browser_factory.call_args.args, (RemoteLocation(config, 'Cloud'),))
+        self.assertEqual(self.browser_factory.call_args.kwargs, {'package': package})
+
     def test_leaving_unlock_discards_late_credentials(self):
         from threading import Event
         from features.rclone import session
