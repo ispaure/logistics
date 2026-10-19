@@ -33,10 +33,8 @@ class WorkspacePanes(qt.QMainWindow):
             dock.setFeatures(qt.QDockWidget.DockWidgetFeature.NoDockWidgetFeatures if locked else
                 qt.QDockWidget.DockWidgetFeature.DockWidgetMovable | qt.QDockWidget.DockWidgetFeature.DockWidgetFloatable)
             if locked:
-                header = qt.QTabBar(dock)
-                header.addTab(dock.windowTitle())
-                header.setExpanding(True)
-                header.setMovable(False)
+                header = qt.QWidget(dock)
+                header.setFixedHeight(0)
                 header.setAccessibleName(dock.windowTitle() + ' pane (fixed)')
                 dock.setTitleBarWidget(header)
             else:

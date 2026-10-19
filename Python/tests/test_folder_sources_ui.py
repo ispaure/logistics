@@ -309,8 +309,8 @@ class FolderSourceTests(QtTestCase):
             self.browser_factory.reset_mock()
         for dock in page.panes.docks:
             header = dock.titleBarWidget()
-            self.assertTrue(header.expanding())
-            self.assertGreaterEqual(header.tabRect(0).width(), header.width() - 2)
+            self.assertEqual(header.height(), 0)
+            self.assertIn(dock.windowTitle(), header.accessibleName())
 
     def test_locked_workspace_unlocks_in_files_and_retries_inline(self):
         from types import SimpleNamespace
