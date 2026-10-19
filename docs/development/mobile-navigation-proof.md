@@ -189,6 +189,12 @@ installed iOS/Android visual and network behavior needs a freshly rebuilt app.
 
 ## Complete simulator test results
 
+Readers opened from Files use the Documents navigation stack and retain their
+Files origin on both platforms. Popping reader tools keeps the reader visible;
+popping the reader returns to the retained file browser, including its viewport.
+UIKit delegate pops and explicit Back follow the same origin policy. Readers
+opened inside Documents return to that tab's root.
+
 The disposable native test app atomically writes `logistics-native-ui-result.json`
 in its cache before printing the chunked stdout report. `ui_tools.py` can read that
 file through `simctl get_app_container` when Apple's log stream drops the final
