@@ -28,7 +28,7 @@ class WorkspaceUnlockView(qt.QWidget):
     idle = qt.Signal()
     unlocked = qt.Signal()
 
-    def __init__(self, config, package, parent=None):
+    def __init__(self, config, package, parent=None, *, purpose='browse this folder'):
         super().__init__(parent)
         self.config, self.package, self.closing = config, package, False
         layout = qt.QVBoxLayout(self)
@@ -42,7 +42,7 @@ class WorkspaceUnlockView(qt.QWidget):
         title.setFont(font)
         fields.addWidget(title)
         message = qt.QLabel(
-            f'Enter the password for {package.name} to browse this folder. Credentials stay in this app session.'
+            f'Enter the password for {package.name} to {purpose}. Credentials stay in this app session.'
             if package else 'Unlock the matching credential ZIP in Settings, then choose Try again.')
         message.setTextFormat(qt.Qt.TextFormat.PlainText)
         message.setWordWrap(True)

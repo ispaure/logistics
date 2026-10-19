@@ -20,6 +20,9 @@ and LocalCrypt copies. Loaded account snapshots take precedence. Local rclone
 folders without an association receive a credential-required Cloud placeholder;
 selecting it never browses the local copy as a remote. Unlocking refreshes discovery,
 preserves the credential/selected root and browser, and exposes additional remotes.
+A successful unlock refreshes lock icons and actions even if opening the browser
+then fails. Action detection captures the credential generation and discards or
+restarts results if credentials lock or are replaced while its worker runs.
 Actions detection waits for required credentials; ordinary decrypted files can be
 browsed while their remote actions use a separate inline unlock view. Closing or
 replacing that view cancels its worker and discards late password results.

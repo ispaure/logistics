@@ -165,7 +165,7 @@ class FolderSourceTests(QtTestCase):
         self.wait(page)
         self.assertTrue(page.visibility.show_legacy)
         self.assertEqual(len(self.entries(page)), 3)
-        for source, count in [('Cloud', 6), ('Home Server', 2), ('Local', 3)]:
+        for source, count in [('Cloud', 5), ('Home Server', 2), ('Local', 3)]:
             page.source_tabs.setCurrentIndex(self.tab(page, source))
             self.wait(page)
             self.assertEqual(len(self.entries(page)), count)
@@ -373,6 +373,104 @@ class FolderSourceTests(QtTestCase):
             for item in page._entry_items.values():
                 self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'LocalCrypt, unlocked')
 
+    def test_unlock_refreshes_icons_and_actions_even_if_browser_cannot_open(self):
+        from types import SimpleNamespace
+        from features.contributions import FolderFeatureContribution, UIAction
+        from features.rclone import session
+        from features.rclone.localcrypt.backend import LocalCryptFolder
+        self.browser_patcher.stop()
+        config, package = self.root / 'keys.session', self.root / 'keys.zip'
+        self.addCleanup(session.forget, config)
+        copies = []
+        for name in ('One', 'Two'):
+            data = self.root / name
+            data.mkdir()
+            copies.append(LocalCryptFolder(SimpleNamespace(
+                data=data, remote=name, context=config, package=package)))
+        self.locals.append(RegisteredContribution('rclone', 'Rclone', LocalFolderSourceContribution(
+            'LocalCrypt', lambda: [LocalFolderSource('Copies', lambda: copies)])))
+        tool = FolderFeatureContribution('Fixture', lambda entry: True,
+            get_actions=lambda entry: [UIAction('Fixture action', callback=lambda: None)],
+            supports_private_folders=True)
+        with patch('features.registry.get_folder_features', return_value=[RegisteredContribution('test', 'Test', tool)]), patch(
+                'ui_new.file_browser._browser_view', side_effect=OSError('synthetic browser failure')), patch(
+                'features.rclone.session.read_package', return_value={name: {'type': 'crypt'} for name in ('One', 'Two')}):
+            page = self.page()
+            page.show()
+            self.select_first(page)
+            view = page._browser_view
+            view.password.setText('synthetic password')
+            view.submit()
+            self.until(lambda: session.credentials(config) is not None and not view.operation.busy)
+            self.wait(page)
+            self.assertIn('synthetic browser failure', page.browser_notice.text())
+            for item in page._entry_items.values():
+                self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'LocalCrypt, unlocked')
+            buttons = {button.text() for button in page.detail_scroll.widget().findChildren(qt.QPushButton)}
+            self.assertIn('Fixture action', buttons)
+
+    def test_credentials_locked_during_action_detection_do_not_publish_actions(self):
+        from threading import Event
+        from types import SimpleNamespace
+        from features.contributions import FolderFeatureContribution, UIAction
+        from features.rclone import session
+        from features.rclone.ui_contributions import CopyContext
+        from models.folder_entry import FolderEntry
+        config, package = self.root / 'local.session', self.root / 'local.zip'
+        session.remember(config, {'Plain': {'type': 'local'}}, package_path=package)
+        self.addCleanup(session.forget, config)
+        local = self.folder('Plain')
+        context = CopyContext(SimpleNamespace(context=config, package=package, data=local.path))
+        entry = FolderEntry('Plain', local=local, remote_name='Plain', remote_source='rclone', remote_context=context)
+        entered, release = Event(), Event()
+        self.addCleanup(release.set)
+        def available(entry):
+            entered.set()
+            release.wait(5)
+            return True
+        tool = FolderFeatureContribution('Fixture', available,
+            get_actions=lambda entry: [UIAction('Fixture action', callback=lambda: None)])
+        page = self.page()
+        page._folder_features = [RegisteredContribution('test', 'Test', tool)]
+        page._show_entry(entry)
+        self.until(entered.is_set)
+        session.forget(config)
+        release.set()
+        self.wait(page)
+        buttons = {button.text() for button in page.detail_scroll.widget().findChildren(qt.QPushButton)}
+        self.assertNotIn('Fixture action', buttons)
+        self.assertIsNotNone(page._actions_unlock_view)
+
+    def test_replaced_credentials_redetect_actions_instead_of_publishing_stale_result(self):
+        from threading import Event
+        from features.contributions import FolderFeatureContribution, UIAction
+        from features.rclone import session
+        from models.folder_entry import FolderEntry
+        config = self.root / 'account.session'
+        session.remember(config, {'Plain': {'type': 'local', 'label': 'Old'}})
+        self.addCleanup(session.forget, config)
+        entry = FolderEntry('Plain', local=self.folder('Plain'), remote_name='Plain',
+                            remote_source='rclone', remote_context=config)
+        entered, release = Event(), Event()
+        self.addCleanup(release.set)
+        def actions(entry):
+            label = session.credentials(config)['Plain']['label']
+            if label == 'Old':
+                entered.set()
+                release.wait(5)
+            return [UIAction(label + ' action', callback=lambda: None)]
+        tool = FolderFeatureContribution('Fixture', lambda entry: True, get_actions=actions)
+        page = self.page()
+        page._folder_features = [RegisteredContribution('test', 'Test', tool)]
+        page._show_entry(entry)
+        self.until(entered.is_set)
+        session.remember(config, {'Plain': {'type': 'local', 'label': 'New'}})
+        release.set()
+        self.wait(page)
+        buttons = {button.text() for button in page.detail_scroll.widget().findChildren(qt.QPushButton)}
+        self.assertIn('New action', buttons)
+        self.assertNotIn('Old action', buttons)
+
     def test_plain_local_actions_require_unlock_and_discard_late_password_results(self):
         from threading import Event
         from types import SimpleNamespace
@@ -392,6 +490,7 @@ class FolderSourceTests(QtTestCase):
         page._show_entry(entry)
         view = page._actions_unlock_view
         self.assertIsNotNone(view)
+        self.assertTrue(any('load this workspace’s actions' in label.text() for label in view.findChildren(qt.QLabel)))
         available.assert_not_called()
         with patch('features.rclone.session.read_package', return_value={'Plain': {'type': 'local'}}):
             view.password.setText('correct')
@@ -591,6 +690,70 @@ class FolderSourceTests(QtTestCase):
                                              for i in range(page.credential_combo.count())])
         self.assertEqual(page.folder_tree.currentItem().data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole),
                          'Remote, locked')
+
+    def test_remote_with_default_local_matching_has_no_duplicate_placeholder(self):
+        self.local_folders = [self.folder('Shared')]
+        self.remote(['Shared'], 'account.conf', feature='rclone')
+        page = self.page()
+        page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
+        self.wait(page)
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Shared'])
+        self.assertEqual(page.credential_combo.count(), 2)
+
+    def test_real_credential_zip_unlock_browses_remote_contents_in_workspaces(self):
+        from types import SimpleNamespace
+        from commonUtils.archives.zip_access import open_archive
+        from features.rclone import executable, session
+        from features.rclone.ui_contributions import CopyContext
+        from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
+        binary = executable.get_rclone_path()
+        if not binary.is_file():
+            self.skipTest('Pinned rclone is not installed')
+        self.browser_patcher.stop()
+        local = self.folder('Workspace')
+        cloud = self.root / 'remote' / 'Workspace'
+        cloud.mkdir(parents=True)
+        (cloud / 'remote-note.txt').write_text('Synthetic remote data')
+        (local.path / 'local-note.txt').write_text('Local copy must not be browsed as Cloud')
+        config, package = self.root / 'account.session', self.root / 'account.zip'
+        self.addCleanup(session.forget, config)
+        with open_archive(package, 'w', password='synthetic-password') as archive:
+            archive.writestr('Workspace.txt', f'[Workspace]\ntype=alias\nremote={cloud}\n')
+            archive.writestr('Additional.txt', f'[Additional]\ntype=alias\nremote={cloud}\n')
+        association = SimpleNamespace(data=local.path, remote='Workspace', context=config, package=package)
+        def sources():
+            if session.names(config) is not None:
+                return [RemoteFolderSource('account (session)', lambda: session.names(config),
+                    context=config, get_local_folders=lambda: [local])]
+            return [RemoteFolderSource('account — Local', lambda: ['Workspace'],
+                context=CopyContext(association), get_local_folders=lambda: [local])]
+        self.remotes.append(RegisteredContribution('rclone', 'rclone', RemoteFolderSourceContribution('rclone', sources)))
+        with patch.object(executable, 'ensure_rclone', return_value=binary):
+            page = self.page()
+            page.resize(1100, 800)
+            page.show()
+            page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
+            self.wait(page)
+            self.select_first(page)
+            unlock = page._browser_view
+            self.assertIsInstance(unlock, WorkspaceUnlockView)
+            unlock.password.setText('synthetic-password')
+            unlock.submit()
+            self.until(lambda: page._browser_view is not unlock)
+            self.wait(page)
+            view = page._browser_view
+            self.assertIsNotNone(view)
+            browser = view.file_browser
+            self.until(lambda: not browser.busy)
+            tree = browser.model.tree
+            labels = {tree.entries[key].label for key in tree.children[tree.root]}
+            self.assertEqual(labels, {'remote-note.txt'})
+            self.assertEqual(view.provider.config_path, config)
+            self.assertEqual(view.provider.remote, 'Workspace')
+            self.assertEqual(page.selected_entry_name, 'Workspace')
+            self.assertEqual([entry.name for entry in self.entries(page)], ['Additional', 'Workspace'])
+            self.assertFalse(config.exists())
+            self.assertEqual(sorted(cloud.iterdir()), [cloud / 'remote-note.txt'])
 
     def test_actions_are_below_sources_and_files_uses_full_height(self):
         page = self.page()

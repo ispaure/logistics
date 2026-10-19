@@ -106,8 +106,8 @@ def workspace_remote_sources(sources):
         result.append(replace(group[0], source=source, remote_names=tuple(sorted(names)),
                               local_folders=tuple(folders.values()), encrypted_remote_names=frozenset(encrypted)))
 
-    represented = {folder.path for source in declared if source.feature_name == 'rclone'
-                   for folder in source.local_folders or () if folder.name in source.remote_names}
+    represented = {entry.local.path for source in declared if source.feature_name == 'rclone'
+                   for entry in remote_entries(source, sources.local_folders) if entry.local is not None}
     unassociated = [entry.local for entry in local_entries(sources)
                     if local_entry_category(entry, sources) == 'Rclone' and entry.local.path not in represented]
     # Local/LocalCrypt copies can share a remote name; the online placeholder is one destination.

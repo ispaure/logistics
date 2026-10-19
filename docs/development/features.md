@@ -93,7 +93,9 @@ A missing or hidden selection clears both browser and action scope.
 Loaded rclone contexts appear online; `CopyContext` records also keep locked
 online destinations visible. The adapter groups saved copies by credential ZIP
 and remote, preferring loaded account snapshots. Unassociated rclone folders
-receive a credential-required Cloud placeholder. Unlocking rediscovers the account’s
+receive a credential-required Cloud placeholder. Matching honors the provider’s
+optional local-folder fallback, so an already matched remote does not also get
+a placeholder. Unlocking rediscovers the account’s
 other remotes while preserving its selection. Home Server uses mobile's explicit network-share package names, not protocol
 inference. Encrypted remote metadata is read on the discovery worker.
 

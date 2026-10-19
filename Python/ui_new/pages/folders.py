@@ -476,8 +476,8 @@ class FoldersPage(pyside.QWidget):
             self.open_browser_location(location)
         except Exception as error:
             self._clear_browser(f'Cannot browse this workspace: {error}')
-            return
-        self._browser_key = key
+        else:
+            self._browser_key = key
         self._refresh_lock_icons()
         self.refresh()
         item = self.folder_tree.currentItem()
@@ -590,7 +590,7 @@ class FoldersPage(pyside.QWidget):
             elif not online and not getattr(entry.local, 'private', False):
                 # Plain local files remain browsable; only the remote actions need a password.
                 from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
-                view = WorkspaceUnlockView(*target, parent=widget)
+                view = WorkspaceUnlockView(*target, parent=widget, purpose='load this workspace’s actions')
                 self._actions_unlock_view = view
                 view.unlocked.connect(lambda: self._actions_unlocked(view, entry))
                 view.idle.connect(self._browser_idle)
@@ -631,6 +631,11 @@ class FoldersPage(pyside.QWidget):
         entry, self._detail_pending = self._detail_pending, None
         generation = self._detail_generation
         features = tuple(self._folder_features)
+        from features.rclone import session
+        config = (entry.local.connection.context if getattr(entry.local, 'private', False) else
+                  entry.remote_context if entry.remote_source == 'rclone' else None)
+        self._detail_credentials_revoked = (session.revocation_check(Path(config))
+            if config is not None and Path(config).suffix == '.session' else lambda: False)
         def work(report, cancelled):
             from commonUtils.runtime.operations import check_cancelled
             found = []
@@ -661,6 +666,11 @@ class FoldersPage(pyside.QWidget):
                 self._tools_status.setText(f'Workspace tools unavailable: {error}')
             return
         _, entry, found = result
+        if self._detail_credentials_revoked() or self._entry_unlock_target(entry) is not None:
+            # Credential changes can race with provider detection on its worker.
+            self._show_entry(entry)
+            self._refresh_lock_icons()
+            return
         layout = self.detail_scroll.widget().layout()
         self._tools_status.hide()
         try:
