@@ -79,6 +79,9 @@ class StorageUI:
         box.add(toga.Button('Refresh drives / permission', on_press=self.show_collection_storage, style=Pack(height=48)))
         self.collection_storage_status = SettingsLabel('After switching, Logistics closes. Reopen it to use the selected location.')
         box.add(self.collection_storage_status)
+        for child in box.children:
+            if isinstance(child, toga.Label):
+                child.style.margin_bottom = 12
         self.collection_target_changed()
         fit_section(box, max(280, self.app.adaptive.content_width('settings')))
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)),

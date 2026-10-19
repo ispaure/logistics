@@ -95,7 +95,7 @@ class Audit(LogisticsMobile):
                 assert phase == 'after'
                 assert not (self.private_root / RESET_MARKER).exists()
                 assert self.preferences.values['font_size'] != '28'
-                assert not self.store.documents()
+                assert self.store.documents() == ([], [])
                 for root in (self.private_root, Path(self.paths.config), Path(self.paths.cache), Path(self.paths.data)):
                     assert not (root / 'reset-qa-file.txt').exists(), str(root)
                 if ios:

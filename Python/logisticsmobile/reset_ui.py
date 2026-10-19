@@ -19,7 +19,7 @@ class ResetUI:
         self.reset_page = box
         box.add(SettingsLabel('Erase all app data', style=Pack(font_size=22)))
         box.add(SettingsLabel('Deletes private documents and unsaved drafts, imported books, chat, saved credentials and device keys, settings, transfer mappings, reading progress, metadata and caches.'))
-        box.add(SettingsLabel('Also deletes every file in On My iPhone / iPad → Logistics, including Local and files you added in Files.' if ios
+        box.add(SettingsLabel('Also deletes every file in On My iPhone / iPad → Logisticks, including Local and files you added in Files.' if ios
             else 'Also deletes internal Local and LocalCrypt files. Android closes the app and resets its permissions.'))
         box.add(SettingsLabel('SD-card and shared-storage Logistics folders, cloud files and SMB server files are kept. You will need the original credential ZIPs and passwords to unlock retained LocalCrypt files.'))
         box.add(SettingsLabel('On iOS, erasure runs before startup after you fully close Logistics in the app switcher and reopen it. Until then the app is locked on a reset notice.' if ios
@@ -30,6 +30,9 @@ class ResetUI:
             enabled=False, on_press=self.confirm_app_reset, style=Pack(height=48))
         self.reset_status = SettingsLabel('')
         box.add(self.reset_phrase, self.reset_button, self.reset_status)
+        for child in box.children:
+            if isinstance(child, toga.Label):
+                child.style.margin_bottom = 12
         fit_section(box, max(280, app.adaptive.content_width('settings')))
         app.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)),
                       destination='settings', route='app-reset', title='Erase app data')
@@ -50,7 +53,7 @@ class ResetUI:
             ios = is_ios(app)
             if not await app.main_window.dialog(toga.ConfirmDialog('Permanently erase all app data?',
                 'All private app files, drafts, settings, metadata, chat and saved credentials will be lost. '
-                + ('All files in the Logistics folder in Files will also be lost. Erasure starts when you fully close and reopen the app. ' if ios else 'Internal Local and LocalCrypt files will also be lost. Android will close the app. ')
+                + ('All files in the Logisticks folder in Files will also be lost. Erasure starts when you fully close and reopen the app. ' if ios else 'Internal Local and LocalCrypt files will also be lost. Android will close the app. ')
                 + 'SD/shared collections and remote server files are kept. This cannot be undone.')):
                 return
             if not self.reset_available():
