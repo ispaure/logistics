@@ -223,21 +223,27 @@ For plain-source editing, choose [Text Editor](../../Python/features/text_editor
 
 Choose a source and folder on **Workspaces**. Sources occupy the upper left,
 with Actions below them and Files filling the right side. Drag the dividers to
-give the hierarchy or actions more room. The fixed panes have no tab headers. Local folders normally live under
+give the hierarchy or actions more room. The fixed panes have no tab headers.
+Local folders normally live under
 `~/Server/Local`. **Local** includes all available local copies, including detected
 Dropbox account folders and rclone-linked Local and LocalCrypt copies. **Cloud**
 contains remotes from loaded rclone credentials, including **Load for Session**,
 and browses them online even when no local copy exists. Session-only credentials
 can also create LocalCrypt copies from crypt remotes; those encrypted copies
-remain on disk after the credentials lock. Offline
-copy associations alone do not create Cloud rows. A folder can appear in both
+remain on disk after the credentials lock. A saved Local or LocalCrypt association
+keeps its Cloud destination visible
+while its credential ZIP is locked. Folders sharing a ZIP are grouped under one
+credential; unlocking it updates all lock icons and discovers its other remotes.
+Unassociated rclone Local folders appear under **Credentials required** in Cloud;
+load the matching credential package in Settings and refresh to connect them.
+A folder can appear in both
 Local and Cloud; each tab opens its corresponding storage. **Home Server** contains
-loaded rclone sources from the `Network shares` or `Session network shares`
+rclone sources (including locked associations) from the `Network shares` or `Session network shares`
 credential package, matching mobile's explicit package grouping. Other rclone
 sources remain in Cloud; protocols alone do not determine the category.
 
 Blue open-lock and orange closed-lock folder glyphs match mobile and distinguish
-unlocked and locked encrypted storage. LocalCrypt opens through the credential
+unlocked and locked credential-backed locations. LocalCrypt opens through the credential
 unlock flow and private browser. An unavailable location shows a browsing status;
 it does not silently fall back to another copy. Switching source tabs refreshes folder
 sources in the background while keeping the cached list available. Use

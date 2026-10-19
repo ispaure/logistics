@@ -19,8 +19,10 @@ to compact the shared workspace footer's padding, font, buttons and activity
 track. Embedded, standalone and detached browser workspaces use this same
 presentation; progress subscriptions and index actions remain owned by
 `WorkspaceIndexStatus`. Workspaces likewise uses zero outer margins and places
-its source-discovery progress in one horizontal row below the source tree and
-Files/Actions panes. The Workspaces Files pane reuses `_browser_view` for Local,
+its source-discovery progress in one horizontal row below all panes. Sources and
+Actions share a left column, with a full-height Files pane on the right. Pane
+headers are hidden in the fixed layout; dock dividers remain resizable.
+The Workspaces Files pane reuses `_browser_view` for Local,
 LocalCrypt and remote browsing, retaining normal document activation. See the
 [folder source contract](features.md#remote-folder-source-context) for its action
 scope, browser retirement and pane-lock policy.

@@ -13,7 +13,7 @@ from features import registry
 from features.contributions import UIAction
 from services.folders.policy import folder_parts
 from services.folders.sources import discover_folder_sources
-from services.folders.workspaces import SOURCE_NAMES, local_entries, local_entry_category, remote_entries, source_category
+from services.folders.workspaces import SOURCE_NAMES, local_entries, local_entry_category, remote_entries, source_category, workspace_remote_sources
 from ui_new.pages.workspace_panes import WorkspacePanes, WORKSPACE_PANES_LOCKED
 from ui_new.pages.workspace_tree import WorkspaceTree
 from ui_new.settings.workspaces import workspace_visibility
@@ -172,7 +172,7 @@ class FoldersPage(pyside.QWidget):
         self._sources = sources
         from ui_new.location_context import location_catalog
         location_catalog().publish(sources)
-        self._remote_sources = sources.remote_sources
+        self._remote_sources = workspace_remote_sources(sources)
         self._local_folders = sources.local_folders
         with pyside.QSignalBlocker(self.source_tabs):
             self._rebuild_source_tabs(selected_source_key)
@@ -190,7 +190,7 @@ class FoldersPage(pyside.QWidget):
         for name in SOURCE_NAMES:
             index = self.source_tabs.addTab(name)
             sources = [source for source in self._remote_sources
-                       if not hasattr(source.source.context, 'item') and source_category(source) == name]
+                       if source_category(source) == name]
             self.source_tabs.setTabData(index, ('local', None) if name == 'Local' else ('remote', None, sources))
         self.source_tabs.setCurrentIndex(self._find_source_index(selected_source_key))
 
@@ -239,7 +239,13 @@ class FoldersPage(pyside.QWidget):
                 self.credential_combo.setCurrentIndex(self.credential_combo.findData('Rclone'))
             if selected_credential is not None:
                 for index in range(self.credential_combo.count()):
-                    if self.credential_combo.itemData(index) == selected_credential:
+                    current = self.credential_combo.itemData(index)
+                    association = getattr(selected_credential, 'item', None)
+                    same_account = False
+                    if association is not None and isinstance(current, Path):
+                        from features.rclone import session
+                        same_account = current == association.context and session.package_path(current) == association.package
+                    if current == selected_credential or same_account:
                         self.credential_combo.setCurrentIndex(index)
                         break
         self.credential_label.setText('Credential' if is_remote else 'Source')
@@ -250,7 +256,9 @@ class FoldersPage(pyside.QWidget):
     def _entry_key(entry):
         """Keep same-named folders from different credentials independently selectable."""
 
-        return (entry.name, entry.remote_source, str(entry.remote_context),
+        context = (str(Path(entry.remote_context)) if entry.remote_source == 'rclone'
+                   and entry.remote_context is not None else str(entry.remote_context))
+        return (entry.name, entry.remote_source, context,
                 str(entry.local.path) if entry.local is not None else None)
 
     def _refresh_folder_tree(self):
@@ -377,14 +385,18 @@ class FoldersPage(pyside.QWidget):
         private = getattr(entry.local, 'private', False)
         state = None
         online = self._get_selected_source()[0] == 'remote'
-        if online:
-            for source in self._remote_sources:
-                if (source.source.context == entry.remote_context
-                        and entry.remote_name in source.encrypted_remote_names):
-                    from features.rclone import session
-                    config = Path(entry.remote_context)
-                    state = 'locked' if config.suffix == '.session' and session.credentials(config) is None else 'unlocked'
-                    break
+        if online and entry.remote_source == 'rclone':
+            from features.rclone import session
+            context = Path(entry.remote_context) if entry.remote_context is not None else None
+            association = getattr(entry.remote_context, 'item', None)
+            if context is None or (context.suffix == '.session' and
+                    (session.credentials(context) is None or (association is not None
+                     and session.package_path(context) != association.package))):
+                state = 'locked'
+            elif context.suffix == '.session' or any(
+                    source.source.context == entry.remote_context and entry.remote_name in source.encrypted_remote_names
+                    for source in self._remote_sources):
+                state = 'unlocked'
         elif private:
             from features.rclone import session
             connection = entry.local.connection
@@ -406,6 +418,8 @@ class FoldersPage(pyside.QWidget):
         self._clear_browser('Opening workspace…')
         try:
             if online:
+                if entry.remote_context is None:
+                    raise ValueError('Load the matching credential package in Settings, then refresh folders.')
                 from features.rclone.ui.remote_browser import RemoteLocation
                 location = RemoteLocation(Path(entry.remote_context), entry.remote_name)
             elif getattr(entry.local, 'private', False):
@@ -465,6 +479,7 @@ class FoldersPage(pyside.QWidget):
             return
         self._browser_key = key
         self._refresh_lock_icons()
+        self.refresh()
         item = self.folder_tree.currentItem()
         entry = item.data(0, pyside.Qt.ItemDataRole.UserRole) if item is not None else None
         if entry is not None:
@@ -504,6 +519,8 @@ class FoldersPage(pyside.QWidget):
             return
         self._refresh_lock_icons()
         self._show_entry(entry)
+        if self._selected_entry_key == self._entry_key(entry):
+            self.refresh()
 
     def _clear_browser(self, message):
         self._browser_key = None
@@ -559,14 +576,18 @@ class FoldersPage(pyside.QWidget):
         self.details.request_cancel()
         self._tools_status = None
         target = self._entry_unlock_target(entry)
-        if target is not None:
+        needs_credentials = (self._get_selected_source()[0] == 'remote'
+                             and entry.remote_source == 'rclone' and entry.remote_context is None)
+        if target is not None or needs_credentials:
             widget = pyside.QWidget()
             layout = pyside.QVBoxLayout(widget)
             label = pyside.QLabel('Unlock the workspace credentials to load its actions.')
             label.setWordWrap(True)
             layout.addWidget(label)
             online = self._get_selected_source()[0] == 'remote'
-            if not online and not getattr(entry.local, 'private', False):
+            if needs_credentials:
+                label.setText('Load the matching credential package in Settings to load this workspace’s actions.')
+            elif not online and not getattr(entry.local, 'private', False):
                 # Plain local files remain browsable; only the remote actions need a password.
                 from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
                 view = WorkspaceUnlockView(*target, parent=widget)

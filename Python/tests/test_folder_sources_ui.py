@@ -165,7 +165,7 @@ class FolderSourceTests(QtTestCase):
         self.wait(page)
         self.assertTrue(page.visibility.show_legacy)
         self.assertEqual(len(self.entries(page)), 3)
-        for source, count in [('Cloud', 3), ('Home Server', 2), ('Local', 3)]:
+        for source, count in [('Cloud', 6), ('Home Server', 2), ('Local', 3)]:
             page.source_tabs.setCurrentIndex(self.tab(page, source))
             self.wait(page)
             self.assertEqual(len(self.entries(page)), count)
@@ -173,7 +173,7 @@ class FolderSourceTests(QtTestCase):
                           if item.data(0, qt.Qt.ItemDataRole.UserRole).name.casefold().startswith('legacy-'))
             page.folder_tree.setCurrentItem(legacy)
             page.visibility.set_show_legacy(False)
-            self.assertEqual([entry.name for entry in self.entries(page)], ['Books'])
+            self.assertEqual({entry.name for entry in self.entries(page)}, {'Books'})
             self.assertIsNone(page.selected_entry_name)
             page.visibility.set_show_legacy(True)
         fresh_page = self.page()
@@ -243,8 +243,9 @@ class FolderSourceTests(QtTestCase):
         self.assertEqual(self.browser_factory.call_args.args, (_PrivateBrowserLocation(connection, cipher),))
         page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
         self.wait(page)
-        self.assertEqual(len(self.entries(page)), 1)
-        self.select_first(page)
+        self.assertEqual(len(self.entries(page)), 2)
+        loaded = next(entry for entry in self.entries(page) if entry.remote_context == self.root / 'keys.conf')
+        page.folder_tree.setCurrentItem(page._entry_items[page._entry_key(loaded)])
         from features.rclone.ui.remote_browser import RemoteLocation
         self.assertEqual(self.browser_factory.call_args.args,
                          (RemoteLocation(self.root / 'keys.conf', 'Shared'),))
@@ -341,7 +342,8 @@ class FolderSourceTests(QtTestCase):
         available = Mock(return_value=True)
         page._folder_features = [RegisteredContribution('test', 'Test', FolderFeatureContribution(
             'Test', available, get_actions=lambda entry: [], supports_private_folders=True))]
-        with patch('ui_new.file_browser._browser_view', return_value=opened) as factory, patch(
+        with patch('features.registry.get_folder_features', return_value=page._folder_features), patch(
+                'ui_new.file_browser._browser_view', return_value=opened) as factory, patch(
                 'features.rclone.localcrypt.ui.views.ensure_session', side_effect=AssertionError('Popup requested')), patch(
                 'features.rclone.session.read_package', side_effect=[ValueError('bad password'), {'Private': {'type': 'crypt'}}]):
             self.select_first(page)
@@ -364,8 +366,8 @@ class FolderSourceTests(QtTestCase):
             self.assertEqual(session.package_path(config), package)
             self.assertEqual(session.credentials(config), {'Private': {'type': 'crypt'}})
             self.assertEqual(page.selected_entry_name, 'Private')
-            self.until(lambda: not page.details.busy)
-            available.assert_called_once()
+            self.wait(page)
+            available.assert_called()
             factory.assert_called_once()
             self.assertEqual(len(page._entry_items), 2)
             for item in page._entry_items.values():
@@ -486,7 +488,8 @@ class FolderSourceTests(QtTestCase):
         self.browser_factory.side_effect = OSError('Connection unavailable')
         page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
         self.wait(page)
-        self.select_first(page)
+        entry = next(entry for entry in self.entries(page) if entry.remote_context == Path('profile'))
+        page.folder_tree.setCurrentItem(page._entry_items[page._entry_key(entry)])
         from features.rclone.ui.remote_browser import RemoteLocation
         self.assertTrue(all(isinstance(call.args[0], RemoteLocation)
                             for call in self.browser_factory.call_args_list))
@@ -506,6 +509,88 @@ class FolderSourceTests(QtTestCase):
         page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
         self.wait(page)
         self.assertEqual([entry.name for entry in self.entries(page)], ['CloudFolder'])
+
+    def test_locked_cloud_account_groups_copies_and_discovers_more_remotes_after_unlock(self):
+        from types import SimpleNamespace
+        from features.rclone import session
+        from features.rclone.ui_contributions import CopyContext
+        from features.rclone.localcrypt.backend import LocalCryptFolder
+        from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
+        self.browser_patcher.stop()
+        local = self.folder('Shared')
+        private_path = self.root / 'private-copy'
+        private_path.mkdir()
+        config, package = self.root / 'keys.session', self.root / 'keys.zip'
+        self.addCleanup(session.forget, config)
+        plain = SimpleNamespace(data=local.path, remote='Shared', context=config, package=package)
+        private = SimpleNamespace(data=private_path, remote='Shared', context=config, package=package)
+        crypt = LocalCryptFolder(private)
+        def sources():
+            rows = [RemoteFolderSource('keys — Local', lambda: ['Shared'], context=CopyContext(plain),
+                                       get_local_folders=lambda: [local]),
+                    RemoteFolderSource('keys — LocalCrypt', lambda: ['Shared'], context=CopyContext(private),
+                                       get_local_folders=lambda: [crypt])]
+            if session.names(config) is not None:
+                rows.insert(0, RemoteFolderSource('keys (session)', lambda: session.names(config),
+                                                  context=config, get_local_folders=lambda: [local]))
+            return rows
+        self.remotes.append(RegisteredContribution('rclone', 'rclone',
+            RemoteFolderSourceContribution('rclone', sources)))
+        page = self.page()
+        page.show()
+        page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
+        self.wait(page)
+        self.assertEqual([page.credential_combo.itemText(i) for i in range(page.credential_combo.count())],
+                         ['All', 'keys (locked)'])
+        page.credential_combo.setCurrentIndex(1)
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Shared'])
+        self.select_first(page)
+        unlock = page._browser_view
+        self.assertIsInstance(unlock, WorkspaceUnlockView)
+        item = page.folder_tree.currentItem()
+        self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'Remote, locked')
+        class Opened(qt.QWidget):
+            idle = qt.Signal()
+            def prepare_close(self):
+                return True
+        opened = Opened()
+        with patch('ui_new.file_browser._browser_view', return_value=opened) as factory, patch(
+                'features.rclone.session.read_package', return_value={
+                    'Shared': {'type': 'crypt'}, 'Additional': {'type': 'drive'}}):
+            unlock.password.setText('synthetic password')
+            unlock.submit()
+            self.until(lambda: page._browser_view is opened)
+            self.wait(page)
+            self.assertEqual([entry.name for entry in self.entries(page)], ['Additional', 'Shared'])
+            self.assertEqual(page.credential_combo.currentText(), 'keys (session)')
+            self.assertEqual(page.selected_entry_name, 'Shared')
+            self.assertIs(page._browser_view, opened)
+            factory.assert_called_once()
+            for item in page._entry_items.values():
+                self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'Remote, unlocked')
+
+    def test_unassociated_local_has_locked_cloud_placeholder_without_local_fallback(self):
+        local = self.folder('Unassociated')
+        self.local_folders = [local]
+        config = self.root / 'loaded.conf'
+        config.write_text('[Other]\ntype=local\n')
+        self.remotes.append(RegisteredContribution('rclone', 'rclone', RemoteFolderSourceContribution(
+            'rclone', lambda: [RemoteFolderSource('loaded', lambda: ['Other'], context=config,
+                                                get_local_folders=lambda: [local])])))
+        page = self.page()
+        page.show()
+        page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
+        self.wait(page)
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Other', 'Unassociated'])
+        entry = next(entry for entry in self.entries(page) if entry.name == 'Unassociated')
+        page.folder_tree.setCurrentItem(page._entry_items[page._entry_key(entry)])
+        self.assertIsNone(page._browser_view)
+        self.browser_factory.assert_not_called()
+        self.assertIn('Load the matching credential package', page.browser_notice.text())
+        self.assertIn('Credentials required', [page.credential_combo.itemText(i)
+                                             for i in range(page.credential_combo.count())])
+        self.assertEqual(page.folder_tree.currentItem().data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole),
+                         'Remote, locked')
 
     def test_actions_are_below_sources_and_files_uses_full_height(self):
         page = self.page()
@@ -635,7 +720,7 @@ class FolderSourceTests(QtTestCase):
         page.refresh()
         self.wait(page)
         self.assertEqual(read_names.call_count, 3)
-        self.assertEqual({entry.name for entry in self.entries(page)}, {'Shared', 'Remote-Only'})
+        self.assertEqual({entry.name for entry in self.entries(page)}, {'Local', 'Shared', 'Remote-Only'})
         page.close()
 
     def test_remote_tab_recovers_empty_snapshot_and_retries_failed_refresh(self):
@@ -655,17 +740,17 @@ class FolderSourceTests(QtTestCase):
         self.assertTrue(page.discovery.busy)
         release.set()
         self.wait(page)
-        self.assertEqual([entry.name for entry in self.entries(page)], ['Restored'])
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Local', 'Restored'])
         read_names.side_effect = OSError('temporarily unavailable')
         page.refresh_button.click()
         self.wait(page)
-        self.assertEqual([entry.name for entry in self.entries(page)], ['Restored'])
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Local', 'Restored'])
         self.assertIn('temporarily unavailable', page.discovery.message.text())
         read_names.side_effect = None
         read_names.return_value = ['Recovered']
         page.refresh_button.click()
         self.wait(page)
-        self.assertEqual([entry.name for entry in self.entries(page)], ['Recovered'])
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Local', 'Recovered'])
 
     def test_main_window_first_display_reads_sources_once_and_returning_refreshes(self):
         read_names = self.remote(['Remote'], 'profile')

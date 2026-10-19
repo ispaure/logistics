@@ -75,7 +75,8 @@ The Folders page owns fixed `Local`, `Cloud` and `Home Server` categories. A rem
 remote names plus opaque backend context. That context is carried through the
 generic `FolderEntry` model and interpreted only by the feature that owns it.
 
-For rclone, the context is the selected credential `.conf` path. The context
+For rclone, the context is a selected credential `.conf` or `.session` path,
+or a `CopyContext` carrying the saved copy’s package association. The context
 does not change the managed local sync folder name. FUSE separately derives a
 mount-path identity from that config path; do not discard it when mounting.
 
@@ -89,11 +90,16 @@ filter and selected entry; changing tabs resets Local to Rclone and remote
 credential filters to All. Source/filter changes clear folder selection; tree
 rebuilds only restore an explicit selection and never choose the first entry.
 A missing or hidden selection clears both browser and action scope.
-Loaded rclone contexts appear online; `CopyContext` records supply offline copies
-only. Home Server uses mobile's explicit network-share package names, not protocol
+Loaded rclone contexts appear online; `CopyContext` records also keep locked
+online destinations visible. The adapter groups saved copies by credential ZIP
+and remote, preferring loaded account snapshots. Unassociated rclone folders
+receive a credential-required Cloud placeholder. Unlocking rediscovers the account’s
+other remotes while preserving its selection. Home Server uses mobile's explicit network-share package names, not protocol
 inference. Encrypted remote metadata is read on the discovery worker.
 
-`FoldersPage` owns a browser stack between the source tree and action details.
+`FoldersPage` owns a full-height browser stack beside the source tree and action
+details. Actions sit below Sources in the left column. Required credential
+unlocks gate action detection; stale unlock results cannot publish credentials.
 The selected tree entry owns the action scope; browser navigation never rewrites
 it. Browser construction waits for page visibility. Replaced views cancel work and
 remain owned until `idle` and `prepare_close()` permit deletion; page shutdown
@@ -101,9 +107,8 @@ waits for discovery, detail detection and every retained browser.
 
 `ui_new/pages/workspace_panes.py` supplies resizable native dock panes. Set
 `WORKSPACE_PANES_LOCKED = False` or construct `FoldersPage(panes_locked=False)` to
-experiment with moving/detaching them. The default keeps Files/Actions headers
-fixed, expands their tabs across each pane with centered labels, and removes
-closing, moving and floating controls. This is a code setting,
+experiment with moving/detaching them. The default hides the fixed pane headers
+and removes closing, moving and floating controls. Split dividers remain usable. This is a code setting,
 not a persisted user preference. `services/folders/appearance.py` owns portable
 folder paths and lock colours shared by desktop and mobile; it is included in the
 mobile services manifest. `WorkspaceTree` paints the expanded hierarchy guides,

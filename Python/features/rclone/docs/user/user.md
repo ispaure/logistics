@@ -167,10 +167,11 @@ A missing or invalid credential mapping blocks Push rather than guessing a remot
 ## Browse remote files directly
 
 On desktop choose **File Browser → File → Open Remote…**, or select a remote on
-Workspaces to browse it in the Files pane. Each remote opens in its own tab, labelled with its account
-and remote name. Navigation stays within that remote. Duplicate tabs retain the
+Workspaces to browse it in the Files pane. In File Browser, each remote opens in
+its own tab, labelled with its account and remote name. Navigation stays within that remote. Duplicate tabs retain the
 account and current directory; tabs use the existing workspace docking.
-Credentials must already be loaded through rclone settings.
+In Workspaces, selecting a locked associated remote prompts for its credential
+ZIP password in Files. File Browser’s Open Remote chooser lists loaded accounts.
 
 Remote browsing is read-only. Search filters the current folder; it does not scan
 subfolders. Listings, thumbnails and directly opened contents stay in memory,
@@ -243,8 +244,13 @@ stay in `Server/Local`. If both an old and new storage directory exist, Logistic
 preserves both and reports the conflict rather than replacing either copy.
 
 A loaded account can show folders that exist only remotely. After the account is
-unloaded, its saved Local or LocalCrypt entry appears only while the corresponding
-folder exists on disk. Connection records without a folder do not create entries.
+unloaded, an existing saved Local or LocalCrypt copy keeps both its Local entry
+and a locked Cloud destination (Home Server for network-share packages). Copies
+of the same remote share one Cloud entry under their credential ZIP. Unlock it in
+Files to discover the package’s other remotes; actions appear after unlocking.
+Unassociated rclone Local folders also have a Cloud placeholder under **Credentials
+required**; load the matching package in Settings and refresh. Connection records
+without a folder do not create entries.
 
 Choose **Load for Session**, unlock the ZIP containing both the crypt
 remote and its direct backing remote, then use **Pull to LocalCrypt**. Open its

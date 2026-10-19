@@ -54,3 +54,66 @@ def local_entry_category(entry, sources):
                    for source in sources.remote_sources)):
         return 'Rclone'
     return 'Others'
+
+
+def workspace_remote_sources(sources):
+    """Keep offline account destinations and unassociated rclone copies in Cloud.
+
+    A saved copy association identifies a remote even while its ZIP is locked.
+    Local and LocalCrypt copies of that remote share one online destination.
+    """
+    from dataclasses import replace
+    from features.contributions import RemoteFolderSource
+    from features.rclone import session
+    from services.folders.sources import RemoteSourceSnapshot
+
+    declared = list(sources.remote_sources)
+    represented_copies = {folder.path for source in declared for folder in source.local_folders or ()
+                          if folder.name in source.remote_names}
+    for entry in local_entries(sources):
+        if getattr(entry.local, 'private', False) and entry.local.path not in represented_copies:
+            from features.rclone.ui_contributions import CopyContext
+            item = entry.local.connection
+            source = RemoteFolderSource(item.package.stem, lambda name=entry.name: [name], context=CopyContext(item))
+            declared.append(RemoteSourceSnapshot('rclone', 'rclone', source, (entry.name,), (entry.local,)))
+    loaded = [source for source in declared
+              if source.feature_name != 'rclone' or not hasattr(source.source.context, 'item')]
+    groups = {}
+    for source in declared:
+        item = getattr(source.source.context, 'item', None) if source.feature_name == 'rclone' else None
+        if item is None:
+            continue
+        if any(other.feature_name == 'rclone' and other.source.context is not None
+               and Path(other.source.context) == item.context
+               and session.package_path(item.context) == item.package for other in loaded):
+            continue
+        groups.setdefault((item.context, item.package), []).append(source)
+
+    result = list(loaded)
+    for (context, package), group in groups.items():
+        names, folders, encrypted = set(), {}, set()
+        for source in group:
+            names.update(source.remote_names)
+            encrypted.update(source.encrypted_remote_names)
+            for folder in source.local_folders or ():
+                if getattr(folder, 'private', False):
+                    encrypted.add(folder.name)
+                current = folders.get(folder.name)
+                if current is None or getattr(current, 'private', False):
+                    folders[folder.name] = folder
+        unlocked = session.credentials(context) is not None and session.package_path(context) == package
+        source = replace(group[0].source, name=f'{package.stem} ({"session" if unlocked else "locked"})')
+        result.append(replace(group[0], source=source, remote_names=tuple(sorted(names)),
+                              local_folders=tuple(folders.values()), encrypted_remote_names=frozenset(encrypted)))
+
+    represented = {folder.path for source in declared if source.feature_name == 'rclone'
+                   for folder in source.local_folders or () if folder.name in source.remote_names}
+    unassociated = [entry.local for entry in local_entries(sources)
+                    if local_entry_category(entry, sources) == 'Rclone' and entry.local.path not in represented]
+    # Local/LocalCrypt copies can share a remote name; the online placeholder is one destination.
+    folders = {folder.name: folder for folder in unassociated}
+    if folders:
+        names = tuple(sorted(folders))
+        source = RemoteFolderSource('Credentials required', lambda: list(names), context=None)
+        result.append(RemoteSourceSnapshot('rclone', 'rclone', source, names, tuple(folders.values())))
+    return result

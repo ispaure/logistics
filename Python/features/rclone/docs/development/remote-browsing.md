@@ -2,17 +2,27 @@
 
 Desktop hosts `RemoteBrowserView` in the existing File Browser workspace. Its
 `RemoteLocation` carries config identity, remote name and relative directory;
-cloning a tab retains all three. Workspaces's Browse action and the browser's
+cloning a tab retains all three. Workspaces selection and the browser's
 Open Remote command share this route. Local and LocalCrypt routing is preserved.
 
 In desktop Workspaces, selecting a locked session-backed remote or LocalCrypt
-copy shows `ui/workspace_unlock.py:WorkspaceUnlockView` inside Files. Remote Browse
-actions route to that host before invoking the standalone password dialog. The
+copy shows `ui/workspace_unlock.py:WorkspaceUnlockView` inside Files. The
 form reads the credential ZIP on an OperationProgress worker and publishes the
 session only after successful completion while still active. Invalid passwords
 remain inline; cancelling, changing folder/source or closing the page discards
-late results. Unlock resumes the selected location and updates its lock icon.
+late results. Unlock resumes the selected location and updates all affected lock icons.
 Standalone File Browser windows retain their existing unlock dialog.
+
+Desktop Workspaces uses `services.folders.workspaces.workspace_remote_sources`
+to group `CopyContext` associations by session context and ZIP identity. A locked
+account remains in Cloud/Home Server, with one remote destination for its Local
+and LocalCrypt copies. Loaded account snapshots take precedence. Local rclone
+folders without an association receive a credential-required Cloud placeholder;
+selecting it never browses the local copy as a remote. Unlocking refreshes discovery,
+preserves the credential/selected root and browser, and exposes additional remotes.
+Actions detection waits for required credentials; ordinary decrypted files can be
+browsed while their remote actions use a separate inline unlock view. Closing or
+replacing that view cancels its worker and discards late password results.
 
 The rclone feature owns remote credentials, CLI/native adapters, direct-open
 policy and previews. The commonUtils provider browser and range-reader contracts
