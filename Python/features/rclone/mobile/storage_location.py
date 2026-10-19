@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import stat
+import time
 from uuid import uuid4
 
 from commonUtils.persistence import atomic_write_json
@@ -128,7 +129,29 @@ class CollectionFiles(LocalFiles):
         return sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
 
 
-def _inventory(root):
+class _Progress:
+    """Worker-side throttling keeps large collections from flooding the UI loop."""
+    def __init__(self, callback):
+        self.callback = callback
+        self.phase = ''
+        self.bytes = self.files = 0
+        self.total = None
+        self.last = 0
+
+    def update(self, phase=None, path='', size=0, file=False, total=None, force=False):
+        if phase is not None and phase != self.phase:
+            self.phase, self.bytes, self.files, self.total = phase, 0, 0, total
+            force = True
+        self.bytes += size
+        self.files += int(file)
+        now = time.monotonic()
+        if self.callback and (force or now - self.last >= 0.1):
+            self.last = now
+            self.callback(dict(phase=self.phase, path=str(path), bytes=self.bytes,
+                               total=self.total, files=self.files))
+
+
+def _inventory(root, progress=None):
     """Hash bytes, not mtimes (SD filesystems round timestamp precision)."""
     result = {}
     _unlinked(root)
@@ -150,18 +173,30 @@ def _inventory(root):
                 with path.open('rb') as stream:
                     while block := stream.read(1024 * 1024):
                         digest.update(block)
+                        if progress:
+                            progress.update(path=path, size=len(block))
                 if (path.stat().st_ino, path.stat().st_size, path.stat().st_mtime_ns, path.stat().st_ctime_ns) != (info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns):
                     raise OSError('Collection changed during copying. Close documents and retry.')
                 result[key] = info.st_size, digest.hexdigest()
+                if progress:
+                    progress.update(path=path, file=True)
             else:
                 raise ValueError('Collection migration requires independent regular files and folders.')
     return result
 
 
-def _copy_durable(source, destination):
-    shutil.copyfile(source, destination)
-    with open(destination, 'r+b') as stream:
-        _sync(stream)
+def _copy_durable(source, destination, progress=None):
+    if not stat.S_ISREG(os.stat(source).st_mode):
+        raise shutil.SpecialFileError('Collection copying requires a regular file.')
+    with open(source, 'rb') as reader, open(destination, 'wb') as writer:
+        while block := reader.read(1024 * 1024):
+            writer.write(block)
+            if progress:
+                progress.update(path=source, size=len(block))
+        writer.flush()
+        _sync(writer)
+    if progress:
+        progress.update(path=source, file=True, force=True)
     return destination
 
 
@@ -207,29 +242,37 @@ def _activate(private_root, volume, base):
     atomic_write_json(_unlinked(Path(private_root) / CONFIG), dict(volume=str(volume), token=token))
 
 
-def recover_location(private_root, volume):
+def recover_location(private_root, volume, *, progress=None):
     """Explicitly use a retained collection without reading the unavailable source."""
+    report = _Progress(progress)
+    report.update('Checking files')
     base, trees = _destination(private_root, volume)
     if not any(tree.is_dir() for tree in trees):
         raise ValueError('No existing collection found at this location. Choose a retained backup or copy collections instead.')
     for tree in trees:
-        _inventory(tree)
+        _inventory(tree, report)
     for tree in trees:
         tree.mkdir(parents=True, exist_ok=True)
+    report.update('Saving location')
     _activate(private_root, volume, base)
+    report.update('Complete', force=True)
     return True
 
 
-def start_empty_location(private_root, volume):
+def start_empty_location(private_root, volume, *, progress=None):
     """Select empty collection folders without copying or erasing either side."""
+    report = _Progress(progress)
+    report.update('Checking files')
     base, trees = _destination(private_root, volume)
     for tree in trees:
-        if _inventory(tree):
+        if _inventory(tree, report):
             raise FileExistsError('This location contains files. Use existing files here, or erase this location first.')
     base.mkdir(parents=True, exist_ok=True)
     for tree in trees:
         tree.mkdir(exist_ok=True)
+    report.update('Saving location')
     _activate(private_root, volume, base)
+    report.update('Complete', force=True)
     return True
 
 
@@ -247,8 +290,10 @@ def describe_location(private_root, volume):
     return dict(base=str(base), active=base == active, folders=folders)
 
 
-def wipe_destination(private_root, volume):
+def wipe_destination(private_root, volume, *, progress=None):
     """Delete only inactive collection trees and interrupted copy staging folders."""
+    report = _Progress(progress)
+    report.update('Checking files')
     base, trees = _destination(private_root, volume)
     chosen = selection(private_root)
     active = Path(chosen['volume']) / 'Logistics' if chosen else Path(private_root)
@@ -260,18 +305,21 @@ def wipe_destination(private_root, volume):
     if marker is not None and marker.exists() and not marker.is_file():
         raise ValueError('Collection marker must be a regular file.')
     for target in targets:
-        _inventory(target)
+        _inventory(target, report)
+    report.update('Erasing files')
     for target in targets:
+        report.update(path=target, force=True)
         if target.exists():
             shutil.rmtree(target)
     if marker is not None:
         marker.unlink(missing_ok=True)
     # Keep unrelated folders; neither credentials nor the card itself are
     # erased. A failed/partial wipe can safely be retried.
+    report.update('Complete', force=True)
     return False
 
 
-def switch_location(private_root, volume):
+def switch_location(private_root, volume, *, progress=None):
     """Copy/verify both trees, then commit the private pointer. Keep source backup.
 
     Existing destination files are never merged or replaced. Uncommitted copied
@@ -293,10 +341,13 @@ def switch_location(private_root, volume):
     sources = [collection_path(private_root, crypt) for crypt in (False, True)]
     destinations = [destination_base / name for name in (
         ('Local', 'LocalCrypt') if volume is not None else ('LocalFiles', 'LocalCryptFolders'))]
-    snapshots = [_inventory(source) for source in sources]
+    report = _Progress(progress)
+    report.update('Checking source files')
+    snapshots = [_inventory(source, report) for source in sources]
+    report.update('Checking destination files')
     # Check all conflicts before publishing either tree.
     for target, expected in zip(destinations, snapshots):
-        existing = _inventory(target)
+        existing = _inventory(target, report)
         if existing and expected and existing != expected:
             raise FileExistsError('Destination already contains different files: ' + str(target))
     needed = sum(size for target, snapshot in zip(destinations, snapshots)
@@ -313,17 +364,20 @@ def switch_location(private_root, volume):
     for source, target, expected in zip(sources, destinations, snapshots):
         _unlinked(target)
         if target.exists() and any(target.iterdir()):
-            if expected and _inventory(target) != expected:
+            report.update('Verifying files')
+            if expected and _inventory(target, report) != expected:
                 raise OSError('Destination changed during copying; original location retained.')
             continue  # Identical backup, or adoption when the source is empty.
+        report.update('Copying ' + target.name, total=sum(value[0] for value in expected.values() if value is not None))
         temporary = destination_base / ('.storage-copy-' + uuid4().hex)
         try:
             if source.exists():
                 # Never follow a link that appeared after preflight.
-                shutil.copytree(source, temporary, symlinks=True, copy_function=_copy_durable)
+                shutil.copytree(source, temporary, symlinks=True, copy_function=lambda src, dst: _copy_durable(src, dst, report))
             else:
                 temporary.mkdir()
-            if _inventory(temporary) != expected or _inventory(source) != expected:
+            report.update('Verifying files')
+            if _inventory(temporary, report) != expected or _inventory(source, report) != expected:
                 raise OSError('Collection verification failed; original location retained.')
             if target.exists():
                 target.rmdir()  # Only an empty folder may be replaced.
@@ -331,10 +385,13 @@ def switch_location(private_root, volume):
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary)
+    report.update('Final verification')
     for target, expected in zip(destinations, snapshots):
-        if expected and _inventory(target) != expected:
+        if expected and _inventory(target, report) != expected:
             raise OSError('Destination verification failed; original location retained.')
-    if [_inventory(source) for source in sources] != snapshots:
+    if [_inventory(source, report) for source in sources] != snapshots:
         raise OSError('Collection changed during copying; original location retained.')
+    report.update('Saving location')
     _activate(private_root, volume, destination_base)
+    report.update('Complete', force=True)
     return True

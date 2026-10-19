@@ -40,6 +40,10 @@ class StorageUI:
                 'Android could not open developer settings. Developer mode must be enabled first.'))
 
     def show_collection_storage(self, widget=None, **kwargs):
+        if getattr(self, '_storage_changing', False) and getattr(self, 'collection_storage_progress_view', None) is not None:
+            self.show_view(self.collection_storage_progress_view, destination='settings',
+                           route='collection-storage-progress', title='File storage progress')
+            return
         from .settings_ui import SettingsLabel, fit_section
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         self.collection_storage_page = box
@@ -163,6 +167,8 @@ class StorageUI:
             widget.enabled = False
         changed = False
         busy = False
+        progress_bar = None
+        done_button = None
         try:
             if not await self.main_window.dialog(toga.ConfirmDialog(title, message)):
                 return
@@ -174,19 +180,69 @@ class StorageUI:
                 return
             self.set_cloud_busy(True)
             busy = True
-            self.collection_storage_status.text = {
-                'copy': 'Copying and verifying collections… Keep Logistics open.',
-                'recover': 'Checking existing collections… Keep Logistics open.',
-                'empty': 'Preparing empty collection folders…',
-                'wipe': 'Deleting inactive collection data… Keep Logistics open.',
-            }[action]
+            from .settings_ui import SettingsLabel, fit_section, fit_text
+            width = max(280, self.app.adaptive.content_width('settings'))
+            progress_box = toga.Box(style=Pack(direction=COLUMN, margin=16))
+            heading = {'copy': 'Moving Local + LocalCrypt', 'recover': 'Checking existing files',
+                       'empty': 'Preparing empty folders', 'wipe': 'Erasing files at selected location'}[action]
+            progress_box.add(SettingsLabel(heading, style=Pack(font_size=22, margin_bottom=16)))
+            if action == 'copy':
+                progress_box.add(SettingsLabel('From: ' + str(collection_base(self.private_root))))
+            progress_box.add(SettingsLabel('To: ' + destination if action != 'wipe' else 'Location: ' + destination))
+            progress_box.add(SettingsLabel('Keep Logistics open until this finishes. Original files stay in place when copying.'))
+            self.collection_storage_status = SettingsLabel('Preparing…', style=Pack(margin_top=16))
+            progress_bar = toga.ProgressBar(max=None, style=Pack(height=12, margin_top=12, margin_bottom=12))
+            details = SettingsLabel('Finding files…')
+            current_file = SettingsLabel('')
+            done_button = toga.Button('Back to storage settings', enabled=False,
+                                      on_press=self.show_collection_storage, style=Pack(height=48, margin_top=24))
+            progress_box.add(self.collection_storage_status, progress_bar, details, current_file, done_button)
+            self.collection_storage_page = progress_box
+            fit_section(progress_box, width)
+            self.collection_storage_progress_view = toga.ScrollContainer(horizontal=False, content=progress_box, style=Pack(flex=1))
+            self.show_view(self.collection_storage_progress_view,
+                           destination='settings', route='collection-storage-progress', title='File storage progress')
+            progress_bar.start()
+            loop = asyncio.get_running_loop()
+            status_label = self.collection_storage_status
+
+            def render(event):
+                status_label.text = event['phase']
+                total = event['total']
+                if total is None:
+                    progress_bar.max = None
+                    progress_bar.start()
+                    details.text = f"{event['files']} files checked · {event['bytes'] / 1048576:.1f} MiB read"
+                else:
+                    progress_bar.stop()
+                    progress_bar.max = 100
+                    percent = min(100, event['bytes'] * 100 / total) if total else 100
+                    progress_bar.value = percent
+                    details.text = f"Current folder: {percent:.0f}% · {event['bytes'] / 1048576:.1f} / {total / 1048576:.1f} MiB · {event['files']} files copied"
+                current_file.text = event['path']
+                for label in (status_label, details, current_file):
+                    fit_text(label, width - 32)
+
             operation = {'copy': switch_location, 'recover': recover_location, 'wipe': wipe_destination, 'empty': start_empty_location}[action]
-            changed = await asyncio.to_thread(operation, self.private_root, volume)
+            changed = await asyncio.to_thread(operation, self.private_root, volume,
+                                             progress=lambda event: loop.call_soon_threadsafe(render, event))
+            progress_bar.stop()
+            progress_bar.max = 100
+            progress_bar.value = 100
+            details.text = 'Finished. All checks passed.'
+            current_file.text = ''
             self.collection_storage_status.text = ('Collection folders erased. You can copy files here or start empty here now.' if action == 'wipe'
                 else 'Storage location saved. Reopen Logistics.' if changed else 'Already using this location.')
         except (OSError, ValueError) as error:
-            self.collection_storage_status.text = 'Location unchanged: ' + str(error)
+            if progress_bar is not None:
+                progress_bar.stop()
+                progress_bar.max = 100
+                progress_bar.value = 0
+                details.text = 'Stopped before completion. Check the location and permission, then retry.'
+            self.collection_storage_status.text = ('Erase incomplete; retry this location: ' if action == 'wipe' else 'Location unchanged: ') + str(error)
         finally:
+            if done_button is not None:
+                done_button.enabled = True
             self._storage_changing = False
             self.collection_drive.enabled = True
             if busy:

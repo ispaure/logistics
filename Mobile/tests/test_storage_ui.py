@@ -48,6 +48,26 @@ class StorageUITests(unittest.TestCase):
         self.assertFalse(self.app.cloud_busy)
         exit_app.assert_called_once()
 
+    def test_worker_progress_is_rendered_and_failure_keeps_retry_available(self):
+        import threading
+        ui_thread = threading.get_ident()
+        def fail(root, volume, *, progress):
+            self.assertNotEqual(threading.get_ident(), ui_thread)
+            progress(dict(phase='Copying Local', path='Local/book.epub', bytes=1024, total=2048, files=0))
+            raise OSError('Card disconnected')
+        with patch('logisticsmobile.storage_ui.all_files_allowed', return_value=True), \
+                patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value=True)), \
+                patch('logisticsmobile.storage_ui.switch_location', side_effect=fail):
+            self.app.loop.run_until_complete(self.app.change_collection_storage())
+        page = self.app.collection_storage_page
+        text = ' '.join(str(getattr(child, 'text', '')) for child in page.children)
+        self.assertIn('Card disconnected', text)
+        self.assertIn('Stopped before completion', text)
+        self.assertTrue(page.children[-1].enabled)
+        self.assertFalse(self.app._storage_changing)
+        self.assertFalse(self.app.cloud_busy)
+        self.assertFalse((self.card / 'Logistics').exists())
+
     def test_busy_operation_prevents_switch(self):
         self.app.transfer_busy = True
         self.app.loop.run_until_complete(self.app.change_collection_storage())

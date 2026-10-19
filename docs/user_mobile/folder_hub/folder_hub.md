@@ -274,6 +274,17 @@ Documents is opened. Closing secondary iPad windows releases their callbacks, wi
 registries and writers. The beta simulator vetoed or terminated the process during destruction of
 its launch scene, so original-window OS close remains unverified on a physical iPad.
 
+## Local / LocalCrypt location
+
+When changing the Android storage location, a dedicated progress page shows the
+source and destination, current folder/file, copied MiB and a percentage for the
+folder being copied. Scanning and byte verification use an activity indicator
+because their total work is not known yet. A completed copy is followed by final
+verification before the new location is saved. Keep Logistics open throughout.
+Checking existing files, preparing empty folders and erasing an unused location
+also show their current stage. Failures keep the original location selected and
+show a retry message; an interrupted erase can leave some old files deleted.
+
 ### Keeping your place during delayed opens
 
 If you switch documents or open Settings while a private document is loading,

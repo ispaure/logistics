@@ -45,6 +45,35 @@ class CollectionStorageTests(unittest.TestCase):
         self.assertFalse((self.volume / 'Logistics').exists())
         start_empty_location(self.private, self.volume)
         self.assertTrue(describe_location(self.private, self.volume)['active'])
+    def test_progress_reports_real_chunks_and_only_completes_after_activation(self):
+        self.seed()
+        (self.private / 'LocalFiles/large.bin').write_bytes(b'x' * (3 * 1024 * 1024))
+        events = []
+        def record(event):
+            events.append(event)
+            if event['phase'] == 'Complete':
+                self.assertEqual(collection_path(self.private), self.volume / 'Logistics/Local')
+        import itertools
+        with patch('features.rclone.mobile.storage_location.time.monotonic', side_effect=itertools.count()):
+            switch_location(self.private, self.volume, progress=record)
+        copy = [event for event in events if event['phase'] == 'Copying Local']
+        self.assertTrue(any(0 < event['bytes'] < event['total'] for event in copy))
+        self.assertEqual(copy[-1]['bytes'], copy[-1]['total'])
+        self.assertEqual([event['bytes'] for event in copy], sorted(event['bytes'] for event in copy))
+        self.assertTrue(any(event['path'].endswith('large.bin') for event in copy))
+        self.assertIn('Final verification', [event['phase'] for event in events])
+        self.assertEqual(events[-1]['phase'], 'Complete')
+
+    def test_progress_failure_never_reports_complete_or_changes_location(self):
+        self.seed()
+        events = []
+        with patch('features.rclone.mobile.storage_location._sync', side_effect=OSError('Card removed')):
+            with self.assertRaisesRegex(OSError, 'Card removed'):
+                switch_location(self.private, self.volume, progress=events.append)
+        self.assertNotIn('Complete', [event['phase'] for event in events])
+        self.assertFalse((self.private / CONFIG).exists())
+        self.assertEqual(list((self.volume / 'Logistics').glob('.storage-copy-*')), [])
+
     def setUp(self):
         self.temporary = TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
