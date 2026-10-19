@@ -90,7 +90,7 @@ def compact_icon(button, *, width=24, height=48, size=17, background='transparen
 
 
 def toolbar_button(button, symbol):
-    surface(button, radius=9, foreground='accent')
+    surface(button, radius=9, foreground='accent', outlined=False)
     if type(button._impl).__module__.startswith('toga_iOS.'):
         from rubicon.objc import ObjCClass
         native = button._impl.native

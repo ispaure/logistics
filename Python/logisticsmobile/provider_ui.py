@@ -59,6 +59,9 @@ class ProviderUI(FilesUI):
         search = getattr(self, 'pdf_search', None)
         if search is not None:
             search.dispose()
+        contents = getattr(self, 'pdf_contents', None)
+        if contents is not None:
+            contents.dispose()
         reader = self.crypt_reader
         if reader is not None and reader.kind == '.pdf':
             reader.pdf.close()
@@ -429,6 +432,11 @@ class ProviderUI(FilesUI):
                 margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
                 on_chapter=controller.open_provider_epub_chapter,
                 on_position=lambda value: locations.update({book.spine[index]: value}))
+            chapters = getattr(view.provider_epub_view, 'chapters', None)
+            if chapters is not None:
+                from .appearance import hierarchy_row_style
+                chapters.row_style, chapters.current = hierarchy_row_style, index
+                chapters.render()
             tools = view.provider_epub_view.tools
             if tools.button in tools.widget.children:
                 tools.widget.remove(tools.button)
@@ -648,7 +656,13 @@ class ProviderUI(FilesUI):
                 alive=lambda: self.active_host and self.crypt_reader is reader
                     and self.session.id in self.workspace.sessions and self.manager.active is self)
             from features.pdf.mobile.canvas import PDFTools
-            view.pdf_tools = PDFTools([jump_row, view.pdf_search])
+            from features.pdf.mobile.contents import PDFContents
+            from .appearance import hierarchy_row_style
+            view.pdf_contents = PDFContents(reader.pdf, on_page=self.move_private_page,
+                alive=lambda: self.active_host and self.crypt_reader is reader
+                    and self.session.id in self.workspace.sessions and self.manager.active is self,
+                row_style=hierarchy_row_style)
+            view.pdf_tools = PDFTools([jump_row, view.pdf_contents, view.pdf_search])
             controls.append(view.pdf_tools.widget)
         elif not view.crypt_reader.editable and not comic and view.crypt_reader.book is None:
             controls.append(toga.Box(children=[view.crypt_page, view.crypt_read_page], style=Pack(direction=ROW)))
@@ -917,7 +931,9 @@ class ProviderUI(FilesUI):
                     and formatted.view in self.crypt_content.children):
                 self.crypt_text.value = text
         from .preview import reader_image_source
+        from .palette import css_variables
         formatted = FormattedMarkdownInput(changed, font_size=int(self.preferences.values['font_size']),
+            stylesheet=css_variables(),
             image_source=lambda: reader_image_source(self._crypt_reader_store, reader))
         try:
             formatted.load(self.crypt_text.value)

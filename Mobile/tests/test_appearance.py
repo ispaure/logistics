@@ -64,7 +64,7 @@ class AppearanceTests(unittest.TestCase):
         finally:
             set_eink_enabled(False)
 
-    def test_android_command_outline_survives_theme_and_eink_transitions(self):
+    def test_android_filled_commands_follow_theme_and_preserve_eink_boundary(self):
         import sys
         from types import SimpleNamespace as NS
         from unittest.mock import MagicMock, patch
@@ -95,12 +95,17 @@ class AppearanceTests(unittest.TestCase):
                         (False, False, LIGHT), (True, False, DARK),
                         (False, True, EINK), (False, False, LIGHT))):
                     set_eink_enabled(eink)
+                    drawable.reset_mock()
                     impl.native.getResources().getConfiguration().uiMode = 0x20 if dark else 0x10
                     if index == 0:
                         outline_command(impl)
                     else:
                         paint_surface(impl, 8)
-                    drawable.setStroke.assert_called_with(2, argb(colors['control_border']))
+                    if eink:
+                        drawable.setStroke.assert_called_with(2, argb(colors['border']))
+                    else:
+                        drawable.setStroke.assert_not_called()
+                    drawable.setColor.assert_called_with(argb(colors['surface']))
                     drawable.setCornerRadius.assert_called_with(0 if eink else 16)
                     tint = impl.native.setTextColor.call_args.args[0]
                     self.assertEqual(tint.states, [[-1], []])

@@ -133,7 +133,7 @@ class ChatUI:
             self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
             self.chat_drawer_open = self.adaptive.width() >= 640
             for control in (self.chat_header_new, self.chat_actions_button):
-                self.presentation.surface(control, radius=24, background='chat_input', foreground='text', outlined=True)
+                self.presentation.surface(control, radius=24, background='chat_input', foreground='text', outlined=False)
             self.chat_header_actions = self.presentation.surface(toga.Box(children=[self.chat_header_new, self.chat_actions_button],
                 style=Pack(direction=ROW)), radius=24, background='chat_input', outlined=False)
             self.chat_header = toga.Box(children=[self.chat_menu_button,

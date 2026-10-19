@@ -114,7 +114,9 @@ class ReaderChrome:
             await self.open_reader_destination(entry.index)
         def activate(entry):
             return self.loop.create_task(choose(entry))
-        self.chapter_tree = ChapterList(entries, activate)
+        from .appearance import hierarchy_row_style
+        self.chapter_tree = ChapterList(entries, activate, row_style=hierarchy_row_style,
+                                       current=self.book_record['position'])
         self.chapter_rows.clear()
         self.chapter_rows.add(self.chapter_tree.rows)
         self.reflow_chapters()
@@ -207,7 +209,8 @@ class ReaderChrome:
                 return
             self.epub_offset = start
             self.epub_event(self.book_reader, self.book_epoch, self.book_record['position'], 'position', start)
-        self.speech_panel = ReadAloudPanel(loop=self.loop, source=source, on_range=follow, close=self.close_read_aloud, app=self.app)
+        self.speech_panel = ReadAloudPanel(loop=self.loop, source=source, on_range=follow, close=self.close_read_aloud,
+            app=self.app, document_title=lambda: self.book_record['name'])
         self.speech_panel.show_over(self.book_content)
 
     def close_read_aloud(self, widget=None, **kwargs):

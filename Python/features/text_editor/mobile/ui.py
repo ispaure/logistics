@@ -207,7 +207,8 @@ class TextEditorView:
         if rich:
             if self.formatted is None:
                 self.formatted = FormattedMarkdownInput(self.formatted_changed,
-                    font_size=int(self.app.preferences.values['font_size']))
+                    font_size=int(self.app.preferences.values['font_size']),
+                    stylesheet=self.app.presentation.css_variables())
             try:
                 self.formatted.load(self.document.text)
                 surface = self.formatted.view

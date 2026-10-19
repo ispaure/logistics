@@ -64,7 +64,7 @@ class HomeUnlockTests(unittest.TestCase):
             self.assertEqual(unlock.control_icon, 'storage_crypt')
             self.assertEqual(unlock.accessible_name, 'Unlock credentials')
             self.assertEqual((unlock.style.width, unlock.style.height), (48, 48))
-            self.assertEqual(unlock._impl._surface_roles, ('surface', 'text', True))
+            self.assertEqual(unlock._impl._surface_roles, ('surface', 'text', False))
             header.children[1].on_press()
             self.assertEqual(app.native_host.state.destination, 'home')
             self.assertEqual(app.routes.screens['home'][-1][0], 'unlock-credential')

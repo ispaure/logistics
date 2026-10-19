@@ -397,7 +397,7 @@ document.querySelectorAll('[data-table]').forEach(button => {
 '''
 
 
-def editor_html(text, bridge, font_size=16, *, image_source=None):
+def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet=''):
     nonce = uuid4().hex
     data = json.dumps(editor_blocks(text, image_source=image_source), ensure_ascii=True).replace('<', '\\u003c')
     script = _SCRIPT.replace('location.href = BRIDGE', 'location.href = ' + json.dumps(bridge)).replace('const blocks = DATA;', 'const blocks = ' + data + ';')
@@ -472,15 +472,25 @@ def editor_html(text, bridge, font_size=16, *, image_source=None):
             'p[data-editor-boundary]{margin:0;line-height:.5em;min-height:.5em}section{outline:none;min-height:1em}section:empty{display:none}section[contenteditable=true]:focus{outline:1px solid Highlight}'
             'section[contenteditable=false]{opacity:.8}section[data-source-only]::after{content:"Edit this block in Source";display:block;font-size:.8em;color:GrayText}pre{white-space:pre-wrap}blockquote{border-left:3px solid GrayText;padding-left:1em}'
             'table{border-collapse:collapse;max-width:100%;display:block;overflow-x:auto}td,th{border:1px solid GrayText;padding:4px}#notice{color:MarkText;background:Mark}'
+            + stylesheet +
+            'body{background:var(--window,Canvas);color:var(--text,CanvasText)}'
+            'nav{background:var(--window,Canvas)}'
+            '#document{background:var(--surface,Canvas);border-radius:8px;padding:12px;box-sizing:border-box}'
+            '@media(max-height:180px){#document{padding:0}}'
+            'button,summary{border:0;border-radius:8px;background:var(--surface,ButtonFace);color:var(--text,CanvasText)}'
+            'button:active,summary:active{background:var(--hover,ButtonFace)}'
+            'button:focus-visible,summary:focus-visible{outline:2px solid var(--accent,Highlight);outline-offset:-2px}'
+            'nav details[open] .format-menu{background:var(--window,Canvas)}'
             '</style></head><body><nav aria-label="Markdown formatting">' + toolbar + '</nav>'
             '<p id="notice" role="status"></p><main id="document" aria-label="Formatted Markdown editor"></main>' + link_dialog +
             f'<script nonce="{nonce}">{script}</script></body></html>')
 
 
 class FormattedMarkdownInput:
-    def __init__(self, changed, *, font_size=16, image_source=None):
+    def __init__(self, changed, *, font_size=16, image_source=None, stylesheet=''):
         self.changed, self.font_size = changed, font_size
         self.image_source = image_source
+        self.stylesheet = stylesheet
         self.closed = False
         self.text = None
         self.bridge = 'logistics-editor://' + uuid4().hex + '/'
@@ -491,7 +501,7 @@ class FormattedMarkdownInput:
             return
         bridge = 'logistics-editor://' + uuid4().hex + '/'
         content = editor_html(text, bridge, self.font_size,
-            image_source=self.image_source() if self.image_source else None)
+            image_source=self.image_source() if self.image_source else None, stylesheet=self.stylesheet)
         self.bridge = bridge
         self.text = text
         self.view.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)

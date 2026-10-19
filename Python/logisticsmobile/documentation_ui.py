@@ -3,8 +3,8 @@ from pathlib import Path
 from commonUtils.ui.native.markdown import MarkdownWikiView
 from .preview import markdown_preview
 from .markdown_speech import MarkdownSpeech
-from .browser_ui import entry_icon, highlight_entry, middle_filename
-from .appearance import accessible_name
+from .browser_ui import entry_icon, middle_filename
+from .appearance import accessible_name, hierarchy_row_style
 from toga.style.pack import CENTER
 
 
@@ -14,6 +14,7 @@ class DocumentationReader(MarkdownWikiView):
         self.speech = None
         super().__init__(*args, **kwargs)
         self.speech = MarkdownSpeech(app, self.web, self.article,
+            document_title=lambda: self.path,
             valid=lambda: app.active_host and getattr(app, 'documentation', None) is self and self.path is not None)
         self.speech.button.on_press = self.show_speech
         self.speech.button.enabled = self.path is not None
@@ -47,8 +48,7 @@ class DocumentationReader(MarkdownWikiView):
             row.insert(2, entry_icon(directory, landing_page=entry.page is not None))
             accessible_name(button, entry.title + (' — Open folder page' if directory and entry.page is not None else ''))
             selected = self.path is not None and entry.page == self.path
-            highlight_entry(row, selected)
-            highlight_entry(button, selected)
+            hierarchy_row_style(row, selected)
 
     def show_speech(self, widget=None, **kwargs):
         self.reading = True

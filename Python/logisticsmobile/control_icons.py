@@ -260,4 +260,4 @@ def icon_button(name, label, *, on_press=None, enabled=True):
     from .appearance import surface
     return surface(apply_icon(toga.Button(on_press=on_press, enabled=enabled,
                                  style=Pack(width=48, height=48)), name, label),
-                   background='transparent', foreground='text', outlined=True)
+                   background='surface', foreground='text', outlined=False)

@@ -15,10 +15,15 @@ This works from the app's allocated space, including iPad windows, Android table
 split-screen and full or partial foldable windows. Screen pixel count alone does
 not determine the layout.
 
-The + and − buttons expand or collapse a folder. Each child level is indented
+The chevron beside a folder expands or collapses it without opening a page. Each child level is indented
 further, with page titles aligned to folder titles at the same depth. Tap the folder's title to open its
 own page, when it has one. For example, a documents folder containing documents.md
 uses that file as its folder page, without repeating it as a child.
+
+Rows use the same filled surfaces as the file browser in light and dark mode.
+The current page has a highlighted row and bold title. Folder/page icons distinguish
+a folder with its own guide from an ordinary page. Expansion and page opening
+have separate touch targets.
 
 A heading at the start of the document body supplies the displayed title. It may
 follow YAML properties enclosed in `---` delimiters and separating blank lines.

@@ -3,9 +3,11 @@
   "modules": [
     "__init__.py",
     "document.py",
+    "contents.py",
     "mobile/__init__.py",
     "mobile/canvas.py",
     "mobile/copies.py",
+    "mobile/contents.py",
     "search.py",
     "mobile/search.py"
   ]

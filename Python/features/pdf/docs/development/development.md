@@ -85,3 +85,15 @@ rasterization, page jumps, embedded-text search, reading mode and memory release
 Android bitmap background fill explicitly uses Chaquopy jint(-1), preventing the
 long color-space overload from raising Invalid ID: 63. Reports and screenshots
 are in the root development mobile-evidence/2026-10-17-pdf-search folder.
+
+## Mobile contents hierarchy
+
+`contents.contents` reads embedded bookmark destinations through the existing
+pypdf dependency, using memory bytes and zero-based page targets. The traversal
+rejects more than 2,000 outline nodes or depth beyond 32. Invalid destinations
+are omitted; PDFs without contents return an empty tuple.
+`mobile.contents.PDFContents` loads on demand in a worker, checks the owning
+session before publishing or navigating, and keeps page jump/search available
+when parsing fails. It uses `commonUtils.ui.native.presentation.HierarchyList`;
+the host injects colours through `hierarchy_row_style`. `Mobile/tests/test_contents_hierarchy.py`
+covers real PDF destinations, disclosure independence and stale-session guards.

@@ -33,6 +33,15 @@ Holding the page or tapping the magnifier buttons does not turn pages or toggle 
 Pinch to zoom and pan; return to fit size to swipe between pages.
 Pages & search starts collapsed.
 
+## Document contents
+
+Open **Pages & search → Document contents** to show embedded PDF bookmarks.
+Tap a title to jump to its page. Use the chevron separately to expand or collapse
+nested sections. The rows share EPUB and documentation navigation styling in
+light and dark mode. PDFs without embedded contents show an explanation; page
+numbers and search remain available. Contents are read in memory and clear when
+the document session closes.
+
 ## Search
 
 Open **Pages & search**. Enter text in **Find in PDF** and submit it or choose **Next match**. Search

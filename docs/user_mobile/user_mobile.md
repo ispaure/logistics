@@ -9,6 +9,11 @@ in narrow windows; wider windows show the tree and article together.
 - [Remote and offline files](documents/remote.md)
 - [Using documentation](documentation/documentation.md)
 
+Mobile action buttons use the file browser’s filled surfaces: near-white in light
+mode and the same raised dark surface in dark mode. Ordinary actions have no
+outline. Contents and documentation share indented rows, disclosure chevrons and
+a highlighted current item.
+
 Password and token fields start hidden. Use the eye button beside a field to
 show or hide its value. Clearing the field hides it again.
 

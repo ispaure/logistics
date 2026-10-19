@@ -36,11 +36,11 @@ def accessible_name(widget, name):
 
 
 def action_button(button, *, destructive=False):
-    """Give commands a boundary without making them look selected."""
+    """Use the browser's filled surface for ordinary commands."""
     button.action_role = 'destructive' if destructive else 'primary'
     button._impl._action_role = button.action_role
     _widgets.add(button._impl)
-    return surface(button, radius=8, foreground='destructive' if destructive else 'text')
+    return surface(button, radius=8, foreground='destructive' if destructive else 'text', outlined=False)
 
 
 def outline_command(impl):
@@ -49,13 +49,13 @@ def outline_command(impl):
     Called during backend creation, before the interface has its _impl assigned.
     Do not set _row_hint: list_button must still install its shrinking row hint.
     """
-    impl._surface_roles = ('surface', 'text', True)
+    impl._surface_roles = ('surface', 'text', False)
     _surfaces[impl] = 8
     paint_surface(impl, 8)
 
 
 def list_button(button):
-    """Keep native row sizing/alignment and restore the app's command outline."""
+    """Keep native row sizing/alignment and the app's filled surface."""
     from commonUtils.ui.native.presentation import list_button as native_list_button
     native_list_button(button)
     if button._impl in _surfaces:
@@ -94,6 +94,29 @@ def described_button(button, description):
         native.setText(title)
         native.setContentDescription(text[:start - 1] + '. ' + description)
     return button
+
+
+def hierarchy_row_style(row, selected=False):
+    """One quiet browser-style row for contents and documentation trees."""
+    from .folder_hub_style import folder_row, folder_name
+    folder_row(row)
+    folder_name(row.title_button)
+    background = 'hover' if selected else 'surface'
+    surface(row, radius=8, background=background, outlined=False, eink_outlined=selected)
+    # All child targets share the row's fill, without looking like separate
+    # commands. Each remains a native accessible button.
+    for control in (row.title_button, row.disclosure):
+        if control is not None:
+            surface(control, radius=0, background='transparent',
+                    foreground='text' if control is row.title_button else 'muted',
+                    outlined=False, eink_outlined=False)
+    row.title_button.style.font_weight = 'bold' if selected else 'normal'
+    backend = type(row.title_button._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        row.title_button._impl.native.accessibilityTraits = 1 | (4 if selected else 0)
+    elif backend.startswith('toga_android.'):
+        row.title_button._impl.native.setSelected(selected)
+    return row
 
 
 def reserve_navigation(app):
@@ -165,7 +188,7 @@ def paint_surface(impl, radius):
         native.layer.borderColor = apple_color(border).resolvedColorWithTraitCollection(native.traitCollection).CGColor
         if hasattr(impl.interface, 'on_press'):
             from rubicon.objc import UIEdgeInsets
-            inset = 8 if outlined and not getattr(impl.interface, 'control_icon', None) else 0
+            inset = 8 if background != 'transparent' and not getattr(impl.interface, 'control_icon', None) else 0
             native.contentEdgeInsets = UIEdgeInsets(0, inset, 0, inset)
         if foreground:
             if hasattr(impl.interface, 'on_press'):
@@ -218,7 +241,7 @@ def paint_surface(impl, radius):
             tint_android(impl)
 
 
-def surface(widget, *, radius=12, background='surface', foreground=None, outlined=True,
+def surface(widget, *, radius=12, background='surface', foreground=None, outlined=False,
             eink_outlined=True, eink_selected=False):
     widget._impl._surface_roles = (background, foreground, outlined)
     widget._impl._surface_eink_outlined = eink_outlined
@@ -334,7 +357,8 @@ def install_appearance(app):
                     return bool(inside)
                 # The visible boundary is the touch target, including its edges.
                 outlined = getattr(self.impl, '_surface_roles', (None, None, False))[2]
-                if (outlined or getattr(self.impl, '_row_hint', False) or self.bounds.size.width <= 52
+                filled = getattr(self.impl, '_surface_roles', ('transparent',))[0] != 'transparent'
+                if (filled or outlined or getattr(self.impl, '_row_hint', False) or self.bounds.size.width <= 52
                         or self.configuration is not None):
                     return True
                 title = self.titleRectForContentRect(self.bounds)
