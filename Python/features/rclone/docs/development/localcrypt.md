@@ -8,6 +8,12 @@ and documented in that repository.
 
 ## Desktop
 
+New LocalCrypt copies require a crypt remote from session-only credentials
+(`session.credentials` with the originating ZIP association). A saved config alone
+does not satisfy this creation contract. The same session can supply online Cloud
+remotes, including those without a local copy. Credential lifetime and persistence
+of the ciphertext copy are separate: ending the session preserves the copy.
+
 `features/rclone/localcrypt/backend.py` maps an absolute credential ZIP path and remote
 name to a stable directory under the Logistics per-user application support root's
 `LocalCrypt`. `.connections` records contain

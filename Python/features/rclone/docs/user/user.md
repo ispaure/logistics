@@ -22,7 +22,9 @@ Logistics does not create account credentials for you.
 
 Choose **Load for Session** to use a package only for this Logistics session.
 Pressing Enter in the password field also loads for the session. The ZIP is decrypted directly in memory, with no extracted
-TXT or `.conf` file. Workspaces shows the package with a **(session)** label. Push,
+TXT or `.conf` file. Its remotes appear in **Workspaces → Cloud** (or **Home Server**
+for network-share packages), including remotes with no local copy. Session-only
+does not mean local-only. Workspaces shows the package with a **(session)** label. Push,
 Pull and previews pass its settings to each rclone child in a private environment,
 with a memory-only config and no secret command arguments. Existing saved configs
 remain unchanged. Session credentials disappear when Logistics exits, or when you
@@ -209,6 +211,11 @@ moving is available in the remote browser.
 See [Rclone mobile workflows](../user_mobile/workflows.md#android-and-ios-prototype).
 
 ## Read and edit a LocalCrypt copy on desktop
+
+**Creating a LocalCrypt copy requires credentials loaded with Load for Session**,
+including both the crypt remote and its backing remote. LocalCrypt describes the
+encrypted copy on disk; session-only describes how its credentials are held.
+The encrypted copy remains after the credentials lock or Logistics exits.
 
 For a session-loaded crypt remote with no existing copy, Workspaces offers:
 

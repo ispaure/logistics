@@ -647,6 +647,15 @@ class FoldersPage(pyside.QWidget):
             )
             status_layout.addWidget(remote_label, next_row, 1)
 
+        if entry.remote_source == 'rclone' and entry.remote_context is not None:
+            if Path(entry.remote_context).suffix == '.session':
+                note = pyside.QLabel(
+                    'Session-only credentials enable Cloud browsing and transfers. '
+                    'A session-loaded crypt remote can create a LocalCrypt copy; '
+                    'its encrypted files remain on disk when credentials lock.')
+                note.setWordWrap(True)
+                status_layout.addWidget(note, next_row + 1, 0, 1, 2)
+
         status_layout.setColumnStretch(1, 1)
         layout.addLayout(status_layout)
 

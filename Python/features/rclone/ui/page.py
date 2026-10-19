@@ -43,7 +43,7 @@ class RclonePage(pyside.QWidget):
         self.load_button = pyside.QPushButton('Load on Disk')
         self.load_session_button = pyside.QPushButton('Load for Session')
         self.load_button.setToolTip('Save a same-named rclone config on disk.')
-        self.load_session_button.setToolTip('Keep credentials in memory until Logistics exits.')
+        self.load_session_button.setToolTip('Keep credentials in memory until Logistics exits. Enables Cloud browsing and LocalCrypt creation.')
         self.remove_button = pyside.QPushButton('Forget Credentials')
 
         self.remote_list = pyside.QListWidget()
@@ -76,7 +76,10 @@ class RclonePage(pyside.QWidget):
         title.setFont(title_font)
 
         description = pyside.QLabel(
-            'Unlock a credential ZIP for this session, or save a same-named rclone config.'
+            'Load for Session keeps credentials in memory and makes its remotes available in Cloud '
+            '(or Home Server for network shares). Session-loaded crypt remotes can create LocalCrypt copies. '
+            'LocalCrypt files stay encrypted on disk after the session ends. '
+            'Load on Disk instead saves a same-named rclone config.'
         )
         description.setWordWrap(True)
 

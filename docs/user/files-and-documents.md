@@ -224,7 +224,10 @@ For plain-source editing, choose [Text Editor](../../Python/features/text_editor
 Choose a source and folder on **Workspaces**. Local folders normally live under
 `~/Server/Local`. **Local** includes all available local copies, including detected
 Dropbox account folders and rclone-linked Local and LocalCrypt copies. **Cloud**
-contains remotes from loaded rclone credentials and browses them online. Offline
+contains remotes from loaded rclone credentials, including **Load for Session**,
+and browses them online even when no local copy exists. Session-only credentials
+can also create LocalCrypt copies from crypt remotes; those encrypted copies
+remain on disk after the credentials lock. Offline
 copy associations alone do not create Cloud rows. A folder can appear in both
 Local and Cloud; each tab opens its corresponding storage. **Home Server** contains
 loaded rclone sources from the `Network shares` or `Session network shares`
