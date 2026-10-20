@@ -246,15 +246,16 @@ def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None):
     return view
 
 
-async def watch_width(*, alive, width, view):
+async def watch_width(*, alive, width, view, changed):
     """Keep rich content inside its current pane despite native minimum-size hints."""
-    import asyncio
     while alive():
+        await changed()
+        if not alive():
+            return
         widget = view()
         available = max(1, int(width()))
         if widget.style.width != available:
             widget.style.width = available
-        await asyncio.sleep(.3)
 
 
 def pane_width(widget, fallback, margin=0):

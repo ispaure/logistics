@@ -51,12 +51,11 @@ class SpreadView(toga.Box):
         self.canvas.dispose()
 
 
-async def watch_layout(*, alive, available, viewport, view, reload):
+async def watch_layout(*, alive, available, viewport, view, reload, changed):
     """Refresh a fitted spread after a viewport change; hosts own task lifetime."""
-    import asyncio
     previous = viewport()
     while alive():
-        await asyncio.sleep(.3)
+        await changed()
         if not alive():
             return
         current = viewport()

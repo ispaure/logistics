@@ -384,6 +384,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             owner.reflow(self.adaptive.content_width(owner.destination, margin=0))
         for owner in self.text_views.values():
             owner.apply_split(self.main_window.size.width)
+        from .layout_events import notify_layout
+        self.loop.call_soon(notify_layout, self)
 
     def refresh_native_theme(self):
         from .appearance import refresh_appearance

@@ -203,6 +203,8 @@ class ReaderChrome:
             view = self.book_content.children[0]
             if hasattr(view, 'fit_page'):
                 view.fit_page()
+        from .layout_events import notify_layout
+        notify_layout(self.app)
 
     def swipe_book_page(self, direction):
         if self.book_reader is None:

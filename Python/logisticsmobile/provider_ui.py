@@ -1010,6 +1010,8 @@ class ProviderUI(FilesUI):
     def fit_private_page(self, widget=None, **kwargs):
         view = getattr(self, 'provider_spread', self.crypt_image)
         view.fit_page()
+        from .layout_events import notify_layout
+        notify_layout(getattr(self, 'app', self))
 
     def close_crypt(self, widget=None, **kwargs):
         if not self.cloud_busy and self.clear_private_reader():
@@ -1097,6 +1099,7 @@ class ProviderUI(FilesUI):
             task.cancel()
         self._provider_width_panel = panel
         from features.books.mobile.presentation import watch_width, pane_width
+        from .layout_events import layout_waiter
         def width():
             available = pane_width(self.crypt_content, self.main_window.size.width, 0)
             if hasattr(panel, 'reflow'):
@@ -1104,7 +1107,7 @@ class ProviderUI(FilesUI):
             return available
         self._provider_width_task = self.loop.create_task(watch_width(
             alive=lambda: getattr(self, 'provider_epub_view', None) is panel,
-            width=width, view=lambda: panel))
+            width=width, view=lambda: panel, changed=layout_waiter(self.app)))
 
     def private_comic_seam(self, view=None):
         from .fold_layout import seam_fraction
@@ -1125,12 +1128,14 @@ class ProviderUI(FilesUI):
                 or (task is not None and not task.done())):
             return
         from features.comics.mobile.presentation import watch_layout
+        from .layout_events import layout_waiter
         self._provider_layout_task = self.loop.create_task(watch_layout(
             alive=lambda: self.crypt_reader is reader and self.active_host
                 and hasattr(self, 'provider_spread') and not getattr(self, 'page_suspended', False),
             available=lambda: not self.cloud_busy and self.manager.active is self,
             viewport=lambda: (self.private_comic_viewport(), self.private_comic_mode(), self.private_comic_seam()),
-            view=lambda: getattr(self, 'provider_spread', None), reload=self.read_crypt_page))
+            view=lambda: getattr(self, 'provider_spread', None), reload=self.read_crypt_page,
+            changed=layout_waiter(self.app)))
 
     def show_provider_layout(self, widget=None, **kwargs):
         if (self.crypt_reader is None or self.crypt_reader.editable

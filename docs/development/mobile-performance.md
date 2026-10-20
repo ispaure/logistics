@@ -175,7 +175,12 @@ callbacks and omission of operation return values from reports.
     close retains its existing wait-until-saved guard. Twenty-one EPUB/reader
     checks pass, including twenty events producing one latest-position write.
     Private provider locations continue to live only in the session dictionary.
-23. Event-driven reader layout — pending.
+23. Event-driven reader layout — implemented: weak event subscriptions replace
+    both 300 ms timer loops. Initial mounting, native window/fold resize, reader
+    idle transitions and fit actions coalesce wakeups. Zoomed spreads defer reload
+    until an eligible layout/fit notification. Twenty-two reader/layout checks
+    pass; idle waits stay asleep, 100 notifications coalesce, and retired listeners
+    are collected. Native fold/gesture geometry checks remain pending.
 24. Sampled comic decoding and reusable spreads — pending.
 25. Coordinated Python/native memory budgets — pending.
 26. Native loading-panel draw readiness — pending.

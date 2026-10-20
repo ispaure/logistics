@@ -343,7 +343,7 @@ class ReaderBridgeLifecycleTests(unittest.TestCase):
                     available=lambda: True,
                     viewport=lambda: state["viewport"],
                     view=lambda: canvas,
-                    reload=refresh,
+                    reload=refresh, changed=lambda: tick(0),
                 )
             self.assertEqual(state["calls"], 1)
 
@@ -371,9 +371,9 @@ class ReaderBridgeLifecycleTests(unittest.TestCase):
                 await watch_width(
                     alive=lambda: state["alive"],
                     width=lambda: state["width"],
-                    view=lambda: widget,
+                    view=lambda: widget, changed=lambda: tick(0),
                 )
-            self.assertEqual(observed, [395, 732, 395])
+            self.assertEqual(observed, ["none", 732, 395])
 
         asyncio.run(exercise())
 

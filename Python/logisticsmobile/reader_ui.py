@@ -68,6 +68,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
 
     def set_book_busy(self, busy):
         self.book_busy = busy
+        if not busy:
+            from .layout_events import notify_layout
+            notify_layout(self.app)
         if not hasattr(self, '_book_idle'):
             self._book_idle = asyncio.Event()
         if busy:
@@ -684,6 +687,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if task is not None and not task.done():
             return
         from features.books.mobile.presentation import watch_width, pane_width
+        from .layout_events import layout_waiter
         def width():
             self.reflow_chapters()
             available = pane_width(self.library_view, self.app.adaptive.content_width(self.presentation_destination, margin=0), 0)
@@ -692,19 +696,21 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         self._epub_width_task = self.loop.create_task(watch_width(
             alive=lambda: self.book_reader is reader and self.book_epoch == epoch,
             width=width,
-            view=lambda: self.epub_view))
+            view=lambda: self.epub_view, changed=layout_waiter(self.app)))
 
     def watch_comic_layout(self, reader, epoch):
         task = getattr(self, '_comic_layout_task', None)
         if task is not None and not task.done():
             return
         from features.comics.mobile.presentation import watch_layout
+        from .layout_events import layout_waiter
         self._comic_layout_task = self.loop.create_task(watch_layout(
             alive=lambda: self.book_reader is reader and self.book_epoch == epoch and self.active_host,
             available=lambda: not self.book_busy and self.manager.active is self,
             viewport=lambda: (self.comic_viewport(), self.comic_layout_mode(), self.comic_seam()),
             view=lambda: self.book_content.children[0] if self.book_content.children else None,
-            reload=lambda: self.move_book_page(self.book_record['position'])))
+            reload=lambda: self.move_book_page(self.book_record['position']),
+            changed=layout_waiter(self.app)))
 
     async def first_comic_page(self, widget=None, **kwargs):
         if self.book_record is not None and self.book_record['kind'] == 'comic':
