@@ -207,7 +207,10 @@ class AutoSaveTests(QtTestCase):
         color = False
         def saved():
             nonlocal color
-            if self.path.read_bytes() == b'edit original\r\n':
+            # Windows denies reads while the save worker holds its write handle.
+            # Keep sending formatting events during the write, then inspect the
+            # published bytes after its completion callback releases that handle.
+            if not self.doc.buffer.autosave.busy and self.path.read_bytes() == b'edit original\r\n':
                 return True
             cursor = qt.QTextCursor(self.doc.document())
             cursor.select(qt.QTextCursor.SelectionType.Document)
