@@ -181,6 +181,13 @@ callbacks and omission of operation return values from reports.
     until an eligible layout/fit notification. Twenty-two reader/layout checks
     pass; idle waits stay asleep, 100 notifications coalesce, and retired listeners
     are collected. Native fold/gesture geometry checks remain pending.
-24. Sampled comic decoding and reusable spreads — pending.
+24. Sampled comic decoding and reusable spreads — implemented: Android uses
+    BitmapFactory sampling and iOS ImageIO thumbnails bounded to draw resolution.
+    Composition decodes one page at a time, releases Android scratch bitmaps and
+    drains per-page Apple autorelease pools. Compatible spreads reuse the canvas
+    after successful composition; failures preserve previous pixels. Twenty-eight
+    reader/private checks pass for sampling, canvas identity, failure retention,
+    manga order, alpha and gutter. Native decoder execution remains pending;
+    Apple signatures were checked against installed SDK/backend sources.
 25. Coordinated Python/native memory budgets — pending.
 26. Native loading-panel draw readiness — pending.

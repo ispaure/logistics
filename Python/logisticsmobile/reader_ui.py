@@ -296,8 +296,13 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 view = page_view(data[0], canvas=ImageCanvas, on_page=self.swipe_book_page,
                                  on_toggle=self.toggle_reading_mode)
             else:
-                view = SpreadView(data, canvas=ImageCanvas, on_page=self.swipe_book_page,
-                    on_toggle=self.toggle_reading_mode, right_to_left=reader.right_to_left, viewport=self.comic_viewport(), seam=seam)
+                previous = self.book_content.children[0] if self.book_content.children else None
+                if isinstance(previous, SpreadView):
+                    view = previous.replace(data, right_to_left=reader.right_to_left,
+                        viewport=self.comic_viewport(), seam=seam)
+                else:
+                    view = SpreadView(data, canvas=ImageCanvas, on_page=self.swipe_book_page,
+                        on_toggle=self.toggle_reading_mode, right_to_left=reader.right_to_left, viewport=self.comic_viewport(), seam=seam)
         location = dict(path=reader.spine[index], offset=prepared_epub[1]) if record['kind'] == 'epub' else None
         updated = dict(record, position=index)
         if location is not None:
@@ -317,7 +322,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 right_to_left=getattr(reader, 'right_to_left', False))
         begin_page_slide(self.book_content, direction, self.preferences.values)
         for child in list(self.book_content.children):
-            if hasattr(child, 'dispose'):
+            if child is not view and hasattr(child, 'dispose'):
                 child.dispose()
             self.book_content.remove(child)
         self.close_read_aloud()

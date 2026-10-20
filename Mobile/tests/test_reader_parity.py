@@ -379,6 +379,12 @@ class ReaderBridgeLifecycleTests(unittest.TestCase):
 
 
 class CompositeRenderingTests(unittest.TestCase):
+    def test_sampled_decode_keeps_draw_resolution(self):
+        from features.comics.mobile.decoding import sample_size
+        self.assertEqual(sample_size((8000, 12000), (1000, 1500)), 8)
+        self.assertEqual(sample_size((8000, 12000), (1500, 3000)), 4)
+        self.assertEqual(sample_size((80, 120), (100, 150)), 1)
+
     def test_native_composite_preserves_manga_order_gutter_and_alpha(self):
         from features.comics.mobile.composite import compose_spread
         from Mobile.native_tests.tests.logisticsmobile.reader_parity_probe import (
@@ -435,6 +441,15 @@ class CompositeRenderingTests(unittest.TestCase):
         view.fit_page()
         view.turn(1)
         self.assertEqual(events, [1])
+        canvas = view.canvas
+        view.replace([data, data], right_to_left=True)
+        self.assertIs(view.canvas, canvas)
+        self.assertEqual(canvas.zoom_scale, 1)
+        previous = canvas.image
+        with patch('features.comics.mobile.composite.compose_spread', side_effect=ValueError('decode')):
+            with self.assertRaises(ValueError):
+                view.replace([data])
+        self.assertIs(canvas.image, previous)
         view.dispose()
         self.assertIsNone(view.canvas.image)
         self.assertIsNone(view.canvas.on_page)

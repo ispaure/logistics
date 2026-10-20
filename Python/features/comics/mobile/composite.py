@@ -69,30 +69,49 @@ def compose_spread(data, *, right_to_left=False, viewport=None, seam=None):
         viewport = tuple(max(1, round(value * 2)) for value in viewport)
     size, rects = spread_geometry(sizes, viewport=viewport, seam=seam,
                                   single_right=len(data) == 1 and right_to_left)
-    images = [toga.Image(src=page) for page in data]
+    from .decoding import decode_page
     backend = get_factory().Image.__module__
     if backend.startswith('toga_android.'):
         from android.graphics import Bitmap, Canvas, Paint, RectF
         bitmap = Bitmap.createBitmap(*size, Bitmap.Config.ARGB_8888)
         drawing = Canvas(bitmap)
         paint = Paint(Paint.FILTER_BITMAP_FLAG)
-        for image, (x, y, width, height) in zip(images, rects):
-            drawing.drawBitmap(image._impl.native, None, RectF(x, y, x + width, y + height), paint)
+        for page, source_size, (x, y, width, height) in zip(data, sizes, rects):
+            image = decode_page(page, source_size, (width, height), backend)
+            decoded = image._impl.native
+            try:
+                drawing.drawBitmap(decoded, None, RectF(x, y, x + width, y + height), paint)
+            finally:
+                decoded.recycle()
+                del image
         return toga.Image(src=bitmap)
     if backend.startswith('toga_iOS.'):
         from rubicon.objc import ObjCClass, Block, objc_id, CGSize, CGRect
         format = ObjCClass('UIGraphicsImageRendererFormat').defaultFormat()
         format.scale, format.opaque = 1, False  # Pixel bound must not grow with device DPI.
         renderer = ObjCClass('UIGraphicsImageRenderer').alloc().initWithSize(CGSize(*size), format=format)
+        from rubicon.objc.runtime import autoreleasepool
+        errors = []
         def draw(context):
-            for image, (x, y, width, height) in zip(images, rects):
-                image._impl.native.drawInRect(CGRect((x, y), (width, height)))
-        return toga.Image(src=renderer.imageWithActions(Block(draw, None, objc_id)))
+            try:
+                for page, source_size, (x, y, width, height) in zip(data, sizes, rects):
+                    with autoreleasepool():
+                        image = decode_page(page, source_size, (width, height), backend)
+                        image._impl.native.drawInRect(CGRect((x, y), (width, height)))
+                        del image
+            except Exception as error:
+                # Exceptions cannot cross the Objective-C block boundary.
+                errors.append(error)
+        result = renderer.imageWithActions(Block(draw, None, objc_id))
+        if errors:
+            raise errors[0]
+        return toga.Image(src=result)
     if backend.startswith('toga_dummy.'):
         # Toga's testing backend already owns Pillow images. No mobile dependency.
         from PIL import Image
         bitmap = Image.new('RGBA', size)
-        for image, (x, y, width, height) in zip(images, rects):
+        for page, source_size, (x, y, width, height) in zip(data, sizes, rects):
+            image = decode_page(page, source_size, (width, height), backend)
             bitmap.alpha_composite(image._impl.native.raw.convert('RGBA').resize((width, height)), (x, y))
         return toga.Image(src=get_factory().Image.RAW_TYPE(bitmap))
     raise RuntimeError('Composite comic rendering requires Android or iOS.')

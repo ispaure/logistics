@@ -27,6 +27,14 @@ class SpreadView(toga.Box):
         self.canvases = [self.canvas]
         super().__init__(children=[self.canvas], style=Pack(flex=1, width=width if width is not None else NONE))
 
+    def replace(self, data, *, right_to_left=False, viewport=None, seam=None):
+        """Publish only a fully prepared bitmap; reuse gesture/native ownership."""
+        from .composite import compose_spread
+        image = compose_spread(data, right_to_left=right_to_left, viewport=viewport, seam=seam)
+        self.canvas.image = image
+        self.canvas.fit_page()
+        return self
+
     @property
     def magnifier_enabled(self):
         return self.canvas.magnifier_enabled

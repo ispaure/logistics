@@ -408,11 +408,17 @@ class ProviderUI(FilesUI):
             indices, data = content
             # Decode/compose before retiring the displayed private pixels. Native
             # allocation or decoder failures must preserve the previous spread.
-            prepared_spread = SpreadView(data, canvas=ImageCanvas,
-                on_page=controller.swipe_crypt_page, on_toggle=controller.toggle_private_reading_mode,
-                right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
-                viewport=controller.private_comic_viewport(view),
-                seam=controller.private_comic_seam(view))
+            previous = getattr(view, 'provider_spread', None)
+            if isinstance(previous, SpreadView) and previous in view.crypt_content.children:
+                prepared_spread = previous.replace(data,
+                    right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
+                    viewport=controller.private_comic_viewport(view), seam=controller.private_comic_seam(view))
+            else:
+                prepared_spread = SpreadView(data, canvas=ImageCanvas,
+                    on_page=controller.swipe_crypt_page, on_toggle=controller.toggle_private_reading_mode,
+                    right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
+                    viewport=controller.private_comic_viewport(view),
+                    seam=controller.private_comic_seam(view))
             from .magnifier import bind
             bind(controller, prepared_spread)
         from .page_animation import page_direction, begin_page_slide, finish_page_slide
@@ -424,7 +430,7 @@ class ProviderUI(FilesUI):
                 right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
         begin_page_slide(view.crypt_content, direction, self.preferences.values)
         for child in list(view.crypt_content.children):
-            if hasattr(child, 'dispose') and child not in (view.crypt_image, view.crypt_text):
+            if hasattr(child, 'dispose') and child not in (view.crypt_image, view.crypt_text, prepared_spread):
                 child.dispose()
             view.crypt_content.remove(child)
         view.crypt_text.value = ''
