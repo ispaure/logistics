@@ -33,18 +33,23 @@ SCRIPT = r'''
  const place=value=>{page=Math.max(0,Math.min(pageCount-1,value));pages.style.transform='translateX('+(-page*pageWidth)+'px)';scrollTo(0,0);};
  layout();
  let anchor = options.offset, selectedCache = null, speechRange = null;
- const nodes = () => {
-   const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-   const result = []; let n; while ((n = walk.nextNode())) result.push(n);
-   return result;
- };
+ // Inert chapter text is immutable for this bridge's lifetime. Index once.
+ let textNodes = [], textEnds = [], textStarts = new WeakMap();
+ const walk = document.createTreeWalker(pages, NodeFilter.SHOW_TEXT);
+ let node, length = 0;
+ while ((node = walk.nextNode())) {
+   textStarts.set(node, length); length += node.length;
+   textNodes.push(node); textEnds.push(length);
+ }
  const point = (offset, end=false) => {
-   const list = nodes(); let left = Math.max(0, offset);
-   for (const node of list) {
-     if (left < node.length || (end && left === node.length)) return [node, left];
-     left -= node.length;
+   const value = Math.max(0, offset);
+   let lo=0, hi=textEnds.length;
+   while(lo<hi) {
+     const mid=(lo+hi)>>>1;
+     if(end ? textEnds[mid]<value : textEnds[mid]<=value) lo=mid+1; else hi=mid;
    }
-   return list.length ? [list[list.length-1], list[list.length-1].length] : null;
+   if(lo<textNodes.length) return [textNodes[lo], value-(lo ? textEnds[lo-1] : 0)];
+   return textNodes.length ? [textNodes.at(-1), textNodes.at(-1).length] : null;
  };
  const notify = (action, value) => {
    window.location.href = options.root + action + '?offset=' + value + '&end=' + (page===pageCount-1 ? '1' : '0');
@@ -53,7 +58,7 @@ SCRIPT = r'''
    let total = 0;
    const bounds=document.body.getBoundingClientRect();
    const left=bounds.left+parseFloat(getComputedStyle(document.body).paddingLeft), right=left+pageWidth;
-   for (const node of nodes()) {
+   for (const node of textNodes) {
      if (!node.length) continue;
      const range = document.createRange(); range.selectNodeContents(node);
      const rects = [...range.getClientRects()];
@@ -88,7 +93,7 @@ SCRIPT = r'''
         r.endContainer===speechRange.endContainer && r.endOffset===speechRange.endOffset) return null;
      if (!document.body.contains(r.commonAncestorContainer)) return null;
      before.selectNodeContents(document.body); before.setEnd(r.startContainer,r.startOffset);
-     const start = before.toString().length;
+     const start = textStarts.has(r.startContainer) ? textStarts.get(r.startContainer)+r.startOffset : before.toString().length;
      return {start, end:start+r.toString().length};
  };
  const clearSelectionCache = () => {selectedCache=null;};
@@ -137,7 +142,7 @@ SCRIPT = r'''
      place(page+(direction>0?1:-1));
      anchor=visible();notify('position',anchor);
    },
-   dispose: () => {disposed=true;if(viewport.isConnected){while(pages.firstChild) viewport.before(pages.firstChild);viewport.remove();}document.removeEventListener('touchstart',touchStart);document.removeEventListener('touchmove',touchMove);document.removeEventListener('touchend',touchEnd);document.removeEventListener('wheel',wheel);document.removeEventListener('keydown',key);removeEventListener('resize',resized);document.removeEventListener('selectionchange',rememberSelection);removeEventListener('pointerdown',clearSelectionCache);removeEventListener('keydown',clearSelectionCache);selectedCache=null;}
+   dispose: () => {disposed=true;textNodes=[];textEnds=[];textStarts=new WeakMap();if(viewport.isConnected){while(pages.firstChild) viewport.before(pages.firstChild);viewport.remove();}document.removeEventListener('touchstart',touchStart);document.removeEventListener('touchmove',touchMove);document.removeEventListener('touchend',touchEnd);document.removeEventListener('wheel',wheel);document.removeEventListener('keydown',key);removeEventListener('resize',resized);document.removeEventListener('selectionchange',rememberSelection);removeEventListener('pointerdown',clearSelectionCache);removeEventListener('keydown',clearSelectionCache);selectedCache=null;}
  };
  addEventListener('resize',resized);
  document.addEventListener('selectionchange',rememberSelection);addEventListener('pointerdown',clearSelectionCache);addEventListener('keydown',clearSelectionCache);

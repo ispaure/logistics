@@ -157,7 +157,12 @@ callbacks and omission of operation return values from reports.
     surfaces consume the prepared index; fragment lookup reuses it. Thirty-two
     reader/session checks pass, including worker-thread indexing and no repeat
     indexing during native text-surface construction. No persistent chapter cache.
-20. Cached EPUB DOM text indexes — pending.
+20. Cached EPUB DOM text indexes — implemented: one text-node/prefix-offset
+    index per inert chapter, binary-search seeks and cached selection starts.
+    Disposal clears node references. Ten browser/reader lifecycle checks pass.
+    A synthetic 2,000-paragraph browser chapter performs one TreeWalker build
+    across 100 Unicode selections and visible-position queries. Browser fixture
+    notifications are intercepted to model the native navigation bridge.
 21. Present pages before progress persistence — pending.
 22. Batched EPUB position updates — pending.
 23. Event-driven reader layout — pending.
