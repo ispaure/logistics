@@ -106,6 +106,28 @@ class MarkdownEditorTests(unittest.TestCase):
         bridge.navigate(None, bridge.bridge + '?text=closed')
         self.assertEqual(owner.document.text, text)
 
+    def test_changed_blocks_are_cumulative_ordered_and_retired(self):
+        import json
+        from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
+        changes = []
+        editor = FormattedMarkdownInput(changes.append)
+        source = '# Original\r\n\r\n' + ('untouched 😀\n\n' * 1000)
+        editor.load(source)
+        def send(revision, updates):
+            editor.navigate(None, editor.bridge + '?patch=' + quote(json.dumps(
+                dict(revision=revision, changes=updates)), safe=''))
+        send(2, [[0, '# Changed\r\n']])  # A coalesced earlier navigation is safe.
+        self.assertEqual(changes[-1], '# Changed\r\n' + ''.join(editor._blocks[1:]))
+        send(1, [[0, 'stale']])
+        send(3, [[999999, 'invalid']])
+        self.assertEqual(len(changes), 1)
+        send(4, [])  # Undo restores the exact original source.
+        self.assertEqual(changes[-1], source)
+        editor.dispose()
+        send(5, [[0, 'closed']])
+        self.assertEqual(len(changes), 2)
+        self.assertEqual(editor._blocks, ())
+
     def test_each_markdown_session_owns_its_preview(self):
         first = self.app.store.create('First.md', b'# First')
         self.app.open_document(first.id)

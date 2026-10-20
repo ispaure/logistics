@@ -141,7 +141,12 @@ callbacks and omission of operation return values from reports.
     Twenty-four browser/keyboard checks pass, including 10,005 entries and exact
     last-file activation. Stop clears retained names/images and entry snapshots.
     Native scrolling and frame timing remain pending.
-17. Formatted Markdown changed-block bridge — pending.
+17. Formatted Markdown changed-block bridge — implemented: cumulative changed
+    blocks replace whole-source URL messages; unchanged blocks retain exact
+    original spelling. Byte counts are cached per block. Monotonic revisions and
+    per-load nonces reject stale updates; cumulative payloads tolerate coalesced
+    navigation. Twelve Markdown checks pass, including Unicode/CRLF preservation,
+    undo, invalid indexes, out-of-order messages and disposal. Source stays in RAM.
 18. Background provider Markdown previews — pending.
 19. Background EPUB text indexes — pending.
 20. Cached EPUB DOM text indexes — pending.

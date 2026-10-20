@@ -180,23 +180,38 @@ function serialize(node) {
     default: return inline(node);
     }
 }
+let revision = 0;
+const byteSizes = blocks.map(block => new TextEncoder().encode(block.source).length);
+let totalBytes = byteSizes.reduce((sum, size) => sum + size, 0);
+const changes = new Map();
 function publish() {
     try {
-        const parts = [];
-        const text = Array.from(root.children, section => {
-            const block = blocks[Number(section.dataset.index)];
-            if (section.innerHTML === block.originalHTML) {parts.push(block.source); return block.source;}
-            let edited = serialize(section).replace(/\n+$/, '');
-            const ending = block.source.match(/\n*$/)[0];
-            const previous = parts.join('');
-            const prefix = block.source === '' && previous ? (previous.endsWith('\n\n') ? '' : previous.endsWith('\n') ? '\n' : '\n\n') : '';
-            const result = prefix + edited + (ending || '\n\n');
-            parts.push(result);
-            return result;
-        }).join('');
-        if (new TextEncoder().encode(text).length > 1024 * 1024)
-            throw Error('Formatted editing is limited to 1 MiB.');
-        location.href = BRIDGE + '?text=' + encodeURIComponent(text);
+        let previousEnding = '';
+        for (const section of root.children) {
+            const index = Number(section.dataset.index), block = blocks[index];
+            const html = section.innerHTML;
+            if (html !== (block.publishedHTML ?? block.originalHTML)) {
+                if (html === block.originalHTML) changes.delete(index);
+                else {
+                    const edited = serialize(section).replace(/\n+$/, '');
+                    const ending = block.source.match(/\n*$/)[0];
+                    const prefix = block.source === '' && previousEnding ?
+                        (previousEnding.endsWith('\n\n') ? '' : previousEnding.endsWith('\n') ? '\n' : '\n\n') : '';
+                    changes.set(index, prefix + edited + (ending || '\n\n'));
+                }
+                const source = changes.has(index) ? changes.get(index) : block.source;
+                totalBytes -= byteSizes[index];
+                byteSizes[index] = new TextEncoder().encode(source).length;
+                totalBytes += byteSizes[index];
+                block.publishedHTML = html;
+            }
+            const source = changes.has(index) ? changes.get(index) : block.source;
+            if (source) previousEnding = source.slice(-2);
+        }
+        if (totalBytes > 1024 * 1024) throw Error('Formatted editing is limited to 1 MiB.');
+        // Cumulative changed blocks tolerate a WebView coalescing navigation events.
+        // Untouched source never crosses the bridge again; no document is persisted.
+        location.href = BRIDGE + '?patch=' + encodeURIComponent(JSON.stringify({revision: ++revision, changes: Array.from(changes)}));
         document.getElementById('notice').textContent = '';
     } catch (error) {
         document.getElementById('notice').textContent = error.message + ' Undo this change before switching modes.';
@@ -493,6 +508,8 @@ class FormattedMarkdownInput:
         self.stylesheet = stylesheet
         self.closed = False
         self.text = None
+        self._blocks = ()
+        self._revision = 0
         self.bridge = 'logistics-editor://' + uuid4().hex + '/'
         self.view = toga.WebView(on_navigation_starting=self.navigate, style=Pack(flex=1))
 
@@ -503,22 +520,51 @@ class FormattedMarkdownInput:
         content = editor_html(text, bridge, self.font_size,
             image_source=self.image_source() if self.image_source else None, stylesheet=self.stylesheet)
         self.bridge = bridge
+        self._blocks = tuple(block['source'] for block in editor_blocks(text))
+        self._revision = 0
         self.text = text
         self.view.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
 
     def navigate(self, widget, url, **kwargs):
         if not self.closed and url.split('?', 1)[0] == self.bridge:
             values = parse_qs(urlsplit(url).query, keep_blank_values=True)
-            if set(values) == {'text'} and len(values['text']) == 1:
+            text = None
+            if set(values) == {'patch'} and len(values['patch']) == 1:
+                try:
+                    raw = values['patch'][0]
+                    if len(raw.encode('utf-8')) > 8 * 1024 * 1024:
+                        return False
+                    payload = json.loads(raw)
+                    revision = payload['revision']
+                    changes = payload['changes']
+                    if type(revision) is not int or revision <= self._revision or not isinstance(changes, list):
+                        return False
+                    parts = list(self._blocks)
+                    seen = set()
+                    for index, source in changes:
+                        if (type(index) is not int or index in seen or not 0 <= index < len(parts)
+                                or not isinstance(source, str)):
+                            return False
+                        seen.add(index)
+                        parts[index] = source
+                    text = ''.join(parts)
+                    if len(text.encode('utf-8')) > 1024 * 1024:
+                        return False
+                    self._revision = revision
+                except (ValueError, TypeError, KeyError):
+                    return False
+            elif set(values) == {'text'} and len(values['text']) == 1:
                 text = values['text'][0]
-                if len(text.encode('utf-8')) <= 1024 * 1024 and text != self.text:
-                    self.text = text
-                    self.changed(text)
+            if text is not None and len(text.encode('utf-8')) <= 1024 * 1024 and text != self.text:
+                self.text = text
+                self.changed(text)
         return False
 
     def dispose(self):
         self.closed = True
         self.changed = None
+        self.text = None
+        self._blocks = ()
         self.image_source = None
         retire_webview(self.view)
 
