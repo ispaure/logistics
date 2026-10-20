@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -112,5 +113,30 @@ func TestRemoteComicSnapshotIsOfflineAESBoundedAndRevoked(t *testing.T) {
 				t.Fatal("closed cache remained readable")
 			}
 		}
+	}
+}
+
+func TestRemoteComicControlReportsSharedBudgetWithoutContent(t *testing.T) {
+	clearRemoteComics()
+	defer clearRemoteComics()
+	run := strings.Repeat("b", 32)
+	remoteComics.entries[run] = &remoteComic{total: 123, done: 123, ready: true, data: []byte("private sentinel")}
+	remoteComics.bytes = 123
+	var response struct {
+		Result map[string]any `json:"result"`
+	}
+	raw := remoteComicControl("remote_cache_status", `{"run":"`+run+`"}`)
+	if strings.Contains(raw, "private sentinel") {
+		t.Fatal("content leaked in accounting")
+	}
+	if err := json.Unmarshal([]byte(raw), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Result["pool_bytes"] != float64(123) || response.Result["pool_limit"] != float64(remoteComicPoolLimit) {
+		t.Fatal("missing aggregate admission accounting")
+	}
+	remoteComicControl("remote_cache_close", `{"run":"`+run+`"}`)
+	if remoteComics.bytes != 0 {
+		t.Fatal("close did not release reservation")
 	}
 }

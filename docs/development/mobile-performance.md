@@ -189,5 +189,13 @@ callbacks and omission of operation return values from reports.
     reader/private checks pass for sampling, canvas identity, failure retention,
     manga order, alpha and gutter. Native decoder execution remains pending;
     Apple signatures were checked against installed SDK/backend sources.
-25. Coordinated Python/native memory budgets — pending.
+25. Coordinated Python/native memory budgets — implemented: the native archive
+    pool admits 128 MiB total while preserving the 128 MiB individual archive
+    limit. Python private admission counts shared bytes once plus member caches
+    and edit strings within 32 MiB; memory pressure clears decoded thumbnail
+    caches. Named bitmap/decode/bridge reserves document a 384 MiB managed-reader
+    envelope, excluding interpreter/WebKit/OS memory (not an RSS ceiling). Thirty
+    Python accounting/private/remote checks pass. Native Go tests verify budget
+    accounting without content disclosure, release, offline access and revocation.
+    Real-device peak RSS remains unmeasured.
 26. Native loading-panel draw readiness — pending.

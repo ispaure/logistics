@@ -5,7 +5,9 @@ from logisticsmobile.provider_ui import ProviderUI
 from .reader_host import ReaderHost
 
 MAX_PRIVATE_SESSIONS = 4
-MAX_PRIVATE_BYTES = 32 * 1024 * 1024
+from .reader_memory import PRIVATE_BUFFERS, private_buffer_bytes
+
+MAX_PRIVATE_BYTES = PRIVATE_BUFFERS
 
 
 class PrivateController(ReaderHost, ProviderUI):
@@ -270,8 +272,7 @@ class PrivateSessions:
                 retire_open()
                 return False
             reader = owner.crypt_reader
-            total = sum(len(getattr(value.crypt_reader, 'data', b'') or b'')
-                        for value in self.controllers.values())
+            total = private_buffer_bytes(self.controllers.values())
             if total > MAX_PRIVATE_BYTES:
                 retire_open()
                 self.app.cloud_status.value = 'Private content exceeds the 32 MiB memory budget. Close an item and retry; existing edits were kept.'

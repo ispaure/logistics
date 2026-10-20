@@ -1166,6 +1166,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             browser = getattr(self, name, None)
             if browser is not None:
                 browser.icons.clear()
+                decoded = getattr(browser, '_decoded_thumbnails', None)
+                if decoded is not None:
+                    decoded.clear()
 
     def cancel_cloud(self, widget=None, **kwargs):
         picker = getattr(self, '_editor_picker', None)

@@ -10,7 +10,10 @@ import (
 )
 
 const remoteComicLimit int64 = 128 * 1024 * 1024
-const remoteComicPoolLimit int64 = 256 * 1024 * 1024
+
+// Coordinate with logisticsmobile.reader_memory: reserve room for Python buffers,
+// current/replacement canvases, one sampled decode and transient bridge copies.
+const remoteComicPoolLimit int64 = 128 * 1024 * 1024
 
 type remoteComic struct {
 	remote, path, identity, revision string
@@ -57,6 +60,8 @@ func remoteComicControl(action, input string) string {
 	if item := remoteComics.entries[request.Run]; item != nil {
 		result = map[string]any{"done": item.done, "total": item.total, "ready": item.ready}
 	}
+	result["pool_bytes"] = remoteComics.bytes
+	result["pool_limit"] = remoteComicPoolLimit
 	remoteComics.Unlock()
 	data, _ := json.Marshal(map[string]any{"ok": true, "result": result})
 	return string(data)
