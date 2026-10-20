@@ -888,6 +888,9 @@ Credential restore, replacement and lock cleanup retain ordinary local provider
 roots, rows and in-flight listings. They remove private roots and retire private
 browser state. This also protects a cold Local files entry while initial
 credential restoration finishes on Android or iOS.
+UIKit scene activation can also arrive while the startup window is still being
+built. Scene callbacks record activity immediately and dispatch privacy/focus
+handlers only after the privacy owner exists.
 
 The local browser presents one On this device source. `SharedFiles` lists the
 iOS Documents root and exposes its `Local` child with the display name Collection.

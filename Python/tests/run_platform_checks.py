@@ -34,7 +34,8 @@ def main():
     results.mkdir(parents=True, exist_ok=True)
     report = {'platform': platform.platform(), 'python': sys.version,
               'dependencies': {name: version(name) for name in ('Pillow', 'PySide6', 'pyzipper', 'yt-dlp')}, 'checks': []}
-    env = dict(os.environ, PYTHONPATH=str(REPO / 'Python'), QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1', PYTHONUTF8='1')
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join((str(REPO / 'Python'), str(REPO))),
+               QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1', PYTHONUTF8='1')
     # Qt expands Windows 8.3 aliases; give fixtures matching native long paths.
     native_temp = str(Path(tempfile.gettempdir()).resolve())
     env.update(TEMP=native_temp, TMP=native_temp, TMPDIR=native_temp)

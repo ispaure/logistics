@@ -34,6 +34,22 @@ class SceneManager:
             self.supported = (ObjCClass('UIDevice').currentDevice.userInterfaceIdiom == 1
                               and bool(application.supportsMultipleScenes))
 
+    @staticmethod
+    def scene_activity(host, active):
+        host.scene_active = active
+        # UIKit may activate the startup window before workspace construction
+        # has installed privacy/focus handlers. Its privacy owner refreshes on
+        # construction; do not dispatch through an unfinished host.
+        privacy = getattr(host, 'screen_privacy', None)
+        if privacy is None:
+            return
+        if active:
+            privacy.reveal()
+            host.main_window.on_gain_focus()
+        else:
+            privacy.conceal()
+            host.checkpoint()
+
     def bind_workspace(self, key, host):
         host.window_id = key
         host.scene_manager = self
@@ -197,16 +213,12 @@ class SceneManager:
             @objc_method
             def sceneDidBecomeActive_(self, scene) -> None:
                 if hasattr(self, 'host'):
-                    self.host.scene_active = True
-                    self.host.screen_privacy.reveal()
-                    self.host.main_window.on_gain_focus()
+                    manager.scene_activity(self.host, True)
 
             @objc_method
             def sceneWillResignActive_(self, scene) -> None:
                 if hasattr(self, 'host'):
-                    self.host.scene_active = False
-                    self.host.screen_privacy.conceal()
-                    self.host.checkpoint()
+                    manager.scene_activity(self.host, False)
 
             @objc_method
             def sceneDidEnterBackground_(self, scene) -> None:

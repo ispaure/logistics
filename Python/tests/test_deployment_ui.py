@@ -2,20 +2,15 @@
 import json
 from pathlib import Path
 import sys
-import tempfile
 import unittest
 from unittest.mock import patch
 
-from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QMessageBox
+from commonUtils.tests.qt_test_case import QtTestCase
 from Mobile import deploy_ui as ui
 
 
-class DeploymentUITests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.app = QApplication.instance() or QApplication([])
-
+class DeploymentUITests(QtTestCase):
     def test_selection_survives_refresh_and_only_routes_local_deployment(self):
         with patch.object(ui.QTimer, 'singleShot'):
             window = ui.DeploymentWindow()
@@ -43,7 +38,7 @@ class DeploymentUITests(unittest.TestCase):
 
     def test_process_reads_split_confirmation_and_only_sends_users_answer(self):
         for answer, expected in [(QMessageBox.StandardButton.Yes, 'y'), (QMessageBox.StandardButton.No, 'n')]:
-            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(expected=expected), self.temporary_directory() as directory:
                 root = Path(directory)
                 (root / 'fake.py').write_text(
                     'import sys, time\n'
@@ -57,10 +52,8 @@ class DeploymentUITests(unittest.TestCase):
                 with patch.object(ui, 'ROOT', root), patch.object(ui, 'PYTHON', Path(sys.executable)), \
                         patch.object(ui.QMessageBox, 'question', return_value=answer) as question:
                     window.start('fake.py', [])
-                    for _ in range(300):
-                        QTest.qWait(10)
-                        if not window.busy:
-                            break
+                    self.wait_until(lambda: not window.busy, timeout=10,
+                                    message='Deployment confirmation subprocess did not finish')
                     self.assertFalse(window.busy)
                     question.assert_called_once()
                     self.assertIn('answer=' + expected, window.output.toPlainText())

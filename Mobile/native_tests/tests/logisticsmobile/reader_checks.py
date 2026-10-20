@@ -4,6 +4,7 @@ import base64
 import json
 from pathlib import Path
 from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.platform import get_os, OS
 from .web_checks import wait_for_text
 
 
@@ -104,7 +105,16 @@ async def exercise_reader(app, passed):
     assert owner.reader_immersive and owner.library_view._comic_fullscreen
     assert owner.reader_header not in owner.library_view.children
     current_view().toggle_controls()
-    assert not owner.reader_immersive and owner.reader_header in owner.library_view.children
+    assert not owner.reader_immersive
+    # Native document controls now live in the platform title bar rather than
+    # an extra Toga header row. Verify that actual bar after leaving fullscreen.
+    if get_os() is OS.IOS:
+        controller = app._reader_toolbar_controller
+        assert len(controller.navigationItem.rightBarButtonItems) > 0
+        assert owner.reader_header not in owner.library_view.children
+    else:
+        assert app._impl.native.getSupportActionBar().isShowing()
+        assert app.native_host.adapter._reader_action_bar_buttons
     current_view().toggle_controls()
     assert owner.reader_immersive
     await assert_comic_centered(current_view, fullscreen=True)
