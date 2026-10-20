@@ -7,7 +7,7 @@ from .content import chapter_html
 from .presentation import chapter_view
 from .private_view import PrivateWebView, private_webview_supported
 from .text_reader import TextBookView
-from .navigation import ChapterList
+from .navigation import ChapterList, chapter_sidebar
 
 
 class RichBookView(toga.Box):
@@ -33,9 +33,9 @@ class RichBookView(toga.Box):
         from commonUtils.ui.native.adaptive import AdaptiveSidebar
         self.chapters = ChapterList(self.choices.values(), self.open_chapter)
         tree = toga.Box(children=[toga.Label('Chapters', style=Pack(font_size=20)),
-            toga.ScrollContainer(content=self.chapters.rows, horizontal=False, style=Pack(flex=1))],
-            style=Pack(direction=COLUMN, flex=1, margin=8))
-        self.sidebar = AdaptiveSidebar(tree, self.webview, label='Browse book chapters')
+            self.chapters.rows], style=Pack(direction=COLUMN, margin=8))
+        sidebar = chapter_sidebar(tree)
+        self.sidebar = AdaptiveSidebar(sidebar, self.webview, label='Browse book chapters')
         # Keep the host's existing hamburger contract, with no search field in
         # the chapter hierarchy. Find remains an explicit action.
         self.tools = self.sidebar

@@ -8,7 +8,27 @@ ENTRY_ICON_SIZE = 24
 ENTRY_ICON_MARGIN = 6
 ENTRY_ICON_SLOT = ENTRY_ICON_SIZE + 2 * ENTRY_ICON_MARGIN
 TREE_INDENT = 40
-TREE_STROKE = 1.5
+TREE_STROKE = 2
+TREE_LABEL_GAP = 8
+
+
+def align_group_label(label):
+    """Center native text in the same row geometry as the branch connectors."""
+    label.style.margin_top = label.style.margin_bottom = 0
+    backend = type(label._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from math import ceil
+        size = label._impl.native.intrinsicContentSize
+        size = size() if callable(size) else size
+        label.style.height = ceil(size.height)
+        gap = max(0, ROW_HEIGHT - label.style.height)
+        label.style.margin_top = gap // 2
+        label.style.margin_bottom = gap - label.style.margin_top
+    elif backend.startswith('toga_android.'):
+        label._impl.native.setIncludeFontPadding(False)
+        label._impl.native.setGravity(3 | 16)  # Start, center vertically.
+        label.style.height = ROW_HEIGHT
+    return label
 
 
 def tree_anchor(label=None):
@@ -26,7 +46,7 @@ def tree_anchor(label=None):
     else:
         width = len(label.text) * label.style.font_size * .5
     # Long headings must still leave space for a horizontal branch in the gutter.
-    return min(TREE_INDENT - 8, max(8, width / 2))
+    return round(min(TREE_INDENT - 8, max(8, (getattr(label.style, 'margin_left', 0) or 0) + width / 2)))
 
 
 def tree_guide(height, midpoints, anchor):
@@ -40,14 +60,15 @@ def tree_guide(height, midpoints, anchor):
     from toga.style.pack import COLUMN
 
     guide = toga.Box(style=Pack(direction=COLUMN, width=TREE_INDENT, height=height))
+    left = anchor - TREE_STROKE / 2
     cursor = 0
     for midpoint in midpoints:
         top = midpoint - TREE_STROKE / 2
         guide.add(surface(toga.Box(style=Pack(width=TREE_STROKE,
-            height=top - cursor, margin_left=anchor)),
+            height=top - cursor, margin_left=left)),
             radius=0, background='tree_guide', outlined=False))
-        guide.add(surface(toga.Box(style=Pack(width=TREE_INDENT - anchor,
-            height=TREE_STROKE, margin_left=anchor)),
+        guide.add(surface(toga.Box(style=Pack(width=TREE_INDENT - left,
+            height=TREE_STROKE, margin_left=left)),
             radius=0, background='tree_guide', outlined=False))
         cursor = midpoint + TREE_STROKE / 2
     if cursor < height:

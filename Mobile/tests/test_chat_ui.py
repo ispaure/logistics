@@ -31,6 +31,16 @@ class ChatUITests(unittest.TestCase):
         self.app.chat_url.value = url
         self.app.chat_model.value = 'fixture-model'
 
+    def test_rotation_header_uses_current_safe_width_instead_of_previous_layout(self):
+        app = self.app
+        with patch.object(app.adaptive, 'content_width') as available:
+            for width in (720, 370, 720, 370):
+                available.return_value = width
+                app.update_chat_header()
+                menu = 52 if app.chat_menu_button in app.chat_header.children else 0
+                self.assertEqual(app.chat_title.style.width, width - 108 - menu)
+                self.assertEqual(app.chat_model_label.style.width, width - 108 - menu)
+
     def test_batched_drafts_never_persist_the_session_api_key(self):
         self.app.chat_key.value = 'SESSION-ONLY-API-KEY-SENTINEL'
         self.app.chat_prompt.value = 'Synthetic draft'

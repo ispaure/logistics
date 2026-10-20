@@ -48,6 +48,24 @@ class FolderHubContrastTests(unittest.TestCase):
         impl.native.intrinsicContentSize = lambda: NS(width=200, height=18)
         self.assertEqual(folder_hub_style.tree_anchor(label), folder_hub_style.TREE_INDENT - 8)
 
+    def test_tree_segments_do_not_accumulate_fractional_rounding(self):
+        import toga
+        from toga.style import Pack
+        label = toga.Label('Lib', style=Pack(font_size=15, margin_left=8))
+        self.assertEqual(folder_hub_style.tree_anchor(label), 19)
+        guide = folder_hub_style.tree_guide(210, (24, 182), 30)
+        top = 0
+        centers = []
+        for segment in guide.children:
+            height = segment.style.height
+            self.assertEqual(height, round(height))
+            if height == folder_hub_style.TREE_STROKE:
+                centers.append(top + height / 2)
+                self.assertEqual(segment.style.margin_left + segment.style.width, 40)
+            top += height
+        self.assertEqual(centers, [24, 182])
+        self.assertEqual(top, 210)
+
     def test_source_selection_inverts_only_in_high_contrast_and_repaints(self):
         tab = self.widget()
         palette.set_eink_enabled(True)

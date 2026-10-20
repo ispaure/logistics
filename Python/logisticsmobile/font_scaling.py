@@ -35,6 +35,14 @@ def refresh(host):
             choice.on_change = None
             choice.value = app.preferences.values[key]
             choice.on_change = handler
+    for key in ('markdown_justify', 'epub_justify'):
+        choice = getattr(app, key + '_choice', None)
+        value = app.preferences.values.get(key, 'false') == 'true'
+        if choice is not None and choice.value != value:
+            handler = choice.on_change
+            choice.on_change = None
+            choice.value = value
+            choice.on_change = handler
 
 
 def bind(host, widget, kind, *, web=False, formatted=None):
@@ -105,19 +113,27 @@ class FontBinding:
     async def apply_web(self):
         applied = None
         try:
-            while applied != self.size:
+            while True:
                 widget = self.widget()
-                if widget is None or getattr(widget, 'private_closed', False):
+                app = self.app()
+                if widget is None or app is None or getattr(widget, 'private_closed', False):
                     return
                 formatted = self.formatted()
                 if formatted is not None and formatted.closed:
                     return
-                applied = self.size
+                key = font_key(self.kind()).replace('_font_size', '_justify')
+                alignment = 'justify' if app.preferences.values.get(key, 'false') == 'true' else 'start'
+                current = (self.size, alignment)
+                if applied == current:
+                    return
+                applied = current
                 # Reflow the existing DOM: retain editor selection, undo and book anchor.
                 await widget.evaluate_javascript(
                     "(()=>{const viewport=document.querySelector('meta[name=viewport]');"
                     "if(viewport)viewport.content='width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no';"
-                    f"document.body.style.fontSize='{applied}px';window.dispatchEvent(new Event('resize'));}})()")
+                    f"document.body.style.fontSize='{applied[0]}px';"
+                    f"document.documentElement.style.setProperty('--logistics-text-align','{alignment}');"
+                    "window.dispatchEvent(new Event('resize'));})()")
         except Exception:
             logging.getLogger(__name__).debug('Text surface retired during font update', exc_info=True)
 

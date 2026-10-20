@@ -83,9 +83,10 @@ def run(target, device, *, local=False, require_independent_windows=False):
     path = logs / (target + '-native-ui.log')
     started_ns = time.time_ns()
     # Include cold startup, installation, all native cases and the visual audit.
-    # Hosted Android software rendering can finish the 32 core cases but still
-    # exceed 15 minutes in the audit. Keep both platforms bounded at 25 minutes.
-    timeout = 1500
+    # Hosted Android software rendering can finish the core cases but still
+    # exceed 15 minutes in the audit. Include the repeated rotation matrix,
+    # while keeping each native run bounded at 30 minutes.
+    timeout = 1800
     with path.open('w') as stream:
         process = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
         try:

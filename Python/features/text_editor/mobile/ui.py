@@ -58,6 +58,8 @@ class TextEditorView:
         self.conflict_copy = toga.Button('Save a copy…',
             on_press=lambda widget, **kw: self.actions.invoke(app.save_copy), style=Pack(height=48))
         self.action_items = [
+            ('Rename document…', self.rename_document), ('Find and replace…', self.toggle_search),
+            ('View document', app.show_preview),
             ('Open documents', app.show_documents_hub), ('New document', app.choose_document_type),
             ('Open beside another document', lambda: app.adaptive.show_pair_picker()),
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
@@ -72,11 +74,19 @@ class TextEditorView:
         self.save_button.on_press = lambda widget, **kw: self.actions.invoke(app.save_document)
         self.preview_button = icon_button('view', 'View document',
             on_press=lambda widget, **kw: self.actions.invoke(app.show_preview))
+        self.find_button = icon_button('find', 'Find and replace', on_press=self.toggle_search)
         self.toolbar = toga.Box(children=[self.name,
-            icon_button('find', 'Find and replace', on_press=self.toggle_search),
+            self.find_button,
             self.preview_button, self.actions_button], style=Pack(direction=ROW))
         box.add(self.toolbar)
         box._workspace_toolbar = self.toolbar
+        box._native_reader_toolbar = self.toolbar
+        box._native_reader_status = self.status
+        box._native_reader_title = lambda: self.document.name if self.document else 'New document'
+        box._native_reader_buttons = lambda: [
+            self.save_button if self.document is not None and self.document.modified else
+            self.preview_button if self.session is not None and self.session.kind == 'markdown' else self.find_button,
+            self.actions_button]
         self.source_tools = toga.Box(children=[self.language_choice, self.line_count], style=Pack(direction=ROW))
         box.add(self.source_tools)
         self.editor_area = toga.Box(children=[self.editor], style=Pack(direction=ROW, flex=1))
@@ -94,6 +104,22 @@ class TextEditorView:
         if self.session is not None and self.session.kind == 'markdown':
             self.edit_mode.value = 'Source'
         self.search.toggle()
+
+    def rename_document(self, widget=None, **kwargs):
+        name = toga.TextInput(value=self.document.name, style=Pack(height=48))
+        status = toga.Label('')
+        def apply(widget=None, **kwargs):
+            try:
+                value = document_name(name.value)
+            except ValueError as error:
+                status.text = str(error)
+                return
+            self.name.value = value
+            self.app.show_documents(edit=True, destination='documents')
+        content = toga.Box(children=[toga.Label('Document name'), name, status,
+            toga.Button('Apply name', on_press=apply, style=Pack(height=48))],
+            style=Pack(direction=COLUMN, margin=12))
+        self.app.show_view(content, destination='documents', route='document-name', title='Rename document')
 
     def load(self, document, session):
         self.document, self.session = document, session
@@ -116,7 +142,8 @@ class TextEditorView:
         self.save_button.enabled = dirty
         folder_actions = self.app.presentation.folder_actions(self.session)
         menu_state = dirty, bool(folder_actions)
-        if menu_state != getattr(self, '_action_state', None):
+        toolbar_changed = menu_state != getattr(self, '_action_state', None)
+        if toolbar_changed:
             self._action_state = menu_state
             self.save_visible = dirty
             self.actions.dispose()
@@ -131,6 +158,8 @@ class TextEditorView:
             self.conflict_actions.add(self.conflict_copy)
         elif not conflict and self.conflict_copy in self.conflict_actions.children:
             self.conflict_actions.remove(self.conflict_copy)
+        if toolbar_changed and self.document is not None and hasattr(self.app, 'adaptive'):
+            self.app.adaptive.render()
 
     def bind(self):
         self.app.editor_view = self

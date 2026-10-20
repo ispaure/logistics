@@ -10,6 +10,7 @@ from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_
 
 DEFAULTS = {'android_eink': 'false', 'font_size': '16', 'markdown_font_size': '16', 'text_font_size': '16', 'epub_font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'document_card_overview': 'false', 'show_legacy': 'false',
+            'markdown_justify': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false',
             'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
 
@@ -67,6 +68,8 @@ class Preferences:
             raise ValueError('Invalid session speech lock-screen preference.')
         if values['android_eink'] not in {'true', 'false'}:
             raise ValueError('Invalid Android E Ink preference.')
+        if values['markdown_justify'] not in {'true', 'false'}:
+            raise ValueError('Invalid Markdown justification preference.')
         if any(values[key] not in FONT_SIZES for key in ('font_size', 'markdown_font_size', 'text_font_size', 'epub_font_size')):
             raise ValueError('Choose a supported font size.')
         if values['restore_last_document'] not in {'true', 'false'}:

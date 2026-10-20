@@ -13,8 +13,23 @@ Background memory cleanup preserves the active Markdown reading or editing
 surface when returning from sleep. Reading and formatted editing use the
 platform's default font, including the device-selected sans-serif font on Android;
 code retains a monospace font.
+Markdown preview and formatted editing use the app's surface colours throughout
+the reading area, following light and dark mode.
 Pinch Markdown to change its font size and reflow the text within the view.
 Markdown, EPUB and plain text retain separate font-size settings.
+On iOS, text and Markdown editors share the readers' native title bar. The
+filename stays centered, and **Save** appears beside the reading/actions controls
+only while there are unsaved changes. Use **Actions → Rename document…** to change
+a managed document's name. Notes Library shows the current note's filename and
+moves previous/next history and parent-folder commands into **•••**.
+Markdown and editable Notes Library pages put **Read aloud…** in **•••** to leave
+room for their titles. When a managed editor has unsaved changes, Save takes
+the primary action slot; **View document** remains available in **•••**.
+Enable **Settings → Markdown → Justify text** to align paragraphs and lists to
+both edges in previews and formatted editing, including folder and vault readers.
+The switch defaults to off and saves on this device independently of EPUB.
+It reflows the display without changing Markdown source or unsaved edits;
+headings, code blocks, tables and Source mode keep their existing alignment.
 Open the **three-dot Document actions** menu in the editor or Markdown preview
 and choose **Delete document…** to remove an app-stored document, including an
 unsaved Untitled document. Confirm the warning to close it and permanently remove
@@ -22,7 +37,7 @@ its saved content, recovery copy and Recent entry. **Cancel** keeps it open.
 **Close document** keeps the stored document; discarding changes only reverts edits.
 Close other app windows before deleting. Files opened directly from a folder
 continue to use that folder's file-management actions.
-Choose **New document** from Home, Documents or Document actions to enter a name
+Choose **New document** from Home or Document actions to enter a name
 and select the file type before creating it. Markdown offers an optional title
 that becomes the first heading; the filename remains independently editable.
 For a new Markdown document, tap anywhere in the blank writing area below the
@@ -57,7 +72,10 @@ Tap the **speaker** icon in the Markdown preview or vault reader toolbar to open
 **Read aloud** in a floating panel with speed, pause/resume and stop controls.
 The panel leaves the page layout unchanged. Choose the saved offline voice in
 **Settings → Read aloud → Read-aloud voice**. Select a passage to read it, or
-play the whole rendered note. See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md#markdown-read-aloud).
+play the whole rendered note. Speech follows the preview: links read their visible
+labels without their destinations, and formatting markers are omitted. Visible
+URLs and literal code remain readable.
+See [Reading and editing](../../../../../docs/user_mobile/documents/reading-and-editing.md#markdown-read-aloud).
 
 Formatting controls use the same icons as desktop, including Bold, Italic, Undo,
 Redo and the Format menu. Buttons keep accessible names and tooltips.

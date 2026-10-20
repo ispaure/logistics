@@ -7,7 +7,7 @@ from features.books.epub import resolve_href
 from features.images.validation import image_dimensions
 
 
-def chapter_html(book, index, font_size=16, *, margin=16, theme='system', links=False, font_family='system', line_spacing=150, reading_width='800'):
+def chapter_html(book, index, font_size=16, *, margin=16, theme='system', links=False, font_family='system', line_spacing=150, reading_width='800', justify=False):
     if not 0 <= index < len(book.spine):
         raise IndexError('Chapter does not exist.')
     size = int(font_size)
@@ -81,7 +81,7 @@ def chapter_html(book, index, font_size=16, *, margin=16, theme='system', links=
     result = ('<!doctype html><html><head><meta charset="utf-8">'
               '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">'
               '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">'
-              '<style>' + css(size, margin, theme, font_family=font_family, line_spacing=line_spacing, reading_width=reading_width) +
+              '<style>' + css(size, margin, theme, font_family=font_family, line_spacing=line_spacing, reading_width=reading_width, justify=justify) +
               'img{max-width:100%;height:auto}pre{white-space:pre-wrap}table{max-width:100%}</style>'
               '</head><body>' + content + '</body></html>')
     if len(result.encode('utf-8')) > 2 * 1024 * 1024:

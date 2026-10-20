@@ -135,6 +135,26 @@ class ReaderTests(QtTestCase):
         cursor = qt.QTextCursor(self.page.text.document()); cursor.setPosition(anchor)
         self.assertTrue(self.page.text.viewport().rect().contains(self.page.text.cursorRect(cursor).center()))
 
+    def test_speech_skip_replaces_highlight_in_both_pages_of_spread(self):
+        from commonUtils.tests.test_read_aloud import SilentEngine
+        self.page.text.setHtml('<p>' + ' '.join(f'word{i}' for i in range(400)) + '</p>')
+        self.app.processEvents()
+        speech = self.page.speech
+        speech.engine_factory = SilentEngine
+        speech.show(); speech.start()
+        tag = qt.QTextFormat.Property.UserProperty + 77
+        for direction in (15, -15, 15):
+            speech.skip(direction)
+            current = speech._highlight_widget
+            expected = [entry.cursor.selectedText() for entry in current.extraSelections() if entry.format.property(tag)]
+            self.assertEqual(len(expected), 1)
+            for widget in (self.page.text, self.page.spread.second):
+                selected = [entry.cursor.selectedText() for entry in widget.extraSelections() if entry.format.property(tag)]
+                self.assertEqual(selected, expected)
+        speech.stop()
+        self.assertEqual(self.page.text.extraSelections(), [])
+        self.assertEqual(self.page.spread.second.extraSelections(), [])
+
     def test_read_aloud_follows_the_word_and_resize_centers_its_pointer(self):
         from PySide6.QtTest import QTest
         from commonUtils.tests.test_read_aloud import SilentEngine

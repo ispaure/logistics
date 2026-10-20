@@ -74,6 +74,9 @@ class CredentialDocumentLists:
     def credentials_changed(self):
         if self.app.active_host and not self.app.loop.is_closed():
             self.app.loop.call_soon_threadsafe(self.refresh)
+            # Saved packages have no encrypted-list state, but their publication
+            # still changes the connection badges in both document hubs.
+            self.app.loop.call_soon_threadsafe(self.queue_views)
 
     def queue_views(self):
         if not self.views_pending and self.app.active_host and not self.app.loop.is_closed():

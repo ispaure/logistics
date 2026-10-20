@@ -25,8 +25,15 @@ class PDFTools:
         else:
             self.widget.add(self.panel)
             self.button.text = 'Hide pages & search'
+        self.refresh_control()
 
     def close(self):
         if self.panel in self.widget.children:
             self.widget.remove(self.panel)
         self.button.text = 'Pages & search'
+        self.refresh_control()
+
+    def refresh_control(self):
+        callback = getattr(self, 'on_state_change', None)
+        if callback is not None:
+            callback()

@@ -15,6 +15,8 @@ SOURCE_SCRIPT = r'''
  while((node=walker.nextNode())) {
    const parent=node.parentElement;
    if(!parent || parent.closest('script,style,noscript') || !parent.getClientRects().length)continue;
+   const visibility=getComputedStyle(parent).visibility;
+   if(visibility==='hidden' || visibility==='collapse')continue;
    if(selected && !selected.intersectsNode(node))continue;
    let left=selected && selected.startContainer===node ? selected.startOffset : 0;
    let right=selected && selected.endContainer===node ? selected.endOffset : node.length;
@@ -32,7 +34,11 @@ SOURCE_SCRIPT = r'''
 
 HIGHLIGHT_SCRIPT = r'''
 ((start,end) => {
- if(window.CSS && CSS.highlights)CSS.highlights.delete('logistics-speech');
+ if(window.CSS && CSS.highlights) {
+   const previous=CSS.highlights.get('logistics-speech');
+   if(previous)previous.clear();
+   CSS.highlights.delete('logistics-speech');
+ }
  const state=window.logisticsSpeech;
  if(start<0) {getSelection().removeAllRanges();return;}
  if(!state)return;

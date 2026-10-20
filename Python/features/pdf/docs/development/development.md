@@ -20,6 +20,13 @@ one-based at the UI boundary and zero-based internally. PrivateSessions retains
 transient PDF sessions, excludes their content from recovery, clears native
 pixels on suspension, and drops PDF bytes on close or credential revocation.
 
+`mobile.canvas.PDFTools` exposes an optional `on_state_change` callback so the
+host can keep its native pages/search icon and accessible name in sync when the
+panel opens or closes. The feature does not import host toolbar policy. The host
+places this panel above the page canvas and page navigation below it; invalid
+numeric jumps retain feedback inside the panel even when filename labels are
+detached for the native title bar.
+
 Desktop `ui.reader.PDFWindow` uses QPdfView SinglePage/FitInView and a numeric page
 control. Remote and LocalCrypt ResourceChoice sessions load through their provider
 in the existing cancellable worker and retain the provider lease until window

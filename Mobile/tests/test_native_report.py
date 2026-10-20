@@ -48,7 +48,9 @@ class NativeReportTests(unittest.TestCase):
                 log.write_text('native stdout: ' + ui_tools.PREFIX + json.dumps(data) + '\n')
             write(report)
             self.assertEqual(ui_tools.verify(log, 'android', output), report)
-            for changes in (dict(cases=[]), dict(success=False), dict(backend='toga_dummy.app'),
+            for changes in (dict(cases=[]),
+                            dict(cases=[case for case in report['cases'] if case != 'native_rotation_safe_areas']),
+                            dict(success=False), dict(backend='toga_dummy.app'),
                             dict(source=dict(source, dirty=True)),
                             dict(source=dict(source, logistics_commit='0' * 40))):
                 write(dict(report, **changes))

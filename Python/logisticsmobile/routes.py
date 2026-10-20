@@ -214,7 +214,7 @@ class MobileRoutes(Routes):
                 continue
             if browser.search.value:
                 return self.invoke_back(lambda: setattr(browser.search, 'value', ''))
-            if browser.search_panel in browser.widget.children:
+            if browser.search_open:
                 return self.invoke_back(browser.close_search)
             if browser.history.previous() is not None:
                 return self.invoke_back(browser.go_back)

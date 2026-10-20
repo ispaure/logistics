@@ -250,6 +250,16 @@ class FolderNavigation:
                     panel._impl.native.addSubview(retained.snapshot)
                 else:
                     clear_snapshot(retained)
+        from .folder_title import mount
+        for route, _, container in routes.screens[destination]:
+            retained = self.screens.get((destination, route))
+            if retained is None or container is None:
+                continue
+            browser = retained.preview.browser if retained.preview is not None else retained.browser
+            header = getattr(browser, 'location_bar', None)
+            if header is not None:
+                title = PurePosixPath(retained.path).name if retained.path else retained.source
+                mount(header, container.controller, title)
         header = getattr(info.browser, 'location_bar', None)
         if header is not None:
             if header.parent_button in header.children:

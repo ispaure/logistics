@@ -508,6 +508,20 @@ class CloudUI(LocalCryptUI):
         kinds = getattr(self.cloud_client, 'crypt_remotes', lambda: ())
         self.cloud_crypt_remotes = set(await asyncio.to_thread(kinds))
         try:
+            cache = self.retained_packages()
+            update = getattr(cache, 'update_crypt_remotes', None)
+            if update is not None:
+                records = {item['package_name']: item for item in getattr(self.cloud_client, 'package_records', ())}
+                for key, item in tuple(cache.items.items()):
+                    record = records.get(item['zip'])
+                    if record is not None and record.get('document_cache_id') != key:
+                        continue
+                    if record is not None or item['zip'] == getattr(self.cloud_client, 'package_name', ''):
+                        await asyncio.to_thread(update, key, self.cloud_crypt_remotes,
+                            aliases=record.get('aliases', {}) if record else {})
+        except (OSError, ValueError) as error:
+            self.folder_hub_error = 'Could not save folder type metadata: ' + str(error)[:200]
+        try:
             await self.refresh_hub_crypt_locations()
         except (OSError, ValueError) as error:
             self.folder_hub_error = str(error)[:300]
@@ -629,12 +643,17 @@ class CloudUI(LocalCryptUI):
             return []
 
     async def require_remote_credentials_async(self, remote, *, identity=None, resume=None):
+        origin = self.navigation_generation
+        restore = getattr(self, 'cloud_restore_task', None)
+        if restore is not None:
+            await asyncio.shield(restore)
+            if not self.active_host or self.navigation_generation != origin:
+                return False
         if identity is not None and hasattr(self.cloud_client, 'resolve_remote'):
             remote = self.cloud_client.resolve_remote(remote, identity)
         if remote in self.loaded_remote_names() and identity is None:
             return True
         client, generation = self.cloud_client, getattr(self.cloud_client, 'generation', None)
-        origin = self.navigation_generation
         try:
             current = await asyncio.to_thread(client.connection_identity, remote)
         except (OSError, ValueError, AttributeError):

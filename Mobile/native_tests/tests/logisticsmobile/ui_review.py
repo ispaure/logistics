@@ -375,15 +375,8 @@ async def exercise_ui_review(app):
         await capture('local-markdown-' + mode)
         app.private_sessions.close(owner.session.id, discard=True)
         app.show_home()
-        if get_os() is OS.IOS:
-            from rubicon.objc import ObjCClass
-            from logisticsmobile.appearance import apple_color
-            native = app.home_continue._impl.native
-            traits = native.traitCollection
-            assert native.backgroundColor.resolvedColorWithTraitCollection(traits).isEqual(
-                apple_color('surface').resolvedColorWithTraitCollection(traits))
-            stroke = ObjCClass('UIColor').colorWithCGColor(native.layer.borderColor)
-            assert stroke.isEqual(apple_color('border').resolvedColorWithTraitCollection(traits))
+        assert app.home_continue is None
+        assert [button.text for button in app.home_actions.children] == ['Open file…', 'New document']
         await capture('home-' + mode)
         app.show_locations()
         await capture('folder-picker-' + mode)

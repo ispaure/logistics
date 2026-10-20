@@ -6,6 +6,14 @@ Tap **Documents** while that tab is already selected to return to the Documents
 list without closing the current document. Switching to Documents from another
 tab resumes any document already displayed within Documents; otherwise it shows
 the list. Tap Documents again to see the list.
+
+Home provides Open/New actions and five recent files. **See all in Documents**
+opens the full workspace, where **All open** puts the active document first and
+provides close controls. **Recent** lists closed history entries, and **Saved
+documents** lists other saved text and Markdown files. **Search documents**
+filters all three sections by filename. The Books & Comics library is available
+below those lists.
+
 In a book, comic or provider-backed document reader, open the **…** actions menu
 and choose **All documents** to return to the Documents list without closing the
 document. Opening a document from Home or Workspaces keeps that tab selected.

@@ -1,5 +1,10 @@
 """Semantic colours for the pinned native backends, without changing document data."""
 import weakref
+import sys
+from collections import OrderedDict
+from contextlib import contextmanager
+from contextvars import ContextVar
+from functools import lru_cache
 from toga.colors import BLACK
 from .palette import LIGHT, DARK, argb, android_palette, eink_enabled
 
@@ -11,6 +16,73 @@ _color_blocks = []
 _template_icons = weakref.WeakSet()
 _android_boxes = weakref.WeakSet()
 _android_webviews = weakref.WeakSet()
+
+
+_pending_surfaces = ContextVar('pending_native_surfaces', default=None)
+_android_backgrounds = OrderedDict()
+
+
+@contextmanager
+def batch_surfaces():
+    """Paint offscreen controls once, after their final roles/metrics are set."""
+    if _pending_surfaces.get() is not None:
+        yield
+        return
+    pending = weakref.WeakKeyDictionary()
+    token = _pending_surfaces.set(pending)
+    try:
+        yield
+    finally:
+        _pending_surfaces.reset(token)
+        for impl, radius in list(pending.items()):
+            paint_surface(impl, radius)
+
+
+@lru_cache(maxsize=4)
+def _android_surface_types(modules):
+    # The module identities also isolate test/runtime module replacements.
+    from android import R
+    from android.content.res import ColorStateList
+    from android.graphics.drawable import GradientDrawable, RippleDrawable
+    return R, ColorStateList, GradientDrawable, RippleDrawable
+
+
+@lru_cache(maxsize=128)
+def _android_color_states(cls, enabled_attribute, disabled, enabled):
+    # ColorStateList is immutable; drawable instances must remain independent.
+    return cls([[-enabled_attribute], []], [disabled, enabled])
+
+
+def _android_surface_resources():
+    return _android_surface_types(tuple(id(sys.modules.get(name)) for name in
+        ('android', 'android.content.res', 'android.graphics.drawable')))
+
+
+def _android_background(types, *, background, radius, stroke, border, hover, button):
+    _, colors, gradient, ripple = types
+    key = (gradient, ripple, colors, background, radius, stroke, border, hover, button)
+    state = _android_backgrounds.get(key)
+    if state is None:
+        drawable = gradient()
+        drawable.setColor(background)
+        drawable.setCornerRadius(radius)
+        if stroke:
+            drawable.setStroke(stroke, border)
+        if button:
+            drawable = ripple(colors.valueOf(hover), drawable, None)
+        constant_state = getattr(drawable, 'getConstantState', None)
+        state = constant_state() if constant_state is not None else None
+        if state is None:
+            return drawable
+        _android_backgrounds[key] = state
+        if len(_android_backgrounds) > 128:
+            _android_backgrounds.popitem(last=False)
+    else:
+        _android_backgrounds.move_to_end(key)
+    # Never share mutable bounds, tint, pressed or animation state across views.
+    # Geometry is already expressed in device pixels; do not rescale it again.
+    return state.newDrawable().mutate()
+
 
 
 def template_icon(widget):
@@ -176,6 +248,10 @@ def apple_color(role):
 
 
 def paint_surface(impl, radius):
+    pending = _pending_surfaces.get()
+    if pending is not None:
+        pending[impl] = radius
+        return
     backend = type(impl).__module__
     background, foreground, outlined = getattr(impl, '_surface_roles', ('surface', None, True))
     border = 'control_border' if hasattr(impl.interface, 'on_press') and outlined else 'border'
@@ -201,25 +277,26 @@ def paint_surface(impl, radius):
             else:
                 native.textColor = apple_color(foreground)
     elif backend.startswith('toga_android.'):
-        from android.graphics.drawable import GradientDrawable
-        colors = android_palette(impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20)
-        if eink_enabled() and getattr(impl, '_surface_eink_selected', False):
+        types = _android_surface_resources()
+        R, ColorStateList, _, _ = types
+        resources = impl.native.getResources()
+        colors = android_palette(resources.getConfiguration().uiMode & 0x30 == 0x20)
+        eink = eink_enabled()
+        if eink and getattr(impl, '_surface_eink_selected', False):
             colors = dict(colors, surface='#000000', alternate='#000000', hover='#000000',
                           text='#ffffff', muted='#ffffff')
-        if hasattr(impl.interface, 'on_press') and eink_enabled():
+        button = hasattr(impl.interface, 'on_press')
+        if button and eink:
             paint_eink_button(impl, outlined=False)
-        drawable = GradientDrawable()
-        drawable.setColor(0 if background == 'transparent' else argb(colors.get(background, colors['surface'])))
-        drawable.setCornerRadius(0 if eink_enabled() else impl.scale_in(radius))
-        eink_outline = getattr(impl, '_surface_eink_outlined', True)
-        has_outline = eink_outline if eink_enabled() else outlined
-        if has_outline:
-            drawable.setStroke(max(1, impl.scale_in(1)), argb(colors[border]))
+        has_outline = getattr(impl, '_surface_eink_outlined', True) if eink else outlined
+        drawable = _android_background(types,
+            background=0 if background == 'transparent' else argb(colors.get(background, colors['surface'])),
+            radius=0 if eink else impl.scale_in(radius),
+            stroke=max(1, impl.scale_in(1)) if has_outline else 0,
+            border=argb(colors[border]), hover=argb(colors['hover']), button=button)
         if foreground:
-            from android.content.res import ColorStateList
-            from android import R
-            tint = ColorStateList(
-                [[-R.attr.state_enabled], []], [argb(colors['muted']), argb(colors.get(foreground, colors['text']))])
+            tint = _android_color_states(ColorStateList, R.attr.state_enabled,
+                                        argb(colors['muted']), argb(colors.get(foreground, colors['text'])))
             accessory = getattr(impl, '_settings_accessory', None)
             if accessory is not None:
                 accessory.setTintList(tint)
@@ -227,15 +304,11 @@ def paint_surface(impl, radius):
                 impl.native.setImageTintList(tint)
             else:
                 impl.native.setTextColor(tint)
-        if hasattr(impl.interface, 'on_press'):
-            from android.content.res import ColorStateList
-            from android.graphics.drawable import RippleDrawable
+        if button:
             impl.native.setBackgroundTintList(None)
             impl.native.setStateListAnimator(None)
             impl.native.setElevation(0)
-            impl.native.setBackground(RippleDrawable(ColorStateList.valueOf(argb(colors['hover'])), drawable, None))
-        else:
-            impl.native.setBackground(drawable)
+        impl.native.setBackground(drawable)
         if hasattr(impl, '_control_drawable'):
             from .control_icons import tint_android
             tint_android(impl)

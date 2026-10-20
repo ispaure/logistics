@@ -86,6 +86,14 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self._startup_in_progress = False
 
     async def _prepare_startup_phase(self, index):
+        if index == 6:
+            # Restore device-saved connections before Home renders its recent
+            # files. Retained session-only ZIPs still require their password.
+            self.show_cloud(present=False)
+            restore = getattr(self, 'cloud_restore_task', None)
+            if restore is not None:
+                await restore
+            return
         if index != 1:
             return
         from .startup import load_startup_models
@@ -353,6 +361,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if (getattr(self, '_startup_in_progress', False)
                 and not getattr(self, '_startup_layout_ready', False)):
             return
+        from .layout_events import native_resize_changed
+        if not native_resize_changed(self, widget):
+            return
         from .keyboard import fit_editors
         fit_editors(self)
         from .settings_ui import fit_section
@@ -372,8 +383,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             page = getattr(self, name, None)
             if page is not None:
                 page.reflow()
-        if hasattr(self, 'home_panels') and self.main_window.content is self.native_host.root:
+        if hasattr(self, 'home_sections') and self.main_window.content is self.native_host.root:
             self.reflow_home()
+        if hasattr(self, 'documents_sections'):
+            self.reflow_documents_hub()
         if hasattr(self, 'document_launchers'):
             self.document_launchers.reflow(self.main_window.size.width)
         for grid in getattr(self, 'document_grids', []):
@@ -686,23 +699,31 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.editor_view.session.view['markdown_mode'] = 'edit'
         return self.show_view(self.document_view, destination=destination, route='editor', title=self.current.name if self.current else 'New document')
 
-    def show_editor_actions(self, owner):
+    def show_editor_actions(self, owner, *, menu=None):
+        menu = menu or owner.actions
         box = toga.Box(style=Pack(direction=COLUMN, margin=12))
-        for title, action in owner.actions.actions:
-            def command(widget=None, target=action, **kwargs):
-                owner.actions.invoke(target)
-            box.add(toga.Button(title, on_press=command, style=Pack(height=48)))
+        from .action_menu import command_groups
+        for index, group in enumerate(command_groups(menu.actions)):
+            if index:
+                box.add(toga.Divider(style=Pack(margin_top=8, margin_bottom=8)))
+            for title, action in group:
+                def command(widget=None, target=action, **kwargs):
+                    menu.invoke(target)
+                box.add(toga.Button(title, on_press=command, style=Pack(height=48)))
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), route='actions', title='Document actions')
 
     def show_settings(self, widget=None, *, present=True, rebuild=False, **kwargs):
         from .settings_ui import SettingsNavigation, settings_sections
-        if rebuild or not hasattr(self, 'settings_navigation'):
-            for name in ('font_choice', 'markdown_font_size_choice', 'text_font_size_choice', 'epub_font_size_choice', 'restore_choice', 'clear_documents_choice'):
-                self.__dict__.pop(name, None)
-            self.settings_navigation = SettingsNavigation(self, settings_sections(self))
-        # Fit the retained menu before mounting it: each changed row height
-        # otherwise lays out the entire visible Android destination again.
-        self.settings_navigation.reflow()
+        from .appearance import batch_surfaces
+        # Native controls receive several default/intermediate styles while
+        # building. Paint only their final appearance, before presenting them.
+        with batch_surfaces():
+            if rebuild or not hasattr(self, 'settings_navigation'):
+                for name in ('font_choice', 'markdown_font_size_choice', 'text_font_size_choice', 'epub_font_size_choice', 'markdown_justify_choice', 'epub_justify_choice', 'restore_choice', 'clear_documents_choice'):
+                    self.__dict__.pop(name, None)
+                self.settings_navigation = SettingsNavigation(self, settings_sections(self))
+            # Fit before mounting to avoid repeatedly laying out visible rows.
+            self.settings_navigation.reflow()
         if present:
             self.show_view(self.settings_navigation, destination='settings', root=True)
         else:
@@ -756,17 +777,24 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         try:
             from .font_scaling import FONT_KEYS, refresh
             previous_fonts = tuple(self.preferences.values[key] for key in FONT_KEYS)
+            alignment_keys = ('markdown_justify', 'epub_justify')
+            previous_alignment = tuple(self.preferences.values[key] for key in alignment_keys)
             changes = {}
             for key in FONT_KEYS:
                 choice = getattr(self, key + '_choice', None)
                 if choice is not None:
                     changes[key] = choice.value
+            for key in alignment_keys:
+                choice = getattr(self, key + '_choice', None)
+                if choice is not None:
+                    changes[key] = 'true' if choice.value else 'false'
             for name, key in (('clear_documents_choice', 'clear_unmodified_documents_on_restart'),
                               ('restore_choice', 'restore_last_document')):
                 if hasattr(self, name):
                     changes[key] = 'true' if getattr(self, name).value else 'false'
             self.preferences.save(**changes)
-            if tuple(self.preferences.values[key] for key in FONT_KEYS) != previous_fonts:
+            if (tuple(self.preferences.values[key] for key in FONT_KEYS) != previous_fonts
+                    or tuple(self.preferences.values[key] for key in alignment_keys) != previous_alignment):
                 refresh(self)
             self.settings_status.text = 'Preferences saved on this device.'
         except (OSError, ValueError) as error:
@@ -823,14 +851,15 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 owner.preview], style=Pack(direction=COLUMN, flex=1))
             owner.preview_box._workspace_toolbar = owner.preview_toolbar
             owner.preview_box._native_reader_toolbar = owner.preview_toolbar
-            owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.markdown_speech.button,
-                                                               owner.preview_actions_button]
+            owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.preview_actions_button]
+            owner.preview_box._native_reader_title = lambda: owner.document.name
         from .action_menu import ActionMenu
         from .document_sources import folder_action
         if hasattr(owner, 'preview_actions'):
             owner.preview_actions.dispose()
         owner.preview_actions = ActionMenu(owner.preview_actions_button, owner,
             folder_action(self, owner.session) + [
+                ('Read aloud…', lambda: owner.markdown_speech.show()),
                 ('Close document', lambda: self.request_close_session(owner.session.id)),
                 ('Delete document…', lambda: self.request_delete_document(owner.session.id))])
         from .markdown_speech import MarkdownSpeech
@@ -890,6 +919,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.loading = previous
         self.recovery_notice.text = (f'{len(failures)} recovery record(s) could not be opened; they were preserved.'
                                      if failures else '')
+        self.refresh_document_list()
 
     def open_document(self, key):
         self.__dict__.pop('_pending_managed_restore', None)

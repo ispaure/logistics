@@ -95,6 +95,25 @@ class CredentialPackages:
     def aliases(self, key):
         return dict(self.items[key].get('aliases', {}))
 
+    def update_crypt_remotes(self, key, crypt_remotes, *, aliases=None):
+        """Repair older type metadata after unlock without retaining secrets."""
+        item = self.items[key]
+        crypt = set(crypt_remotes)
+        known = set() if aliases else set(item['remotes']) & crypt
+        # A package can receive different aliases when another account with the
+        # same remote names is loaded. Keep the retained index's name namespace.
+        previous = item.get('aliases', {})
+        for original, loaded in (aliases or {}).items():
+            retained = previous.get(original, original)
+            if loaded in crypt and retained in item['remotes']:
+                known.add(retained)
+        names = sorted(known)
+        if item.get('crypt_remotes') == names:
+            return
+        updated = {**self.items, key: {**item, 'crypt_remotes': names}}
+        atomic_write_json(self.index, updated, max_bytes=128 * 1024)
+        self.items = updated
+
     @contextmanager
     def open(self, key):
         path = self.path(key)

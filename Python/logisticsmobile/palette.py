@@ -51,8 +51,10 @@ def css_variables(mode='system'):
 
 def themed_chapter(content, mode):
     """Style the sanitized chapter without changing its offline content policy."""
+    if mode not in ('system', 'light', 'dark'):
+        return content
     return content.replace('</style>', css_variables(mode)
-        + 'body{background:var(--surface);color:var(--text)}</style>', 1)
+        + 'html,body{background:var(--surface);color:var(--text)}</style>', 1)
 
 
 EINK = dict(window='#ffffff', surface='#ffffff', alternate='#ffffff',

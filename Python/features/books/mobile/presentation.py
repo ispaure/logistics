@@ -119,7 +119,11 @@ SCRIPT = r'''
    speechSource: () => ({selection:selectedRange() || selectedCache, offset:visible()}),
    selection: () => selectedRange() || selectedCache,
    highlight: (start, end) => {
-     if (window.CSS && CSS.highlights) CSS.highlights.delete('logistics-speech');
+     if (window.CSS && CSS.highlights) {
+       const previous=CSS.highlights.get('logistics-speech');
+       if(previous) previous.clear();
+       CSS.highlights.delete('logistics-speech');
+     }
      if (start < 0) {getSelection().removeAllRanges();selectedCache=null;speechRange=null;return;}
      seek(start);
      const p=point(start), q=point(end,true);if(!p || !q)return;

@@ -8,7 +8,7 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class WorkspaceNavigationTests(unittest.TestCase):
-    def test_rotating_a_reader_with_a_wide_file_sidebar_restores_full_width(self):
+    def test_rotating_a_reader_with_explicit_file_browser_keeps_it_open(self):
         self.app.create_chosen_document('md')
         owner = self.app.editor_view
         owner.editor.value = '# Keep this draft open'
@@ -19,12 +19,12 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertEqual(len(frame.row.children), 2)
         with patch.object(self.navigation, 'width', return_value=390):
             self.navigation.render()
+            self.assertTrue(self.navigation.menu_open['documents'])
+            self.assertEqual(len(frame.row.children), 2)
+            self.assertTrue(frame.compact_open)
+            self.navigation.toggle('documents')
             self.assertFalse(self.navigation.menu_open['documents'])
             self.assertEqual(list(frame.row.children), [frame.main])
-            self.assertEqual(frame.main.style.flex, 1)
-            # The user can still deliberately reopen the compact drawer.
-            self.navigation.toggle('documents')
-            self.assertTrue(self.navigation.menu_open['documents'])
         self.assertEqual(owner.editor.value, '# Keep this draft open')
 
     def test_readers_use_the_same_native_menu_slot_as_documents(self):
@@ -46,7 +46,45 @@ class WorkspaceNavigationTests(unittest.TestCase):
             ) as toolbar:
                 self.navigation.render()
                 mount.assert_called_once_with(self.app, menu, 'documents')
-                toolbar.assert_called_once_with(self.app, owner.library_view)
+                toolbar.assert_called_once_with(self.app, owner.library_view, 'documents')
+
+    def test_incoming_workspace_toolbar_uses_destination_before_tab_commit(self):
+        app = self.app
+        app.show_locations()
+        app.select_destination('documents')
+        app.native_host.activate('documents')
+        self.assertEqual(app.native_host.state.destination, 'documents')
+        with patch('logisticsmobile.workspace_navigation.sync_reader_toolbar') as toolbar:
+            self.navigation.render(destination='files')
+        toolbar.assert_called_once_with(app, app.routes.body('files').children[0], 'files')
+        self.assertEqual(app.native_host.state.destination, 'documents')
+
+    def test_toolbar_cleanup_targets_rendered_tab_and_retained_controller(self):
+        import sys
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock
+        from logisticsmobile.workspace_navigation import sync_reader_toolbar
+        # Selection callbacks render the incoming tab before state commits.
+        reader = Mock(ptr=NS(value=101))
+        files = Mock(ptr=NS(value=102))
+        files.navigationItem.title = 'Workspaces'
+        files.navigationItem.titleView = 'stale comic title'
+        files.navigationItem.rightBarButtonItems = ['stale reader actions']
+        app = NS(routes=NS(apple=True), native_host=NS(
+            state=NS(destination='documents'), destinations=('documents', 'files'),
+            adapter=NS(navigation=[NS(topViewController=reader), NS(topViewController=files)])),
+            _reader_toolbar_controllers={101, 102}, _reader_toolbar_controller=reader,
+            _reader_title_controller=reader, _reader_toolbar_state='retained reader')
+        with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=Mock(), CGRect=Mock())}):
+            sync_reader_toolbar(app, NS(), 'files')
+        self.assertIsNone(files.navigationItem.titleView)
+        self.assertIsNone(files.navigationItem.rightBarButtonItems)
+        self.assertIsNone(files.navigationItem.prompt)
+        self.assertEqual(files.navigationItem.title, 'Workspaces')
+        self.assertEqual(app._reader_toolbar_controllers, {101})
+        self.assertEqual(app._reader_toolbar_state, 'retained reader')
+        self.assertIs(app._reader_toolbar_controller, reader)
+        self.assertIs(app._reader_title_controller, reader)
 
     def setUp(self):
         self.directory = TemporaryDirectory()

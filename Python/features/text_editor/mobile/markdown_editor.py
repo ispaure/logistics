@@ -488,14 +488,15 @@ def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet='')
             'section[contenteditable=false]{opacity:.8}section[data-source-only]::after{content:"Edit this block in Source";display:block;font-size:.8em;color:GrayText}pre{white-space:pre-wrap}blockquote{border-left:3px solid GrayText;padding-left:1em}'
             'table{border-collapse:collapse;max-width:100%;display:block;overflow-x:auto}td,th{border:1px solid GrayText;padding:4px}#notice{color:MarkText;background:Mark}'
             + stylesheet +
-            'body{background:var(--window,Canvas);color:var(--text,CanvasText)}'
-            'nav{background:var(--window,Canvas)}'
-            '#document{background:var(--surface,Canvas);border-radius:8px;padding:12px;box-sizing:border-box}'
+            'html,body{background:var(--surface,Canvas);color:var(--text,CanvasText)}'
+            'nav{background:var(--surface,Canvas)}'
+            '#document{border-radius:8px;padding:12px;box-sizing:border-box}'
+            '#document p,#document li{text-align:var(--logistics-text-align,start)}'
             '@media(max-height:180px){#document{padding:0}}'
             'button,summary{border:0;border-radius:8px;background:var(--surface,ButtonFace);color:var(--text,CanvasText)}'
             'button:active,summary:active{background:var(--hover,ButtonFace)}'
             'button:focus-visible,summary:focus-visible{outline:2px solid var(--accent,Highlight);outline-offset:-2px}'
-            'nav details[open] .format-menu{background:var(--window,Canvas)}'
+            'nav details[open] .format-menu{background:var(--surface,Canvas)}'
             '</style></head><body><nav aria-label="Markdown formatting">' + toolbar + '</nav>'
             '<p id="notice" role="status"></p><main id="document" aria-label="Formatted Markdown editor"></main>' + link_dialog +
             f'<script nonce="{nonce}">{script}</script></body></html>')

@@ -1,11 +1,10 @@
-"""Settings help preserves preference values; About uses the installed payload."""
-import asyncio
+"""Settings explanations stay visible; About uses the installed payload."""
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 from logisticsmobile.app import LogisticsMobile
 from logisticsmobile.settings_ui import build_information
@@ -28,7 +27,9 @@ class SettingsUITests(unittest.TestCase):
         menu_parents = []
         def fit(section, width):
             nav = app.settings_navigation
-            if section is nav.sidebar.content:
+            if section is nav._menu:
+                if not menu_parents:
+                    self.assertIsNone(nav.sidebar.content)
                 menu_parents.append(nav.parent)
             return fit_section(section, width)
         with patch.object(app.adaptive, 'content_width', return_value=390) as width, \
@@ -44,6 +45,52 @@ class SettingsUITests(unittest.TestCase):
             nav.reflow()
             self.assertEqual(len(menu_parents), 2)
             self.assertIs(app.settings_navigation, nav)
+
+    def test_wide_menu_defers_all_pages_and_paints_each_row_once(self):
+        from collections import Counter
+        from logisticsmobile import appearance
+        app = self.make_app()
+        paints = Counter()
+        original = appearance.paint_surface
+        def paint(impl, radius):
+            if appearance._pending_surfaces.get() is None:
+                paints[impl] += 1
+            return original(impl, radius)
+        with patch.object(app.adaptive, 'content_width', return_value=900), \
+                patch.object(appearance, 'paint_surface', side_effect=paint):
+            app.show_settings(present=False)
+        nav = app.settings_navigation
+        self.assertEqual(nav.sections.built, {})
+        self.assertEqual(nav.options.built, {})
+        self.assertFalse(hasattr(app, 'restore_choice'))
+        for button in nav.buttons.values():
+            self.assertEqual(paints[button._impl], 1)
+            self.assertEqual(button._impl._surface_roles, ('transparent', 'text', False))
+            self.assertGreaterEqual(button.style.height, 52)
+        nav.choose('Text')
+        self.assertEqual(set(nav.sections.built), {'Text'})
+        self.assertEqual(set(nav.options.built), {'Text'})
+        self.assertFalse(hasattr(app, 'restore_choice'))
+
+    def test_retained_category_skips_fitting_but_messages_and_resize_still_refit(self):
+        from logisticsmobile.settings_ui import fit_section
+        app = self.make_app()
+        with patch.object(app.adaptive, 'content_width', return_value=390) as width:
+            app.show_settings()
+            nav = app.settings_navigation
+            with patch('logisticsmobile.settings_ui.fit_section', wraps=fit_section) as fit:
+                nav.choose('App')
+                self.assertGreater(fit.call_count, 0)
+                fit.reset_mock()
+                nav.choose('App')
+                nav.reflow()
+                fit.assert_not_called()
+                app.settings_status.text = 'A new status message that must wrap within the available settings pane.'
+                self.assertIn('\n', app.settings_status.text)
+                fit.assert_not_called()
+                width.return_value = 320
+                nav.reflow()
+                self.assertGreater(fit.call_count, 0)
 
     def test_phone_menu_defers_categories_and_about_and_reuses_existing_pages(self):
         from logisticsmobile.preferences import Preferences
@@ -94,8 +141,11 @@ class SettingsUITests(unittest.TestCase):
             fit_text(label, 100)
             factory.assert_called_once_with('UILabel')
             first = label.text
+            # A repeat must not read font metrics across the native bridge.
+            label._impl.native = None
             fit_text(label, 100)
             self.assertEqual(label.text, first)
+            label._impl.native = SimpleNamespace(font=SimpleNamespace(lineHeight=22))
             fit_text(label, 200)
             factory.assert_called_once()
             self.assertLess(len(label.text.splitlines()), len(first.splitlines()))
@@ -112,7 +162,7 @@ class SettingsUITests(unittest.TestCase):
             self.assertEqual(app.preferences.values['restore_last_document'], 'false')
             self.assertEqual(app.preferences.values['clear_unmodified_documents_on_restart'], 'false')
 
-    def test_help_order_dialog_and_about_at_bottom(self):
+    def test_explanations_follow_options_and_about_stays_at_bottom(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
@@ -123,20 +173,15 @@ class SettingsUITests(unittest.TestCase):
             box = app.settings_navigation.sections['About']
             for switch, title in ((app.restore_choice, 'Restore last document'),
                                   (app.clear_documents_choice, 'Close saved documents on restart')):
-                label, info, control = switch.parent.children
+                label, control = switch.parent.children
                 self.assertEqual(label.text.replace('\n', ' '), title)
-                self.assertEqual(info.text, 'ⓘ')
                 self.assertIs(control, switch)
-                previous = switch.value
-                with patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog, \
-                        patch('logisticsmobile.settings_ui.toga.InfoDialog') as notice:
-                    info.on_press()
-                    app.loop.run_until_complete(asyncio.sleep(0))
-                    dialog.assert_awaited_once()
-                    self.assertEqual(notice.call_args.args[0], title)
-                    self.assertTrue(notice.call_args.args[1])
-                    self.assertIs(dialog.await_args.args[0], notice.return_value)
-                self.assertEqual(switch.value, previous)
+                row = switch.parent
+                group = row.parent
+                section = group.parent
+                self.assertIs(section.children[section.children.index(group) + 1], row._settings_note)
+                self.assertTrue(row._settings_note.text)
+                self.assertEqual(row._settings_note.style.font_size, 13)
             self.assertEqual(list(app.settings_navigation.sections)[-1], 'About')
             self.assertEqual(box.children[0].text, 'About')
             self.assertIs(box.children[-1], app.build_version_label)

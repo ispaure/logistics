@@ -10,6 +10,44 @@ from logisticsmobile.app import LogisticsMobile
 from .fixtures import capture_window
 
 
+def assert_tree_alignment(app):
+    """Compare connector endpoints with actual native child-row centers."""
+    from logisticsmobile.folder_hub_style import TREE_INDENT, TREE_STROKE, ROW_HEIGHT
+    def rect(widget):
+        native = widget._impl.native
+        if type(widget._impl).__module__.startswith('toga_iOS.'):
+            frame = native.convertRect(native.bounds, toView=None)
+            return float(frame.origin.x), float(frame.origin.y), float(frame.size.width), float(frame.size.height)
+        from java import jarray, jint
+        position = jarray(jint)(2)
+        native.getLocationOnScreen(position)
+        density = float(native.getResources().getDisplayMetrics().density)
+        return tuple(value / density for value in (int(position[0]), int(position[1]), native.getWidth(), native.getHeight()))
+    checked = 0
+    def visit(widget):
+        nonlocal checked
+        if widget.style.width == TREE_INDENT and widget.style.height:
+            content = widget.parent.children[1]
+            rows = [child for child in content.children if child.style.height == ROW_HEIGHT]
+            segments = [child for child in widget.children if child.style.height == TREE_STROKE]
+            assert len(segments) == len(rows), (len(segments), len(rows))
+            for segment, row in zip(segments, rows):
+                x, y, width, height = rect(segment)
+                row_x, row_y, _, row_height = rect(row)
+                assert abs(y + height / 2 - row_y - row_height / 2) < 1, (rect(segment), rect(row))
+                assert abs(x + width - row_x) < 1, (rect(segment), rect(row))
+                checked += 1
+        for child in widget.children:
+            visit(child)
+    visit(app.folder_list)
+    for label in app.folder_tree_buttons.values():
+        _, y, _, height = rect(label)
+        _, row_y, _, row_height = rect(label.parent)
+        assert abs(y + height / 2 - row_y - row_height / 2) < 1, (rect(label), rect(label.parent))
+    assert checked > 0
+    return checked
+
+
 class FolderHubDesignProbe(LogisticsMobile):
     def startup(self):
         self.storage_root = Path(self.paths.cache) / ('hub-design-' + uuid4().hex)
@@ -62,6 +100,8 @@ class FolderHubDesignProbe(LogisticsMobile):
             self.update_folder_list(choices)
             assert set(self.folder_buttons) == set(names)
             backend = type(self._impl).__module__
+            await asyncio.sleep(.3)
+            report['aligned_connectors'] = assert_tree_alignment(self)
             for dark in (False, True):
                 if backend.startswith('toga_iOS.'):
                     self.main_window._impl.native.overrideUserInterfaceStyle = 2 if dark else 1

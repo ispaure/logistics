@@ -452,6 +452,8 @@ class ProviderUI(FilesUI):
             offset = locations.get(book.spine[index], 0)
             if target is not None:
                 offset = content[1].anchors.get(target, 0) if isinstance(target, str) else target
+            from .palette import themed_chapter
+            content = (themed_chapter(content[0], self.preferences.values['reading_theme']), content[1])
             view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
                 font_size=int(self.preferences.values['epub_font_size']),
                 margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
@@ -475,7 +477,7 @@ class ProviderUI(FilesUI):
                 if control.parent is not None:
                     control.parent.remove(control)
                 tools.panel.add(control)
-            tools.panel.add(toga.Label('Bookmarks stay in this session and are cleared on close.'))
+            tools.panel.add(toga.Label('Bookmarks stay in this session\nand are cleared on close.'))
             view.crypt_content.add(view.provider_epub_view)
         elif kind == 'spread':
             view.provider_spread = prepared_spread
@@ -517,7 +519,7 @@ class ProviderUI(FilesUI):
             self._show_crypt_content(kind, content)
             self.page_suspended = False
             if reader.kind in {'.pdf', '.cbz', '.zip'}:
-                self.crypt_title.text = private_label(f'{Path(reader.name).name} · {index + 1}/{len(reader.labels)}')
+                self.crypt_title.text = private_label(f'Page {index + 1}/{len(reader.labels)}')
             self.refresh_private_bookmarks()
             self.watch_provider_layout()
             self.watch_provider_epub_width()
@@ -642,15 +644,18 @@ class ProviderUI(FilesUI):
                 close=self.close_crypt)
             view.crypt_tools_view = comic_pages(view.crypt_page, self.resume_crypt)
         elif getattr(view.crypt_reader, 'read_only', False):
-            actions = [('Reader tools…', self.show_private_tools)]
+            actions = []
             if view.crypt_reader.book is not None:
-                actions.extend([('Read aloud…', self.show_provider_read_aloud), ('Find in chapter…', self.show_provider_epub_find),
+                actions.extend([('Chapters and bookmarks…', self.show_provider_epub_navigation),
+                    ('Read aloud…', self.show_provider_read_aloud), ('Find in chapter…', self.show_provider_epub_find),
                     ('Appearance…', self.show_provider_layout)])
+            elif view.crypt_reader.kind == '.pdf':
+                actions.append(('Pages and search', lambda: view.pdf_tools.toggle()))
             elif getattr(view.crypt_reader, 'image_document', False):
                 actions.append(('Fit image', self.fit_private_page))
             actions.append(('Close private document', self.close_crypt))
         else:
-            actions = [('Open / Save As…' if view.crypt_reader.editable else 'Open / Metadata…', self.show_private_tools)]
+            actions = [('File actions…' if view.crypt_reader.editable else 'Open / Metadata…', self.show_private_tools)]
             if view.crypt_reader.book is not None:
                 actions.extend([('Read aloud…', self.show_provider_read_aloud), ('Find in chapter…', self.show_provider_epub_find),
                     ('Appearance…', self.show_provider_layout)])
@@ -664,10 +669,14 @@ class ProviderUI(FilesUI):
         if folder_location(self.app, self.session, view) is not None:
             actions.append(('Show in folder', lambda: show_in_folder(self.app, self.session, self)))
         actions.append(('All documents', self.show_documents_hub))
-        view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, actions, self.show_private_tools)
+        view.crypt_action_items = list(actions)
+        view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, actions, self.show_private_tools, document=True)
         view.crypt_title.style.flex = 1
         view.crypt_page.style.flex = 1
         view.crypt_title.style.font_size = 12
+        if comic:
+            view.crypt_title.text = f'Page 1/{len(view.crypt_reader.labels)}'
+            view.crypt_title.style.text_align = 'center'
         controls = [toga.Box(children=[view.crypt_title, view.crypt_actions], style=Pack(direction=ROW))]
         view.reader_toolbar = controls[0]
         if view.crypt_reader.book is not None:
@@ -680,9 +689,12 @@ class ProviderUI(FilesUI):
                     index = page_index(view.pdf_number.value, len(view.crypt_reader.labels))
                 except ValueError as error:
                     view.crypt_title.text = private_label(error)
+                    view.pdf_jump_status.text = str(error)
                     return
+                view.pdf_jump_status.text = ''
                 await self.move_private_page(index)
             view.pdf_number = toga.TextInput(value='1', on_confirm=jump, style=Pack(flex=1, height=44))
+            view.pdf_jump_status = toga.Label('')
             jump_row = toga.Box(children=[toga.Label(f'Page / {len(view.crypt_reader.labels)}'),
                 view.pdf_number, toga.Button('Go', on_press=jump, style=Pack(height=44))], style=Pack(direction=ROW))
             from features.pdf.mobile.search import PDFSearchBar
@@ -697,9 +709,10 @@ class ProviderUI(FilesUI):
                 alive=lambda: self.active_host and self.crypt_reader is reader
                     and self.session.id in self.workspace.sessions and self.manager.active is self,
                 row_style=hierarchy_row_style)
-            view.pdf_tools = PDFTools([jump_row, view.pdf_contents, view.pdf_search])
+            view.pdf_tools = PDFTools([jump_row, view.pdf_jump_status, view.pdf_contents, view.pdf_search])
             controls.append(view.pdf_tools.widget)
-        elif not view.crypt_reader.editable and not comic and view.crypt_reader.book is None:
+        elif (not view.crypt_reader.editable and not comic and view.crypt_reader.book is None
+              and not getattr(view.crypt_reader, 'image_document', False)):
             controls.append(toga.Box(children=[view.crypt_page, view.crypt_read_page], style=Pack(direction=ROW)))
         controls.append(view.crypt_content)
         if view.crypt_reader.editable:
@@ -737,29 +750,43 @@ class ProviderUI(FilesUI):
                     following=self.next_provider_comic_file if neighbors else None)
                 header = view.comic_header.widget
             else:
-                header = toga.Box(children=controls[:-1], style=Pack(direction=COLUMN))
+                header = controls[0]
             view.previous_page, view.next_page = page_buttons(self.previous_private_page, self.next_private_page)
-            view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page,
-                compact=view.crypt_reader.book is not None)
+            view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page)
             view.page_footer.sync(comic=view.crypt_reader.kind in {'.cbz', '.zip'},
                                   count=len(view.crypt_reader.labels), index=0,
                                   right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
             footer = view.page_footer.widget
             if view.crypt_reader.book is not None:
-                view.reader_toolbar.insert(1, footer)
                 view.crypt_title.style.update(flex=1, width=1, height=48, margin=0)
             view.reader_restore = (toga.Button('Show reading controls', on_press=self.toggle_private_reading_mode,
                                              style=Pack(height=48)) if view.crypt_reader.book is not None or view.crypt_reader.kind == '.pdf' else None)
-            view.reading_frame = ReadingFrame(view.crypt_content,
-                [header, footer, view.crypt_title] if comic else
-                [header] if view.crypt_reader.book is not None else [header, footer],
-                margin=0 if view.crypt_reader.book is not None else 16, restore=view.reader_restore)
+            image = getattr(view.crypt_reader, 'image_document', False)
+            reader_controls = ([header, footer, view.crypt_title] if comic else
+                               [header] if image else [header, footer])
+            if view.crypt_reader.kind == '.pdf':
+                reader_controls.insert(1, view.pdf_tools.widget)
+                from .control_icons import apply_icon
+                view.pdf_tools.on_state_change = lambda: apply_icon(view.pdf_tools.button, 'find',
+                    'Hide pages and search' if view.pdf_tools.panel in view.pdf_tools.widget.children else 'Pages and search')
+                view.pdf_tools.refresh_control()
+            view.reading_frame = ReadingFrame(view.crypt_content, reader_controls,
+                margin=0 if view.crypt_reader.book is not None else 16, restore=view.reader_restore,
+                top_controls=2 if view.crypt_reader.kind == '.pdf' else 1)
             view.crypt_view = view.reading_frame.widget
+            view.crypt_view._native_reader_toolbar = header
+            view.crypt_view._native_reader_status = view.crypt_title
             if view.crypt_reader.book is not None:
-                view.crypt_view._native_reader_toolbar = header
-                view.crypt_view._native_reader_status = view.crypt_title
-                view.crypt_view._native_reader_buttons = lambda: [view.previous_page, view.next_page,
-                    view.reader_speech_button, view.crypt_actions]
+                view.crypt_view._native_reader_buttons = lambda: [view.reader_speech_button, view.crypt_actions]
+            elif comic:
+                view.crypt_view._native_reader_buttons = lambda: [
+                    *([view.comic_header.previous] if view.comic_header.available[0] else []),
+                    *([view.comic_header.following] if view.comic_header.available[1] else []), view.crypt_actions]
+            elif view.crypt_reader.kind == '.pdf':
+                view.crypt_view._native_reader_buttons = lambda: [view.pdf_tools.button, view.crypt_actions]
+            else:
+                view.fit_button = icon_button('fit', 'Fit image', on_press=self.fit_private_page)
+                view.crypt_view._native_reader_buttons = lambda: [view.fit_button, view.crypt_actions]
             if reader_menu is not None:
                 view.crypt_view._workspace_menu_button = reader_menu
             view.crypt_controls = view.reading_frame.controls
@@ -776,7 +803,18 @@ class ProviderUI(FilesUI):
                 view.crypt_view._native_reader_buttons = lambda: view._native_reading_buttons
                 view.crypt_title.style.update(flex=1, width=1, height=48, margin=0)
                 self.refresh_private_text_controls(view=view)
+            else:
+                from .control_icons import apply_icon
+                apply_icon(view.crypt_save, 'save', 'Save text')
+                view.crypt_view._workspace_toolbar = view.reader_toolbar
+                view._native_reading_buttons = [view.crypt_actions]
+                view.crypt_view._native_reader_toolbar = view.reader_toolbar
+                view.crypt_view._native_reader_status = view.crypt_title
+                view.crypt_view._native_reader_buttons = lambda: view._native_reading_buttons
+                view.crypt_view._native_reader_hidden = [view.crypt_save]
+                self.refresh_private_text_controls(view=view)
             view.crypt_controls = [control for control in controls if control is not view.crypt_content]
+        view.crypt_view._native_reader_title = lambda: Path(view.crypt_reader.name).name
         view.crypt_immersive = view.crypt_reader.kind in {'.cbz', '.zip'}
         if view.crypt_immersive:
             view.reading_frame.set_immersive(True, comic=True)
@@ -840,7 +878,7 @@ class ProviderUI(FilesUI):
         owner = view or self
         reader = getattr(owner, 'crypt_reader', None)
         toolbar = getattr(owner, 'reader_toolbar', None)
-        if reader is None or toolbar is None or reader.kind not in {'.md', '.markdown'}:
+        if reader is None or toolbar is None or not reader.editable:
             return
         dirty = owner.crypt_text.value != reader.text and not getattr(reader, 'read_only', False)
         owner.crypt_save.enabled = dirty and not self.cloud_busy
@@ -859,11 +897,24 @@ class ProviderUI(FilesUI):
                 footer.style.height = 0
         buttons = getattr(owner, '_native_reading_buttons', None)
         if buttons is not None:
-            buttons[:] = ([owner.crypt_save] if dirty else []) + [owner.crypt_preview_button]
+            buttons[:] = ([owner.crypt_save] if dirty else [])
+            markdown = reader.kind in {'.md', '.markdown'}
+            if markdown and not dirty:
+                buttons.append(owner.crypt_preview_button)
             speech = getattr(owner, 'markdown_speech', None)
             preview = getattr(owner, 'crypt_preview', None)
-            if speech is not None and preview is not None and preview in owner.crypt_content.children:
-                buttons.append(speech.button)
+            reading = speech is not None and preview is not None and preview in owner.crypt_content.children
+            menu_state = dirty, reading
+            if markdown and menu_state != getattr(owner, '_text_menu_state', None):
+                from .action_menu import FeatureCommands
+                actions = list(owner.crypt_action_items)
+                mode = ('View source text' if getattr(reader, 'read_only', False) else 'Edit Markdown') if reading else 'View Markdown'
+                actions.insert(0, (mode, self.toggle_private_preview))
+                if reading:
+                    actions.insert(0, ('Read aloud…', speech.show))
+                owner.crypt_actions_menu.dispose()
+                owner.crypt_actions_menu = FeatureCommands(owner.crypt_actions, self, actions, self.show_private_tools, document=True)
+                owner._text_menu_state = menu_state
             buttons.append(owner.crypt_actions)
             app = getattr(self, 'app', self)
             body = app.routes.body()

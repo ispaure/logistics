@@ -64,12 +64,52 @@ class FolderLocationTests(unittest.TestCase):
         self.assertEqual(browser.search_button.control_icon, 'find')
         self.assertNotIn(browser.navigation_controls, browser.widget.children)
         self.assertNotIn(browser.search_panel, browser.widget.children)
+        original = list(header.children)
         browser.search_button.on_press()
-        self.assertIn(browser.search_panel, browser.widget.children)
+        self.assertIn(browser.search_panel, header.children)
+        self.assertTrue(browser.search_open)
+        self.assertNotIn(browser.search_panel, browser.widget.children)
         browser.search.value = 'test'
         browser.close_search_button.on_press()
         self.assertEqual(browser.search.value, '')
         self.assertNotIn(browser.search_panel, browser.widget.children)
+        self.assertEqual(header.children, original)
+        self.assertFalse(browser.search_open)
+
+    def test_native_title_actions_leave_no_idle_row_and_search_keeps_menu_in_bar(self):
+        from logisticsmobile.browser_ui import FileBrowser
+        browser = FileBrowser()
+        header = browser.attach_location_header(browser.status_label(''), icon_button('up', 'Parent folder'))
+        overflow = icon_button('more', 'Folder actions')
+        header.add(overflow)
+        header.use_native_title()
+        header._native_title_mounted = True
+        header.refresh_status()
+        self.assertEqual(header.title_actions, (browser.search_button, overflow))
+        self.assertEqual(header.children, [])
+        browser.toggle_search()
+        self.assertEqual(header.native_actions.children, [browser.search_panel])
+        self.assertEqual(header.children, [header.native_actions])
+        self.assertIsNone(overflow.parent)
+        self.assertNotIn(browser.search_panel, browser.widget.children)
+        browser.open_search()  # Refocusing must not overwrite the saved controls.
+        browser.toggle_search()
+        self.assertEqual(header.native_actions.children, [])
+        self.assertEqual(header.children, [])
+        self.assertFalse(browser.search_open)
+        header.status.value = 'Refreshing folder…'
+        self.assertEqual(header.children, [header.caption])
+        header.status.value = ''
+        self.assertEqual(header.children, [])
+
+    def test_standalone_search_retains_fixed_height_row(self):
+        from logisticsmobile.browser_ui import FileBrowser
+        browser = FileBrowser()
+        browser.toggle_search()
+        self.assertIs(browser.search_panel.parent, browser.widget)
+        self.assertEqual(browser.search_panel.style.flex, 0)
+        browser.toggle_search()
+        self.assertFalse(browser.search_open)
 
     def test_parent_remote_navigation_stays_in_current_storage(self):
         self.app.show_cloud(present=False)
@@ -95,18 +135,31 @@ class FolderLocationTests(unittest.TestCase):
         with patch.object(label_backend, 'rehint', native_measure, create=True):
             browser = FileBrowser()
             header = browser.attach_location_header(browser.status_label(''), icon_button('up', 'Parent folder'))
+            overflow = icon_button('overflow', 'File and folder actions')
+            header.add(overflow)
             header.update('A very long folder name that cannot fit beside navigation')
             for message in ('', 'A long operation message that must truncate'):
                 header.status.value = message
                 for label in (header.folder_name, header.status, header.storage_identity.children[-1]):
                     label._impl.rehint()
-                for width in (180, 320, 600):
+                for width in (240, 320, 600):
                     with self.subTest(message=message, width=width):
                         header.style.layout(Viewport(width, 80))
                         search = browser.search_button.layout
                         self.assertLessEqual(search.content_left + search.content_width, width)
                         self.assertEqual(search.content_width, 48)
+                        more = overflow.layout
+                        self.assertLessEqual(more.content_left + more.content_width, width)
+                        self.assertEqual(more.content_width, 48)
+                        self.assertEqual(more.content_top, search.content_top)
                         self.assertGreater(header.folder_name.layout.content_width, 0)
+                        if not message:
+                            subtitle = header.storage_identity.children[-1].layout
+                            self.assertGreater(subtitle.content_width, 1)
+                            self.assertGreaterEqual(subtitle.content_height, 24)
+                            self.assertGreaterEqual(header.storage_identity.layout.content_height, 24)
+                        else:
+                            self.assertGreaterEqual(header.status.layout.content_height, 24)
 
     def test_local_drawer_search_stays_beside_current_folder(self):
         drawer = self.app.adaptive.browser('documents')
@@ -117,7 +170,9 @@ class FolderLocationTests(unittest.TestCase):
         self.assertIs(header.children[-1], browser.search_button)
         self.assertNotIn(browser.navigation_controls, browser.widget.children)
         browser.search_button.on_press()
-        self.assertIn(browser.search_panel, browser.widget.children)
+        self.assertIn(browser.search_panel, header.children)
+        self.assertTrue(browser.search_open)
+        self.assertNotIn(browser.search_panel, browser.widget.children)
         browser.close_search_button.on_press()
         self.assertNotIn(browser.search_panel, browser.widget.children)
 

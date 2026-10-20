@@ -7,7 +7,9 @@ __all__ = ['markdown_body', 'markdown_preview']
 
 def markdown_preview(text, font_size=16, *, local_links=False, image_source=None):
     # The Android host replaces this fallback with the actual native font.
-    stylesheet = css_variables() + 'html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif}'
+    stylesheet = (css_variables() + 'html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif}'
+                  'html,body{background:var(--surface);color:var(--text)}'
+                  'p,li{text-align:var(--logistics-text-align,start)}')
     content = _markdown_preview(text, font_size, local_links=local_links, stylesheet=stylesheet, image_source=image_source)
     content = content.replace('content="width=device-width, initial-scale=1"',
         'content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"', 1)

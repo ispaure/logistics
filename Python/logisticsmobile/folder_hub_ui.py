@@ -11,12 +11,12 @@ from toga.style.pack import COLUMN, ROW, CENTER
 from .folder_hub import hub_entries, folder_tree, credential_choices, source_choices, folder_storage_label, folder_browse_copy
 from features.rclone.mobile.messages import import_hint
 from textwrap import fill
-from .appearance import list_button
+from .appearance import list_button, batch_surfaces
 from .appearance import action_button, accessible_name
 from .folder_hub_style import (
     surface, source_tab, compact_icon, toolbar_button, folder_row, folder_name,
     source_actions, SOURCE_LABELS, ROW_HEIGHT, ROW_GAP, ENTRY_ICON_SLOT, ENTRY_ICON_SIZE,
-    tree_anchor, tree_guide,
+    tree_anchor, tree_guide, TREE_LABEL_GAP, align_group_label,
 )
 
 
@@ -345,6 +345,7 @@ class FolderHubUI:
         self.folder_picker_view = box
         return box
 
+    @batch_surfaces()
     def update_folder_list(self, choices):
         import json
         network_remotes = self.network_share_remotes()
@@ -392,33 +393,42 @@ class FolderHubUI:
         # Native selectors and retained metadata are relatively expensive. Read
         # them once, rather than once for every encrypted folder in the tree.
         crypt_remotes = set(getattr(self.app, 'cloud_crypt_remotes', ()))
+        crypt_remotes.update(remote for package in getattr(self.app.cloud_client, 'package_records', ())
+                             for remote in package.get('crypt_identities', {}))
         crypt_remotes.update(remote for package in associations
                              for remote in package.get('crypt_remotes', ()))
-        snapshot = (choices, network_remotes, loaded_remotes, crypt_remotes,
-                    getattr(self, 'show_legacy_session', False))
-        if snapshot != self.folder_tab_snapshot:
-            # Discard every source on a discovery/privacy change, even when
-            # that source is currently detached. Keep at most one view per tab.
-            self.folder_tab_views.clear()
-            self.folder_tab_snapshot = deepcopy(snapshot)
-        cached = self.folder_tab_views.get(self.folder_source)
-        if cached is not None and cached[0] == visible:
-            _, content, self.folder_buttons, self.folder_tree_buttons = cached
-            self.mount_folder_tab(content)
-            return
-        # Assemble the hierarchy offscreen so adding each row does not trigger
-        # a layout of the visible iOS/Android scroll container.
-        content = toga.Box(style=Pack(direction=COLUMN))
-        self.folder_buttons = {}
-        self.folder_tree_buttons = {}
+        # Cache each source's native rows independently. Discovery/credential
+        # metadata may change without changing anything this source displays.
+        tab = self.folder_tab_views.get(self.folder_source)
+        if tab is None:
+            tab = SimpleNamespace(content=toga.Box(style=Pack(direction=COLUMN)),
+                                  nodes={}, panels={}, extras={})
+            self.folder_tab_views[self.folder_source] = tab
+        self._render_folder_tab(tab, visible, loaded_remotes, crypt_remotes)
+        self.folder_buttons, self.folder_tree_buttons = tab.buttons, tab.tree_buttons
+        self.mount_folder_tab(tab.content)
+
+    def _render_folder_tab(self, tab, visible, loaded_remotes, crypt_remotes):
+        """Reconcile controls and hierarchy; unchanged rows keep native identity."""
+        nodes, panels, buttons, tree_buttons = {}, {}, {}, {}
+
+        def sync(parent, children):
+            # Native remove/add triggers layout. Touch only changed positions.
+            for child in list(parent.children):
+                if child not in children:
+                    parent.remove(child)
+            for index, child in enumerate(children):
+                if index < len(parent.children) and parent.children[index] is child:
+                    continue
+                if child.parent is not None:
+                    child.parent.remove(child)
+                parent.insert(index, child)
 
         def divider():
             return surface(toga.Box(style=Pack(height=1, margin_left=34)),
                            radius=0, background='transparent', outlined=False)
 
         def branch_height(branch):
-            # A fixed-width Box has no intrinsic height on either native
-            # backend. Size tree guides from the same fixed row geometry.
             return sum(ROW_HEIGHT + ROW_GAP
                        + (branch_height(node['children']) if node['children'] else 0)
                        for node in branch.values()) + max(0, len(branch) - 1)
@@ -431,97 +441,137 @@ class FolderHubUI:
                 if node['children']:
                     offset += branch_height(node['children'])
 
-        def add_branch(branch, parent, ancestors=()):
-            for index, (title, node) in enumerate(sorted(branch.items(), key=lambda item: item[0].casefold())):
-                path = (*ancestors, title)
-                children = node['children']
-                group = None
+        def row_for(path, title, node):
+            name = node['names'][0] if node['names'] else None
+            if name is not None:
+                entry = visible[name]
+                target = folder_browse_copy(entry, self.folder_source)
+                storage = (folder_storage_label(entry) if self.folder_source == 'Network shares'
+                           else target['source'])
+                remote = target.get('remote') or entry.get('remote')
+                encrypted = ('LocalCrypt' in storage or ('Remote' in storage and (
+                    remote in crypt_remotes
+                    or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ())))))
+                state = ('unlocked' if remote in loaded_remotes else 'locked') if encrypted else None
+                icon = 'folder_' + state if state else 'folder'
+                description = storage + (', ' + state if state else '')
+                presentation = (title, icon, description)
+            record = tab.nodes.get(path)
+            if record is None or record.name != name:
                 row = toga.Box(style=Pack(direction=ROW, align_items=CENTER,
                                          height=ROW_HEIGHT, margin_bottom=ROW_GAP))
-                if node['names']:
-                    name = node['names'][0]
+                record = SimpleNamespace(name=name, row=row, presentation=None,
+                                         group=None, child_box=None, divider=None, geometry=None)
+                if name is not None:
                     async def select(widget=None, selected=name, **kwargs):
                         return await self.browse_hub_folder(selected)
-                    entry = visible[name]
-                    target = folder_browse_copy(entry, self.folder_source)
-                    storage = (folder_storage_label(entry) if self.folder_source == 'Network shares'
-                               else target['source'])
-                    remote = target.get('remote') or entry.get('remote')
-                    encrypted = ('LocalCrypt' in storage or ('Remote' in storage and (
-                        remote in crypt_remotes
-                        or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ())))))
-                    state = ('unlocked' if remote in loaded_remotes else 'locked') if encrypted else None
-                    icon = 'folder_' + state if state else 'folder'
-                    description = storage + (', ' + state if state else '')
-                    indicator = icon_button(icon, name + ', ' + description, on_press=select)
-                    compact_icon(indicator, width=ENTRY_ICON_SLOT, size=ENTRY_ICON_SIZE,
-                                 foreground='folder_' + state if state else 'folder')
-                    row.add(indicator)
-                    button = folder_name(list_button(toga.Button(title, on_press=select,
+                    record.indicator = icon_button(icon, name + ', ' + description, on_press=select)
+                    record.button = folder_name(list_button(toga.Button(title, on_press=select,
                         style=Pack(height=ROW_HEIGHT, flex=1))))
-                    self.folder_buttons[name] = button
-                    accessible_name(button, name + ', ' + description)
-                    row.add(button)
                     def options(widget=None, selected=name, **kwargs):
                         self.choose_folder(selected)
-                    menu = icon_button('more', 'Workspace actions for ' + name, on_press=options)
-                    compact_icon(menu, width=44, size=18)
-                    row.add(menu)
+                    record.menu = icon_button('more', 'Workspace actions for ' + name, on_press=options)
+                    compact_icon(record.menu, width=44, size=18)
+                    row.add(record.indicator, record.button, record.menu)
                     folder_row(row)
                 else:
-                    # Labels deliberately have no press handler or disclosure
-                    # glyph. The entire hierarchy is always expanded.
-                    group = surface(toga.Label(title,
+                    record.group = surface(toga.Label(title,
                         style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=15,
-                                   # Start at this level's origin; only browsable
-                                   # folders reserve an icon slot before the title.
-                                   font_weight='bold', flex=1)),
-                        radius=0, background='transparent',
-                        foreground='text', outlined=False)
-                    accessible_name(group, title + ', group')
-                    self.folder_tree_buttons[path] = group
-                    row.add(group)
-                parent.add(row)
-                if children:
-                    content = toga.Box(style=Pack(direction=COLUMN, flex=1))
-                    add_branch(children, content, path)
-                    guide = tree_guide(branch_height(children),
-                                       child_midpoints(children), tree_anchor(group))
-                    parent.add(toga.Box(children=[guide, content], style=Pack(direction=ROW)))
-                if index < len(branch) - 1:
-                    parent.add(divider())
+                                   margin_left=TREE_LABEL_GAP if len(path) > 1 else 0,
+                                   font_weight='bold', flex=1)), radius=0,
+                        background='transparent', foreground='text', outlined=False)
+                    align_group_label(record.group)
+                    accessible_name(record.group, title + ', group')
+                    row.add(record.group)
+            if name is not None:
+                if record.presentation != presentation:
+                    if record.indicator.control_icon != icon:
+                        from .control_icons import apply_icon
+                        apply_icon(record.indicator, icon, name + ', ' + description, preserve_layout=True)
+                    if record.button.text != title:
+                        record.button.text = title
+                    accessible_name(record.indicator, name + ', ' + description)
+                    accessible_name(record.button, name + ', ' + description)
+                    color = 'folder_' + state if state else 'folder'
+                    if record.presentation is None:
+                        compact_icon(record.indicator, width=ENTRY_ICON_SLOT, size=ENTRY_ICON_SIZE, foreground=color)
+                    else:
+                        surface(record.indicator, radius=0, background='transparent', foreground=color, outlined=False)
+                    record.presentation = presentation
+                buttons[name] = record.button
+            else:
+                tree_buttons[path] = record.group
+            nodes[path] = record
+            return record
 
+        def add_branch(branch, parent, ancestors=()):
+            children = []
+            for index, (title, node) in enumerate(sorted(branch.items(), key=lambda item: item[0].casefold())):
+                path = (*ancestors, title)
+                record = row_for(path, title, node)
+                children.append(record.row)
+                if node['children']:
+                    if record.child_box is None:
+                        record.child_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
+                        record.child_box = toga.Box(style=Pack(direction=ROW))
+                    add_branch(node['children'], record.child_content, path)
+                    geometry = (branch_height(node['children']), tuple(child_midpoints(node['children'])),
+                                tree_anchor(record.group))
+                    if record.geometry != geometry:
+                        record.guide = tree_guide(*geometry)
+                        record.geometry = geometry
+                    sync(record.child_box, [record.guide, record.child_content])
+                    children.append(record.child_box)
+                elif record.child_box is not None:
+                    # Drop removed descendants even when their parent remains.
+                    sync(record.child_content, [])
+                if index < len(branch) - 1:
+                    if record.divider is None:
+                        record.divider = divider()
+                    children.append(record.divider)
+            sync(parent, children)
+
+        content = []
         folders = {name: entry for name, entry in visible.items() if not entry.get('browser_root')}
         for title, node in sorted(folder_tree(folders).items(), key=lambda item: item[0].casefold()):
-            branch_content = toga.Box(style=Pack(direction=COLUMN))
-            panel = surface(toga.Box(children=[branch_content], style=Pack(direction=COLUMN)),
-                            radius=0, background='transparent', outlined=False)
-            panel.style.margin_bottom = 12
-            add_branch({title: node}, branch_content)
-            content.add(panel)
+            panel = tab.panels.get(title)
+            if panel is None:
+                branch_content = toga.Box(style=Pack(direction=COLUMN))
+                panel = surface(toga.Box(children=[branch_content], style=Pack(direction=COLUMN)),
+                                radius=0, background='transparent', outlined=False)
+                panel.style.margin_bottom = 12
+            add_branch({title: node}, panel.children[0])
+            panels[title] = panel
+            content.append(panel)
         if not folders:
-            content.add(toga.Label('No folders available for this source.'))
+            if 'empty' not in tab.extras:
+                tab.extras['empty'] = toga.Label('No folders available for this source.')
+            content.append(tab.extras['empty'])
+        browse = {}
         for name, entry in visible.items():
             if entry.get('browser_root'):
-                async def browse_all(widget=None, selected=name, **kwargs):
-                    return await self.browse_hub_folder(selected)
-                button = list_button(toga.Button('Browse All Files', on_press=browse_all,
-                    style=Pack(height=ROW_HEIGHT, margin_top=12)))
-                self.folder_buttons[name] = button
-                content.add(button)
-        legend = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
-        labels = (('Locked', 'folder_locked', 'folder_locked'),
-                  ('Unlocked', 'folder_unlocked', 'folder_unlocked'))
-        for label, icon, color in labels:
-            mark = icon_button(icon, label + ' folder')
-            compact_icon(mark, width=28, height=32, size=22, background='window', foreground=color)
-            legend.add(mark)
-            legend.add(surface(toga.Label(label, style=Pack(font_size=11, margin_right=16)),
-                               background='window', foreground='muted', outlined=False))
-        content.add(legend)
-        self.folder_tab_views[self.folder_source] = (deepcopy(visible), content,
-                                                    self.folder_buttons, self.folder_tree_buttons)
-        self.mount_folder_tab(content)
+                button = getattr(tab, 'browse', {}).get(name)
+                if button is None:
+                    async def browse_all(widget=None, selected=name, **kwargs):
+                        return await self.browse_hub_folder(selected)
+                    button = list_button(toga.Button('Browse All Files', on_press=browse_all,
+                        style=Pack(height=ROW_HEIGHT, margin_top=12)))
+                browse[name] = buttons[name] = button
+                content.append(button)
+        if 'legend' not in tab.extras:
+            legend = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
+            for label, icon, color in (('Locked', 'folder_locked', 'folder_locked'),
+                                       ('Unlocked', 'folder_unlocked', 'folder_unlocked')):
+                mark = icon_button(icon, label + ' folder')
+                compact_icon(mark, width=28, height=32, size=22, background='window', foreground=color)
+                legend.add(mark)
+                legend.add(surface(toga.Label(label, style=Pack(font_size=11, margin_right=16)),
+                                   background='window', foreground='muted', outlined=False))
+            tab.extras['legend'] = legend
+        content.append(tab.extras['legend'])
+        sync(tab.content, content)
+        tab.nodes, tab.panels, tab.browse = nodes, panels, browse
+        tab.buttons, tab.tree_buttons = buttons, tree_buttons
 
     def mount_folder_tab(self, content):
         if list(self.folder_list.children) != [content]:

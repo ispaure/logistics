@@ -16,6 +16,11 @@ In Workspaces's **Cloud** and **Local** tabs, encrypted folders show a combined
 folder-and-lock icon before their name. Blue open padlocks mean unlocked;
 orange closed padlocks mean locked. Each folder reports its own state, including
 mixed states within one group. Ordinary folders use a plain folder icon.
+Cloud crypt folders use the lock icon even when there is no local copy. Unlocking
+an older retained session-only ZIP repairs missing folder-type metadata, so the
+crypt folders remain marked as locked after locking again or restarting. Older
+entries without that metadata need one successful unlock before their type can
+be shown correctly.
 Group headings and nesting remain expanded and cannot be collapsed.
 
 The online browser loads filenames and sizes without fetching thumbnails, in
@@ -111,10 +116,11 @@ appears above the remote selector, so the package and its remote names stay asso
 Saved settings and refreshed OAuth tokens use an AES-256-GCM encrypted private
 vault. Android Keystore protects its key, and the files are outside Android backup;
 iOS Keychain stores a device-only key available while the device is unlocked, and
-the vault folder is excluded from backup. Credentials restore when Remote files
-opens or when you enter Workspaces's **Cloud** or **Home Server** source,
-without contacting a remote. The folder list updates when restoration finishes;
-opening credential settings first is unnecessary. The ZIP password is never saved, and neither
+the vault folder is excluded from backup. Saved credentials restore during app
+startup, before Home appears, without contacting a remote. Recent and Documents
+show the restored connection state; opening a cloud file waits for any pending
+restoration and continues directly. Session-only ZIPs still require their password
+after restarting the app. The ZIP password is never saved, and neither
 mode rewrites the source ZIP. A locked device, missing key or damaged vault stops
 restoration; there is no plaintext fallback or silent replacement of saved data.
 Unlock the device and reload, or use **Forget saved credentials** before reimporting.

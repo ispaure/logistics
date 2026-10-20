@@ -240,9 +240,11 @@ class SpeechSession:
         target = max(0, min(len(self.words) - 1,
             current + round((elapsed + seconds) * 3 * self.speed)))
         self.cancel_timer()
-        self.engine.stop()
         self.generation += 1
         self.token = str(self.generation)
+        # Retire pixels and callbacks before stopping the old native utterance.
+        self.on_range(-1, -1)
+        self.engine.stop()
         self.ranges = list(utterances(self.text, self.words[target], self.end, breaks=self.breaks))
         self.index, self.elapsed = 0, 0
         if paused:

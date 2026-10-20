@@ -131,7 +131,14 @@ build stages that source and merges the feature-owned speech-service query.
 Gradle projects: Briefcase's source update alone does not apply newly added roots.
 Without this refresh, older projects can omit `BookSpeechListener` and report
 that speech support is missing even with an installed system voice.
-`mobile/speech_view.py` owns the floating native controls.
+`mobile/speech_view.py` owns the floating native controls. Speed uses a native
+seven-detent slider over 0.5–2.0, snapping to 0.25 increments, with muted percent
+limits, tick markers and a live percent label. The timer row pairs the duration
+with an accessible reset icon; a separate bold label shows its remaining time.
+Playback buttons share the available row width and status text sits below them.
+The overlay height includes the section spacing and grows for wrapped status
+messages. `test_speech_overlay` covers slider quantization and timer behavior;
+`speech_controls_probe` checks native control bounds with a silent fixture engine.
 `logisticsmobile/speech_overlay.py` hosts them in a detached iOS container or
 Android popup, leaving the document layout tree unchanged. Disposal detaches the
 surface. Both native hosts size the popup to its status message and controls,
@@ -231,7 +238,15 @@ the hosts mount them through the shared adaptive sidebar. Search remains an
 explicit action outside the chapter list.
 
 `mobile/speech.py` keeps bounded utterances and a private in-memory word-offset
-index. Fifteen-second skips use 180 words/minute multiplied by playback speed,
+index. A skip retires the old generation and publishes a clear range before
+stopping the old native utterance; synchronous/late callbacks cannot repaint it.
+Both EPUB and Markdown empty the old CSS `Highlight` before deleting its registry
+entry so WebKit also invalidates its painted ranges. The silent native
+`speech_skip_probe` verifies eight EPUB/Markdown forward/backward cases while
+playing and paused, including empty old range objects and exactly one new range.
+Desktop `test_books_reader` covers mirrored spread cleanup; shared speech tests
+cover matching slider/timer behavior without using speakers. Fifteen-second skips use
+180 words/minute multiplied by playback speed,
 including elapsed time in the current utterance; native synthesis supplies no
 seekable audio timeline. Skips invalidate old completion tokens, respect selected
 passage bounds and preserve pause state. Stop/disposal clear text and word offsets.
@@ -260,3 +275,14 @@ are checked again before speech starts. A saved device preference permits only
 the existing in-memory speech passage while its gate remains locked. Credential
 revocation remains authoritative. UI-hidden memory trimming retains only that
 single authorized playback owner; navigation/close still disposes it.
+
+## Mobile sidebar allocation
+
+Imported and provider EPUB chapter browsers scroll their padded tree, bookmarks
+and session notice together inside an unpadded sidebar viewport. Its 44-point
+minimum permits short landscape panes without fixed bookmark controls expanding
+the entire reader beyond the safe area. The adaptive sidebar's fixed width includes
+that internal padding, so the calculated text width stays within the native safe area
+when switching orientation. The mobile native release suite checks portrait and
+both landscape directions repeatedly, retaining the active reader and chapter
+browser state.

@@ -28,6 +28,7 @@
     "font_scaling.py",
     "folder_controller.py",
     "folder_navigation.py",
+    "folder_title.py",
     "folder_hub.py",
     "folder_hub_style.py",
     "folder_hub_ui.py",

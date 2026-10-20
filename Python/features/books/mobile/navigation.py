@@ -45,3 +45,12 @@ class ChapterList(HierarchyList):
         super().render()
         for row in self.rows.children:
             row.title_button.chapter_entry = row.title_button.hierarchy_entry
+
+
+def chapter_sidebar(content):
+    """Scroll chapters and bookmarks together inside even a short landscape pane."""
+    import toga
+    from toga.style import Pack
+    class ChapterSidebar(toga.ScrollContainer):
+        _MIN_HEIGHT = 44
+    return ChapterSidebar(horizontal=False, content=content, style=Pack(flex=1))

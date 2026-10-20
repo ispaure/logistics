@@ -40,13 +40,41 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertIs(app.show_legacy_choice.parent.parent.parent, nav.sections['Workspaces'])
         self.assertEqual(app.text_font_size_choice.value, '24')
 
+    def test_repeated_rotation_from_category_list_does_not_open_default_options(self):
+        app, nav = self.app, self.nav
+        for width in (900, 390, 900, 390, 900, 390):
+            self.width.return_value = width
+            app.resize_workspace()
+            self.assertFalse(app.routes.screens['settings'])
+            self.assertIs(app.body.children[0], nav)
+        self.assertFalse(nav.detail_requested)
+        self.assertEqual(nav.sections.built, {})
+        self.assertEqual(nav.options.built, {})
+
+    def test_category_selected_wide_survives_rotation_while_another_tab_is_visible(self):
+        app, nav = self.app, self.nav
+        self.width.return_value = 900
+        app.resize_workspace()
+        nav.choose('Text')
+        app.show_home()
+        self.width.return_value = 390
+        nav.reflow()
+        app.native_host.activate('settings')
+        nav.reflow()
+        self.assertEqual(app.routes.screens['settings'][-1][0], 'settings-category')
+        self.assertIs(app.body.children[0], nav.options['Text'])
+        app.routes.back()
+        self.assertFalse(nav.detail_requested)
+
     def test_tablet_switches_categories_in_place_with_one_selected_row(self):
         app, nav = self.app, self.nav
         self.width.return_value = 900
         app.resize_workspace()
         self.assertTrue(nav.wide)
         self.assertEqual(list(nav.children), [nav.sidebar, nav.detail])
-        self.assertEqual(list(nav.detail.children), [nav.options['App']])
+        self.assertEqual(list(nav.detail.children), [])
+        self.assertEqual(nav.sections.built, {})
+        self.assertEqual(nav.options.built, {})
         nav.buttons['Read aloud'].on_press()
         self.assertFalse(app.routes.screens['settings'])
         self.assertEqual(list(nav.detail.children), [nav.options['Read aloud']])
@@ -120,11 +148,14 @@ class SettingsNavigationTests(unittest.TestCase):
         self.width.return_value = 600
         with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.55):
             nav.reflow()
+            nav.choose('App')
             self.assertEqual(nav.sidebar.style.width, 330)
-            label, info, switch = app.clear_documents_choice.parent.children
+            label, switch = app.clear_documents_choice.parent.children
             self.assertEqual(label.text.replace('\n', ' '), 'Close saved documents on restart')
             self.assertGreater(len(label.text.splitlines()), 1)
-            self.assertEqual(info.style.width, 48)
+            note = switch.parent._settings_note
+            self.assertGreater(len(note.text.splitlines()), 1)
+            self.assertEqual(note.text.replace('\n', ' '), note._settings_source_text)
             self.assertIs(switch, app.clear_documents_choice)
             nav.choose('LM Chat')
             button = nav.sections['LM Chat'].children[1].children[0]
@@ -148,6 +179,7 @@ class SettingsNavigationTests(unittest.TestCase):
         self.width.return_value = 600
         with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.55):
             self.nav.reflow()
+            self.nav.choose('App')
         self.app.settings_status.text = 'Preferences saved on this device.'
         self.assertIn('\n', self.app.settings_status.text)
         self.assertEqual(self.app.settings_status.text.replace('\n', ' '),

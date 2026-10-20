@@ -33,7 +33,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.target == 'android' && '[{"target":"android","os":"ubuntu-24.04"}]' || inputs.target == 'ios' && '[{"target":"ios","os":"xcode-27"}]' || '[{"target":"android","os":"ubuntu-24.04"},{"target":"ios","os":"xcode-27"}]') }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.target == 'ios' && 60 || 45 }}
+    timeout-minutes: ${{ matrix.target == 'ios' && 75 || 55 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -86,7 +86,7 @@ jobs:
           app=$(find build/logisticsmobile/ios -type d -name 'Logistics Mobile.app' -print -quit)
           test -n "$app"
           ditto -c -k --sequesterRsrc --keepParent "$app" "$RUNNER_TEMP/Logistics-ios-simulator.zip"
-      - name: Exercise the actual Android native app
+      - name: Exercise Android panels, rotation and safe areas
         if: matrix.target == 'android'
         working-directory: Mobile
         env:
@@ -94,7 +94,7 @@ jobs:
         run: |
           sudo chmod a+rw /dev/kvm
           python ui_tools.py run android --device '{"avd":"LogisticsValidation","device_type":"pixel","skin":null,"system_image":"system-images;android-35;google_apis;x86_64"}'
-      - name: Exercise the actual iOS native app
+      - name: Exercise iPhone and iPad panels, rotation and safe areas
         if: matrix.target == 'ios'
         working-directory: Mobile
         env:

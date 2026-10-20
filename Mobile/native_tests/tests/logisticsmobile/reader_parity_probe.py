@@ -260,7 +260,7 @@ class ReaderProbe(LogisticsMobile):
                 await asyncio.sleep(.3)
                 await capture_window(self, output / 'speech-controls.png')
                 await owner.epub_view.evaluate_javascript('window.reader.seek(0, 18)')
-                speech.speed_choice.value = '1.25'
+                speech.speed_choice.value = 1.25
                 await speech.play()
                 assert speech.session.state == 'speaking', speech.status.text
                 assert speech.session.ranges[0][1] == 0 and speech.session.ranges[-1][2] == 18, speech.session.ranges

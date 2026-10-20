@@ -4,8 +4,8 @@ from logisticsmobile.hub_ui import HubUI
 
 
 class HubController(HubUI):
-    METHODS = ('session_visible', 'recent_items', 'recent_opener', 'recent_row', 'build_home', 'reflow_home', 'build_documents_hub', 'open_document_category', 'session_card', 'session_summary', 'session_panel', 'new_hub_document', 'open_hub_file', 'refresh_hub')
-    FIELDS = ('document_categories', 'document_grids', 'document_launchers', 'home_actions', 'home_content', 'home_continue', 'home_continue_button', 'home_panels')
+    METHODS = ('session_visible', 'recent_items', 'recent_opener', 'recent_row', 'build_home', 'reflow_home', 'reflow_documents_hub', 'build_documents_hub', 'search_documents', 'refresh_document_list', 'open_document_category', 'session_card', 'session_summary', 'session_panel', 'new_hub_document', 'open_hub_file', 'refresh_hub')
+    FIELDS = ('document_categories', 'document_grids', 'document_launchers', 'document_search', 'document_open_list', 'document_recent_list', 'document_saved_list', 'home_actions', 'home_content', 'home_continue', 'home_continue_button', 'home_sections', 'documents_sections')
 
     def __init__(self, app):
         self.app = app

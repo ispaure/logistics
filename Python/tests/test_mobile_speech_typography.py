@@ -45,6 +45,30 @@ class SpeechTests(unittest.TestCase):
         session.resume()
         self.assertEqual(engine.calls[-1][:3], ('two.', 'local', .75))
 
+    def test_skip_clears_old_word_before_native_stop_and_rejects_its_callbacks(self):
+        engine = Engine()
+        ranges = []
+        session = SpeechSession(engine, on_range=lambda *value: ranges.append(value), on_state=lambda *args: None)
+        self.addCleanup(session.dispose)
+        session.play(' '.join(f'word{i}' for i in range(200)))
+        old = session.token
+        session.progress(old, 0, 5)
+        observed = []
+        def native_stop():
+            observed.append(ranges[-1])
+            session.progress(old, 6, 11)
+            session.completed(old)
+        engine.stop = native_stop
+        session.skip(15)
+        self.assertEqual(observed[-1], (-1, -1))
+        self.assertEqual(ranges[-1], (-1, -1))
+        session.progress(session.token, 0, 6)
+        self.assertGreater(ranges[-1][0], 0)
+        session.pause()
+        session.skip(-15)
+        self.assertEqual(session.state, 'paused')
+        self.assertGreaterEqual(ranges[-1][0], 0)
+
     def test_native_word_offsets_selection_and_stale_events(self):
         engine = Engine()
         ranges = []

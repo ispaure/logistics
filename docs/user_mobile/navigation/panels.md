@@ -2,15 +2,16 @@
 
 ## Using the mobile panels
 
-Home offers Continue and compact shortcuts to Workspaces, writing and the library.
-Documents lists every open session under **All open** and shows Recent as compact rows without
+Home offers **Open file…**, **New document**, five recent files and **See all in
+Documents**. Documents lists every open session under **All open** and shows closed Recent entries as compact rows without
 text-preview cards. Tap a filename to continue. The **×** button closes an open
 session through the existing unsaved-change guard. Card overview is permanently
-off and has no Settings switch. Stored documents are not listed in the overview.
+off and has no Settings switch. Other saved text and Markdown files appear under
+**Saved documents**. **Search documents** filters open, recent and saved filenames.
 Settings groups feature options under Text & Markdown, Books & Comics, LM Chat
-and Workspaces; reader appearance stays in each open reader. Documents offers New document and Open file in its toolbar; Chat has
-its own bottom navigation destination. The Library shortcut has been removed
-from Documents.
+and Workspaces; reader appearance stays in each open reader. Home provides the
+Open/New actions; Documents provides **Books & Comics library** access. Chat has
+its own bottom navigation destination.
 
 The library is a searchable list of configured library folders. Tap a folder to
 browse its books and comics. Contents/bookmarks and appearance have separate tools, keeping the reading

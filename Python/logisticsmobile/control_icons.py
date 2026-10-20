@@ -1,5 +1,6 @@
 """Named, compact controls using UIKit symbols and Android vector drawables."""
 import weakref
+from functools import lru_cache
 import toga
 from toga.style import Pack
 from .appearance import accessible_name
@@ -37,8 +38,10 @@ ICONS = {
     'save': ('square.and.arrow.down', '↓', (((4, 13), (4, 21), (20, 21), (20, 13)), ((12, 2), (12, 16)), ((7, 11), (12, 16), (17, 11)))),
     'down': ('chevron.down', '⌄', (((5, 8), (12, 15), (19, 8)),)),
     'fullscreen': ('arrow.up.left.and.arrow.down.right', '⤢', (((10, 3), (3, 3), (3, 10)), ((3, 3), (10, 10)), ((14, 21), (21, 21), (21, 14)), ((21, 21), (14, 14)))),
+    'fit': ('arrow.down.right.and.arrow.up.left', 'Fit', (((3, 3), (10, 10)), ((4, 10), (10, 10), (10, 4)), ((21, 21), (14, 14)), ((14, 20), (14, 14), (20, 14)))),
     'speaker': ('speaker.wave.2', '🔊', (((3, 9), (7, 9), (12, 5), (12, 19), (7, 15), (3, 15), (3, 9)),
                                       ((16, 8), (18, 10), (18, 14), (16, 16)), ((19, 4), (22, 8), (23, 12), (22, 16), (19, 20)))),
+    'reset': ('arrow.counterclockwise', '↺', (((4, 9), (7, 5), (13, 3), (19, 6), (21, 12), (19, 18), (13, 21), (7, 19)), ((4, 3), (4, 9), (10, 9)))),
     'play': ('play.fill', '▶', (((7, 4), (20, 12), (7, 20), (7, 4)),)),
     'pause': ('pause.fill', 'Ⅱ', (((8, 4), (8, 20)), ((16, 4), (16, 20)))),
     # Match commonUtils.ui.readers.reader_chrome.ReaderIcon's back15/forward15:
@@ -71,22 +74,47 @@ ICONS.update((name, ('folder', {'folder_locked': '▱⚿', 'folder_unlocked': '�
 
 
 def tint_android(impl):
-    from android import R
-    from android.content.res import ColorStateList
+    from .appearance import _android_surface_resources, _android_color_states
     from .palette import argb, android_palette, eink_enabled
+    R, ColorStateList, _, _ = _android_surface_resources()
     dark = impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20
     colors = android_palette(dark)
     if eink_enabled() and getattr(impl, '_surface_eink_selected', False):
         colors = dict(colors, text='#ffffff', muted='#ffffff')
     foreground = getattr(impl, '_surface_roles', ('', 'text', False))[1]
-    impl._control_drawable.setTintList(ColorStateList(
-        [[-R.attr.state_enabled], []],
-        [argb(colors['muted']), argb(colors.get(foreground, colors['text']))]))
+    disabled, enabled = argb(colors['muted']), argb(colors.get(foreground, colors['text']))
+    key = (disabled, enabled)
+    if (getattr(impl, '_control_tint_drawable', None) is impl._control_drawable
+            and getattr(impl, '_control_tint_key', None) == key):
+        return
+    impl._control_drawable.setTintList(_android_color_states(ColorStateList, R.attr.state_enabled,
+                                                           disabled, enabled))
+    impl._control_tint_drawable, impl._control_tint_key = impl._control_drawable, key
 
 
 def refresh_icons():
     for impl in list(_android_controls):
         tint_android(impl)
+
+
+@lru_cache(maxsize=64)
+def _apple_button_image(names, scale):
+    """Reuse immutable template pixels; each button keeps its own tint/state."""
+    from rubicon.objc import ObjCClass, Block, objc_id
+    from toga_iOS.libs import UIGraphicsImageRenderer, CGSize, CGRect
+    width = 28 * len(names) - 4
+    image_format = ObjCClass('UIGraphicsImageRendererFormat').defaultFormat()
+    image_format.scale = scale
+    renderer = UIGraphicsImageRenderer.alloc().initWithSize(CGSize(width + 8, 24), format=image_format)
+    configuration = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(22, weight=5)
+    images = [ObjCClass('UIImage').systemImageNamed(ICONS[name][0]).imageWithConfiguration(configuration)
+              for name in names]
+    def draw(context):
+        for index, image in enumerate(images):
+            ratio = min(24 / float(image.size.width), 24 / float(image.size.height))
+            w, h = float(image.size.width) * ratio, float(image.size.height) * ratio
+            image.drawInRect(CGRect((28 * index + (24 - w) / 2, (24 - h) / 2), (w, h)))
+    return renderer.imageWithActions(Block(draw, None, objc_id)).imageWithRenderingMode(2)
 
 
 def button_icons(button, icons):
@@ -98,19 +126,8 @@ def button_icons(button, icons):
     width = 28 * len(icons) - 4
     labels = ' · '.join(label for _, label in icons)
     if backend.startswith('toga_iOS.'):
-        from rubicon.objc import ObjCClass, Block, objc_id
-        from toga_iOS.libs import UIGraphicsImageRenderer, CGSize, CGRect
-        renderer = UIGraphicsImageRenderer.alloc().initWithSize(CGSize(width + 8, 24))
-        configuration = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(22, weight=5)
-        images = [ObjCClass('UIImage').systemImageNamed(ICONS[name][0]).imageWithConfiguration(configuration)
-                  for name, _ in icons]
-        def draw(context):
-            for index, image in enumerate(images):
-                # Preserve each symbol's aspect ratio inside a shared icon cell.
-                scale = min(24 / float(image.size.width), 24 / float(image.size.height))
-                w, h = float(image.size.width) * scale, float(image.size.height) * scale
-                image.drawInRect(CGRect((28 * index + (24 - w) / 2, (24 - h) / 2), (w, h)))
-        image = renderer.imageWithActions(Block(draw, None, objc_id)).imageWithRenderingMode(2)
+        from rubicon.objc import ObjCClass
+        image = _apple_button_image(tuple(name for name, _ in icons), float(ObjCClass('UIScreen').mainScreen.scale))
         native = button._impl.native
         native.setImage(image, forState=0)
         native.accessibilityHint = ' · '.join(filter(None, (getattr(button, 'description', ''), labels)))
@@ -144,17 +161,21 @@ def button_icons(button, icons):
     return button
 
 
-def apply_icon(button, name, label):
+def apply_icon(button, name, label, *, preserve_layout=False):
     """Preserve callbacks, enabled state and native menus on an existing button."""
     symbol, fallback, lines = ICONS[name]
-    button.text = fallback
-    button.style.width = button.style.height = 48
+    if not preserve_layout:
+        button.text = fallback
+        button.style.width = button.style.height = 48
+    elif not type(button._impl).__module__.startswith(('toga_iOS.', 'toga_android.')):
+        button.text = fallback
     button.control_icon = name
     accessible_name(button, label)
     backend = type(button._impl).__module__
     if backend.startswith('toga_iOS.'):
         from rubicon.objc import ObjCClass
-        button.text = ''
+        if not preserve_layout:
+            button.text = ''
         image = ObjCClass('UIImage').systemImageNamed(symbol)
         if name in {'group', 'obsidian', 'skip_back', 'skip_forward', 'folder', 'folder_locked', 'folder_unlocked'}:
             from math import radians
@@ -198,7 +219,8 @@ def apply_icon(button, name, label):
             image = renderer.imageWithActions(Block(draw, None, objc_id)).imageWithRenderingMode(2)
         config = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(22, weight=5)
         button._impl.native.setImage(image, forState=0)
-        button._impl.native.setPreferredSymbolConfiguration(config, forImageInState=0)
+        if not preserve_layout:
+            button._impl.native.setPreferredSymbolConfiguration(config, forImageInState=0)
     elif backend.startswith('toga_android.'):
         from android.graphics import Path, Paint
         from android.graphics.drawable import ShapeDrawable
@@ -231,11 +253,15 @@ def apply_icon(button, name, label):
         native = button._impl.native
         density = native.getResources().getDisplayMetrics().density
         size, padding = round(24 * density), round(12 * density)
+        if preserve_layout and hasattr(button._impl, '_control_drawable'):
+            size = button._impl._control_drawable.getBounds().width()
         drawable.setBounds(0, 0, size, size)
-        button.text = ''
-        native.setMinimumWidth(0)
-        native.setMinimumHeight(0)
-        native.setPadding(padding, padding, padding, padding)
+        if not preserve_layout:
+            button.text = ''
+        if not preserve_layout:
+            native.setMinimumWidth(0)
+            native.setMinimumHeight(0)
+            native.setPadding(padding, padding, padding, padding)
         if name in {'skip_back', 'skip_forward'}:
             from android.graphics import Bitmap, Canvas
             from android.graphics.drawable import BitmapDrawable

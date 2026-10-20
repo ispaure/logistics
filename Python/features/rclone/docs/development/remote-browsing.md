@@ -57,6 +57,21 @@ credential ZIP's original password is held only in native session memory and is
 cleared with credential lock/replacement. Only authenticated, password-protected
 credential ZIPs enable this cache. No cache contains file contents or unsaved edits.
 
+Native startup initializes the cloud controller and awaits its saved-vault restore
+in the workspace preparation phase, before building Home. Remote and LocalCrypt
+document reopening also await an existing restore before resolving identities or
+checking credential generations. Navigation away during that wait cancels the
+open intent. Credential publication queues Home and Documents badge refreshes
+even for saved packages, which have no session-only encrypted-list state.
+
+Workspaces derives online crypt-folder icons from published `crypt_identities`
+as well as the loaded crypt-name list and retained package metadata; a local copy
+is not required. Credential loading backfills missing retained `crypt_remotes`
+metadata for the exact matching document-cache identity. Alias translation keeps
+the retained index's remote names, so another loaded account with the same names
+cannot change a regular folder's classification. Locked rendering reads this
+metadata without decrypting the credential ZIP or calling the native bridge.
+
 After credential unlock, validated open/recent entries restore in RAM; restored
 open entries are transient placeholders until selected. Restore never fetches
 remote file content. Explicit close updates the encrypted open list; credential

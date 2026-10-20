@@ -15,7 +15,7 @@ class AppearanceTests(unittest.TestCase):
             __module__ = 'toga_iOS.widgets.label'
 
         impl = Impl()
-        label = NS(_impl=impl)
+        label = NS(_impl=impl, style=NS(margin_left=0))
         for getter in (NS(width=40), lambda: NS(width=40)):
             impl.native = NS(intrinsicContentSize=getter)
             self.assertEqual(tree_anchor(label), 20)
@@ -68,7 +68,7 @@ class AppearanceTests(unittest.TestCase):
         import sys
         from types import SimpleNamespace as NS
         from unittest.mock import MagicMock, patch
-        from logisticsmobile.appearance import outline_command, paint_surface
+        from logisticsmobile.appearance import outline_command, paint_surface, _android_backgrounds
         from logisticsmobile.palette import EINK, set_eink_enabled
 
         class Impl:
@@ -96,6 +96,7 @@ class AppearanceTests(unittest.TestCase):
                         (False, True, EINK), (False, False, LIGHT))):
                     set_eink_enabled(eink)
                     drawable.reset_mock()
+                    _android_backgrounds.clear()
                     impl.native.getResources().getConfiguration().uiMode = 0x20 if dark else 0x10
                     if index == 0:
                         outline_command(impl)
@@ -111,7 +112,8 @@ class AppearanceTests(unittest.TestCase):
                     self.assertEqual(tint.states, [[-1], []])
                     self.assertEqual(tint.colors, [argb(colors['muted']), argb(colors['text'])])
                     impl.native.setBackgroundTintList.assert_called_with(None)
-                    impl.native.setBackground.assert_called_with(ripple.return_value)
+                    impl.native.setBackground.assert_called_with(
+                        ripple.return_value.getConstantState.return_value.newDrawable.return_value.mutate.return_value)
                     impl.native.setSelected.assert_not_called()
         finally:
             set_eink_enabled(False)
@@ -332,6 +334,7 @@ class AppearanceTests(unittest.TestCase):
                 for role, color in palette.items():
                     self.assertIn(f'--{role}:{color}', html)
             self.assertIn(f'background:var(--{background})', html)
+        self.assertIn('html,body{background:var(--surface);color:var(--text)}', markdown_preview('# Notes'))
 
     def test_chat_canvas_tracks_system_light_and_dark_themes(self):
         html = transcript_document(theme_css=css_variables())
@@ -345,9 +348,13 @@ class AppearanceTests(unittest.TestCase):
 
     def test_explicit_reader_appearance_overrides_device_mode(self):
         content = '<html><head><style>body{margin:24px}</style></head><body>Book</body></html>'
-        for mode, palette in (('light', LIGHT), ('dark', DARK)):
+        for mode, palette in (('system', LIGHT), ('light', LIGHT), ('dark', DARK)):
             html = themed_chapter(content, mode)
             self.assertIn('body{margin:24px}', html)
             self.assertIn('<body>Book</body>', html)
             self.assertIn('--surface:' + palette['surface'], html)
-            self.assertNotIn('@media', html)
+            self.assertIn('html,body{background:var(--surface);color:var(--text)}', html)
+            if mode != 'system':
+                self.assertNotIn('@media', html)
+        for mode in ('sepia', 'slate'):
+            self.assertEqual(themed_chapter(content, mode), content)

@@ -2,8 +2,8 @@
 
 ## Categories and adaptive layout
 
-Settings opens a category list: **App**, **Read aloud**, **Text & Markdown**,
-**Books & Comics**, **LM Chat**, **Workspaces**, **Help**, and **About**.
+Settings opens a category list: **App**, **Read aloud**, **Markdown**, **Text**,
+**EPUB**, **Books & Comics**, **LM Chat**, **Workspaces**, **Help**, and **About**.
 Android also includes **Appearance** for High contrast / E Ink. On a phone, tap
 one category to see its options and use Back to return to the list.
 Categories and related options share rounded groups with inset dividers, like
@@ -16,9 +16,12 @@ solid selected-category highlight in the wide layout.
 With at least 640 points/dp of usable width, Settings shows categories on the
 left and the selected category's options on the right. This applies to Android
 and iOS tablets, wide app windows, and an unfolded iPhone Duo in landscape.
+Each category loads only when you open it, then retains its controls for later
+visits. The wide layout starts with an empty options pane until you select a
+category; opening Settings does not load the default App page.
 A partially folded Duo with a vertical seam aligns the two panes to that seam.
 Labels, descriptions and action buttons wrap to the available pane width; long
-switch labels leave room for both help and the full switch. Each pane scrolls
+switch labels leave room for the full switch. Each pane scrolls
 independently. Rotating or resizing retains the selected category and its controls. A nested
 page stays open during a resize; Back returns to its category in the new layout.
 Preferences still save immediately, and each window keeps its own category
@@ -45,7 +48,11 @@ The mode forces this app's light appearance even when Android uses dark mode.
 Turn it off to restore the normal system-following app palette and the original
 reader/HTML styling. Existing documents, drafts and transfers remain in place.
 
-**Settings → Text & Markdown** also provides editor/preview font size (12–32).
+**Settings → Markdown**, **Text**, and **EPUB** provide separate font sizes (12–32).
+Markdown and EPUB also offer **Justify text** to align paragraphs and lists to
+both edges. Each switch defaults to off and saves independently on this device.
+Changes reflow open rich readers and formatted Markdown without changing the file;
+source editing, headings, code blocks and tables keep their existing alignment.
 In an open EPUB or comic, **••• → Appearance…** offers reader typography, margins,
 width, theme and comic layout. The high-contrast override takes precedence over
 reader text colors while enabled; turning it off reveals the chosen theme again.
@@ -82,8 +89,10 @@ or import operations and close other app windows before deleting a copy.
 
 On iPhone and iPad, choosing a dropdown option closes its picker immediately.
 
-Settings switches use one compact row: label, **ⓘ** help, then the on/off switch.
-Tap **ⓘ** for an explanation without changing the setting. This includes
+Settings switches use one compact row with the label and on/off switch.
+Explanations appear as muted, wrapping comments immediately below the option's
+rounded group, visible without opening a dialog. This applies across all settings
+categories, including
 **Restore last document**, **Close saved documents on restart** and,
 on Android and iOS, **Show Legacy**. Preferences save automatically when changed.
 **Show Legacy** applies immediately for the current session only and resets to off

@@ -132,7 +132,7 @@ native check has not yet been run on a device.
 Settings measures Apple text with its native font and inserts explicit line
 breaks because Toga labels clip instead of wrapping. Category content uses the
 available viewport width, with the physical seam dividing partially folded
-landscape panes. Switch rows reserve native switch/help widths; multiline action
+landscape panes. Switch rows reserve native switch widths; multiline action
 buttons grow beyond their 48-point minimum. Status and offline voice messages
 refit when changed. Retained source text allows widening without accumulating
 old line breaks. Compact category navigation and nested Back routes are retained.
@@ -209,9 +209,11 @@ closes before handlers can replace a view or navigate. Programmatic selection
 continues through Toga's existing implementation; Android keeps its native
 Spinner behavior.
 
-`logisticsmobile/settings_ui.py` owns compact label/help/switch rows. Help opens
-an `InfoDialog` without mutating preference values. Native accessibility names
-identify the help buttons and textless switches. Existing preference callbacks
+`logisticsmobile/settings_ui.py` owns compact label/switch rows. Each row retains
+its explanation in `_settings_note`; the shared presentation places that muted
+13-point label below the rounded option group. Explanations wrap to the pane
+width and remain visible across all categories. Native accessibility names
+identify the textless switches. Existing preference callbacks
 and Save/Reload behavior remain authoritative.
 
 The bottom About section reuses `services.build_version.BuildVersion.label` for

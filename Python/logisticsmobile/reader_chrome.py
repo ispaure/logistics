@@ -31,17 +31,7 @@ class ReaderChrome:
     def refresh_folder_action(self):
         if not hasattr(self, 'reader_actions'):
             return
-        from .document_sources import folder_action
-        folder_actions = folder_action(self.app, self.session)
-        available = bool(folder_actions)
-        if available == getattr(self, '_folder_menu_available', False):
-            return
-        actions = [(label, callback) for label, callback in self.reader_actions.actions
-                   if label != 'Show in folder']
-        actions.extend(folder_actions)
-        self.reader_actions.dispose()
-        self.reader_actions = FeatureCommands(self.reader_actions_button, self, actions, self.show_reader_tools)
-        self._folder_menu_available = available
+        self.reader_actions.refresh()
 
     def compact_reader(self):
         old = self.library_view
@@ -66,7 +56,7 @@ class ReaderChrome:
         self._folder_menu_available = bool(folder_actions)
         actions.extend(folder_actions)
         actions.append(('All documents', self.app.show_documents_hub))
-        self.reader_actions = FeatureCommands(self.reader_actions_button, self, actions, self.show_reader_tools)
+        self.reader_actions = FeatureCommands(self.reader_actions_button, self, actions, self.show_reader_tools, document=True)
         from .workspace_navigation import menu_button
         if comic:
             self.comic_header = ComicHeader(self.reader_actions_button,
@@ -80,34 +70,43 @@ class ReaderChrome:
                 self.reader_speech_button,
                 self.reader_actions_button], style=Pack(direction=ROW))
         self.chapter_selector.style.flex = 1
-        self.page_footer = PageFooter(self.previous_page, self.next_page, self.move_book_page, compact=not comic)
+        self.page_footer = PageFooter(self.previous_page, self.next_page, self.move_book_page)
         self.reader_footer = self.page_footer.widget
         if not comic:
-            self.reader_header.insert(1, self.reader_footer)
             self.book_status.style.update(flex=1, width=1, height=48, margin_top=0)
         self.reader_restore = toga.Button('Show reading controls', on_press=self.toggle_reading_mode, style=Pack(height=48))
         self.book_status.style.font_size = 12
+        if comic:
+            self.book_status.style.text_align = 'center'
         self.reader_immersive = False
         content = self.book_content
         if not comic:
             from commonUtils.ui.native.adaptive import AdaptiveSidebar
             self.chapter_rows = toga.Box(style=Pack(direction=COLUMN))
             tree = toga.Box(children=[toga.Label('Chapters', style=Pack(font_size=20)),
-                toga.ScrollContainer(content=self.chapter_rows, horizontal=False, style=Pack(flex=1)),
-                self.bookmark_button, self.bookmark_selector], style=Pack(direction=COLUMN, flex=1, margin=8))
-            self.chapter_sidebar = AdaptiveSidebar(tree, self.book_content, label='Browse book chapters')
+                self.chapter_rows, self.bookmark_button, self.bookmark_selector],
+                style=Pack(direction=COLUMN, margin=8))
+            from features.books.mobile.navigation import chapter_sidebar
+            sidebar = chapter_sidebar(tree)
+            self.chapter_sidebar = AdaptiveSidebar(sidebar, self.book_content, label='Browse book chapters')
             self.chapter_collapsed = set()
             content = self.chapter_sidebar.view
         self.reading_frame = ReadingFrame(content,
-            [self.reader_header, self.reader_footer, self.book_status] if comic else [self.reader_header],
+            [self.reader_header, self.reader_footer, self.book_status] if comic else [self.reader_header, self.reader_footer],
             margin=16 if comic else 0, restore=self.reader_restore)
         self.library_view = self.reading_frame.widget
+        self.library_view._native_reader_title = lambda: self.session.title
+        self.library_view._native_reader_toolbar = self.reader_header
+        self.library_view._native_reader_status = self.book_status
         if not comic:
             self.library_view._workspace_menu_button = browser
             self.library_view._native_reader_toolbar = self.reader_header
             self.library_view._native_reader_status = self.book_status
-            self.library_view._native_reader_buttons = lambda: [self.previous_page, self.next_page,
-                self.reader_speech_button, self.reader_actions_button]
+            self.library_view._native_reader_buttons = lambda: [self.reader_speech_button, self.reader_actions_button]
+        else:
+            self.library_view._native_reader_buttons = lambda: [
+                *([self.comic_header.previous] if self.comic_header.available[0] else []),
+                *([self.comic_header.following] if self.comic_header.available[1] else []), self.reader_actions_button]
         if comic:
             self.reader_tools_view = comic_pages(self.chapter_selector, self.show_library)
         else:

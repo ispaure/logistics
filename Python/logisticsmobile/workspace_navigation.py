@@ -68,25 +68,39 @@ def mount_native_menu(app, menu, destination):
     return menu._native_workspace_item
 
 
-def sync_reader_toolbar(app, view):
+def sync_reader_toolbar(app, view, destination=None):
     """Share UIKit's title bar rather than spending a second row on reading."""
     if not app.routes.apple:
         return
     from rubicon.objc import ObjCClass, CGRect
     adapter = app.native_host.adapter
-    destination = app.native_host.state.destination
+    destination = destination or app.native_host.state.destination
     controller = adapter.navigation[app.native_host.destinations.index(destination)].topViewController
+    owned = getattr(app, '_reader_toolbar_controllers', None)
+    if owned is None:
+        owned = app._reader_toolbar_controllers = set()
+    key = controller.ptr.value
     controls = getattr(view, '_native_reader_buttons', None)
     if controls is None:
-        if getattr(app, '_reader_toolbar_controller', None) == controller:
+        # Tabs retain their controllers. Clear reader-owned chrome even when a
+        # different tab was the most recent reader toolbar to be rendered.
+        if key in owned:
             controller.navigationItem.rightBarButtonItems = None
             controller.navigationItem.prompt = None
-            app._reader_toolbar_controller = None
-            app._reader_toolbar_state = None
-            app._reader_toolbar_prompt = None
+            controller.navigationItem.titleView = None
+            owned.discard(key)
+            if getattr(app, '_reader_toolbar_controller', None) == controller:
+                app._reader_toolbar_controller = None
+                app._reader_toolbar_state = None
+                app._reader_toolbar_prompt = None
+            if getattr(app, '_reader_title_controller', None) == controller:
+                app._reader_title_controller = None
+                app._reader_title_state = None
         return
     toolbar = view._native_reader_toolbar
     detach(toolbar)
+    for control in getattr(view, '_native_reader_hidden', ()):
+        detach(control)
     buttons = [] if getattr(view, '_reader_fullscreen', False) else list(controls())
     state = (controller.ptr.value, tuple(id(button) for button in buttons))
     if getattr(app, '_reader_toolbar_state', None) != state:
@@ -119,7 +133,21 @@ def sync_reader_toolbar(app, view):
     if getattr(app, '_reader_toolbar_prompt', None) != (controller.ptr.value, prompt):
         controller.navigationItem.prompt = prompt
         app._reader_toolbar_prompt = (controller.ptr.value, prompt)
+    owned.add(key)
     app._reader_toolbar_controller = controller
+    title = getattr(view, '_native_reader_title', None)
+    text = str(title() if callable(title) else title or controller.navigationItem.title or '').replace('\n', ' ')
+    leading = 104 if getattr(view, '_workspace_menu_button', None) is not None or hasattr(view, '_workspace_frame') else 52
+    width = max(44, min(320, app.adaptive.content_width(destination, margin=0)
+                        - 2 * max(leading, 44 * len(buttons)) - 24))
+    title_state = (controller.ptr.value, text, width, state)
+    if getattr(app, '_reader_title_state', None) != title_state:
+        from .ios_reader_chrome import reader_title
+        title_view, label = reader_title(text, width, app._reader_toolbar_group)
+        controller.navigationItem.titleView = title_view
+        app._reader_title_label = label
+        app._reader_title_state = title_state
+    app._reader_title_controller = controller
 
 
 class WorkspaceNavigation(AdaptiveWorkspace):
@@ -194,14 +222,15 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             view._workspace_menu = False
         if destination not in ('files', 'documents'):
             return view
-        if root and isinstance(view, toga.ScrollContainer):
+        if root and (isinstance(view, toga.ScrollContainer) or getattr(view, '_hub_sections', False)):
             original = view
             view = toga.Box(children=[original], style=Pack(direction=COLUMN, flex=1))
             # Keep the overview's content available to its existing callers.
             view.content = original.content
         # Focused prompts and reader controls retain their own layout. Main
         # workspaces and each editor get a permanent top-left drawer control.
-        eligible = (isinstance(view, toga.Box) and not getattr(view, '_reading_frame', False) and
+        eligible = (isinstance(view, toga.Box) and not getattr(view, '_reading_frame', False)
+                    and not getattr(view, '_hub_sections', False) and
                     (root or route in ('editor', 'browser', 'remote-browser', 'folder-options', 'workspace-browser')
                      or (route or '').startswith('private:')))
         if eligible and not hasattr(view, '_workspace_frame'):
@@ -279,7 +308,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
 
     def show_pair_picker(self, widget=None, **kwargs):
         current = self.app.workspace.active
-        if self.session_view(current) is None or not self.app.checkpoint():
+        if self.width() < 640 or self.session_view(current) is None or not self.app.checkpoint():
             return
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Label('Open beside this document', style=Pack(font_size=20, margin_bottom=12)))
@@ -326,20 +355,14 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 for panel in (self.app.native_host.bodies[key], self.app.routes.body(key)):
                     if panel.style.width != width:
                         panel.style.width = width
-            was_wide = self.wide
             self.layout_width = self.width()
             self.wide = self.layout_width >= 640
+            from .action_menu import refresh_document_menus
+            refresh_document_menus(self.app)
             if self.pinned is not None and self.session_view(self.pinned) is None:
                 self.pinned = None
             body = self.app.routes.body(destination)
             view = body.children[0] if body.children else None
-            if (was_wide and not self.wide and not preserve_drawer and view is not None
-                    and view is self.session_view(self.app.workspace.active)):
-                # A wide file sidebar is a companion to the open document.
-                # On a phone, keep that document visible at full width rather
-                # than leaving it behind the compact file drawer.
-                key = destination or self.app.native_host.state.destination
-                self.menu_open[key] = False
             frame = getattr(view, '_workspace_frame', None)
             from .fold_layout import seam_fraction
             seam = (seam_fraction(self.app, frame.row, include_open=True)
@@ -357,22 +380,24 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                     frame.render()
                     frame.finish_transition(transition)
                 self.last_layout = layout
+            if view is not None:
+                sync_reader_toolbar(self.app, view, destination or self.app.native_host.state.destination)
             if frame is not None:
                 frame.sync_native_header()
             elif view is not None and self.app.routes.apple:
                 menu = getattr(view, '_workspace_menu_button', None)
                 if menu is not None:
                     mount_native_menu(self.app, menu, destination or self.app.native_host.state.destination)
-            if view is not None:
-                sync_reader_toolbar(self.app, view)
             from .reader_chrome import sync_comic_chrome
             sync_comic_chrome(self.app, body)
             if hasattr(self.app, 'render_chat_workspace'):
                 self.app.render_chat_workspace()
             from .appearance import reserve_navigation
             reserve_navigation(self.app)
-            if hasattr(self.app, 'home_content'):
+            if hasattr(self.app, 'home_sections'):
                 self.app.reflow_home()
+            if hasattr(self.app, 'documents_sections'):
+                self.app.reflow_documents_hub()
             from .browser_ui import sync_browser_population
             sync_browser_population(self.app, body)
         finally:

@@ -44,6 +44,64 @@ class FontScalingTests(unittest.TestCase):
             getattr(self.app, key + '_choice').value = size
         self.assertEqual([Preferences(self.app.private_root).values[key] for key in FONT_KEYS], ['20', '24', '28'])
 
+    def test_justification_settings_persist_independently_and_reload(self):
+        self.app.show_settings()
+        nav = self.app.settings_navigation
+        nav.choose('Markdown')
+        self.assertFalse(self.app.markdown_justify_choice.value)
+        self.app.markdown_justify_choice.value = True
+        saved = Preferences(self.app.private_root)
+        self.assertEqual(saved.values['markdown_justify'], 'true')
+        self.assertEqual(saved.values['epub_justify'], 'false')
+        nav.choose('EPUB')
+        self.app.epub_justify_choice.value = True
+        self.app.markdown_justify_choice.value = False
+        saved = Preferences(self.app.private_root)
+        self.assertEqual(saved.values['markdown_justify'], 'false')
+        self.assertEqual(saved.values['epub_justify'], 'true')
+        self.app.reload_preferences()
+        self.assertFalse(hasattr(self.app, 'epub_justify_choice'))
+        self.app.settings_navigation.choose('EPUB')
+        self.assertTrue(self.app.epub_justify_choice.value)
+        for key in ('markdown_justify', 'epub_justify'):
+            with self.assertRaises(ValueError):
+                self.app.preferences.save(**{key: 'invalid'})
+
+    def test_justification_reflows_open_markdown_without_replacing_unsaved_content(self):
+        self.app.create_chosen_document('md')
+        owner = self.app.editor_view
+        owner.editor.value = '# Unsaved heading\n\nParagraph with words.\n'
+        self.app.show_preview()
+        formatted, preview = owner.formatted, owner.preview
+        formatted.view.evaluate_javascript = AsyncMock()
+        preview.evaluate_javascript = AsyncMock()
+        self.app.show_settings()
+        self.app.settings_navigation.choose('Markdown')
+        with patch.object(formatted.view, 'set_content') as formatted_load, patch.object(preview, 'set_content') as preview_load:
+            for enabled, alignment in ((True, 'justify'), (False, 'start')):
+                self.app.markdown_justify_choice.value = enabled
+                self.app.loop.run_until_complete(asyncio.sleep(0))
+                for web in (formatted.view, preview):
+                    self.assertIn("'--logistics-text-align','" + alignment + "'", web.evaluate_javascript.call_args.args[0])
+            formatted_load.assert_not_called()
+            preview_load.assert_not_called()
+        self.assertEqual(owner.editor.value, '# Unsaved heading\n\nParagraph with words.\n')
+        self.assertTrue(owner.document.modified)
+
+    def test_epub_appearance_and_renderer_share_justification_preference(self):
+        from features.books.mobile.appearance import ReaderAppearance
+        from features.books.mobile.typography import css, options
+        values = self.app.preferences.values
+        form = ReaderAppearance(values, lambda widget: None)
+        self.assertFalse(form.justify_choice.value)
+        form.justify_choice.value = True
+        self.app.preferences.save(**form.settings())
+        typography = options(self.app.preferences.values)
+        self.assertTrue(typography['justify'])
+        self.assertIn('p,li{text-align:var(--logistics-text-align,justify)}', css(16, 16, 'system', **typography))
+        self.assertIn('p,li{text-align:var(--logistics-text-align,start)}', css(16, 16, 'system'))
+
+
     def test_pinch_commits_once_clamps_and_updates_other_editors_of_same_format(self):
         self.app.create_chosen_document('txt')
         first = self.app.editor_view

@@ -66,6 +66,9 @@ async def exercise(app):
         print('LOGISTICS_UI_REVIEW=complete; checking native browser Back', flush=True)
         from .browser_back_checks import exercise_browser_back
         ui_review.update(await exercise_browser_back(app))
+        from .rotation_checks import exercise_rotation
+        ui_review.update(await exercise_rotation(app))
+        passed.append('native_rotation_safe_areas')
         success = passed == list(CASES)
         error = ''
     except Exception:

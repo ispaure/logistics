@@ -47,7 +47,7 @@ class FolderNavigationTests(unittest.TestCase):
             self.assertIs(app.folder_buttons[name], button)
         self.assertLessEqual(len(app.folder_tab_views), 3)
 
-    def test_tab_cache_invalidates_after_local_and_credential_changes(self):
+    def test_tab_rows_refresh_in_place_after_local_and_credential_changes(self):
         app = self.folder_app()
         app.cloud_remote.items = ['Secret']
         app.cloud_crypt_remotes = {'Secret'}
@@ -55,6 +55,7 @@ class FolderNavigationTests(unittest.TestCase):
         app.change_folder_source('rclone')
         unlocked = app.folder_buttons['Secret']
         self.assertIn('unlocked', unlocked.accessible_name)
+        indicator = unlocked.parent.children[0]
         app.change_folder_source('Local')
         (app.private_root / 'LocalFiles' / 'New folder').mkdir(parents=True)
         app.change_folder_source('rclone')
@@ -68,7 +69,9 @@ class FolderNavigationTests(unittest.TestCase):
         app.cloud_remote.items = []
         app.change_folder_source('rclone')
         locked = app.folder_buttons['Secret']
-        self.assertIsNot(locked, unlocked)
+        self.assertIs(locked, unlocked)
+        self.assertIs(locked.parent.children[0], indicator)
+        self.assertEqual(indicator.control_icon, 'folder_locked')
         self.assertIn('locked', locked.accessible_name)
         self.assertNotIn('unlocked', locked.accessible_name)
         # A changed mapping may reuse its original dict; cache keys must own a
@@ -76,7 +79,8 @@ class FolderNavigationTests(unittest.TestCase):
         choices = app.folder_picker_choices
         choices['Secret']['name'] = 'Renamed'
         app.update_folder_list(choices)
-        self.assertIsNot(app.folder_buttons['Secret'], locked)
+        self.assertIs(app.folder_buttons['Secret'], locked)
+        self.assertEqual(app.folder_picker_choices['Secret']['name'], 'Renamed')
 
     def test_large_encrypted_tab_reads_credential_state_a_constant_number_of_times(self):
         app = self.folder_app()
@@ -94,6 +98,46 @@ class FolderNavigationTests(unittest.TestCase):
             self.assertLessEqual(retained.call_count, 3)
         with patch('logisticsmobile.folder_hub_ui.toga.Button', side_effect=AssertionError('Rebuilt tab')):
             app.update_folder_list(choices)
+
+    def test_remote_metadata_publications_do_not_rebuild_unchanged_local_rows(self):
+        app = self.folder_app()
+        for name in ('Team-Books', 'Team-Notes'):
+            (app.private_root / 'LocalFiles' / name).mkdir(parents=True, exist_ok=True)
+        app.show_locations()
+        rows = dict(app.folder_buttons)
+        content = app.folder_list.children[0]
+        previous = app.folder_picker_choices
+        app.cloud_remote.items = ['RemoteOnly']
+        app.remember_credential_association('Cloud.zip', ['RemoteOnly'], session_only=True)
+        with patch('logisticsmobile.folder_hub_ui.toga.Button', side_effect=AssertionError('Rebuilt unchanged rows')):
+            # Tab entry can see old discovery choices with new credential state,
+            # followed by the worker's newer choices. Neither changes Local.
+            app.update_folder_list(previous)
+            app.update_folder_list(app.folder_choices())
+        self.assertIs(app.folder_list.children[0], content)
+        for name, button in rows.items():
+            self.assertIs(app.folder_buttons[name], button)
+
+    def test_folder_add_remove_preserves_sibling_controls_and_hierarchy(self):
+        app = self.folder_app()
+        base = app.private_root / 'LocalFiles'
+        for name in ('Team-Books', 'Team-Notes'):
+            (base / name).mkdir(parents=True, exist_ok=True)
+        app.show_locations()
+        books, notes = app.folder_buttons['Team-Books'], app.folder_buttons['Team-Notes']
+        group = app.folder_tree_buttons[('Team',)]
+        (base / 'Team-Comics').mkdir()
+        app.update_folder_list(app.folder_choices())
+        self.assertIs(app.folder_buttons['Team-Books'], books)
+        self.assertIs(app.folder_buttons['Team-Notes'], notes)
+        self.assertIs(app.folder_tree_buttons[('Team',)], group)
+        (base / 'Team-Comics').rmdir()
+        app.update_folder_list(app.folder_choices())
+        self.assertNotIn('Team-Comics', app.folder_buttons)
+        self.assertIs(app.folder_buttons['Team-Books'], books)
+        self.assertIs(app.folder_buttons['Team-Notes'], notes)
+        self.assertEqual([child.children[1].text for child in books.parent.parent.children
+                          if len(child.children) == 3], ['Books', 'Notes'])
 
     def test_collection_snapshot_matches_rows_with_constant_location_checks(self):
         with TemporaryDirectory() as root:

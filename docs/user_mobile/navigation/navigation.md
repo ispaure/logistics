@@ -52,16 +52,20 @@ active detail; compact drawers close first.
 On iPhone Duo, pages retain their full available height when the system moves
 the destination bar into a vertical rail. The rail uses the native side safe
 area; bottom-bar clearance applies only to a horizontal destination bar.
-When the Duo is partially open with a vertical fold, Home aligns its action and
-Recent/Your spaces columns with the physical center seam, including when the
-navigation rail makes the available content area asymmetric. Fully opening the
-device restores the ordinary responsive layout.
+In landscape, Home and the Documents list use two independently scrolling
+sections when there is enough room. Home puts file actions on the left, with
+its short Recent list on the right. Documents puts search and All open on the
+left, with Recent and Saved documents on the right. On Duo, both fully open and
+partially open landscape layouts align these sections to the physical crease,
+including when the navigation rail makes the usable area asymmetric. Cards,
+filenames and buttons stay within their section. Returning to a narrow portrait
+layout stacks the same controls into one scrolling page.
 
-Home shows **Your workspace**, with a **Continue** card for the selected document,
-**New document** and **Open file…**. Recent lists up to ten recently used documents, including open documents; Workspaces and Books & Comics remain available below. Wider windows put
-Recent and Your spaces side by side. Continue restores the document's
-Edit/Preview mode. Open file browses existing Local/LocalCrypt files and detects
-the supported format when you open one.
+Home shows **Your workspace**, **Open file…**, **New document**, and up to five
+recent files. **See all in Documents** opens the full document workspace. Tapping
+an already open recent file restores its existing draft and Edit/Preview mode.
+Open file browses existing Local/LocalCrypt files and detects the supported format
+when you open one. Active transfer and recovery notices remain on Home.
 
 When an unloaded credential ZIP is retained on disk, a bordered lock icon button
 (**Unlock credentials**) appears beside **Your workspace**. Choose a credential and enter its ZIP password to unlock it
@@ -70,12 +74,14 @@ names in this button. Disabled Legacy credentials are excluded from the chooser;
 if only Legacy is available and Show Legacy is off, the button stays hidden.
 Passwords are never saved.
 
-Documents shows **New document** and **Open file…**, an always-visible **All open**
-section, and a unified **Recent** list. Recent includes open and closed documents;
-selecting an open entry returns to its existing editor and pending edits.
-All open lists every visible open document with its Close button, without an
-expand/collapse control. Closing keeps saved files and retains the existing
-unsaved-change choices. An empty section shows **No open documents**.
+Documents shows **Search documents**, **All open**, **Recent**, **Saved documents**,
+and access to the **Books & Comics library**. All open lists every visible open
+document, with the active one first and a Close button beside each. Recent shows
+closed entries from the ten-file history; open entries stay in All open. Other
+saved text and Markdown files appear in Saved documents without repeating files
+already listed above. Search filters all three sections by filename, ignoring
+case. Clearing search restores the lists. Closing keeps saved files and retains
+the existing unsaved-change choices. An empty section shows **No open documents**.
 
 **Currently open** appears as plain status text beneath recent filenames for documents
 still open in the workspace. Select the filename to return to that document. **Unsaved changes** and

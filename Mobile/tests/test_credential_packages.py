@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, AsyncMock
 from logisticsmobile.app import LogisticsMobile
 from features.rclone.mobile.credential_packages import CredentialPackages
 from features.rclone.mobile.cloud_ui import SelectedCredentialZIP
@@ -45,6 +45,54 @@ class CacheClient:
 
 
 class CredentialPackageTests(unittest.TestCase):
+    def test_unlock_repairs_older_remote_only_crypt_metadata_and_survives_relock(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            LogisticsMobile.storage_root = root
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.show_cloud(present=False)
+            app.cloud_client = client = CacheClient()
+            client.loaded = False
+            client.remotes = ('Secret', 'RemoteOnly')
+            client.crypt_remotes = lambda: ['Secret']
+            vault = SimpleNamespace(root=root / 'Retained', unlock=lambda **kw: dict(key='fixture'))
+            vault.root.mkdir()
+            cache = CredentialPackages(vault, client)
+            key = cache.remember(SimpleNamespace(name='Personal.zip', data=PACKAGE),
+                                 {'Secret': 'a' * 64, 'RemoteOnly': 'b' * 64})
+            self.assertNotIn('crypt_remotes', cache.items[key])
+            with patch.object(app, 'retained_packages', return_value=cache) as retained, \
+                    patch.object(app, 'refresh_hub_crypt_locations', new_callable=AsyncMock):
+                app.show_retained_unlock(key)
+                app.credential_unlock_password.value = 'correct'
+                app.loop.run_until_complete(app.credential_unlock_button.on_press())
+                self.assertEqual(cache.items[key]['crypt_remotes'], ['Secret'])
+                self.assertNotIn('correct', cache.index.read_text())
+                app.loop.run_until_complete(app.lock_cloud())
+                restored = CredentialPackages(vault, client)
+                retained.return_value = restored
+                with patch.object(client, 'request', side_effect=AssertionError('No bridge I/O for icons')):
+                    app.folder_source = 'rclone'
+                    app.build_folder_picker()
+                    def icon(name):
+                        return app.folder_buttons[name].parent.children[0].control_icon
+                    self.assertEqual(icon('Secret'), 'folder_locked')
+                    self.assertEqual(icon('RemoteOnly'), 'folder')
+                    self.assertFalse((root / 'LocalCryptFolders').exists())
+
+    def test_crypt_metadata_uses_retained_aliases_without_reclassifying_other_accounts(self):
+        with TemporaryDirectory() as directory:
+            vault = SimpleNamespace(root=Path(directory), unlock=lambda **kw: dict(key='fixture'))
+            cache = CredentialPackages(vault, CacheClient())
+            key = cache.remember(SimpleNamespace(name='Personal.zip', data=PACKAGE),
+                                 {'Secret': 'a' * 64, 'Regular': 'b' * 64})
+            cache.update_crypt_remotes(key, ['Secret @ Personal', 'Regular'],
+                aliases={'Secret': 'Secret @ Personal', 'Regular': 'Regular @ Personal'})
+            self.assertEqual(CredentialPackages(vault, CacheClient()).items[key]['crypt_remotes'], ['Secret'])
+
     def test_retained_remote_without_local_copy_remains_visible_and_requires_unlock(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

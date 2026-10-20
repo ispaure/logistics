@@ -2,8 +2,8 @@
 
 ## Document workflow
 
-The app opens on **Home**, a landing page with quick access to files, editors,
-books/comics and chat. The house icon is the first native destination, before
+The app opens on **Home**, a landing page with Open/New actions and five recent
+files. **See all in Documents** opens the full document workspace. The house icon is the first native destination, before
 **Workspaces**, **Documents**, **Chat** and **Settings**. **Workspaces** separates ordinary Local files, Cloud and Home Server into source tabs, with available copies grouped under their owning source.
 If folder discovery fails while credentials change, Workspaces shows an error
 with **Refresh**, **Browse local files** and **Connections…**. Retry there after
@@ -13,11 +13,11 @@ beside a folder opens its Browse Local/LocalCrypt/Remote, Pull, Push and managem
 actions. The main Browse action is prominent; Delete local folder is separated
 and uses destructive styling. Pull/Push direction is shown for mapped copies.
 Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
-the entire device filesystem. Choose **New document** from Home, Documents or Document actions. Enter a document
+the entire device filesystem. Choose **New document** from Home or Document actions. Enter a document
 name and select **Plain text (.txt)** or **Markdown (.md)**, then tap
 **Create document**. The selected extension is added when needed. Markdown also
 offers an optional title, inserted as the first heading. **Cancel** creates nothing.
-Books and comics are available through Workspaces or Home’s Books & Comics panel;
+Books and comics are available through Workspaces or Documents’ Books & Comics library;
 Chat has its own bottom navigation button between Documents and Settings. Native tab
 controls adapt to the Apple layout; Android uses bottom navigation in compact
 windows and a rail at 600 dp or wider. Switching destinations retains each
@@ -30,8 +30,8 @@ Android uses the lifecycle-owned AndroidX Back dispatcher. At a destination root
 Android yields Back to the system. Existing save/checkpoint failures block a
 Back action that would leave the screen.
 
-The Documents hamburger lists configured Comics Library folders. Recent files,
-local browsing, and new-document actions stay on the main page.
+The Documents hamburger lists configured Comics Library folders. Documents lists
+open, recent and other saved documents; Home provides Open/New actions.
 
 Choose a document from **All open** in Documents or **Recent** on its main page,
 or use **Actions → New document**. Edit its name in the name field and
@@ -39,10 +39,12 @@ its contents in the text area. **Save** publishes the edited file inside the app
 Text, source files and Markdown share the native source editor. Markdown can
 show a live formatted preview while you edit. See [Text and Markdown](documents.md#text-and-markdown).
 
-Recent lists up to ten recently used documents, including ones still open. An
-**Open** badge indicates an existing workspace session; selecting it resumes that
-session without reloading its file. **All open** always shows every visible open
-item and its Close button; there is no expand/collapse button.
+History retains ten recent files. Home shows up to five, including open files;
+**Currently open** identifies an existing session and selecting it resumes that
+session without reloading its file. Documents lists open files once in **All open**,
+with the active one first and a Close button beside each. Its **Recent** section
+shows closed entries. **Saved documents** includes other saved text and Markdown
+files, including files older than Recent. Search filters these three lists by name.
 Reopening a file from Home or Recent shows a small activity bar and an
 **Opening file…** status below the current view. Cloud files show
 **Opening cloud file…** while credentials are checked and any required download

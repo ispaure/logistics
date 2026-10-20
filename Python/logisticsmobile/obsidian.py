@@ -93,6 +93,14 @@ class VaultBrowser:
         self.toolbar = toga.Box(children=[self.menu, self.back_button, self.forward_button, self.up_button,
             toga.Box(style=Pack(flex=1)), self.edit, self.speech.button], style=Pack(direction=ROW))
         self.view = toga.Box(children=[self.toolbar, self.notice, self.sidebar.view], style=Pack(direction=COLUMN, flex=1))
+        self.reader_actions_button = icon_button('more', 'Note actions')
+        self.view._workspace_menu_button = self.menu
+        self.view._native_reader_toolbar = self.toolbar
+        self.view._native_reader_title = lambda: PurePosixPath(self.path).name if self.path else 'Notes Library'
+        self.view._native_reader_buttons = lambda: [
+            *([self.edit if not self.library.remote else self.speech.button] if self.path else []),
+            self.reader_actions_button]
+        self.refresh_reader_actions()
         self.reflow(app.adaptive.content_width(destination, margin=0))
         self.sidebar.show_sidebar()
 
@@ -114,11 +122,28 @@ class VaultBrowser:
         # Compact browsing still needs its menu while the article is hidden.
         # Wide layouts keep document commands over their own article pane.
         parent = self.article if self.sidebar.expanded else self.view
-        if self.toolbar.parent is not parent:
-            self.toolbar.parent.remove(self.toolbar)
+        if not self.app.routes.apple and self.toolbar.parent is not parent:
+            if self.toolbar.parent is not None:
+                self.toolbar.parent.remove(self.toolbar)
             parent.insert(0, self.toolbar)
         self.rows.style.width = self.sidebar.policy.sidebar_width if self.sidebar.expanded else available
-        self.menu.enabled = not self.sidebar.expanded
+        self.menu.enabled = self.app.routes.apple or not self.sidebar.expanded
+
+    def refresh_reader_actions(self):
+        if hasattr(self, 'reader_actions'):
+            self.reader_actions.dispose()
+        from .action_menu import FeatureCommands
+        actions = []
+        if self.path is not None:
+            actions.append(('Read aloud…', self.speech.show))
+        if self.back_button.enabled:
+            actions.append(('Previous note', lambda: self.navigate_history(-1)))
+        if self.forward_button.enabled:
+            actions.append(('Next note', lambda: self.navigate_history(1)))
+        if self.up_button.enabled:
+            actions.append(('Browse parent folder', self.browse_parent))
+        actions.append(('All documents', self.app.show_documents_hub))
+        self.reader_actions = FeatureCommands(self.reader_actions_button, self.app, actions, self.browse_parent)
 
     async def load_folder(self, path):
         if not self.valid() or path in self.loading:
@@ -236,7 +261,9 @@ class VaultBrowser:
             self.back_button.enabled = self.history_index > 0
             self.forward_button.enabled = self.history_index < len(self.history) - 1
             self.up_button.enabled = True
+            self.refresh_reader_actions()
             self.sidebar.show_detail()
+            self.app.adaptive.render()
             return True
         except OperationCancelled:
             return False
@@ -284,6 +311,7 @@ class VaultBrowser:
             self.history_index = index
             self.back_button.enabled = index > 0
             self.forward_button.enabled = index < len(self.history) - 1
+            self.refresh_reader_actions()
 
     async def browse_parent(self, widget=None, **kwargs):
         if self.path is not None:
@@ -315,6 +343,7 @@ class VaultBrowser:
         return await self.app.open_crypt(copies=copies, key=key, destination=self.destination)
 
     def dispose(self):
+        self.reader_actions.dispose()
         self.speech.close()
         self.speech.button.enabled = False
         self.cancelled.set()

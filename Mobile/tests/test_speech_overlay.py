@@ -33,7 +33,7 @@ class SpeechOverlayTests(unittest.TestCase):
                 self.assertFalse(hasattr(panel, 'voice_choice'))
                 self.assertEqual(panel.voice, 'Another voice')
                 compact_height = panel.overlay_height
-                self.assertLess(compact_height, 260)
+                self.assertLess(compact_height, 280)
                 with patch.object(panel.overlay, 'reposition') as reposition:
                     message = 'Could not read this passage. Try reopening the document.'
                     panel.set_status(message)
@@ -47,11 +47,11 @@ class SpeechOverlayTests(unittest.TestCase):
                 panel.source = source
                 await panel.play()
                 self.assertEqual(panel.session.voice, 'Another voice')
-                panel.speed_choice.value = '1.5'
+                panel.speed_choice.value = 1.5
                 self.assertEqual(panel.engine.calls[-1][2], 1.5)
                 panel.session.pause()
                 calls = len(panel.engine.calls)
-                panel.speed_choice.value = '2'
+                panel.speed_choice.value = 2
                 self.assertEqual(len(panel.engine.calls), calls)
                 await panel.toggle_playback()
                 self.assertEqual(panel.engine.calls[-1][2], 2)
@@ -76,6 +76,27 @@ class SpeechOverlayTests(unittest.TestCase):
                 await speech.panel.ready_task
                 self.assertEqual(speech.panel.voice, 'Offline')
                 speech.close()
+        self.run_async(exercise())
+
+    def test_speed_slider_snaps_and_shows_percent_limits(self):
+        from features.books.mobile.speech_view import ReadAloudPanel
+        async def exercise():
+            panel = ReadAloudPanel(loop=self.app.loop, source=lambda: None, on_range=lambda *a: None,
+                close=lambda: None, engine=Engine(self.app.loop))
+            try:
+                await panel.ready_task
+                self.assertIsInstance(panel.speed_choice, toga.Slider)
+                self.assertEqual(panel.speed_choice.tick_count, 7)
+                self.assertEqual((panel.speed_minimum.text, panel.speed_maximum.text), ('50%', '200%'))
+                for requested, expected in ((.1, .5), (.63, .75), (1.12, 1), (1.38, 1.5), (3, 2)):
+                    panel.speed_choice.value = requested
+                    self.assertEqual(panel.speed_choice.value, expected)
+                    self.assertEqual(panel.session.speed, expected)
+                    self.assertEqual(panel.speed_value.text, f'{expected * 100:.0f}%')
+                self.assertEqual(panel.reset_timer_button.control_icon, 'reset')
+                self.assertEqual(panel.reset_timer_button.accessible_name, 'Reset timer')
+            finally:
+                panel.dispose()
         self.run_async(exercise())
 
     def test_timer_follows_playback_and_survives_hidden_controls(self):

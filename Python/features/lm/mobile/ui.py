@@ -261,18 +261,23 @@ class ChatUI:
         title = (self.chat_current or {}).get('title', 'New conversation')
         # Native ellipsis and explicit bounds stop long titles pushing the
         # action capsule outside the safe-area allocation on iPad and Duo.
-        available = self.chat_header.layout.content_width or self.adaptive.content_width('chat')
+        available = self.adaptive.content_width('chat')
         menu_width = 52 if self.chat_menu_button in self.chat_header.children else 0
         title_width = max(24, int(available) - 96 - menu_width - 12)
         for label in (self.chat_title, self.chat_model_label):
-            label.style.width = title_width
-        self.chat_title.text = 'Conversations' if sidebar else title
-        self.chat_model_label.text = '' if sidebar else self.chat_profile.get('model') or 'Set up a server'
+            if label.style.width != title_width:
+                label.style.width = title_width
+        for label, text in ((self.chat_title, 'Conversations' if sidebar else title),
+                            (self.chat_model_label, '' if sidebar else self.chat_profile.get('model') or 'Set up a server')):
+            if label.text != text:
+                label.text = text
 
     def resize_chat_composer(self):
         if not hasattr(self, 'chat_messages'):
             return
-        width = self.chat_messages.layout.content_width or max(1, self.adaptive.width() - 24)
+        width = self.adaptive.content_width('chat')
+        if self.chat_drawer_open and self.adaptive.width() >= 640:
+            width /= 2
         inset = max(0, int((width - 780) / 2))
         self.chat_composer.style.margin_left = self.chat_composer.style.margin_right = inset
         self.chat_status_box.style.margin_left = self.chat_status_box.style.margin_right = inset

@@ -22,6 +22,9 @@ def wrap_text(text, width, measure):
                 continue
             if line:
                 lines.append(line)
+            if measure(word) <= width:
+                line = word
+                continue
             line = ''
             # Build identifiers must also fit the pane.
             for char in word:
@@ -49,6 +52,11 @@ def fit_text(control, width):
     if size is None or size <= 0:
         size = 17
     line_height = size * 1.4
+    # A retained page's text and font normally stay unchanged. Avoid even native
+    # font/line-height reads on repeat navigation through the Python UI bridge.
+    measure_key = (source, width, size, control.style.font_family, control.style.font_weight)
+    if getattr(control, '_settings_measure_key', None) == measure_key and current == previous:
+        return
     def measure(text):
         return len(text) * size * .65
     if type(control._impl).__module__.startswith('toga_iOS.'):
@@ -68,6 +76,7 @@ def fit_text(control, width):
             ruler.text = text
             return float(ruler.sizeThatFits(CGSize(100000, 100000)).width)
     control._settings_fit_key = key
+    control._settings_measure_key = measure_key
     rendered = wrap_text(source, width, measure)
     if rendered != control.text:
         # Toga's public Button setter discards everything after a newline.
@@ -77,7 +86,9 @@ def fit_text(control, width):
     control._settings_rendered_text = rendered
     if button:
         from .appearance import list_button
-        list_button(control)
+        if not getattr(control, '_settings_list_styled', False):
+            list_button(control)
+            control._settings_list_styled = True
         control.style.height = max(52 if getattr(control, '_settings_row', False) else 48, int(line_height * len(rendered.split('\n')) + 20))
         if type(control._impl).__module__.startswith('toga_iOS.'):
             control._impl.native.titleLabel.numberOfLines = len(rendered.split('\n'))
@@ -94,14 +105,14 @@ def fit_section(section, width):
         fit_text(section.children[0], max(24, width - 72))
         return
     if getattr(section, '_settings_switch_row', False):
-        label, info, switch = section.children
-        # UISwitch has a fixed native width; leave its full target beside help.
+        label, switch = section.children
+        # UISwitch has a fixed native width; leave its full touch target.
         switch_width = max(64, getattr(switch.intrinsic.width, 'value', switch.intrinsic.width) or 0)
-        fit_text(label, max(24, width - 48 - switch_width))
+        fit_text(label, max(24, width - switch_width))
         return
     for child in section.children:
         if isinstance(child, (toga.Label, toga.Button)):
-            fit_text(child, width)
+            fit_text(child, max(24, width - child.style.margin_left - child.style.margin_right))
         elif isinstance(child, toga.Box):
             fit_section(child, width)
 
@@ -192,12 +203,17 @@ def settings_presentation(section):
                 disclosure(child)
             rows.append(child)
         elif getattr(child, '_settings_switch_row', False):
-            label, info, switch = child.children
+            label, switch = child.children
             surface(switch, radius=0, background='transparent', outlined=False, eink_outlined=False)
             surface(label, radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False)
-            surface(info, radius=0, background='transparent', foreground='accent', outlined=False, eink_outlined=False)
             child.style.margin_bottom = 0
             rows.append(child)
+            flush()
+            section.children[-1].style.margin_bottom = 6
+            note = child._settings_note
+            note.style.margin_left = note.style.margin_right = 16
+            note.style.margin_bottom = 20
+            section.add(note)
         elif isinstance(child, toga.Selection):
             surface(child, radius=0, background='transparent', outlined=False, eink_outlined=False)
             child.style.margin_top = 4
@@ -217,6 +233,10 @@ def settings_presentation(section):
                 rows.append(toga.Box(children=[child, choice], style=Pack(direction=COLUMN)))
             else:
                 flush()
+                if child.style.font_weight != 'bold':
+                    child.style.font_size = 13
+                    if section.children and getattr(section.children[-1], '_settings_group', False):
+                        section.children[-1].style.margin_bottom = 6
                 child.style.margin_left = child.style.margin_right = 12
                 child.style.margin_bottom = 12
                 section.add(child)
@@ -315,26 +335,19 @@ class ConnectionSettingsPage(toga.ScrollContainer):
 
 
 def switch_row(app, title, switch, explanation):
-    async def explain(widget, **kwargs):
-        await app.main_window.dialog(toga.InfoDialog(title, explanation))
-
-    # Keep the switch's native accessible label, while drawing the visible label
-    # before the help button. Both controls retain a full touch target.
+    # Keep the switch's native accessible label with a separate visible title.
     switch.text = ''
     switch.style.flex = 0
-    info = toga.Button('ⓘ', on_press=explain, style=Pack(width=48, height=48))
-    for control, label in ((switch, title), (info, 'About ' + title)):
-        backend = type(control._impl).__module__
-        if backend.startswith('toga_iOS.'):
-            control._impl.native.accessibilityLabel = label
-        elif backend.startswith('toga_android.'):
-            control._impl.native.setContentDescription(label)
+    switch.style.width = 64
+    from .appearance import accessible_name
+    accessible_name(switch, title)
     row = toga.Box(children=[
-        toga.Label(title, style=Pack(flex=1)),
-        info,
+        SettingsLabel(title, style=Pack(flex=1)),
         switch,
     ], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=8))
     row._settings_switch_row = True
+    row._settings_note = connection_note(explanation)
+    row._settings_note.style.font_size = 13
     return row
 
 
@@ -442,6 +455,7 @@ class SettingsNavigation(toga.Box):
             return section
         self.sections = SettingsPages({title: lambda value=value: build(value) for title, value in sections.items()})
         self.selected = next(iter(sections))
+        self.detail_requested = False
         self.wide = None
         self._reflowing = False
         self.options = SettingsPages({title: lambda title=title: toga.ScrollContainer(horizontal=False,
@@ -460,9 +474,15 @@ class SettingsNavigation(toga.Box):
             def choose(widget=None, selected=title, **kwargs):
                 self.choose(selected)
             button = list_button(toga.Button(title, on_press=choose, style=Pack(height=52)))
+            button._settings_list_styled = True
             button_icons(button, [(icons[title], '')])
             disclosure(button)
             button._settings_row = True
+            # Match the initial unselected state during detached construction,
+            # rather than restyling every native button on the first reflow.
+            button._settings_selected = False
+            surface(button, radius=8, background='transparent', foreground='text',
+                    outlined=False, eink_outlined=False)
             self.buttons[title] = button
             rows.append(button)
             end_group = title == ('Appearance' if 'Appearance' in sections else 'App')
@@ -471,7 +491,10 @@ class SettingsNavigation(toga.Box):
                 rows = []
         if rows:
             menu.add(group_rows(rows, icon_inset=True))
-        self.sidebar = toga.ScrollContainer(horizontal=False, content=menu, style=Pack(flex=1))
+        self._menu = menu
+        # Fit before assigning scroll content: changing each row height after
+        # assignment triggers a complete native scroll-content layout per row.
+        self.sidebar = toga.ScrollContainer(horizontal=False, style=Pack(flex=1))
         self.detail = surface(toga.Box(style=Pack(direction=COLUMN, flex=1)),
                               radius=0, background='settings_background', outlined=False, eink_outlined=False)
         surface(menu, radius=0, background='settings_background', outlined=False, eink_outlined=False)
@@ -487,8 +510,9 @@ class SettingsNavigation(toga.Box):
         if not self.owner.checkpoint():
             return
         self.selected = title
+        self.detail_requested = True
         self.update_selection(show_detail=True)
-        fit_section(self.sections[title], self.detail_width)
+        self.fit_detail(title)
         view = self.options[title]
         self.detach(view)
         if self.wide:
@@ -500,7 +524,6 @@ class SettingsNavigation(toga.Box):
             self.owner.show_view(view, checkpoint=False, destination='settings', route='settings-category', title=title)
 
     def update_selection(self, *, show_detail=False):
-        from .folder_hub_style import source_tab
         from .appearance import surface
         status = self.owner.settings_status
         if show_detail:
@@ -509,13 +532,24 @@ class SettingsNavigation(toga.Box):
                 self.detach(status)
                 section.add(status)
         for title, button in self.buttons.items():
-            selected = bool(self.wide and title == self.selected)
+            selected = bool(self.wide and self.detail_requested and title == self.selected)
             if getattr(button, '_settings_selected', None) == selected:
                 continue
-            source_tab(button, selected)
+            button.style.font_weight = 'bold' if selected else 'normal'
             surface(button, radius=8, background='hover' if selected else 'transparent',
                     foreground='text', outlined=False, eink_outlined=False, eink_selected=selected)
+            backend = type(button._impl).__module__
+            if backend.startswith('toga_iOS.'):
+                button._impl.native.accessibilityTraits = (1 | 4) if selected else 1
+            elif backend.startswith('toga_android.'):
+                button._impl.native.setSelected(selected)
             button._settings_selected = selected
+
+    def fit_detail(self, title):
+        section = self.sections[title]
+        if getattr(section, '_settings_fit_width', None) != self.detail_width:
+            fit_section(section, self.detail_width)
+            section._settings_fit_width = self.detail_width
 
     def reflow(self):
         if self._reflowing:
@@ -536,6 +570,8 @@ class SettingsNavigation(toga.Box):
         screens = app.routes.screens['settings']
         active = app.native_host.state.destination == 'settings'
         category_on_top = bool(screens and screens[-1][0] == 'settings-category')
+        if active and not was_wide and not screens and getattr(self, '_category_on_stack', False):
+            self.detail_requested = False
         sidebar_width = (width * seam if seam is not None
                          else min(320, max(240, width * .32)))
         detail_width = width - sidebar_width if self.wide else width
@@ -544,8 +580,10 @@ class SettingsNavigation(toga.Box):
         # The category menu is static. Avoid native text reads, sizing and
         # drawable updates for every row on each tab/resize callback.
         if getattr(self, '_menu_fit_width', None) != menu_width:
-            fit_section(self.sidebar.content, menu_width)
+            fit_section(self._menu, menu_width)
             self._menu_fit_width = menu_width
+        if self.sidebar.content is None:
+            self.sidebar.content = self._menu
         if self.wide:
             self.sidebar.style.flex = 0
             # A partially folded Duo uses the physical seam, including rail/safe areas.
@@ -558,7 +596,7 @@ class SettingsNavigation(toga.Box):
                 self.add(self.detail)
             # A nested page can still own the compact category beneath it. Wait
             # for native Back before moving that retained category to the root.
-            if not any(screen[0] == 'settings-category' for screen in screens):
+            if self.detail_requested and not any(screen[0] == 'settings-category' for screen in screens):
                 view = self.options[self.selected]
                 if view.parent is not self.detail:
                     self.detach(view)
@@ -572,11 +610,12 @@ class SettingsNavigation(toga.Box):
                 del self.sidebar.style.width
             if self.detail.parent is self:
                 self.remove(self.detail)
-            if was_wide and active and not screens:
+            if active and not screens and self.detail_requested:
                 self.choose(self.selected)
-        self.update_selection(show_detail=self.wide or category_on_top)
-        if self.wide or category_on_top:
-            fit_section(self.sections[self.selected], detail_width)
+        self._category_on_stack = any(screen[0] == 'settings-category' for screen in screens)
+        self.update_selection(show_detail=(self.wide and self.detail_requested) or category_on_top)
+        if (self.wide and self.detail_requested) or category_on_top:
+            self.fit_detail(self.selected)
 
 
 def settings_sections(app):
@@ -643,6 +682,13 @@ def settings_sections(app):
         choice.on_change = app.save_preferences
         box.add(choice)
         box.add(toga.Label('Pinch to adjust. Saved for this format on this device.', style=Pack(font_size=12)))
+        if title in {'Markdown', 'EPUB'}:
+            justify_key = title.lower() + '_justify'
+            justify = toga.Switch('Justify text', value=app.preferences.values[justify_key] == 'true', style=Pack(height=48))
+            setattr(app, justify_key + '_choice', justify)
+            box.add(switch_row(app, 'Justify text', justify,
+                'Align paragraphs and lists to both edges. Saved for this format on this device.'))
+            justify.on_change = app.save_preferences
         return box
 
     def books():

@@ -11,21 +11,54 @@ from toga.style.pack import CENTER
 class DocumentationReader(MarkdownWikiView):
     """Add host-owned speech without changing the shared wiki's navigation API."""
     def __init__(self, app, *args, **kwargs):
+        self.host_app = app
         self.speech = None
         super().__init__(*args, **kwargs)
+        from .font_scaling import bind
+        bind(app, self.web, 'markdown', web=True)
         self.speech = MarkdownSpeech(app, self.web, self.article,
             document_title=lambda: self.path,
             valid=lambda: app.active_host and getattr(app, 'documentation', None) is self and self.path is not None)
         self.speech.button.on_press = self.show_speech
         self.speech.button.enabled = self.path is not None
         self.navigation.add(self.speech.button)
+        from .workspace_navigation import menu_button
+        from .control_icons import icon_button
+        self.reader_menu = menu_button(self.toggle_browse, label='Browse documentation')
+        self.reader_actions_button = icon_button('more', 'Documentation actions')
+        self.view._workspace_menu_button = self.reader_menu
+        self.view._native_reader_toolbar = self.navigation
+        self.view._native_reader_buttons = lambda: [self.speech.button, self.reader_actions_button]
+        self.view._native_reader_title = lambda: self.title.text
+        self.view._native_reader_hidden = [self.title]
+        self.refresh_reader_actions()
 
     def reflow(self, width):
         super().reflow(width)
         parent = self.article if self.wide else self.view
-        if self.navigation.parent is not parent:
-            self.navigation.parent.remove(self.navigation)
+        if not self.host_app.routes.apple and self.navigation.parent is not parent:
+            if self.navigation.parent is not None:
+                self.navigation.parent.remove(self.navigation)
             parent.insert(0, self.navigation)
+
+    def refresh_reader_actions(self):
+        if hasattr(self, 'reader_actions'):
+            self.reader_actions.dispose()
+        from .action_menu import FeatureCommands
+        actions = []
+        if self.back_button.enabled:
+            actions.append(('Previous page', self.back))
+        if self.forward_button.enabled:
+            actions.append(('Next page', self.forward))
+        if self.up_button.enabled:
+            actions.append(('Parent folder page', self.up))
+        actions.append(('Browse documentation', self.toggle_browse))
+        self.reader_actions = FeatureCommands(self.reader_actions_button, self.host_app, actions, self.show_browse)
+
+    def update_navigation(self):
+        super().update_navigation()
+        if hasattr(self, 'reader_actions_button'):
+            self.refresh_reader_actions()
 
     def filter(self, widget=None, **kwargs):
         super().filter(widget, **kwargs)
@@ -61,6 +94,9 @@ class DocumentationReader(MarkdownWikiView):
         opened = super().open_page(*args, **kwargs)
         if self.speech is not None:
             self.speech.button.enabled = self.path is not None
+        if hasattr(self, 'reader_actions_button'):
+            self.refresh_reader_actions()
+            self.host_app.adaptive.render()
         return opened
 
 

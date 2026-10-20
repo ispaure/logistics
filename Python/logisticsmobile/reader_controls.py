@@ -76,10 +76,11 @@ class ComicHeader:
 
 
 class ReadingFrame:
-    def __init__(self, content, controls, *, margin=16, restore=None):
+    def __init__(self, content, controls, *, margin=16, restore=None, top_controls=1):
         self.content, self.controls, self.margin = content, list(controls), margin
+        self.top_controls = top_controls
         self.restore = restore
-        self.widget = toga.Box(children=[*self.controls[:1], content, *self.controls[1:]],
+        self.widget = toga.Box(children=[*self.controls[:top_controls], content, *self.controls[top_controls:]],
                                style=Pack(direction=COLUMN, margin=margin, flex=1))
         self.widget._reading_frame = True
         self.widget._reading_frame_owner = self
@@ -95,8 +96,9 @@ class ReadingFrame:
             if control in self.widget.children:
                 self.widget.remove(control)
         if not immersive:
-            self.widget.insert(0, self.controls[0])
-            for control in self.controls[1:]:
+            for index, control in enumerate(self.controls[:self.top_controls]):
+                self.widget.insert(index, control)
+            for control in self.controls[self.top_controls:]:
                 self.widget.add(control)
         if self.restore is not None:
             if self.restore in self.widget.children:

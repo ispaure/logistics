@@ -134,7 +134,11 @@ Read aloud opens a compact panel anchored to its toolbar button. The reader
 highlights the spoken word when the platform engine reports word progress;
 otherwise it highlights the current utterance. During speech, the reading pane
 follows that pointer and keeps it near the center, including after resizing.
-Closing the panel, changing chapters, or closing the reader stops playback.
+Skipping backward/forward clears the previous spoken-word highlight in both
+pages before highlighting the new position. For speed, sleep timer and playback
+controls, see the [shared read-aloud guide](../../../../commonUtils/ui/markdown/user_docs/README.md#read-aloud).
+Changing chapters or closing the reader stops playback; hiding the floating
+controls leaves speech running.
 
 ## Reading defaults
 

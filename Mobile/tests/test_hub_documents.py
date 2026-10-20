@@ -125,6 +125,68 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIn(app.document_view, app.body.children)
         self.assertEqual(app.store.open(first).text, 'Retain my draft')
 
+    def test_hubs_split_whole_sections_and_restore_compact_order(self):
+        from unittest.mock import patch
+        app = self.app
+        for build, destination in ((app.build_home, 'home'), (app.build_documents_hub, 'documents')):
+            with self.subTest(destination=destination):
+                with patch.object(app.adaptive, 'content_width', return_value=390):
+                    hub = build()
+                    original = list(hub.content.children)
+                    trailing = hub.trailing
+                    self.assertFalse(hub.paired)
+                with patch.object(app.adaptive, 'content_width', return_value=960):
+                    hub.reflow(app, destination)
+                    self.assertTrue(hub.paired)
+                    self.assertEqual(len(hub.children), 2)
+                    self.assertIs(trailing.parent, hub.trailing_content)
+                    self.assertNotIn(trailing, hub.content.children)
+                    self.assertEqual(hub.leading_scroll.style.width, 480)
+                    self.assertEqual(hub.trailing_scroll.style.width, 480)
+                    self.assertEqual(hub.leading_scroll.style.flex, 0)
+                    # Relayout must reuse the controls and their callbacks.
+                    hub.reflow(app, destination)
+                    self.assertIs(hub.trailing, trailing)
+                with patch.object(app.adaptive, 'content_width', return_value=390):
+                    hub.reflow(app, destination)
+                    self.assertFalse(hub.paired)
+                    self.assertEqual(list(hub.content.children), original)
+                    self.assertEqual(len(hub.children), 1)
+
+    def test_partial_fold_forces_sections_and_accounts_for_asymmetric_safe_area(self):
+        from unittest.mock import patch
+        app = self.app
+        for build, destination in ((app.build_home, 'home'), (app.build_documents_hub, 'documents')):
+            with self.subTest(destination=destination), patch.object(app.adaptive, 'content_width', return_value=620):
+                hub = build()
+                with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.46) as seam:
+                    hub.reflow(app, destination)
+                    seam.assert_called_once_with(app, hub, include_open=True)
+                    self.assertTrue(hub.paired)
+                    self.assertAlmostEqual(hub.leading_scroll.style.width, 620 * .46, delta=1)
+                    self.assertAlmostEqual(hub.trailing_scroll.style.width, 620 * .54, delta=1)
+                    self.assertIs(hub.trailing.parent, hub.trailing_content)
+                hub.reflow(app, destination)
+                self.assertFalse(hub.paired)
+
+    def test_hub_resize_reflows_both_retained_tabs(self):
+        from unittest.mock import patch
+        app = self.app
+        app.show_home()
+        app.show_documents_hub()
+        home, documents = app.home_sections, app.documents_sections
+        self.assertFalse(hasattr(documents, '_workspace_frame'))
+        self.assertIn(documents.leading_scroll, documents.children)
+        self.assertTrue(hasattr(app.routes.roots['documents'].children[0], '_workspace_frame'))
+        with patch.object(app.adaptive, 'content_width', return_value=900):
+            app.adaptive.render()
+        self.assertTrue(home.paired)
+        self.assertTrue(documents.paired)
+        with patch.object(app.adaptive, 'content_width', return_value=390):
+            app.adaptive.render()
+        self.assertFalse(home.paired)
+        self.assertFalse(documents.paired)
+
     def test_home_heading_is_compact_and_keeps_native_home_label(self):
         import toga
         app = self.app
@@ -136,6 +198,67 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(view.content.children[0].style.margin_top, 0)
         self.assertNotIn('Read. Write. Organize.', labels)
         self.assertEqual(app.native_host.labels[0], 'Home')
+
+    def test_home_shows_five_recent_files_and_links_to_the_full_documents_workspace(self):
+        import toga
+        app = self.app
+        for index in range(8):
+            doc = app.store.create(f'History {index}.txt')
+            session = app.workspace.open('managed-text', doc.id, 'text', doc.name)
+            app.recent_documents.remember(session)
+        app.show_documents_hub()
+        app.document_search.value = 'No matching name'
+        app.show_home()
+        buttons = list({id(widget): widget for widget in widgets(app.body)
+                        if isinstance(widget, toga.Button)}.values())
+        self.assertEqual(len([button for button in buttons if button.text.startswith('History ')]), 5)
+        self.assertNotIn('Your spaces', labels(app.body))
+        self.assertNotIn('All open', labels(app.body))
+        self.assertFalse(any(button.text == 'Continue' for button in buttons))
+        next(button for button in buttons if button.text == 'See all in Documents').on_press()
+        self.assertEqual(app.native_host.state.destination, 'documents')
+        self.assertEqual(app.document_search.value, '')
+        self.assertEqual(len([widget for widget in widgets(app.document_open_list)
+                              if hasattr(widget, 'session_id')]), len(app.workspace.sessions))
+
+    def test_documents_search_retains_input_and_finds_saved_files_beyond_recent(self):
+        import toga
+        from logisticsmobile.workspace import Session
+        app = self.app
+        hidden = app.store.create('Old saved draft.md', b'# Old content')
+        for index in range(12):
+            doc = app.store.create(f'Recent {index}.txt')
+            app.recent_documents.remember(Session('', 'managed-text', doc.id, 'text', title=doc.name))
+        app.refresh_documents()
+        app.show_documents_hub()
+        search = app.document_search
+        search.value = 'OLD SAVED'
+        self.assertIs(app.document_search, search)
+        found = [widget for widget in widgets(app.document_saved_list)
+                 if isinstance(widget, toga.Button) and widget.text == 'Old saved draft.md']
+        self.assertEqual(len(found), 1)
+        self.assertIn('No matching open documents.', labels(app.document_open_list))
+        self.assertIn('No matching recent documents.', labels(app.document_recent_list))
+        app.loop.run_until_complete(found[0].on_press())
+        self.assertEqual(app.current.id, hidden.id)
+        self.assertEqual(app.editor.value, '# Old content')
+
+    def test_documents_lists_active_first_and_does_not_repeat_open_files_in_history(self):
+        import toga
+        app = self.app
+        first = app.editor_view.session
+        app.new_document()
+        active = app.editor_view.session
+        app.recent_documents.remember(first)
+        app.recent_documents.remember(active)
+        app.show_documents_hub()
+        rows = [widget for widget in widgets(app.document_open_list) if hasattr(widget, 'session_id')]
+        self.assertEqual(rows[0].session_id, active.id)
+        self.assertFalse(any(isinstance(widget, toga.Button) for widget in widgets(app.document_recent_list)))
+        app.document_search.value = 'No such filename'
+        app.document_search.value = ''
+        rows = [widget for widget in widgets(app.document_open_list) if hasattr(widget, 'session_id')]
+        self.assertEqual({row.session_id for row in rows}, {first.id, active.id})
 
     def test_folder_hub_live_transfer_banner_precedes_credential_and_actions_share_row(self):
         app = self.app
@@ -192,11 +315,9 @@ class HubDocumentTests(unittest.TestCase):
             return next((found for child in children if (found := button(child)) is not None), None)
         async def press_home():
             app.show_home()
-            action = button(app.body)
-            self.assertIsNotNone(action)
-            result = action.on_press()
-            if result is not None:
-                await result
+            # Workspaces remains a destination command; Home no longer repeats
+            # its tab as a large shortcut card.
+            await app.show_home_files()
             self.assertEqual(app.native_host.state.destination, 'files')
             self.assertIn('All files', app.folder_picker_choices)
             app.change_folder_source('Local')
@@ -229,15 +350,16 @@ class HubDocumentTests(unittest.TestCase):
                 app.set_cloud_busy(False)
         app.loop.run_until_complete(exercise())
 
-    def test_continue_resumes_selected_document_and_preview(self):
+    def test_home_recent_resumes_selected_document_and_preview(self):
         app = self.app
         app.name.value = 'Notes.md'
         app.editor.value = '# Retained'
         first = app.editor_view.session.id
         app.show_preview()
         app.show_home()
-        card = app.home_continue
-        app.home_continue_button.on_press()
+        recent = next(widget for widget in widgets(app.body)
+                      if getattr(widget, 'text', '') == 'Notes.md')
+        app.loop.run_until_complete(recent.on_press())
         self.assertEqual(app.workspace.active, first)
         self.assertEqual(app.editor.value, '# Retained')
         self.assertEqual(app.editor_view.session.view['markdown_mode'], 'preview')
@@ -288,15 +410,16 @@ class HubDocumentTests(unittest.TestCase):
         app.show_home()
         content = app.body.children[0].content
         self.assertEqual(content.children[0].text, 'Your workspace')
-        self.assertIn(app.home_continue, content.children)
-        self.assertEqual(app.home_continue.children[0].children[1].text, 'Focus.md')
+        self.assertIsNone(app.home_continue)
+        self.assertIn('Focus.md', [getattr(widget, 'text', '') for widget in widgets(content)])
         self.assertNotIn('Markdown', labels(content))
         self.assertNotIn('Markdown', labels(app.recent_row(app.editor_view.session, app.session_summary(app.editor_view.session))))
         self.assertNotIn('Markdown', labels(app.session_panel(app.editor_view.session)))
         actions = app.home_actions
         self.assertTrue(all(isinstance(button, toga.Button) for button in actions.children))
-        self.assertEqual([button.text for button in actions.children], ['New document', 'Open file…'])
-        app.home_continue_button.on_press()
+        self.assertEqual([button.text for button in actions.children], ['Open file…', 'New document'])
+        recent = next(widget for widget in widgets(content) if getattr(widget, 'text', '') == 'Focus.md')
+        app.loop.run_until_complete(recent.on_press())
         self.assertIs(app.body.children[0], app.document_view)
         self.assertEqual(app.editor.value, '# A retained draft')
 

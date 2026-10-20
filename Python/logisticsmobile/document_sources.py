@@ -205,6 +205,12 @@ async def _reopen_file(app, source):
         from features.text_editor.resources import LocalTextCopies
         return await app.open_crypt(copies=LocalTextCopies(LocalFiles(path.parent)), key=path.name)
     app.show_cloud(present=False)
+    origin = getattr(app, 'navigation_generation', None)
+    restore = getattr(app, 'cloud_restore_task', None)
+    if restore is not None:
+        await asyncio.shield(restore)
+        if (not app.active_host or app.navigation_generation != origin):
+            return False
     remote, identity = source['remote'], source['identity']
     async def resume():
         return await reopen_file(app, source)
@@ -264,6 +270,15 @@ def folder_location(app, session, owner=None):
         path = local_document_path(app, source['path'])
         if path.is_file():
             return dict(path=path)
+    if session.provider == 'library':
+        readers = getattr(app, 'readers', None)
+        controller = getattr(readers, 'controllers', {}).get(session.id)
+        store = getattr(owner or controller, 'library_store', None)
+        if store is not None:
+            suffix = '.cbz' if session.kind == 'comic' else '.epub'
+            path = store.path(session.resource, suffix)
+            if path.is_file():
+                return dict(path=path)
     return None
 
 
@@ -279,6 +294,11 @@ async def show_in_folder(app, session, owner=None):
         return False
     # Capture the source before presenting Workspaces suspends private pixels.
     app.show_locations()
+    remote = location.get('remote')
+    # Back to the overview must retain the storage source of the revealed file.
+    # LocalCrypt providers contain local ciphertext, even if bound to a remote.
+    source = ('Network shares' if remote in app.network_share_remotes() else 'rclone') if remote else 'Local'
+    app.change_folder_source(source)
     if 'remote' in location:
         app.show_cloud(present=False)
         if not await app.browser_cloud_location((location['remote'], location['key'].rpartition('/')[0])):

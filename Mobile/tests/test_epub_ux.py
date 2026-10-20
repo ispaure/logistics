@@ -141,9 +141,15 @@ class EpubUXTests(unittest.TestCase):
                     self.assertNotIn(panel.tools.panel, panel.tools.widget.children)
                     panel.tools.toggle()
                     self.assertEqual(panel.offset, 7)
+                    if isinstance(panel, RichBookView):
+                        panel.show_find()
                     panel.query.value = 'no such passage exists'
                     panel.find()
-                    self.assertIn(panel.tools.panel, panel.tools.widget.children)
+                    if isinstance(panel, RichBookView):
+                        self.assertIn(panel.find_box, panel.children)
+                        self.assertTrue(panel.sidebar.sidebar_open is False)
+                    else:
+                        self.assertIn(panel.tools.panel, panel.tools.widget.children)
                     self.assertIn('No matching', panel.status.text)
                     panel.query.value = 'Native'
                     panel.find()

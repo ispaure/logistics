@@ -35,17 +35,13 @@ class FoldSeamProbe(LogisticsMobile):
             await asyncio.sleep(.5)
             self.resize_workspace()
             await asyncio.sleep(.5)
-            report['home'] = dict(seam=seam_fraction(self, self.home_content),
-                layout_width=self.home_content.layout.content_width,
-                native_width=float(self.home_content._impl.native.bounds.size.width),
-                widths=[str(child.style.width) for child in self.home_actions.children],
-                flexes=[str(child.style.flex) for child in self.home_actions.children])
-            for name, row, gap in (('actions', self.home_actions, 8), ('panels', self.home_panels.children[0], 10)):
-                first = row.children[0]._impl.native
-                rect = first.convertRect(first.bounds, toView=window)
-                join = float(rect.origin.x + rect.size.width + gap / 2)
-                report['samples'].append(dict(name=name, join=join, expected=expected, left=float(rect.origin.x), width=float(rect.size.width)))
-                # Assertions follow capture so a failure retains useful pixels.
+            hub = self.home_sections
+            report['home'] = dict(seam=seam_fraction(self, hub), paired=hub.paired)
+            first = hub.leading_scroll._impl.native
+            rect = first.convertRect(first.bounds, toView=window)
+            join = float(rect.origin.x + rect.size.width)
+            report['samples'].append(dict(name='home-sections', join=join, expected=expected,
+                left=float(rect.origin.x), width=float(rect.size.width)))
             await capture_window(self, output / 'home-partial.png')
             assert all(abs(item['join'] - expected) <= 1 for item in report['samples']), report
             owner = await fixture_reader(self, output, pages=4)

@@ -40,10 +40,13 @@ of their visible layout for the interactive transition. Back keeps this content
 visible until the fresh parent listing is ready. Trimming routes cancels preview
 work and releases its widgets/snapshots; credential invalidation clears private
 previews and snapshots before they can be revealed.
-Native folder pages use the navigation controller's title. Their location header
-keeps its storage/status line and actions but omits the repeated folder heading,
-including ancestor previews. Home pickers omit a source selector when only one
-source is available; it reappears when additional sources can be chosen.
+Native folder pages put their folder title, storage subtitle, Search and folder
+actions in UIKit's navigation bar, including ancestor previews. Existing buttons
+retain their callbacks and anchored native menus inside a single trailing custom
+bar group with 48-point-wide controls. The content header has no idle action row;
+it appears only for an operation status or an open search field. Home pickers
+omit a source selector when only one source is available; it reappears when
+additional sources can be chosen.
 
 
 `document_sources.folder_action` supplies **Show in folder** only for resolvable
@@ -54,10 +57,53 @@ import index. Reveal selects Workspaces, builds its folder ancestry and selects
 the file; it does not move the reader or create a cross-tab return edge. Sources
 outside ordinary browser roots use a scoped provider.
 
+Library imports without an original source reference reveal their stored EPUB or
+CBZ copy. Reveal selects Local, Cloud or Home Server from the live source before
+building the folder ancestry, so returning to Workspaces retains the correct tab.
+The shared document action-menu policy orders reading, appearance, file operations,
+navigation and close/delete commands consistently. iOS uses inline UIMenu sections;
+Android uses popup groups with dividers on supported Android versions. Fallback
+pages insert dividers between the same groups. Available commands remain format
+specific. `Open beside another document` is offered only at widths of at least
+640 logical pixels and for sessions supported by the editable pane host. Resize
+refreshes retained menus; the picker also rejects compact invocation.
+
 `Mobile/tests/test_folder_navigation.py` covers native ancestor controllers,
 multi-level pop callbacks, guarded Back, retained reader return, Home reveal,
 file selection and unsaved provider drafts. These mocked native and dummy-host
 checks do not certify physical iOS gesture rendering.
+
+## Home and Documents hub sections
+
+`hub_ui.HubSections` retains the existing controls and moves Recent between the
+compact page and a second scroll container. Home keeps its heading and Open/New
+actions together, with five recent entries and a Documents link in the trailing
+section. Documents keeps search and All open together; the trailing section holds
+closed Recent entries, other saved text documents and library access. Open entries
+are excluded from Recent, with the active session first in All open. Search updates
+the retained list containers without replacing the input or changing sessions.
+Saved text inventory uses cached metadata summaries and refreshes when the host
+publishes a new inventory; listing it does not decode stored file contents.
+Each wide section scrolls independently. Narrow layouts restore the
+original section order without rebuilding sessions or changing routes.
+
+Reflow uses the destination's measured native allocation, with a two-section
+threshold of 700 points. `fold_layout.seam_fraction(..., include_open=True)`
+forces and aligns the two sections in partially or fully open Duo landscape,
+converting the physical center into the hub's coordinates to account for rails
+and asymmetric safe areas. Each section has its own 16-point content margins,
+keeping controls away from the crease. Tab rendering, viewport changes and hinge
+status changes reflow retained hubs. Open reader routes keep their own layouts.
+
+`test_hub_documents` checks section ownership, compact restoration and retained
+hub reflow. The disposable `hub_landscape_probe` checks native bounds and scroll
+independence in both landscape directions and portrait; its partial hinge status
+is injected, so it does not certify a physical folding gesture. On 2026-10-20,
+the iOS 27.1 Duo simulator passed ten hub/pose samples plus retained-control
+rotation checks for both tabs. Both landscape directions aligned section edges
+to the physical center within one point, with full-height independent scrolling
+and controls contained within their section. The 79 focused hub, unlock,
+workspace, fold and private-session tests passed.
 
 ## Native iPad tab selection
 
@@ -65,7 +111,11 @@ The app installs a retained `UITabBarControllerDelegate` for iPad sidebar/tab
 presentation. Modern iPad tab selection can change the visible controller
 without invoking Toga 0.5.7's legacy `tabBar:didSelectItem:` notification. Both
 notification paths use the existing deferred, coalesced selection handler so the
-Python destination, toolbar ownership and native selection agree. Home's Open
+Python destination, toolbar ownership and native selection agree. Toolbar rendering
+uses the explicitly rendered destination while selection callbacks are still
+committing the incoming tab. Reader title/action ownership is tracked per native
+controller; returning to a non-reader page clears that controller's reader title,
+actions and status prompt before its workspace header is restored. Home's Open
 file action captures its destination before awaiting credential restoration and
 abandons the open if the user navigates elsewhere during that wait.
 
@@ -236,7 +286,14 @@ Main local/remote browsers and the local/library drawer browser mount the search
 button in this header beside the current folder. Native single-line label
 measurements retain a zero minimum width after rehinting so long folder names
 and status messages truncate instead of pushing the 48-point search control
-outside the viewport, including on Android.
+outside the viewport, including on Android. Android uses one inline row
+with Back/Up, a compact folder title and storage subtitle, Search and overflow.
+Subtitle and operation-status rows use native text height rather than a fixed
+18-point box, so Android font padding and larger text do not clip glyphs.
+Opening search temporarily replaces its caption with the input and close control
+while retaining Up and overflow. iOS retains its title, subtitle and both actions
+in the native bar and adds a search row only while active. Closing search removes
+that row completely. Standalone pickers retain their search row.
 
 Remote browsing mounts `cloud_up` beside `cloud_status` in the main browser,
 using the same 48-point up-arrow control as local browsing. It calls the existing
@@ -796,6 +853,11 @@ The landing page's outer branch containers are transparent; indentation and
 branch guides retain its always-expanded naming hierarchy. Group labels remain
 noninteractive. This presentation does not add tree expansion to browser
 entries or change discovery, filtering, activation, menus, paging or tile mode.
+Guide strokes and anchors use whole-point geometry so native rounding does not
+accumulate across siblings. Strokes are centered on row midpoints, nested group
+labels leave an eight-point gap after incoming branches, and native text metrics
+keep group labels centered on both platforms. The native folder-hub design probe
+compares actual connector endpoints, row centers and group bounds on iOS/Android.
 
 `WorkspaceFrame` retains the Workspaces root's actual `main` container as the
 leading pane on wide folder-options, local/LocalCrypt, remote and workspace-browser
@@ -968,11 +1030,52 @@ desktop/document-store checks. Local evidence is retained under the ignored
 attachments, logs, a swipe recording and `report.json`. This validates the tested
 simulator flows; physical devices and live remote providers need separate checks.
 
-Native iOS folder pages center the storage icon and identity close below the folder
-title, removing the content margin and moving the subtitle 12 points further
-toward the title. Disk/cloud icons describe
-the storage; encrypted folders also show their locked/unlocked icon. Search and
-contextual actions occupy a separate trailing toolbar row.
+Native iOS folder pages place the folder title and centered storage icon/subtitle
+inside the navigation bar's title view. Disk/cloud icons describe the storage;
+encrypted folders also show their locked/unlocked icon. The subtitle uses native
+bar containment instead of negative content margins. Search and contextual actions
+occupy the content toolbar below the safe-area boundary.
 The recycled table and its ordinary cells use the window palette, so the list
 blends into the surrounding page in both light and dark appearance. Selected
 files retain a rounded highlight in the hover palette.
+
+## Rotation and display cutouts
+
+Rotation is a layout event, not navigation. Workspaces retains its current source,
+folder and route stack; open file drawers keep their explicit open state. Settings
+retains either its category list or the category the user chose, including across
+compact/wide transitions. Merely displaying the default wide category does not
+authorize opening that category when returning to portrait.
+
+The iOS host coalesces changes to each native content container's allocation and
+safe-area insets into a responsive-layout wakeup. This includes inset-only changes
+and portrait shrink events that Toga's normal window resize notification can
+suppress. UIKit supplies the safe areas for the owning window and navigation/split
+controller; no model-specific notch or Dynamic Island offsets are used. Root panels
+therefore reflow against the current allocation after every orientation change.
+Chat header/composer widths use the current safe host allocation rather than the
+previous child layout. Android ignores unchanged global-layout callbacks, while
+viewport size, padding/keyboard, navigation chrome and active-panel changes still
+wake responsive layouts; explicit reflow calls are never suppressed. EPUB chapter sidebars keep their internal padding inside
+the sidebar's measured width, for both imported and provider books. Chapters,
+bookmarks and the provider session notice share one scrolling sidebar viewport,
+so their minimum heights cannot push the reader below a short landscape safe area.
+
+The native release suite requires `native_rotation_safe_areas`. Its
+`rotation_checks.py` fixture performs two rounds of portrait → landscape-left →
+portrait → landscape-right → portrait, checking route/panel identity, actual
+native content bounds and visible fixed controls against the window safe area. It covers the five destinations, workspace sources, nested
+folders, Home file picker, Settings categories, connection/Chat configuration,
+Markdown editor/preview, imported/provider EPUB and its Find panel, comics, provider text, Notes
+Library and Help. A settings category may move between a compact route and a wide
+pane while retaining its logical identity. Fullscreen image content intentionally
+extends beneath system chrome and is tested separately by the comic suite.
+
+These checks run through `Mobile/ui_tools.py` in `.github/workflows/mobile-build.yml`,
+which is a required dependency of `.github/workflows/release.yml`. They belong to
+the real native app gate, not the pure-Python document-runtime smoke test. Native
+geometry samples and failures are included in the uploaded mobile diagnostics.
+Each native app run is bounded at 30 minutes; build-job limits include both iOS
+device runs and their compilation time.
+Physical devices, accessibility text sizes, keyboard presentation and live remote
+provider behavior still require their own targeted verification.

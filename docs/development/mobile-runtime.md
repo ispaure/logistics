@@ -47,13 +47,22 @@ their existing control row instead of adding a second header. UIKit still mounts
 the drawer in its native navigation bar. Reading views also expose native
 button/toolbar handles so UIKit hosts the existing buttons as title-bar custom
 views, preserving callbacks, menus, accessibility labels and enabled states.
-Updates cache the controller/button set and never reparent borrowed buttons
-during progress or dirty-state refresh. Error prompts remain visible. Text editors use top pencil/page mode
+Updates cache the controller/button set and only rebuild the action group when
+its buttons change. Error prompts remain visible. Text editors use top pencil/page mode
 icons, and rebuild their native action menu only when clean/dirty state changes;
 clean documents omit Save. Provider Markdown likewise inserts its Save icon only
 for a changed editable buffer and collapses its unused mode-selector footer.
-EPUB uses compact `PageFooter` controls inside its top toolbar; comic scrubbing
-keeps its existing footer. Safe-area and floating-tab clearance remain in force.
+EPUB and PDF keep page commands/progress in a footer; comic scrubbing keeps its
+existing footer. All iOS readers and text editors publish `_native_reader_title`
+and their supported action buttons through the same title-bar contract. The
+host's `ios_reader_chrome.reader_title` centers the label relative to the native
+window during UIKit layout, allowing asymmetric action groups without shifting
+the visible title. Fullscreen continues to hide the entire native bar.
+Native-only filename/status controls are detached to avoid duplicate titles;
+managed editor renaming remains available through its action menu. PDF tools
+stay above the canvas when open, and single-image readers omit page navigation.
+Notes Library/documentation keep their trees while putting history/parent
+commands in their native More menus. Safe-area and floating-tab clearance remain in force.
 The isolated `compact_reading_probe.py` measures Markdown and EPUB reading areas
 through portrait, landscape and portrait return, including provider sessions.
 
@@ -539,15 +548,28 @@ reported delay to these emulator results.
 
 ### Retained Workspaces implementation
 
-Workspaces now retains its root page and controls between visits. Tab entry still
-runs local discovery and `update_folder_list`; the existing snapshot covers
-folder choices, network-share ownership, loaded/crypt remote names and visibility.
-Changed snapshots invalidate every source's rows, including detached tabs. An
-unchanged source retains its native rows and does not repaint the source buttons.
-Source and credential selection survive returning to the page. Transfer actions
-are reevaluated even when folder rows are reused. Explicit Refresh also checks
-lock state when names are unchanged. Discovery errors replace the page with the
-existing recovery actions and discard the failed page for a fresh retry.
+Workspaces retains its root page and separate row hierarchies for Local, Cloud
+and Home Server. Background discovery still snapshots native credential state on
+the UI loop, coalesces worker scans and rejects retired credential generations.
+Each publication reconciles the selected source: unchanged controls stay attached,
+added/removed folders change only the affected hierarchy, and lock/status changes
+update the existing icon and accessibility description. Callbacks resolve the
+latest choices when pressed. Detached source views reconcile before mounting;
+credential and visibility filters still remove unavailable entries. A remote-only
+metadata change does not discard unchanged Local rows. Source and credential
+selection survive returning to the page, and transfer actions are reevaluated.
+Discovery errors keep the existing recovery actions and rebuild a failed page on
+retry.
+
+Offscreen Workspaces construction batches native surface painting until each
+control has its final roles and metrics. Android caches resolved drawing classes,
+immutable colour lists and up to 128 drawable constant-state templates. Each view
+gets an independent mutated drawable; bounds, tint, pressed state and animations
+are not shared. Template keys include resolved colours and pixel geometry, so
+Light/Dark, E Ink and density changes cannot reuse the wrong appearance. Existing
+compact icon updates preserve dimensions, padding and symbol configuration rather
+than resetting the control and forcing repeated Toga layout. No persistent cache,
+new credential index or row virtualization is introduced.
 
 The attached root is not removed and reattached on an unchanged tab return.
 Detail routes retain their previous browser/Back behavior. The same emulator
@@ -568,6 +590,35 @@ human-readable profiles and `.prof` call trees under that app's cache directory.
 Keep it out of normal launchers and signed tester releases. The draw listener is
 Android-specific. Results in this run are retained locally under
 `Mobile/build/performance-profile/android/`.
+
+
+### Incremental Workspaces verification — 2026-10-20
+
+A paired run on the same API 35 ARM64 AOSP ATD emulator uses synthetic cache-only
+folders, retained metadata and no loaded credentials or network. The before build
+preserves the pre-change presentation files; the after build changes only row
+reconciliation and surface/icon handling. These are emulator timings, not a
+physical-phone latency claim.
+
+| Operation with 100 local folders | Before | After |
+| --- | ---: | ---: |
+| UI row work after a remote-only metadata change, both publications | 3,700 ms | 9.3 ms |
+| Full row construction, unprofiled callback | 1,888 ms | 810 ms |
+| Unchanged repeat visit callback | 16.6 ms | 10.7 ms |
+
+The original cache discarded Local rows once against old discovery results and
+again when new Remote choices arrived, even though the Local folders were
+unchanged. Reconciliation retains all those native controls across both updates.
+Updating all 100 lock icons in place takes 128–139 ms in this fixture. Native
+checks verify retained button/icon identities and independent pressed states.
+Light, Dark and E Ink before/after screenshots are pixel-identical at 1080×1920.
+The 100-row profile reduces actual native background paints from 1,614 to 706;
+wrapper calls that only enqueue a final paint are not counted as native paints.
+The full list still constructs all its native controls on first use; recycling
+large offscreen lists remains separate work. This incremental run did not include
+native iOS timing or screenshots. Raw profiles, source hashes and
+screenshots are retained locally in
+`Mobile/logs/workspaces-optimization-20261020/`.
 
 ## App reset boundary
 
@@ -620,3 +671,12 @@ seed missing category sizes from the legacy `font_size` and preserve them on the
 next save. Settings and gestures refresh registered surfaces in place, including
 provider readers; WebViews reflow their DOM without replacing editor contents.
 EPUB reflow uses the existing resize bridge to retain its text anchor.
+
+`markdown_justify` and `epub_justify` are independent validated Boolean strings,
+defaulting to `false`. The same registered WebView bindings apply them through
+the `--logistics-text-align` CSS variable and dispatch resize without reloading
+the document. Markdown preview and formatted editor CSS target paragraphs and
+list items; native source inputs keep their platform alignment. EPUB's portable
+typography options include `justify` for initial chapter rendering and the
+in-reader appearance form saves the same preference as Settings. Settings reload
+discards stale switch references and rebuilds the categories lazily.

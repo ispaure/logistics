@@ -110,46 +110,45 @@ class FolderLocationHeader(toga.Box):
     """Current storage identity and a parent/root navigation control."""
     def __init__(self, status, parent_button, *, actions=()):
         self.parent_button = parent_button
-        self.folder_name = BrowserStatusLabel('Root', style=Pack(font_size=20, font_weight='bold'))
+        self.folder_name = BrowserStatusLabel('Root', style=Pack(font_size=18, font_weight='normal'))
         self.status = status
         self.folder_name.style.flex = self.status.style.flex = 0
         self.folder_name.style.margin_left = self.status.style.margin_left = 0
-        self.status.style.font_size = 12
-        self.status.style.height = 18
+        self.status.style.font_size = self.folder_name.style.font_size * .75
+        # Let native font metrics (including Android font scaling/padding)
+        # determine text height. Only the decorative icons have a fixed size.
+        del self.status.style.height
         self.status.style.margin = 0
         surface(self.status, radius=0, background='transparent', foreground='muted',
                 outlined=False, eink_outlined=False)
         self.storage_icons = toga.Box(style=Pack(direction=ROW, align_items=CENTER, height=18))
-        self.storage_identity = toga.Box(style=Pack(direction=ROW, align_items=CENTER, height=18))
+        self.storage_identity = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
         self.caption = toga.Box(children=[self.folder_name],
                                 style=Pack(direction=COLUMN, flex=1, margin_left=6))
         self.status.status_changed = self.refresh_status
         self.refresh_status()
         super().__init__(children=[parent_button, self.caption, *actions],
-                         style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
+                         style=Pack(direction=ROW, align_items=CENTER, margin_top=0))
         self.update('')
 
     def use_native_title(self):
-        """Center the storage subtitle below UIKit's title, above the actions."""
+        """Let UIKit own the title/actions; reserve content space only for search."""
         if getattr(self, 'native_actions', None) is not None:
             return
-        actions = [child for child in self.children
-                   if child not in (self.parent_button, self.caption)]
+        self.title_actions = tuple(child for child in self.children
+                                   if child not in (self.parent_button, self.caption))
         for child in list(self.children):
             self.remove(child)
         self.caption.remove(self.folder_name)
         self.caption.style.flex = 0
         self.caption.style.margin_left = 0
         self.status.style.text_align = CENTER
-        # Folder pages have a 12-point content margin below the native bar.
-        # Remove that gap and tuck the subtitle 12 points toward the title.
-        self.style.margin_top = -24
+        self.style.margin_top = 0
         self.center_storage_identity()
         self.style.direction = COLUMN
         del self.style.align_items
-        self.native_actions = toga.Box(children=[toga.Box(style=Pack(flex=1)), *actions],
-                                       style=Pack(direction=ROW, align_items=CENTER))
-        self.add(self.caption, self.native_actions)
+        self.native_actions = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
+        self.add(self.caption)
 
     def center_storage_identity(self):
         # Equal flexible gutters center the icon/text group within the row.
@@ -165,6 +164,11 @@ class FolderLocationHeader(toga.Box):
 
     def refresh_status(self):
         """Use one secondary line for operation text or passive storage identity."""
+        if getattr(self, '_native_title_mounted', False):
+            if self.status.text and self.caption not in self.children:
+                self.insert(0, self.caption)
+            elif not self.status.text and self.caption in self.children:
+                self.remove(self.caption)
         visible = self.status if self.status.text else self.storage_identity
         for child in (self.status, self.storage_identity):
             if child is not visible and child in self.caption.children:
@@ -197,10 +201,8 @@ class FolderLocationHeader(toga.Box):
                     outlined=False, eink_outlined=False)
             self.storage_icons.add(indicator)
         identity = ('Cloud' if remote else 'On-device') + ((' · Unlocked' if unlocked else ' · Locked') if encrypted else '')
-        self.storage_identity.add(BrowserStatusLabel(identity, shrink=False, style=Pack(font_size=12, height=18, margin=0)))
-        # Bound the passive subtitle in the inline header too. UIKit restores
-        # its intrinsic text width when centering this row in the native bar.
-        self.storage_identity.children[-1].style.width = 1
+        self.storage_identity.add(BrowserStatusLabel(identity, style=Pack(
+            font_size=self.folder_name.style.font_size * .75, margin=0)))
         surface(self.storage_identity.children[-1], radius=0, background='transparent', foreground='muted',
                 outlined=False, eink_outlined=False)
         if getattr(self, 'native_actions', None) is not None:
@@ -245,6 +247,7 @@ class FileBrowser(NativeBrowser):
         for child in list(self.widget.children):
             self.widget.remove(child)
         self.search.placeholder = 'Search files and folders'
+        self.search_panel.style.update(margin=0, align_items=CENTER)
         for control in (self.search, self.sort, self.list_button, self.tile_button, self.previous, self.next):
             control.style.height = 48
         apply_icon(self.back_button, 'back', 'Go back')
@@ -316,17 +319,56 @@ class FileBrowser(NativeBrowser):
         return [entry for entry in rows if self.folder_visible(
             entry.payload.get('path', entry.label), directory=entry.container)]
 
+    @property
+    def search_open(self):
+        return self.search_panel.parent is not None
+
+    def toggle_search(self, widget=None, **kwargs):
+        if self.search_open:
+            self.close_search()
+        else:
+            self.open_search()
+
     def open_search(self, widget=None, **kwargs):
-        if self.search_panel not in self.widget.children:
-            self.widget.insert(0, self.search_panel)
+        if not self.search_open:
+            header = getattr(self, 'location_bar', None)
+            if header is None:
+                self.widget.insert(0, self.search_panel)
+            else:
+                toolbar = getattr(header, 'native_actions', header)
+                if toolbar is not header and toolbar.parent is None:
+                    header.add(toolbar)
+                self.search_panel.style.flex = 1
+                self._search_toolbar = toolbar
+                self._search_toolbar_children = list(toolbar.children)
+                for child in self._search_toolbar_children:
+                    toolbar.remove(child)
+                # UIKit keeps the folder title in its navigation bar. Inline
+                # headers keep Up, replacing the caption with the search field.
+                if toolbar is header:
+                    toolbar.add(header.parent_button)
+                toolbar.add(self.search_panel)
+                for child in self._search_toolbar_children:
+                    if child not in (header.parent_button, header.caption, self.search_button) and not (
+                            type(child) is toga.Box and not child.children):
+                        toolbar.add(child)
         if self.page_label not in self.widget.children:
-            self.widget.insert(1, self.page_label)
+            self.widget.insert(0 if hasattr(self, '_search_toolbar') else 1, self.page_label)
         self.search.focus()
 
     def close_search(self, widget=None, **kwargs):
         self.search.value = ''
-        if self.search_panel in self.widget.children:
-            self.widget.remove(self.search_panel)
+        if self.search_open:
+            self.search_panel.parent.remove(self.search_panel)
+        toolbar = getattr(self, '_search_toolbar', None)
+        if toolbar is not None:
+            for child in list(toolbar.children):
+                toolbar.remove(child)
+            toolbar.add(*self._search_toolbar_children)
+            if not toolbar.children and toolbar.parent is not None:
+                toolbar.parent.remove(toolbar)
+            self.search_panel.style.flex = 0
+            del self._search_toolbar, self._search_toolbar_children
         if self.page_label in self.widget.children:
             self.widget.remove(self.page_label)
 

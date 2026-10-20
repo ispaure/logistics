@@ -11,6 +11,26 @@ from test_mirror_jobs import MirrorClient
 
 
 class FolderHubTests(unittest.TestCase):
+    def test_remote_only_crypt_icon_uses_loaded_credential_snapshot(self):
+        from logisticsmobile.app import LogisticsMobile
+        from types import SimpleNamespace
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.show_cloud(present=False)
+            app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None, package_records=(dict(
+                package_name='Session.zip', saved=False, remotes=['Secret', 'Regular'],
+                crypt_identities={'Secret': 'a' * 64}),))
+            app.cloud_crypt_remotes = set()
+            app.folder_source = 'rclone'
+            app.build_folder_picker()
+            self.assertEqual(app.folder_buttons['Secret'].parent.children[0].control_icon, 'folder_unlocked')
+            self.assertEqual(app.folder_buttons['Regular'].parent.children[0].control_icon, 'folder')
+            self.assertEqual([copy['source'] for copy in app.folder_picker_choices['Secret']['copies']], ['Remote'])
+
     def test_local_workspace_entry_and_browsing_do_not_construct_cloud_controls(self):
         from logisticsmobile.app import LogisticsMobile
         with TemporaryDirectory() as directory:
@@ -456,10 +476,10 @@ class FolderHubTests(unittest.TestCase):
                 self.assertFalse(hasattr(group, 'on_press'))
                 self.assertEqual(group.text, 'Library')
                 self.assertEqual(group.accessible_name, 'Library, group')
-                for label in app.folder_tree_buttons.values():
+                for path, label in app.folder_tree_buttons.items():
                     self.assertEqual(list(label.parent.children), [label])
                     self.assertEqual(label._impl._surface_roles[1], 'text')
-                    self.assertEqual(label.style.margin_left, 0)
+                    self.assertEqual(label.style.margin_left, 8 if len(path) > 1 else 0)
                     self.assertEqual(label.parent.style.height, 48)
                     self.assertEqual(label.style.font_weight, 'bold')
                 # Each nested container keeps the guide plus a 40-point

@@ -209,6 +209,65 @@ callbacks and omission of operation return values from reports.
     first-draw timing remains pending; Android platform SDK is unavailable.
 
 
+## Settings navigation work reduction (2026-10-20)
+
+Settings constructs categories on demand and reads installed build identity
+only when About opens. Initial profiling of the tab callback on the dummy backend identified
+text fitting and layout as the main Settings-specific cold-open work; this is not
+a measurement of native device latency.
+
+The category menu now fits before it becomes scroll content, avoiding per-row
+scroll layout while heights change. Category pages retain their last fitted width;
+revisiting at the same width skips the recursive fitting pass. `SettingsLabel`
+continues to fit changed status/voice text immediately, and resizing refits the
+visible page. Text fitting caches source, width and font style before native font
+reads, and wrapping measures whole words before falling back to character splits.
+Menu selection also avoids duplicate surface painting and initializes unselected
+buttons during construction.
+
+The same disposable host profile at 390-point width reduced the first App-category
+visit from 12 recursive `fit_section` calls and 16 `fit_text` calls to 6 and 8;
+repeat visits reduced both counts to zero. A 900-point cold Settings open reduced
+layout invocations from 12 to 10. Thirty-three Settings/navigation/appearance
+checks pass, including retained-page reuse, changed status text, resizing and
+avoiding native font reads on an unchanged label. These counts establish less
+synchronous work, not a measured low-end iOS/Android speedup.
+
+### Strict page deferral and native menu construction
+
+No category is constructed on initial entry, including in the wide layout. The
+right pane remains empty until a category is selected. Opened categories retain
+their controls and fitted widths across navigation and resizing. About identity,
+voice controls and feature settings are constructed only on actual access.
+
+`show_settings` batches surface changes during construction and initial fitting,
+painting final roles before mounting. Each menu button receives its native list
+styling once rather than repeating it during text fitting. iOS composite icon
+images use a bounded 64-entry cache keyed by icon names and display scale; these
+are immutable template pixels, with independent button tint and interaction
+state. Renderer geometry, symbol weight, padding and group styling are retained.
+
+A paired run on a dedicated iPhone 17 simulator (iOS 27.0), using an isolated empty
+workspace and the same profiler, produced:
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| First Settings callback, including tab activation | 142.9 ms | 74.5 ms |
+| Next native draw after selection | 164.9 ms | 95.7 ms |
+| Menu construction | 118.7 ms | 50.6 ms |
+| Icon installation | 49.6 ms | 21.8 ms |
+| Surface styling | 33.1 ms | 8.4 ms |
+
+The component spans overlap; they must not be added. This is a single paired
+simulator run, not a physical low-end device benchmark. Menu screenshot content
+matched pixel-for-pixel outside the native tab selection animation; the App-page
+options/comments also matched outside its native Back control. All 38 focused
+Settings/navigation/checkpoint/appearance checks pass, including zero initial
+subpages on wide screens, one final paint per menu row, saved values, narrow text
+wrapping, resizing and native Back. The Android implementation shares batching
+and lazy construction; this change has not received native Android timing or
+visual verification.
+
 ## Final host verification (2026-10-20)
 
 The combined regression selection covers 193 checks. Two localhost HTTP fixture

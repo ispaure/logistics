@@ -14,10 +14,21 @@ navigation and a format-specific Actions menu. EPUB offers contents, bookmarks,
 text appearance, chapter search and read-aloud; comics offer page navigation,
 page layout, fit and neighboring-comic actions where supported. EPUB pages turn using Previous/Next or horizontal swipes, with no vertical
 scrolling. Its hamburger opens a nested chapter sidebar without a search field.
-EPUB places Previous/Next, speech and its Actions menu in one top toolbar,
-leaving the reading area free of a separate page-navigation footer in portrait
-and landscape on iOS and Android. On iOS these controls share the native title
-bar, recovering the entire separate toolbar row. Appearance and fullscreen are in Actions.
+EPUB keeps Previous/Next and chapter progress in a compact footer. Speech and
+Actions stay above the content. On iOS, readers and editors share the native
+title bar: Back and the relevant browser are on the left, a centered document
+title is in the middle, and supported actions are on the right. Long names
+shorten in the middle. Appearance and fullscreen are in Actions.
+
+Document **•••** menus group reading, appearance, file, navigation and close/delete
+options in the same order across formats. **Show in folder** is available for
+documents with a browsable source, including text, Markdown, PDF, images, EPUB
+and comics. It reveals the file in Workspaces and returns to the appropriate
+Local, Cloud or Home Server tab when you go back through its folders. Imported
+books without a retained original location reveal their stored library copy.
+**Open beside another document** appears only when the current layout is wide
+enough and the document supports paired panes; it hides again on narrow layouts.
+
 Fullscreen hides navigation and reading controls and keeps a visible
 **Show reading controls** button. Comics open with controls hidden and zero page margins; tap the page to
 show or hide reading controls. Native navigation bars hide with comic controls
@@ -47,6 +58,13 @@ actions. Markdown reading uses a single top toolbar, including its file drawer
 and speech control, without an edit/save footer. On iOS the buttons share the
 native title bar; Android uses one compact row. Provider-backed
 Markdown uses the same single-surface editor and retains its existing save rules.
+On iOS, Markdown's **•••** menu includes **Read aloud…**, keeping room for the
+title beside the pencil. During editing, **Save** takes the primary action slot
+when the buffer changes; **View document** remains in **•••**.
+Text and Markdown editors on iOS keep the filename in the centered title rather
+than repeating an editable name field below it. Use **Actions → Rename document…**
+for managed documents. Notes Library and documentation use the same title bar;
+previous/next history and parent-page actions are in their **•••** menus.
 See [Text and Markdown](documents.md#text-and-markdown) for saving and private drafts.
 
 ## Markdown read-aloud

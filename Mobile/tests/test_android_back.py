@@ -135,6 +135,7 @@ class AndroidBackTests(unittest.TestCase):
         self.assertEqual(app.file_path, 'Second')
         self.assertTrue(self.routes.system_back())
         self.assertNotIn(browser.search_panel, browser.widget.children)
+        self.assertFalse(browser.search_open)
         self.assertTrue(self.routes.system_back())
         self.settle()
         self.assertEqual(app.file_path, 'First')

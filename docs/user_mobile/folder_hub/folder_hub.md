@@ -12,7 +12,10 @@ Workspaces keeps the locations and source controls on the left. Opening a local,
 LocalCrypt or remote folder shows its files on the right; workspace actions use
 that same right pane. Each pane scrolls independently. Narrow windows use the
 full-screen browser and Back returns to Workspaces. Rotating between these
-layouts keeps the current browser. In landscape on an open or partially open
+layouts keeps the current browser, source and folder. Rotating repeatedly does
+not open a child folder or return to a different panel. iPhone layouts use the
+current window safe areas to keep controls clear of notches, the Dynamic Island
+and the Home indicator. In landscape on an open or partially open
 Duo, the pane boundary follows the physical crease when hinge information is
 available, accounting for the navigation rail and safe areas.
 
@@ -66,12 +69,16 @@ The file browser keeps your current folder, selection, list/tile mode, search, s
 history when you visit Documents or Settings. Local and remote browsers give most
 of the screen to the listing. Tap a local file to open it, or a folder to browse
 it. The top bar shows the current directory name as plain text,
-with a larger, bold title and no item count or outline, including in Android
+with no item count or outline, including in Android
 e-ink mode. Beneath it, a smaller line shows passive storage and lock icons with
 Cloud or On-device and, for encrypted folders, Locked or Unlocked labels.
 Opening, download, result and error messages temporarily replace that line; the
 indicators return when the message clears. Tap the magnifying glass on the right to
 reveal search; close it with **×** to clear the filter and hide the field.
+Search and **…** share the title row at the upper right. On iOS they sit in the
+native navigation bar; Android keeps them beside the folder name and subtitle
+in one compact header. The listing starts directly below this header. iOS adds
+an input row only while search is open, keeping the folder actions in the top bar.
 Local file search includes files and folders in every subfolder beneath the
 current location. Typing pauses briefly before searching; clearing search restores
 the current folder's immediate children.

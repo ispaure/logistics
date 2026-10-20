@@ -9,6 +9,11 @@ use the previous/next buttons. Open **Pages & search** to enter a page number in
 and keep the displayed page. The first and last pages stop navigation at the
 ends of the document.
 
+On iOS the filename is centered in the native title bar. The magnifying-glass
+button opens **Pages and search**; **•••** holds the remaining PDF actions.
+Previous/Next and the page count stay in a compact footer. Fullscreen hides the
+title and controls. The PDF reader does not show EPUB chapter or speech actions.
+
 PDFs are read-only, limited to 32 MiB and 10,000 pages. Pages are fitted to the
 reading pane and rasterized on demand. Reading positions stay in this session.
 Decrypted bytes and page images stay in memory and clear on close; remote and

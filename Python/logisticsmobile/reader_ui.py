@@ -267,6 +267,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             content, chapter_text = await asyncio.to_thread(indexed_chapter, reader, index,
                 int(self.preferences.values['epub_font_size']), margin=int(self.preferences.values['reading_margin']),
                 theme=self.preferences.values['reading_theme'], links=True, **typography_options(self.preferences.values))
+            from .palette import themed_chapter
+            content = themed_chapter(content, self.preferences.values['reading_theme'])
             if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
                 return
             target = getattr(self, '_epub_target', None)
@@ -360,7 +362,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         title = reader.title if record['kind'] == 'epub' else record['name']
         direction = ' · Right-to-left manga' if getattr(reader, 'right_to_left', False) else ''
         position = str(index + 1) if record['kind'] == 'epub' or len(indices) == 1 else f'{indices[0] + 1}–{indices[-1] + 1}'
-        self.book_status.text = f'{title} · {position}/{count}{direction}'
+        self.book_status.text = (f'Page {position}/{count}{direction}' if record['kind'] == 'comic'
+                                 else f'{title} · {position}/{count}{direction}')
         if hasattr(self, 'page_footer'):
             self.page_footer.sync(comic=record['kind'] == 'comic', count=count, index=index,
                                   right_to_left=getattr(reader, 'right_to_left', False))

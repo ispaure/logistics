@@ -251,3 +251,12 @@ adapter, such as the mobile host's byte-counting stream. It delegates the same
 path, revision checks and cancellation to `ResourceTextSession`; the original
 provider remains responsible for later saves. The feature does not import the
 host's progress presentation.
+
+## Native mobile editor chrome
+
+`mobile.ui.TextEditorView` publishes native title, toolbar and button handles to
+the host using the reader contract. iOS borrows the existing Save/View/Actions
+buttons and centers the document name; a clean buffer omits Save. The explicit
+Rename action edits the existing name control through its normal validation and
+change handler, preserving document/session identity and unsaved text. Native
+source inputs and formatted WebViews remain the same retained editing surfaces.

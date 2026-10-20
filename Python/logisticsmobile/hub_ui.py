@@ -4,9 +4,9 @@ from .control_icons import icon_button, button_icons
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from .hub_icons import icon
-from .appearance import list_button, described_button
+from .appearance import list_button
 from .appearance import template_icon
-from .appearance import surface, action_button, accessible_name
+from .appearance import surface, accessible_name
 from .recent_documents import MAX_RECENT
 
 DOCUMENT_TYPES = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB books', 'comic': 'Comics', 'pdf': 'PDF documents'}
@@ -56,10 +56,6 @@ def status_badges(details, *, currently_open=False):
     return box
 
 
-def home_surface(widget, *, hero=False):
-    return surface(widget, radius=20 if hero else 16)
-
-
 def panel(title, detail, glyph, actions):
     box = toga.Box(style=Pack(direction=COLUMN, margin=16))
     box.add(toga.Box(children=[
@@ -105,6 +101,57 @@ class PanelGrid(toga.Box):
             for _ in range(columns - len(row.children)):
                 row.add(toga.Box(style=Pack(flex=1)))
             self.add(row)
+
+
+class HubSections(toga.Box):
+    """Retain hub controls while moving whole sections across a physical fold."""
+    def __init__(self, content, trailing, *, before=None):
+        super().__init__(style=Pack(direction=ROW, flex=1))
+        self._hub_sections = True
+        self.content = content  # Compact content compatibility for hub callers.
+        self.trailing = trailing
+        self.before = before
+        self.leading_scroll = toga.ScrollContainer(horizontal=False, content=content, style=Pack(flex=1))
+        self.trailing_content = toga.Box(style=Pack(direction=COLUMN, margin=16))
+        self.trailing_scroll = toga.ScrollContainer(horizontal=False, content=self.trailing_content,
+                                                    style=Pack(flex=1))
+        self.add(self.leading_scroll)
+        self.paired = False
+
+    def reflow(self, app, destination):
+        from .fold_layout import seam_fraction
+        seam = seam_fraction(app, self, include_open=True)
+        width = app.adaptive.content_width(destination, margin=0)
+        if type(self._impl).__module__.startswith('toga_iOS.'):
+            measured = float(self._impl.native.bounds.size.width)
+            if measured > 0:
+                width = measured
+        paired = seam is not None or width >= 700
+        if paired != self.paired:
+            if self.trailing.parent is not None:
+                self.trailing.parent.remove(self.trailing)
+            if paired:
+                self.trailing_content.add(self.trailing)
+                self.add(self.trailing_scroll)
+            else:
+                self.remove(self.trailing_scroll)
+                index = self.content.children.index(self.before) if self.before is not None else len(self.content.children)
+                self.content.insert(index, self.trailing)
+            self.paired = paired
+        left = round(width * (seam if seam is not None else .5))
+        for scroll, size in ((self.leading_scroll, left), (self.trailing_scroll, round(width) - left)):
+            if paired:
+                size = max(1, size)
+                if scroll.style.width != size:
+                    scroll.style.width = size
+                if scroll.style.flex != 0:
+                    scroll.style.flex = 0
+            else:
+                from toga.style.pack import NONE
+                if scroll.style.width != NONE:
+                    del scroll.style.width
+                if scroll.style.flex != 1:
+                    scroll.style.flex = 1
 
 
 class HubUI:
@@ -201,107 +248,122 @@ class HubUI:
                 style=Pack(direction=ROW, align_items=CENTER)))
         else:
             box.add(title)
-        active = self.workspace.sessions.get(self.workspace.active)
-        active = active if active is not None and self.session_visible(active) else None
         self.home_continue = None
-        if active is not None:
-            title, kind, details = self.session_summary(active)
-            hero = toga.Box(style=Pack(direction=COLUMN, margin_bottom=12))
-            hero_content = toga.Box(style=Pack(direction=COLUMN, margin=16))
-            hero.add(hero_content)
-            hero_content.add(toga.Label('Continue', style=Pack(font_size=13, margin_bottom=8)))
-            from textwrap import fill
-            hero_content.add(toga.Label(fill(title, width=26), style=Pack(font_size=22, font_weight='bold', margin_bottom=8)))
-            if details:
-                hero_content.add(status_badges(details))
-            self.home_continue_button = action_button(toga.Button('Continue', on_press=self.session_opener(active.id),
-                                style=Pack(height=48)))
-            hero_content.add(self.home_continue_button)
-            box.add(home_surface(hero, hero=True))
-            self.home_continue = hero
-        else:
-            box.add(toga.Label('Open a file or start a new document.', style=Pack(margin_bottom=12)))
+        box.add(toga.Label('Open a file or start a new document.', style=Pack(margin_bottom=12)))
         self.home_actions = toga.Box(children=[
-            toga.Button('New document', on_press=self.new_hub_document, style=Pack(height=48, flex=1, margin_right=8)),
-            toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1))],
+            toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1, margin_right=8)),
+            toga.Button('New document', on_press=self.new_hub_document, style=Pack(height=48, flex=1))],
             style=Pack(direction=ROW))
         self.home_content = box
         box.add(self.home_actions)
-        recent = self.recent_items()
+        recent = self.recent_items()[:5]
         recent_box = toga.Box(style=Pack(direction=COLUMN))
         recent_box.add(heading('Recent'))
         for session, summary in recent:
             recent_box.add(self.recent_row(session, summary))
         if not recent:
             recent_box.add(toga.Label('Recently opened files will appear here.', style=Pack(font_size=13)))
-        spaces = toga.Box(style=Pack(direction=COLUMN))
-        spaces.add(heading('Your spaces'))
-        for title, subtitle, glyph, action in (
-            ('Workspaces', 'Local · LocalCrypt · Remote', 'folder_hub', self.show_home_files),
-            ('Books & Comics', 'Browse your library', 'books', self.show_library),
-        ):
-            button = described_button(toga.Button(title, on_press=action,
-                style=Pack(height=64, flex=1)), subtitle)
-            button_icons(button, [(glyph, title)])
-            button.style.margin_bottom = 12
-            spaces.add(button)
-        self.home_panels = PanelGrid([recent_box, spaces], self.main_window.size.width, maximum_columns=2)
-        box.add(self.home_panels)
+        def see_all(widget=None, **kwargs):
+            self.documents_query = ''
+            self.app.show_documents_hub()
+        recent_box.add(toga.Button('See all in Documents', on_press=see_all,
+                                  style=Pack(height=48)))
+        box.add(recent_box)
+        notice = getattr(getattr(self.app, 'recovery_notice', None), 'text', '')
+        if notice:
+            box.add(toga.Label(notice, style=Pack(font_size=13, margin_top=12)))
+        if self.workspace.error:
+            box.add(toga.Label(self.workspace.error, style=Pack(font_size=13, margin_top=12)))
         self.register_transfer_status(box)
+        self.home_sections = HubSections(box, recent_box)
         self.reflow_home()
-        return toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
+        return self.home_sections
 
     def reflow_home(self):
-        from .fold_layout import seam_fraction
-        seam = seam_fraction(self, self.home_content)
-        paired = seam is not None
-        self.home_panels.minimum_columns = 2 if paired else 1
-        self.home_panels.reflow(self.main_window.size.width)
-        # Both rows use the same physical seam; half the gutter lies on each side.
-        width = self.home_content.layout.content_width
-        for row, gap in ((self.home_actions, 8), (self.home_panels.children[0], 10)):
-            sizes = [None] * len(row.children)
-            if paired and width and len(row.children) == 2:
-                left = max(1, width * seam - gap / 2)
-                sizes = [left, max(1, width - left - gap)]
-            for child, size in zip(row.children, sizes):
-                flex = 1 if size is None else 0
-                if child.style.flex != flex:
-                    child.style.flex = flex
-                if size is None:
-                    from toga.style.pack import NONE
-                    if child.style.width != NONE:
-                        del child.style.width
-                elif child.style.width != size:
-                    child.style.width = size
+        self.home_sections.reflow(self.app, 'home')
+
+    def reflow_documents_hub(self):
+        self.documents_sections.reflow(self.app, 'documents')
 
     def build_documents_hub(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Box(children=[
-            toga.Button('New document', on_press=self.new_hub_document,
-                        style=Pack(height=48, flex=1, margin_right=8)),
-            toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1))],
-            style=Pack(direction=ROW)))
+        box.add(toga.Label('Documents', style=Pack(font_size=22, font_weight='bold', margin_bottom=12)))
+        self.document_search = toga.TextInput(placeholder='Search documents',
+            value=getattr(self, 'documents_query', ''), on_change=self.search_documents,
+            style=Pack(height=48, margin_bottom=8))
+        box.add(self.document_search)
         self.document_grids = []
         self.document_categories = {}
         self.document_launchers = PanelGrid([], self.main_window.size.width)
-        sessions = [session for session in self.workspace.sessions.values() if self.session_visible(session)]
-        entries = toga.Box(children=[heading('All open')], style=Pack(direction=COLUMN))
-        entries.add(toga.Label('Closing keeps saved files.\nYou’ll be asked about unsaved edits.' if sessions
-                              else 'No open documents.', style=Pack(font_size=12, margin_bottom=8)))
-        for session in sessions:
-            entries.add(self.session_panel(session, close=True))
-        box.add(entries)
-        box.add(heading('Recent'))
-        recent = self.recent_items()
-        for session, summary in recent:
-            box.add(self.recent_row(session, summary))
-        if not recent:
-            box.add(toga.Label('Recently used documents will appear here.', style=Pack(font_size=13)))
+        self.document_open_list = toga.Box(style=Pack(direction=COLUMN))
+        self.document_recent_list = toga.Box(style=Pack(direction=COLUMN))
+        self.document_saved_list = toga.Box(style=Pack(direction=COLUMN))
+        history = toga.Box(children=[self.document_recent_list, self.document_saved_list,
+            toga.Button('Books & Comics library', on_press=self.show_library, style=Pack(height=48))],
+            style=Pack(direction=COLUMN))
+        box.add(self.document_open_list, history)
+        self.refresh_document_list()
         if self.workspace.error:
             box.add(toga.Label(self.workspace.error, style=Pack(margin_top=8)))
         self.register_transfer_status(box)
-        return toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
+        self.documents_sections = HubSections(box, history)
+        self.reflow_documents_hub()
+        return self.documents_sections
+
+    def search_documents(self, widget, **kwargs):
+        self.documents_query = widget.value
+        self.refresh_document_list()
+
+    def refresh_document_list(self):
+        if not hasattr(self, 'document_open_list'):
+            return
+        from .workspace import Session
+        query = getattr(self, 'documents_query', '').strip().casefold()
+        def matches(summary):
+            return not query or query in summary[0].casefold()
+        for section in (self.document_open_list, self.document_recent_list, self.document_saved_list):
+            for child in list(section.children):
+                section.remove(child)
+        sessions = [session for session in self.workspace.sessions.values() if self.session_visible(session)]
+        sessions.sort(key=lambda session: session.id != self.workspace.active)
+        entries = self.document_open_list
+        entries.add(heading('All open'))
+        entries.add(toga.Label('Closing keeps saved files. You’ll be asked about unsaved edits.',
+                              style=Pack(font_size=12, margin_bottom=8)))
+        found = False
+        for session in sessions:
+            summary = self.session_summary(session)
+            if matches(summary):
+                entries.add(self.session_panel(session, close=True, summary=summary))
+                found = True
+        if not found:
+            entries.add(toga.Label('No matching open documents.' if query else 'No open documents.',
+                                   style=Pack(font_size=13)))
+        recent = self.recent_items(excluding=[session.identity for session in sessions])
+        self.document_recent_list.add(heading('Recent'))
+        found = False
+        for session, summary in recent:
+            if matches(summary):
+                self.document_recent_list.add(self.recent_row(session, summary))
+                found = True
+        if not found:
+            self.document_recent_list.add(toga.Label('No matching recent documents.' if query else
+                'Closed recent documents will appear here.', style=Pack(font_size=13)))
+        represented = {session.identity for session in sessions}
+        represented.update(session.identity for session, _ in recent)
+        self.document_saved_list.add(heading('Saved documents'))
+        found = False
+        for record in self.store.cached_summaries():
+            if ('managed-text', record.id) in represented:
+                continue
+            summary = record.name, text_document_kind(record.name), []
+            if matches(summary):
+                session = Session('', 'managed-text', record.id, summary[1], title=record.name)
+                self.document_saved_list.add(self.recent_row(session, summary))
+                found = True
+        if not found:
+            self.document_saved_list.add(toga.Label('No matching saved documents.' if query else
+                'Other saved text and Markdown documents will appear here.', style=Pack(font_size=13)))
 
     async def open_document_category(self, category):
         extensions = {

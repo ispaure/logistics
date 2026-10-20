@@ -304,8 +304,9 @@ class ShowInFolderTests(TestCase):
             self.assertNotIn(header.folder_name, header.caption.children)
             self.assertEqual(header.folder_name.value, 'Reports')
             self.assertIn(header.storage_identity, header.caption.children)
-            self.assertIn(app.file_browser.search_button, header.native_actions.children)
-            self.assertIn(app.file_actions_button, header.native_actions.children)
+            self.assertIn(app.file_browser.search_button, header.title_actions)
+            self.assertIn(app.file_actions_button, header.title_actions)
+            self.assertNotIn(header.native_actions, header.children)
         app.loop.run_until_complete(exercise())
 
     def test_direct_ancestor_preview_lists_parent_before_back(self):
