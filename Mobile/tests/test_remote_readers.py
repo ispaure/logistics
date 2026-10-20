@@ -592,11 +592,19 @@ class RemoteReaderTests(unittest.TestCase):
                     self.assertTrue(app.loop.run_until_complete(app.open_remote_document(
                         dict(path=name, directory=False, size=len(client.files[name])))))
                     owner = app.private_sessions.active
+                    self.assertIsNotNone(owner, name)
                     assert_preview_only_ui(self, owner)
                     self.assertTrue(owner.crypt_reader.read_only)
                     self.assertFalse(owner.crypt_save.enabled)
                     self.assertIsNone(owner.edit_crypt_metadata())
-                    owner.close_crypt()
+                    self.assertTrue(owner.close_crypt())
+                    # A viewport/layout read may still own the comic worker.
+                    # Finish its deferred close before opening the next file;
+                    # otherwise that close changes navigation during the open.
+                    closing = getattr(owner, '_exit_task', None)
+                    if closing is not None:
+                        app.loop.run_until_complete(closing)
+                    self.assertNotIn(owner.session.id, app.private_sessions.controllers)
             finally:
                 app.main_window.close()
                 app.loop.close()
