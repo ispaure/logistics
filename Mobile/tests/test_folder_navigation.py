@@ -197,6 +197,22 @@ class ShowInFolderTests(TestCase):
             self.assertFalse(app.routes.origins)
         app.loop.run_until_complete(exercise())
 
+    def test_native_folder_header_has_one_title_and_keeps_storage_identity_and_actions(self):
+        from logisticsmobile.browser_ui import FolderLocationHeader
+        app = self.app
+        async def exercise():
+            await app.show_files()
+            header = app.file_browser.location_bar
+            self.assertIsInstance(header, FolderLocationHeader)
+            header.use_native_title()
+            header.update('Projects/Reports')
+            self.assertNotIn(header.folder_name, header.caption.children)
+            self.assertEqual(header.folder_name.value, 'Reports')
+            self.assertIn(header.storage_identity, header.caption.children)
+            self.assertIn(app.file_browser.search_button, header.children)
+            self.assertIn(app.file_actions_button, header.children)
+        app.loop.run_until_complete(exercise())
+
     def test_direct_ancestor_preview_lists_parent_before_back(self):
         from logisticsmobile.folder_navigation import FolderPreview, FolderScreen
         app = self.app

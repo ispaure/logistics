@@ -154,7 +154,8 @@ screens does not send a model request.
 
 In the Workspaces file browser, the native Back button and swipe-back gesture
 move to the parent folder. At the storage root, Back returns to the Workspaces
-overview. The browser omits its separate Up button on iOS. Opening a pinned or
+overview. The browser omits its separate Up button on iOS. The folder name appears
+once in the native title bar; the row below keeps storage identity and actions. Opening a pinned or
 deep folder includes its ancestors in this navigation stack.
 Home's **Open file…** browser uses the same parent-folder Back behavior. At its
 storage root, Back returns to the screen that opened the picker. **Cancel**

@@ -126,6 +126,11 @@ class FolderLocationHeader(toga.Box):
                          style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
         self.update('')
 
+    def use_native_title(self):
+        """UIKit owns the folder title; this row retains storage and actions."""
+        if self.folder_name in self.caption.children:
+            self.caption.remove(self.folder_name)
+
     def refresh_status(self):
         """Use one secondary line for operation text or passive storage identity."""
         visible = self.status if self.status.text else self.storage_identity

@@ -23,6 +23,11 @@ of their visible layout for the interactive transition. Back keeps this content
 visible until the fresh parent listing is ready. Trimming routes cancels preview
 work and releases its widgets/snapshots; credential invalidation clears private
 previews and snapshots before they can be revealed.
+Native folder pages use the navigation controller's title. Their location header
+keeps its storage/status line and actions but omits the repeated folder heading,
+including ancestor previews. Home pickers omit a source selector when only one
+source is available; it reappears when additional sources can be chosen.
+
 
 `document_sources.folder_action` supplies **Show in folder** only for resolvable
 sources. Provider readers resolve the current provider/key at invocation and

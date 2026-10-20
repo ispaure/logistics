@@ -730,6 +730,11 @@ class FileDrawer:
                 self.storage.value = selected
             finally:
                 self.changing_storage = False
+            if self.app.routes.apple and self.destination == 'home' and hasattr(self, 'page'):
+                if len(roots) == 1:
+                    detach(self.storage)
+                elif self.storage.parent is None:
+                    self.browser_widget.insert(0, self.storage)
             try:
                 if selected != 'Local files' and not local_read_available(self.app):
                     raise ValueError('This connection is busy. Local files remain available.')

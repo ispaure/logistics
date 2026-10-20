@@ -45,6 +45,7 @@ class FolderPreview:
         parent = toga.Button('')
         header = self.browser.attach_location_header(self.status, parent)
         header.remove(parent)
+        header.use_native_title()
         self.browser.search_button.enabled = False
         header.update(entry.path, remote=entry.kind == 'remote-browser',
                       encrypted=self.private, unlocked=True,
@@ -222,8 +223,12 @@ class FolderNavigation:
                 else:
                     clear_snapshot(retained)
         header = getattr(info.browser, 'location_bar', None)
-        if header is not None and header.parent_button in header.children:
-            header.remove(header.parent_button)
+        if header is not None:
+            if header.parent_button in header.children:
+                header.remove(header.parent_button)
+            native_title = getattr(header, 'use_native_title', None)
+            if native_title is not None:
+                native_title()
 
     def restore(self, destination):
         routes = self.routes
