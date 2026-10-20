@@ -896,6 +896,9 @@ class CloudUI(LocalCryptUI):
                     self.remote_browser.location_bar.update(folder, remote=True,
                         encrypted=remote in self.cloud_crypt_remotes, unlocked=True,
                         name=Path(folder).name if folder else remote)
+                from logisticsmobile.folder_navigation import record
+                record(self.app, self.cloud_view, self.remote_browser, 'remote-browser', remote, folder,
+                       self.browser_cloud_location)
                 self.cloud_status.value = ''
                 return True
             except Exception as error:
@@ -947,6 +950,8 @@ class CloudUI(LocalCryptUI):
         return await self.browser_cloud_location((self.cloud_open_remote, row['path']))
 
     async def browser_cloud_location(self, location):
+        if not self.app.routes.folders.restoring:
+            self.app.routes.folders.capture()
         if self.cloud_busy:
             return False
         self.cloud_remote.value, self.cloud_location.value = location
@@ -984,14 +989,14 @@ class CloudUI(LocalCryptUI):
             await self.main_window.dialog(toga.InfoDialog('Local copy required', LOCAL_COPY_MESSAGE))
             return False
         opening = 'Opening remote file: ' + row['path'] + '…'
-        self.show_cloud()
+        self.show_cloud(present=False)
         self.cloud_status.value = opening
         try:
             from features.rclone.mobile.remote_readers import RemoteReaders
             async with self.remote_activity(opening) as progress:
                 opened = await self.open_crypt(
                     copies=RemoteReaders(self.cloud_client, self.cloud_open_remote, progress=progress),
-                    key=row['path'], destination='documents')
+                    key=row['path'])
         except Exception as error:
             # Session setup can fail before the provider reader's error handler.
             self.cloud_status.value = 'Remote opening failed: ' + str(error)[:300]
@@ -1054,7 +1059,17 @@ class CloudUI(LocalCryptUI):
             self.download_selector.value = next(key for key, path in self.download_labels.items() if path == selected)
 
     async def open_download(self, widget=None, *, path=None, destination=None, **kwargs):
+        from logisticsmobile.document_sources import opening_status
+        selected = path if path is not None else self.download_labels.get(self.download_selector.value)
+        if selected is None:
+            return False
+        with opening_status(self.app, dict(path=str(selected)), destination=destination):
+            await asyncio.sleep(0)
+            return await self._open_download(path=selected, destination=destination)
+
+    async def _open_download(self, *, path, destination=None):
         from commonUtils.runtime.document_access import LocalDocuments
+        destination = destination or self.native_host.state.destination
         if not hasattr(self, 'cloud_view'):
             self.show_cloud(present=False)
             restore = getattr(self, 'cloud_restore_task', None)
@@ -1066,13 +1081,11 @@ class CloudUI(LocalCryptUI):
             from features.pdf.mobile.copies import PDFCopies
             from commonUtils.runtime.local_files import LocalFiles
             selected = Path(selected)
-            destination = destination or 'documents'
             return await self.open_crypt(copies=PDFCopies(LocalFiles(selected.parent)), key=selected.name, destination=destination)
         independent = (self.cloud_busy and getattr(self, 'transfer_busy', False) and path is not None
                        and selected.resolve().is_relative_to((collection_path(self.private_root)).resolve()))
         if (self.cloud_busy and not independent) or selected is None:
             return False
-        destination = destination or 'documents'
         if not independent:
             self.set_cloud_busy(True)
         try:
@@ -1083,7 +1096,12 @@ class CloudUI(LocalCryptUI):
                     or self.resource_imports.collection_root != collection_root):
                 self.resource_imports = ResourceImports(self.private_root, collection_root=collection_root)
             imported = self.resource_imports.find(selected)
+            def remember_folder(provider, resource):
+                if not hasattr(self.app, '_document_folder_sources'):
+                    self.app._document_folder_sources = {}
+                self.app._document_folder_sources[provider, resource] = dict(type='local', path=str(selected))
             if imported is not None:
+                remember_folder(imported['provider'], imported['resource'])
                 if imported['provider'] == 'library':
                     return await self.open_book(imported['resource'], destination=destination)
                 elif self.open_document(imported['resource']):
@@ -1096,14 +1114,19 @@ class CloudUI(LocalCryptUI):
                 generation = self.navigation_generation
                 record = await asyncio.to_thread(catalog.library_store.import_book, LocalDocuments(), selected)
                 self.resource_imports.remember(selected, 'library', record['id'])
-                if not self.active_host or (independent and self.navigation_generation != generation):
+                remember_folder('library', record['id'])
+                if not self.active_host or self.navigation_generation != generation:
                     return False
                 self.refresh_library()
                 return await self.open_book(record['id'], destination=destination)
             else:
+                generation = self.navigation_generation
                 doc = await asyncio.to_thread(self.store.import_document, LocalDocuments(), selected)
                 self.resource_imports.remember(selected, 'managed-text', doc.id)
+                remember_folder('managed-text', doc.id)
                 self.refresh_documents()
+                if not self.active_host or self.navigation_generation != generation:
+                    return False
                 if not self.open_document(doc.id):
                     return False
                 self.show_documents(destination=destination)

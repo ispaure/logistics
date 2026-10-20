@@ -38,7 +38,7 @@ class ProviderUI(FilesUI):
 
     def resume_crypt(self, widget=None, **kwargs):
         if self.crypt_reader is not None:
-            self.show_view(self.crypt_view, destination='documents')
+            self.show_view(self.crypt_view)
 
     def clear_private_reader(self, *, discard=False):
         if getattr(self, '_crypt_cancel', None) is not None:
@@ -177,7 +177,7 @@ class ProviderUI(FilesUI):
                 from .preview import markdown_preview, reader_image_source
                 try:
                     initial_preview = await asyncio.to_thread(markdown_preview, content,
-                        int(self.preferences.values['font_size']), image_source=reader_image_source(copies, reader))
+                        int(self.preferences.values['markdown_font_size']), image_source=reader_image_source(copies, reader))
                 except ValueError as error:
                     # Keep the established source fallback and error feedback.
                     initial_preview_error = str(error)
@@ -186,7 +186,7 @@ class ProviderUI(FilesUI):
             view = SimpleNamespace()
             view.crypt_reader = reader
             view._crypt_reader_store = copies
-            view.crypt_title = toga.Label(private_label(reader.name), style=Pack(font_size=18))
+            view.crypt_title = toga.Label(private_label(Path(reader.name).name), style=Pack(font_size=18))
             view.crypt_page = toga.Selection(items=reader.labels, style=Pack(height=44))
             view.crypt_page.value = reader.labels[0]
             view.crypt_read_page = toga.Button('Read selected page', on_press=self.read_crypt_page, style=Pack(height=44))
@@ -197,10 +197,12 @@ class ProviderUI(FilesUI):
             view.crypt_bookmark_selector = toga.Selection(items=['Bookmarks…'],
                 on_change=self.select_private_bookmark, enabled=not reader.editable, style=Pack(height=44))
             from commonUtils.ui.native.code_input import CodeInput
+            from .font_scaling import bind, font_size
             view.crypt_text = CodeInput(loop=self.loop, filename=reader.name, readonly=not reader.editable,
                 highlighting=self.preferences.values.get('android_eink') != 'true',
                 on_change=self.private_source_changed,
-                style=Pack(flex=1, font_size=int(self.preferences.values['font_size'])))
+                style=Pack(flex=1, font_size=font_size(self, reader.kind)))
+            bind(self, view.crypt_text, reader.kind)
             if getattr(reader, 'read_only', False):
                 view.crypt_text.readonly = True
             from commonUtils.ui.native.image_canvas import ImageCanvas
@@ -239,7 +241,7 @@ class ProviderUI(FilesUI):
                 view.privacy_gate = self.privacy_gate
             handoff = (prepared is not None and getattr(self, 'save_as_source_document', None) is self.current
                        and getattr(self.current, 'private', False))
-            if not self.show_view(view.crypt_view, checkpoint=not handoff, destination='documents', title=reader.name):
+            if not self.show_view(view.crypt_view, checkpoint=not handoff, title=Path(reader.name).name):
                 return False
             self._crypt_cancel = None
             self.clear_private_reader(discard=True)
@@ -305,7 +307,7 @@ class ProviderUI(FilesUI):
         self.crypt_metadata_initial = initial
         self.crypt_metadata_fields = {key: toga.MultilineTextInput(value=value, style=Pack(height=80)) for key, value in initial.items()}
         self.crypt_metadata_status = toga.Label(private_label('Save updates only the encrypted local copy.'))
-        children = [toga.Label(private_label('Edit metadata: ' + reader.name)), self.crypt_metadata_status]
+        children = [toga.Label(private_label('Edit metadata: ' + Path(reader.name).name)), self.crypt_metadata_status]
         for key, field in self.crypt_metadata_fields.items():
             children.extend([toga.Label(key), field])
         self.crypt_metadata_save = toga.Button('Save encrypted metadata', on_press=self.save_crypt_metadata, style=Pack(height=44))
@@ -378,7 +380,7 @@ class ProviderUI(FilesUI):
         self._crypt_cancel = threading.Event()
         try:
             self.crypt_reader = await asyncio.to_thread(self._crypt_reader_store.save, self.crypt_reader, self.crypt_text.value, cancelled=self._crypt_cancel.is_set)
-            self.crypt_title.text = private_label(self.crypt_reader.name + (' · Saved encrypted locally' if getattr(self._crypt_reader_store, 'encrypted', True) else ' · Saved locally'))
+            self.crypt_title.text = private_label(Path(self.crypt_reader.name).name + (' · Saved encrypted locally' if getattr(self._crypt_reader_store, 'encrypted', True) else ' · Saved locally'))
         except Exception as error:
             self.crypt_title.text = private_label('Save failed; edits retained: ' + str(error)[:200])
         finally:
@@ -441,10 +443,16 @@ class ProviderUI(FilesUI):
                 from features.books.mobile.content import chapter_html
                 offset = ChapterText(chapter_html(book, index)).anchors.get(target, 0) if isinstance(target, str) else target
             view.provider_epub_view = provider_view(book, index, offset=offset,
-                font_size=int(self.preferences.values['font_size']),
+                font_size=int(self.preferences.values['epub_font_size']),
                 margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
                 on_chapter=controller.open_provider_epub_chapter,
                 on_position=lambda value: locations.update({book.spine[index]: value}))
+            from .font_scaling import bind
+            epub_surface = getattr(view.provider_epub_view, 'webview', None)
+            if epub_surface is not None:
+                bind(self, epub_surface, 'epub', web=True)
+            else:
+                bind(self, view.provider_epub_view.text, 'epub')
             chapters = getattr(view.provider_epub_view, 'chapters', None)
             if chapters is not None:
                 from .appearance import hierarchy_row_style
@@ -499,7 +507,7 @@ class ProviderUI(FilesUI):
             self._show_crypt_content(kind, content)
             self.page_suspended = False
             if reader.kind in {'.pdf', '.cbz', '.zip'}:
-                self.crypt_title.text = private_label(f'{reader.name} · {index + 1}/{len(reader.labels)}')
+                self.crypt_title.text = private_label(f'{Path(reader.name).name} · {index + 1}/{len(reader.labels)}')
             self.refresh_private_bookmarks()
             self.watch_provider_layout()
             self.watch_provider_epub_width()
@@ -642,6 +650,9 @@ class ProviderUI(FilesUI):
         if view.crypt_reader.book is not None or view.crypt_reader.kind in {'.md', '.markdown'}:
             app = getattr(self, 'app', self)
             actions.append(('Open beside another document', app.adaptive.show_pair_picker))
+        from .document_sources import folder_location, show_in_folder
+        if folder_location(self.app, self.session, view) is not None:
+            actions.append(('Show in folder', lambda: show_in_folder(self.app, self.session, self)))
         actions.append(('All documents', self.show_documents_hub))
         view.crypt_actions_menu = FeatureCommands(view.crypt_actions, self, actions, self.show_private_tools)
         view.crypt_title.style.flex = 1
@@ -875,7 +886,7 @@ class ProviderUI(FilesUI):
             from .preview import markdown_preview, reader_image_source
             try:
                 preview.set_content('https://logistics.invalid/live/',
-                    markdown_preview(widget.value, int(self.preferences.values['font_size']),
+                    markdown_preview(widget.value, int(self.preferences.values['markdown_font_size']),
                         image_source=reader_image_source(self._crypt_reader_store, reader)))
             except ValueError as error:
                 self.crypt_title.text = private_label(str(error))
@@ -895,7 +906,7 @@ class ProviderUI(FilesUI):
         from uuid import uuid4
         try:
             content = rendered if rendered is not None else markdown_preview(
-                self.crypt_text.value, int(self.preferences.values['font_size']),
+                self.crypt_text.value, int(self.preferences.values['markdown_font_size']),
                 image_source=reader_image_source(self._crypt_reader_store, self.crypt_reader))
         except ValueError as error:
             self.crypt_title.text = private_label(str(error))
@@ -903,6 +914,8 @@ class ProviderUI(FilesUI):
         if preview is None:
             self.crypt_preview = preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
                                                        style=Pack(flex=1))
+        from .font_scaling import bind
+        bind(self, preview, 'markdown', web=True)
         preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
         self.crypt_markdown_mode = 'preview'
         footer = getattr(self, 'crypt_markdown_footer', None)
@@ -947,7 +960,7 @@ class ProviderUI(FilesUI):
                 self.crypt_text.value = text
         from .preview import reader_image_source
         from .palette import css_variables
-        formatted = FormattedMarkdownInput(changed, font_size=int(self.preferences.values['font_size']),
+        formatted = FormattedMarkdownInput(changed, font_size=int(self.preferences.values['markdown_font_size']),
             stylesheet=css_variables(),
             image_source=lambda: reader_image_source(self._crypt_reader_store, reader))
         try:
@@ -956,6 +969,8 @@ class ProviderUI(FilesUI):
             formatted.dispose()
             self.crypt_title.text = private_label(str(error))
             return
+        from .font_scaling import bind
+        bind(self, formatted.view, 'markdown', web=True, formatted=formatted)
         self.crypt_formatted = formatted
         self.crypt_content.clear()
         self.crypt_content.add(formatted.view)
@@ -963,7 +978,7 @@ class ProviderUI(FilesUI):
     def show_private_tools(self, widget=None, **kwargs):
         if not self.cloud_busy:
             title = 'Comic pages' if self.crypt_reader is not None and self.crypt_reader.kind in {'.cbz', '.zip'} else 'Private document actions'
-            self.show_view(self.crypt_tools_view, destination='documents', route='private-tools', title=title)
+            self.show_view(self.crypt_tools_view, route='private-tools', title=title)
 
     async def show_provider_comic_info(self, widget=None, **kwargs):
         if (self.crypt_reader is None or self.crypt_reader.kind not in {'.cbz', '.zip'}
@@ -1110,6 +1125,8 @@ class ProviderUI(FilesUI):
             return
         try:
             self.preferences.save(**self.provider_appearance.settings())
+            from .font_scaling import refresh
+            refresh(self)
         except (OSError, ValueError) as error:
             self.provider_appearance.status.text = str(error)
             return

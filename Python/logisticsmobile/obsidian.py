@@ -20,7 +20,8 @@ from .control_icons import icon_button
 from .browser_ui import entry_icon, highlight_entry
 from .preview import markdown_preview
 
-async def open_vault(app, provider, root, destination='documents', *, title='', rows=None):
+async def open_vault(app, provider, root, destination=None, *, title='', rows=None):
+    destination = destination or app.native_host.state.destination
     if not app.checkpoint():
         return None
     previous = getattr(app, 'vault_browser', None)
@@ -68,6 +69,8 @@ class VaultBrowser:
         web_type = PrivateWebView if provider.private and private_webview_supported() else toga.WebView
         self.pending_fragment = ''
         self.web = web_type(on_navigation_starting=self.follow_link, on_webview_load=self.page_loaded, style=Pack(flex=1))
+        from .font_scaling import bind
+        bind(app, self.web, 'markdown', web=True)
         self.article = toga.Box(children=[self.web], style=Pack(direction=COLUMN, flex=1))
         from .markdown_speech import MarkdownSpeech
         self.speech = MarkdownSpeech(app, self.web, self.article,
@@ -208,7 +211,7 @@ class VaultBrowser:
                 raise ValueError('Choose a Markdown note.')
             def read():
                 data = self.library.read(path, cancelled=lambda: not self.valid())
-                html = markdown_preview(data.decode('utf-8-sig'), int(self.app.preferences.values['font_size']), local_links=True)
+                html = markdown_preview(data.decode('utf-8-sig'), int(self.app.preferences.values['markdown_font_size']), local_links=True)
                 if self.provider.private and len(html.encode('utf-8')) > MAX_NOTE:
                     raise ValueError('Private preview exceeds the 2 MiB memory-only limit.')
                 return html
@@ -293,8 +296,9 @@ class VaultBrowser:
 
     def present(self):
         if self.valid() and self.session is not None:
+            self.destination = self.app.native_host.state.destination
             self.app.workspace.activate(self.session.id)
-            return self.app.show_view(self.view, destination='documents',
+            return self.app.show_view(self.view,
                 route='notes-library:' + self.session.id, title=self.session.title)
 
     async def open_editor(self, widget=None, **kwargs):
@@ -305,7 +309,7 @@ class VaultBrowser:
         if self.library.remote:
             from features.rclone.mobile.remote_readers import RemoteReaders
             return await self.app.open_crypt(copies=RemoteReaders(self.client, self.provider.remote),
-                key=self.path, destination='documents')
+                key=self.path)
         source = encrypted_document(self.provider, self.path)
         copies, key = source if source is not None else (LocalTextCopies(self.provider), self.path)
         return await self.app.open_crypt(copies=copies, key=key, destination=self.destination)

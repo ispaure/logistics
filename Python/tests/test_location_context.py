@@ -36,9 +36,19 @@ class LocationContextTests(QtTestCase):
         window.current.path = self.root / 'Books' / 'Nested' / 'renamed.txt'
         self.assertEqual(document_title(window), 'renamed.txt * [Local: Nested]')
         window.current.path = self.root / 'elsewhere.txt'
-        self.assertEqual(document_title(window), window.windowTitle())
+        self.assertEqual(document_title(window), 'elsewhere.txt *')
         window.current.path = self.root / 'Managed' / 'Server-Notes' / 'note.txt'
         self.assertEqual(document_title(window), 'note.txt * [Local: Server-Notes]')
+
+    def test_unmanaged_document_titles_use_filename_with_extension(self):
+        window = qt.QMainWindow()
+        self.addCleanup(window.deleteLater)
+        for name in ('A Book.epub', 'Comic.cbz', 'Guide.pdf', 'notes.md'):
+            with self.subTest(name=name):
+                path = self.root / 'unmanaged' / name
+                window.setWindowFilePath(str(path))
+                window.setWindowTitle(str(path))
+                self.assertEqual(document_title(window), name)
 
     def test_remote_and_localcrypt_titles_use_provider_not_virtual_paths(self):
         window = qt.QMainWindow()

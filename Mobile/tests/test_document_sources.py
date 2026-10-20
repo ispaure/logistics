@@ -90,4 +90,4 @@ class ReopenSourceTests(IsolatedAsyncioTestCase):
     async def test_local_pdf_reopens_from_original_path(self):
         app = SimpleNamespace(open_download=AsyncMock(return_value=True))
         self.assertTrue(await reopen_file(app, dict(type='local', path='/files/report.pdf')))
-        app.open_download.assert_awaited_once_with(path=Path('/files/report.pdf'), destination='documents')
+        app.open_download.assert_awaited_once_with(path=Path('/files/report.pdf'))

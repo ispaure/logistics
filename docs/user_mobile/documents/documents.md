@@ -4,14 +4,21 @@ Use the document workspace to return to open text, Markdown, books, comics and
 conversations. Switching to another part of the app keeps these sessions available.
 Tap **Documents** while that tab is already selected to return to the Documents
 list without closing the current document. Switching to Documents from another
-tab resumes the document you were viewing; tap Documents again to see the list.
+tab resumes any document already displayed within Documents; otherwise it shows
+the list. Tap Documents again to see the list.
 In a book, comic or provider-backed document reader, open the **…** actions menu
 and choose **All documents** to return to the Documents list without closing the
-document. This also works when you opened the file from Home or Files. Android's
-system Back follows the opening location instead and may first dismiss reading
-controls or fullscreen mode.
-On iOS, the top navigation bar shows the opened document's name, including files
-opened from local, remote and encrypted storage. Fullscreen reading hides the bar
+document. Opening a document from Home or Workspaces keeps that tab selected.
+iOS navigation Back and Android system Back return to the retained opening screen
+without closing the session. Android may first dismiss reading controls or
+fullscreen mode.
+While a file downloads or prepares to open from Home, Documents or Workspaces,
+a separate panel shows its file icon, name and loading bar. The reader replaces
+that panel when ready. Back returns to the opening screen, including when used
+before loading finishes. Failed opens return to that screen too.
+On iOS, the top navigation bar shows the opened document's filename with its
+extension, without the folder path, including files opened from local, remote
+and encrypted storage. Fullscreen reading hides the bar
 until you show the reading controls again.
 
 ## Text and Markdown
@@ -40,11 +47,27 @@ Local/private Markdown uses the same Formatted/Source switch and opens in
 preview. Remote previews remain read-only. Save changes before closing a private
 draft.
 
+## Show a document's folder
+
+Choose **Show in folder** from the document's **…** actions menu to browse its
+source in Workspaces with the file selected. The reader stays open in its
+original tab, including unsaved text. On iOS, Back in that browser moves through
+parent folders, then returns to the Workspaces overview at the storage root.
+
+The action appears for folder-backed local, encrypted and remote documents.
+Local imports opened from the app's file browser retain their source location
+for the current app run. Imported copies without a known accessible source,
+new app-owned documents and locked private sessions omit the action.
+
 ## Books and comics
 
 Open supported EPUB books and CBZ/ZIP comics in their readers. Reader controls
 include navigation and Appearance. Reader settings are separate from the general
-Text & Markdown font-size preference.
+Markdown font-size preference. Text has its own font size under Settings → Text,
+and EPUB under Settings → EPUB. Pinch with two fingers in a reader or editor to
+change that format’s size (12–32); it is saved on this device. Markdown source,
+formatted editing and preview share one size, and text viewing and editing share
+one size. Existing shared sizes migrate to all three settings.
 
 Settings → Books & Comics → Saved books & comics lists retained imports and their
 space usage. Close removes an open view. Delete local copy removes that retained

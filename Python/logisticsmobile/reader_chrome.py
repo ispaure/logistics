@@ -28,6 +28,21 @@ def sync_comic_chrome(app, view):
 
 
 class ReaderChrome:
+    def refresh_folder_action(self):
+        if not hasattr(self, 'reader_actions'):
+            return
+        from .document_sources import folder_action
+        folder_actions = folder_action(self.app, self.session)
+        available = bool(folder_actions)
+        if available == getattr(self, '_folder_menu_available', False):
+            return
+        actions = [(label, callback) for label, callback in self.reader_actions.actions
+                   if label != 'Show in folder']
+        actions.extend(folder_actions)
+        self.reader_actions.dispose()
+        self.reader_actions = FeatureCommands(self.reader_actions_button, self, actions, self.show_reader_tools)
+        self._folder_menu_available = available
+
     def compact_reader(self):
         old = self.library_view
         for child in list(old.children):
@@ -46,6 +61,10 @@ class ReaderChrome:
                 ('Fullscreen', self.toggle_reading_mode), ('Read aloud…', self.show_read_aloud),
                 ('Find in chapter…', self.show_epub_search),
                 ('Open beside another document', self.app.adaptive.show_pair_picker)]
+        from .document_sources import folder_action
+        folder_actions = folder_action(self.app, self.session)
+        self._folder_menu_available = bool(folder_actions)
+        actions.extend(folder_actions)
         actions.append(('All documents', self.app.show_documents_hub))
         self.reader_actions = FeatureCommands(self.reader_actions_button, self, actions, self.show_reader_tools)
         from .workspace_navigation import menu_button
@@ -171,6 +190,8 @@ class ReaderChrome:
     async def apply_reader_appearance(self, widget=None, **kwargs):
         try:
             self.preferences.save(**self.reader_appearance.settings())
+            from .font_scaling import refresh
+            refresh(self)
             if self.book_reader is not None:
                 await self.move_book_page(self.book_record['position'])
             self.show_library()

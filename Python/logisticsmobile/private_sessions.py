@@ -17,7 +17,7 @@ class PrivateController(ReaderHost, ProviderUI):
         self.crypt_metadata_values = {}
         self._crypt_cancel = None
         self.operation_busy = False
-        self.presentation_destination = 'documents'
+        self.presentation_destination = self.app.native_host.state.destination
         self.privacy_gate = None
 
     @property
@@ -50,7 +50,7 @@ class PrivateController(ReaderHost, ProviderUI):
                 return True
         self.manager.bind(self)
         reader = self.crypt_reader
-        document_title = reader.name if reader is not None else self.session.title
+        document_title = Path(reader.name).name if reader is not None else self.session.title
         kwargs.update(destination=self.__dict__.get('presentation_destination', 'documents'), route=kwargs.get('route') or 'private:' + self.session.id,
                       title=kwargs.get('title') or document_title or 'Private document')
         presented = self.app.show_view(view, **kwargs)
@@ -196,7 +196,8 @@ class PrivateSessions:
                 source.cache.clear()
                 source.cache_bytes = 0
 
-    async def open(self, copies, key, *, prepared=None, destination='documents', privacy_gate=None, edit=False):
+    async def open(self, copies, key, *, prepared=None, destination=None, privacy_gate=None, edit=False):
+        destination = destination or self.app.native_host.state.destination
         from .files_ui import local_read_available
         if not hasattr(self.app, 'cloud_view'):
             self.app.show_cloud(present=False)
@@ -277,7 +278,7 @@ class PrivateSessions:
                 return False
             session.kind = ('pdf' if reader.kind == '.pdf' else 'epub' if reader.kind == '.epub' else 'comic' if not reader.editable
                             else 'markdown' if reader.kind in {'.md', '.markdown'} else 'text')
-            session.title = reader.name
+            session.title = Path(reader.name).name
             from .document_sources import file_source
             try:
                 session.history_source = file_source(self.app, copies, key) if privacy_gate is None else None
@@ -311,7 +312,8 @@ class PrivateSessions:
         return (getattr(getattr(owner, '_crypt_reader_store', None), 'offline', False)
                 or (getattr(source, 'cache_token', None) is not None and not source.closed))
 
-    def activate(self, key, *, destination='documents'):
+    def activate(self, key, *, destination=None):
+        destination = destination or self.app.native_host.state.destination
         owner = self.controllers.get(key)
         if not self.available(key) or (self.app.cloud_busy and not ((getattr(self.app, 'transfer_busy', False) or getattr(self.app, 'remote_read_busy', False)) and self.offline_owner(owner))):
             return False

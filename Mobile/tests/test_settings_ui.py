@@ -36,25 +36,25 @@ class SettingsUITests(unittest.TestCase):
             about.assert_not_called()
             app.show_settings()
             self.assertIs(app.settings_navigation, nav)
-            nav.choose('Text & Markdown')
-            font = app.font_choice
+            nav.choose('Text')
+            font = app.text_font_size_choice
             font.value = '23'
             self.assertFalse(hasattr(app, 'restore_choice'))
             saved = Preferences(app.private_root).values
-            self.assertEqual(saved['font_size'], '23')
+            self.assertEqual(saved['text_font_size'], '23')
             self.assertEqual(saved['restore_last_document'], 'true')
             nav.choose('About')
             about.assert_called_once()
-            nav.choose('Text & Markdown')
-            self.assertIs(app.font_choice, font)
+            nav.choose('Text')
+            self.assertIs(app.text_font_size_choice, font)
             nav.choose('About')
             about.assert_called_once()
-            self.assertEqual(set(nav.sections.built), {'Text & Markdown', 'About'})
+            self.assertEqual(set(nav.sections.built), {'Text', 'About'})
             app.reload_preferences()
             self.assertIsNot(app.settings_navigation, nav)
-            self.assertFalse(hasattr(app, 'font_choice'))
-            app.settings_navigation.choose('Text & Markdown')
-            self.assertEqual(app.font_choice.value, '23')
+            self.assertFalse(hasattr(app, 'text_font_size_choice'))
+            app.settings_navigation.choose('Text')
+            self.assertEqual(app.text_font_size_choice.value, '23')
 
     def test_apple_fitting_reuses_measurement_label_and_skips_unchanged_text(self):
         import toga
@@ -96,7 +96,7 @@ class SettingsUITests(unittest.TestCase):
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile', version='0.1.5')
             app.show_settings()
             app.settings_navigation.sections['App']
-            app.settings_navigation.sections['Text & Markdown']
+            app.settings_navigation.sections['Text']
             box = app.settings_navigation.sections['About']
             for switch, title in ((app.restore_choice, 'Restore last document'),
                                   (app.clear_documents_choice, 'Close saved documents on restart')):
@@ -123,7 +123,7 @@ class SettingsUITests(unittest.TestCase):
             for control, key, value, saved in (
                     (app.restore_choice, 'restore_last_document', False, 'false'),
                     (app.clear_documents_choice, 'clear_unmodified_documents_on_restart', False, 'false'),
-                    (app.font_choice, 'font_size', '23', '23')):
+                    (app.text_font_size_choice, 'text_font_size', '23', '23')):
                 control.value = value
                 self.assertEqual(Preferences(app.private_root).values[key], saved)
             self.assertEqual(app.preferences.values['restore_last_document'], 'false')

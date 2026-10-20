@@ -157,6 +157,9 @@ def group_rows(rows, *, icon_inset=False):
             group.add(surface(toga.Box(style=Pack(height=1, margin_left=48 if icon_inset else 16,
                                                  margin_right=16)), radius=0,
                               background='settings_separator', outlined=False, eink_outlined=False))
+        # Nested layout boxes and native pickers must share the card fill.
+        if isinstance(row, (toga.Box, toga.Selection)):
+            surface(row, radius=0, background='transparent', outlined=False, eink_outlined=False)
         row.style.margin_left = 12
         row.style.margin_right = 12
         row.style.margin_top = 4 if index == 0 else 0
@@ -190,11 +193,13 @@ def settings_presentation(section):
             rows.append(child)
         elif getattr(child, '_settings_switch_row', False):
             label, info, switch = child.children
+            surface(switch, radius=0, background='transparent', outlined=False, eink_outlined=False)
             surface(label, radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False)
             surface(info, radius=0, background='transparent', foreground='accent', outlined=False, eink_outlined=False)
             child.style.margin_bottom = 0
             rows.append(child)
         elif isinstance(child, toga.Selection):
+            surface(child, radius=0, background='transparent', outlined=False, eink_outlined=False)
             child.style.margin_top = 4
             child.style.margin_bottom = 8
             rows.append(child)
@@ -205,6 +210,7 @@ def settings_presentation(section):
             if primary and child.style.font_weight != 'bold':
                 child.style.margin_top = 12
                 choice = children[index + 1]
+                surface(choice, radius=0, background='transparent', outlined=False, eink_outlined=False)
                 consumed.add(choice)
                 choice.style.margin_top = 4
                 choice.style.margin_bottom = 12
@@ -447,7 +453,7 @@ class SettingsNavigation(toga.Box):
         menu.add(surface(toga.Label('Settings', style=Pack(font_size=28, font_weight='bold', margin_bottom=24)),
                          radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False))
         icons = {'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
-                 'Text & Markdown': 'edit', 'Books & Comics': 'books', 'LM Chat': 'chat',
+                 'Markdown': 'edit', 'Text': 'edit', 'EPUB': 'books', 'Books & Comics': 'books', 'LM Chat': 'chat',
                  'Workspaces': 'folder', 'Reset': 'preferences', 'Help': 'help', 'About': 'info'}
         rows = []
         for title in sections:
@@ -466,7 +472,10 @@ class SettingsNavigation(toga.Box):
         if rows:
             menu.add(group_rows(rows, icon_inset=True))
         self.sidebar = toga.ScrollContainer(horizontal=False, content=menu, style=Pack(flex=1))
-        self.detail = toga.Box(style=Pack(direction=COLUMN, flex=1))
+        self.detail = surface(toga.Box(style=Pack(direction=COLUMN, flex=1)),
+                              radius=0, background='settings_background', outlined=False, eink_outlined=False)
+        surface(menu, radius=0, background='settings_background', outlined=False, eink_outlined=False)
+        surface(self.sidebar, radius=0, background='settings_background', outlined=False, eink_outlined=False)
         self.add(self.sidebar)
 
     @staticmethod
@@ -487,7 +496,8 @@ class SettingsNavigation(toga.Box):
                 self.detail.remove(child)
             self.detail.add(view)
         else:
-            self.owner.show_view(view, destination='settings', route='settings-category', title=title)
+            # The guard above also protects wide layouts; do not checkpoint twice.
+            self.owner.show_view(view, checkpoint=False, destination='settings', route='settings-category', title=title)
 
     def update_selection(self, *, show_detail=False):
         from .folder_hub_style import source_tab
@@ -619,13 +629,15 @@ def settings_sections(app):
             'It does not unlock credentials or permit new file reads while locked.'))
         return box
 
-    def text():
-        box = category('Text & Markdown')
-        box.add(toga.Label('Editor and preview font size'))
-        app.font_choice = toga.Selection(items=[str(size) for size in range(12, 33)],
-            value=app.preferences.values['font_size'], style=Pack(height=48))
-        app.font_choice.on_change = app.save_preferences
-        box.add(app.font_choice)
+    def text_size(title, key):
+        box = category(title)
+        box.add(toga.Label(title + ' font size'))
+        choice = toga.Selection(items=[str(size) for size in range(12, 33)],
+            value=app.preferences.values[key], style=Pack(height=48))
+        setattr(app, key + '_choice', choice)
+        choice.on_change = app.save_preferences
+        box.add(choice)
+        box.add(toga.Label('Pinch to adjust. Saved for this format on this device.', style=Pack(font_size=12)))
         return box
 
     def books():
@@ -684,7 +696,9 @@ def settings_sections(app):
     if type(app._impl).__module__.startswith('toga_android.'):
         sections['Appearance'] = appearance
     sections['Read aloud'] = speech
-    sections['Text & Markdown'] = text
+    sections['Markdown'] = lambda: text_size('Markdown', 'markdown_font_size')
+    sections['Text'] = lambda: text_size('Text', 'text_font_size')
+    sections['EPUB'] = lambda: text_size('EPUB', 'epub_font_size')
     sections['Books & Comics'] = books
     sections['LM Chat'] = chat
     sections['Workspaces'] = workspaces

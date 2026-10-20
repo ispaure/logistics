@@ -20,6 +20,74 @@ class MobileDocumentsTests(unittest.TestCase):
         self.root = Path(self.directory.name).resolve()
         self.store = DocumentStore(self.root / 'private')
 
+    def test_unchanged_checkpoint_skips_serialization_and_disk_flushes(self):
+        doc = self.store.create(content=b'original')
+        with patch('logisticsmobile.documents.atomic_write_json') as write, \
+                patch.object(type(doc.snapshot), 'encode', side_effect=AssertionError('Re-encoded unchanged text')):
+            self.store.checkpoint(doc)
+        write.assert_not_called()
+
+    def test_changed_text_name_and_saved_baseline_are_checkpointed(self):
+        from logisticsmobile.documents import atomic_write_json
+        doc = self.store.create(content=b'original')
+        with patch('logisticsmobile.documents.atomic_write_json', wraps=atomic_write_json) as write:
+            doc.text = 'unsaved edits'
+            self.store.checkpoint(doc)
+            self.store.checkpoint(doc)
+            self.assertEqual(write.call_count, 1)
+            self.assertEqual(DocumentStore(self.store.root).open(doc.id).text, 'unsaved edits')
+            doc.name = 'Renamed.md'
+            self.store.checkpoint(doc)
+            self.assertEqual(write.call_count, 2)
+            self.store.save(doc)
+            self.assertEqual(write.call_count, 3)
+        recovered = DocumentStore(self.store.root).open(doc.id)
+        self.assertEqual(recovered.name, 'Renamed.md')
+        self.assertFalse(recovered.modified)
+
+    def test_missing_edited_and_replaced_recovery_files_force_checkpoint(self):
+        from logisticsmobile.documents import atomic_write_json
+        doc = self.store.create(content=b'original')
+        path = self.store.path(doc.id, '.json')
+        for change in ('missing', 'edited', 'replaced'):
+            with self.subTest(change=change):
+                if change == 'missing':
+                    path.unlink()
+                elif change == 'edited':
+                    path.write_text('{}')
+                else:
+                    replacement = path.with_suffix('.replacement')
+                    replacement.write_bytes(path.read_bytes())
+                    replacement.replace(path)
+                with patch('logisticsmobile.documents.atomic_write_json', wraps=atomic_write_json) as write:
+                    self.store.checkpoint(doc)
+                write.assert_called_once()
+                self.assertEqual(DocumentStore(self.store.root).open(doc.id).text, 'original')
+
+    def test_cached_checkpoint_still_rejects_symbolic_link(self):
+        doc = self.store.create(content=b'original')
+        path = self.store.path(doc.id, '.json')
+        outside = self.root / 'outside.json'
+        outside.write_bytes(path.read_bytes())
+        path.unlink()
+        path.symlink_to(outside)
+        with self.assertRaises(ValueError):
+            self.store.checkpoint(doc)
+
+    def test_failed_durable_checkpoint_retries_even_after_file_publication(self):
+        from logisticsmobile.documents import atomic_write_json
+        doc = self.store.create(content=b'original')
+        doc.text = 'unsaved edits'
+        # The file flush succeeds, but the directory flush fails after replace.
+        with patch('os.fsync', side_effect=[None, OSError('directory flush failed')]):
+            with self.assertRaises(OSError):
+                self.store.checkpoint(doc)
+        with patch('logisticsmobile.documents.atomic_write_json', wraps=atomic_write_json) as write:
+            self.store.checkpoint(doc)
+            self.store.checkpoint(doc)
+        write.assert_called_once()
+        self.assertEqual(DocumentStore(self.store.root).open(doc.id).text, 'unsaved edits')
+
     def test_recovery_after_process_recreation_preserves_unsaved_text(self):
         doc = self.store.create('Notes.md', b'original\r\n')
         doc.text += 'recovered\n'
@@ -101,6 +169,7 @@ class MobileDocumentsTests(unittest.TestCase):
         doc.text = 'after'
         self.store.checkpoint(doc)
         before = self.store.path(doc.id, '.json').read_bytes()
+        doc.text = 'latest unsaved edit'
         with patch('logisticsmobile.documents.atomic_write_json', side_effect=OSError('disk full')):
             with self.assertRaises(OSError):
                 self.store.checkpoint(doc)

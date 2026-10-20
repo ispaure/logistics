@@ -20,7 +20,7 @@ class AndroidBackTests(unittest.TestCase):
         self.addCleanup(self.app.loop.close)
         self.addCleanup(self.app.main_window.close)
         self.routes = self.app.routes
-        self.app.show_documents()
+        self.app.show_documents(destination='documents')
         self.app.show_cloud(present=False)
 
     def settle(self):
@@ -51,8 +51,8 @@ class AndroidBackTests(unittest.TestCase):
         with patch.object(self.app.adaptive, 'content_width', return_value=390):
             nav = self.app.settings_navigation
             nav.reflow()
-            nav.choose('Text & Markdown')
-            self.app.font_choice.value = '24'
+            nav.choose('Text')
+            self.app.text_font_size_choice.value = '24'
             self.app.show_view(toga.Label('Connections'), route='connections')
             self.app.native_host.activate('files')
             self.assertTrue(self.routes.system_back())
@@ -60,7 +60,7 @@ class AndroidBackTests(unittest.TestCase):
             self.app.native_host.activate('settings')
             self.assertTrue(self.routes.system_back())
             self.assertEqual(self.routes.screens['settings'][-1][0], 'settings-category')
-            self.assertEqual(self.app.font_choice.value, '24')
+            self.assertEqual(self.app.text_font_size_choice.value, '24')
             self.assertTrue(self.routes.system_back())
             self.assertFalse(self.routes.screens['settings'])
             self.assertTrue(self.routes.system_back())

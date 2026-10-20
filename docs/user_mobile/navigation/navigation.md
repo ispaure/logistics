@@ -8,6 +8,15 @@ their row presentation, while chat Send/Stop keeps its distinct composer control
 Settings uses unboxed category and action rows, with gray descriptions separating
 explanatory text from commands and native preference controls.
 
+## Opening documents
+
+Opening text, Markdown, PDF, EPUB or comic documents keeps the current tab selected
+on iOS and Android. Home opens a document above Home; Workspaces opens it above
+the current folder. Back returns through document detail screens to that retained
+origin, preserving its folder, search, selection and scroll state. Open sessions
+and unsaved drafts remain available in Documents. Choosing **All documents**
+explicitly switches to the Documents list.
+
 ## Android Back
 
 The Android Back button and back gesture dismiss the current temporary surface
@@ -30,8 +39,8 @@ a document keeps its open session and draft; use the document's Close command
 to close it explicitly.
 
 Each bottom tab or rail destination retains its own place. Back follows the
-current destination's screens. Opening a file from Workspaces hands it to
-Documents; after leaving that file, Back returns to the same folder. Ordinary
+current destination's screens. Opening a file from Workspaces keeps that tab selected; after leaving the file,
+Back returns to the same folder. Ordinary
 tab taps preserve each tab's place without creating these action return steps.
 At a destination's root, Back returns to **Home**. From Home's root,
 Android handles leaving the app. Switching tabs does not create a trail of tab
@@ -140,6 +149,18 @@ options with native Back navigation. At 640 points/dp of usable width, including
 an unfolded Duo in landscape, categories remain on the left and options on the
 right. Rotation keeps the selected category and current values. Opening these
 screens does not send a model request.
+
+## Browsing folders on iOS
+
+In the Workspaces file browser, the native Back button and swipe-back gesture
+move to the parent folder. At the storage root, Back returns to the Workspaces
+overview. The browser omits its separate Up button on iOS. Opening a pinned or
+deep folder includes its ancestors in this navigation stack.
+
+A reader's **Show in folder** action switches to Workspaces, opens its containing
+folder and selects the file. Back then follows parent folders; switching to the
+reader's original tab returns to that reader. Back inside the reader still
+returns to the screen from which the file was opened.
 
 ## Related pages
 

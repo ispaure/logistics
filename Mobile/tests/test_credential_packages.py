@@ -129,8 +129,8 @@ class CredentialPackageTests(unittest.TestCase):
                     self.assertEqual(len(cache.matching('Secret', 'a' * 64)), 1)
                     self.assertIn('Personal', app.credential_groups())
                     app.show_settings()
-                    app.settings_navigation.choose('Text & Markdown')
-                    app.font_choice.value = '23'
+                    app.settings_navigation.choose('Text')
+                    app.text_font_size_choice.value = '23'
                     app.preferences.reload()
                     self.assertNotIn('Personal.zip', app.preferences.path.read_text())
                     self.assertNotIn('Secret', app.preferences.path.read_text())

@@ -27,9 +27,10 @@ DARK.update(chat_background='#000000', chat_panel='#141414', chat_selected='#222
             chat_input='#141414', chat_bubble='#353535', chat_primary='#f3f3f3', chat_on_primary='#111111')
 
 
-# Settings uses native-style grouped lists rather than independent command cards.
-LIGHT.update(settings_background='#f2f2f7', settings_group='#ffffff', settings_separator='#dedee3')
-DARK.update(settings_background='#000000', settings_group='#1c1c1e', settings_separator='#38383a')
+# Grouped settings share the surrounding app palette at every appearance.
+for colors in (LIGHT, DARK):
+    colors.update(settings_background=colors['window'], settings_group=colors['surface'],
+                  settings_separator=colors['border'])
 
 
 def argb(value):

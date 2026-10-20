@@ -311,7 +311,7 @@ class HubUI:
             'Comic Reader': ('.cbz', '.zip'),
             'Archives': ('.zip', '.cbz', '.epub'),
         }
-        await self.adaptive.browser('documents').show_main_browser(
+        await self.adaptive.browser(self.app.native_host.state.destination).show_main_browser(
             'Local files', extensions=extensions[category], title=category)
 
     def document_button_icons(self, button, session):
@@ -386,12 +386,12 @@ class HubUI:
         restore = getattr(self, 'cloud_restore_task', None)
         if restore is not None:
             await restore
-        return await self.adaptive.browser('documents').show_main_browser(
+        return await self.adaptive.browser(self.app.native_host.state.destination).show_main_browser(
             'Local files', title='Open file')
 
     def refresh_hub(self, destination):
         if destination == 'files' and self.routes.screens['files']:
-            # Returning from Documents restores the folder that opened it.
+            # Retain the existing folder and any document detail above it.
             return
         if destination == 'files' and self.window_id == 'primary':
             self.show_cloud(present=False)

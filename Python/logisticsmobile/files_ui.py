@@ -363,6 +363,8 @@ class FilesUI:
         return await self.browser_file_location((self.file_storage.value, row['path']))
 
     async def browser_file_location(self, location):
+        if not self.app.routes.folders.restoring:
+            self.app.routes.folders.capture()
         label, path = location
         if label == 'Shared files' and (path == 'Local' or path.startswith('Local/')):
             location = ('Local files', path.removeprefix('Local').lstrip('/'))
@@ -483,6 +485,9 @@ class FilesUI:
                 'On this device' if self.file_storage.value in ('Local files', 'Shared files') else self.file_storage.value)
         self.file_browser.location_bar.update(self.file_path or ('Local' if managed_root else ''),
             encrypted=self.file_provider.private, unlocked=True, name=name)
+        from .folder_navigation import record
+        record(getattr(self, 'app', self), self.files_view, self.file_browser, 'browser', self.file_storage.value,
+               self.file_path, self.browser_file_location)
 
     def selected_file(self):
         row = self.file_rows.get(self.file_selection.value)
@@ -560,12 +565,12 @@ class FilesUI:
             if source is not None:
                 self.crypt_password.value = self.file_password.value
                 copies, key = source
-                return await self.open_crypt(copies=copies, key=key, destination='documents')
+                return await self.open_crypt(copies=copies, key=key)
             elif Path(path).suffix.lower() in SOURCE_EXTENSIONS:
                 from features.text_editor.resources import LocalTextCopies
-                return await self.open_crypt(copies=LocalTextCopies(provider), key=path, destination='documents')
+                return await self.open_crypt(copies=LocalTextCopies(provider), key=path)
             else:
-                return await self.open_download(path=provider._locate(path), destination='documents')
+                return await self.open_download(path=provider._locate(path))
         except ValueError as error:
             self.file_status.value = str(error)
             return False

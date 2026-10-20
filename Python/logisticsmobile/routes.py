@@ -22,11 +22,41 @@ class MobileRoutes(Routes):
         self.app = app
         self.back_task = None
         self.origins = {}
+        from .folder_navigation import FolderNavigation
+        self.folders = FolderNavigation(self)
         super().__init__(*args, **kwargs)
+
+    def uninstall(self):
+        task = self.folders.task
+        if task is not None and not task.done():
+            task.cancel()
+        super().uninstall()
 
     def show(self, view, *, destination=None, route=None, title='', root=False):
         origin = self.host.state.destination
         target = destination or origin
+        folder = getattr(view, '_folder_screen', None)
+        if self.apple and target == 'files' and not root and folder is not None and route in ('browser', 'remote-browser', 'workspace-browser'):
+            self.folders.present(folder, target)
+            return
+        screens = self.screens[target]
+        if screens and screens[-1][0].startswith('file-loading:'):
+            # The ready reader replaces its loading route. Back goes straight
+            # to the retained Home, Documents or workspace screen.
+            self.trim(target, len(screens) - 1)
+        # Session widgets have one native parent. Moving a retained document
+        # between tabs retires its old presentation, preserving the screens
+        # underneath rather than leaving an empty route behind.
+        for previous, screens in self.screens.items():
+            if previous == target:
+                continue
+            index = next((index for index, (_, panel, _) in enumerate(screens)
+                          if view in panel.children), None)
+            if index is not None:
+                self.trim(previous, index)
+                if view.parent is not None:
+                    view.parent.remove(view)
+                self.render(previous)
         super().show(view, destination=destination, route=route, title=title, root=root)
         if (not root and route is not None and target != origin
                 and route not in ('browser', 'remote-browser', 'folder-options', 'workspace-browser')):
@@ -39,6 +69,7 @@ class MobileRoutes(Routes):
         super().trim(destination, count, native=native)
         for route in removed:
             self.origins.pop((destination, route), None)
+            self.folders.screens.pop((destination, route), None)
 
     def return_to(self, destination):
         if self.app.select_destination(destination) is not False:
@@ -51,6 +82,8 @@ class MobileRoutes(Routes):
         count = len(screens)
         origin = self.origins.get((destination, screens[-1][0])) if screens else None
         handled = super().back()
+        if self.apple and len(screens) < count:
+            self.folders.restore(destination)
         if origin is not None and len(screens) < count:
             self.return_to(origin)
         return handled
@@ -82,6 +115,8 @@ class MobileRoutes(Routes):
         count = len(screens)
         origin = self.origins.get((destination, screens[-1][0])) if screens else None
         super().native_popped(navigation)
+        if len(screens) < count:
+            self.folders.restore(destination)
         if origin is not None and len(screens) < count:
             self.return_to(origin)
         # UIKit can re-enable its pop recognizers when a push completes too.

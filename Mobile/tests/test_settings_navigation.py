@@ -27,18 +27,18 @@ class SettingsNavigationTests(unittest.TestCase):
         app, nav = self.app, self.nav
         self.assertEqual(list(nav.children), [nav.sidebar])
         self.assertFalse(app.routes.screens['settings'])
-        nav.buttons['Text & Markdown'].on_press()
+        nav.buttons['Text'].on_press()
         self.assertEqual(app.routes.screens['settings'][-1][0], 'settings-category')
-        self.assertEqual(list(app.body.children), [nav.options['Text & Markdown']])
-        self.assertIs(app.settings_status.parent, nav.sections['Text & Markdown'])
-        app.font_choice.value = '24'
-        self.assertEqual(Preferences(app.private_root).values['font_size'], '24')
+        self.assertEqual(list(app.body.children), [nav.options['Text']])
+        self.assertIs(app.settings_status.parent, nav.sections['Text'])
+        app.text_font_size_choice.value = '24'
+        self.assertEqual(Preferences(app.private_root).values['text_font_size'], '24')
         app.routes.back()
         self.assertEqual(list(app.body.children), [nav])
         nav.buttons['Workspaces'].on_press()
         self.assertEqual(list(app.body.children), [nav.options['Workspaces']])
         self.assertIs(app.show_legacy_choice.parent.parent.parent, nav.sections['Workspaces'])
-        self.assertEqual(app.font_choice.value, '24')
+        self.assertEqual(app.text_font_size_choice.value, '24')
 
     def test_tablet_switches_categories_in_place_with_one_selected_row(self):
         app, nav = self.app, self.nav
@@ -56,22 +56,22 @@ class SettingsNavigationTests(unittest.TestCase):
 
     def test_rotation_preserves_selected_options_and_control_values(self):
         app, nav = self.app, self.nav
-        nav.choose('Text & Markdown')
-        app.font_choice.value = '25'
-        font = app.font_choice
+        nav.choose('Text')
+        app.text_font_size_choice.value = '25'
+        font = app.text_font_size_choice
         self.width.return_value = 900
         app.resize_workspace()
         self.assertFalse(app.routes.screens['settings'])
         self.assertEqual(list(app.body.children), [nav])
-        self.assertEqual(list(nav.detail.children), [nav.options['Text & Markdown']])
+        self.assertEqual(list(nav.detail.children), [nav.options['Text']])
         self.width.return_value = 390
         app.resize_workspace()
         self.assertEqual(app.routes.screens['settings'][-1][0], 'settings-category')
-        self.assertEqual(list(app.body.children), [nav.options['Text & Markdown']])
+        self.assertEqual(list(app.body.children), [nav.options['Text']])
         app.routes.back()
         self.assertEqual(list(app.body.children), [nav])
-        nav.choose('Text & Markdown')
-        self.assertIs(app.font_choice, font)
+        nav.choose('Text')
+        self.assertIs(app.text_font_size_choice, font)
         self.assertEqual(font.value, '25')
 
     def test_resizing_nested_page_preserves_it_then_back_restores_wide_category(self):

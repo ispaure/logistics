@@ -35,6 +35,7 @@ class DocumentStore:
         if not root.is_absolute():
             raise ValueError('The mobile host must supply an absolute app-private directory.')
         self.root = root.resolve()
+        self._checkpoints = {}
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def path(self, key, suffix):
@@ -70,16 +71,33 @@ class DocumentStore:
             raise
         return doc
 
+    @staticmethod
+    def _recovery_revision(path):
+        info = path.stat()
+        return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
+                info.st_ctime_ns, info.st_mode, info.st_nlink)
+
     def checkpoint(self, doc):
         if getattr(doc, "private", False):
             return
+        path = self.path(doc.id, '.json')
+        state = (doc.name, doc.text, doc.snapshot.encoding, doc.snapshot.original)
+        cached = self._checkpoints.get(doc.id)
+        if cached is not None and cached[0] == state:
+            try:
+                if self._recovery_revision(path) == cached[1]:
+                    return
+            except FileNotFoundError:
+                pass
         if not isinstance(doc.text, str) or len(doc.snapshot.encode(doc.text)) > MAX_BYTES:
             raise ValueError('Mobile text documents are limited to 1 MiB.')
         record = dict(schema=1, id=doc.id, name=document_name(doc.name), text=doc.text,
                       encoding=doc.snapshot.encoding,
                       original=base64.b64encode(doc.snapshot.original).decode('ascii'))
-        atomic_write_json(self.path(doc.id, '.json'), record, max_bytes=MAX_RECORD,
+        atomic_write_json(path, record, max_bytes=MAX_RECORD,
                           durable_directory=True)
+        # Only a successful durable publication may suppress a future write.
+        self._checkpoints[doc.id] = (state, self._recovery_revision(path))
 
     def privatize(self, doc):
         """Keep the draft in memory and replace its recovery record with the baseline."""
@@ -145,6 +163,7 @@ class DocumentStore:
         # Leave recovery available if removing the saved bytes fails.
         source.unlink(missing_ok=True)
         recovery.unlink(missing_ok=True)
+        self._checkpoints.pop(doc.id, None)
 
     def discard(self, doc):
         """Reset recovery to the current saved bytes without writing the source."""

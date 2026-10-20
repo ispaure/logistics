@@ -77,32 +77,64 @@ def source_icons(app, session):
 
 
 @contextmanager
-def opening_status(app, source):
-    """Show quiet activity below the current view until a source has reopened."""
-    body = getattr(app, 'body', None)
-    if body is None:
+def opening_status(app, source, *, destination=None):
+    """Present a temporary file panel, retaining the screen underneath it."""
+    routes = getattr(app, 'routes', None)
+    task = asyncio.current_task()
+    pending = getattr(app, '_file_loading', None)
+    if routes is None or (pending is not None and pending['task'] is task):
         yield
         return
     import toga
     from toga.style import Pack
-    from toga.style.pack import COLUMN
-    from .appearance import surface
-    message = 'Opening cloud file…' if source['type'] == 'remote' else 'Opening file…'
-    label = toga.Label(message, style=Pack(font_size=12, margin_left=12, margin_right=12))
-    surface(label, radius=0, background='transparent', foreground='muted',
-            outlined=False, eink_outlined=False)
-    progress = toga.ProgressBar(max=None, style=Pack(height=3, margin_top=2))
-    banner = toga.Box(children=[label, progress], style=Pack(direction=COLUMN))
-    body.add(banner)
+    from toga.style.pack import COLUMN, CENTER
+    from .browser_ui import entry_icon
+    name = Path(source.get('path') or source.get('key') or 'File').name
+    label = toga.Label(name, style=Pack(font_size=18, text_align=CENTER, margin_top=16))
+    image = entry_icon(False)
+    image.style.width = image.style.height = 64
+    progress = toga.ProgressBar(max=None, style=Pack(height=6, margin_top=24))
+    content = toga.Box(children=[image, label, progress],
+                       style=Pack(direction=COLUMN, align_items=CENTER, margin=32))
+    progress.style.align_self = 'stretch'
+    panel = toga.Box(children=[toga.Box(style=Pack(flex=1)), content,
+                               toga.Box(style=Pack(flex=1))],
+                     style=Pack(direction=COLUMN, flex=1))
+    destination = destination or app.native_host.state.destination
+    route = 'file-loading:' + str(id(panel))
+    state = dict(task=task, route=route, destination=destination)
+    app._file_loading = state
+    # Loading is presentation, not a new user intent. Preserve the generation
+    # used by provider readers to reject completion after navigation away.
+    adaptive = app.adaptive
+    split = adaptive.split is not None and destination == 'documents'
+    if split:
+        app.native_host.activate(destination)
+        adaptive.present(panel, route=route, title=name)
+    else:
+        routes.show(panel, destination=destination, route=route, title=name)
     progress.start()
     try:
         yield
     finally:
         progress.stop()
-        # Navigation may already have detached the originating view. Never
-        # restore it or touch the newly selected document when the read ends.
-        if banner.parent is not None:
-            banner.parent.remove(banner)
+        if getattr(app, '_file_loading', None) is state:
+            app._file_loading = None
+        screens = adaptive.detail_routes if split else routes.screens[destination]
+        if screens and screens[-1][0] == route:
+            visible = app.native_host.state.destination == destination
+            if split:
+                adaptive.trim_details(len(screens) - 1)
+                if visible and adaptive.in_detail:
+                    if adaptive.detail_routes:
+                        app.body = adaptive.detail_routes[-1][1]
+                        app.route_changed(app.body)
+                    else:
+                        adaptive.show_list()
+            else:
+                routes.trim(destination, len(screens) - 1)
+            if visible and not split:
+                routes.render(destination)
 
 
 async def reopen_file(app, source):
@@ -117,11 +149,10 @@ async def _reopen_file(app, source):
     if source['type'] == 'local':
         path = Path(source['path'])
         if path.suffix.lower() in {'.pdf', '.epub', '.cbz', '.zip'}:
-            return await app.open_download(path=path, destination='documents')
+            return await app.open_download(path=path)
         from commonUtils.runtime.local_files import LocalFiles
         from features.text_editor.resources import LocalTextCopies
-        return await app.open_crypt(copies=LocalTextCopies(LocalFiles(path.parent)), key=path.name,
-                                    destination='documents')
+        return await app.open_crypt(copies=LocalTextCopies(LocalFiles(path.parent)), key=path.name)
     app.show_cloud(present=False)
     remote, identity = source['remote'], source['identity']
     async def resume():
@@ -155,4 +186,88 @@ async def _reopen_file(app, source):
         copies = app.crypt_copies
         if copies.record(source['key'])['identity'] != identity:
             raise ValueError('The downloaded file connection changed.')
-    return await app.open_crypt(copies=copies, key=source['key'], destination='documents')
+    return await app.open_crypt(copies=copies, key=source['key'])
+
+
+def folder_location(app, session, owner=None):
+    """Resolve a live folder source without guessing paths for imported copies."""
+    if session is None:
+        return None
+    manager = getattr(app, 'private_sessions', None)
+    owner = owner or (manager.controllers.get(session.id) if manager else None)
+    reader = getattr(owner, 'crypt_reader', None)
+    copies = getattr(owner, '_crypt_reader_store', None)
+    if reader is not None and copies is not None:
+        provider = getattr(copies, 'provider', None)
+        if provider is not None:
+            if (provider.private and manager.controllers.get(session.id) is owner
+                    and not manager.available(session.id)):
+                return None
+            return dict(provider=provider, key=reader.key)
+        if (getattr(copies, 'remote_storage', False)
+                and (manager.controllers.get(session.id) is not owner or manager.available(session.id))):
+            return dict(remote=copies.remote, key=reader.key)
+    source = (getattr(session, 'history_source', None) or getattr(session, 'source', None)
+              or getattr(app, '_document_folder_sources', {}).get((session.provider, session.resource)))
+    if source and source.get('type') == 'local':
+        path = Path(source['path'])
+        if path.is_file():
+            return dict(path=path)
+    return None
+
+
+def folder_action(app, session, owner=None):
+    if folder_location(app, session, owner) is None:
+        return []
+    return [('Show in folder', lambda: show_in_folder(app, session, owner))]
+
+
+async def show_in_folder(app, session, owner=None):
+    location = folder_location(app, session, owner)
+    if location is None or not app.checkpoint():
+        return False
+    # Capture the source before presenting Workspaces suspends private pixels.
+    app.show_locations()
+    if 'remote' in location:
+        app.show_cloud(present=False)
+        if not await app.browser_cloud_location((location['remote'], location['key'].rpartition('/')[0])):
+            return False
+        app.show_cloud()
+        browser = app.remote_browser
+        key = location['key']
+    else:
+        provider = location.get('provider')
+        path = location.get('path')
+        if path is None and not getattr(provider, 'private', True):
+            path = Path(provider.root) / location['key']
+        if path is not None:
+            await app.show_files()
+            matching = []
+            for label in app.ordinary_file_roots():
+                candidate = app.file_provider_for(label)
+                if not candidate.private and path.resolve().is_relative_to(Path(candidate.root).resolve()):
+                    matching.append((len(Path(candidate.root).parts), label, candidate))
+            if matching:
+                _, label, provider = max(matching, key=lambda item: item[0])
+                key = path.resolve().relative_to(Path(provider.root).resolve()).as_posix()
+                if not await app.browser_file_location((label, key.rpartition('/')[0])):
+                    return False
+                browser = app.file_browser
+            else:
+                from commonUtils.runtime.local_files import LocalFiles
+                provider, key = LocalFiles(path.parent), path.name
+                drawer = app.adaptive.browser('files')
+                if not await drawer.show_main_browser(path.parent.name, provider=provider):
+                    return False
+                browser = drawer.browser
+        else:
+            key = location['key']
+            drawer = app.adaptive.browser('files')
+            if not await drawer.show_main_browser(getattr(provider, 'remote', 'Encrypted files'),
+                    folder=key.rpartition('/')[0], provider=provider):
+                return False
+            browser = drawer.browser
+    entry = next((entry for entry in browser.entries if entry.payload['path'] == key), None)
+    if entry is not None:
+        await browser.select(entry)
+    return True

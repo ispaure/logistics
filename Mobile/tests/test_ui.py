@@ -32,13 +32,13 @@ class MobileUITests(unittest.TestCase):
             self.assertEqual(app.body.children[0].content.children[0].text, 'Your workspace')
             app.show_settings()
             app.settings_navigation.sections['App']
-            app.settings_navigation.sections['Text & Markdown']
-            app.font_choice.value = '20'
+            app.settings_navigation.sections['Text']
+            app.text_font_size_choice.value = '20'
             app.restore_choice.value = False
             app.save_preferences()
-            self.assertEqual(app.preferences.values['font_size'], '20')
+            self.assertEqual(app.preferences.values['text_font_size'], '20')
             self.assertEqual(app.preferences.values['restore_last_document'], 'false')
-            app.show_documents()
+            app.show_documents(destination='documents')
             first = app.current.id
             self.assertEqual(app.native_host.state.destination, 'documents')
             app.name.value = 'Notes.md'
@@ -79,10 +79,10 @@ class MobileUITests(unittest.TestCase):
             app.show_preview()
             preview = app.preview
             self.assertIs(app.body.children[0].children[-1], app.preview)
-            app.show_documents()
+            app.show_documents(destination='documents')
             app.show_preview()
             self.assertIs(app.preview, preview)
-            app.show_documents()
+            app.show_documents(destination='documents')
             with patch('logisticsmobile.pickers.export_document', new=AsyncMock(return_value=True)) as export:
                 app.loop.run_until_complete(app.export_document())
                 self.assertEqual(export.await_args.args[2], b'keep these edits')

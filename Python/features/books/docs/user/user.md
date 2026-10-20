@@ -15,7 +15,8 @@ The same **Edit metadata…** action works for comics and mixed selections.
 It opens the appropriate editors without opening a reader.
 
 In the main app, readers open as tabs in **Open documents**. Metadata editors
-open in separate popup windows.
+open in separate popup windows. Reader headers and window titles show the EPUB
+filename with its extension, including after metadata edits.
 Use **Detach** for a separate window and **Bring back** to return it to the same
 workspace. Switching to File Browser or Workspaces retains your open documents.
 

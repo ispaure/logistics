@@ -49,5 +49,5 @@ def choose_document_type(app):
             toga.Button('Create document', on_press=create, style=Pack(height=48)),
             toga.Button('Cancel', on_press=lambda widget, **kw: app.routes.back(), style=Pack(height=48)))
     app.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)),
-                  destination='documents', route='new-document', title='New document')
+                  route='new-document', title='New document')
     name.focus()

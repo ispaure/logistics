@@ -1,5 +1,46 @@
 # Mobile workspace drawers and paired documents
 
+## iOS Workspaces folder ancestry
+
+`folder_navigation.FolderNavigation` adds a native route for each ancestor of a
+successfully listed Workspaces folder. The storage root is directly above the
+retained Workspaces overview, including entry from pinned-folder options.
+Local, LocalCrypt, remote and full-page workspace browsers publish successful
+locations with `record`; failed listings do not advance the stack. UIKit Back,
+interactive pops and explicit route Back restore the ancestor location into the
+retained browser owner. Reader pops to the same folder keep its existing widgets
+without listing again. iOS omits the browser's separate parent button; Android
+keeps its existing parent and system Back policy. Embedded document drawers keep
+their existing navigation policy.
+
+`document_sources.folder_action` supplies **Show in folder** only for resolvable
+sources. Provider readers resolve the current provider/key at invocation and
+check private-session availability. Imported local text/books retain a source
+reference in memory for the current run, without changing the hashed durable
+import index. Reveal selects Workspaces, builds its folder ancestry and selects
+the file; it does not move the reader or create a cross-tab return edge. Sources
+outside ordinary browser roots use a scoped provider.
+
+`Mobile/tests/test_folder_navigation.py` covers native ancestor controllers,
+multi-level pop callbacks, guarded Back, retained reader return, Home reveal,
+file selection and unsaved provider drafts. These mocked native and dummy-host
+checks do not certify physical iOS gesture rendering.
+
+## File loading panels
+
+`document_sources.opening_status` presents a temporary `file-loading:` route with
+the filename, file icon and indeterminate loading bar. Reopen, provider reading,
+local imports and library readers share it; nested calls in the same async task
+reuse the panel. Loading does not advance the navigation generation, so provider
+completion still detects Back or another navigation action during I/O.
+The ready view replaces the loading route in `MobileRoutes.show` or the native
+Documents secondary column. Failure removes the temporary route and reveals the
+retained origin. Cleanup never selects a tab the user has left. Library readers
+prepare their first page before presenting their view.
+
+`Mobile/tests/test_file_loading.py` checks the panel contents and replacement
+across Home, Documents and Workspaces, failure recovery and Back during loading.
+
 ## Compact Android top chrome
 
 `logisticsmobile.navigation.install_android_navigation_appearance` hides the
@@ -21,18 +62,17 @@ layout still requires device validation.
 `logisticsmobile.routes.MobileRoutes` specializes the shared route host at
 the Android dispatcher entry point. It installs the existing lifecycle-scoped
 AndroidX `NavigationBack` bridge with `system_back`; explicit toolbar Back and
-Cancel pop their route directly. On Android, both paths honor an action's
-cross-destination return edge. UIKit keeps the shared delegate and split handling.
+Cancel pop their route directly. Document routes stay within the opening
+destination on both platforms. UIKit keeps the shared delegate and split handling.
 The app module is included in `mobile_sources.json`.
 
 The policy follows Android's [fixed start destination and navigation principles](https://developer.android.com/guide/navigation/principles)
 and [independent destination stacks](https://developer.android.com/guide/navigation/backstack/multi-back-stacks).
 Tab changes preserve local stacks without accumulating tab-selection history.
-An action that opens a detail in another destination records its source tab.
-After popping that detail, Back restores the source's retained panel; for example,
-Workspaces opens a file in Documents and Back returns to that folder. Opening
-tools within the file does not replace this return edge. Trimming a route clears
-its edge, and checkpoint refusal retains it.
+Document opening retains the selected destination and pushes above its existing
+panel. Home and Workspaces no longer hand document activation to Documents.
+Explicit cross-destination actions can still retain a return edge; ordinary tab
+selection does not create one.
 Each non-Home root returns to the retained Home root; Home's root disables the
 callback and delegates exit to Android. Both native tab selection and route
 rendering update callback eligibility, including Material's pre-commit selection
@@ -814,13 +854,23 @@ preferences status follows the selected category.
 nested-page return, Duo seam sizing and Android/iOS category availability;
 `test_settings_ui` retains preference persistence and explanatory help checks.
 
-## Reader gestures and Workspaces handoff
+## Reader gestures and document origins
 
-Workspaces file activation targets Documents for local imports, provider readers
-and direct remote readers. Returning to Workspaces retains its existing browser
-route instead of trimming the source folder. Android Back unwinds file tools,
-then returns through the opening action's source edge. Switching destinations
-preserves the reader session.
+Local imports, provider readers, direct remote readers, recent entries and open
+sessions present in the selected destination. Reader and private controllers
+capture that destination before opening work; text editors and file pickers use
+the current destination. Documents remains the shared session list. Only an
+explicit command such as All documents selects that list.
+
+Back pops document detail routes to the retained originating panel, preserving
+folder, search, selection and scroll widgets. Android first dismisses applicable
+reader controls or fullscreen mode. Reopening a session from another tab moves
+its view and trims its previous presentation, preserving the old tab's underlying
+screen and avoiding an empty route. Workspace frames are rebuilt for the new tab
+without copying document buffers. Regression coverage includes
+`test_document_navigation`, `test_reader_navigation`, `test_native_reader_return`
+and `test_android_back`; dummy-host and mocked UIKit checks do not certify device
+gesture rendering.
 
 The host reapplies reader chrome and horizontal swipe ownership after adaptive
 layout and after UIKit navigation completion, including pushes. EPUB WebViews

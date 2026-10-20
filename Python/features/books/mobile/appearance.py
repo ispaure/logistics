@@ -19,7 +19,7 @@ class ReaderAppearance(toga.ScrollContainer):
             super().__init__(horizontal=False, content=content, style=Pack(flex=1))
             return
         from .typography import FONT_SIZES
-        self.font_choice = select('font_size', list(FONT_SIZES))
+        self.font_choice = select('epub_font_size', list(FONT_SIZES))
         self.margin_choice = select('reading_margin', ['8', '16', '24', '32'])
         from .typography import font_families, THEMES, DEFAULTS
         values = dict(DEFAULTS, **values)
@@ -52,5 +52,5 @@ class ReaderAppearance(toga.ScrollContainer):
     def settings(self):
         if self.kind == 'comic':
             return dict(comic_layout=self.layout_choice.value)
-        return dict(font_size=self.font_choice.value, reading_margin=self.margin_choice.value,
+        return dict(epub_font_size=self.font_choice.value, reading_margin=self.margin_choice.value,
                     reading_theme=self.theme_choice.value, **self.typography())

@@ -30,7 +30,7 @@ class HubDocumentTests(unittest.TestCase):
         self.directory = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.directory.name)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.app.show_documents()
+        self.app.show_documents(destination='documents')
 
     def tearDown(self):
         self.app.main_window.close()
@@ -118,7 +118,7 @@ class HubDocumentTests(unittest.TestCase):
         form.children[7].on_press()
         self.assertEqual(app.current.name, 'My notes.txt')
         self.assertNotEqual(app.current.id, first)
-        self.assertEqual(app.native_host.state.destination, 'documents')
+        self.assertEqual(app.native_host.state.destination, 'home')
         self.assertIn(app.document_view, app.body.children)
         self.assertEqual(app.store.open(first).text, 'Retain my draft')
 
@@ -167,14 +167,14 @@ class HubDocumentTests(unittest.TestCase):
             (folder / name).write_bytes(b'Fixture; dispatch is mocked below')
         app.show_home()
         self.assertTrue(app.loop.run_until_complete(app.open_hub_file()))
-        drawer = app.adaptive.browser('documents')
+        drawer = app.adaptive.browser(app.native_host.state.destination)
         self.assertIsNone(drawer.extensions)
         self.assertTrue(app.loop.run_until_complete(drawer.open_folder({'path': 'Library'})))
         self.assertEqual({entry.label for entry in drawer.browser.entries}, set(names))
         with patch.object(app, 'open_download', new_callable=AsyncMock) as reader:
             for name in names[:3]:
                 self.assertTrue(app.loop.run_until_complete(drawer.open_file({'path': 'Library/' + name})))
-                reader.assert_awaited_with(path=folder / name, destination='documents')
+                reader.assert_awaited_with(path=folder / name, destination='home')
 
     def test_home_browse_refreshes_local_root_after_other_views_and_search(self):
         import asyncio
@@ -419,7 +419,7 @@ class HubDocumentTests(unittest.TestCase):
         app = self.app
         app.show_settings()
         categories = app.settings_navigation.sections
-        sections = ['App', 'Text & Markdown', 'Books & Comics', 'LM Chat', 'Workspaces']
+        sections = ['App', 'Text', 'Books & Comics', 'LM Chat', 'Workspaces']
         self.assertEqual([title for title in categories if title in sections], sections)
         self.assertFalse(any(getattr(widget, 'text', '') == 'Document card overview'
                              for section in categories.values() for widget in widgets(section)))

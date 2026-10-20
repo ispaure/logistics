@@ -256,10 +256,12 @@ class DocumentationTests(unittest.TestCase):
         script.write_text('print("hello")')
         owner = show_documentation(self.app, root)
         history = list(owner.history)
+        destination = self.app.native_host.state.destination
+        origin = self.app.body
         owner.follow_link(owner.web, 'sample.py')
         async def wait_for_editor():
             for _ in range(100):
-                if (self.app.native_host.state.destination == 'documents' and any(
+                if (self.app.native_host.state.destination == destination and any(
                         session.title == 'sample.py' for session in self.app.workspace.sessions.values())):
                     return
                 await asyncio.sleep(.01)
@@ -267,5 +269,7 @@ class DocumentationTests(unittest.TestCase):
         self.app.loop.run_until_complete(wait_for_editor())
         self.assertEqual(owner.history, history)
         self.assertEqual(owner.path, root / 'README.md')
-        self.assertEqual(self.app.native_host.state.destination, 'documents')
+        self.assertEqual(self.app.native_host.state.destination, destination)
+        self.assertTrue(self.app.routes.back())
+        self.assertIs(self.app.body, origin)
         self.assertTrue(any(session.title == 'sample.py' for session in self.app.workspace.sessions.values()))

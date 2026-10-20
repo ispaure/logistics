@@ -115,10 +115,9 @@ def document_title(window, original=None):
     if not path:
         return original
     context = location_context(path, provider)
-    if not context.name:
-        return original
     modified = ' *' if ' *' in original or window.isWindowModified() else ''
-    return f'{Path(path).name}{modified} {context.suffix}'
+    suffix = f' {context.suffix}' if context.name else ''
+    return f'{Path(path).name}{modified}{suffix}'
 
 
 class BrowserLocationRow(qt.QWidget):

@@ -39,6 +39,7 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertEqual(self.app.editor_view.editor_area.children, [self.app.editor_view.formatted.view])
 
     def test_save_only_appears_after_a_real_markdown_change(self):
+        self.app.show_documents_hub()
         document = self.app.store.create('Read.md', b'# Original\n')
         self.app.open_document(document.id)
         self.app.show_documents(edit=True)

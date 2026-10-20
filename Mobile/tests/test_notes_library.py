@@ -39,7 +39,7 @@ class NotesLibraryTests(unittest.TestCase):
     setUp = test_obsidian.ObsidianTests.setUp
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
-    def test_actions_open_local_as_documents_and_close_session(self):
+    def test_actions_open_local_in_workspaces_and_close_session(self):
         from features.rclone.mobile.storage_location import collection_path
         folder = collection_path(self.app.private_root) / 'Notes'
         shutil.copytree(self.vault, folder)
@@ -55,7 +55,7 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertIsNotNone(button.parent)
             await button.on_press()
             owner = self.app.vault_browser
-            self.assertEqual(self.app.native_host.state.destination, 'documents')
+            self.assertEqual(self.app.native_host.state.destination, 'files')
             self.assertEqual(owner.session.provider, 'notes-library')
             self.assertIn(owner.session.id, self.app.workspace.sessions)
             self.assertIsNotNone(owner.search)

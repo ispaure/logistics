@@ -6,9 +6,10 @@ from .reader_host import ReaderHost
 class ReaderController(ReaderHost, ReaderUI):
     def __init__(self, manager, session=None):
         self.manager, self.app, self.session = manager, manager.app, session
-        self.presentation_destination = 'documents'
+        self.presentation_destination = self.app.native_host.state.destination
 
     def show_view(self, view, **kwargs):
+        self.refresh_folder_action()
         self.manager.bind(self)
         route = 'reader:' + self.session.id if self.session is not None else 'library'
         suffix = kwargs.pop('reader_route', None)
@@ -83,10 +84,15 @@ class Readers:
             owner.session.view['position'] = owner.book_record['position']
 
     def show_catalog(self):
+        self.catalog.presentation_destination = self.app.native_host.state.destination
         self.catalog.refresh_library()
         self.catalog.show_library()
 
-    async def open(self, resource, *, password=None, destination='documents'):
+    async def open(self, resource, *, password=None, destination=None):
+        import asyncio
+        destination = destination or self.app.native_host.state.destination
+        loading = getattr(self.app, '_file_loading', None)
+        deferred = loading is not None and loading['task'] is asyncio.current_task()
         manager = getattr(self.app, 'scene_manager', None)
         if password is not None and manager is not None and len(manager.owners.hosts) > 1:
             raise ValueError('Close other windows before opening protected content.')
@@ -102,7 +108,7 @@ class Readers:
             owner = ReaderController(self, session)
             owner.presentation_destination = destination
             self.controllers[session.id] = owner
-            owner.show_library()
+            owner.show_library(present=not deferred)
             # Each view owns its decoder; the catalog owns the shared storage
             # adapter, including the native archive implementation.
             owner.library_store = self.catalog.library_store
@@ -110,8 +116,18 @@ class Readers:
         else:
             owner.presentation_destination = destination
             self.bind(owner)
+            owner.show_library(present=not deferred)
+        if deferred:
+            self.bind(owner)
+        navigation = self.app.navigation_generation
+        selection = self.app.workspace.active
+        opened = await owner.open_book(resource, password=password)
+        if (deferred and (opened or owner.book_pending_key is not None)
+                and self.app.active_host and self.app.navigation_generation == navigation
+                and self.app.workspace.active == selection
+                and self.app.native_host.state.destination == destination):
             owner.show_library()
-        return await owner.open_book(resource, password=password)
+        return opened
 
     def close(self, key):
         owner = self.controllers.get(key)
@@ -148,8 +164,14 @@ class ReaderWorkspace:
             manager.active.refresh_library()
             manager.update_session(manager.active)
 
-    async def open_book(self, key, *, password=None, destination='documents'):
-        return await self.reader_manager().open(key, password=password, destination=destination)
+    async def open_book(self, key, *, password=None, destination=None):
+        import asyncio
+        from .document_sources import opening_status
+        manager = self.reader_manager()
+        record = manager.catalog.library_store.read_record(key)[0]
+        with opening_status(self, dict(key=record['name']), destination=destination):
+            await asyncio.sleep(0)
+            return await manager.open(key, password=password, destination=destination)
 
     async def import_book(self, widget=None, **kwargs):
         return await self.reader_manager().active.import_book(widget, **kwargs)

@@ -1,4 +1,4 @@
-"""UIKit pop callbacks retain the browser origin across the Documents tab."""
+"""UIKit pop callbacks return to the retained origin within the selected tab."""
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
@@ -38,16 +38,16 @@ class NativeReaderReturnTests(unittest.TestCase):
         self.routes.show(self.browser, destination='files', root=True)
 
     def pop(self):
-        nav = self.navigation[self.host.destinations.index('documents')]
+        nav = self.navigation[self.host.destinations.index(self.host.state.destination)]
         nav.viewControllers.pop()
         self.routes.native_popped(nav)
 
     def test_native_tools_back_keeps_reader_then_returns_to_browser(self):
         reader = toga.Label('Reader')
-        self.routes.show(reader, destination='documents', route='reader:fixture')
+        self.routes.show(reader, route='reader:fixture')
         self.routes.show(toga.Label('Tools'), route='reader-tools:fixture')
         self.pop()
-        self.assertEqual(self.host.state.destination, 'documents')
+        self.assertEqual(self.host.state.destination, 'files')
         self.assertIs(self.routes.body().children[0], reader)
         self.pop()
         self.assertEqual(self.host.state.destination, 'files')
@@ -55,10 +55,10 @@ class NativeReaderReturnTests(unittest.TestCase):
         self.assertFalse(self.routes.origins)
 
     def test_explicit_back_obeys_guard_and_returns_to_origin(self):
-        self.routes.show(toga.Label('Reader'), destination='documents', route='reader:fixture')
+        self.routes.show(toga.Label('Reader'), route='reader:fixture')
         self.guard.return_value = False
         self.assertTrue(self.routes.back())
-        self.assertEqual(self.host.state.destination, 'documents')
+        self.assertEqual(self.host.state.destination, 'files')
         self.guard.return_value = True
         self.assertTrue(self.routes.back())
         self.assertEqual(self.host.state.destination, 'files')
@@ -70,3 +70,17 @@ class NativeReaderReturnTests(unittest.TestCase):
         self.pop()
         self.assertEqual(self.host.state.destination, 'documents')
         self.assertFalse(self.routes.origins)
+
+    def test_native_swipe_pop_restores_same_origin_panel_in_each_tab(self):
+        for destination in ('home', 'files', 'documents'):
+            with self.subTest(destination=destination):
+                source = toga.TextInput(value='Retained search')
+                self.routes.show(source, destination=destination, root=True)
+                panel = self.routes.body()
+                self.routes.show(toga.Label('Document'), route='reader:any-kind')
+                self.assertEqual(self.host.state.destination, destination)
+                self.pop()
+                self.assertEqual(self.host.state.destination, destination)
+                self.assertIs(self.routes.body(), panel)
+                self.assertEqual(source.value, 'Retained search')
+                self.assertFalse(self.routes.origins)

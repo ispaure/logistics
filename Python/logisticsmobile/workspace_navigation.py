@@ -168,7 +168,31 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         return max(1, int(available) - margin)
 
     def prepare(self, view, destination, route=None, root=False):
-        if destination not in self.menu_open:
+        # A retained session can be opened from another tab. Unwrap its old
+        # workspace chrome before applying the new destination's presentation.
+        frame = getattr(view, '_workspace_frame', None)
+        if frame is not None and frame.destination != destination:
+            frame.restore()
+            detach(frame.menu)
+            if hasattr(frame, 'pair'):
+                detach(frame.pair)
+            detach(frame.row)
+            if frame.compact_toolbar is None:
+                detach(frame.header)
+            for child in list(frame.main.children):
+                frame.main.remove(child)
+                view.add(child)
+            self.frames.discard(frame)
+            del view._workspace_frame
+        for frame in list(self.frames):
+            frame.restore()
+        self.last_layout = None
+        if (getattr(view, '_workspace_menu', False)
+                and getattr(view, '_workspace_menu_destination', None) != destination):
+            detach(view._workspace_menu_button)
+            del view._workspace_menu_button
+            view._workspace_menu = False
+        if destination not in ('files', 'documents'):
             return view
         if root and isinstance(view, toga.ScrollContainer):
             original = view
@@ -186,22 +210,17 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             self.frames.add(view._workspace_frame)
         if eligible and destination == 'files':
             view._workspace_frame.folder_root = root
-            view._workspace_frame.folder_detail = not root
+            view._workspace_frame.folder_detail = not root and route in ('browser', 'remote-browser', 'folder-options', 'workspace-browser')
         if route == 'preview' and isinstance(view, toga.Box) and not getattr(view, '_workspace_menu', False):
             menu = menu_button(lambda widget, **kw: self.show_browser(destination))
             toolbar = getattr(view, '_workspace_toolbar', view)
             toolbar.insert(0, menu)
             view._workspace_menu_button = menu
             view._workspace_menu = True
+            view._workspace_menu_destination = destination
         menu = getattr(view, '_workspace_menu_button', None)
         if menu is not None and self.app.routes.apple:
             detach(menu)
-        # Returning to a previously borrowed editor restores its single parent
-        # before Routes attaches its native screen.
-        for frame in list(self.frames):
-            frame.restore()
-        # Reparenting invalidates even an otherwise identical layout tuple.
-        self.last_layout = None
         return view
 
     def browser(self, destination):
@@ -588,6 +607,7 @@ class FileDrawer:
         self.navigation.menu_open[self.destination] = False
         detach(self.browser_widget)
         page = toga.Box(children=[self.browser_widget], style=Pack(direction=COLUMN, flex=1, margin=12))
+        self.page = page
         self.app.show_view(page, destination=self.destination, route='workspace-browser', title=title)
         return await self.refresh()
 
@@ -701,6 +721,9 @@ class FileDrawer:
                 self.browser.location_bar.update(folder, remote=getattr(provider, 'remote_storage', False),
                                                  encrypted=provider.private, unlocked=True)
                 self.parent_button.enabled = bool(folder)
+                if hasattr(self, 'page'):
+                    from .folder_navigation import record
+                    record(self.app, self.page, self.browser, 'workspace-browser', selected, folder, self.navigate)
                 self.status.value = ''
                 if self.destination == 'documents':
                     self.refresh_menu()
@@ -716,10 +739,13 @@ class FileDrawer:
                 return False
 
     async def open_folder(self, row):
+        self.app.routes.folders.capture()
         self.folder = row['path']
         return await self.refresh()
 
     async def navigate(self, location):
+        if not self.app.routes.folders.restoring:
+            self.app.routes.folders.capture()
         label, folder = location
         if label not in self.roots:
             return False

@@ -52,7 +52,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         self.directory = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.directory.name)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.app.show_documents()
+        self.app.show_documents(destination='documents')
         self.navigation = self.app.adaptive
 
     def tearDown(self):

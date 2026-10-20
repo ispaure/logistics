@@ -389,7 +389,7 @@ def install_appearance(app):
             if value is None and isinstance(impl, (TextInput, MultilineTextInput, Selection)):
                 impl._default_background_color = apple_color('surface')
             original_background(impl, value)
-            if isinstance(impl, Button) and impl in _surfaces:
+            if impl in _surfaces:
                 paint_surface(impl, _surfaces[impl])
         Widget.set_background_color = set_background
         original_button_color = Button.set_color

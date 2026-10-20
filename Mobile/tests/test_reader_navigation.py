@@ -30,7 +30,7 @@ class ReaderNavigationTests(unittest.TestCase):
                 async def exercise():
                     store = app.reader_manager().catalog.library_store
                     record = store.import_book(LocalDocuments(), epub)
-                    app.show_home()
+                    app.show_documents_hub()
                     await app.open_book(record['id'])
                     owner = app.readers.active
                     panel = app.body
@@ -80,7 +80,9 @@ class ReaderNavigationTests(unittest.TestCase):
                         await app.open_book(record['id'])
                         owner = app.readers.active
                         key = owner.session.id
-                        self.assertEqual(app.routes.origins['documents', 'reader:' + key], 'home')
+                        self.assertEqual(app.native_host.state.destination, 'home')
+                        self.assertEqual(app.routes.screens['home'][-1][0], 'reader:' + key)
+                        self.assertFalse(app.routes.origins)
                         owner.reader_actions.invoke(dict(owner.reader_actions.actions)['All documents'])
                         self.assertEqual(app.native_host.state.destination, 'documents')
                         self.assertFalse(app.routes.screens['documents'])
@@ -97,7 +99,7 @@ class ReaderNavigationTests(unittest.TestCase):
                 app.main_window.close()
                 app.loop.close()
 
-    def test_folder_open_selects_documents_and_folder_tab_retains_browser(self):
+    def test_folder_open_keeps_workspaces_and_back_restores_browser(self):
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
@@ -119,7 +121,7 @@ class ReaderNavigationTests(unittest.TestCase):
                         with patch.object(app.native_host.chrome, 'set_page_swipes',
                                           wraps=app.native_host.chrome.set_page_swipes) as policy:
                             await app.read_managed_file()
-                            self.assertEqual(app.native_host.state.destination, 'documents')
+                            self.assertEqual(app.native_host.state.destination, 'files')
                             owner = app.readers.active
                             self.assertTrue(policy.call_args.args[0])
                             if path == comic:
@@ -137,8 +139,7 @@ class ReaderNavigationTests(unittest.TestCase):
                             owner.set_reading_mode(True)
                             app.adaptive.render()
                             self.assertTrue(policy.call_args.args[0])
-                            self.assertTrue(app.select_destination('files'))
-                            app.native_host.activate('files')
+                            self.assertTrue(app.routes.back())
                             self.assertIs(app.body, origin)
                             self.assertEqual(app.file_path, file_path)
                             self.assertFalse(policy.call_args.args[0])

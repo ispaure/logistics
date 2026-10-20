@@ -57,6 +57,18 @@ class PrivateSessionTests(unittest.TestCase):
             first.show_view(first.crypt_view, title='Reading appearance')
             self.assertEqual(present.call_args.kwargs['title'], 'Reading appearance')
 
+    def test_nested_document_headers_show_filename_and_keep_source_path(self):
+        (self.local / 'nested').mkdir()
+        with patch.object(self.app, 'show_view', wraps=self.app.show_view) as present:
+            owner = self.open('nested/First.md', b'# First')
+            self.assertEqual(present.call_args.kwargs['title'], 'First.md')
+            self.assertEqual(owner.session.title, 'First.md')
+            self.assertIn('First.md', owner.crypt_title.text)
+            self.assertNotIn('nested/', owner.crypt_title.text)
+            self.assertEqual(owner.crypt_reader.key, 'nested/First.md')
+            self.app.private_sessions.activate(owner.session.id)
+            self.assertEqual(present.call_args.kwargs['title'], 'First.md')
+
     def test_unified_recent_matches_local_source_and_keeps_live_unsaved_edits(self):
         from logisticsmobile.document_sources import reopen_file
         owner = self.open('live-draft.md', b'# Original')
@@ -145,7 +157,7 @@ class PrivateSessionTests(unittest.TestCase):
                             await asyncio.sleep(.01)
                         self.assertTrue(started.is_set())
                         if destination == 'documents':
-                            self.app.show_documents()
+                            self.app.show_documents(destination=destination)
                             self.app.editor.value = 'Ordinary draft written during opening'
                         else:
                             self.app.show_settings()
@@ -196,7 +208,7 @@ class PrivateSessionTests(unittest.TestCase):
                 self.assertTrue(await task)
                 self.assertIsNotNone(self.app.private_sessions.active)
                 self.assertEqual(self.app.provider_sessions().active.crypt_text.value, 'Requested provider document')
-                self.assertEqual(self.app.native_host.state.destination, 'documents')
+                self.assertEqual(self.app.native_host.state.destination, 'files')
             finally:
                 release.set()
                 await task

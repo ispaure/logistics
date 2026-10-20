@@ -96,7 +96,8 @@ class StorageReaderOpeningTests(unittest.TestCase):
                         self.assertEqual(reader.pdf.count, 3)
                     else:
                         self.assertEqual(len(reader.labels), 2)
-                self.assertEqual(app.native_host.state.destination, 'documents')
+                expected = 'documents' if entry == 'drawer' else 'files' if entry == 'files' else 'home'
+                self.assertEqual(app.native_host.state.destination, expected)
                 if storage == 'localcrypt':
                     for path in private.rglob('*'):
                         if path.is_file():
@@ -120,7 +121,7 @@ class StorageReaderOpeningTests(unittest.TestCase):
             try:
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
                 app.show_cloud(present=False)
-                app.show_documents()
+                app.show_documents(destination='documents')
                 drawer = app.adaptive.browser('documents')
                 local = app.private_root / 'LocalFiles'
                 local.mkdir(exist_ok=True)

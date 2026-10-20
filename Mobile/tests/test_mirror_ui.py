@@ -463,7 +463,7 @@ class MirrorUITests(unittest.TestCase):
                         await asyncio.sleep(.01)
                     self.assertTrue(started.is_set())
                     self.assertTrue(app.transfer_busy)
-                    app.show_documents()
+                    app.show_documents(destination='documents')
                     owner = app.editor_view
                     self.assertIn(owner.document_view.transfer_banner, owner.document_view.children)
                     app.editor.value = 'Draft during pull'

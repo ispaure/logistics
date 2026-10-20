@@ -83,7 +83,7 @@ def show_documentation(app, directory=None, path=None):
         app.loop.create_task(app.open_crypt(copies=LocalTextCopies(LocalFiles(path.parent)), key=path.name))
 
     owner = DocumentationReader(app, directory, path, width=app.adaptive.content_width('settings', margin=0),
-                             font_size=int(app.preferences.values['font_size']), render=markdown_preview, open_file=open_file)
+                             font_size=int(app.preferences.values['markdown_font_size']), render=markdown_preview, open_file=open_file)
     if app.show_view(owner.view, route='documentation', title='Documentation') is not False:
         app.documentation = owner
     return owner

@@ -7,6 +7,7 @@ from commonUtils.ui.native.editor_search import EditorSearch
 from commonUtils.ui.native.code_input import CodeInput
 from commonUtils.formats.code_syntax import LANGUAGES
 from .markdown_editor import FormattedMarkdownInput
+from logisticsmobile.font_scaling import bind, font_size
 
 FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_button',
           'save_button', 'export_button', 'document_view')
@@ -32,7 +33,8 @@ class TextEditorView:
         self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, height=48))
         self.editor = CodeInput(loop=app.loop, on_change=self.text_changed,
             highlighting=app.preferences.values.get('android_eink') != 'true',
-            style=Pack(flex=1, font_size=int(app.preferences.values['font_size']), margin_top=4))
+            style=Pack(flex=1, font_size=font_size(app, 'text'), margin_top=4))
+        bind(app, self.editor, lambda: self.session.kind if self.session else 'text')
         if self.editor.backend_name.startswith('toga_iOS.'):
             # The source editor constructs its own native text view, bypassing
             # the ordinary Toga input creation hook used by host appearance.
@@ -113,14 +115,18 @@ class TextEditorView:
             self.status.text = status
         dirty = bool(self.document.modified)
         self.save_button.enabled = dirty
-        if dirty != self.save_visible:
+        from logisticsmobile.document_sources import folder_action
+        folder_actions = folder_action(self.app, self.session)
+        menu_state = dirty, bool(folder_actions)
+        if menu_state != getattr(self, '_action_state', None):
+            self._action_state = menu_state
             self.save_visible = dirty
             self.actions.dispose()
-            actions = [item for item in self.action_items if dirty or item[0] != 'Save']
+            actions = [item for item in self.action_items if dirty or item[0] != 'Save'] + folder_actions
             self.actions = self.app.presentation.ActionMenu(self.actions_button, self, actions)
-            if dirty:
+            if dirty and self.save_button not in self.toolbar.children:
                 self.toolbar.insert(1, self.save_button)
-            elif self.save_button in self.toolbar.children:
+            elif not dirty and self.save_button in self.toolbar.children:
                 self.toolbar.remove(self.save_button)
         conflict = not getattr(self.document, 'private', False) and self.document.conflict
         if conflict and self.conflict_copy not in self.conflict_actions.children:
@@ -202,13 +208,15 @@ class TextEditorView:
         """Keep one editing surface at every width, including restored old splits."""
         if self.session is None:
             return
+        self.editor.style.font_size = font_size(self.app, self.session.kind)
         rich = self.session.kind == 'markdown' and self.session.view.get('markdown_editor', 'formatted') == 'formatted'
         surface = self.editor
         if rich:
             if self.formatted is None:
                 self.formatted = FormattedMarkdownInput(self.formatted_changed,
-                    font_size=int(self.app.preferences.values['font_size']),
+                    font_size=font_size(self.app, 'markdown'),
                     stylesheet=self.app.presentation.css_variables())
+                bind(self.app, self.formatted.view, 'markdown', web=True, formatted=self.formatted)
             try:
                 self.formatted.load(self.document.text)
                 surface = self.formatted.view

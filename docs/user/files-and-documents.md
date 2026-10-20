@@ -81,7 +81,8 @@ continue through the normal reader/editor document hosts. **Workspace actions** 
 operations and their results.
 The **Documents** menu lists open editors/readers. Switching destinations keeps
 those documents alive. Feature-specific actions appear only for eligible selections.
-Documents inside a workspace show their filename and storage in their tab title,
+Open document titles show the filename including its extension, without the folder
+path. Documents inside a workspace also show their storage in their tab title,
 for example **guide.pdf [Local: Books]** or
 **guide.pdf [Remote: Books (🕵️ Session-Only)]**. LocalCrypt documents use **Local**
 with the same session-only marker: the encrypted copy is local, while its opened

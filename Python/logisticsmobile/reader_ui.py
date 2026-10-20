@@ -61,7 +61,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.register_transfer_status(self.library_view)
         if present:
             title = self.session.title if getattr(self, 'session', None) is not None else 'Books & Comics'
-            self.show_view(self.library_view, destination='documents', route='library', title=title)
+            self.show_view(self.library_view, route='library', title=title)
 
 
 
@@ -254,7 +254,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             return
         if record['kind'] == 'epub':
             content = await asyncio.to_thread(chapter_html, reader, index,
-                int(self.preferences.values['font_size']), margin=int(self.preferences.values['reading_margin']),
+                int(self.preferences.values['epub_font_size']), margin=int(self.preferences.values['reading_margin']),
                 theme=self.preferences.values['reading_theme'], links=True, **typography_options(self.preferences.values))
             if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
                 return
@@ -297,6 +297,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
                 on_event=lambda action, value: self.epub_event(reader, epoch, index, action, value),
                 on_link=lambda href: self.epub_link(reader, epoch, index, href))
+            from .font_scaling import bind
+            bind(self, self.epub_view, 'epub', web=True)
             view = self.epub_view
         from .page_animation import page_direction, begin_page_slide, finish_page_slide
         direction = 0

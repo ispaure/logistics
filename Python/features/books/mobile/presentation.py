@@ -94,7 +94,7 @@ SCRIPT = r'''
  const clearSelectionCache = () => {selectedCache=null;};
  const rememberSelection = () => {const range=selectedRange();if(range) selectedCache=range;};
  const resized = () => {const range=selectedRange() || selectedCache;layout();if(range) seek(range.start,range.end); else seek(anchor);};
- const touchStart=e=>{const t=e.touches[0];touch=t?{x:t.clientX,y:t.clientY}:null;};
+ const touchStart=e=>{const t=e.touches.length===1?e.touches[0]:null;touch=t?{x:t.clientX,y:t.clientY}:null;};
  const touchMove=e=>{if(!selectedRange()) e.preventDefault();};
  const touchEnd=e=>{
    if(!touch || selectedRange()) return;

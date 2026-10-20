@@ -8,7 +8,7 @@ from commonUtils.persistence import atomic_write_bytes
 
 from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_SIZES, validate as validate_reading
 
-DEFAULTS = {'android_eink': 'false', 'font_size': '16', 'restore_last_document': 'true', 'last_document': '',
+DEFAULTS = {'android_eink': 'false', 'font_size': '16', 'markdown_font_size': '16', 'text_font_size': '16', 'epub_font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'document_card_overview': 'false', 'show_legacy': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false',
             'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
@@ -41,6 +41,10 @@ class Preferences:
                 for key in DEFAULTS:
                     if key not in {'show_legacy', 'document_card_overview'} and parser.has_option('Mobile', key):
                         self.values[key] = parser['Mobile'][key]
+                # Seed each new category from the old shared size only when absent.
+                for key in ('markdown_font_size', 'text_font_size', 'epub_font_size'):
+                    if not parser.has_option('Mobile', key):
+                        self.values[key] = self.values['font_size']
                 self.validate(self.values)
                 # Older session-only imports persisted package/remote labels.
                 # Remove those associations as part of the privacy migration.
@@ -63,7 +67,7 @@ class Preferences:
             raise ValueError('Invalid session speech lock-screen preference.')
         if values['android_eink'] not in {'true', 'false'}:
             raise ValueError('Invalid Android E Ink preference.')
-        if values['font_size'] not in FONT_SIZES:
+        if any(values[key] not in FONT_SIZES for key in ('font_size', 'markdown_font_size', 'text_font_size', 'epub_font_size')):
             raise ValueError('Choose a supported font size.')
         if values['restore_last_document'] not in {'true', 'false'}:
             raise ValueError('Invalid document restore preference.')
@@ -97,6 +101,8 @@ class Preferences:
             raise ValueError('Repair or move the preserved preferences file before saving settings.')
         # Retain retired keys for INI compatibility, but keep cards and the saved legacy toggle off.
         changes = dict(changes, show_legacy='false', document_card_overview='false')
+        for key in ('markdown_font_size', 'text_font_size', 'epub_font_size'):
+            changes.setdefault(key, self.values[key])
         values = dict(self.values, **changes)
         self.validate(values)
         # Session-only associations must never reach disk, including through autosave.

@@ -30,12 +30,12 @@ def assert_preview_only_ui(test, owner):
         test.assertNotIn(forbidden, text)
     actions = {label for label, _ in owner.crypt_actions_menu.actions}
     if owner.crypt_reader.editable:
-        expected = {'Reader tools…', 'Close private document', 'All documents'}
+        expected = {'Reader tools…', 'Close private document', 'All documents', 'Show in folder'}
         if owner.crypt_reader.kind in {'.md', '.markdown'}:
             expected.add('Open beside another document')
         test.assertEqual(actions, expected)
     elif getattr(owner.crypt_reader, 'image_document', False):
-        test.assertEqual(actions, {'Reader tools…', 'Fit image', 'Close private document', 'All documents'})
+        test.assertEqual(actions, {'Reader tools…', 'Fit image', 'Close private document', 'All documents', 'Show in folder'})
 
 
 class RemoteClient:
@@ -340,7 +340,10 @@ class RemoteReaderTests(unittest.TestCase):
                             break
                     self.assertIn('Checking remote file and connection', app.cloud_status.value)
                     self.assertNotIn(' · 0s', app.cloud_status.value)
-                    self.assertIn(app.cloud_view, app.body.children)
+                    # Opening retains Home beneath the existing loading route.
+                    destination = app.native_host.state.destination
+                    self.assertEqual(destination, 'home')
+                    self.assertTrue(app.routes.screens[destination][-1][0].startswith('file-loading:'))
                     app.cancel_cloud()
                     self.assertFalse(await asyncio.wait_for(task, 2))
                     self.assertIn('cancelled', app.cloud_status.value)

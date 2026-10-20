@@ -308,7 +308,14 @@ Workspace saves skip repeated durable publication only when the serialized
 ordinary-session state and on-disk revision are unchanged. The revision includes
 device/inode, size, nanosecond modification/change times, mode and link count.
 Deletion or replacement forces a write; linked paths are still rejected before
-checking the cache. Draft recovery writes keep their existing durability policy.
+checking the cache. Managed text recovery likewise skips publication only when
+name, text, encoding, original bytes and the recovery file revision match the
+last successful durable checkpoint. Missing or changed files force publication;
+failed writes are retried and linked paths remain rejected. Changed drafts keep
+file and directory flushes before navigation is allowed. Settings categories
+checkpoint once before changing selection, including in wide layouts; compact
+presentation reuses that guard. Destination selection checkpoints text first and
+saves workspace state once afterward. These paths are shared by Android and iOS.
 `Python/tests/test_mobile_workspace.py` covers view changes and external edits.
 
 ## Workspaces refresh
@@ -509,3 +516,12 @@ contents. Internal Local files and Shared
 files location identities remain distinct for existing pins, managed workflows,
 provider documents and history, but share one source control. No storage migration
 is involved; Android's collection root is unchanged.
+
+## Per-format mobile text sizing
+
+`logisticsmobile.font_scaling` binds native iOS and Android pinch gestures to
+`markdown_font_size`, `text_font_size` and `epub_font_size` (12–32). Preferences
+seed missing category sizes from the legacy `font_size` and preserve them on the
+next save. Settings and gestures refresh registered surfaces in place, including
+provider readers; WebViews reflow their DOM without replacing editor contents.
+EPUB reflow uses the existing resize bridge to retain its text anchor.

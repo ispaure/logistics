@@ -638,13 +638,15 @@ class FolderHubTests(unittest.TestCase):
                 app.browser_file_selected(row)
                 origin = app.body
                 app.loop.run_until_complete(app.read_managed_file())
-                self.assertEqual(app.native_host.state.destination, 'documents')
+                self.assertEqual(app.native_host.state.destination, 'files')
                 self.assertEqual(app.private_sessions.active.crypt_text.value, '# Read while pulling')
                 self.assertTrue(app.cloud_busy and app.transfer_busy)
                 self.assertIs(app.transfer_controller()._transfer_cancel, cancel)
                 app.transfer_busy = False
                 app.set_cloud_busy(False)
                 self.assertTrue(app.folder_browse_button.enabled)
+                self.assertTrue(app.routes.back())
+                self.assertIs(app.body, origin)
                 app.show_home()
                 app.select_destination('files')
                 self.assertIs(app.body, origin)

@@ -234,7 +234,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.loop.create_task(run(self))
 
     def select_destination(self, destination):
-        if not self.checkpoint():
+        if not self.checkpoint(save_workspace=False):
             return False
         if destination != 'files':
             self.retire_private_comic_batch()
@@ -444,11 +444,12 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         return activate
 
     async def resume_library_session(self, session):
+        destination = self.native_host.state.destination
         try:
             await self.open_book(session.resource)
         except (OSError, ValueError, KeyError, TypeError):
             if (session.id in self.workspace.sessions and self.workspace.active == session.id
-                    and self.native_host.state.destination == 'documents'):
+                    and self.native_host.state.destination == destination):
                 self.show_unavailable_session(session.id)
 
     def show_unavailable_session(self, key):
@@ -458,7 +459,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         box.add(toga.Button('Try again', on_press=self.session_opener(key), style=Pack(height=48)))
         box.add(toga.Button('Remove from open documents', on_press=self.session_closer(key), style=Pack(height=48)))
         box.add(toga.Button('All documents', on_press=self.show_documents_hub, style=Pack(height=48)))
-        self.show_view(box, destination='documents', route='unavailable:' + key, title='Unavailable document')
+        self.show_view(box, route='unavailable:' + key, title='Unavailable document')
 
     def session_closer(self, key):
         def close(widget=None, **kwargs):
@@ -490,7 +491,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         box.add(toga.Button('Cancel', on_press=lambda widget, **kw: self.cancel_close_session(key), style=Pack(height=48)))
         self.close_notice = toga.Label('', style=Pack(margin_top=8))
         box.add(self.close_notice)
-        return self.show_view(box, checkpoint=False, route='close:' + key, destination='documents', title='Close document')
+        return self.show_view(box, checkpoint=False, route='close:' + key, title='Close document')
 
     def cancel_close_session(self, key):
         owner = self.text_views.get(key)
@@ -622,7 +623,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         except (OSError, ValueError) as error:
             self.recovery_notice.text = str(error)
 
-    def show_documents(self, widget=None, *, resume=False, edit=False, destination='documents', **kwargs):
+    def show_documents(self, widget=None, *, resume=False, edit=False, destination=None, **kwargs):
         if self.current is None:
             self.new_document()
         if self.current is None:
@@ -649,7 +650,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
     def show_settings(self, widget=None, *, present=True, rebuild=False, **kwargs):
         from .settings_ui import SettingsNavigation, settings_sections
         if rebuild or not hasattr(self, 'settings_navigation'):
-            for name in ('font_choice', 'restore_choice', 'clear_documents_choice'):
+            for name in ('font_choice', 'markdown_font_size_choice', 'text_font_size_choice', 'epub_font_size_choice', 'restore_choice', 'clear_documents_choice'):
                 self.__dict__.pop(name, None)
             self.settings_navigation = SettingsNavigation(self, settings_sections(self))
         if present:
@@ -704,18 +705,20 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
 
     def save_preferences(self, widget=None, **kwargs):
         try:
-            previous_font = self.preferences.values['font_size']
+            from .font_scaling import FONT_KEYS, refresh
+            previous_fonts = tuple(self.preferences.values[key] for key in FONT_KEYS)
             changes = {}
-            if hasattr(self, 'font_choice'):
-                changes['font_size'] = self.font_choice.value
+            for key in FONT_KEYS:
+                choice = getattr(self, key + '_choice', None)
+                if choice is not None:
+                    changes[key] = choice.value
             for name, key in (('clear_documents_choice', 'clear_unmodified_documents_on_restart'),
                               ('restore_choice', 'restore_last_document')):
                 if hasattr(self, name):
                     changes[key] = 'true' if getattr(self, name).value else 'false'
             self.preferences.save(**changes)
-            if self.preferences.values['font_size'] != previous_font:
-                self.editor.style.font_size = int(self.preferences.values['font_size'])
-                self.refresh_document_overview()
+            if tuple(self.preferences.values[key] for key in FONT_KEYS) != previous_fonts:
+                refresh(self)
             self.settings_status.text = 'Preferences saved on this device.'
         except (OSError, ValueError) as error:
             self.settings_status.text = str(error)
@@ -729,7 +732,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if type(self._impl).__module__.startswith('toga_android.'):
             self.refresh_native_theme()
         self.refresh_folder_visibility()
-        self.editor.style.font_size = int(self.preferences.values['font_size'])
+        from .font_scaling import refresh
+        refresh(self)
         self.refresh_document_overview()
         self.show_settings(rebuild=True)
 
@@ -737,7 +741,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if self.current is None or not self.checkpoint():
             return
         try:
-            content = markdown_preview(self.current.text, int(self.preferences.values['font_size']))
+            from .font_scaling import font_size
+            content = markdown_preview(self.current.text, font_size(self, self.editor_view.session.kind))
         except ValueError as error:
             self.status.text = str(error)
             return
@@ -745,6 +750,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if owner.preview is None:
             owner.preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
                                          style=Pack(flex=1))
+        from .font_scaling import bind
+        bind(self, owner.preview, lambda: owner.session.kind, web=True)
         self.preview = owner.preview
         self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
         owner.session.view['markdown_mode'] = 'preview'
@@ -759,11 +766,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if owner.preview_box is None:
             from .control_icons import icon_button
             owner.preview_edit = icon_button('edit', 'Edit Markdown', on_press=back_to_editor)
-            from .action_menu import ActionMenu
             owner.preview_actions_button = icon_button('more', 'Document actions')
-            owner.preview_actions = ActionMenu(owner.preview_actions_button, owner, [
-                ('Close document', lambda: self.request_close_session(owner.session.id)),
-                ('Delete document…', lambda: self.request_delete_document(owner.session.id))])
             owner.preview_toolbar = toga.Box(children=[owner.preview_edit,
                 toga.Box(style=Pack(flex=1)), owner.preview_actions_button], style=Pack(direction=ROW))
             owner.preview_box = toga.Box(children=[
@@ -773,6 +776,14 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             owner.preview_box._native_reader_toolbar = owner.preview_toolbar
             owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.markdown_speech.button,
                                                                owner.preview_actions_button]
+        from .action_menu import ActionMenu
+        from .document_sources import folder_action
+        if hasattr(owner, 'preview_actions'):
+            owner.preview_actions.dispose()
+        owner.preview_actions = ActionMenu(owner.preview_actions_button, owner,
+            folder_action(self, owner.session) + [
+                ('Close document', lambda: self.request_close_session(owner.session.id)),
+                ('Delete document…', lambda: self.request_delete_document(owner.session.id))])
         from .markdown_speech import MarkdownSpeech
         speech = getattr(owner, 'markdown_speech', None)
         if speech is None:
@@ -807,7 +818,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
     def open_document(self, key):
         opened = False
         previous_view = self.document_view
-        displaying = (hasattr(self, 'routes') and previous_view in self.routes.body('documents').children)
+        displaying = (hasattr(self, 'routes') and previous_view in self.routes.body().children)
         self.editor_view.capture()
         self.loading = True
         try:
@@ -905,7 +916,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if self.checkpoint():
             self.editor_view.refresh_status()
 
-    def checkpoint(self, *args, **kwargs):
+    def checkpoint(self, *args, save_workspace=True, **kwargs):
         if getattr(self, '_startup_in_progress', False) and not hasattr(self, 'current'):
             return True
         if getattr(self, '_reset_scheduled', False):
@@ -919,7 +930,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             return not self.current.modified
         try:
             self.store.checkpoint(self.current)
-            self.save_workspace()
+            if save_workspace:
+                self.save_workspace()
             return True
         except (OSError, ValueError) as error:
             self.status.text = 'Could not preserve edits: ' + str(error)
@@ -1126,12 +1138,15 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.private_sessions = PrivateSessions(self)
         return self.private_sessions
 
-    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, destination='documents', privacy_gate=None, edit=False, **kwargs):
+    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, destination=None, privacy_gate=None, edit=False, **kwargs):
         copies = copies or self.crypt_copies
         key = key if key is not None else self.crypt_labels.get(self.crypt_selector.value)
         if key is None:
             return False
-        return await self.provider_sessions().open(copies, key, prepared=prepared, destination=destination, privacy_gate=privacy_gate, edit=edit)
+        from .document_sources import opening_status
+        with opening_status(self, dict(key=key), destination=destination):
+            await asyncio.sleep(0)
+            return await self.provider_sessions().open(copies, key, prepared=prepared, destination=destination, privacy_gate=privacy_gate, edit=edit)
 
     def private_dirty(self):
         return self.provider_sessions().dirty()
@@ -1191,7 +1206,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         box.add(toga.Button('Save and close', on_press=save, style=Pack(height=48)))
         box.add(toga.Button('Discard and close', on_press=owner.discard_crypt, style=Pack(height=48)))
         box.add(toga.Button('Cancel', on_press=owner.resume_crypt, style=Pack(height=48)))
-        self.show_view(box, destination='documents', route='private-close:' + owner.session.id, title='Close private document')
+        self.show_view(box, route='private-close:' + owner.session.id, title='Close private document')
 
 
 def main():

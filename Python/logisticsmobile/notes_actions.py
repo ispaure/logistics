@@ -119,7 +119,7 @@ async def offer_notes(app, entry, box, button, status):
                 if vault_root(provider, root, rows) is None:
                     raise ValueError('This folder no longer contains an .obsidian directory.')
                 from .obsidian import open_vault
-                await open_vault(app, provider, root, 'documents', title=entry['name'], rows=rows)
+                await open_vault(app, provider, root, title=entry['name'], rows=rows)
             except (OSError, ValueError) as error:
                 status.text = str(error)[:180]
         button.on_press = open_notes

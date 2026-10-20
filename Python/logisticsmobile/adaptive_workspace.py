@@ -100,6 +100,8 @@ class AdaptiveWorkspace:
     def present(self, view, *, route=None, title=''):
         from toga_iOS.container import ControlledContainer
         adapter = self.app.native_host.adapter
+        if self.detail_routes and self.detail_routes[-1][0].startswith('file-loading:'):
+            self.trim_details(len(self.detail_routes) - 1)
         route = route or (self.detail_routes[-1][0] if self.detail_routes else 'detail')
         existing = next((index for index, item in enumerate(self.detail_routes) if item[0] == route), None)
         self.changing = True
@@ -145,15 +147,21 @@ class AdaptiveWorkspace:
             self.app.body = self.app.routes.roots['documents']
 
     def clear_details(self):
+        self.trim_details(0)
+
+    def trim_details(self, count):
+        """Retire secondary panels while retaining the earlier document views."""
         if self.split is None:
             return
         self.changing = True
         try:
-            self.secondary.setViewControllers([self.placeholder_container.controller], animated=False)
-            for _, _, container in self.detail_routes:
+            retained = self.detail_routes[:count]
+            self.secondary.setViewControllers([item[2].controller for item in retained]
+                or [self.placeholder_container.controller], animated=False)
+            for _, _, container in self.detail_routes[count:]:
                 self.app.native_host.adapter.release_pane(container)
-            self.detail_routes.clear()
-            self.app.native_host.state.routes['documents'] = []
+            self.detail_routes = retained
+            self.app.native_host.state.routes['documents'] = [item[0] for item in retained]
         finally:
             self.changing = False
 

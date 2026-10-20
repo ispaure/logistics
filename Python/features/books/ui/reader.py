@@ -259,10 +259,10 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.text.book = book
         self.text.show()
         self.empty_panel.hide()
-        self.title.setText(book.title)
+        self.title.setText(book.path.name)
         self.title.setToolTip(book.title)
         if self.reader_window() is not None:
-            self.reader_window().setWindowTitle(('🕵️ Private - ' if self.private else '') + book.title + ' — EPUB reader')
+            self.reader_window().setWindowTitle(('🕵️ Private - ' if self.private else '') + book.path.name)
             self.reader_window().setWindowFilePath(str(book.path))
         if not self.private:
             self._remember(book.path)
@@ -504,13 +504,13 @@ class BooksPage(Bookmarks, qt.QWidget):
         def saved(result):
             book, backup = result
             self.book = self.text.book = book
-            self.title.setText(book.title)
+            self.title.setText(book.path.name)
             self.title.setToolTip(book.title)
             self._current = current
             self._render(location=location)
             self.status.setText(f'Metadata saved. Original backup: {backup.name}' if backup else 'Encrypted metadata saved.')
             if self.reader_window() is not None:
-                self.reader_window().setWindowTitle(('🕵️ Private - ' if self.private else '') + book.title + ' — EPUB reader')
+                self.reader_window().setWindowTitle(('🕵️ Private - ' if self.private else '') + book.path.name)
         self._run(lambda cancelled: save_metadata(self.book, changes, cancelled=cancelled), saved,
                   'Saving encrypted metadata…' if self.private else 'Saving metadata and backing up the original…')
 

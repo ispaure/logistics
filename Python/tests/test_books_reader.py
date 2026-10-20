@@ -34,6 +34,13 @@ class ReaderTests(QtTestCase):
         self.page._loaded(EPUBBook(self.path))
         self.app.processEvents()
 
+    def test_reader_header_and_window_use_filename_with_extension(self):
+        self.assertEqual(self.page.title.text(), self.path.name)
+        window = BookWindow(EPUBBook(self.path))
+        self.addCleanup(window.deleteLater)
+        self.assertEqual(window.windowTitle(), self.path.name)
+        self.assertEqual(Path(window.windowFilePath()).resolve(), self.path.resolve())
+
     def test_arrows_from_chapter_sidebar_and_wheel_turn_pages_without_scrolling(self):
         from PySide6.QtTest import QTest
         from unittest.mock import Mock
@@ -320,7 +327,7 @@ class ReaderTests(QtTestCase):
             self.page.edit_metadata()
         self.wait_idle(self.page)
         self.assertEqual(EPUBBook(self.path).title, 'Edited from reader')
-        self.assertEqual(self.page.title.text(), 'Edited from reader')
+        self.assertEqual(self.page.title.text(), 'book.epub')
         self.assertTrue((self.folder / 'book.epub.bak').is_file())
 
     def test_metadata_form_keeps_additional_titles_and_languages(self):
