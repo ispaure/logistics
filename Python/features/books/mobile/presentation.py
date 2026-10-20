@@ -100,7 +100,8 @@ SCRIPT = r'''
  const rememberSelection = () => {const range=selectedRange();if(range) selectedCache=range;};
  const resized = () => {const range=selectedRange() || selectedCache;layout();if(range) seek(range.start,range.end); else seek(anchor);};
  const touchStart=e=>{const t=e.touches.length===1?e.touches[0]:null;touch=t?{x:t.clientX,y:t.clientY}:null;};
- const touchMove=e=>{if(!selectedRange()) e.preventDefault();};
+ // Two-finger movement belongs to the host's text-size pinch recognizer.
+ const touchMove=e=>{if(e.touches.length===1 && !selectedRange()) e.preventDefault();};
  const touchEnd=e=>{
    if(!touch || selectedRange()) return;
    const t=e.changedTouches[0], dx=t.clientX-touch.x,dy=t.clientY-touch.y;touch=null;

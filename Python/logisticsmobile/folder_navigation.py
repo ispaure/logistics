@@ -32,7 +32,7 @@ class FolderScreen:
 
 class FolderPreview:
     """Read-only parent contents, ready before UIKit begins an interactive pop."""
-    def __init__(self, app, entry):
+    def __init__(self, app, entry, *, captured=False):
         from .browser_ui import FileBrowser
         self.app, self.entry = app, entry
         self.provider = entry.browser.search_provider
@@ -65,7 +65,20 @@ class FolderPreview:
             if self.sidebar_snapshot is not None:
                 left._impl.native.addSubview(self.sidebar_snapshot)
                 self.sidebar_snapshot.frame = left._impl.native.bounds
-        self.task = app.loop.create_task(self.prepare())
+        self.task = None
+        if captured:
+            # Keep an actual list in the parent controller before the live
+            # browser moves into its child. No disk/network refresh is needed.
+            self.browser.mode = entry.browser.mode
+            self.browser.search.on_change = None
+            self.browser.search.value = entry.query
+            self.browser.sort.value = entry.browser.sort.value
+            self.browser.set_tree(entry.browser.tree)
+            self.browser.selected = entry.selected
+            self.browser.highlight_selection()
+            self.status.value = ''
+        else:
+            self.task = app.loop.create_task(self.prepare())
 
     async def prepare(self):
         try:
@@ -86,7 +99,8 @@ class FolderPreview:
             self.status.value = 'Return to this folder to refresh.'
 
     def close(self):
-        self.task.cancel()
+        if self.task is not None:
+            self.task.cancel()
         if self.sidebar_snapshot is not None:
             self.sidebar_snapshot.removeFromSuperview()
             self.sidebar_snapshot = None
@@ -147,6 +161,10 @@ class FolderNavigation:
             entry.selected = entry.browser.selected
             scroll = getattr(entry.browser, '_scroll', None)
             entry.scroll = scroll.vertical_position if scroll is not None else 0
+            if getattr(entry.browser, 'tree', None) is not None:
+                if entry.preview is not None:
+                    entry.preview.close()
+                entry.preview = FolderPreview(routes.app, entry, captured=True)
 
     def forget(self, destination, route):
         entry = self.screens.pop((destination, route), None)
@@ -177,12 +195,15 @@ class FolderNavigation:
         paths = ['']
         for part in PurePosixPath(info.path).parts:
             paths.append('/'.join(filter(None, (paths[-1], part))))
+        entry_source, entry_path = getattr(info.view, '_folder_entry_location', (None, None))
+        if entry_source == info.source and entry_path in paths:
+            paths = paths[paths.index(entry_path):]
         desired = [FolderScreen(info.view, info.browser, info.navigate, info.source, path, info.kind,
                                base=info.base, scope=info.scope)
                    for path in paths]
         screens = routes.screens[destination]
-        # Storage root returns directly to the Workspaces overview, including
-        # entry through a pinned folder's options screen.
+        # A workspace shortcut returns directly to the overview. Only folders
+        # below its entry point belong in this navigation stack.
         keep = info.base
         for entry, screen in zip(desired, screens[info.base:]):
             if entry.route != screen[0]:
@@ -213,6 +234,13 @@ class FolderNavigation:
             if entry.route in [screen[0] for screen in routes.screens[destination]]:
                 if entry.path == info.path:
                     Routes.show(routes, view, destination=destination, route=entry.route, title=title)
+                elif retained.preview is not None:
+                    panel = next(panel for route, panel, _ in routes.screens[destination]
+                                 if route == entry.route)
+                    if not panel.children:
+                        panel.add(retained.preview.view)
+                        panel.refresh()
+                        retained.preview.browser.vertical_position = retained.scroll
                 continue
             Routes.show(routes, view, destination=destination, route=entry.route, title=title)
         for route, panel, _ in routes.screens[destination]:

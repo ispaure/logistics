@@ -11,6 +11,26 @@ from test_mirror_jobs import MirrorClient
 
 
 class FolderHubTests(unittest.TestCase):
+    def test_local_workspace_entry_and_browsing_do_not_construct_cloud_controls(self):
+        from logisticsmobile.app import LogisticsMobile
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            with patch.object(app, 'show_cloud') as cloud:
+                app.select_destination('files')
+                app.native_host.activate('files')
+                app.show_locations()
+                self.assertFalse(hasattr(app, 'cloud_view'))
+                with patch.object(app, 'open_picker_folder', new_callable=AsyncMock,
+                                  return_value=True) as opened:
+                    self.assertTrue(app.loop.run_until_complete(app.browse_hub_folder('All files')))
+                    opened.assert_awaited_once()
+                cloud.assert_not_called()
+            self.assertFalse(app.folder_loading_box.children)
+
     def test_startup_rclone_tab_restores_saved_remotes_and_shows_cloud_and_lock(self):
         from logisticsmobile.app import LogisticsMobile
         from types import SimpleNamespace

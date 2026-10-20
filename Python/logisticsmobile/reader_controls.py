@@ -45,7 +45,7 @@ def comic_pages(selector, back):
 
 class ComicHeader:
     """File navigation above the page; page navigation remains in the footer."""
-    def __init__(self, browser, more, *, previous=None, following=None):
+    def __init__(self, more, *, previous=None, following=None):
         self.busy = False
         self.supported = previous is not None, following is not None
         def handler(callback):
@@ -66,7 +66,7 @@ class ComicHeader:
         self.previous = icon_button('previous_comic', 'Previous comic', on_press=handler(previous))
         self.following = icon_button('next_comic', 'Next comic', on_press=handler(following))
         self.sync(previous is not None, following is not None)
-        self.widget = toga.Box(children=[browser, toga.Box(style=Pack(flex=1)),
+        self.widget = toga.Box(children=[toga.Box(style=Pack(flex=1)),
             self.previous, self.following, more], style=Pack(direction=ROW))
 
     def sync(self, previous, following):

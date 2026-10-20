@@ -329,5 +329,7 @@ class DocumentStore:
         # Platform handles are consumed as streams, never treated as file paths.
         with provider.open(reference) as opened:
             name, stream = opened
-            content = stream.read(MAX_BYTES + 1)
+            from .loading_progress import reading_stream
+            with reading_stream(stream) as incoming:
+                content = incoming.read(MAX_BYTES + 1)
             return self.create(name, content)

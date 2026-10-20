@@ -18,6 +18,7 @@ class WindowOwnerTests(unittest.TestCase):
             manager = app.scene_manager
             manager.window_class = toga.Window
             child = manager.make_host('b' * 32)
+            self.assertIs(child.commands, app.commands)
             child.show_documents()
             self.assertNotEqual(app.current.id, child.current.id)
             self.assertIsNot(app.routes, child.routes)

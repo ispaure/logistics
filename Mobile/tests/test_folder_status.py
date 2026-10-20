@@ -1,11 +1,23 @@
 """Folder identity is independent of listing, download and failure messages."""
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
+from logisticsmobile.app import LogisticsMobile
 from logisticsmobile.browser_ui import FileBrowser
 from logisticsmobile.control_icons import icon_button
 
 
 class FolderStatusTests(unittest.TestCase):
+    def setUp(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        LogisticsMobile.storage_root = Path(directory.name)
+        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+        self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.addCleanup(self.app.loop.close)
+        self.addCleanup(self.app.main_window.close)
+
     def test_operations_update_only_the_smaller_line_below_the_folder(self):
         browser = FileBrowser()
         self.addCleanup(browser.stop)

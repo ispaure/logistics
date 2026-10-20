@@ -88,7 +88,7 @@ class FilesUI:
                         self.file_browser.stop()
                 return False
 
-    async def show_files(self, widget=None, *, local_root=False, **kwargs):
+    async def show_files(self, widget=None, *, local_root=False, location=None, **kwargs):
         # Files can be opened directly from Home/Documents on a cold launch.
         # Initial credential restoration clears private browser state; finish
         # it before constructing/publishing the new local browser controls.
@@ -121,7 +121,14 @@ class FilesUI:
                     self.file_destination.value = destination if destination in roots else 'Local files'
                 finally:
                     self.file_changing_location = False
-            if local_root or (self.cloud_busy and not self.can_browse_local(self.file_storage.value)):
+            opened = None
+            if location is not None:
+                self.files_view._folder_entry_location = location
+                self.file_browser.search.value = ''
+                self.file_browser.history.clear()
+                opened = await self.browser_file_location(location)
+            elif local_root or (self.cloud_busy and not self.can_browse_local(self.file_storage.value)):
+                self.files_view._folder_entry_location = (self.local_browser_root(), '')
                 self.file_changing_location = True
                 try:
                     self.file_storage.value = self.local_browser_root()
@@ -132,10 +139,10 @@ class FilesUI:
                 if local_root:
                     self.file_browser.search.value = ''
                     self.file_browser.history.clear()
-                await self.browse_files()
+                opened = await self.browse_files()
             self.refresh_file_source_tabs()
             self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser')
-            return
+            return opened
         if hasattr(self, 'file_browser'):
             await self.file_browser.close()
         self.file_roots = self.ordinary_file_roots()
@@ -145,6 +152,8 @@ class FilesUI:
         self.file_storage = toga.Selection(items=list(self.file_roots), style=Pack(height=48))
         self.file_storage.value = self.local_browser_root()
         self.file_location = toga.TextInput(placeholder='Folder path (empty for root)', style=Pack(height=48))
+        if location is not None:
+            self.file_storage.value, self.file_location.value = location
         self.file_selection = toga.Selection(style=Pack(height=48))
         from .browser_ui import FileBrowser as NativeBrowser
         self.file_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open)
@@ -201,10 +210,12 @@ class FilesUI:
             self.file_browser.location_bar,
             self.file_browser.scroll_container()],
             style=Pack(direction=COLUMN, margin=12, flex=1))
+        self.files_view._folder_entry_location = location or (self.local_browser_root(), '')
         self.refresh_file_source_tabs()
         self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser')
-        await self.browse_files()
+        opened = await self.browse_files()
         self.file_storage.on_change = self.change_file_storage
+        return opened
 
     def refresh_file_source_tabs(self):
         if not hasattr(self, 'file_source_tabs'):
@@ -334,6 +345,9 @@ class FilesUI:
                        route='file-details', title='File details')
 
     async def parent_file_folder(self, widget=None, **kwargs):
+        if (self.file_storage.value, self.file_path) == getattr(self.files_view, '_folder_entry_location', None):
+            self.show_locations()
+            return
         if not self.file_path and self.file_storage.value == 'Local files' and self.local_browser_root() == 'Shared files':
             return await self.browser_file_location(('Shared files', ''))
         if not self.file_path:

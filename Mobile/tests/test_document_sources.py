@@ -69,6 +69,37 @@ class DocumentSourceTests(TestCase):
 
 
 class ReopenSourceTests(IsolatedAsyncioTestCase):
+    async def test_ios_top_level_text_reopens_after_container_relocation(self):
+        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        with TemporaryDirectory() as directory:
+            private = Path(directory) / 'private'
+            documents = Path(directory) / 'Documents'
+            documents.mkdir()
+            path = documents / 'Welcome to Local.txt'
+            path.write_text('Welcome')
+            use_shared_local(private, documents)
+            self.addCleanup(_shared_local_roots.pop, private, None)
+            app = SimpleNamespace(private_root=private, open_crypt=AsyncMock(return_value=True))
+            old = '/var/mobile/Containers/Data/Application/OLD-CONTAINER/Documents/Welcome to Local.txt'
+            self.assertTrue(await reopen_file(app, dict(type='local', path=old)))
+            copies = app.open_crypt.await_args.kwargs['copies']
+            self.assertEqual(copies.provider.root, documents)
+            self.assertEqual(copies.open(path.name).text, 'Welcome')
+
+    async def test_missing_unrelated_path_is_not_retargeted_to_ios_documents(self):
+        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        from logisticsmobile.document_sources import local_document_path
+        with TemporaryDirectory() as directory:
+            private = Path(directory) / 'private'
+            documents = Path(directory) / 'Documents'
+            documents.mkdir()
+            (documents / 'notes.txt').write_text('Different file')
+            use_shared_local(private, documents)
+            self.addCleanup(_shared_local_roots.pop, private, None)
+            app = SimpleNamespace(private_root=private)
+            path = Path(directory) / 'missing' / 'notes.txt'
+            self.assertEqual(local_document_path(app, path), path)
+
     async def test_locked_remote_waits_for_matching_credentials_before_opening(self):
         app = SimpleNamespace(show_cloud=Mock(), require_remote_credentials_async=AsyncMock(return_value=False),
                               open_crypt=AsyncMock())

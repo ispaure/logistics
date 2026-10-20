@@ -22,6 +22,29 @@ class SettingsUITests(unittest.TestCase):
         self.addCleanup(app.main_window.close)
         return app
 
+    def test_settings_menu_fits_before_mounting_and_reuses_sizing_until_resize(self):
+        from logisticsmobile.settings_ui import fit_section
+        app = self.make_app()
+        menu_parents = []
+        def fit(section, width):
+            nav = app.settings_navigation
+            if section is nav.sidebar.content:
+                menu_parents.append(nav.parent)
+            return fit_section(section, width)
+        with patch.object(app.adaptive, 'content_width', return_value=390) as width, \
+                patch('logisticsmobile.settings_ui.fit_section', side_effect=fit):
+            app.show_settings()
+            nav = app.settings_navigation
+            self.assertEqual(menu_parents, [None])
+            app.select_destination('home')
+            app.select_destination('settings')
+            nav.reflow()
+            self.assertEqual(menu_parents, [None])
+            width.return_value = 360
+            nav.reflow()
+            self.assertEqual(len(menu_parents), 2)
+            self.assertIs(app.settings_navigation, nav)
+
     def test_phone_menu_defers_categories_and_about_and_reuses_existing_pages(self):
         from logisticsmobile.preferences import Preferences
         app = self.make_app()

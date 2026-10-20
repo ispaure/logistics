@@ -46,6 +46,21 @@ class AndroidBackTests(unittest.TestCase):
                 self.assertFalse(self.routes.system_back())
         self.routes.back_callback = None
 
+    def test_workspace_entry_back_returns_to_overview_after_child_history(self):
+        app = self.app
+        (app.private_root / 'LocalFiles' / 'Projects' / 'Child').mkdir(parents=True)
+        app.show_locations()
+        app.loop.run_until_complete(app.browse_hub_folder('Projects'))
+        app.loop.run_until_complete(app.browser_file_folder(
+            next(row for row in app.file_rows.values() if row['name'] == 'Child')))
+        self.assertTrue(self.routes.system_back())
+        self.settle()
+        self.assertEqual(app.file_path, 'Projects')
+        self.assertTrue(self.routes.system_back())
+        self.settle()
+        self.assertFalse(self.routes.screens['files'])
+        self.assertEqual(app.native_host.state.destination, 'files')
+
     def test_nested_settings_back_and_tab_switch_keep_independent_stacks(self):
         self.app.show_settings()
         with patch.object(self.app.adaptive, 'content_width', return_value=390):

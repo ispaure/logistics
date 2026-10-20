@@ -8,7 +8,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, END
 
-from features.lm.domain import build_request, message, validate_settings
+from features.lm.domain import build_request, conversation, message, validate_settings
 from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
 from features.lm.mobile.transport import ChatClient, ChatCancelled
 from features.lm.mobile.presentation import composer_height, transcript_document, transcript_entries, transcript_update
@@ -463,6 +463,13 @@ class ChatUI:
 
     def chat_draft_changed(self, widget, **kwargs):
         self.resize_chat_composer()
+        if (not self.chat_loading and widget.value and self.chat_current is None
+                and getattr(self, '_chat_needs_initial_selection', False)):
+            # Typing wins over a cold inventory result. Keep the new draft in
+            # memory and use the normal queued save instead of opening an older
+            # conversation (or clearing the composer) when discovery completes.
+            self._chat_needs_initial_selection = False
+            self.chat_current = conversation(self.chat_profile['settings'], profile_id='mobile')
         if not self.chat_loading and self.chat_current is not None:
             self.chat_current['draft'] = widget.value
             self.chat_store.queue_save(self.chat_current, self.loop,

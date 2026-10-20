@@ -103,6 +103,11 @@ changes within that rendering model, not a promise of a common desktop/mobile
 synchronization file format. Images, blocks and Qt document separators can affect
 platform-specific offset interpretation.
 
+The EPUB touch handler suppresses single-finger page scrolling only. Two-finger
+movement reaches the host font-size gesture, which reflows the DOM without
+changing the WebView scale. SVG-wrapped raster covers pass through the bounded
+archive-local image loader; SVG markup and active attributes are discarded.
+
 Provider text anchors and bookmarks stay controller-owned and clear on close.
 Suspend disposes provider rich/passage/spread presentation; reentry reads again
 under the originating provider's existing revision and credential checks. Private

@@ -540,7 +540,12 @@ class SettingsNavigation(toga.Box):
                          else min(320, max(240, width * .32)))
         detail_width = width - sidebar_width if self.wide else width
         self.detail_width = detail_width
-        fit_section(self.sidebar.content, sidebar_width if self.wide else width)
+        menu_width = sidebar_width if self.wide else width
+        # The category menu is static. Avoid native text reads, sizing and
+        # drawable updates for every row on each tab/resize callback.
+        if getattr(self, '_menu_fit_width', None) != menu_width:
+            fit_section(self.sidebar.content, menu_width)
+            self._menu_fit_width = menu_width
         if self.wide:
             self.sidebar.style.flex = 0
             # A partially folded Duo uses the physical seam, including rail/safe areas.

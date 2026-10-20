@@ -84,10 +84,7 @@ async def run(app):
                 expected_left=float(safe.left), expected_width=float(size.width - safe.left - safe.right))
             if not owner.reader_immersive:
                 adapter = app.native_host.adapter
-                navigation = adapter.navigation[app.native_host.destinations.index(owner.presentation_destination)]
-                menu = owner.library_view._workspace_menu_button
-                sample['native_menu'] = (navigation.topViewController.navigationItem.leftBarButtonItem
-                                         == menu._native_workspace_item)
+                sample['no_browser_menu'] = not hasattr(owner.library_view, '_workspace_menu_button')
                 bar = adapter.controller.tabBar
                 tab_rect = bar.convertRect(bar.bounds, toView=window)
                 status = owner.book_status._impl.native
@@ -130,7 +127,7 @@ async def run(app):
              and abs(item['viewport_left'] - item['expected_left']) < 2
              and abs(item['viewport_top']) < 2
              and abs(item['viewport_height'] - item['window_height']) < 2) if item['fullscreen']
-            else item['native_menu'] and item['status_accessible'] for item in report['samples'])
+            else item['no_browser_menu'] and item['status_accessible'] for item in report['samples'])
     except Exception as error:
         report['error'] = str(error)
     finally:

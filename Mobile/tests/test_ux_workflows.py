@@ -78,7 +78,9 @@ class UXWorkflowTests(unittest.TestCase):
         self.assertEqual(app.file_path, 'Notes')
         self.assertNotIn(app.file_browser.back_button, app.file_browser.navigation_controls.children)
         app.loop.run_until_complete(app.parent_file_folder())
-        self.assertEqual(app.file_path, '')
+        self.assertEqual(app.file_path, 'Notes')
+        self.assertEqual(app.routes.screens['files'], [])
+        self.assertIs(app.body, app.routes.roots['files'])
         app.choose_folder('Notes')
         buttons = [w for w in widgets(app.body) if isinstance(w, toga.Button)]
         delete = next(w for w in buttons if w.text == 'Delete local folder…')

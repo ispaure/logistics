@@ -13,6 +13,8 @@ Background memory cleanup preserves the active Markdown reading or editing
 surface when returning from sleep. Reading and formatted editing use the
 platform's default font, including the device-selected sans-serif font on Android;
 code retains a monospace font.
+Pinch Markdown to change its font size and reflow the text within the view.
+Markdown, EPUB and plain text retain separate font-size settings.
 Open the **three-dot Document actions** menu in the editor or Markdown preview
 and choose **Delete document…** to remove an app-stored document, including an
 unsaved Untitled document. Confirm the warning to close it and permanently remove

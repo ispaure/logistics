@@ -68,13 +68,12 @@ class ReaderChrome:
         actions.append(('All documents', self.app.show_documents_hub))
         self.reader_actions = FeatureCommands(self.reader_actions_button, self, actions, self.show_reader_tools)
         from .workspace_navigation import menu_button
-        browser = (menu_button(lambda widget, **kw: self.app.adaptive.show_browser(self.presentation_destination))
-                   if comic else menu_button(self.show_reader_tools, label=tools_title))
         if comic:
-            self.comic_header = ComicHeader(browser, self.reader_actions_button,
+            self.comic_header = ComicHeader(self.reader_actions_button,
                 previous=self.previous_comic_file, following=self.next_comic_file)
             self.reader_header = self.comic_header.widget
         else:
+            browser = menu_button(self.show_reader_tools, label=tools_title)
             self.reader_speech_button = icon_button('speaker', 'Read aloud', on_press=self.show_read_aloud)
             self.reader_header = toga.Box(children=[browser,
                 self.book_status,
@@ -103,8 +102,8 @@ class ReaderChrome:
             [self.reader_header, self.reader_footer, self.book_status] if comic else [self.reader_header],
             margin=16 if comic else 0, restore=self.reader_restore)
         self.library_view = self.reading_frame.widget
-        self.library_view._workspace_menu_button = self.reader_header.children[0]
         if not comic:
+            self.library_view._workspace_menu_button = browser
             self.library_view._native_reader_toolbar = self.reader_header
             self.library_view._native_reader_status = self.book_status
             self.library_view._native_reader_buttons = lambda: [self.previous_page, self.next_page,

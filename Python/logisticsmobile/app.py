@@ -296,7 +296,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if destination == 'settings':
             if not hasattr(self, 'settings_navigation'):
                 self.show_settings(present=False)
-            self.settings_navigation.reflow()
+            else:
+                self.settings_navigation.reflow()
         self.refresh_hub(destination)
         if (destination == 'documents' and adaptive is not None and adaptive.split is not None
                 and adaptive.in_detail and adaptive.detail_routes):
@@ -699,6 +700,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             for name in ('font_choice', 'markdown_font_size_choice', 'text_font_size_choice', 'epub_font_size_choice', 'restore_choice', 'clear_documents_choice'):
                 self.__dict__.pop(name, None)
             self.settings_navigation = SettingsNavigation(self, settings_sections(self))
+        # Fit the retained menu before mounting it: each changed row height
+        # otherwise lays out the entire visible Android destination again.
+        self.settings_navigation.reflow()
         if present:
             self.show_view(self.settings_navigation, destination='settings', root=True)
         else:
@@ -709,7 +713,6 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             for child in list(root.children):
                 root.remove(child)
             root.add(view)
-        self.settings_navigation.reflow()
 
     def refresh_document_overview(self):
         # Replace only the retained root, including when a detail is open.

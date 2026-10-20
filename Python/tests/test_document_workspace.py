@@ -478,7 +478,7 @@ class DocumentWorkspaceTests(QtTestCase):
             deadline = monotonic() + 5
             while reader.reader.worker is not None:
                 self.assertLess(monotonic(), deadline); self.app.processEvents(); sleep(.005)
-            self.assertIn('Sample Book', self.page.records[reader]['dock'].windowTitle())
+            self.assertEqual(self.page.records[reader]['dock'].windowTitle(), path.name)
             self.assertIs(reader.reader.reader_window(), reader)
             reader.reader.close_reader(); self.settle()
             self.assertEqual(self.page.attached_count, 0)

@@ -155,6 +155,7 @@ class ReaderFormatTests(unittest.TestCase):
                     records.append(store.import_book(LocalDocuments(), path))
                 await app.open_book(records[1]['id'])
                 owner = app.readers.active
+                self.assertFalse(hasattr(owner.library_view, '_workspace_menu_button'))
                 self.assertNotIn(owner.reader_header, owner.library_view.children)
                 owner.set_reading_mode(False)
                 self.assertLess(owner.library_view.children.index(owner.reader_header),
@@ -177,7 +178,7 @@ class ReaderFormatTests(unittest.TestCase):
                 self.assertNotIn(first.reader_header, first.library_view.children)
                 from types import SimpleNamespace
                 rows = [dict(path=name, name=name, directory=False) for name in ('01.cbz', '02.cbz', '03.cbz')]
-                provider = SimpleNamespace(root=root / 'provider', list=lambda folder='': rows)
+                provider = SimpleNamespace(root=root / 'provider', private=False, list=lambda folder='': rows)
                 def open_copy(key, **kwargs):
                     reader = PrivateReader(key, source.read_bytes())
                     reader.key = key
@@ -186,6 +187,7 @@ class ReaderFormatTests(unittest.TestCase):
                 app.show_cloud(present=False)
                 self.assertTrue(await app.open_crypt(copies=copies, key='02.cbz'))
                 private = app.private_sessions.active
+                self.assertFalse(hasattr(private.crypt_view, '_workspace_menu_button'))
                 private.toggle_private_reading_mode()
                 self.assertTrue(private.comic_header.previous.enabled)
                 self.assertTrue(private.comic_header.following.enabled)

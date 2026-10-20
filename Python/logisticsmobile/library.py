@@ -4,7 +4,8 @@ from collections import OrderedDict
 from copy import deepcopy
 from threading import RLock
 from commonUtils.runtime.archive_source import LocalArchiveSource
-from commonUtils.runtime.streams import iter_chunks, file_sha256
+from commonUtils.runtime.streams import iter_chunks
+from .loading_progress import file_sha256, reading_stream
 import json
 import os
 from pathlib import Path
@@ -185,7 +186,7 @@ class LibraryStore(LibraryEdits):
                     raise ValueError('Import an EPUB or CBZ/ZIP comic.')
                 kind = 'epub' if suffix == '.epub' else 'comic'
                 digest, length = sha256(), 0
-                with NamedTemporaryFile(dir=self.root, delete=False) as stream:
+                with NamedTemporaryFile(dir=self.root, delete=False) as stream, reading_stream(incoming) as incoming:
                     temporary = Path(stream.name)
                     for chunk in iter_chunks(incoming):
                         length += len(chunk)

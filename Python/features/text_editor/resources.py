@@ -33,9 +33,10 @@ class LocalTextCopies:
         from commonUtils.runtime.local_files import LocalFiles
         return isinstance(self.provider, LocalFiles)
 
-    def open(self, key, *, password='', cancelled=lambda: False):
+    def open(self, key, *, password='', cancelled=lambda: False, read_provider=None):
         from commonUtils.runtime.resource_selection import ResourceTextSession
-        session = ResourceTextSession.open(self.provider, key, cancelled=cancelled)
+        session = ResourceTextSession.open(read_provider if read_provider is not None else self.provider,
+                                          key, cancelled=cancelled)
         return TextReader(session.text.name, session.text.data, key=session.path, revision=session.text.revision)
 
     def save(self, reader, text, *, cancelled=lambda: False):

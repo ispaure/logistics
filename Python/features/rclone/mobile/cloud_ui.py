@@ -573,6 +573,10 @@ class CloudUI(LocalCryptUI):
             associations[item['package_name']] = dict(zip=item['package_name'], remotes=item['remotes'])
         available = {copy['remote'] for entry in (self.folder_choices() if choices is None else choices).values()
                      for copy in entry.get('copies', ()) if copy.get('remote')}
+        if choices is None:
+            # Loaded packages are authoritative while folder discovery is still
+            # pending. An explicit choices snapshot still scopes its own rows.
+            available.update(self.loaded_remote_names())
         for item in associations.values():
             if item['zip'] in ('Network shares', 'Session network shares'):
                 continue
@@ -897,9 +901,8 @@ class CloudUI(LocalCryptUI):
                     self.remote_browser.location_bar.update(folder, remote=True,
                         encrypted=remote in self.cloud_crypt_remotes, unlocked=True,
                         name=Path(folder).name if folder else remote)
-                from logisticsmobile.folder_navigation import record
-                record(self.app, self.cloud_view, self.remote_browser, 'remote-browser', remote, folder,
-                       self.browser_cloud_location)
+                self.rclone_ui.record_folder(self.cloud_view, self.remote_browser, 'remote-browser', remote, folder,
+                                             self.browser_cloud_location)
                 self.cloud_status.value = ''
                 return True
             except Exception as error:
@@ -1060,11 +1063,10 @@ class CloudUI(LocalCryptUI):
             self.download_selector.value = next(key for key, path in self.download_labels.items() if path == selected)
 
     async def open_download(self, widget=None, *, path=None, destination=None, **kwargs):
-        from logisticsmobile.document_sources import opening_status
         selected = path if path is not None else self.download_labels.get(self.download_selector.value)
         if selected is None:
             return False
-        with opening_status(self.app, dict(path=str(selected)), destination=destination):
+        with self.rclone_ui.opening_status(dict(path=str(selected)), destination=destination):
             await asyncio.sleep(0)
             return await self._open_download(path=selected, destination=destination)
 

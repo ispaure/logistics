@@ -1,5 +1,6 @@
 """Compact Logistics presentation over the shared native browser."""
 import inspect
+from functools import partial
 from contextlib import contextmanager
 from collections import OrderedDict
 import weakref
@@ -63,7 +64,7 @@ def sync_browser_population(app, body=None):
 
 class BrowserStatusLabel(toga.Label):
     """Plain browser text with the value interface used by workflow status."""
-    def __init__(self, value='', **kwargs):
+    def __init__(self, value='', *, shrink=True, **kwargs):
         super().__init__(value, **kwargs)
         self.style.flex = 1
         self.style.margin_left = 6
@@ -77,6 +78,8 @@ class BrowserStatusLabel(toga.Label):
             self._impl.native.setEllipsize(TextUtils.TruncateAt.MIDDLE)
         surface(self, radius=0, background='transparent', foreground='text',
                 outlined=False, eink_outlined=False)
+        if not shrink:
+            return
         # Native labels measure the whole single-line string. Let Pack shrink
         # that text so the adjacent parent/search controls stay on screen.
         from travertino.size import at_least
@@ -127,9 +130,38 @@ class FolderLocationHeader(toga.Box):
         self.update('')
 
     def use_native_title(self):
-        """UIKit owns the folder title; this row retains storage and actions."""
-        if self.folder_name in self.caption.children:
-            self.caption.remove(self.folder_name)
+        """Center the storage subtitle below UIKit's title, above the actions."""
+        if getattr(self, 'native_actions', None) is not None:
+            return
+        actions = [child for child in self.children
+                   if child not in (self.parent_button, self.caption)]
+        for child in list(self.children):
+            self.remove(child)
+        self.caption.remove(self.folder_name)
+        self.caption.style.flex = 0
+        self.caption.style.margin_left = 0
+        self.status.style.text_align = CENTER
+        # Folder pages have a 12-point content margin below the native bar.
+        # Let the subtitle sit at that bar's lower edge, close to its title.
+        self.style.margin_top = -12
+        self.center_storage_identity()
+        self.style.direction = COLUMN
+        del self.style.align_items
+        self.native_actions = toga.Box(children=[toga.Box(style=Pack(flex=1)), *actions],
+                                       style=Pack(direction=ROW, align_items=CENTER))
+        self.add(self.caption, self.native_actions)
+
+    def center_storage_identity(self):
+        # Equal flexible gutters center the icon/text group within the row.
+        if not hasattr(self, '_identity_gutters'):
+            self._identity_gutters = [toga.Box(style=Pack(flex=1)), toga.Box(style=Pack(flex=1))]
+        for gutter in self._identity_gutters:
+            if gutter in self.storage_identity.children:
+                self.storage_identity.remove(gutter)
+        self.storage_identity.children[-1].style.flex = 0
+        del self.storage_identity.children[-1].style.width
+        self.storage_identity.insert(0, self._identity_gutters[0])
+        self.storage_identity.add(self._identity_gutters[1])
 
     def refresh_status(self):
         """Use one secondary line for operation text or passive storage identity."""
@@ -165,9 +197,14 @@ class FolderLocationHeader(toga.Box):
                     outlined=False, eink_outlined=False)
             self.storage_icons.add(indicator)
         identity = ('Cloud' if remote else 'On-device') + ((' · Unlocked' if unlocked else ' · Locked') if encrypted else '')
-        self.storage_identity.add(BrowserStatusLabel(identity, style=Pack(font_size=12, height=18, margin=0)))
+        self.storage_identity.add(BrowserStatusLabel(identity, shrink=False, style=Pack(font_size=12, height=18, margin=0)))
+        # Bound the passive subtitle in the inline header too. UIKit restores
+        # its intrinsic text width when centering this row in the native bar.
+        self.storage_identity.children[-1].style.width = 1
         surface(self.storage_identity.children[-1], radius=0, background='transparent', foreground='muted',
                 outlined=False, eink_outlined=False)
+        if getattr(self, 'native_actions', None) is not None:
+            self.center_storage_identity()
         self._storage_kinds = kinds
 
 
@@ -218,12 +255,13 @@ class FileBrowser(NativeBrowser):
         for control in (self.back_button, self.previous, self.next,
                         self.search_button, self.close_search_button):
             browser_command(control)
-        self.paging = toga.Box(children=[self.previous, self.page_label, self.next], style=Pack(direction=ROW))
+        self.page_label.parent.remove(self.page_label)
+        self.paging = toga.Box(children=[self.previous, self.next], style=Pack(direction=ROW))
         self.widget.add(toga.Box(children=[self.back_button, toga.Box(style=Pack(flex=1)),
                                           self.search_button],
                                  style=Pack(direction=ROW, margin_top=4, margin_bottom=8)))
         self.navigation_controls = self.widget.children[-1]
-        self.page_label.style.flex = 1
+        self.page_label.style.update(flex=0, font_size=12, margin_bottom=6)
         self.page_label.style.font_size = 12
         from .recycled_file_list import RecycledFileList
         self.native_list = RecycledFileList(on_select=self._list_selected,
@@ -281,12 +319,16 @@ class FileBrowser(NativeBrowser):
     def open_search(self, widget=None, **kwargs):
         if self.search_panel not in self.widget.children:
             self.widget.insert(0, self.search_panel)
+        if self.page_label not in self.widget.children:
+            self.widget.insert(1, self.page_label)
         self.search.focus()
 
     def close_search(self, widget=None, **kwargs):
         self.search.value = ''
         if self.search_panel in self.widget.children:
             self.widget.remove(self.search_panel)
+        if self.page_label in self.widget.children:
+            self.widget.remove(self.page_label)
 
     def render(self):
         # Resolve sorting/filtering once; list rows are lightweight source data.
@@ -305,8 +347,31 @@ class FileBrowser(NativeBrowser):
 
     def scroll_container(self):
         """Return a bounded viewport; never put a native list in a ScrollContainer."""
-        self._scroll = self.widget
+        self._scroll = self
         return self.widget
+
+    @property
+    def vertical_position(self):
+        if self.mode != 'List':
+            return self._tile_scroll.vertical_position
+        getter = getattr(self.native_list._impl, 'get_vertical_position', None)
+        return getter() if getter is not None else 0
+
+    @vertical_position.setter
+    def vertical_position(self, value):
+        if self.mode != 'List':
+            self._tile_scroll.vertical_position = value
+        else:
+            setter = getattr(self.native_list._impl, 'set_vertical_position', None)
+            if setter is not None:
+                setter(value)
+
+    @property
+    def max_vertical_position(self):
+        if self.mode != 'List':
+            return self._tile_scroll.max_vertical_position
+        getter = getattr(self.native_list._impl, 'get_max_vertical_position', None)
+        return getter() if getter is not None else 0
 
     @contextmanager
     def population_paused(self):
@@ -327,7 +392,8 @@ class FileBrowser(NativeBrowser):
         self._cancel()
         self.page = 0
         self.previous.enabled = self.next.enabled = False
-        self.page_label.text = ''
+        if not self.search.value:
+            self.page_label.text = ''
         self.buttons.clear()
         self.entry_rows = {}
         self._list_entries = tuple(self.entries) if not self.closed else ()
@@ -358,7 +424,8 @@ class FileBrowser(NativeBrowser):
         if self._list_entries:
             self._mount_listing(self.native_list)
         else:
-            self.empty_label.text = ('No matching items.' if self.search.value else 'This folder is empty.')
+            self.empty_label.text = ('Searching subfolders…' if getattr(self, 'searching', False)
+                                     else 'No matching items.' if self.search.value else 'This folder is empty.')
             self._mount_listing(self.empty_label)
         from .keyboard import bind_browser
         bind_browser(self)

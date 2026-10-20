@@ -1,14 +1,31 @@
 # Mobile workspace drawers and paired documents
 
+Saved local file references from iOS Documents recover after an app container
+relocation: if the historical path is missing, reopening and Show in folder use
+the same relative file under the currently registered Logistics Documents root.
+Recovery requires an existing file and applies only to iOS application Documents
+paths; unrelated missing paths keep their original identity.
+
 ## iOS Workspaces folder ancestry
 
 `folder_navigation.FolderNavigation` adds a native route for each ancestor of a
-successfully listed Workspaces folder. The storage root is directly above the
-retained Workspaces overview, including entry from pinned-folder options.
+successfully listed Workspaces folder. A local workspace shortcut starts its
+stack at the selected folder: Back from that folder returns to the retained
+Workspaces overview, and subfolders return to their parent within that workspace.
+Browse All Files starts at the storage root. Other direct reveals retain their
+folder ancestry.
 Local, LocalCrypt, remote and full-page workspace browsers publish successful
 locations with `record`; failed listings do not advance the stack. UIKit Back,
 interactive pops and explicit route Back restore the ancestor location into the
-retained browser owner. Reader pops to the same folder keep its existing widgets
+retained browser owner. Before entering a child, the parent controller receives
+a read-only native list from the already loaded tree, retaining search, sort,
+selection and scroll state. That list remains visible throughout UIKit's Back
+animation and the subsequent asynchronous refresh; Back never needs to wait for
+filesystem or network access to display the parent rows.
+Native file tables disable automatic content-inset adjustment because their
+destination container already accounts for the navigation bar. This keeps the
+parent preview and live list aligned during UIKit transitions.
+Reader pops to the same folder keep its existing widgets
 without listing again. iOS omits the browser's separate parent button; Android
 keeps its existing parent and system Back policy. Embedded document drawers keep
 their existing navigation policy. Home's full-page picker uses a scoped folder
@@ -65,10 +82,21 @@ owned by the same text session.
 ## File loading panels
 
 `document_sources.opening_status` presents a temporary `file-loading:` route with
-the filename, file icon and indeterminate loading bar. Reopen, provider reading,
+the filename, file icon and indeterminate loading bar. The centered filename
+label can shrink within the panel's horizontal margins; long names use native
+middle truncation while keeping the full label text. Reopen, provider reading,
 local imports and library readers share it; nested calls in the same async task
 reuse the panel. Loading does not advance the navigation generation, so provider
 completion still detects Back or another navigation action during I/O.
+`loading_progress` carries the active opening reporter through `asyncio.to_thread`.
+Local text reads, document/book imports and library integrity reads publish
+actual bytes consumed, using descriptor size or provider metadata when available.
+The panel shows **Reading N%** only with a known positive total; unknown totals
+show **Reading file…**. On completion of the read it switches to an indeterminate
+**Preparing document…** stage for validation, decoding and first-page rendering.
+Random-access PDF/archive opening and encrypted operations without byte callbacks
+remain indeterminate. Reports are coalesced on the UI loop and ignored after
+their opening scope closes or another scope replaces it.
 The ready view replaces the loading route in `MobileRoutes.show` or the native
 Documents secondary column. Failure removes the temporary route and reveals the
 retained origin. Cleanup never selects a tab the user has left. Library readers
@@ -548,6 +576,15 @@ then verifies the first Documents frame, toolbar target and drawer action.
 This covers event ordering that programmatic `current_tab` tests missed.
 
 
+## Folder viewport restoration
+
+Local workspace shortcuts initialize the file browser at the requested storage
+and path, without first listing the device root. Folder navigation captures and
+restores scroll position through the browser's viewport adapter: List mode uses
+the native table's content offset and Tiles uses its ScrollContainer. The outer
+browser Box is only a layout container; treating it as a ScrollContainer raises
+an exception when navigating away from an already displayed folder on iOS.
+
 ## LocalCrypt picker identity on iOS
 
 The pinned Toga backend did not reload UIPickerView's row count before selecting
@@ -930,3 +967,11 @@ desktop/document-store checks. Local evidence is retained under the ignored
 `Mobile/logs/navigation-flow-fixes/` directory, including XCTest source,
 attachments, logs, a swipe recording and `report.json`. This validates the tested
 simulator flows; physical devices and live remote providers need separate checks.
+
+Native iOS folder pages center the storage icon and identity close below the folder
+title, removing the content margin above the subtitle. Disk/cloud icons describe
+the storage; encrypted folders also show their locked/unlocked icon. Search and
+contextual actions occupy a separate trailing toolbar row.
+The recycled table and its ordinary cells use the window palette, so the list
+blends into the surrounding page in both light and dark appearance. Selected
+files retain a rounded highlight in the hover palette.

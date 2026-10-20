@@ -73,7 +73,7 @@ class HubDocumentTests(unittest.TestCase):
                         app.show_home()
                     else:
                         app.show_documents_hub()
-                    original = app.body.children[0]
+                    original = app.body
                     started, finish = asyncio.Event(), asyncio.Event()
                     async def delayed_open(*args):
                         started.set()
@@ -85,16 +85,17 @@ class HubDocumentTests(unittest.TestCase):
                           patch.object(app.main_window, 'dialog', new_callable=AsyncMock)):
                         task = asyncio.create_task(app.recent_opener(recent)())
                         await started.wait()
-                        self.assertIs(app.body.children[0], original)
-                        banner = app.body.children[-1]
-                        self.assertEqual(labels(banner), ['Opening cloud file…'])
-                        progress = next(child for child in banner.children if isinstance(child, toga.ProgressBar))
+                        self.assertIsNot(app.body, original)
+                        self.assertTrue(app.routes.screens[destination][-1][0].startswith('file-loading:'))
+                        panel = app.body.children[0]
+                        self.assertEqual(labels(panel), ['Cloud note.md', 'Preparing document…'])
+                        progress = next(child for child in widgets(panel) if isinstance(child, toga.ProgressBar))
                         self.assertTrue(progress.is_running)
-                        # Exercise both an attached strip and navigation away.
-                        # Completion must never restore the originating view.
+                        # Completion returns to the retained origin unless the
+                        # user has already navigated to a replacement screen.
                         if outcome == 'failure':
                             app.show_documents_hub()
-                        replacement = app.body.children[0]
+                        replacement = app.body if outcome == 'failure' else original
                         if outcome == 'cancel':
                             task.cancel()
                             with self.assertRaises(asyncio.CancelledError):
@@ -103,8 +104,10 @@ class HubDocumentTests(unittest.TestCase):
                             finish.set()
                             await task
                         self.assertFalse(progress.is_running)
-                        self.assertIsNone(banner.parent)
-                        self.assertIs(app.body.children[0], replacement)
+                        self.assertIsNone(app._file_loading)
+                        self.assertFalse(any(route.startswith('file-loading:')
+                                             for route, *_ in app.routes.screens[destination]))
+                        self.assertIs(app.body, replacement)
         app.loop.run_until_complete(check())
 
     def test_new_from_home_displays_new_editor_and_keeps_previous_draft(self):

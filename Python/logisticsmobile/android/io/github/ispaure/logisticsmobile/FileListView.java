@@ -111,6 +111,23 @@ public final class FileListView extends ListView {
 
     public int getCreatedRowCount() { return createdRows; }
 
+    public int getVerticalPosition() {
+        View first = getChildAt(0);
+        return first == null ? 0 : Math.max(0,
+                getFirstVisiblePosition() * dp(44) - first.getTop() + getPaddingTop());
+    }
+
+    public int getMaxVerticalPosition() {
+        return Math.max(0, titles.length * dp(44) - getHeight()
+                + getPaddingTop() + getPaddingBottom());
+    }
+
+    public void setVerticalPosition(int value) {
+        int position = Math.max(0, Math.min(value, getMaxVerticalPosition()));
+        int height = dp(44);
+        setSelectionFromTop(position / height, -(position % height));
+    }
+
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
@@ -154,7 +171,7 @@ public final class FileListView extends ListView {
                 LinearLayout row = new LinearLayout(getContext());
                 row.setGravity(Gravity.CENTER_VERTICAL);
                 row.setPadding(dp(8), 0, dp(8), 0);
-                row.setLayoutParams(new ListView.LayoutParams(-1, dp(56)));
+                row.setLayoutParams(new ListView.LayoutParams(-1, dp(44)));
                 android.util.TypedValue background = new android.util.TypedValue();
                 getContext().getTheme().resolveAttribute(android.R.attr.activatedBackgroundIndicator,
                         background, true);

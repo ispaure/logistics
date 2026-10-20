@@ -88,6 +88,30 @@ class FolderStackTests(TestCase):
         self.assertIs(self.routes.body().children[0], reader)
         self.assertFalse(self.routes.origins)
 
+    def test_workspace_shortcut_back_returns_to_overview_without_storage_ancestors(self):
+        self.view._folder_entry_location = ('Local files', 'Projects/Reports')
+        self.show('Projects/Reports')
+        self.assertEqual([screen[2].controller.title for screen in self.routes.screens['files']], ['Reports'])
+        self.show('Projects/Reports/Invoices')
+        self.assertEqual([screen[2].controller.title for screen in self.routes.screens['files']],
+                         ['Reports', 'Invoices'])
+        self.routes.back()
+        self.finish()
+        self.assertEqual(self.loaded[-1], ('Local files', 'Projects/Reports'))
+        self.routes.back()
+        self.assertFalse(self.routes.screens['files'])
+        self.assertEqual(self.routes.body().children[0].text, 'Workspaces')
+
+    def test_workspace_shortcut_native_pop_returns_directly_to_overview(self):
+        self.view._folder_entry_location = ('Local files', 'Projects')
+        self.show('Projects')
+        nav = self.navigation[self.host.destinations.index('files')]
+        nav.viewControllers.pop()
+        self.routes.native_popped(nav)
+        self.assertFalse(self.routes.screens['files'])
+        self.assertFalse(self.loaded)
+        self.assertEqual(self.routes.body().children[0].text, 'Workspaces')
+
     def test_parent_query_is_restored_and_failed_parent_remains_navigable(self):
         self.show('Projects')
         self.browser.search.value = 'report'
@@ -153,6 +177,58 @@ class ShowInFolderTests(TestCase):
         self.folder.mkdir(parents=True)
         self.path = self.folder / 'note.txt'
         self.path.write_text('Keep my draft')
+
+    def test_parent_list_is_mounted_before_pop_while_refresh_is_blocked(self):
+        from logisticsmobile.browser_ui import FileBrowser
+        from features.rclone.mobile.storage_location import CollectionFiles
+        app = self.app
+        host = NativeNavigationHost(DESTINATION_ITEMS)
+        owner = SimpleNamespace(loop=app.loop, native_host=host, active_host=True,
+            folder_path_visible=app.folder_path_visible, adaptive=SimpleNamespace(wide=False),
+            select_destination=Mock(return_value=True))
+        routes = owner.routes = MobileRoutes(owner, host, guard=lambda: True, changed=Mock())
+        navigation = [Navigation() for _ in host.destinations]
+        def push(destination, panel, title):
+            controller = SimpleNamespace(title=title)
+            navigation[host.destinations.index(destination)].viewControllers.append(controller)
+            return SimpleNamespace(controller=controller)
+        host.adapter = SimpleNamespace(navigation=navigation, push=push,
+            containers=[(None, nav.viewControllers[0]) for nav in navigation], release_pane=Mock())
+        provider = CollectionFiles(app.private_root)
+        browser = FileBrowser()
+        view = toga.Box(children=[browser.scroll_container()])
+        view._folder_entry_location = ('Local files', 'Projects')
+        release = asyncio.Event()
+        async def navigate(location):
+            await release.wait()
+            browser.set_entries(provider, location[1], provider.list(location[1]))
+            return True
+        async def exercise():
+            routes.show(toga.Label('Workspaces'), destination='files', root=True)
+            browser.set_entries(provider, 'Projects', provider.list('Projects'))
+            record(owner, view, browser, 'browser', 'Local files', 'Projects', navigate)
+            routes.show(view, destination='files', route='browser')
+            routes.folders.capture()
+            parent = routes.screens['files'][0][1]
+            entry = routes.folders.screens['files', routes.screens['files'][0][0]]
+            preview = entry.preview
+            self.assertIsNone(preview.task)
+            browser.set_entries(provider, 'Projects/Reports', provider.list('Projects/Reports'))
+            record(owner, view, browser, 'browser', 'Local files', 'Projects/Reports', navigate)
+            self.assertIs(parent.children[0], preview.view)
+            self.assertEqual([item.label for item in preview.browser.entries], ['Reports'])
+            routes.back()
+            await asyncio.sleep(0)
+            self.assertFalse(routes.folders.task.done())
+            self.assertIs(routes.body().children[0], preview.view)
+            self.assertEqual([item.label for item in preview.browser.entries], ['Reports'])
+            release.set()
+            await routes.folders.task
+            self.assertIs(routes.body().children[0], view)
+            routes.trim('files', 0)
+            await browser.close()
+            await asyncio.sleep(0)
+        app.loop.run_until_complete(exercise())
 
     def test_home_file_action_does_not_open_in_a_tab_selected_during_restore(self):
         app = self.app
@@ -228,8 +304,8 @@ class ShowInFolderTests(TestCase):
             self.assertNotIn(header.folder_name, header.caption.children)
             self.assertEqual(header.folder_name.value, 'Reports')
             self.assertIn(header.storage_identity, header.caption.children)
-            self.assertIn(app.file_browser.search_button, header.children)
-            self.assertIn(app.file_actions_button, header.children)
+            self.assertIn(app.file_browser.search_button, header.native_actions.children)
+            self.assertIn(app.file_actions_button, header.native_actions.children)
         app.loop.run_until_complete(exercise())
 
     def test_direct_ancestor_preview_lists_parent_before_back(self):

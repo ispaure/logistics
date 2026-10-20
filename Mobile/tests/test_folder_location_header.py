@@ -43,6 +43,7 @@ class FolderLocationTests(unittest.TestCase):
 
     def test_root_navigation_returns_to_hub_even_when_cloud_busy(self):
         self.app.show_cloud(present=False)
+        self.run_async(self.app.show_files(local_root=True))
         self.app.file_path = self.app.cloud_path = ''
         self.app.cloud_busy = True
         with patch.object(self.app, 'show_locations') as hub:

@@ -5,7 +5,65 @@ from zipfile import ZipFile
 from commonUtils.runtime.platform import get_os, OS
 
 
+async def exercise_folder_pop_preview(app, *, scroll_position=120):
+    """The parent must already contain rows while its refresh is blocked."""
+    if get_os() is not OS.IOS:
+        return {}
+    from features.rclone.mobile.storage_location import collection_path
+    root = collection_path(app.private_root) / 'Back transition fixture'
+    (root / 'Child').mkdir(parents=True, exist_ok=True)
+    for index in range(60):
+        (root / f'File-{index:02}.txt').write_text('Native transition fixture')
+    await app.show_files(location=('Local files', root.name))
+    browser = app.file_browser
+    browser.show_list()
+    await asyncio.sleep(.3)
+    browser.vertical_position = scroll_position
+    position = browser.vertical_position
+    original = browser.native_list._impl.native
+    original_top = float(original.convertRect(original.bounds, toView=None).origin.y)
+    original_offset = float(original.contentOffset.y)
+    await app.browser_file_folder(next(row for row in app.file_rows.values() if row['name'] == 'Child'))
+    await asyncio.sleep(.3)
+    parent_route, parent_panel, _ = app.routes.screens['files'][-2]
+    parent = app.routes.folders.screens['files', parent_route]
+    preview = parent.preview
+    assert preview is not None and preview.view in parent_panel.children
+    assert len(preview.browser.native_list.data) == 61
+    release = asyncio.Event()
+    navigate = parent.navigate
+    async def delayed(location):
+        await release.wait()
+        return await navigate(location)
+    parent.navigate = delayed
+    try:
+        navigation = app.native_host.adapter.navigation[app.native_host.destinations.index('files')]
+        navigation.popViewControllerAnimated(True)
+        await asyncio.sleep(.1)
+        native = preview.browser.native_list._impl.native
+        assert native.window is not None and len(native.visibleCells) > 0
+        assert abs(float(native.adjustedContentInset.top)) < 1
+        assert abs(float(native.contentOffset.y) - original_offset) < 2
+        assert abs(float(native.convertRect(native.bounds, toView=None).origin.y) - original_top) < 2
+        await asyncio.sleep(.6)
+        assert app.routes.folders.task is not None and not app.routes.folders.task.done()
+        assert preview.view in app.routes.body().children
+        assert native.window is not None and len(native.visibleCells) > 0
+        assert abs(float(native.adjustedContentInset.top)) < 1
+        assert abs(float(native.contentOffset.y) - original_offset) < 2
+        assert abs(preview.browser.vertical_position - position) < 2
+    finally:
+        release.set()
+        if app.routes.folders.task is not None:
+            await app.routes.folders.task
+        parent.navigate = navigate
+    assert app.file_path == root.name
+    return {'parent_rows_ready_during_native_pop': True}
+
+
 async def exercise_browser_back(app):
+    await exercise_folder_pop_preview(app, scroll_position=0)
+    transition = await exercise_folder_pop_preview(app)
     await app.show_files()
     root = app.private_root / 'LocalFiles' / 'Back review'
     root.mkdir(exist_ok=True)
@@ -21,7 +79,7 @@ async def exercise_browser_back(app):
     browser.page = 0
     browser.render()
     tree = browser.tree
-    scroll = app.files_view._workspace_frame.main.children[-1]
+    scroll = browser
     for filename in ('Comic.cbz', 'A Notes.md', 'Comic.cbz'):
         browser.search.value = ''
         # Clearing search still schedules the 400 ms query render. Finish it
@@ -93,7 +151,7 @@ async def exercise_browser_back(app):
         if filename.endswith('.md'):
             assert owner.crypt_text.value == '# Unsaved note after opening from Files'
     assert not hasattr(app, 'book_reader') and not hasattr(app, 'crypt_text')
-    return {'native_back_to_files': True,
+    return {**transition, 'native_back_to_files': True,
             'native_tab_to_files': False, 'browser_scroll_preserved': True,
             'draft_retained_on_back': True, 'reader_tools_back_preserved': True,
             'controller_state_is_owned': True}

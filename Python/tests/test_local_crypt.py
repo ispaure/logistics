@@ -973,7 +973,7 @@ class LocalCryptTests(QtTestCase):
                     self.wait(lambda: window.reader.worker is None)
                     self.assertEqual(EPUBBook(f.item.data / 'book.epub', source=f.provider).title, 'Private reader metadata')
                     self.assertIn('Encrypted metadata saved', window.reader.status.text())
-                    self.assertTrue(window.windowTitle().startswith('🕵️ Private - Private reader metadata'))
+                    self.assertEqual(window.windowTitle(), '🕵️ Private - book.epub')
                 finally:
                     self.wait(window.prepare_close)
                     window.close()

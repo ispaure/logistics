@@ -27,6 +27,68 @@ class FileLoadingTests(TestCase):
         self.path.write_text('# Ready')
         self.copies = LocalTextCopies(LocalFiles(self.path.parent))
 
+    def test_real_byte_counts_switch_from_percentage_to_preparing(self):
+        from logisticsmobile.document_sources import opening_status
+        from logisticsmobile.loading_progress import reading_stream
+        self.path.write_bytes(b'x' * (256 * 1024))
+        started, release = Event(), Event()
+        def read():
+            with self.path.open('rb') as source, reading_stream(source) as stream:
+                first = stream.read(64 * 1024)
+                started.set()
+                if not release.wait(3):
+                    raise RuntimeError('Progress fixture timed out')
+                return first + stream.read()
+        async def exercise():
+            self.app.show_home()
+            with opening_status(self.app, dict(path=str(self.path))):
+                content = self.app.body.children[0].children[1]
+                bar, status = content.children[2:]
+                task = asyncio.create_task(asyncio.to_thread(read))
+                try:
+                    self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                    await asyncio.sleep(.1)
+                    self.assertEqual(bar.max, 256 * 1024)
+                    self.assertEqual(bar.value, 64 * 1024)
+                    self.assertEqual(status.text, 'Reading 25%')
+                finally:
+                    release.set()
+                    data = await task
+                self.assertEqual(len(data), 256 * 1024)
+                await asyncio.sleep(.1)
+                self.assertIsNone(bar.max)
+                self.assertEqual(status.text, 'Preparing document…')
+                reporter = self.app._file_loading['progress']
+            reporter.publish(1, 2)
+            await asyncio.sleep(.1)
+            self.assertEqual(status.text, '')
+        self.app.loop.run_until_complete(exercise())
+
+    def test_unknown_size_and_stale_loading_updates_never_show_fake_percent(self):
+        from logisticsmobile.document_sources import opening_status
+        from logisticsmobile.loading_progress import reading_stream
+        from io import BytesIO
+        async def exercise():
+            self.app.show_home()
+            with opening_status(self.app, dict(key='Unknown.txt')):
+                content = self.app.body.children[0].children[1]
+                bar, status = content.children[2:]
+                with reading_stream(BytesIO(b'content')) as stream:
+                    self.assertEqual(stream.read(3), b'con')
+                    await asyncio.sleep(.1)
+                    self.assertIsNone(bar.max)
+                    self.assertEqual(status.text, 'Reading file…')
+                    self.assertEqual(stream.read(), b'tent')
+                await asyncio.sleep(.1)
+                self.assertIsNone(bar.max)
+                self.assertEqual(status.text, 'Preparing document…')
+                reporter = self.app._file_loading['progress']
+                self.app._file_loading = None
+                reporter.publish(9, 10)
+                await asyncio.sleep(.1)
+                self.assertEqual(status.text, 'Preparing document…')
+        self.app.loop.run_until_complete(exercise())
+
     def test_reopen_panel_is_replaced_and_back_returns_to_each_origin(self):
         async def exercise():
             for destination in ('home', 'documents', 'files'):

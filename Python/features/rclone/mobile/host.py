@@ -1,5 +1,6 @@
 """Presentation hooks supplied explicitly by the mobile application host."""
 from dataclasses import dataclass
+from contextlib import nullcontext
 from typing import Callable
 
 
@@ -23,3 +24,5 @@ class MobileHostUI:
     settings_note: Callable = None
     settings_heading: Callable = None
     settings_disclosure: Callable = None
+    record_folder: Callable = lambda *args, **kwargs: None
+    opening_status: Callable = lambda *args, **kwargs: nullcontext()

@@ -26,7 +26,7 @@ def chapter_html(book, index, font_size=16, *, margin=16, theme='system', links=
     allowed = {'p', 'div', 'span', 'section', 'article', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
                'strong', 'b', 'em', 'i', 'u', 's', 'blockquote', 'pre', 'code', 'ul', 'ol', 'li',
                'table', 'thead', 'tbody', 'tr', 'th', 'td', 'sup', 'sub', 'br', 'hr'}
-    blocked = {'head', 'script', 'style', 'iframe', 'object', 'embed', 'svg', 'math',
+    blocked = {'head', 'script', 'style', 'iframe', 'object', 'embed', 'math',
                'form', 'input', 'button', 'textarea', 'link', 'meta', 'base', 'video', 'audio'}
     images = 0
     def render(node, depth=0):
@@ -38,9 +38,14 @@ def chapter_html(book, index, font_size=16, *, margin=16, theme='system', links=
         tag = node.tag.rsplit('}', 1)[-1].lower()
         if tag in blocked:
             return ''
-        if tag == 'img':
+        if tag in {'img', 'image'}:
             try:
-                resource, _ = resolve_href(path, node.get('src', ''))
+                # EPUB cover pages commonly wrap a raster in SVG <image>.
+                # Extract its bytes through the same bounded offline loader;
+                # SVG markup, geometry and active attributes never reach WebKit.
+                source = (node.get('src', '') if tag == 'img' else
+                          node.get('href') or node.get('{http://www.w3.org/1999/xlink}href', ''))
+                resource, _ = resolve_href(path, source)
                 if resource not in book.members or book.resource_sizes[resource] > 256 * 1024:
                     raise ValueError('Large image')
                 data = book.read(resource)
@@ -74,7 +79,7 @@ def chapter_html(book, index, font_size=16, *, margin=16, theme='system', links=
         return '<span' + attributes + '>' + text + '</span>' if attributes else text
     content = render(body)
     result = ('<!doctype html><html><head><meta charset="utf-8">'
-              '<meta name="viewport" content="width=device-width, initial-scale=1">'
+              '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">'
               '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">'
               '<style>' + css(size, margin, theme, font_family=font_family, line_spacing=line_spacing, reading_width=reading_width) +
               'img{max-width:100%;height:auto}pre{white-space:pre-wrap}table{max-width:100%}</style>'

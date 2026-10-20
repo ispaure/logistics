@@ -17,8 +17,10 @@
     "control_icons.py",
     "document_choices.py",
     "document_sources.py",
+    "loading_progress.py",
     "documentation_ui.py",
     "documents.py",
+    "draw_ready.py",
     "editor_picker.py",
     "feature_hosts.py",
     "files_ui.py",
@@ -36,6 +38,7 @@
     "ios_reader_chrome.py",
     "ios_storage.py",
     "keyboard.py",
+    "layout_events.py",
     "library.py",
     "library_edits.py",
     "library_ui.py",
@@ -59,6 +62,7 @@
     "reader_controls.py",
     "page_animation.py",
     "reader_host.py",
+    "reader_memory.py",
     "reader_sessions.py",
     "reader_ui.py",
     "recent_documents.py",
@@ -79,6 +83,7 @@
     "recycled_file_list.py",
     "recycled_file_list_android.py",
     "recycled_file_list_ios.py",
-    "android/io/github/ispaure/logisticsmobile/FileListView.java"
+    "android/io/github/ispaure/logisticsmobile/FileListView.java",
+    "android/io/github/ispaure/logisticsmobile/DrawReady.java"
   ]
 }

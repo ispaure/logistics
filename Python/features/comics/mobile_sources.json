@@ -11,6 +11,7 @@
     "mobile/__init__.py",
     "mobile/collection.py",
     "mobile/composite.py",
+    "mobile/decoding.py",
     "mobile/index.py",
     "mobile/metadata.py",
     "mobile/navigation.py",

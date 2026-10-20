@@ -19,6 +19,7 @@ User behavior belongs in [the mobile user guide](../user_mobile/user_mobile.md).
 | Explicit host dependencies and legacy state access | `host_services.py` |
 | Managed text bytes, checkpoints and editing widgets | `documents.py` (host recovery), `features/text_editor/mobile/ui.py` (widgets) |
 | Ordinary and provider reader ownership | `reader_sessions.py`, `private_sessions.py` |
+| Temporary file-opening presentation and measured read progress | `document_sources.py`, `loading_progress.py` |
 | Reader-facing host services and shared controls | `reader_host.py`, `reader_controls.py`, `reader_chrome.py` |
 | Device screen locking and sensitive-content protection | `screen_privacy.py` |
 
@@ -26,6 +27,14 @@ Format behavior and presentation remain with `features/books/mobile` and
 `features/comics/mobile`. Cloud, managed collections and encrypted-copy adapters
 remain with `features/rclone/mobile`. The host owns navigation, session policy and
 workflow composition. Shared toolkit mechanisms remain in commonUtils.
+
+Feature adapters receive application policy through presentation contracts.
+`MobileHostUI` supplies folder-route recording and temporary loading-panel scopes
+to rclone; `MobilePresentation` supplies font sizing/binding and folder actions to
+the text editor. Feature code must not import the `logisticsmobile` host to reach
+those services. Secondary scene hosts share the application's command registry
+alongside its other application infrastructure, while retaining independent
+document and navigation state.
 
 `navigation.py` installs application-owned Android destination artwork on both
 the bottom bar and side rail: Home, the existing Workspaces glyph, stacked
@@ -52,6 +61,23 @@ The pinned Toga iOS backend queues scroll-view refreshes during layout. The
 host's `appearance.py` adapter ignores refresh/scroll callbacks after their weak
 Python interface has been released. Editor preview shutdown remains with the
 Text Editor feature, which retires WebKit delegates before releasing its view.
+
+## Destination entry cost
+
+Entering Workspaces with Local selected reuses the folder view and discovers
+local changes without constructing the cloud browser or credential settings.
+Selecting Cloud or Home Server still initializes remote controls and restores
+saved credentials. Local folder opening uses its own loading status even when
+remote progress widgets have never been created.
+
+Settings fits its category menu before mounting it in the destination. The static
+menu retains its measured width across repeated tab and layout callbacks and
+refits when the pane width changes. Category status messages continue to refit
+as their text changes; compact/wide routes keep the same preference controls.
+These contracts are covered by `test_folder_hub.py`, `test_settings_ui.py`,
+`test_settings_navigation.py` and `test_settings_checkpoints.py` in `Mobile/tests`.
+Host profiles measure Python work only; Android draw latency requires the native
+`performance_probe.py` with an attached device.
 
 ## Open/Save As lifecycle
 

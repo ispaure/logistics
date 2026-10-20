@@ -295,6 +295,70 @@ class FolderSourceTabTests(unittest.TestCase):
         app.loop.run_until_complete(app.folder_buttons['Imported'].on_press())
         self.assertEqual(app.file_path, 'Imported')
 
+    def test_local_shortcut_lists_only_requested_folder_on_cold_and_reused_browser(self):
+        from unittest.mock import patch
+        from features.rclone.mobile.storage_location import CollectionFiles
+        app = self.app
+        documents = Path(self.directory.name) / 'Documents'
+        folder = documents / 'Local' / 'Server-Lib-Calibre'
+        folder.mkdir(parents=True)
+        (folder / 'book.epub').write_text('fixture')
+        use_shared_local(app.private_root, documents)
+        app.show_locations()
+        original = CollectionFiles.list
+        listed = []
+        def listing(provider, path='', **kwargs):
+            listed.append(path)
+            return original(provider, path, **kwargs)
+        for _ in range(2):
+            with patch.object(CollectionFiles, 'list', new=listing):
+                self.assertTrue(app.loop.run_until_complete(
+                    app.browse_hub_folder('Server-Lib-Calibre')))
+            self.assertEqual(listed, ['Server-Lib-Calibre'])
+            self.assertEqual(app.file_storage.value, 'Local files')
+            self.assertEqual(app.file_path, 'Server-Lib-Calibre')
+            self.assertEqual({row['name'] for row in app.file_rows.values()}, {'book.epub'})
+            app.show_locations()
+            listed.clear()
+
+    def test_recycled_browser_keeps_folder_navigation_scroll_contract(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+        from logisticsmobile.folder_navigation import FolderScreen
+        app = self.app
+        app.loop.run_until_complete(app.show_files())
+        browser = app.file_browser
+        self.assertIs(browser._scroll, browser)
+        native = browser.native_list._impl
+        with patch.object(native, 'get_vertical_position', return_value=84, create=True), \
+                patch.object(native, 'get_max_vertical_position', return_value=120, create=True), \
+                patch.object(native, 'set_vertical_position', create=True) as set_position:
+            routes = app.routes
+            screen = FolderScreen(app.files_view, browser, app.browser_file_location,
+                                  'Local files', '', 'browser')
+            routes.folders.screens['files', 'browser'] = screen
+            with patch.object(routes, 'screens', {'files': [('browser', app.files_view, None)]}), \
+                    patch.object(routes.host, 'state', SimpleNamespace(destination='files')), \
+                    patch('logisticsmobile.folder_navigation.native_snapshot', Mock(return_value=None)):
+                routes.folders.capture()
+            self.assertEqual(screen.scroll, 84)
+            browser._scroll.vertical_position = min(screen.scroll, browser._scroll.max_vertical_position)
+            set_position.assert_called_once_with(84)
+
+    def test_workspace_parent_button_returns_to_hub_after_visiting_child(self):
+        app = self.app
+        folder = app.private_root / 'LocalFiles' / 'Projects'
+        (folder / 'Child').mkdir(parents=True)
+        app.show_locations()
+        app.loop.run_until_complete(app.browse_hub_folder('Projects'))
+        app.loop.run_until_complete(app.browser_file_folder(
+            next(row for row in app.file_rows.values() if row['name'] == 'Child')))
+        app.loop.run_until_complete(app.parent_file_folder())
+        self.assertEqual(app.file_path, 'Projects')
+        app.loop.run_until_complete(app.parent_file_folder())
+        self.assertFalse(app.routes.screens['files'])
+        self.assertEqual(app.native_host.state.destination, 'files')
+
     def test_mapped_copies_also_appear_locally(self):
         from logisticsmobile.folder_hub import source_choices
         choices = {'Offline': dict(source='Local', kind='job', remote='Drive', copies=[

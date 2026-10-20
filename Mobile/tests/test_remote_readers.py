@@ -195,7 +195,13 @@ class RemoteReaderTests(unittest.TestCase):
                 browser.render()
                 self.assertEqual(len(browser.native_list.data), 200)
                 browser.show_tiles()
-                self.assertEqual(len(browser.buttons), browser.page_size)
+                self.assertGreater(len(browser.buttons), 0)
+                self.assertLess(len(browser.buttons), browser.page_size)
+                # The tile window reaches the end without building every card
+                # or requesting another remote listing.
+                browser._update_tile_window(browser.TILE_ROW_HEIGHT * len(browser.entries))
+                self.assertIn(browser.entries[-1].identity, browser.buttons)
+                self.assertEqual(client.calls, [('list', 'mangas')])
                 browser.search.value = 'series-199'
                 for _ in range(100):
                     if len(browser.buttons) == 1:

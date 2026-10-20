@@ -1,7 +1,8 @@
 """Keep Toga's reusable UITableView cells, adding browser row semantics."""
 from rubicon.objc import objc_method, ObjCInstance, ObjCBlock
 from toga_iOS.widgets.detailedlist import DetailedList, TogaTableViewController
-from toga_iOS.libs import UITableViewCell, UITableViewCellStyleSubtitle
+from toga_iOS.libs import UITableViewCell, UITableViewCellStyleSubtitle, UIView
+from .appearance import apple_color
 
 
 class FileTableController(TogaTableViewController):
@@ -18,6 +19,11 @@ class FileTableController(TogaTableViewController):
         if cell is None:
             cell = UITableViewCell.alloc().initWithStyle(
                 UITableViewCellStyleSubtitle, reuseIdentifier='file-row')
+            selection = UIView.alloc().init()
+            selection.backgroundColor = apple_color('hover')
+            selection.layer.cornerRadius = 10
+            selection.clipsToBounds = True
+            cell.selectedBackgroundView = selection
         row = self.interface.data[indexPath.row]
         cell.textLabel.text = row.title
         cell.detailTextLabel.text = row.subtitle
@@ -25,8 +31,7 @@ class FileTableController(TogaTableViewController):
         cell.accessoryType = 1 if row.folder else 0
         cell.textLabel.lineBreakMode = 5  # Middle truncation preserves extensions.
         cell.accessibilityLabel = row.title + ('. Folder' if row.folder else '. ' + self.interface.row_kind)
-        from .appearance import apple_color
-        cell.backgroundColor = apple_color('surface')
+        cell.backgroundColor = apple_color('window')
         cell.textLabel.textColor = apple_color('text')
         cell.detailTextLabel.textColor = apple_color('muted')
         self.interface.row_visible(indexPath.row)
@@ -48,6 +53,20 @@ class IOSFileList(DetailedList):
             cell.imageView.image = item.icon._impl.native
             cell.setNeedsLayout()
 
+    def get_vertical_position(self):
+        return max(0, float(self.native.contentOffset.y + self.native.adjustedContentInset.top))
+
+    def get_max_vertical_position(self):
+        self.native.layoutIfNeeded()
+        return max(0, float(self.native.contentSize.height - self.native.bounds.size.height
+                            + self.native.adjustedContentInset.top + self.native.adjustedContentInset.bottom))
+
+    def set_vertical_position(self, value):
+        from rubicon.objc import CGPoint
+        self.native.layoutIfNeeded()
+        position = min(max(0, value), self.get_max_vertical_position())
+        self.native.setContentOffset(CGPoint(self.native.contentOffset.x,
+            position - self.native.adjustedContentInset.top), animated=False)
 
     def primary_action_handler(self, index):
         row = self.interface.data[index]
@@ -62,11 +81,14 @@ class IOSFileList(DetailedList):
         self.native_controller.interface = self.interface
         self.native_controller.impl = self
         self.native = self.native_controller.tableView
+        # The destination container already lays out below the navigation bar.
+        # A retained parent table can inherit UIKit's full bar inset during a
+        # pop, briefly shifting its rows down before the live browser returns.
+        self.native.contentInsetAdjustmentBehavior = 2  # Never
         self.native.delegate = self.native_controller
-        self.native.rowHeight = 56
+        self.native.rowHeight = 44
         self.native.keyboardDismissMode = 1
-        from .appearance import apple_color
-        self.native.backgroundColor = apple_color('surface')
+        self.native.backgroundColor = apple_color('window')
         self.primary_action_enabled = self.secondary_action_enabled = False
         self.add_constraints()
 

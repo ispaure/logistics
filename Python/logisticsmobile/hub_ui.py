@@ -405,7 +405,8 @@ class HubUI:
             # Retain the existing folder and any document detail above it.
             return
         if destination == 'files' and self.window_id == 'primary':
-            self.show_cloud(present=False)
+            if getattr(self, 'folder_source', 'Local') != 'Local':
+                self.show_cloud(present=False)
             view = self.folder_picker_or_error()
             root = self.routes.roots['files']
             if list(root.children) == [view]:

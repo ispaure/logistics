@@ -3,6 +3,7 @@ from features.rclone.mobile.storage_location import collection_path
 import asyncio
 from copy import deepcopy
 from types import SimpleNamespace
+from contextlib import nullcontext
 import toga
 from .control_icons import icon_button
 from toga.style import Pack
@@ -235,7 +236,7 @@ class FolderHubUI:
     def show_folder_picker(self, *, initialize=True):
         if self.window_id != 'primary':
             return self.show_window_boundary()
-        if initialize:
+        if initialize and getattr(self, 'folder_source', 'Local') != 'Local':
             self.show_cloud(present=False)
         box = self.folder_picker_or_error()
         self.show_view(box, destination='files', root=True)
@@ -352,7 +353,8 @@ class FolderHubUI:
         associations = (json.loads(self.preferences.values['remote_packages'])
                         + self.retained_credential_associations()
                         + list(getattr(self, 'session_credential_packages', ())))
-        configured = set(self.loaded_remote_names())
+        loaded_remotes = set(self.loaded_remote_names())
+        configured = set(loaded_remotes)
         configured.update(remote for item in associations for remote in item['remotes'])
         configured.update(remote for item in getattr(getattr(self, 'cloud_client', None), 'package_records', ())
                           for remote in item['remotes'])
@@ -389,9 +391,8 @@ class FolderHubUI:
                    if self.folder_path_visible(name) and self.folder_path_visible(entry.get('remote') or '')}
         # Native selectors and retained metadata are relatively expensive. Read
         # them once, rather than once for every encrypted folder in the tree.
-        loaded_remotes = set(self.loaded_remote_names())
         crypt_remotes = set(getattr(self.app, 'cloud_crypt_remotes', ()))
-        crypt_remotes.update(remote for package in self.retained_credential_associations()
+        crypt_remotes.update(remote for package in associations
                              for remote in package.get('crypt_remotes', ()))
         snapshot = (choices, network_remotes, loaded_remotes, crypt_remotes,
                     getattr(self, 'show_legacy_session', False))
@@ -596,7 +597,11 @@ class FolderHubUI:
             if entry['source'] == 'Remote':
                 opened = await self.open_picker_folder(entry)
             else:
-                async with self.remote_activity('Opening ' + entry['source'] + ' folder'):
+                # The folder's loading bar already covers local-only browsing.
+                # Remote progress controls may not have been constructed yet.
+                activity = (self.remote_activity('Opening ' + entry['source'] + ' folder')
+                            if hasattr(self.app, 'cloud_view') else nullcontext())
+                async with activity:
                     opened = await self.open_picker_folder(entry)
         finally:
             if self._folder_opening is token:
@@ -730,11 +735,9 @@ class FolderHubUI:
             value = job['target']
             kind = 'local'
         if kind == 'shared-local':
-            await self.show_files(local_root=True)
-            return await self.browser_file_location(('Shared files', value))
+            return await self.show_files(location=('Shared files', value))
         if kind == 'local':
-            await self.show_files(local_root=True)
-            return await self.browser_file_location(('Local files', value))
+            return await self.show_files(location=('Local files', value))
         if kind == 'crypt':
             await self.show_files()
             return await self.browser_file_location((value, ''))

@@ -11,6 +11,11 @@ import unittest
 PREFIX = 'LOGISTICS_MOBILE_RESULT='
 FORBIDDEN = {'PySide6', 'PIL', 'patoolib', 'pyzipper', 'toga', 'java', 'rubicon'}
 EXPECTED_TESTS = (
+    'test_cached_checkpoint_still_rejects_symbolic_link',
+    'test_changed_text_name_and_saved_baseline_are_checkpointed',
+    'test_failed_durable_checkpoint_retries_even_after_file_publication',
+    'test_missing_edited_and_replaced_recovery_files_force_checkpoint',
+    'test_unchanged_checkpoint_skips_serialization_and_disk_flushes',
     'test_android_adapter_closes_cursor_and_stream_on_consumer_failure',
     'test_bom_encoding_and_endings_survive_recovery_and_save',
     'test_changed_or_deleted_private_file_preserves_draft_and_requires_copy',
@@ -36,6 +41,8 @@ EXPECTED_TESTS = (
     'test_large_comic_streaming_keeps_unrelated_members_and_bounds_page_reads',
     'test_mobile_epub_import_navigation_progress_and_bookmarks_preserve_source',
     'test_mobile_epub_sanitizer_removes_active_html_and_external_resources',
+    'test_svg_external_cover_does_not_fetch_or_leave_an_empty_page',
+    'test_svg_wrapped_opening_cover_preserves_only_the_offline_raster',
     'test_mobile_reader_rejects_unsafe_archives_and_oversized_image_dimensions',
     'test_mobile_chat_cancel_interrupts_blocked_read_and_rejects_redirects_tools',
     'test_mobile_chat_profile_never_accepts_stored_api_keys',

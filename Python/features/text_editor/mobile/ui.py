@@ -7,7 +7,6 @@ from commonUtils.ui.native.editor_search import EditorSearch
 from commonUtils.ui.native.code_input import CodeInput
 from commonUtils.formats.code_syntax import LANGUAGES
 from .markdown_editor import FormattedMarkdownInput
-from logisticsmobile.font_scaling import bind, font_size
 
 FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_button',
           'save_button', 'export_button', 'document_view')
@@ -33,8 +32,8 @@ class TextEditorView:
         self.name = toga.TextInput(placeholder='Document name', on_change=self.name_changed, style=Pack(flex=1, height=48))
         self.editor = CodeInput(loop=app.loop, on_change=self.text_changed,
             highlighting=app.preferences.values.get('android_eink') != 'true',
-            style=Pack(flex=1, font_size=font_size(app, 'text'), margin_top=4))
-        bind(app, self.editor, lambda: self.session.kind if self.session else 'text')
+            style=Pack(flex=1, font_size=app.presentation.font_size('text'), margin_top=4))
+        app.presentation.bind_font(self.editor, lambda: self.session.kind if self.session else 'text')
         if self.editor.backend_name.startswith('toga_iOS.'):
             # The source editor constructs its own native text view, bypassing
             # the ordinary Toga input creation hook used by host appearance.
@@ -115,8 +114,7 @@ class TextEditorView:
             self.status.text = status
         dirty = bool(self.document.modified)
         self.save_button.enabled = dirty
-        from logisticsmobile.document_sources import folder_action
-        folder_actions = folder_action(self.app, self.session)
+        folder_actions = self.app.presentation.folder_actions(self.session)
         menu_state = dirty, bool(folder_actions)
         if menu_state != getattr(self, '_action_state', None):
             self._action_state = menu_state
@@ -208,15 +206,15 @@ class TextEditorView:
         """Keep one editing surface at every width, including restored old splits."""
         if self.session is None:
             return
-        self.editor.style.font_size = font_size(self.app, self.session.kind)
+        self.editor.style.font_size = self.app.presentation.font_size(self.session.kind)
         rich = self.session.kind == 'markdown' and self.session.view.get('markdown_editor', 'formatted') == 'formatted'
         surface = self.editor
         if rich:
             if self.formatted is None:
                 self.formatted = FormattedMarkdownInput(self.formatted_changed,
-                    font_size=font_size(self.app, 'markdown'),
+                    font_size=self.app.presentation.font_size('markdown'),
                     stylesheet=self.app.presentation.css_variables())
-                bind(self.app, self.formatted.view, 'markdown', web=True, formatted=self.formatted)
+                self.app.presentation.bind_font(self.formatted.view, 'markdown', web=True, formatted=self.formatted)
             try:
                 self.formatted.load(self.document.text)
                 surface = self.formatted.view

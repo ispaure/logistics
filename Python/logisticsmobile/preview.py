@@ -9,6 +9,8 @@ def markdown_preview(text, font_size=16, *, local_links=False, image_source=None
     # The Android host replaces this fallback with the actual native font.
     stylesheet = css_variables() + 'html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif}'
     content = _markdown_preview(text, font_size, local_links=local_links, stylesheet=stylesheet, image_source=image_source)
+    content = content.replace('content="width=device-width, initial-scale=1"',
+        'content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"', 1)
     return content.replace('</head>', '<meta name="logistics-native-font" content="true"></head>', 1)
 
 

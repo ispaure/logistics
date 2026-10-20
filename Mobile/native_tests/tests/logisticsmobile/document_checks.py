@@ -6,7 +6,33 @@ from logisticsmobile.preferences import Preferences
 from .web_checks import wait_for_text
 
 
+async def exercise_loading_layout(app):
+    """Long filenames must not enlarge or displace the loading presentation."""
+    if get_os() is not OS.IOS:
+        return
+    from logisticsmobile.document_sources import opening_status
+    app.show_home()
+    for name in ('Book.epub', 'A very long book filename ' * 12 + '.epub'):
+        with opening_status(app, dict(key=name), destination='home'):
+            await asyncio.sleep(.3)
+            panel = app.routes.body().children[0]
+            content = panel.children[1]
+            width = float(app.main_window._impl.native.bounds.size.width)
+            for widget in content.children:
+                native = widget._impl.native
+                rect = native.convertRect(native.bounds, toView=None)
+                left, size = float(rect.origin.x), float(rect.size.width)
+                assert left >= 31 and left + size <= width - 31
+                assert abs(left + size / 2 - width / 2) < 2
+            label = content.children[1]
+            assert label.text == name
+            assert label._impl.native.textAlignment == 1  # Center
+            assert label._impl.native.lineBreakMode == 5  # Middle ellipsis
+
+
 async def exercise_documents(app, passed):
+    await exercise_loading_layout(app)
+    await exercise_loading_progress(app)
     app.show_documents()
     app.editor.value = 'Draft survives actual Back'
     import toga
@@ -106,3 +132,44 @@ async def exercise_documents(app, passed):
     assert app.preview is original_preview
     await wait_for_text(app.preview, 'Native preview')
     passed.append('native_markdown_preview')
+
+
+async def exercise_loading_progress(app):
+    """Real worker reads must drive percentages, then return to preparation."""
+    from pathlib import Path
+    from threading import Event
+    from logisticsmobile.document_sources import opening_status
+    from logisticsmobile.loading_progress import reading_stream
+    path = Path(app.paths.cache) / 'opening-progress-fixture.bin'
+    path.write_bytes(b'x' * (256 * 1024))
+    started, released = [Event() for _ in range(4)], [Event() for _ in range(4)]
+    def read():
+        with path.open('rb') as source, reading_stream(source) as stream:
+            for index in range(4):
+                assert len(stream.read(64 * 1024)) == 64 * 1024
+                started[index].set()
+                if not released[index].wait(5):
+                    raise RuntimeError('Progress fixture timed out')
+    try:
+        app.show_home()
+        with opening_status(app, dict(key=path.name), destination='home'):
+            content = app.routes.body().children[0].children[1]
+            bar, status = content.children[2:]
+            task = asyncio.create_task(asyncio.to_thread(read))
+            try:
+                for index in range(4):
+                    assert await asyncio.to_thread(started[index].wait, 4)
+                    await asyncio.sleep(.15)
+                    assert bar.max == 256 * 1024
+                    assert abs(bar.value - (index + 1) * 64 * 1024) < 1
+                    assert status.text == f'Reading {(index + 1) * 25}%'
+                    released[index].set()
+                await task
+                await asyncio.sleep(.15)
+                assert bar.max is None and status.text == 'Preparing document…'
+            finally:
+                for event in released:
+                    event.set()
+                await task
+    finally:
+        path.unlink(missing_ok=True)

@@ -158,7 +158,9 @@ class FolderNavigationTests(unittest.TestCase):
 
     def test_private_listing_rejects_replaced_client_even_with_same_generation(self):
         from logisticsmobile.files_ui import FilesUI
+        from contextlib import nullcontext
         host = SimpleNamespace(active_host=True, cloud_client=SimpleNamespace(generation=1),
+            file_browser=SimpleNamespace(population_paused=nullcontext),
             file_storage=SimpleNamespace(value='Private'), file_location=SimpleNamespace(value=''),
             populate_file_browser=Mock())
         def listing(*args, **kwargs):

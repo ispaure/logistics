@@ -169,7 +169,9 @@ class ProviderUI(FilesUI):
         reader = None
         try:
             if prepared is None:
-                reader = await asyncio.to_thread(copies.open, key, password=password, cancelled=self._crypt_cancel.is_set)
+                from .loading_progress import opening_options
+                reader = await asyncio.to_thread(copies.open, key,
+                    password=password, cancelled=self._crypt_cancel.is_set, **opening_options(copies))
                 self._provider_comic_mode = self.private_comic_mode()
                 kind, content = await asyncio.to_thread(self.provider_page_content, reader, 0)
             else:
@@ -722,15 +724,15 @@ class ProviderUI(FilesUI):
         if not view.crypt_reader.editable:
             from .workspace_navigation import menu_button
             host = getattr(self, 'app', self)
-            reader_menu = (menu_button(self.toggle_provider_epub_tools, label='Contents and bookmarks')
+            reader_menu = None if comic else (menu_button(self.toggle_provider_epub_tools, label='Contents and bookmarks')
                            if view.crypt_reader.book is not None else menu_button(lambda widget, **kw:
                                host.adaptive.show_browser(getattr(view, 'presentation_destination', 'documents'))))
-            controls[0].insert(0, reader_menu)
+            if reader_menu is not None:
+                controls[0].insert(0, reader_menu)
             if comic:
-                controls[0].remove(reader_menu)
                 controls[0].remove(view.crypt_actions)
                 controls[0].remove(view.crypt_title)
-                view.comic_header = ComicHeader(reader_menu, view.crypt_actions,
+                view.comic_header = ComicHeader(view.crypt_actions,
                     previous=self.previous_provider_comic_file if neighbors else None,
                     following=self.next_provider_comic_file if neighbors else None)
                 header = view.comic_header.widget
@@ -758,7 +760,8 @@ class ProviderUI(FilesUI):
                 view.crypt_view._native_reader_status = view.crypt_title
                 view.crypt_view._native_reader_buttons = lambda: [view.previous_page, view.next_page,
                     view.reader_speech_button, view.crypt_actions]
-            view.crypt_view._workspace_menu_button = reader_menu
+            if reader_menu is not None:
+                view.crypt_view._workspace_menu_button = reader_menu
             view.crypt_controls = view.reading_frame.controls
             view.previous_page.enabled = False
             view.next_page.enabled = view.crypt_reader.book is not None or len(view.crypt_reader.labels) > 1

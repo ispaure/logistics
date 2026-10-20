@@ -115,6 +115,39 @@ class MobileReaderTests(unittest.TestCase):
         self.assertNotIn('onerror', html)
         self.assertIn("img-src data:", html)
 
+    def test_svg_wrapped_opening_cover_preserves_only_the_offline_raster(self):
+        from types import SimpleNamespace
+        image = png_page()
+        for attribute in ('href', 'xlink:href'):
+            with self.subTest(attribute=attribute):
+                source = ('<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                    '<div><svg xmlns="http://www.w3.org/2000/svg" '
+                    'xmlns:xlink="http://www.w3.org/1999/xlink" onload="steal()">'
+                    '<script>steal()</script><image ' + attribute + '="images/cover.png" '
+                    'onerror="steal()" width="100" height="200"/>'
+                    '</svg></div></body></html>').encode()
+                book = SimpleNamespace(spine=['titlepage.xhtml'], members={'images/cover.png'},
+                    resource_sizes={'images/cover.png': len(image)},
+                    read=lambda path: source if path == 'titlepage.xhtml' else image)
+                html = chapter_html(book, 0)
+                self.assertIn('<img ', html)
+                self.assertIn(base64.b64encode(image).decode(), html)
+                self.assertNotIn('<svg', html)
+                self.assertNotIn('<image', html)
+                self.assertNotIn('steal()', html)
+
+    def test_svg_external_cover_does_not_fetch_or_leave_an_empty_page(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        source = (b'<html><body><svg><image href="https://example.invalid/cover.png"/>'
+                  b'</svg></body></html>')
+        read = Mock(return_value=source)
+        book = SimpleNamespace(spine=['titlepage.xhtml'], members=set(), resource_sizes={}, read=read)
+        html = chapter_html(book, 0)
+        read.assert_called_once_with('titlepage.xhtml')
+        self.assertIn('Image omitted', html)
+        self.assertNotIn('https://example.invalid', html)
+
 
     def test_large_comic_streaming_keeps_unrelated_members_and_bounds_page_reads(self):
         with TemporaryDirectory() as directory:

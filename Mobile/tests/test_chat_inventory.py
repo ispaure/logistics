@@ -53,3 +53,25 @@ class ChatInventoryTests(TestCase):
             if app.chat_render_task is not None:
                 await app.chat_render_task
         app.loop.run_until_complete(exercise())
+
+    def test_typing_before_inventory_finishes_preserves_the_new_draft(self):
+        from logisticsmobile.app import LogisticsMobile
+        LogisticsMobile.storage_root = self.root
+        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+        app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.addCleanup(app.loop.close)
+        self.addCleanup(app.main_window.close)
+        async def exercise():
+            app.show_chat()
+            self.assertIsNone(app.chat_current)
+            app.chat_prompt.value = 'Typed while discovery was running'
+            draft_id = app.chat_current['id']
+            await app.chat_controller()._chat_inventory_task
+            self.assertEqual(app.chat_current['id'], draft_id)
+            self.assertEqual(app.chat_prompt.value, 'Typed while discovery was running')
+            self.assertTrue(app.checkpoint_chat())
+            self.assertEqual(app.chat_store.load(draft_id)['draft'], app.chat_prompt.value)
+            self.assertEqual(app.chat_store.load(self.data['id'])['draft'], self.data['draft'])
+            if app.chat_render_task is not None:
+                await app.chat_render_task
+        app.loop.run_until_complete(exercise())

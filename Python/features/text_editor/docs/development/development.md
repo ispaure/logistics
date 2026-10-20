@@ -245,3 +245,9 @@ a first heading. Creation passes the name and UTF-8 content to the managed
 document store before opening the editor; cancellation leaves storage untouched.
 Validation and creation errors remain visible in the form. Home and document
 lists omit redundant type subheaders while retaining state badges.
+
+`LocalTextCopies.open` accepts an optional `read_provider` for a scoped read
+adapter, such as the mobile host's byte-counting stream. It delegates the same
+path, revision checks and cancellation to `ResourceTextSession`; the original
+provider remains responsible for later saves. The feature does not import the
+host's progress presentation.

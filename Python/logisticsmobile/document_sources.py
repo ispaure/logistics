@@ -88,13 +88,16 @@ def opening_status(app, source, *, destination=None):
     import toga
     from toga.style import Pack
     from toga.style.pack import COLUMN, CENTER
-    from .browser_ui import entry_icon
+    from .browser_ui import BrowserStatusLabel, entry_icon
     name = Path(source.get('path') or source.get('key') or 'File').name
-    label = toga.Label(name, style=Pack(font_size=18, text_align=CENTER, margin_top=16))
+    label = BrowserStatusLabel(name, style=Pack(font_size=18, text_align=CENTER, margin_top=16))
+    label.style.margin_left = label.style.margin_right = 0
     image = entry_icon(False)
     image.style.width = image.style.height = 64
     progress = toga.ProgressBar(max=None, style=Pack(height=6, margin_top=24))
-    content = toga.Box(children=[image, label, progress],
+    status = BrowserStatusLabel('Preparing document…', style=Pack(font_size=12, text_align=CENTER, margin_top=12))
+    status.style.margin_left = status.style.margin_right = 0
+    content = toga.Box(children=[image, label, progress, status],
                        style=Pack(direction=COLUMN, align_items=CENTER, margin=32))
     progress.style.align_self = 'stretch'
     panel = toga.Box(children=[toga.Box(style=Pack(flex=1)), content,
@@ -114,11 +117,18 @@ def opening_status(app, source, *, destination=None):
     else:
         routes.show(panel, destination=destination, route=route, title=name)
     progress.start()
+    from .loading_progress import OpeningProgress, current_progress
+    reporter = OpeningProgress(app, state, progress, status)
+    state['progress'] = reporter
+    token = current_progress.set(reporter)
     try:
         yield
     finally:
+        current_progress.reset(token)
+        reporter.close()
         progress.stop()
         label.text = ''
+        status.text = ''
         image.image = None
         if getattr(app, '_file_loading', None) is state:
             app._file_loading = None
@@ -163,10 +173,32 @@ async def reopen_file(app, source):
         return await _reopen_file(app, source)
 
 
+def local_document_path(app, path):
+    """Recover iOS Documents references after an app container relocation."""
+    path = Path(path)
+    if path.exists():
+        return path
+    from features.rclone.mobile.storage_location import shared_documents_path
+    root = shared_documents_path(getattr(app, 'private_root', Path('/')))
+    if root is None:
+        return path
+    parts = path.parts
+    # Only historical iOS application Documents paths can be relocated. Never
+    # turn an arbitrary missing file into a same-named file in this app.
+    prefix = ('/', 'var', 'mobile', 'Containers', 'Data', 'Application')
+    if parts[:len(prefix)] != prefix or len(parts) < 9 or parts[7] != 'Documents':
+        return path
+    relative = Path(*parts[8:])
+    if '..' in relative.parts:
+        return path
+    candidate = root / relative
+    return candidate if candidate.is_file() else path
+
+
 async def _reopen_file(app, source):
     """Resolve credentials again before constructing any encrypted provider."""
     if source['type'] == 'local':
-        path = Path(source['path'])
+        path = local_document_path(app, source['path'])
         if path.suffix.lower() in {'.pdf', '.epub', '.cbz', '.zip'}:
             return await app.open_download(path=path)
         from commonUtils.runtime.local_files import LocalFiles
@@ -229,7 +261,7 @@ def folder_location(app, session, owner=None):
     source = (getattr(session, 'history_source', None) or getattr(session, 'source', None)
               or getattr(app, '_document_folder_sources', {}).get((session.provider, session.resource)))
     if source and source.get('type') == 'local':
-        path = Path(source['path'])
+        path = local_document_path(app, source['path'])
         if path.is_file():
             return dict(path=path)
     return None

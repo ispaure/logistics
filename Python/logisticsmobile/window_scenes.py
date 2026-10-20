@@ -242,7 +242,7 @@ class SceneManager:
         # Only application infrastructure is shared. Feature state, callbacks,
         # routes, native containers, preferences and drafts belong to this host.
         for field in ('factory', '_impl', '_paths', '_app_name', 'metadata', '_formal_name',
-                      '_app_id', '_author', '_version', '_home_page', '_description', '_windows'):
+                      '_app_id', '_author', '_version', '_home_page', '_description', '_windows', '_commands'):
             setattr(host, field, getattr(self.app, field))
         host._main_window = None
         host.storage_root = self.app.private_root

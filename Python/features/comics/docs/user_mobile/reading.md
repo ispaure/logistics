@@ -29,7 +29,9 @@ relock action; configured INI archive passwords continue to unlock folder reads.
 Rclone crypt credential locking is a separate connection operation.
 
 Mobile Local and LocalCrypt comics use the same fit/zoom/swipe and reading-mode
-controls, with Previous/Next available when controls are visible. LocalCrypt
+controls, with Previous/Next available when controls are visible. Comics do not
+show a chapter/browser hamburger button. Use **Reader actions → Comic pages…**
+to jump to a page, or **Show in folder** to browse the comic’s source when available. LocalCrypt
 readers expose page navigation without bookmark controls. Readers opened from Files return to the
 same folder through Back, including after visiting reader tools.
 

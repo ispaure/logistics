@@ -16,3 +16,6 @@ class MobilePresentation:
     markdown_preview: Callable
     css_variables: Callable
     summary_list: Callable
+    font_size: Callable
+    bind_font: Callable
+    folder_actions: Callable

@@ -10,6 +10,15 @@ class AndroidFileList(Widget):
     def set_enabled(self, enabled):
         self.native.setEnabled(bool(enabled))
 
+    def get_vertical_position(self):
+        return self.native.getVerticalPosition()
+
+    def get_max_vertical_position(self):
+        return self.native.getMaxVerticalPosition()
+
+    def set_vertical_position(self, value):
+        self.native.setVerticalPosition(round(value))
+
     def create(self):
         self.native = FileListView(self._native_activity)
         owner = weakref.ref(self)

@@ -4,6 +4,8 @@ Each workspace is a configured folder or storage location with relevant tools an
 actions: browse its files, open a Notes Library, or manage available local,
 encrypted and remote copies. Open **Workspaces** from the main navigation, then
 use a folder's **Workspace actions** menu for its available commands.
+The **Local** source opens without loading cloud connection controls. Selecting
+**Cloud** or **Home Server** initializes connections and restores saved credentials.
 
 On tablets and other windows with at least 640 points of usable width,
 Workspaces keeps the locations and source controls on the left. Opening a local,
@@ -52,6 +54,9 @@ contents. Workspaces lists imported folders and downloaded/synced copies
 individually, opening each folder directly. **Browse All Files** appears underneath
 the folder list and opens the shared directory on iOS.
 On Android, it opens the managed Local folder.
+When you open a local folder directly from Workspaces, Back from that folder
+returns to Workspaces. Inside a subfolder, Back first returns to its parent.
+List mode uses compact native rows on both iOS and Android.
 Opening LocalCrypt shows source tabs for switching back to local files. Workspace
 actions are in the header menu; the back control returns to the parent folder or
 Workspaces. **Cloud File Browser** uses the same directory, search and listing
@@ -74,7 +79,12 @@ This control stays beside the folder name in local, remote and drawer browsers,
 including when a long folder name is shortened to fit.
 List mode uses a native scrolling list on iOS and Android, reusing rows as you
 scroll. Every matching item is available without page buttons. Search includes
-all available entries, including those you have not scrolled to yet.
+all available entries, including those you have not scrolled to yet. Local and
+LocalCrypt search scans folder and file names throughout the current folder and
+its subfolders. Matches appear as they are found; the search status stays visible
+while scanning continues and reports partial results or errors. Cloud and Home
+Server search filters the currently listed folder. Closing search restores the
+current folder listing.
 The top bar has no Sort control. The
 rows show filenames rather than full paths, shortening long names in the middle.
 File sizes remain available in **Details** instead of beside every filename. The

@@ -13,8 +13,12 @@ iOS navigation Back and Android system Back return to the retained opening scree
 without closing the session. Android may first dismiss reading controls or
 fullscreen mode.
 While a file downloads or prepares to open from Home, Documents or Workspaces,
-a separate panel shows its file icon, name and loading bar. The reader replaces
-that panel when ready. Back returns to the opening screen, including when used
+a separate panel shows its file icon, name and loading bar.
+Measured full-file reads show **Reading N%** when the size is known, or
+**Reading file…** when it is not. The bar switches to **Preparing document…**
+while decoding and the first page finish. Opening paths that read selected
+ranges, including PDFs, keep an indeterminate bar. The reader replaces the panel
+when ready. Back returns to the opening screen, including when used
 before loading finishes. Failed opens return to that screen too.
 On iOS, the top navigation bar shows the opened document's filename with its
 extension, without the folder path, including files opened from local, remote

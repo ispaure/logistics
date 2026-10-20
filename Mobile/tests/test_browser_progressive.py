@@ -100,6 +100,66 @@ class RecycledBrowserTests(unittest.TestCase):
         self.app.loop.run_until_complete(browser._activate_row(row))
         self.assertEqual(self.opened[-1]['path'], 'sub/match-10004.md')
 
+    def test_nested_folder_match_is_visible_before_slow_descendants_finish(self):
+        from threading import Event
+        browser = self.browser
+        blocked, release = Event(), Event()
+        root = [dict(path='Books', name='Books', directory=True)]
+        folder = dict(path='Books/Haruki Murakami', name='Haruki Murakami', directory=True)
+        def listing(path, *, cancelled):
+            if not path:
+                return root
+            if path == 'Books':
+                return [folder]
+            blocked.set()
+            release.wait(5)
+            return []
+        self.provider.list = listing
+        browser.set_entries(self.provider, '', root)
+        browser.open_search()
+        self.assertIn(browser.page_label, browser.widget.children)
+        browser.search.value = 'murakami'
+        async def check():
+            try:
+                async def visible():
+                    while not blocked.is_set() or not browser.native_list.data:
+                        await asyncio.sleep(.01)
+                await asyncio.wait_for(visible(), 2)
+                row = browser.native_list.data[0]
+                self.assertEqual(row.title, 'Haruki Murakami')
+                self.assertEqual(row.entry.payload['path'], folder['path'])
+                self.assertIn('Searching', browser.page_label.text)
+                browser.sort.value = 'Name Z–A'
+                self.assertIn('Searching', browser.page_label.text)
+                # Clearing search invalidates any later worker result.
+                browser.close_search()
+                await asyncio.sleep(.45)
+                self.assertNotIn(browser.page_label, browser.widget.children)
+                self.assertEqual([entry.payload['path'] for entry in browser.entries], ['Books'])
+            finally:
+                release.set()
+            await asyncio.gather(*tuple(browser.tasks))
+            self.assertEqual([entry.payload['path'] for entry in browser.entries], ['Books'])
+        self.app.loop.run_until_complete(check())
+
+    def test_search_errors_and_partial_results_remain_visible(self):
+        browser = self.browser
+        root = [dict(path='Murakami', name='Murakami', directory=True)]
+        def listing(path, *, cancelled):
+            if not path:
+                return root
+            raise PermissionError('Unreadable folder')
+        self.provider.list = listing
+        browser.set_entries(self.provider, '', root)
+        browser.open_search()
+        browser.search.value = 'murakami'
+        async def check():
+            await browser._search_subfolders(browser.search_epoch, browser.search_cancelled)
+            self.assertEqual(browser.native_list.data[0].title, 'Murakami')
+            self.assertIn('Partial results', browser.page_label.text)
+            self.assertIn(browser.page_label, browser.widget.children)
+        self.app.loop.run_until_complete(check())
+
     def test_folder_taps_and_busy_guard_keep_existing_navigation(self):
         browser = self.browser
         opened = AsyncMock()
@@ -158,7 +218,6 @@ class RecycledBrowserTests(unittest.TestCase):
         self.assertIsNone(browser._tile_rows)
         self.assertEqual(last_button.text, '')
 
-
     def test_thumbnails_are_requested_only_for_visible_rows_and_cannot_return_after_stop(self):
         browser = self.browser
         browser.thumbnail = lambda *args: b''
@@ -206,7 +265,6 @@ class RecycledBrowserTests(unittest.TestCase):
         browser.stop()
         self.assertFalse(browser._decoded_thumbnails)
 
-
     def test_ios_thumbnail_changes_update_one_cell_and_reject_retired_rows(self):
         import ast
         import sys
@@ -232,7 +290,6 @@ class RecycledBrowserTests(unittest.TestCase):
             host.interface.data = [object()]
             namespace['source_change'](host, item=row)
             native.cellForRowAtIndexPath.assert_not_called()
-
 
     def test_file_activation_skips_metadata_and_rechecks_navigation_after_callback(self):
         browser = self.browser
