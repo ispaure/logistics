@@ -13,6 +13,14 @@ without listing again. iOS omits the browser's separate parent button; Android
 keeps its existing parent and system Back policy. Embedded document drawers keep
 their existing navigation policy.
 
+Ancestor controllers hold read-only browser previews rather than empty panels.
+Direct deep entry prepares parent listings asynchronously without changing the
+active folder. Previously visited folders additionally retain a native snapshot
+of their visible layout for the interactive transition. Back keeps this content
+visible until the fresh parent listing is ready. Trimming routes cancels preview
+work and releases its widgets/snapshots; credential invalidation clears private
+previews and snapshots before they can be revealed.
+
 `document_sources.folder_action` supplies **Show in folder** only for resolvable
 sources. Provider readers resolve the current provider/key at invocation and
 check private-session availability. Imported local text/books retain a source

@@ -107,6 +107,7 @@ class ProviderUI(FilesUI):
         return True
 
     def clear_private_catalog(self):
+        self.app.routes.folders.invalidate_private()
         vault = getattr(self, 'vault_browser', None)
         if vault is not None and vault.provider.private:
             vault.dispose()

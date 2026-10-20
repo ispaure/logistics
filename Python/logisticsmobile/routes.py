@@ -30,6 +30,8 @@ class MobileRoutes(Routes):
         task = self.folders.task
         if task is not None and not task.done():
             task.cancel()
+        for destination, route in list(self.folders.screens):
+            self.folders.forget(destination, route)
         super().uninstall()
 
     def show(self, view, *, destination=None, route=None, title='', root=False):
@@ -69,7 +71,7 @@ class MobileRoutes(Routes):
         super().trim(destination, count, native=native)
         for route in removed:
             self.origins.pop((destination, route), None)
-            self.folders.screens.pop((destination, route), None)
+            self.folders.forget(destination, route)
 
     def return_to(self, destination):
         if self.app.select_destination(destination) is not False:

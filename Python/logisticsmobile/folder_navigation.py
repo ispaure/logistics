@@ -1,9 +1,11 @@
 """Folder ancestry in UIKit's destination-local navigation stacks."""
+import asyncio
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
 import toga
 from toga.style import Pack
+from toga.style.pack import COLUMN
 from commonUtils.ui.native.routes import Routes
 
 
@@ -18,10 +20,96 @@ class FolderScreen:
     query: str = ''
     selected: object = None
     scroll: int = 0
+    preview: object = None
+    snapshot: object = None
 
     @property
     def route(self):
         return f'folder:{self.kind}:{self.source!r}:{self.path!r}'
+
+
+class FolderPreview:
+    """Read-only parent contents, ready before UIKit begins an interactive pop."""
+    def __init__(self, app, entry):
+        from .browser_ui import FileBrowser
+        self.app, self.entry = app, entry
+        self.provider = entry.browser.search_provider
+        owner = getattr(self.provider, 'provider', self.provider)
+        self.private = entry.kind == 'remote-browser' or getattr(owner, 'private', False)
+        self.client = getattr(app, 'cloud_client', None)
+        self.generation = getattr(self.client, 'generation', None)
+        self.browser = FileBrowser(folder_visible=app.folder_path_visible, preview=False)
+        self.status = self.browser.status_label('Opening folder…')
+        parent = toga.Button('')
+        header = self.browser.attach_location_header(self.status, parent)
+        header.remove(parent)
+        self.browser.search_button.enabled = False
+        header.update(entry.path, remote=entry.kind == 'remote-browser',
+                      encrypted=self.private, unlocked=True,
+                      name=PurePosixPath(entry.path).name if entry.path else entry.source)
+        self.view = toga.Box(children=[header, self.browser.scroll_container()],
+                             style=Pack(direction=COLUMN, flex=1, margin=12))
+        self.sidebar_snapshot = None
+        frame = getattr(entry.view, '_workspace_frame', None)
+        sidebar = getattr(frame, 'folder_master', None)
+        if sidebar is not None and app.adaptive.wide:
+            from toga.style.pack import ROW
+            content = self.view
+            content.style.margin = 0
+            left = toga.Box(style=Pack(width=sidebar.style.width, flex=0))
+            self.view = toga.Box(children=[left, content], style=Pack(direction=ROW, flex=1, margin=12))
+            self.sidebar_snapshot = native_snapshot(sidebar)
+            if self.sidebar_snapshot is not None:
+                left._impl.native.addSubview(self.sidebar_snapshot)
+                self.sidebar_snapshot.frame = left._impl.native.bounds
+        self.task = app.loop.create_task(self.prepare())
+
+    async def prepare(self):
+        try:
+            if hasattr(self.provider, 'list'):
+                rows = await asyncio.to_thread(self.provider.list, self.entry.path)
+            elif self.entry.kind == 'remote-browser':
+                rows = await asyncio.to_thread(self.client.entries, self.entry.source, self.entry.path)
+                rows = [dict(row, name=PurePosixPath(row['path']).name, modified='') for row in rows]
+            else:
+                return
+            if (not self.app.active_host or (self.private and (
+                    self.client is not getattr(self.app, 'cloud_client', None)
+                    or self.generation != getattr(self.client, 'generation', None)))):
+                return
+            self.browser.set_entries(self.provider, self.entry.path, rows)
+            self.status.value = ''
+        except (OSError, ValueError, AttributeError):
+            self.status.value = 'Return to this folder to refresh.'
+
+    def close(self):
+        self.task.cancel()
+        if self.sidebar_snapshot is not None:
+            self.sidebar_snapshot.removeFromSuperview()
+            self.sidebar_snapshot = None
+        self.browser.stop()
+        self.app.loop.create_task(self.browser.close())
+
+
+def native_snapshot(panel):
+    if not type(panel._impl).__module__.startswith('toga_iOS.'):
+        return None
+    native = panel._impl.native
+    if native.bounds.size.width <= 0 or native.bounds.size.height <= 0:
+        return None
+    native.layoutIfNeeded()
+    snapshot = native.snapshotViewAfterScreenUpdates(False)
+    if snapshot is not None:
+        snapshot.frame = native.bounds
+        snapshot.autoresizingMask = 18  # flexible width and height
+        snapshot.userInteractionEnabled = False
+    return snapshot
+
+
+def clear_snapshot(entry):
+    if entry.snapshot is not None:
+        entry.snapshot.removeFromSuperview()
+        entry.snapshot = None
 
 
 def record(app, view, browser, kind, source, path, navigate):
@@ -48,10 +136,30 @@ class FolderNavigation:
         screens = routes.screens[destination]
         entry = self.screens.get((destination, screens[-1][0])) if screens else None
         if entry is not None:
+            clear_snapshot(entry)
+            entry.snapshot = native_snapshot(screens[-1][1])
             entry.query = entry.browser.search.value
             entry.selected = entry.browser.selected
             scroll = getattr(entry.browser, '_scroll', None)
             entry.scroll = scroll.vertical_position if scroll is not None else 0
+
+    def forget(self, destination, route):
+        entry = self.screens.pop((destination, route), None)
+        if entry is not None:
+            clear_snapshot(entry)
+            if entry.preview is not None:
+                entry.preview.close()
+
+    def invalidate_private(self):
+        for entry in self.screens.values():
+            provider = getattr(entry.browser, 'search_provider', None)
+            owner = getattr(provider, 'provider', provider)
+            if entry.kind != 'remote-browser' and not getattr(owner, 'private', False):
+                continue
+            clear_snapshot(entry)
+            if entry.preview is not None:
+                entry.preview.close()
+                entry.preview.status.value = 'Connection locked. Reopen this folder.'
 
     def present(self, info, destination):
         routes = self.routes
@@ -77,15 +185,37 @@ class FolderNavigation:
         if keep < len(screens):
             routes.trim(destination, keep)
         for entry in desired:
-            if (destination, entry.route) not in self.screens or entry.path == info.path:
+            if entry.path == info.path:
+                self.forget(destination, entry.route)
+            if (destination, entry.route) not in self.screens:
                 self.screens[destination, entry.route] = entry
+            else:
+                retained = self.screens[destination, entry.route]
+                retained.view, retained.browser, retained.navigate = info.view, info.browser, info.navigate
             title = PurePosixPath(entry.path).name if entry.path else entry.source
-            view = info.view if entry.path == info.path else toga.Box(style=Pack(flex=1))
+            retained = self.screens[destination, entry.route]
+            if entry.path == info.path:
+                view = info.view
+            elif entry.route not in [screen[0] for screen in routes.screens[destination]]:
+                if hasattr(info.browser, 'search_provider'):
+                    retained.preview = FolderPreview(routes.app, retained)
+                    view = retained.preview.view
+                else:
+                    view = toga.Box(children=[toga.Label('Opening folder…')], style=Pack(flex=1))
+            else:
+                view = None
             if entry.route in [screen[0] for screen in routes.screens[destination]]:
                 if entry.path == info.path:
                     Routes.show(routes, view, destination=destination, route=entry.route, title=title)
                 continue
             Routes.show(routes, view, destination=destination, route=entry.route, title=title)
+        for route, panel, _ in routes.screens[destination]:
+            retained = self.screens.get((destination, route))
+            if retained is not None and retained.snapshot is not None:
+                if retained.path != info.path:
+                    panel._impl.native.addSubview(retained.snapshot)
+                else:
+                    clear_snapshot(retained)
         header = getattr(info.browser, 'location_bar', None)
         if header is not None and header.parent_button in header.children:
             header.remove(header.parent_button)
@@ -101,11 +231,9 @@ class FolderNavigation:
         if self.task is not None and not self.task.done():
             self.task.cancel()
         panel = screens[-1][1]
-        for child in list(panel.children):
-            panel.remove(child)
-        # Avoid showing the child folder under its parent's title while loading.
+        # Keep the retained parent preview visible throughout the transition
+        # and the fresh listing; never replace it with an empty controller.
         loading = toga.Label('Opening folder…')
-        panel.add(loading)
         expected = screens[-1][0]
 
         async def load():
@@ -116,7 +244,11 @@ class FolderNavigation:
                 if (not routes.app.active_host or not screens or screens[-1][0] != expected):
                     return
                 if opened is False:
+                    clear_snapshot(entry)
+                    for child in list(panel.children):
+                        panel.remove(child)
                     loading.text = 'Could not open folder. Go Back and try again.'
+                    panel.add(loading)
                     return
                 if entry.view.parent is not None:
                     entry.view.parent.remove(entry.view)
@@ -124,14 +256,20 @@ class FolderNavigation:
                 selected = next((item for item in entry.browser.entries if item.identity == entry.selected), None)
                 if selected is not None:
                     await entry.browser.select(selected)
-                panel.remove(loading)
+                for child in list(panel.children):
+                    panel.remove(child)
                 panel.add(entry.view)
+                clear_snapshot(entry)
                 scroll = getattr(entry.browser, '_scroll', None)
                 if scroll is not None:
                     scroll.vertical_position = min(entry.scroll, scroll.max_vertical_position)
                 if routes.host.state.destination == destination:
                     routes.render(destination)
             except (OSError, ValueError, KeyError):
+                clear_snapshot(entry)
+                for child in list(panel.children):
+                    panel.remove(child)
+                panel.add(loading)
                 loading.text = 'Could not open folder. Go Back and try again.'
             finally:
                 self.restoring -= 1

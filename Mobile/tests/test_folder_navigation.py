@@ -54,6 +54,7 @@ class FolderStackTests(TestCase):
         self.show('Projects/Reports')
         self.assertEqual([screen[2].controller.title for screen in self.routes.screens['files']],
                          ['Local files', 'Projects', 'Reports'])
+        self.assertTrue(all(panel.children for _, panel, _ in self.routes.screens['files']))
         self.assertNotIn(self.header.parent_button, self.header.children)
         nav = self.navigation[self.host.destinations.index('files')]
         nav.viewControllers.pop()
@@ -150,6 +151,25 @@ class ShowInFolderTests(TestCase):
             self.assertEqual(selected.payload['name'], 'note.txt')
             self.assertIs(app.routes.body('home'), reader)
             self.assertFalse(app.routes.origins)
+        app.loop.run_until_complete(exercise())
+
+    def test_direct_ancestor_preview_lists_parent_before_back(self):
+        from logisticsmobile.folder_navigation import FolderPreview, FolderScreen
+        app = self.app
+        async def exercise():
+            await app.show_files()
+            await app.browser_file_location(('Local files', 'Projects/Reports'))
+            entry = FolderScreen(app.files_view, app.file_browser, app.browser_file_location,
+                                 'Local files', 'Projects', 'browser')
+            preview = FolderPreview(app, entry)
+            try:
+                self.assertTrue(preview.view.children)
+                await preview.task
+                self.assertEqual([item.label for item in preview.browser.entries], ['Reports'])
+                self.assertEqual(app.file_path, 'Projects/Reports')
+            finally:
+                preview.close()
+                await preview.browser.close()
         app.loop.run_until_complete(exercise())
 
     def test_markdown_preview_offers_the_same_folder_action(self):
