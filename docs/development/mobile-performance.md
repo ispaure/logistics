@@ -96,7 +96,15 @@ callbacks and omission of operation return values from reports.
     inventory checks pass, including deferred view construction, exact recovered
     draft restoration and worker-thread execution. Native startup timing remains
     unmeasured; synchronous scene/test construction retains its existing contract.
-11. Queued encrypted document history — pending.
+11. Queued encrypted document history — implemented: normal remember/close writes
+    coalesce for 50 ms and seal/publish in a serialized worker. Credential identity,
+    generation and publication tokens are rechecked before disk publication.
+    Forget retires tokens under the deletion lock; memory clear serializes with
+    writers. Focus/host replacement flush valid writes. Legacy migration retains
+    synchronous ciphertext-before-plaintext-removal ordering. Twenty rapid updates
+    invoke one seal. Twenty-seven credential-list/private checks pass, including
+    plaintext sentinels and cancellation on forget/replacement. Crypto primitives
+    are unchanged; these lifecycle tests use the existing opaque bridge fixture.
 12. Conversation summary inventory — pending.
 13. Recycled conversation rows — pending.
 14. Recycled library-folder rows — pending.

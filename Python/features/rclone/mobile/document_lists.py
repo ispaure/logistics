@@ -1,5 +1,7 @@
 """Credential-password encrypted open/recent references; plaintext lives only in RAM."""
 import base64
+import asyncio
+from copy import deepcopy
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -45,6 +47,7 @@ def _forget_cache(root, key=None):
         directory.rmdir()
     for manager in tuple(_managers):
         if manager.root == root:
+            manager.retire_writes(key)
             if manager.app.loop.is_running():
                 manager.app.loop.call_soon_threadsafe(manager.forget_memory, key)
             else:
@@ -61,6 +64,9 @@ class CredentialDocumentLists:
         self.failed = set()
         self.refreshing = False
         self.views_pending = False
+        self._queued_writes = {}
+        self._write_timers = {}
+        self._write_tasks = set()
         _managers.add(self)
         from .cloud import CloudClient
         CloudClient._document_list_observers.add(self)
@@ -189,19 +195,77 @@ class CredentialDocumentLists:
 
     def write(self, key):
         with _cache_io_lock:
+            self.retire_writes(key)
             if key not in self.records():
                 raise ValueError('Credential document cache is locked.')
             self._write(key)
 
-    def _write(self, key):
-        self.validate(self.states[key], key)
-        raw = json.dumps(self.states[key], ensure_ascii=False).encode()
+    def retire_writes(self, key=None):
+        keys = set(self._queued_writes) | set(self._write_timers) if key is None else {key}
+        for value in keys:
+            self._queued_writes.pop(value, None)
+            timer = self._write_timers.pop(value, None)
+            if timer is not None:
+                timer.cancel()
+
+    def queue_write(self, key):
+        if not self.app.loop.is_running():
+            return self.write(key)
+        client = self.app.cloud_client
+        token = object(), client, getattr(client, 'generation', None)
+        self._queued_writes[key] = token
+        timer = self._write_timers.pop(key, None)
+        if timer is not None:
+            timer.cancel()
+        def start():
+            self._write_timers.pop(key, None)
+            if self._queued_writes.get(key) is not token or key not in self.states:
+                return
+            state = deepcopy(self.states[key])
+            async def publish():
+                try:
+                    await asyncio.to_thread(self._publish_snapshot, key, state, token)
+                except (OSError, ValueError):
+                    if self.app.active_host:
+                        self.notice()
+            task = self.app.loop.create_task(publish())
+            self._write_tasks.add(task)
+            task.add_done_callback(self._write_tasks.discard)
+        self._write_timers[key] = self.app.loop.call_later(.05, start)
+
+    def _write_valid(self, key, token):
+        return (self._queued_writes.get(key) is token and self.app.active_host
+                and token[1] is self.app.cloud_client
+                and token[2] == getattr(token[1], 'generation', None)
+                and key in self.records())
+
+    def _publish_snapshot(self, key, state, token):
+        with _cache_io_lock:
+            if self._write_valid(key, token):
+                self._write(key, state=state, valid=lambda: self._write_valid(key, token))
+                if self._queued_writes.get(key) is token:
+                    self._queued_writes.pop(key, None)
+
+    def flush_writes(self):
+        with _cache_io_lock:
+            for key, token in tuple(self._queued_writes.items()):
+                if self._write_valid(key, token):
+                    self.write(key)
+                else:
+                    self.retire_writes(key)
+
+    def _write(self, key, *, state=None, valid=lambda: True):
+        state = self.states[key] if state is None else state
+        self.validate(state, key)
+        raw = json.dumps(state, ensure_ascii=False).encode()
         if len(raw) > LIMIT:
             raise ValueError('Encrypted document list exceeds limits.')
         value = self.app.cloud_client.request('document_lists_seal', id=key, data=base64.b64encode(raw).decode())
         encrypted = base64.b64decode(value, validate=True)
         if len(encrypted) > LIMIT + 1024:
             raise ValueError('Encrypted document list exceeds limits.')
+        if not valid():
+            return
         path = self.path(key)
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         atomic_write_bytes(path, encrypted)
@@ -224,7 +288,7 @@ class CredentialDocumentLists:
         for field, limit in (('recent', self.max_recent), ('open', 32)):
             state[field] = [item, *(old for old in state[field] if old['resource'] != item['resource'])][:limit]
         try:
-            self.write(key)
+            self.queue_write(key)
         except (OSError, ValueError):
             self.notice()
         self.publish_recent()
@@ -237,11 +301,16 @@ class CredentialDocumentLists:
         resource = self.references.reference_id(session.cache_source)
         self.states[key]['open'] = [item for item in self.states[key]['open'] if item['resource'] != resource]
         try:
-            self.write(key)
+            self.queue_write(key)
         except (OSError, ValueError):
             self.notice()
 
     def forget_memory(self, key=None):
+        with _cache_io_lock:
+            self._forget_memory(key)
+
+    def _forget_memory(self, key=None):
+        self.retire_writes(key)
         keys = (set(self.states) | self.failed) if key is None else {key}
         for value in keys:
             self.states.pop(value, None)

@@ -1,5 +1,6 @@
 """Credential-list lifecycle and UI integration; AES/password checks live in Go tests."""
 import base64
+import asyncio
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -71,6 +72,43 @@ class CredentialDocumentListTests(unittest.TestCase):
         session = Session('live', 'provider-session', 'memory-only', 'markdown', title=f'Sensitive title {index}.md', transient=True)
         self.cache.remember(session, source)
         return session
+
+    def test_async_remembers_coalesce_and_only_ciphertext_reaches_disk(self):
+        self.client.unlock()
+        async def exercise():
+            for index in range(20):
+                self.remember(index)
+            await asyncio.sleep(.1)
+            await asyncio.gather(*self.cache._write_tasks)
+        with patch.object(self.client, 'request', wraps=self.client.request) as request:
+            self.app.loop.run_until_complete(exercise())
+        seals = [call for call in request.call_args_list if call.args[0] == 'document_lists_seal']
+        self.assertEqual(len(seals), 1)
+        for path in self.root.rglob('*'):
+            if path.is_file():
+                self.assertNotIn(b'Sensitive title', path.read_bytes())
+                self.assertNotIn(b'Sensitive/folder', path.read_bytes())
+
+    def test_forget_retires_a_queued_write_before_it_can_recreate_ciphertext(self):
+        self.client.unlock()
+        async def exercise():
+            self.remember()
+            forget_cache(self.cache.root)
+            await asyncio.sleep(.1)
+            await asyncio.gather(*self.cache._write_tasks)
+        self.app.loop.run_until_complete(exercise())
+        self.assertFalse(list(self.cache.root.rglob('*.zip')))
+
+    def test_credential_replacement_retires_a_queued_encrypted_snapshot(self):
+        self.client.unlock()
+        async def exercise():
+            self.remember()
+            self.client.clear()
+            self.cache.forget_memory()
+            await asyncio.sleep(.1)
+            await asyncio.gather(*self.cache._write_tasks)
+        self.app.loop.run_until_complete(exercise())
+        self.assertFalse(list(self.cache.root.rglob('*.zip')))
 
     def test_lists_stay_out_of_plaintext_and_restore_only_after_unlock(self):
         self.client.unlock()

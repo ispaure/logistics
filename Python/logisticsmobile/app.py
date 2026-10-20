@@ -98,6 +98,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             store = getattr(previous, 'store', None)
             if store is not None:
                 store.flush_checkpoints()
+            lists = getattr(previous, 'credential_document_lists', None)
+            if lists is not None:
+                lists.flush_writes()
             if hasattr(previous, 'chat_current') and not previous.checkpoint_chat():
                 raise OSError('Could not preserve the previous conversation.')
             previous.active_host = False
@@ -121,6 +124,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             store = getattr(previous_host, 'store', None)
             if store is not None:
                 store.flush_checkpoints()
+            lists = getattr(previous_host, 'credential_document_lists', None)
+            if lists is not None:
+                lists.flush_writes()
             if hasattr(previous_host, 'chat_current') and not previous_host.checkpoint_chat():
                 raise OSError('Could not preserve the previous conversation.')
             pending = getattr(previous_host, 'startup_task', None)
@@ -991,6 +997,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             return False
         try:
             self.store.flush_checkpoints()
+            self.credential_document_lists.flush_writes()
         except (OSError, ValueError) as error:
             self.status.text = 'Could not preserve edits: ' + str(error)
             return False
