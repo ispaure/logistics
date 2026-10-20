@@ -165,21 +165,39 @@ class ProviderUI(FilesUI):
             if drawer.destination == 'documents':
                 drawer.refresh_menu()
         self.editor_picker().clear()
+        ordinary = self.ordinary_file_roots() if hasattr(self, 'files_view') else {}
+        previous_roots = getattr(self, 'file_roots', {})
+        for label, provider in list(ordinary.items()):
+            previous = previous_roots.get(label)
+            if (previous is provider or (previous is not None and provider is not None
+                    and not previous.private and previous.root == provider.root)):
+                ordinary[label] = previous
+        keep_local = (hasattr(self, 'files_view') and self.file_storage.value in ordinary
+                      and not getattr(self.file_provider, 'private', False))
         listing = getattr(self, '_folder_listing', None)
-        if listing is not None:
+        if listing is not None and not keep_local:
             listing.invalidate()
         for name in ('file_browser', 'remote_browser'):
             browser = getattr(self, name, None)
-            if browser is not None:
+            if browser is not None and not (name == 'file_browser' and keep_local):
                 browser.stop()
         if hasattr(self, 'files_view'):
-            self.file_rows = {}
-            self.file_roots = {}
-            self.file_storage.items = self.file_destination.items = []
-            self.file_provider = None
-            self.file_selection.items = []
-            self.file_name.value = self.file_target.value = self.file_location.value = ''
-            self.file_status.value = ''
+            storage, destination = self.file_storage.value, self.file_destination.value
+            self.file_changing_location = True
+            try:
+                self.file_roots = ordinary
+                self.file_storage.items = self.file_destination.items = list(ordinary)
+                default = self.local_browser_root()
+                self.file_storage.value = storage if storage in ordinary else default
+                self.file_destination.value = destination if destination in ordinary else default
+            finally:
+                self.file_changing_location = False
+            if not keep_local:
+                self.file_rows = {}
+                self.file_provider = None
+                self.file_selection.items = []
+                self.file_name.value = self.file_target.value = self.file_location.value = ''
+                self.file_status.value = ''
         self.crypt_labels = {}
         self.crypt_selector.items = []
 

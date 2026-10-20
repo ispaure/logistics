@@ -6,6 +6,58 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class FileUITests(unittest.TestCase):
+    def test_credential_cleanup_retires_private_rows_but_keeps_ordinary_choices(self):
+        from types import SimpleNamespace
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory).resolve()
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                app.loop.run_until_complete(app.show_files())
+                app.file_changing_location = True
+                app.file_storage.items = ['Local files', 'Private fixture']
+                app.file_storage.value = 'Private fixture'
+                app.file_changing_location = False
+                app.file_provider = SimpleNamespace(private=True)
+                app.file_rows = {'private': {'name': 'secret.txt'}}
+                app.clear_private_catalog()
+                self.assertIsNone(app.file_provider)
+                self.assertEqual(app.file_rows, {})
+                self.assertTrue(app.file_browser.closed)
+                self.assertEqual(app.file_storage.value, app.local_browser_root())
+                self.assertNotIn('Private fixture', [row.value for row in app.file_storage.items])
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
+    def test_credential_cleanup_during_cold_local_read_preserves_picker_and_listing(self):
+        from features.rclone.mobile.storage_location import CollectionFiles
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory).resolve()
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            original = CollectionFiles.list
+            def restoring(provider, *args, **kwargs):
+                # Restore/credential replacement can finish while local I/O runs.
+                app.loop.call_soon_threadsafe(app.clear_private_catalog)
+                return original(provider, *args, **kwargs)
+            try:
+                (app.private_root / 'LocalFiles').mkdir(exist_ok=True)
+                (app.private_root / 'LocalFiles/note.txt').write_text('local fixture')
+                with patch.object(CollectionFiles, 'list', restoring):
+                    self.assertTrue(app.loop.run_until_complete(app.show_files()))
+                self.assertIn('Local files', [row.value for row in app.file_storage.items])
+                self.assertEqual(app.file_storage.value, 'Local files')
+                self.assertFalse(app.file_browser.closed)
+                self.assertEqual([entry.label for entry in app.file_browser.entries], ['note.txt'])
+                rows = app.file_rows.copy()
+                app.clear_private_catalog()
+                self.assertEqual(app.file_rows, rows)
+                self.assertFalse(app.file_browser.closed)
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
     def test_cold_local_files_open_while_initial_cloud_restore_is_blocked(self):
         import asyncio
         with TemporaryDirectory() as directory:
