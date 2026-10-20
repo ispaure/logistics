@@ -52,6 +52,8 @@ class AndroidDeployTests(unittest.TestCase):
             self.assertFalse(any('uninstall' in command for command in calls))
             self.assertIn(deploy.BUNDLE + '/org.beeware.android.MainActivity', calls[-1])
             self.assertIn(['android'], [command[-1:] for command in calls])
+            build = next(command for command in calls if ':app:assembleDebug' in command)
+            self.assertEqual(build[build.index('-p') + 1], str(project))
 
     def test_build_number_exceeds_installed_beta_and_previous_local_builds(self):
         import json
