@@ -69,6 +69,25 @@ class FolderStackTests(TestCase):
         self.assertFalse(self.routes.screens['files'])
         self.assertEqual(self.host.state.destination, 'files')
 
+    def test_home_picker_ancestors_keep_the_opening_reader_below_their_scope(self):
+        self.host.activate('home')
+        reader = toga.Label('Retained Home reader')
+        self.routes.show(reader, route='reader:origin')
+        self.view._folder_return_count = 1
+        self.view._folder_scope = 'picker-one'
+        record(self.app, self.view, self.browser, 'workspace-browser', 'Local files',
+               'Projects/Reports', self.navigate)
+        self.routes.show(self.view, destination='home', route='workspace-browser')
+        self.assertEqual(len(self.routes.screens['home']), 4)
+        self.assertIs(self.routes.screens['home'][0][1].children[0], reader)
+        nav = self.navigation[self.host.destinations.index('home')]
+        self.assertEqual([screen[2].controller.title for screen in self.routes.screens['home'][1:]],
+                         ['Local files', 'Projects', 'Reports'])
+        nav.viewControllers = nav.viewControllers[:2]
+        self.routes.native_popped(nav)
+        self.assertIs(self.routes.body().children[0], reader)
+        self.assertFalse(self.routes.origins)
+
     def test_parent_query_is_restored_and_failed_parent_remains_navigable(self):
         self.show('Projects')
         self.browser.search.value = 'report'
@@ -134,6 +153,31 @@ class ShowInFolderTests(TestCase):
         self.folder.mkdir(parents=True)
         self.path = self.folder / 'note.txt'
         self.path.write_text('Keep my draft')
+
+    def test_home_picker_cancel_returns_to_its_origin_and_reopening_has_separate_controls(self):
+        app = self.app
+        async def exercise():
+            app.show_home()
+            origin = app.body
+            await app.open_hub_file()
+            first = app.adaptive.browser('home')
+            self.assertIn(first.cancel_button, first.browser.location_bar.children)
+            self.assertNotIn(first.workspaces_button, first.browser_widget.children)
+            await first.open_folder({'path': 'Projects'})
+            await first.open_file({'path': 'Projects/Reports/note.txt'})
+            reader = app.body
+            await app.open_hub_file()
+            second = app.adaptive.browser('home')
+            self.assertIsNot(first, second)
+            second.cancel_browser()
+            self.assertIs(app.body, reader)
+            app.routes.back()
+            self.assertIs(app.body.children[0], first.page)
+            first.cancel_browser()
+            self.assertIs(app.body, origin)
+            await first.browser.close()
+            await second.browser.close()
+        app.loop.run_until_complete(exercise())
 
     def test_home_import_reveals_file_in_workspaces_and_keeps_reader(self):
         from logisticsmobile.document_sources import folder_action, show_in_folder

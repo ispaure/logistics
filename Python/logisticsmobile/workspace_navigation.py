@@ -247,6 +247,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             return
         # Immersive readers and focused prompts keep their existing route.
         drawer = self.browser(destination)
+        if destination == 'home':
+            self.app.loop.create_task(drawer.show_main_browser(drawer.storage.value,
+                folder=drawer.folder, provider=drawer.provider))
+            return
         detach(drawer.widget)
         box = toga.Box(children=[toga.Button('Close file browser', on_press=lambda widget, **kw:
             self.app.routes.back(), style=Pack(height=48)), drawer.widget],
@@ -581,9 +585,9 @@ class FileDrawer:
                                                        enabled=False, style=Pack(height=48)))
         header = self.browser.attach_location_header(self.status, self.parent_button)
         self.breadcrumb = header.folder_name
+        self.workspaces_button = toga.Button('Workspaces', on_press=self.app.show_locations, style=Pack(height=48))
         self.widget = toga.Box(children=[self.storage, header,
-            self.browser.scroll_container(),
-            toga.Button('Workspaces', on_press=self.app.show_locations, style=Pack(height=48))],
+            self.browser.scroll_container(), self.workspaces_button],
             style=Pack(direction=COLUMN, flex=1))
         self.browser_widget = self.widget
         if destination == 'documents':
@@ -594,6 +598,14 @@ class FileDrawer:
     async def show_main_browser(self, storage, *, folder='', extensions=None, title='Browse files', provider=None):
         if not self.app.checkpoint():
             return False
+        if self.destination == 'home' and hasattr(self, 'page'):
+            # A second picker can be opened from a reader above the first one.
+            # Each owns its controls and return edge rather than moving the
+            # older picker's widget out from under its retained reader.
+            drawer = FileDrawer(self.navigation, self.destination)
+            self.navigation.browsers[self.destination] = drawer
+            return await drawer.show_main_browser(storage, folder=folder, extensions=extensions,
+                                                  title=title, provider=provider)
         self.extensions = extensions
         client = getattr(self.app, 'cloud_client', None)
         self.scoped_provider = (storage, provider, client, getattr(client, 'generation', None)) if provider else None
@@ -608,8 +620,33 @@ class FileDrawer:
         detach(self.browser_widget)
         page = toga.Box(children=[self.browser_widget], style=Pack(direction=COLUMN, flex=1, margin=12))
         self.page = page
-        self.app.show_view(page, destination=self.destination, route='workspace-browser', title=title)
+        if self.destination != 'files':
+            page._folder_return_count = len(self.app.routes.screens[self.destination])
+            page._folder_scope = str(id(page))
+            page._folder_detail_return_count = len(self.app.adaptive.detail_routes)
+            if self.workspaces_button in self.browser_widget.children:
+                self.browser_widget.remove(self.workspaces_button)
+            self.cancel_button = toga.Button('Cancel', on_press=self.cancel_browser,
+                                            style=Pack(height=48, width=72))
+            self.browser.location_bar.add(self.cancel_button)
+        route = ('workspace-browser:' + page._folder_scope if self.destination == 'home' else 'workspace-browser')
+        self.app.show_view(page, destination=self.destination, route=route, title=title)
         return await self.refresh()
+
+    def cancel_browser(self, widget=None, **kwargs):
+        if not self.app.checkpoint():
+            return
+        self.app.mark_navigation()
+        if self.destination == 'documents' and self.app.adaptive.split is not None:
+            self.app.adaptive.trim_details(self.page._folder_detail_return_count)
+            if self.app.adaptive.detail_routes:
+                self.app.body = self.app.adaptive.detail_routes[-1][1]
+                self.app.route_changed(self.app.body)
+            else:
+                self.app.adaptive.show_list()
+        else:
+            self.app.routes.trim(self.destination, self.page._folder_return_count)
+            self.app.routes.render(self.destination)
 
     def refresh_menu(self):
         from .hub_ui import heading
@@ -744,6 +781,8 @@ class FileDrawer:
         return await self.refresh()
 
     async def navigate(self, location):
+        if self.destination == 'home':
+            self.navigation.browsers[self.destination] = self
         if not self.app.routes.folders.restoring:
             self.app.routes.folders.capture()
         label, folder = location

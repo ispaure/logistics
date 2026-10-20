@@ -38,7 +38,7 @@ class MobileRoutes(Routes):
         origin = self.host.state.destination
         target = destination or origin
         folder = getattr(view, '_folder_screen', None)
-        if self.apple and target == 'files' and not root and folder is not None and route in ('browser', 'remote-browser', 'workspace-browser'):
+        if self.apple and target in ('files', 'home') and not root and folder is not None and route in ('browser', 'remote-browser', 'workspace-browser'):
             self.folders.present(folder, target)
             return
         screens = self.screens[target]

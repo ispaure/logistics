@@ -11,7 +11,10 @@ interactive pops and explicit route Back restore the ancestor location into the
 retained browser owner. Reader pops to the same folder keep its existing widgets
 without listing again. iOS omits the browser's separate parent button; Android
 keeps its existing parent and system Back policy. Embedded document drawers keep
-their existing navigation policy.
+their existing navigation policy. Home's full-page picker uses a scoped folder
+stack above its opening screen, with an explicit Cancel to trim that scope.
+Nested picker invocations keep separate browser owners, so cancelling the newer
+picker retains the older browser beneath its reader.
 
 Ancestor controllers hold read-only browser previews rather than empty panels.
 Direct deep entry prepares parent listings asynchronously without changing the

@@ -22,10 +22,12 @@ class FolderScreen:
     scroll: int = 0
     preview: object = None
     snapshot: object = None
+    base: int = 0
+    scope: str = ''
 
     @property
     def route(self):
-        return f'folder:{self.kind}:{self.source!r}:{self.path!r}'
+        return f'folder:{self.kind}:{self.scope}:{self.source!r}:{self.path!r}'
 
 
 class FolderPreview:
@@ -114,12 +116,14 @@ def clear_snapshot(entry):
 
 def record(app, view, browser, kind, source, path, navigate):
     """Publish only successfully loaded locations; failed listings keep the stack."""
-    view._folder_screen = FolderScreen(view, browser, navigate, source, path, kind)
+    view._folder_screen = FolderScreen(view, browser, navigate, source, path, kind,
+                                      base=getattr(view, '_folder_return_count', 0),
+                                      scope=getattr(view, '_folder_scope', ''))
     routes = getattr(app, 'routes', None)
     if routes is None or not routes.apple or routes.folders.restoring:
         return
     destination = app.native_host.state.destination
-    if destination == 'files' and view in routes.body(destination).children:
+    if destination in ('files', 'home') and view in routes.body(destination).children:
         routes.show(view, destination=destination, route=kind)
 
 
@@ -172,13 +176,14 @@ class FolderNavigation:
         paths = ['']
         for part in PurePosixPath(info.path).parts:
             paths.append('/'.join(filter(None, (paths[-1], part))))
-        desired = [FolderScreen(info.view, info.browser, info.navigate, info.source, path, info.kind)
+        desired = [FolderScreen(info.view, info.browser, info.navigate, info.source, path, info.kind,
+                               base=info.base, scope=info.scope)
                    for path in paths]
         screens = routes.screens[destination]
         # Storage root returns directly to the Workspaces overview, including
         # entry through a pinned folder's options screen.
-        keep = 0
-        for entry, screen in zip(desired, screens):
+        keep = info.base
+        for entry, screen in zip(desired, screens[info.base:]):
             if entry.route != screen[0]:
                 break
             keep += 1
