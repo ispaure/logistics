@@ -336,6 +336,8 @@ class BulkRenameWidget(qt.QWidget):
         ancestor = index.parent()
         while ancestor.isValid():
             depth += 1
+            if self.folder_model.canFetchMore(ancestor):
+                self.folder_model.fetchMore(ancestor)
             self.folder_tree.expand(ancestor)
             ancestor = ancestor.parent()
         self.folder_tree.expand(index)
@@ -351,12 +353,19 @@ class BulkRenameWidget(qt.QWidget):
         # An index can exist before its parents' rows have arrived. Keep the
         # pending reveal until the selected folder is actually in the view.
         rectangle = self.folder_tree.visualRect(index)
-        # Later sibling inserts/sorting in an unloaded ancestor can move this
-        # row out of view again. Finish the reveal only after the entire branch
-        # has loaded, then stop following it so manual tree scrolling is respected.
-        branch_loaded = all(parent in self._loaded_tree_directories for parent in (path, *path.parents))
-        if branch_loaded and not rectangle.isEmpty() and self.folder_tree.viewport().rect().intersects(rectangle):
+        # Some already-populated ancestors never emit directoryLoaded for this
+        # model. Require stable visible geometry instead of waiting forever for
+        # every ancestor notification, then respect manual tree scrolling.
+        geometry = (path, rectangle.getRect(), self.folder_tree.verticalScrollBar().maximum())
+        settled = geometry == getattr(self, '_folder_reveal_geometry', None)
+        self._folder_reveal_geometry = geometry
+        if settled and not rectangle.isEmpty() and self.folder_tree.viewport().rect().intersects(rectangle):
             self._folder_reveal_pending = None
+            self._folder_reveal_geometry = None
+        else:
+            # Directory notifications can precede queued row insertion/layout.
+            # Keep retrying the active request until its row has settled.
+            self._folder_reveal_timer.start(50)
 
     def _scan_options(self):
         return dict(mask=self.mask.text(), files=self.include_files.isChecked(),

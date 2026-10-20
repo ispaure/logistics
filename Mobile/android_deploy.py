@@ -1,9 +1,11 @@
 """Stage current local sources, build and install a normal Android debug app."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -138,33 +140,119 @@ def refresh_sources(env):
     run(command, env, log=workspace / 'logs/android-update.log')
 
 
-def deploy(device=None, *, build_only=False):
+def installed_version(adb, env, serial):
+    details = run([str(adb), '-s', serial, 'shell', 'dumpsys', 'package', BUNDLE], env)
+    match = re.search(r'\bversionCode=(\d+)', details)
+    return int(match[1]) if match else 0
+
+
+def deployment_version(adb, env, serials, configured):
+    """Reserve above installed and tester builds before compiling anything."""
+    numbers = [configured, *(installed_version(adb, env, serial) + 1 for serial in serials)]
+    for record, field in ((ROOT / '.android-beta/build.json', 'last_build'),
+                          (ROOT / '.tools/android-deployment-build.json', 'last_build')):
+        if record.exists():
+            numbers.append(int(json.loads(record.read_text())[field]) + 1)
+    number = max(numbers)
+    if number > 2100000000:
+        raise ValueError('Android version code limit exceeded.')
+    record = ROOT / '.tools/android-deployment-build.json'
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(json.dumps(dict(last_build=number)) + '\n')
+    return number
+
+
+def build_tools(env):
+    candidates = [p for p in (Path(env['ANDROID_HOME']) / 'build-tools').iterdir()
+                  if re.fullmatch(r'\d+(\.\d+)+', p.name) and (p / 'apksigner').is_file()]
+    return max(candidates, key=lambda p: tuple(map(int, p.name.split('.'))))
+
+
+def apk_certificate(apk, tools, env):
+    report = run([str(tools / 'apksigner'), 'verify', '--print-certs', str(apk)], env)
+    match = re.search(r'Signer #1 certificate SHA-256 digest: ([a-fA-F0-9]{64})', report)
+    if not match:
+        raise ValueError('Cannot verify Android APK signing certificate.')
+    return match[1].lower()
+
+
+def compatible_apk(adb, env, serial, apk):
+    """Retain debug signing unless the installed app requires our saved beta key."""
+    tools = build_tools(env)
+    paths = run([str(adb), '-s', serial, 'shell', 'pm', 'path', BUNDLE], env)
+    installed = next((line.removeprefix('package:') for line in paths.splitlines()
+                      if line.startswith('package:') and line.endswith('/base.apk')), None)
+    if installed is None:
+        return apk
+    with tempfile.TemporaryDirectory(prefix='logistics-signing-') as directory:
+        previous = Path(directory) / 'installed.apk'
+        run([str(adb), '-s', serial, 'pull', installed, str(previous)], env)
+        certificate = apk_certificate(previous, tools, env)
+    if apk_certificate(apk, tools, env) == certificate:
+        return apk
+    private = ROOT / '.android-beta'
+    key, record = private / 'signing.p12', private / 'signing.json'
+    if not key.is_file() or not record.is_file():
+        raise ValueError('Installed app requires a different signing key. Restore Mobile/.android-beta; app data is preserved.')
+    password = json.loads(record.read_text())['password']
+    signing_env = dict(env, LOGISTICS_BETA_STORE_PASSWORD=password)
+    public = subprocess.check_output([str(Path(env['JAVA_HOME']) / 'bin/keytool'), '-exportcert',
+        '-keystore', str(key), '-alias', 'logistics-beta', '-storepass:env',
+        'LOGISTICS_BETA_STORE_PASSWORD'], env=signing_env, stderr=subprocess.PIPE)
+    if hashlib.sha256(public).hexdigest() != certificate:
+        raise ValueError('Saved beta key does not match the installed app. Restore its original key; app data is preserved.')
+    signed = output_root(ROOT) / 'build' / ('compatible-' + re.sub(r'[^a-zA-Z0-9_-]', '_', serial) + '.apk')
+    signed.parent.mkdir(parents=True, exist_ok=True)
+    run([str(tools / 'apksigner'), 'sign', '--ks', str(key), '--ks-key-alias', 'logistics-beta',
+         '--ks-pass', 'env:LOGISTICS_BETA_STORE_PASSWORD', '--out', str(signed), str(apk)], signing_env)
+    if apk_certificate(signed, tools, env) != certificate:
+        raise ValueError('Compatible APK signing verification failed.')
+    print('Using the existing beta signing identity for ' + serial + '.', flush=True)
+    return signed
+
+
+def deploy(device=None, *, build_only=False, devices=None):
     config = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['briefcase']
     if config['bundle'] + '.logisticsmobile' != BUNDLE:
         raise ValueError('Android bundle identity changed; deployment stopped.')
     env = deployment_environment()
-    refresh_sources(env)
     env, adb = tools_environment(env)
+    discover_wireless(adb, env)
+    if devices is None:
+        output = run([str(adb), 'devices'], env)
+        devices = ([line.split()[0] for line in output.splitlines()
+                    if len(line.split()) == 2 and line.split()[1] == 'device'] if build_only
+                   else [select_device(output, device)])
+    number = deployment_version(adb, env, devices,
+        config.get('app', {}).get('logisticsmobile', {}).get('android', {}).get('version_code', 1))
+    print('Building Android version code ' + str(number) + '.', flush=True)
+    refresh_sources(env)
     settings = ROOT / '.tools/android-sdk.json'
     settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps({name: env[name] for name in ('ANDROID_HOME', 'BRIEFCASE_HOME') if name in env}))
     # The bridge helper also installs current launcher/appearance resources.
     run([sys.executable, str(ROOT / 'cloud_build.py'), 'android'], env, log=output_root(ROOT) / 'logs/android-bridge.log')
-    run([sys.executable, '-m', 'briefcase', 'build', 'android', '--no-input'], env, log=output_root(ROOT) / 'logs/android-build.log')
+    init = output_root(ROOT) / 'build/deployment-version.gradle'
+    init.parent.mkdir(parents=True, exist_ok=True)
+    init.write_text('gradle.beforeProject { p ->\n'
+        '  p.pluginManager.withPlugin("com.android.application") {\n'
+        '    p.androidComponents.finalizeDsl { dsl ->\n'
+        f'      dsl.defaultConfig.versionCode = {number}\n' + '    }\n  }\n}\n')
+    run([str(PROJECT / 'gradlew'), '--no-daemon', '-I', str(init), ':app:assembleDebug'], env,
+        log=output_root(ROOT) / 'logs/android-build.log')
     apk = PROJECT / 'app/build/outputs/apk/debug/app-debug.apk'
     if not apk.is_file():
         raise ValueError('Expected debug APK was not produced: ' + str(apk))
     if build_only:
         print('Android APK: ' + str(apk))
         return
-    discover_wireless(adb, env)
-    serial = select_device(run([str(adb), 'devices'], env), device)
-    install_apk(adb, env, serial, apk)
+    install_apk(adb, env, devices[0], apk)
 
 
 def install_apk(adb, env, serial, apk):
     """Update one authorized target without changing its identity or data."""
     prefix = [str(adb), '-s', serial]
+    apk = compatible_apk(adb, env, serial, apk)
     # In-place update only. Signature/version failures never trigger uninstall.
     run([*prefix, 'install', '-r', str(apk)], env, log=output_root(ROOT) / 'logs/android-install.log')
     run([*prefix, 'shell', 'am', 'force-stop', BUNDLE], env)

@@ -28,8 +28,9 @@ signals a `RenamePlan`; `widget.renamed` signals a successful `RenameResult` aft
 `selected_paths()`, `load_directory(path)`, `apply()` and `undo()` are available.
 The folder tree retains its filesystem root while revealing the current folder.
 Reveal explicitly fetches unloaded folder contents, including empty folders that
-Qt does not expand, and waits for ancestor loads before releasing the pending
-selection. Later load notifications do not reopen user-collapsed branches.
+Qt does not expand, and retries queued row insertion/layout until the selected
+row has stable visible geometry. Already-populated ancestors need not emit a
+fresh load notification. Later notifications do not reopen user-collapsed branches.
 An embedding host should honor `widget.can_close()` (false while work is running,
 with cancellation requested) and retry closing on `widget.idle` if it initiated
 that close. Do not destroy a running widget or its worker.

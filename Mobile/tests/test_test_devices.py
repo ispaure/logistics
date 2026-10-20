@@ -83,7 +83,7 @@ class TestDeviceDeployment(unittest.TestCase):
                 patch.object(devices.subprocess, 'run') as ios:
             with self.assertRaisesRegex(RuntimeError, 'boox'):
                 devices.deploy_platform([d for d in targets if d['online']])
-        build.assert_called_once_with(build_only=True)
+        build.assert_called_once_with(build_only=True, devices=['boox', 's8'])
         self.assertEqual(install.call_count, 2)
         self.assertEqual(ios.call_args.args[0][-3:], ['--device', 'udid', '--allow-wired'])
 

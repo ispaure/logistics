@@ -304,10 +304,12 @@ class MobileWorkflowTests(unittest.TestCase):
         # Native context selection opens commands for this exact payload.
         row = next(row for row in browser.native_list.data if row.entry is entry)
         app.loop.run_until_complete(browser._select_row(row))
-        self.assertIn(app.file_operation_view, app.body.children)
+        menu = browser._item_menu
+        self.assertEqual(menu.selected, browser.selected)
         self.assertEqual(app.selected_file()[1], 'Two.md')
         self.assertIsNone(getattr(app, 'crypt_reader', None))
-        app.show_file_actions(operation='rename')
+        rename = next(callback for title, callback in menu.actions if title == 'Rename…')
+        menu.invoke(rename)
         self.assertEqual(app.file_name.value, 'Two.md')
         self.assertEqual((root / 'Two.md').read_text(), 'two')
 

@@ -90,10 +90,14 @@ Briefcase provisions its Android SDK/JDK during setup; the helper also recognize
 `ANDROID_HOME` / `ANDROID_SDK_ROOT` and `BRIEFCASE_HOME`. Go and the mobile Python
 environment are required as for iOS. The first Android build may download large
 SDK/NDK dependencies. This is a local debug build, not Play Store distribution.
-Signature or version mismatches stop installation; it never uninstalls the app.
-The native build helper synchronizes the generated Gradle `versionCode` from
-`Mobile/pyproject.toml`, including when reusing an existing Briefcase project.
-The configured code must be at least as new as the device's installed build.
+Before compiling, the helper reads the targets' installed version codes and
+reserves a code above those builds and the saved Firebase/local build counters.
+A Gradle override applies it without rewriting tracked version settings. Firebase
+also considers local deployment reservations when assigning its next build.
+Before installation, APK certificate checks preserve the installed signing identity.
+If the installed app uses the saved beta key, the helper signs a deployment copy
+with that key and verifies the certificate again. Missing or unknown keys stop
+before installation; the helper never replaces keys or uninstalls the app.
 
 Optional Terminal usage: `Mobile/deploy_android.command --device SERIAL` or
 `Mobile/deploy_android.command --build-only`. Build/install logs are under

@@ -45,7 +45,7 @@ for limits and desktop behavior.
 
 ## Android appearance and E Ink status
 
-See [Mobile settings](settings/settings.md#android-appearance-and-e-ink-status).
+See [Mobile settings](settings/settings.md#appearance-and-e-ink-status).
 
 ## Settings and build information
 

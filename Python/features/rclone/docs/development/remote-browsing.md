@@ -255,7 +255,7 @@ compatibility remains preserved. The reports above now contain the 31-scenario
 runs and final staged-source fingerprint.
 
 Android's implemented appearance controls and E Ink limitations are described in
-the [mobile user guide](../../../../../docs/user_mobile/settings/settings.md#android-appearance-and-e-ink-status).
+the [mobile user guide](../../../../../docs/user_mobile/settings/settings.md#appearance-and-e-ink-status).
 
 ## Offline folder snapshots
 

@@ -41,6 +41,8 @@ class AndroidDeployTests(unittest.TestCase):
                 return 'phone\tdevice\n' if command[-1] == 'devices' else 'Success'
             with patch.object(deploy, 'ROOT', root), patch.object(deploy, 'PROJECT', project), \
                     patch.object(deploy, 'refresh_sources') as refresh, \
+                    patch.object(deploy, 'deployment_version', return_value=42), \
+                    patch.object(deploy, 'compatible_apk', side_effect=lambda a, e, s, p: p), \
                     patch.object(deploy, 'tools_environment', return_value=({}, Path('/sdk/adb'))), \
                     patch.object(deploy, 'run', side_effect=run):
                 deploy.deploy()
@@ -50,6 +52,52 @@ class AndroidDeployTests(unittest.TestCase):
             self.assertFalse(any('uninstall' in command for command in calls))
             self.assertIn(deploy.BUNDLE + '/org.beeware.android.MainActivity', calls[-1])
             self.assertIn(['android'], [command[-1:] for command in calls])
+
+    def test_build_number_exceeds_installed_beta_and_previous_local_builds(self):
+        import json
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / '.android-beta').mkdir()
+            (root / '.android-beta/build.json').write_text(json.dumps(dict(last_build=400)))
+            with patch.object(deploy, 'ROOT', root), \
+                    patch.object(deploy, 'installed_version', side_effect=[500, 200, 500, 200]):
+                self.assertEqual(deploy.deployment_version('/adb', {}, ['boox', 'phone'], 100), 501)
+                self.assertEqual(deploy.deployment_version('/adb', {}, ['boox', 'phone'], 100), 502)
+
+    def test_beta_installed_app_is_resigned_with_its_existing_key_before_install(self):
+        import hashlib
+        import json
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            private = root / '.android-beta'
+            private.mkdir()
+            (private / 'signing.p12').touch()
+            (private / 'signing.json').write_text(json.dumps(dict(password='fixture-only')))
+            certificate = hashlib.sha256(b'public certificate').hexdigest()
+            calls = []
+            def run(command, env):
+                calls.append(command)
+                return 'package:/data/app/logistics/base.apk\n' if 'path' in command else ''
+            with patch.object(deploy, 'ROOT', root), patch.object(deploy, 'build_tools', return_value=Path('/tools')), \
+                    patch.object(deploy, 'run', side_effect=run), \
+                    patch.object(deploy, 'apk_certificate', side_effect=[certificate, 'debug', certificate]), \
+                    patch.object(deploy.subprocess, 'check_output', return_value=b'public certificate'):
+                result = deploy.compatible_apk('/adb', {'JAVA_HOME': '/jdk'}, 'boox', Path('/debug.apk'))
+            self.assertEqual(result, root / 'build/compatible-boox.apk')
+            sign = next(command for command in calls if 'sign' in command)
+            self.assertIn(str(private / 'signing.p12'), sign)
+            self.assertIn('env:LOGISTICS_BETA_STORE_PASSWORD', sign)
+            self.assertNotIn('fixture-only', str(calls))
+            self.assertFalse(any('install' in command or 'uninstall' in command for command in calls))
+
+    def test_unknown_installed_signer_stops_before_install_without_replacing_key(self):
+        with TemporaryDirectory() as directory, patch.object(deploy, 'ROOT', Path(directory)), \
+                patch.object(deploy, 'build_tools', return_value=Path('/tools')), \
+                patch.object(deploy, 'run', return_value='package:/data/app/logistics/base.apk\n') as run, \
+                patch.object(deploy, 'apk_certificate', side_effect=['unknown', 'debug']):
+            with self.assertRaisesRegex(ValueError, 'Restore Mobile/.android-beta'):
+                deploy.install_apk('/adb', {}, 'boox', Path('/debug.apk'))
+            self.assertFalse(any('install' in call.args[0] or 'uninstall' in call.args[0] for call in run.call_args_list))
 
     def test_staging_uses_current_sources_and_normal_briefcase_update(self):
         with TemporaryDirectory() as directory:

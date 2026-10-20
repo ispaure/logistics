@@ -129,6 +129,9 @@ def reserve_build():
     record = PRIVATE / 'build.json'
     previous = json.loads(record.read_text())['last_build'] if record.exists() else 0
     existing = [int(p.name) for p in (ROOT / 'build/firebase').glob('*') if p.name.isdigit()]
+    local = ROOT / '.tools/android-deployment-build.json'
+    if local.exists():
+        existing.append(int(json.loads(local.read_text())['last_build']))
     number = max(int(datetime.now(timezone.utc).strftime('%Y%m%d')) * 10 + 1,
                  previous + 1, max(existing, default=0) + 1)
     if number > 2100000000:

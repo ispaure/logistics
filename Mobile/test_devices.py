@@ -95,7 +95,7 @@ def deploy_platform(available):
     android_targets = [d for d in available if d['platform'] == 'Android']
     if android_targets:
         try:
-            android.deploy(build_only=True)
+            android.deploy(build_only=True, devices=[d['connection'] for d in android_targets])
             env, adb = android.tools_environment(android.deployment_environment())
             apk = android.PROJECT / 'app/build/outputs/apk/debug/app-debug.apk'
             for device in android_targets:
