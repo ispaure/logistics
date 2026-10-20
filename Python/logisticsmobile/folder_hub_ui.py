@@ -2,6 +2,7 @@
 from features.rclone.mobile.storage_location import collection_path
 import asyncio
 from copy import deepcopy
+from types import SimpleNamespace
 import toga
 from .control_icons import icon_button
 from toga.style import Pack
@@ -66,14 +67,13 @@ class FolderHubUI:
         self.show_cloud(present=False)
         recovering = bool(getattr(self, 'folder_hub_error', ''))
         try:
-            choices = self.folder_choices()
+            choices = await self._schedule_folder_choices()
+            if choices is None:
+                return False
             if recovering or not hasattr(self, 'folder_list'):
                 box = self.build_folder_picker(choices=choices)
                 self.show_view(box, destination='files', root=True)
-            else:
-                # Lock state and crypt metadata can change without changing
-                # folder names. The list's snapshot cache covers those too.
-                self.update_folder_list(choices)
+            # Successful discovery already published into an existing list.
         except (OSError, ValueError, IndexError, KeyError) as error:
             self.folder_hub_error = str(error)[:300]
             if hasattr(self, 'folder_loading_status'):
@@ -100,6 +100,74 @@ class FolderHubUI:
             self.folder_hub_error = ''
 
     def folder_choices(self):
+        if type(self._impl).__module__.startswith(('toga_iOS.', 'toga_android.')):
+            client = getattr(self, 'cloud_client', None)
+            token = id(client), getattr(client, 'generation', None)
+            self._schedule_folder_choices()
+            if getattr(self, '_folder_choices_token', None) == token:
+                return deepcopy(self._folder_choices_cache)
+            self._folder_choices_cache = {}
+            self._folder_choices_token = None
+            # A credential change must not reveal a prior session's names while
+            # its replacement snapshot is still being discovered.
+            return {'All files': dict(source='Local', kind='local', value='',
+                name='Browse All Files', copies=[], browser_root=True)}
+        return self._discover_folder_choices()
+
+    def _schedule_folder_choices(self):
+        self._folder_refresh_again = True
+        task = getattr(self, '_folder_discovery_task', None)
+        if task is not None and not task.done():
+            return task
+        async def scan():
+            while self.active_host and self._folder_refresh_again:
+                self._folder_refresh_again = False
+                epoch = getattr(self, '_folder_discovery_epoch', 0)
+                client = getattr(self, 'cloud_client', None)
+                token = id(client), getattr(client, 'generation', None)
+                from features.rclone.transfers.mobile.jobs import resolved_job
+                jobs = {key: dict(resolved_job(client, job)) for key, job in self.mirror_store().jobs.items()}
+                remotes = tuple(self.loaded_remote_names())
+                retained = deepcopy(self.retained_credential_associations())
+                snapshot = SimpleNamespace(private_root=self.private_root, cloud_client=None,
+                    mirror_store=lambda: SimpleNamespace(jobs=jobs),
+                    loaded_remote_names=lambda: remotes,
+                    retained_credential_associations=lambda: retained,
+                    hub_crypt_locations=list(getattr(self, 'hub_crypt_locations', ())),
+                    hub_crypt_roots=deepcopy(getattr(self, 'hub_crypt_roots', {})))
+                try:
+                    choices = await asyncio.to_thread(FolderHubUI._discover_folder_choices, snapshot)
+                except (OSError, ValueError, IndexError, KeyError) as error:
+                    if self.active_host:
+                        self.folder_hub_error = str(error)[:300]
+                        if hasattr(self, 'folder_loading_status'):
+                            self.set_folder_loading('Refresh failed: ' + self.folder_hub_error)
+                    return None
+                if not self.active_host:
+                    return None
+                if epoch != getattr(self, '_folder_discovery_epoch', 0):
+                    return None
+                if token != (id(self.cloud_client), getattr(self.cloud_client, 'generation', None)):
+                    self._folder_refresh_again = True
+                    continue
+                if self._folder_refresh_again:
+                    continue
+                self._folder_choices_cache, self._folder_choices_token = choices, token
+                self.hub_crypt_locations = snapshot.hub_crypt_locations
+                if hasattr(self, 'folder_list'):
+                    self.update_folder_list(choices)
+                return choices
+            return None
+        self._folder_discovery_task = self.app.loop.create_task(scan())
+        return self._folder_discovery_task
+
+    def invalidate_folder_discovery(self):
+        self._folder_discovery_epoch = getattr(self, '_folder_discovery_epoch', 0) + 1
+        self._folder_refresh_again = False
+        self._folder_choices_cache = {}
+        self._folder_choices_token = None
+
+    def _discover_folder_choices(self):
         from features.rclone.transfers.mobile.jobs import resolved_job
         client = getattr(self, 'cloud_client', None)
         jobs = {key: resolved_job(client, job) for key, job in self.mirror_store().jobs.items()}

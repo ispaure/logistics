@@ -81,7 +81,13 @@ callbacks and omission of operation return values from reports.
    credential-generation invalidation. Twenty simultaneous requests invoke one
    scan. Twelve inventory/catalog/reader checks pass. Reuse is memory-only and
    never substitutes for credential checks when opening a folder.
-9. Background Workspaces discovery — pending.
+9. Background Workspaces discovery — implemented: native tabs immediately reuse
+   memory snapshots while filesystem discovery runs in one coalesced worker.
+   Native selector reads are captured on the UI loop. Credential changes discard
+   old results; catalog locking clears cached names and retires in-flight work
+   before bridge locking completes. Sixty-four folder/private checks pass.
+   A warmed 300-folder refresh measured 25.1 ms/18.9 ms loop delay before versus
+   23.8 ms/13.7 ms after (host tracing enabled). No persistent discovery index.
 10. Lazy startup screens and document loading — pending.
 11. Queued encrypted document history — pending.
 12. Conversation summary inventory — pending.
