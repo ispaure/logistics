@@ -42,6 +42,16 @@ multi-level pop callbacks, guarded Back, retained reader return, Home reveal,
 file selection and unsaved provider drafts. These mocked native and dummy-host
 checks do not certify physical iOS gesture rendering.
 
+## Native iPad tab selection
+
+The app installs a retained `UITabBarControllerDelegate` for iPad sidebar/tab
+presentation. Modern iPad tab selection can change the visible controller
+without invoking Toga 0.5.7's legacy `tabBar:didSelectItem:` notification. Both
+notification paths use the existing deferred, coalesced selection handler so the
+Python destination, toolbar ownership and native selection agree. Home's Open
+file action captures its destination before awaiting credential restoration and
+abandons the open if the user navigates elsewhere during that wait.
+
 ## Managed document modes
 
 Managed text/Markdown Edit and Preview presentations share the `editor` route in
@@ -905,3 +915,18 @@ advertise page swipes alongside comic canvases, independently of fullscreen.
 direction (reversed for manga), skipping initial/same-page renders and respecting
 platform animation settings and E Ink mode. Library and provider content swaps
 share this animation policy; private pixels remain in their native view layers.
+
+## Native navigation validation
+
+The October 2026 simulator check exercised synthetic local managed and provider
+Markdown on iPhone and iPad with iOS 27.0. Native Back, completed and cancelled
+slow edge swipes, Home → document → Show in folder, parent-folder traversal,
+Home picker Cancel, Preview/Edit switching and single folder titles passed.
+Video review confirmed populated parent content during interactive transitions.
+The iPad check also covers native tab selection updating the Python route state.
+
+The focused host run passed 152 mobile checks, seven packaging checks and 50
+desktop/document-store checks. Local evidence is retained under the ignored
+`Mobile/logs/navigation-flow-fixes/` directory, including XCTest source,
+attachments, logs, a swipe recording and `report.json`. This validates the tested
+simulator flows; physical devices and live remote providers need separate checks.

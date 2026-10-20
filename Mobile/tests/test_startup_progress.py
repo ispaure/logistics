@@ -1,5 +1,6 @@
 """Startup reports real phases, yields for drawing and preserves failure state."""
 import asyncio
+import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
@@ -85,6 +86,36 @@ class StartupProgressTests(unittest.IsolatedAsyncioTestCase):
 
 
 class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_android_snapshot_includes_flattened_window_children_and_cleans_up(self):
+        container = SimpleNamespace(native_parent=Mock(), native_content=Mock())
+        root, image, bitmap, canvas = Mock(), Mock(), Mock(), Mock()
+        container.native_content.getWidth.return_value = 900
+        container.native_content.getHeight.return_value = 1200
+        app = SimpleNamespace(loop=asyncio.get_running_loop(),
+            main_window=SimpleNamespace(_impl=SimpleNamespace(container=container)),
+            navigation=SimpleNamespace(_impl=SimpleNamespace(native=root)))
+        modules = {
+            'android.graphics': SimpleNamespace(Bitmap=SimpleNamespace(
+                createBitmap=Mock(return_value=bitmap), Config=SimpleNamespace(ARGB_8888=1)),
+                Canvas=Mock(return_value=canvas)),
+            'android.widget': SimpleNamespace(FrameLayout=SimpleNamespace(LayoutParams=Mock()),
+                ImageView=Mock(return_value=image)),
+            'android.view': SimpleNamespace(ViewTreeObserver=SimpleNamespace(OnPreDrawListener=object)),
+            'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
+        }
+        with patch.dict(sys.modules, modules):
+            cover = AndroidStartupCover(app)
+        container.native_content.draw.assert_called_once_with(canvas)
+        modules['android.graphics'].Bitmap.createBitmap.assert_called_once_with(900, 1200, 1)
+        container.native_parent.addView.assert_called_once()
+        cover.observer = Mock()
+        cover.dispose()
+        cover.observer.removeOnPreDrawListener.assert_called_once_with(cover.listener)
+        container.native_parent.removeView.assert_called_once_with(image)
+        root.setImportantForAccessibility.assert_called_with(cover.accessibility)
+        image.setImageDrawable.assert_called_once_with(None)
+        self.assertTrue(cover.future.cancelled())
+
     async def test_android_cover_waits_for_measured_reflow_and_clean_draw(self):
         root, content = Mock(), Mock()
         for native in (root, content):

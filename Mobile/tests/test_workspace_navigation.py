@@ -249,6 +249,34 @@ class WorkspaceNavigationTests(unittest.TestCase):
         finally:
             app.native_host.adapter = original
 
+    def test_ipad_tab_delegate_keeps_native_and_route_destinations_in_sync(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from logisticsmobile.navigation import install_apple_selection
+        app = self.app
+        app.native_host.activate('files')
+        original = app.native_host.adapter
+        controller = SimpleNamespace(view=Mock())
+        delegate = SimpleNamespace(owner=None)
+        factory = Mock()
+        factory.alloc.return_value.init.return_value = delegate
+        app.native_host.adapter = SimpleNamespace(navigation=[], controller=controller, sidebar_used=True)
+        try:
+            with patch('logisticsmobile.navigation.apple_selection_delegate', return_value=factory):
+                install_apple_selection(app)
+            self.assertIs(controller.delegate, delegate)
+            self.assertIs(delegate.owner, app)
+            # A modern iPad tab selected Home without the legacy tab-bar event.
+            app.native_host.root._impl._set_value('current_tab_index', 0)
+            app.native_host.root.on_select()
+            app.native_host.root.on_select()  # Coalesce an accompanying legacy notification.
+            app.native_host.adapter = original
+            app.loop.run_until_complete(__import__('asyncio').sleep(0))
+            self.assertEqual(app.native_host.state.destination, 'home')
+            self.assertIs(app.body, app.routes.roots['home'])
+        finally:
+            app.native_host.adapter = original
+
     def test_queued_first_chat_tap_initializes_and_return_keeps_the_draft(self):
         import asyncio
         from types import SimpleNamespace

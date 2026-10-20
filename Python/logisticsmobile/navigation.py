@@ -247,3 +247,36 @@ def install_apple_selection(app):
         pending = app.loop.call_soon(complete)
 
     host.root.on_select = selected
+    if getattr(host.adapter, 'sidebar_used', False):
+        # iPad's modern tabs can switch native controllers without invoking
+        # Toga 0.5.7's tabBar:didSelectItem:. Keep Python route state in sync too.
+        delegate = apple_selection_delegate().alloc().init()
+        delegate.owner = app
+        host.adapter.controller.delegate = delegate
+        app._apple_tab_selection_delegate = delegate
+
+
+
+_apple_selection_delegate = None
+
+
+def apple_selection_delegate():
+    """iPad's unified tabs/sidebar use UITabBarControllerDelegate callbacks."""
+    global _apple_selection_delegate
+    if _apple_selection_delegate is None:
+        from rubicon.objc import ObjCClass, objc_method, objc_property, SEL
+
+        class LogisticsTabSelectionDelegate(ObjCClass('NSObject')):
+            owner = objc_property(object, weak=True)
+
+            @objc_method
+            def tabBarController_didSelectViewController_(self, controller, selected) -> None:
+                app = self.owner
+                if app is not None:
+                    # Preserve Toga's layout refresh, then coalesce both old
+                    # tab-bar and modern sidebar notifications through one path.
+                    controller.performSelector(SEL('refreshContent'), withObject=None, afterDelay=0)
+                    app.native_host.root.on_select()
+
+        _apple_selection_delegate = LogisticsTabSelectionDelegate
+    return _apple_selection_delegate

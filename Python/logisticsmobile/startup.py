@@ -51,7 +51,7 @@ class StartupScreen:
 
     def cover_workspace(self, app):
         if type(app._impl).__module__.startswith('toga_android.'):
-            self.cover = AndroidStartupCover(app, self.view)
+            self.cover = AndroidStartupCover(app)
 
     async def reveal_workspace(self, app):
         cover = getattr(self, 'cover', None)
@@ -125,14 +125,16 @@ def begin_startup(app):
 
 class AndroidStartupCover:
     """Keep the last loading frame above the live, measuring workspace."""
-    def __init__(self, app, view):
+    def __init__(self, app):
         from android.graphics import Bitmap, Canvas
         from android.widget import FrameLayout, ImageView
         from android.view import ViewTreeObserver
         from java import dynamic_proxy
         self.app = app
         self.parent = app.main_window._impl.container.native_parent
-        native = view._impl.native
+        # Toga Android flattens Box children into the window container; the
+        # Box's own native view only draws its background.
+        native = app.main_window._impl.container.native_content
         self.bitmap = Bitmap.createBitmap(max(1, native.getWidth()), max(1, native.getHeight()),
                                           Bitmap.Config.ARGB_8888)
         native.draw(Canvas(self.bitmap))

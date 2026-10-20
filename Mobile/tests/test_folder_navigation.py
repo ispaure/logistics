@@ -154,6 +154,25 @@ class ShowInFolderTests(TestCase):
         self.path = self.folder / 'note.txt'
         self.path.write_text('Keep my draft')
 
+    def test_home_file_action_does_not_open_in_a_tab_selected_during_restore(self):
+        app = self.app
+        async def exercise():
+            app.show_home()
+            started, release = asyncio.Event(), asyncio.Event()
+            async def restore():
+                started.set()
+                await release.wait()
+            app.cloud_restore_task = app.loop.create_task(restore())
+            opening = app.loop.create_task(app.open_hub_file())
+            await started.wait()
+            app.show_settings()
+            panel = app.body
+            release.set()
+            self.assertFalse(await opening)
+            self.assertIs(app.body, panel)
+            self.assertEqual(app.native_host.state.destination, 'settings')
+        app.loop.run_until_complete(exercise())
+
     def test_home_picker_cancel_returns_to_its_origin_and_reopening_has_separate_controls(self):
         app = self.app
         async def exercise():

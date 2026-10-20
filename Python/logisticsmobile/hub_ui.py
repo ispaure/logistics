@@ -382,12 +382,16 @@ class HubUI:
         self.choose_document_type()
 
     async def open_hub_file(self, widget=None, **kwargs):
+        destination = self.app.native_host.state.destination
+        navigation = self.app.navigation_generation
         self.show_cloud(present=False)
         restore = getattr(self, 'cloud_restore_task', None)
         if restore is not None:
             await restore
-        return await self.adaptive.browser(self.app.native_host.state.destination).show_main_browser(
-            'Local files', title='Open file')
+        if (not self.app.active_host or self.app.native_host.state.destination != destination
+                or self.app.navigation_generation != navigation):
+            return False
+        return await self.adaptive.browser(destination).show_main_browser('Local files', title='Open file')
 
     def refresh_hub(self, destination):
         if destination == 'files' and self.routes.screens['files']:
