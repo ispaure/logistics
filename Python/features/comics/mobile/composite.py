@@ -97,8 +97,13 @@ def compose_spread(data, *, right_to_left=False, viewport=None, seam=None):
                 for page, source_size, (x, y, width, height) in zip(data, sizes, rects):
                     with autoreleasepool():
                         image = decode_page(page, source_size, (width, height), backend)
-                        image._impl.native.drawInRect(CGRect((x, y), (width, height)))
-                        del image
+                        try:
+                            image._impl.native.drawInRect(CGRect((x, y), (width, height)))
+                        finally:
+                            # Toga Image/backend objects form a Python cycle;
+                            # detach native pixels before draining this pool.
+                            image._impl.native = None
+                            del image
             except Exception as error:
                 # Exceptions cannot cross the Objective-C block boundary.
                 errors.append(error)
