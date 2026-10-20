@@ -18,7 +18,7 @@ contract = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(contract)
 
 
-def verify(path, target, output, *, local_manifest=None):
+def read_report(path):
     reports = []
     chunks = []
     for line in Path(path).read_text(errors='replace').splitlines():
@@ -33,7 +33,11 @@ def verify(path, target, output, *, local_manifest=None):
         reports.append(json.loads(base64.b64decode(''.join(item['data'] for item in chunks), validate=True)))
     if len(reports) != 1:
         raise ValueError('Expected one native app UI report.')
-    return verify_report(reports[0], target, output, local_manifest=local_manifest)
+    return reports[0]
+
+
+def verify(path, target, output, *, local_manifest=None):
+    return verify_report(read_report(path), target, output, local_manifest=local_manifest)
 
 
 def verify_report(report, target, output, *, local_manifest=None):
@@ -112,19 +116,32 @@ def run(target, device, *, local=False, require_independent_windows=False):
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
             raise RuntimeError(f'Native app UI run exceeded {timeout // 60} minutes; see retained logs.') from None
-    # Briefcase returns 200 when Apple's log stream closes before its exit
-    # marker, even after every native test passed. The cache result is written
-    # atomically before exit and must pass the same complete source contract.
-    cached = simulator_report(device, started_ns, diagnostics=logs) if target == 'ios' and code in (0, 200) else None
     output = logs / (target + ('-native-ui-local.json' if local else '-native-ui.json'))
     manifest = Path('payload/source.json') if local else None
-    if cached is not None:
-        if cached.get('error'):
-            print('Native iOS report error: ' + str(cached['error']), flush=True)
-        report = verify_report(cached, target, output, local_manifest=manifest)
-        (logs / 'ios-report-transport.json').write_text(json.dumps(dict(
-            transport='simulator-file', device=device, briefcase_exit_code=code)) + '\n')
-    else:
+    report = None
+    if target == 'ios' and code in (0, 200):
+        # A complete report already proves every case and exact source. Avoid
+        # depending on a responsive CoreSimulator service after app shutdown.
+        # Briefcase can also lose its exit marker after the full report arrives.
+        try:
+            incoming = read_report(path)
+        except ValueError:
+            incoming = None
+        if incoming is not None:
+            (logs / 'ios-native-ui-stdout.json').write_text(json.dumps(incoming, indent=2) + '\n')
+            transport = 'stdout'
+        else:
+            # The cache is atomic and fresh for this device/run; it still has
+            # to satisfy the same complete case, backend and source contract.
+            incoming = simulator_report(device, started_ns, diagnostics=logs)
+            transport = 'simulator-file'
+        if incoming is not None:
+            if incoming.get('error'):
+                print('Native iOS report error: ' + str(incoming['error']), flush=True)
+            report = verify_report(incoming, target, output, local_manifest=manifest)
+            (logs / 'ios-report-transport.json').write_text(json.dumps(dict(
+                transport=transport, device=device, briefcase_exit_code=code)) + '\n')
+    if report is None:
         if code:
             print(path.read_text(errors='replace')[-10000:])
             raise RuntimeError(f'Native app UI run failed ({code}); see retained logs.')

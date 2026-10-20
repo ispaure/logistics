@@ -132,6 +132,11 @@ validation, along with its fresh `ios-native-ui-error.txt` traceback. These are
 diagnostics, not passing evidence. Failure diagnostics target the device recorded
 for the current run, so an iPad failure cannot be hidden behind an earlier iPhone
 report or collected from the wrong simulator.
+A complete native stdout report passes the same case and source validation before
+any simulator-container lookup. This avoids failing a completed native suite when
+CoreSimulator becomes unresponsive after app exit. Missing stdout reports still
+require a fresh, complete cache result; a structured failed report cannot fall
+back to a successful cache.
 Native WebView probes retry only the transient `WKErrorDomain Code=5` evaluation
 error during document replacement. A successful string result must contain the
 expected replacement text and exclude retired private content; repeated errors,

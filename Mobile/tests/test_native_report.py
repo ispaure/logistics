@@ -199,3 +199,55 @@ class NativeReportTests(unittest.TestCase):
                             ui_tools.run('ios', 'device')
             finally:
                 os.chdir(previous)
+
+    def test_complete_stdout_does_not_depend_on_simulator_service(self):
+        import os
+        from unittest.mock import patch
+        report = self.report()
+        def revision(args, **kwargs):
+            key = 'commonUtils_commit' if 'commonUtils' in args[2] else 'logistics_commit'
+            return report['source'][key]
+        def launch(command, *, stdout, **kwargs):
+            stdout.write(ui_tools.PREFIX + json.dumps(report) + '\n')
+            stdout.flush()
+            return SimpleNamespace(wait=lambda **kwargs: code)
+        with TemporaryDirectory() as directory, patch.object(ui_tools.subprocess, 'Popen', side_effect=launch), \
+                patch.object(ui_tools.subprocess, 'check_output', side_effect=revision), \
+                patch.object(ui_tools, 'simulator_report', side_effect=AssertionError('Simulator service unavailable')) as cache:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                for code in (0, 200):
+                    self.assertEqual(ui_tools.run('ios', 'device'), report)
+                    transport = json.loads(Path('logs/ios-report-transport.json').read_text())
+                    self.assertEqual(transport['transport'], 'stdout')
+                    self.assertEqual(transport['briefcase_exit_code'], code)
+                cache.assert_not_called()
+            finally:
+                os.chdir(previous)
+
+    def test_failed_structured_stdout_cannot_fall_back_to_successful_cache(self):
+        import os
+        from unittest.mock import patch
+        report = self.report()
+        def revision(args, **kwargs):
+            key = 'commonUtils_commit' if 'commonUtils' in args[2] else 'logistics_commit'
+            return report['source'][key]
+        def launch(command, *, stdout, **kwargs):
+            stdout.write(ui_tools.PREFIX + json.dumps(emitted) + '\n')
+            stdout.flush()
+            return SimpleNamespace(wait=lambda **kwargs: 0)
+        with TemporaryDirectory() as directory, patch.object(ui_tools.subprocess, 'Popen', side_effect=launch), \
+                patch.object(ui_tools.subprocess, 'check_output', side_effect=revision), \
+                patch.object(ui_tools, 'simulator_report', return_value=report) as cache:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                for emitted in (dict(report, success=False), dict(report, cases=[]),
+                                dict(report, source=dict(report['source'], logistics_commit='0' * 40))):
+                    with self.assertRaises(ValueError):
+                        ui_tools.run('ios', 'device')
+                cache.assert_not_called()
+                self.assertFalse(Path('logs/ios-native-ui.json').exists())
+            finally:
+                os.chdir(previous)
