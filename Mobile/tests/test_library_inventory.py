@@ -30,6 +30,11 @@ class LibraryInventoryTests(TestCase):
         records[0]['bookmarks'].append(3)
         self.assertEqual(self.store.cached_items()[0][0]['bookmarks'], [])
 
+    def test_read_only_inventory_never_creates_an_edit_journal_directory(self):
+        self.assertFalse((self.store.root / '.edits').exists())
+        self.assertEqual(len(self.store.items()[0]), 1)
+        self.assertFalse((self.store.root / '.edits').exists())
+
     def test_external_changes_deletion_and_corruption_invalidate_cache(self):
         self.store.items()
         self.record['name'] = 'Renamed.epub'
@@ -63,3 +68,33 @@ class LibraryInventoryTests(TestCase):
             await catalog.metadata_task
         with patch('logisticsmobile.library_ui.discover_libraries', return_value=([], 0)) as discover:
             app.loop.run_until_complete(exercise(discover))
+
+    def test_folder_rows_are_recycled_and_lock_retires_private_callbacks(self):
+        from logisticsmobile.app import LogisticsMobile
+        LogisticsMobile.storage_root = self.store.root / 'App'
+        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+        app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.addCleanup(app.loop.close)
+        self.addCleanup(app.main_window.close)
+        catalog = app.reader_manager().catalog
+        async def exercise():
+            await catalog.library_scan_task
+            await catalog.metadata_task
+            local = SimpleNamespace(private=False, root=self.store.root)
+            private = SimpleNamespace(private=True, root=self.store.root / 'Private')
+            catalog.library_records = [dict(name=f'Library {index}', folder=str(index),
+                source='Local', provider=local) for index in range(1000)]
+            catalog.library_records.append(dict(name='SESSION-ONLY-SECRET', folder='secret',
+                source='LocalCrypt', provider=private, client=app.cloud_client,
+                generation=getattr(app.cloud_client, 'generation', None)))
+            with patch('logisticsmobile.library_ui.toga.Button', side_effect=AssertionError('No per-row widgets')):
+                catalog.filter_library()
+            self.assertEqual(len(catalog.library_folder_list.data), 1001)
+            self.assertEqual(list(catalog.library_rows.children), [catalog.library_folder_list])
+            stale = catalog.library_row_buttons[-1].on_press
+            catalog.clear_private_libraries()
+            self.assertEqual(len(catalog.library_folder_list.data), 1000)
+            self.assertFalse(any(row.title == 'SESSION-ONLY-SECRET' for row in catalog.library_folder_list.data))
+            with patch.object(app, 'show_files', side_effect=AssertionError('Retired private callback')):
+                await stale()
+        app.loop.run_until_complete(exercise())

@@ -136,7 +136,7 @@ class ReaderParityUITests(unittest.TestCase):
                 owner.show_book_metadata()
                 owner.book_metadata_fields["title"].value = "Updated mobile title"
                 await owner.save_book_metadata()
-                await app.readers.catalog.metadata_task
+                await app.readers.catalog.wait_for_refresh()
                 self.assertEqual(
                     owner.book_reader.title,
                     "Updated mobile title",

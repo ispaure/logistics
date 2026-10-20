@@ -78,6 +78,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                         not busy and adjacent_comic(records, key, 1) is not None)
         for button in getattr(self, 'library_row_buttons', ()):
             button.enabled = not busy
+        if hasattr(self, 'library_folder_list'):
+            self.library_folder_list.enabled = not busy
         for control in (self.book_selector, self.book_import, self.book_open, self.chapter_selector,
                         self.previous_page, self.next_page, self.bookmark_button, self.bookmark_selector,
                         self.book_password, self.book_unlock, self.book_unlock_cancel):

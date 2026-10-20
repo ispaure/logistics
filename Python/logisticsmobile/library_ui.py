@@ -3,6 +3,7 @@ from features.rclone.mobile.storage_location import collection_path, CollectionF
 import asyncio
 import sqlite3
 import json
+from types import SimpleNamespace
 from configparser import ConfigParser, Error as ConfigError
 from pathlib import Path
 import toga
@@ -94,7 +95,15 @@ class LibraryCatalog:
 
     def build_library_catalog(self):
         self.library_index_status = toga.Label('Metadata search · preparing index', style=Pack(font_size=12))
-        self.library_rows = toga.Box(style=Pack(direction=COLUMN))
+        self.library_rows = toga.Box(style=Pack(direction=COLUMN, flex=1))
+        self.library_folder_list = self.app.presentation.summary_list(kind='Library folder',
+            icon_kind='files', on_select=self._select_library_row, style=Pack(flex=1))
+        self.library_empty = toga.Box(children=[
+            toga.Label('No configured library folders.', style=Pack(font_size=18, margin_top=16, margin_bottom=8)),
+            toga.Label('Import an EPUB or comic, or browse\na folder in Local or LocalCrypt.', style=Pack(font_size=13, margin_bottom=12)),
+            action_button(toga.Button('Import a book or comic…', on_press=self.import_book, style=Pack(height=48))),
+            toga.Button('Open Workspaces', on_press=self.app.show_locations, style=Pack(height=48))],
+            style=Pack(direction=COLUMN))
         self.library_records = []
         self.imported_records = []
         self.imported_selected = set()
@@ -102,7 +111,7 @@ class LibraryCatalog:
         self.library_view = toga.Box(children=[
             toga.Box(children=[toga.Button('Refresh', on_press=self.refresh_library, style=Pack(height=48, flex=1)), self.book_import],
                      style=Pack(direction=ROW, margin_bottom=8)),
-            toga.ScrollContainer(horizontal=False, content=self.library_rows, style=Pack(flex=1)),
+            self.library_rows,
             self.book_status], style=Pack(direction=COLUMN, margin=12, flex=1))
         self.book_import.text = 'Import…'
         self.book_import.style.flex = 1
@@ -113,9 +122,8 @@ class LibraryCatalog:
     def filter_library(self, widget=None, **kwargs):
         if not hasattr(self, 'library_rows'):
             return
-        for child in list(self.library_rows.children):
-            self.library_rows.remove(child)
         self.library_row_buttons = []
+        rows = []
         for record in self.library_records:
             if not self.app.library_folder_visible(record):
                 continue
@@ -139,20 +147,31 @@ class LibraryCatalog:
                     app.file_roots[label] = provider
                     app.update_file_locations()
                     await app.browser_file_location((label, library['folder']))
-            button = toga.Button(record['name'], on_press=open_item,
-                                 enabled=not self.book_busy, style=Pack(height=52))
-            list_button(button)
-            self.library_row_buttons.append(button)
-            button.style.flex = 1
-            self.library_rows.add(toga.Box(children=[
-                template_icon(toga.ImageView(icon('files'), style=Pack(width=24, height=24, margin_right=12))),
-                button], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=8, margin_left=8, margin_right=8)))
-        if not self.library_row_buttons:
-            self.library_rows.add(toga.Label('No configured library folders.',
-                style=Pack(font_size=18, margin_top=16, margin_bottom=8)))
-            self.library_rows.add(toga.Label('Import an EPUB or comic, or browse\na folder in Local or LocalCrypt.', style=Pack(font_size=13, margin_bottom=12)))
-            self.library_rows.add(action_button(toga.Button('Import a book or comic…', on_press=self.import_book, style=Pack(height=48))))
-            self.library_rows.add(toga.Button('Open Workspaces', on_press=self.app.show_locations, style=Pack(height=48)))
+            # Compatibility actions are lightweight models, not native controls.
+            self.library_row_buttons.append(SimpleNamespace(text=record['name'], on_press=open_item,
+                                                            enabled=not self.book_busy))
+            rows.append(dict(title=record['name'], subtitle=record['source'],
+                icon=self.library_folder_list.row_icon, folder=True, thumbnail=False,
+                entry=record, callback=open_item, index=len(rows)))
+        listing = self.library_folder_list
+        listing.updating = True
+        try:
+            listing.data = rows
+            listing.enabled = not self.book_busy
+        finally:
+            listing.updating = False
+        view = listing if rows else self.library_empty
+        if list(self.library_rows.children) != [view]:
+            for child in list(self.library_rows.children):
+                self.library_rows.remove(child)
+            self.library_rows.add(view)
+
+    def _select_library_row(self, widget, **kwargs):
+        if widget.updating or self.book_busy:
+            return
+        row = widget.selection
+        if row is not None and any(record is row.entry for record in self.library_records):
+            self.loop.create_task(row.callback())
 
     async def refresh_library_folders(self, widget=None, **kwargs):
         """Serialize discovery and briefly reuse the same credential/config snapshot."""
@@ -245,6 +264,22 @@ class LibraryCatalog:
         if failures:
             self.book_status.text = f'{len(failures)} library record(s) could not be read; they were preserved.'
         self.book_loading = previous
+
+    async def wait_for_refresh(self):
+        """Wait for inventories and the metadata work they schedule, not an old scan."""
+        while True:
+            inventory = getattr(self, '_library_inventory_task', None)
+            if inventory is not None:
+                await asyncio.shield(inventory)
+            discovery = getattr(self, 'library_scan_task', None)
+            metadata = getattr(self, 'metadata_task', None)
+            for task in (discovery, metadata):
+                if task is not None:
+                    await asyncio.shield(task)
+            if (inventory is getattr(self, '_library_inventory_task', None)
+                    and discovery is getattr(self, 'library_scan_task', None)
+                    and metadata is getattr(self, 'metadata_task', None)):
+                return
 
 
     async def edit_imported_comics(self, widget=None, **kwargs):

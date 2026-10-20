@@ -15,19 +15,20 @@ from commonUtils.runtime.operations import check_cancelled
 
 
 class LibraryEdits:
-    def edit_journal(self, key):
+    def edit_journal(self, key, *, create=True):
         self.path(key, '.json')  # Validate identity before constructing any paths.
         folder = self.root / '.edits'
         if folder.is_symlink():
             raise ValueError('Library edit storage cannot be a symbolic link.')
-        folder.mkdir(exist_ok=True, mode=0o700)
+        if create:
+            folder.mkdir(exist_ok=True, mode=0o700)
         journal = folder / (key + '.json')
         if journal.is_symlink():
             raise ValueError('Library edit journal cannot be a symbolic link.')
         return journal
 
     def recover_edit(self, key):
-        journal = self.edit_journal(key)
+        journal = self.edit_journal(key, create=False)
         if not journal.exists():
             return
         with mutation_lock:

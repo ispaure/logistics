@@ -120,7 +120,14 @@ callbacks and omission of operation return values from reports.
     per-row Button construction. Host update: 147.2 ms/8.27 MB peak allocations
     before versus 14.5 ms/1.29 MB after. Native compilation/device checks remain
     pending (no Android platform SDK is installed in this host environment).
-14. Recycled library-folder rows — pending.
+14. Recycled library-folder rows — implemented: one native list with lightweight
+    compatibility action models, provider/generation checks and scrubbed private
+    rows on lock. Twenty-eight inventory/catalog/session/reader checks pass,
+    including 1,001 rows without per-row controls and retired private callbacks.
+    For 1,000 folders, host rendering fell from 569.8 ms/24.3 MB peak allocations
+    to 28.3 ms/1.12 MB. A refresh barrier waits for inventory-triggered metadata
+    work; integration tests use it before retiring fixtures. Read-only inventory
+    no longer creates edit-journal directories. Native visual checks pending.
 15. Visible-only browser thumbnail decoding — pending.
 16. Bounded tile rendering — pending.
 17. Formatted Markdown changed-block bridge — pending.
