@@ -213,14 +213,14 @@ class FileUITests(unittest.TestCase):
                 await app.browse_files()
                 browser = app.file_browser
                 folder = next(entry for entry in browser.entries if entry.container)
-                await browser.buttons[folder.identity].on_press()
+                await browser.activate_entry(folder)
                 self.assertEqual(app.file_path, 'books')
                 self.assertTrue(browser.back_button.enabled)
                 self.assertEqual([entry.label for entry in browser.entries], ['page2.md', 'page10.md'])
                 browser.sort.value = 'Size largest'
                 self.assertEqual([entry.label for entry in browser.entries], ['page10.md', 'page2.md'])
                 first = browser.entries[0]
-                await browser.buttons[first.identity].on_press()
+                await browser.activate_entry(first)
                 browser.search.value = 'PAGE2'
                 while browser.tasks:
                     await __import__('asyncio').gather(*tuple(browser.tasks))
@@ -231,7 +231,8 @@ class FileUITests(unittest.TestCase):
                 self.assertEqual(app.file_path, '')
                 self.assertEqual(browser.search.value, '')
                 self.assertFalse(browser.back_button.enabled)
-                await browser.buttons[folder.identity].on_press()
+                folder = next(entry for entry in browser.entries if entry.container)
+                await browser.activate_entry(folder)
                 (root / 'books/sub').mkdir()
                 (root / 'books/sub/nested.md').write_text('nested')
                 browser.search_button.on_press()
@@ -239,7 +240,7 @@ class FileUITests(unittest.TestCase):
                 while browser.tasks:
                     await __import__('asyncio').gather(*tuple(browser.tasks))
                 self.assertEqual([entry.label for entry in browser.entries], ['sub/nested.md'])
-                await browser.buttons[browser.entries[0].identity].on_press()
+                await browser.activate_entry(browser.entries[0])
                 self.assertEqual(app.selected_file()[1], 'books/sub/nested.md')
                 browser.close_search_button.on_press()
                 old_history = list(browser.history.locations)
@@ -252,10 +253,11 @@ class FileUITests(unittest.TestCase):
                 await app.show_editor_browser('open')
                 editor = app.editor_browser
                 folder = next(entry for entry in editor.entries if entry.container)
-                await editor.buttons[folder.identity].on_press()
+                await editor.activate_entry(folder)
                 self.assertEqual(app.picker_folder.value, 'books')
                 editor.search.value = 'page10'
-                await editor.buttons[editor.entries[0].identity].on_press()
+                editor.render()  # Tap a row from the rendered query snapshot.
+                await editor.activate_entry(editor.entries[0])
                 self.assertEqual(app.save_as_name.value, 'page10.md')
                 await editor.back_button.on_press()
                 self.assertEqual(app.picker_folder.value, '')

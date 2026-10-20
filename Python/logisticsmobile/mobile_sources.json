@@ -75,6 +75,10 @@
     "window_owners.py",
     "window_scenes.py",
     "workspace.py",
-    "workspace_navigation.py"
+    "workspace_navigation.py",
+    "recycled_file_list.py",
+    "recycled_file_list_android.py",
+    "recycled_file_list_ios.py",
+    "android/io/github/ispaure/logisticsmobile/FileListView.java"
   ]
 }

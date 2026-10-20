@@ -183,24 +183,17 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertTrue(await task)
                 browser = app.remote_browser
                 self.assertEqual(len(browser.entries), 200)
-                self.assertEqual(len(browser.buttons), browser.row_batch_size)
+                self.assertEqual(len(browser.native_list.data), 200)
+                self.assertFalse(browser.buttons)
                 self.assertNotIn(browser.paging, browser.widget.children)
                 self.assertFalse(browser.next.enabled)
-                # Continuous scrolling reaches every result without relisting
-                # the remote folder or replacing the initial row controls.
-                first_button = next(iter(browser.buttons.values()))
+                # The entire source is immediately addressable by the native
+                # recycler without relisting or allocating Toga row controls.
                 app.show_view(app.cloud_view, destination='files', route='remote-browser')
-                scroll = browser._scroll
-                scroll.vertical_position = scroll.max_vertical_position
-                for _ in range(500):
-                    if len(browser.buttons) == 200:
-                        break
-                    await asyncio.sleep(.02)
-                self.assertEqual(len(browser.buttons), 200)
-                self.assertIs(next(iter(browser.buttons.values())), first_button)
+                browser.native_list.scroll_to_bottom()
                 self.assertEqual(client.calls, [('list', 'mangas')])
                 browser.render()
-                self.assertEqual(len(browser.buttons), browser.row_batch_size)
+                self.assertEqual(len(browser.native_list.data), 200)
                 browser.show_tiles()
                 self.assertEqual(len(browser.buttons), browser.page_size)
                 browser.search.value = 'series-199'
@@ -374,7 +367,7 @@ class RemoteReaderTests(unittest.TestCase):
                 browser = app.remote_browser
                 entry = next(entry for entry in browser.entries if entry.container)
                 with patch.object(browser, 'on_open_folder', new=AsyncMock(return_value=True)) as opened:
-                    await browser.buttons[entry.identity].on_press()
+                    await browser.activate_entry(entry)
                     opened.assert_awaited_once_with(entry.payload)
                 with patch.object(RemoteReaders, 'open', side_effect=ArchivePasswordError('ZIP password required')), \
                         patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog:
@@ -436,7 +429,7 @@ class RemoteReaderTests(unittest.TestCase):
                     await release.wait()
                     return await original(**kwargs)
                 with patch.object(app, 'open_crypt', side_effect=delayed_open):
-                    task = browser.buttons[item.identity].on_press()
+                    task = asyncio.create_task(browser.activate_entry(item))
                     await started.wait()
                     self.assertIn('Opening remote file:', app.cloud_status.value)
                     release.set()

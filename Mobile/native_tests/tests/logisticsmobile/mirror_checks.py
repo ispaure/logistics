@@ -63,7 +63,7 @@ async def exercise_mirrors(app, comic_key):
                 assert await app.browser_file_location(('Local files', 'Browse during pull'))
                 browser = app.file_browser
                 entry = next(item for item in browser.entries if item.label == name)
-                await browser._select_pressed(entry, browser.buttons[entry.identity])
+                await browser.activate_entry(entry)
                 assert app.cloud_busy and app.transfer_busy and app.transfer_controller()._transfer_cancel is cancel, app.transfer_message
                 assert not cancel.is_set()
             await tap('Local note.txt')

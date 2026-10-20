@@ -43,7 +43,7 @@ async def exercise_browser_back(app):
         position = scroll.vertical_position
         assert position > 0, 'Scroll fixture did not exceed the viewport'
         entry = next(item for item in browser.entries if item.label == filename)
-        await browser._select_pressed(entry, browser.buttons[entry.identity])
+        await browser.activate_entry(entry)
         assert app.native_host.state.destination == 'documents'
         owner = app.readers.active if filename.endswith('.cbz') else app.private_sessions.active
         if filename.endswith('.cbz'):

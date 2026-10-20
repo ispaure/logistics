@@ -27,6 +27,7 @@ build_gradle_dependencies = [
     "androidx.webkit:webkit:1.15.0",
 ]
 build_gradle_extra_content = """
+android.sourceSets.main.java.srcDir(new File(rootProject.projectDir, "../../../../payload/logisticsmobile/android"))
 chaquopy.defaultConfig.staticProxy("toga_android.widgets.internal.webview")
 android.sourceSets.main.java.srcDir(new File(rootProject.projectDir, "../../../../payload/commonUtils/ui/native/android"))
 android.sourceSets.main.java.srcDir(new File(rootProject.projectDir, "../../../../payload/features/books/mobile/android"))

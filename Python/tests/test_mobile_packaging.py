@@ -69,6 +69,7 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
             app = repo / 'Python/logisticsmobile'
             app.mkdir()
             for name in mobile_tools.APP_MODULES:
+                (app / name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(REPO / 'Python/logisticsmobile' / name, app / name)
             for name in mobile_tools.DOCUMENT_MODULES:
                 target = repo / 'Python' / name

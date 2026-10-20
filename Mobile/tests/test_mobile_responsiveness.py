@@ -142,7 +142,7 @@ class ResponsivenessTests(unittest.TestCase):
 
         async def exercise():
             entry = browser.entries[0]
-            await browser._select_pressed(entry, browser.buttons[entry.identity])
+            await browser.activate_entry(entry)
             self.assertEqual(selected, [row])
             self.assertEqual(opened, [row])
             details.assert_not_called()
@@ -172,7 +172,7 @@ class ResponsivenessTests(unittest.TestCase):
                     app.file_browser.mode = mode
                     app.populate_file_browser(rows)
                     await asyncio.sleep(.02)
-                    self.assertEqual(len(app.file_browser.buttons), 4)
+                    self.assertEqual(len(app.file_browser.native_list.data) if mode == 'List' else len(app.file_browser.buttons), 4)
                     self.assertIsNone(app.file_browser.thumbnail)
                     self.assertIsNotNone(app.file_browser.details)
                     provider.open.assert_not_called()
@@ -214,7 +214,7 @@ class ResponsivenessTests(unittest.TestCase):
         browser.on_selected = selected
         async def exercise():
             entry = browser.entries[0]
-            await browser._select_pressed(entry, browser.buttons[entry.identity])
+            await browser.activate_entry(entry)
             self.assertEqual(opened, [])
             self.assertFalse(browser.navigation_busy)
             await browser.close()
@@ -233,7 +233,8 @@ class ResponsivenessTests(unittest.TestCase):
             style.assert_not_called()
             browser.selected = browser.entries[1].identity
             browser.highlight_selection()
-            self.assertEqual(style.call_count, 4)  # Two rows and their buttons.
+            style.assert_not_called()  # Native selection does not repaint Python rows.
+            self.assertEqual(browser.native_list.selection.entry.identity, browser.selected)
         self.app.loop.run_until_complete(browser.close())
 
     def test_cancel_during_markdown_render_does_not_publish_reader(self):

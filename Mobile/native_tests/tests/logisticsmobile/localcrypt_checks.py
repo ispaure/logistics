@@ -417,7 +417,7 @@ async def exercise_localcrypt(app, passed):
     browser.show_tiles()
     assert browser.mode == 'Tiles' and browser.buttons
     entry = next(entry for entry in browser.entries if entry.label == 'large-browser.cbz')
-    await browser.buttons[entry.identity].on_press()
+    await browser.activate_entry(entry)
     await asyncio.gather(*tuple(browser.tasks))
     assert app.selected_file()[1] == 'large-browser.cbz'
     assert any('Title: Large native browser sentinel' == child.text for child in browser.info.children if hasattr(child, 'text'))
@@ -432,7 +432,7 @@ async def exercise_localcrypt(app, passed):
     while browser.tasks:
         await asyncio.gather(*tuple(browser.tasks))
     assert [item.label for item in browser.entries] == ['navigation/nested-search.md']
-    await browser.buttons[browser.entries[0].identity].on_press()
+    await browser.activate_entry(browser.entries[0])
     assert app.selected_file()[1] == 'navigation/nested-search.md'
     browser.search.value = 'LARGE-BROWSER'
     while browser.tasks:
@@ -453,7 +453,7 @@ async def exercise_localcrypt(app, passed):
         await asyncio.gather(*tuple(browser.tasks))
     assert browser.search.value == '' and browser.search_panel not in browser.widget.children
     folder = next(item for item in browser.entries if item.label == 'navigation')
-    await browser.buttons[folder.identity].on_press()
+    await browser.activate_entry(folder)
     assert app.file_path == 'navigation' and browser.back_button.enabled
     await browser.back_button.on_press()
     assert app.file_path == '' and app.file_storage.value == crypt_label
@@ -466,7 +466,7 @@ async def exercise_localcrypt(app, passed):
     app.save_as_storage.value = crypt_label
     await app.refresh_editor_browser()
     folder = next(item for item in editor.entries if item.label == 'navigation')
-    await editor.buttons[folder.identity].on_press()
+    await editor.activate_entry(folder)
     assert app.picker_folder.value == 'navigation'
     await editor.back_button.on_press()
     assert app.picker_folder.value == ''

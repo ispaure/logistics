@@ -181,7 +181,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Local', 'Notes', 'note.md'})
         collection = next(row for row in app.file_rows.values() if row['name'] == 'Local')
         self.assertNotIn('display_name', collection)
-        self.assertIn('Local', [button.text for button in app.file_browser.buttons.values()])
+        self.assertIn('Local', [row.title for row in app.file_browser.native_list.data])
         app.loop.run_until_complete(app.browser_file_folder(collection))
         self.assertEqual(app.file_provider.root, documents / 'Local')
         self.assertEqual(app.file_browser.location_bar.folder_name.text, 'Local')

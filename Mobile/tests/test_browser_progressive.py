@@ -1,61 +1,17 @@
-"""Cooperative mobile row creation, complete search and visible-page ownership."""
+"""Recycled mobile list contracts, complete search and stale-event ownership."""
 import asyncio
-import heapq
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch, AsyncMock
+
 import toga
-from unittest.mock import patch
-
 from logisticsmobile.app import LogisticsMobile
-from logisticsmobile.browser_ui import FileBrowser, sync_browser_population
-from commonUtils.ui.native_browser import query_entries
+from logisticsmobile.browser_ui import FileBrowser
 
 
-class PopulationClock:
-    """Drive UI timers deterministically; ordinary async work uses the app loop."""
-    def __init__(self, loop):
-        self.create_task = loop.create_task
-        self.now = 0
-        self.events = []
-        self.sequence = 0
-
-    def time(self):
-        return self.now
-
-    def call_later(self, delay, callback):
-        class Handle:
-            cancelled_flag = False
-            def cancel(self):
-                self.cancelled_flag = True
-            def cancelled(self):
-                return self.cancelled_flag
-            def when(self):
-                return due
-        due = self.now + delay
-        handle = Handle()
-        self.sequence += 1
-        heapq.heappush(self.events, (due, self.sequence, handle, callback))
-        return handle
-
-    def tick(self):
-        while self.events:
-            due, _, handle, callback = heapq.heappop(self.events)
-            if not handle.cancelled():
-                self.now = max(self.now, due)
-                callback()
-                return True
-        return False
-
-    def drain(self):
-        for _ in range(1000):
-            if not self.tick():
-                return
-        raise AssertionError('Population did not finish')
-
-
-class ProgressiveBrowserTests(unittest.TestCase):
+class RecycledBrowserTests(unittest.TestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -67,250 +23,172 @@ class ProgressiveBrowserTests(unittest.TestCase):
         self.opened = []
         self.browser = FileBrowser(open_file=self.opened.append)
         self.addCleanup(lambda: self.app.loop.run_until_complete(self.browser.close()))
-        self.clock = PopulationClock(self.app.loop)
-        self.browser._loop = self.clock
-        timer = patch('logisticsmobile.browser_ui.monotonic', self.clock.time)
-        timer.start()
-        self.addCleanup(timer.stop)
-        self.scroll = self.browser.scroll_container()
-        self.app.routes.body().add(self.scroll)
         self.provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path)
 
     def rows(self, count, prefix='file'):
         return [dict(path=f'{prefix}-{i:05d}.md', name=f'{prefix}-{i:05d}.md', directory=False)
                 for i in range(count)]
 
-    def near_bottom(self):
-        self.scroll.vertical_position = self.scroll.max_vertical_position - 1
-
-    def test_idle_population_yields_between_small_slices_without_sorting_or_rebuilding(self):
+    def test_ten_thousand_entries_allocate_no_row_widgets_or_population_timers(self):
         browser = self.browser
-        rows = self.rows(125)
+        viewport = browser.scroll_container()
+        with patch.object(browser._loop, 'call_later', wraps=browser._loop.call_later) as timer:
+            browser.set_entries(self.provider, '', self.rows(10005))
+            self.assertIs(viewport, browser.widget)
+            self.assertIn(browser.native_list, viewport.children)
+            self.assertEqual(len(browser.native_list.data), 10005)
+            self.assertFalse(browser.buttons)
+            self.assertFalse(browser.items.children)
+            timer.assert_not_called()
+        last = browser.native_list.data[-1]
+        self.app.loop.run_until_complete(browser._activate_row(last))
+        self.assertEqual(self.opened[-1]['path'], 'file-10004.md')
+
+    def test_native_tap_captures_selection_and_rejects_replaced_snapshot(self):
+        browser = self.browser
+        browser.set_entries(self.provider, '', self.rows(2))
+        browser.native_list._impl.simulate_selection(1)
+        # Source replacement happens before the asynchronous handler runs.
+        old = browser.native_list.data[1]
+        browser.set_entries(self.provider, '', self.rows(2, 'new'))
+        self.app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertFalse(self.opened)
+        self.app.loop.run_until_complete(browser._activate_row(old))
+        self.assertFalse(self.opened)
+        browser.native_list._impl.simulate_selection(1)
+        self.app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertEqual(self.opened[-1]['name'], 'new-00001.md')
+
+    def test_search_sort_empty_state_and_selection_keep_exact_payload(self):
+        browser = self.browser
+        rows = self.rows(50)
+        rows[3]['display_name'] = 'Human title'
         browser.set_entries(self.provider, '', rows)
-        first_slots = list(browser._list_slots)
-        self.assertEqual(len(first_slots), 40)
-        self.assertEqual(len(browser.entries), 125)
-        with patch('commonUtils.ui.native_browser.query_entries', wraps=query_entries) as query:
-            self.assertTrue(self.clock.tick())  # No scroll needed.
-            self.assertEqual(len(browser.buttons), 42)
-            self.assertIsNotNone(browser._append_handle)
-            self.assertGreater(browser._append_handle.when(), self.clock.now)
-            self.assertEqual(browser._list_slots[:40], first_slots)
-            self.clock.drain()
-            self.assertEqual(len(browser.buttons), 125)
-            query.assert_not_called()
-        self.assertEqual(list(browser.buttons), [entry.identity for entry in browser.entries])
-        self.app.loop.run_until_complete(list(browser.buttons.values())[-1].on_press())
-        self.assertEqual(self.opened, [rows[-1]])
-
-    def test_fast_scroll_uses_single_row_slices_and_preserves_scroll_and_controls(self):
-        browser = self.browser
-        browser.set_entries(self.provider, '', self.rows(125))
-        idle = browser._append_handle
-        slots = list(browser._list_slots)
-        self.near_bottom()
-        pending = browser._append_handle
-        self.assertTrue(idle.cancelled())
-        self.near_bottom()
-        self.assertIs(browser._append_handle, pending)
-        self.clock.tick()
-        self.assertEqual(len(browser.buttons), 41)
-        self.assertEqual(browser._list_slots[:40], slots)
-        self.assertEqual(self.scroll.vertical_position, self.scroll.max_vertical_position - 1)
-        self.assertIs(self.scroll.content.children[0], browser.widget)
-        self.clock.drain()
-        self.assertEqual(len(browser.buttons), 125)
-
-    def test_scrolling_away_from_end_defers_idle_work_until_gesture_settles(self):
-        self.browser.set_entries(self.provider, '', self.rows(100))
-        self.near_bottom()
-        self.scroll.vertical_position = 0
-        self.clock.tick()
-        self.assertEqual(len(self.browser.buttons), 40)
-        self.clock.tick()
-        self.assertGreater(len(self.browser.buttons), 40)
-
-    def test_slow_native_slice_reduces_next_slice_and_leaves_more_ui_time(self):
-        browser = self.browser
-        browser.set_entries(self.provider, '', self.rows(100))
-        populate = browser._populate_rows
-        def expensive(*args, **kwargs):
-            populate(*args, **kwargs)
-            self.clock.now += .03  # Simulated native layout, not a timing threshold.
-        with patch.object(browser, '_populate_rows', side_effect=expensive):
-            self.clock.tick()
-        self.assertEqual(browser._slice_size, 1)
-        self.assertGreaterEqual(browser._append_handle.when() - self.clock.now, .06 - 1e-9)
-        count = len(browser.buttons)
-        self.clock.tick()
-        self.assertEqual(len(browser.buttons), count + 1)
-
-    def test_construction_budget_yields_after_one_expensive_row(self):
-        from logisticsmobile.browser_ui import entry_icon
-        browser = self.browser
-        browser.set_entries(self.provider, '', self.rows(100))
-        def expensive_icon(*args, **kwargs):
-            self.clock.now += .01
-            return entry_icon(*args, **kwargs)
-        with patch('logisticsmobile.browser_ui.entry_icon', side_effect=expensive_icon):
-            self.clock.tick()
-        self.assertEqual(len(browser.buttons), 41)
-
-    def test_obsolete_provider_hold_does_not_stall_a_new_folder(self):
-        browser = self.browser
-        browser.set_entries(self.provider, '', self.rows(100, 'old'))
-        with browser.population_paused():
-            self.assertIsNone(browser._append_handle)
-            # A newer read completes while an abandoned old read is still held.
-            with browser.population_paused():
-                browser.set_entries(self.provider, '', self.rows(100, 'new'))
-            self.clock.drain()
-            self.assertEqual(len(browser.buttons), 100)
-            self.assertTrue(all(button.text.startswith('new') for button in browser.buttons.values()))
-
-    def test_folder_activation_cancels_population_before_awaiting_new_listing(self):
-        browser = self.browser
-        browser.set_entries(self.provider, '', [
-            dict(path='nested', name='nested', directory=True), *self.rows(100)])
-        pending = browser._append_handle
-        async def exercise():
-            entered, release = asyncio.Event(), asyncio.Event()
-            async def open_folder(row):
-                entered.set()
-                await release.wait()
-                return False  # Failed navigation resumes the original folder.
-            browser.on_open_folder = open_folder
-            task = asyncio.ensure_future(next(iter(browser.buttons.values())).on_press())
-            await entered.wait()
-            try:
-                self.assertTrue(pending.cancelled())
-                self.clock.drain()
-                self.assertEqual(len(browser.buttons), 40)
-            finally:
-                release.set()
-                await task
-            self.clock.drain()
-            self.assertEqual(len(browser.buttons), 101)
-        self.app.loop.run_until_complete(exercise())
-
-    def test_render_sorts_and_filters_once_and_invalidates_for_new_query(self):
-        browser = self.browser
-        browser.set_entries(self.provider, '', self.rows(101))
-        for mode in ('List', 'Tiles'):
-            browser.mode = mode
-            with patch('commonUtils.ui.native_browser.query_entries', wraps=query_entries) as query:
-                browser.render()
-                self.assertEqual(query.call_count, 1)
-        browser.mode = 'List'
-        browser.render()
-        pending = browser._append_handle
-        browser.search.value = 'file-00100'
-        self.assertTrue(pending.cancelled())
-        self.clock.drain()
-        self.assertEqual(len(browser.buttons), 40)  # Old query cannot populate during debounce.
-        browser.render()
-        self.assertEqual([button.text for button in browser.buttons.values()], ['file-00100.md'])
-        browser.search.value = ''
+        self.assertEqual(browser.native_list.data[3].title, 'Human title')
         browser.sort.value = 'Name Z–A'
-        self.assertEqual(next(iter(browser.buttons.values())).text, 'file-00100.md')
-        browser.folder_visible = lambda path, **kwargs: '00100' not in str(path)
-        browser.render()
-        self.assertEqual(next(iter(browser.buttons.values())).text, 'file-00099.md')
+        self.assertEqual(browser.native_list.data[0].entry.payload['path'], rows[-1]['path'])
+        browser.search.value = 'file-00003'
+        self.app.loop.run_until_complete(asyncio.sleep(.45))
+        self.assertEqual(len(browser.native_list.data), 1)
+        row = browser.native_list.data[0]
+        self.app.loop.run_until_complete(browser.select(row.entry))
+        self.assertIs(browser.native_list.selection, row)
+        self.assertEqual(row.title, 'Human title')
+        self.assertFalse(browser.buttons)
+        browser.search.value = 'absent'
+        self.app.loop.run_until_complete(asyncio.sleep(.45))
+        self.assertFalse(browser.native_list.data)
+        self.assertIn(browser.empty_label, browser.widget.children)
+        self.assertEqual(browser.empty_label.text, 'No matching items.')
+        browser.close_search()
+        self.app.loop.run_until_complete(asyncio.sleep(.45))
+        self.assertEqual(len(browser.native_list.data), 50)
+        self.assertIn(browser.native_list, browser.widget.children)
 
-    def test_search_keeps_all_recursive_results_and_finds_an_unmounted_last_match(self):
+    def test_recursive_search_keeps_all_matches_and_full_path_identity(self):
         browser = self.browser
-        matches = self.rows(10005, 'nested/match')
-        def listing(folder, *, cancelled):
-            return matches if folder == 'nested' else [dict(path='nested', name='nested', directory=True)]
-        self.provider.list = listing
-        browser.set_entries(self.provider, '', listing('', cancelled=lambda: False))
+        matches = [dict(path=f'sub/match-{i:05d}.md', name=f'match-{i:05d}.md', directory=False)
+                   for i in range(10005)]
+        provider = self.provider
+        provider.list = lambda folder, cancelled: matches if folder == 'sub' else [dict(path='sub', name='sub', directory=True)]
+        browser.set_entries(provider, '', provider.list('', cancelled=lambda: False))
         browser.search.value = 'match'
         self.app.loop.run_until_complete(browser._search_subfolders(browser.search_epoch, browser.search_cancelled))
-        self.assertEqual(len(browser.entries), 10005)
-        self.assertLess(len(browser.buttons), 45)
-        browser.search.value = 'match-10004'
-        browser.render()
-        self.assertEqual([button.text for button in browser.buttons.values()], ['match-10004.md'])
-        self.app.loop.run_until_complete(next(iter(browser.buttons.values())).on_press())
-        self.assertEqual(self.opened[-1]['path'], 'nested/match-10004.md')
+        self.assertEqual(len(browser.native_list.data), 10005)
+        row = browser.native_list.data[-1]
+        self.assertEqual(row.title, 'match-10004.md')
+        self.app.loop.run_until_complete(browser._activate_row(row))
+        self.assertEqual(self.opened[-1]['path'], 'sub/match-10004.md')
 
-    def test_pending_work_is_cancelled_on_navigation_stop_and_view_change(self):
+    def test_folder_taps_and_busy_guard_keep_existing_navigation(self):
         browser = self.browser
-        browser.set_entries(self.provider, '', self.rows(100, 'private'), location=('Private', ''))
-        pending = browser._append_handle
-        old_slots = list(browser._list_slots)
-        with browser.population_paused():
-            self.assertTrue(pending.cancelled())
-            self.clock.drain()
-            self.assertEqual(len(browser.buttons), 40)
-            browser.set_entries(self.provider, '', self.rows(1, 'new'), location=('Local', ''))
-        self.clock.drain()
-        self.assertEqual([button.text for button in browser.buttons.values()], ['new-00000.md'])
-        self.assertTrue(all(slot[3].text == '' and slot[3].accessible_name == '' for slot in old_slots[1:]))
-        browser.set_entries(self.provider, '', self.rows(100))
-        pending = browser._append_handle
-        browser.show_tiles()
-        self.assertTrue(pending.cancelled())
-        self.clock.drain()
-        self.assertEqual(len(browser.buttons), 100)
-        browser.show_list()
-        pending = browser._append_handle
+        opened = AsyncMock()
+        browser.on_open_folder = opened
+        row = dict(path='Shelf', name='Shelf', directory=True)
+        browser.set_entries(self.provider, '', [row])
+        self.assertTrue(browser.native_list.data[0].folder)
+        browser.navigation_busy = True
+        self.app.loop.run_until_complete(browser.activate_entry(browser.entries[0]))
+        opened.assert_not_awaited()
+        browser.navigation_busy = False
+        self.app.loop.run_until_complete(browser.activate_entry(browser.entries[0]))
+        opened.assert_awaited_once_with(row)
+
+    def test_tiles_roundtrip_preserves_selection_and_uses_one_list_viewport(self):
+        browser = self.browser
+        browser.set_entries(self.provider, '', self.rows(5))
+        entry = browser.entries[2]
+        self.app.loop.run_until_complete(browser.select(entry))
+        for _ in range(2):
+            browser.show_tiles()
+            self.assertIn(browser._tile_scroll, browser.widget.children)
+            self.assertFalse(browser.native_list.data)
+            self.assertEqual(len(browser.buttons), 5)
+            browser.show_list()
+            self.assertIn(browser.native_list, browser.widget.children)
+            self.assertNotIn(browser._tile_scroll, browser.widget.children)
+            self.assertIs(browser.native_list.selection.entry, entry)
+            self.assertFalse(browser.buttons)
+
+    def test_thumbnails_are_requested_only_for_visible_rows_and_cannot_return_after_stop(self):
+        browser = self.browser
+        browser.thumbnail = lambda *args: b''
+        browser.set_entries(self.provider, '', self.rows(500))
+        gate = asyncio.Event()
+        called = []
+        async def load(entry, target, epoch, cancelled):
+            called.append(entry.identity)
+            await gate.wait()
+            if not browser.closed and epoch == browser.epoch:
+                target.image = toga.Image(src=b'fake')
+        browser._load_thumbnail = load
+        self.assertFalse(browser.tasks)
+        row = browser.native_list.data[7]
+        browser.native_list.row_visible(7)
+        browser.native_list.row_visible(7)
+        self.app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertEqual(called, [row.entry.identity])
         browser.stop()
-        self.clock.drain()
-        self.assertTrue(pending.cancelled())
-        self.assertFalse(browser._list_entries)
+        gate.set()
+        self.app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertFalse(browser.native_list.data)
+        self.assertFalse(browser.native_list.selection)
+        self.assertFalse(browser.tree)
         self.assertFalse(browser.buttons)
-        self.assertFalse(browser.items.children)
-        self.assertFalse(browser._list_slots)
 
-    def test_tab_switch_and_back_pause_hidden_browser_and_resume_on_return(self):
+    def test_file_activation_skips_metadata_and_rechecks_navigation_after_callback(self):
         browser = self.browser
-        self.app.show_view(toga.Box(children=[self.scroll]), destination='home', route='test-browser')
-        browser.set_entries(self.provider, '', self.rows(100))
-        pending = browser._append_handle
-        self.app.select_destination('settings')
-        self.app.native_host.activate('settings')
-        self.assertTrue(pending.cancelled())
-        self.clock.drain()
-        self.assertEqual(len(browser.buttons), 40)
-        self.app.select_destination('home')
-        self.app.native_host.activate('home')
-        self.clock.tick()
-        self.assertEqual(len(browser.buttons), 42)
-        page = toga.Box()
-        self.app.show_view(page, route='other', destination='home')
-        self.clock.drain()
-        self.assertEqual(len(browser.buttons), 42)
-        self.app.routes.back()
-        self.clock.drain()
-        self.assertEqual(len(browser.buttons), 100)
+        browser.details = lambda *args: self.fail('Opening must not fetch metadata')
+        browser.set_entries(self.provider, '', self.rows(2))
+        old = browser.native_list.data[1]
+        browser.on_selected = lambda payload: browser.set_entries(self.provider, '', self.rows(1, 'new')) if payload else None
+        self.app.loop.run_until_complete(browser._activate_row(old))
+        self.assertFalse(self.opened)
 
-    def test_inactive_app_and_detached_browser_do_not_populate(self):
+    def test_context_selection_does_not_open_and_rejects_old_rows(self):
+        browser = self.browser
+        browser.set_entries(self.provider, '', self.rows(3))
+        row = browser.native_list.data[2]
+        browser.native_list.on_primary_action(row=row)
+        self.app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertIs(browser.native_list.selection, row)
+        self.assertFalse(self.opened)
+        browser.set_entries(self.provider, '', self.rows(1, 'new'))
+        browser.native_list.on_primary_action(row=row)
+        self.app.loop.run_until_complete(asyncio.sleep(0))
+        self.assertIsNone(browser.native_list.selection)
+
+    def test_decoded_list_thumbnails_are_bounded_and_evictions_restore_shared_icons(self):
         browser = self.browser
         browser.set_entries(self.provider, '', self.rows(100))
-        browser._app.screen_privacy.inactive = True
-        sync_browser_population(self.app)
-        self.clock.drain()
-        self.assertEqual(len(browser.buttons), 40)
-        browser._app.screen_privacy.inactive = False
-        sync_browser_population(self.app)
-        self.clock.tick()
-        self.assertEqual(len(browser.buttons), 42)
-        self.scroll.parent.remove(self.scroll)
-        # The queued callback validates visibility even without a route hook.
-        self.clock.drain()
-        self.assertEqual(len(browser.buttons), 42)
-
-    def test_local_browser_and_drawer_population_pauses_for_provider_reads(self):
-        from logisticsmobile.workspace_navigation import FileDrawer
-        self.app.loop.run_until_complete(self.app.show_files())
-        drawer = FileDrawer(SimpleNamespace(app=self.app), 'files')
-        self.addCleanup(drawer.browser.stop)
-        self.addCleanup(self.app.file_browser.stop)
-        for browser in (self.app.file_browser, drawer.browser):
-            browser.set_entries(self.provider, '', self.rows(81))
-            self.assertEqual(len(browser.buttons), 40)
-            with browser.population_paused():
-                self.assertIsNone(browser._append_handle)
-                browser.set_entries(self.provider, '', self.rows(1))
-            self.assertEqual(len(browser.buttons), 1)
+        from logisticsmobile.recycled_file_list import file_list_icon
+        from logisticsmobile.hub_icons import ICONS
+        from base64 import b64decode
+        for row in browser.native_list.data:
+            browser._set_row_thumbnail(row, toga.Image(src=b64decode(ICONS['documents'])))
+        self.assertEqual(len(browser._list_thumbnail_rows), 64)
+        self.assertEqual(sum(row.thumbnail for row in browser.native_list.data), 64)
+        for row in list(browser.native_list.data)[:36]:
+            self.assertIs(row.icon, file_list_icon(False))
+        browser.stop()
+        self.assertFalse(browser._list_thumbnail_rows)

@@ -34,8 +34,9 @@ class MobileWorkflowTests(unittest.TestCase):
         panel, tree = app.body, browser.tree
         for filename in ('Comic.cbz', 'Notes.md', 'Comic.cbz'):
             browser.search.value = filename
+            browser.render()
             entry = next(item for item in browser.entries if item.label == filename)
-            app.loop.run_until_complete(browser._select_pressed(entry, browser.buttons[entry.identity]))
+            app.loop.run_until_complete(browser.activate_entry(entry))
             self.assertEqual(app.native_host.state.destination, 'files')
             owner = app.readers.active if filename.endswith('.cbz') else app.private_sessions.active
             if filename.endswith('.md'):
@@ -81,7 +82,7 @@ class MobileWorkflowTests(unittest.TestCase):
         folder_panel = app.body
         browser = app.file_browser
         entry = next(item for item in browser.entries if item.label == 'Comic.cbz')
-        app.loop.run_until_complete(browser._select_pressed(entry, browser.buttons[entry.identity]))
+        app.loop.run_until_complete(browser.activate_entry(entry))
         owner = app.readers.active
         reader_panel = app.body
         owner.show_reader_tools()
@@ -102,7 +103,7 @@ class MobileWorkflowTests(unittest.TestCase):
         app.loop.run_until_complete(app.browse_files())
         browser = app.file_browser
         entry = next(item for item in browser.entries if item.label == 'Notes.md')
-        app.loop.run_until_complete(browser._select_pressed(entry, browser.buttons[entry.identity]))
+        app.loop.run_until_complete(browser.activate_entry(entry))
         owner = app.private_sessions.active
         self.assertEqual(owner.crypt_reader.name, 'Notes.md')
         self.assertEqual(app.native_host.state.destination, 'files')
@@ -188,7 +189,7 @@ class MobileWorkflowTests(unittest.TestCase):
                     await app.browser_file_location(('Local files', 'Reference'))
                     browser = app.file_browser
                     entry = next(item for item in browser.entries if item.label == name)
-                    await browser._select_pressed(entry, browser.buttons[entry.identity])
+                    await browser.activate_entry(entry)
                     self.assertIs(app.transfer_controller()._transfer_cancel, cancel, app.transfer_message)
                     self.assertFalse(cancel.is_set())
                     self.assertIs(app._crypt_cancel, file_cancel)
@@ -235,16 +236,12 @@ class MobileWorkflowTests(unittest.TestCase):
         document = BrowseEntry('archive:chapter', 'Chapter.md', properties={'size': 123}, payload={'member': 'Chapter.md'})
         tree.set_children('json:root', [folder, document])
         browser.set_tree(tree)
-        labels = [child.text for row in browser.items.children for child in row.children[0].children if isinstance(child, toga.Label)]
-        self.assertNotIn('Folder', labels)
-        button = browser.buttons[folder.identity]
-        async def navigate(payload):
-            self.assertFalse(button.text.startswith('✓'))
-        opened.side_effect = navigate
-        self.app.loop.run_until_complete(browser._select_pressed(folder, button))
+        self.assertEqual([row.title for row in browser.native_list.data], ['Books', 'Chapter.md'])
+        self.assertEqual([row.folder for row in browser.native_list.data], [True, False])
+        self.app.loop.run_until_complete(browser.activate_entry(folder))
         opened.assert_awaited_once_with({'id': 'books'})
         self.app.loop.run_until_complete(browser.select(document))
-        self.assertFalse(any(button.text.startswith('✓') for button in browser.buttons.values()))
+        self.assertIs(browser.native_list.selection.entry, document)
         self.app.loop.run_until_complete(browser.close())
 
     def test_delayed_listing_cannot_replace_a_newer_folder(self):
@@ -295,9 +292,10 @@ class MobileWorkflowTests(unittest.TestCase):
         app.loop.run_until_complete(app.browse_files())
         browser = app.file_browser
         entry = next(item for item in browser.entries if item.label == 'Two.md')
-        row = next(row for row in browser.items.children if browser.buttons[entry.identity] in row.children[0].children)
-        menu = row.children[0].children[-1]
-        app.loop.run_until_complete(menu.on_press())
+        # Native context selection opens commands for this exact payload.
+        row = next(row for row in browser.native_list.data if row.entry is entry)
+        app.loop.run_until_complete(browser._select_row(row))
+        self.assertIn(app.file_operation_view, app.body.children)
         self.assertEqual(app.selected_file()[1], 'Two.md')
         self.assertIsNone(getattr(app, 'crypt_reader', None))
         app.show_file_actions(operation='rename')

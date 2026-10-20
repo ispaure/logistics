@@ -290,7 +290,7 @@ async def exercise_ui_review(app):
     await capture('files')
     browser = app.file_browser
     entry = next(item for item in browser.entries if item.label == 'Meeting notes.md')
-    await browser._select_pressed(entry, browser.buttons[entry.identity])
+    await browser.activate_entry(entry)
     owner = app.private_sessions.active
     assert owner.crypt_reader.name == 'Meeting notes.md'
     owner.crypt_text.value = '# Meeting notes\n\nEdited while testing.\n'
@@ -367,7 +367,7 @@ async def exercise_ui_review(app):
         await app.browser_file_location(('Local files', 'UI Review'))
         browser = app.file_browser
         entry = next(item for item in browser.entries if item.label == 'Meeting notes.md')
-        await browser._select_pressed(entry, browser.buttons[entry.identity])
+        await browser.activate_entry(entry)
         owner = app.private_sessions.active
         editor_contrast(owner.crypt_text)
         await capture('local-editor-' + mode)

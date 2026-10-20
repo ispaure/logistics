@@ -42,7 +42,7 @@ class FilenameDisplayTests(unittest.TestCase):
                     browser.mode = mode
                     browser.render()
                     entry = browser.entries[0]
-                    self.assertEqual(browser.buttons[entry.identity].text, name)
+                    self.assertEqual(browser.native_list.data[0].title if mode == 'List' else browser.buttons[entry.identity].text, name)
                     self.assertEqual(entry.payload['path'], name)
                 app.loop.run_until_complete(browser.close())
             finally:

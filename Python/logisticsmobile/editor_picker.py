@@ -174,12 +174,17 @@ class EditorPicker:
             self.save_as_storage, self.picker_folder,
             toga.Button('Browse folder', on_press=self.refresh_editor_browser, style=Pack(height=48)),
             icon_button('up', 'Parent folder', on_press=self.parent_editor_folder),
-            self.editor_browser.widget, toga.Button('Choose selected item', on_press=self.select_editor_item, style=Pack(height=48)),
+            toga.Button('Choose selected item', on_press=self.select_editor_item, style=Pack(height=48)),
             self.save_as_name, toga.Label('Local files are plaintext. LocalCrypt stays encrypted. Drafts opened here stay in memory.'),
             toga.Button('Open file' if mode == 'open' else 'Save new file', on_press=self.confirm_editor_file, style=Pack(height=48)),
             toga.Button('Cancel', on_press=self.cancel_text_destination, style=Pack(height=48)), self.save_as_status],
             style=Pack(direction=COLUMN, margin=12))
-        self.show_view(toga.ScrollContainer(horizontal=False, content=self.save_as_view, style=Pack(flex=1)))
+        # The list owns its bounded scrolling viewport. Keep the form scrollable
+        # beside it in the page layout, never around the native list itself.
+        form = toga.ScrollContainer(horizontal=False, content=self.save_as_view,
+                                    style=Pack(flex=1))
+        self.show_view(toga.Box(children=[self.editor_browser.scroll_container(), form],
+                               style=Pack(direction=COLUMN, flex=1)))
         await self.refresh_editor_browser()
 
     def browser_editor_selected(self, row):

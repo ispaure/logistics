@@ -31,6 +31,7 @@ class ReaderBuildTests(unittest.TestCase):
             self.assertTrue(first.startswith(existing))
             self.assertEqual(first.count('payload/commonUtils/ui/native/android'), 1)
             self.assertEqual(first.count('payload/features/books/mobile/android'), 1)
+            self.assertEqual(first.count('payload/logisticsmobile/android'), 1)
             for name in ('back15', 'forward15'):
                 icon = root / ('app/src/main/res/drawable/speech_' + name + '.xml')
                 self.assertEqual(ET.parse(icon).getroot().tag, 'vector')

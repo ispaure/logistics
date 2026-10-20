@@ -125,6 +125,7 @@ class CloudUI(LocalCryptUI):
             self.cloud_entries = toga.Selection(style=Pack(height=44))
             NativeBrowser = self.rclone_ui.NativeBrowser
             self.remote_browser = NativeBrowser(bounded_pages=True, folder_visible=self.folder_path_visible, selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location, open_file=self.open_remote_document)
+            self.remote_browser.on_item_actions = self.show_remote_item_actions
             self.remote_browser.navigation_controls.remove(self.remote_browser.back_button)
             self.remote_browser.search.placeholder = 'Search this folder'
             self.cloud_open = toga.Button('Open folder', on_press=self.open_cloud_folder, style=Pack(height=44))

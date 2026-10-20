@@ -72,10 +72,9 @@ current location. Typing pauses briefly before searching; clearing search restor
 the current folder's immediate children.
 This control stays beside the folder name in local, remote and drawer browsers,
 including when a long folder name is shortened to fit.
-Large file lists gradually prepare more rows while you wait and as you approach
-the bottom. Keep scrolling to reach every item; there are no page buttons.
-Preparation pauses when you leave the browser and resumes when you return. Search includes all available
-entries, including those you have not scrolled to yet.
+List mode uses a native scrolling list on iOS and Android, reusing rows as you
+scroll. Every matching item is available without page buttons. Search includes
+all available entries, including those you have not scrolled to yet.
 The top bar has no Sort control. The
 rows show filenames rather than full paths, shortening long names in the middle.
 File sizes remain available in **Details** instead of beside every filename. The
@@ -93,8 +92,8 @@ combined folder-and-lock icon as Workspaces: an open blue padlock after successf
 unlocked browsing, or an orange closed padlock when locked.
 These indicators describe the folder currently open, including when a remote
 also has an on-device copy.
-**•••** beside an item selects that item and opens its commands without opening
-its contents. Rename, Move, New folder and archive-password entry have focused
+In List mode, long-press an item on Android, or swipe left and choose **Select**
+on iOS, to select it and open its commands without opening its contents. Rename, Move, New folder and archive-password entry have focused
 screens. **Details** shows metadata and bounded previews.
 Folders and search results show all matching items in one scrolling view, in
 both List and Tiles. There is no per-page limit or Previous/Next paging.

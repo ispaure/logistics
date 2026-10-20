@@ -506,7 +506,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertEqual(list(frame.row.children), [drawer.widget, frame.main])
             app.loop.run_until_complete(drawer.open_folder({'path': 'Notes'}))
             entry = next(item for item in drawer.browser.entries if item.label == 'Another.md')
-            app.loop.run_until_complete(drawer.browser._select_pressed(entry, drawer.browser.buttons[entry.identity]))
+            app.loop.run_until_complete(drawer.browser.activate_entry(entry))
             self.assertEqual(app.native_host.state.destination, 'documents')
             self.assertFalse(self.navigation.menu_open['documents'])
             self.assertEqual(first.document.text, 'Keep the original draft')

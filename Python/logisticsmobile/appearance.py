@@ -555,6 +555,8 @@ def install_appearance(app):
 
 def refresh_appearance(app):
     """Recolour live chrome without replacing editors or transfer owners."""
+    for listing in tuple(getattr(app, '_recycled_file_lists', ())):
+        listing.refresh_palette()
     if type(app._impl).__module__.startswith('toga_iOS.'):
         host = getattr(app, 'native_host', None)
         window = getattr(app, '_main_window', None)

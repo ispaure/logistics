@@ -195,7 +195,7 @@ class RemoteProbe(LogisticsMobile):
                 await asyncio.sleep(.3)
                 await capture_window(self, output / (remote.lower() + '-browser.png'))
                 folder = next(entry for entry in browser.entries if entry.label == 'nested')
-                await browser._select_pressed(folder, browser.buttons[folder.identity])
+                await browser.activate_entry(folder)
                 assert self.cloud_path == 'folder/nested'
                 await browser.go_back()
                 assert self.cloud_path == 'folder'
@@ -204,7 +204,7 @@ class RemoteProbe(LogisticsMobile):
                 for filename in ('note.txt', 'note.md', 'comic.cbz', 'page.png', 'book.epub'):
                     await self.visit(remote)
                     entry = next(entry for entry in browser.entries if entry.payload['path'] == 'folder/' + filename)
-                    await browser.buttons[entry.identity].on_press()
+                    await browser.activate_entry(entry)
                     owner = self.private_sessions.active
                     assert owner is not None and owner.crypt_reader.read_only
                     assert owner.crypt_view in self.body.children, self.cloud_status.value

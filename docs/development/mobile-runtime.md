@@ -222,30 +222,46 @@ Local reads use the cancellable listing path
 without toggling global cloud controls or refreshing the download inventory.
 Folder pages are built offscreen before attachment. Local and LocalCrypt List/Tiles
 views use names and generic icons, without queuing content or thumbnail reads.
-Plain List views reuse styled row slots for the current folder. The view is detached once
-while its names, actions and file/folder indicators are updated, then mounted
-again; unchanged rows keep their native controls and appearance. Local, remote
-and drawer browser scroll containers initially mount up to 40 plain List rows.
-After a short idle delay, the visible browser continues filling the listing
-in slices of at most two rows, yielding to the native event loop between slices.
-Each slice checks a four-millisecond construction budget; native mounting/layout
-runs on the UI thread and cannot be interrupted. An over-budget slice reduces
-subsequent work to one row and increases the interval before the next update.
-During scrolling, ordinary idle work waits for the gesture to settle; within
-24 row heights of the bottom, one-row slices keep extending the list. Existing
-rows and the scroll container remain mounted, preserving the scroll offset. The complete sorted,
-filtered entry snapshot remains available to search; the widget batch size is
-not a listing or result limit. A render computes that snapshot once, and scroll
-appends reuse it. Provider reads and item activation hold population until they
-finish, including failed navigation. Route/tab/drawer changes pause hidden
-browsers; returning resumes them. App inactivity, search/sort changes, view
-changes and stopping cancel queued work. Every callback rechecks visibility,
-query identity and navigation ownership before creating controls. Android keyboard dismissal shares one listener per
-browser and binds newly created controls without rebinding retained views.
-Unused slots
-clear captions, accessibility names and entry callbacks, then are released. Stopping a browser
-clears the entire pool, so a credential lock retains no row-owned plaintext.
-Tiles and rich thumbnail lists continue through the shared renderer.
+Mobile file List views use `RecycledFileList`, a single bounded native scrolling
+widget with lightweight source records for every sorted/filtered entry. Android
+uses the app-owned `FileListView` Java `ListView`/`BaseAdapter`: `getView` binds
+recycled rows, with text and icons held in Java rather than per-entry Toga
+containers. Toga 0.5.7's Android `DetailedList` instead creates every row inside a
+`ScrollView`, so that backend is deliberately replaced. iOS keeps Toga's
+`UITableView` backend and reusable cells, with browser disclosure indicators,
+middle filename truncation and full accessibility names. Native selection owns
+highlighting. Android palette updates include monochrome selected-row contrast.
+
+Local, remote, workspace drawer and Open/Save picker lists keep a bounded viewport;
+none wraps the native list in an outer scroll container. The picker form has its
+own scrollable area. There are no Python row-population timers or per-file Toga
+buttons. Search still covers the entire source, including recursive matches;
+source publication never truncates the list to the visible rows. File taps keep
+the existing direct-open path. Android long press and iOS's Select swipe action
+select an item for contextual commands without opening it. Each callback captures
+the row's entry and render epoch; replaced snapshots and late asynchronous
+selection callbacks cannot open stale files. Folder and Back behavior retains the
+existing provider/navigation owners.
+
+Only cells requested by a native viewport queue optional thumbnail work, with
+bounded concurrency/pending requests and the existing bounded byte cache. Local
+and LocalCrypt browsing still does not enable thumbnail content reads. Recycled
+cells clear old text, accessibility descriptions and images when retired; stopping
+clears the native source, selection and provider snapshot. Tiles retain their
+existing shared renderer and separate scroll container.
+
+The disposable `recycled_list_probe.py` under `Mobile/native_tests/tests/logisticsmobile/`
+uses 10,005 synthetic file records to validate native viewport bounds, scrolling
+to the last result, activation, search, sorting, stale callback rejection and
+clearing. It is a QA launcher only and must not replace production launchers.
+[Native verification evidence](mobile-evidence/2026-10-19-recycled-file-lists.json)
+records 20 visible Android rows (40 created views while jumping to the last
+entry) on a BOOX Note Air 5C and 10 visible iOS simulator cells, with complete
+search, last-item activation, source replacement, visible-row thumbnails and
+clearing checks. The focused 174-test host set and seven packaging tests pass;
+separate pre-existing broad-suite failures were reproduced with the original
+browser. These synthetic checks establish bounded UI work, not real storage
+latency or full-app frame timing.
 Regression coverage lives in
 `Mobile/tests/test_browser_progressive.py`, `Mobile/tests/test_keyboard.py`,
 `Mobile/tests/test_native_browser.py`, `Mobile/tests/test_settings_ui.py`,
@@ -325,6 +341,51 @@ checkpoint once before changing selection, including in wide layouts; compact
 presentation reuses that guard. Destination selection checkpoints text first and
 saves workspace state once afterward. These paths are shared by Android and iOS.
 `Python/tests/test_mobile_workspace.py` covers view changes and external edits.
+
+### BOOX file-list before/after profiling — 2026-10-19
+
+The [paired BOOX report](mobile-evidence/2026-10-19-boox-file-list-profile.json)
+compares the original progressive browser against the recycled List renderer in
+one isolated QA process on a physical Note Air 5C (Android API 35, reported
+refresh rate 38 Hz). It uses production appearance hooks with normal system
+appearance and synthetic in-memory records. Provider I/O, app startup and physical
+E Ink pixel presentation are excluded. Each size has five alternating paired
+trials after excluded warmups; cProfile runs are separate.
+
+| Files | Original next native draw, median | Recycled next native draw, median | Ratio |
+| --- | ---: | ---: | ---: |
+| 40 | 2,547 ms | 74 ms | 34.2× |
+| 200 | 2,523 ms | 96 ms | 26.3× |
+| 1,000 | 2,536 ms | 179 ms | 14.1× |
+
+The original renderer initially constructs 40 rows at every size. Its 200-file
+cProfile points to widget construction and surface styling: 320 `paint_surface`
+calls within the initial batch. Profiled times include profiler overhead and are
+not used in the latency ratios. Browser-control construction remains about
+250 ms for either implementation, measured separately from listing publication.
+
+Steady-state scrolling was measured only after all 200 records were available
+and the old browser had finished constructing all 200 widgets. That old
+progressive construction took about 101 seconds in this run. Three trials per
+implementation used identical native touch sequences. Median trial frame p50 was
+137 ms original versus 145 ms recycled; median trial p95 was 172 versus 171 ms.
+This does **not** demonstrate a scrolling improvement. Native fling behavior
+produces different travel distances, and Android frame metrics include rendering
+pipeline delays, so these results do not establish the remaining cause or a
+physical E Ink refresh rate. Layout/render tracing remains necessary to diagnose
+the residual scrolling lag. Do not present the listing speedup as an overall app
+or scrolling speedup.
+
+`Mobile/native_tests/tests/logisticsmobile/boox_file_list_profile.py` is a
+QA-only launcher. Stage the original browser at the report's pinned commit as
+`logisticsmobile.legacy_browser_ui`, the current browser normally, and the
+QA-only `android/io/github/ispaure/logisticsmobile/FileListBenchmark.java` into
+the disposable app's Java source tree. The helper is not in the production
+source allowlist. Results and cProfile trees are written beneath that QA app's
+cache in `boox-file-list-profile/`. Local raw results, call trees and a mixed
+render-tail `gfxinfo framestats` dump are retained under
+`Mobile/build/list-recycling-qa/boox-profile/`. The published JSON omits
+noncomparable backing-view counts and records this instrumentation limitation.
 
 ## Workspaces refresh
 
