@@ -1,4 +1,4 @@
-name: Native mobile prototype builds
+name: iPad native failure diagnostics
 
 on:
   push:
@@ -100,10 +100,7 @@ jobs:
         env:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
-          device=$(python ui_tools.py ios-device)
-          python ui_tools.py run ios --device "$device"
-          cp logs/ios-native-ui.json logs/iphone-native-ui.json
-          xcrun simctl shutdown "$device"
+          df -h .
           device=$(python ui_tools.py ios-ipad)
           python ui_tools.py run ios --device "$device" --require-independent-windows
           cp logs/ios-native-ui.json logs/ipad-native-ui.json
