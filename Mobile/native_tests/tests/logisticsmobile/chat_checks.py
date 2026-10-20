@@ -1,4 +1,5 @@
 """Native streamed chat, transcript layout and credential exclusion."""
+import asyncio
 import contextlib
 import os
 import sys
@@ -10,7 +11,7 @@ from .web_checks import wait_for_text
 
 
 @contextlib.contextmanager
-def chat_watchdog():
+def chat_watchdog(app):
     """Retain Python stacks when a native bridge call blocks the event loop."""
     stopped = threading.Event()
 
@@ -23,6 +24,22 @@ def chat_watchdog():
             for ident, frame in sys._current_frames().items():
                 print(f'LOGISTICS_NATIVE_THREAD={names.get(ident, ident)}\n'
                       + ''.join(traceback.format_stack(frame)), flush=True)
+            for task in asyncio.all_tasks(app.loop):
+                print(f'LOGISTICS_NATIVE_TASK={task.get_name()}', flush=True)
+                coroutine = task.get_coro()
+                while coroutine is not None:
+                    frame = getattr(coroutine, 'cr_frame', None) or getattr(coroutine, 'gi_frame', None)
+                    if frame is not None:
+                        print(''.join(traceback.format_stack(frame)), flush=True)
+                    coroutine = getattr(coroutine, 'cr_await', None) or getattr(coroutine, 'gi_yieldfrom', None)
+            try:
+                from java import jclass
+            except ImportError:
+                pass
+            else:
+                native = jclass('android.os.Looper').getMainLooper().getThread()
+                print('LOGISTICS_NATIVE_ANDROID_UI_STACK\n'
+                      + '\n'.join(str(frame) for frame in native.getStackTrace()), flush=True)
         if not stopped.is_set():
             # A blocked native bridge cannot run an asyncio timeout. Fail the
             # test process after retaining three snapshots rather than spending
@@ -41,7 +58,7 @@ def chat_watchdog():
 
 async def exercise_chat(app, passed):
     from logisticsmobile.chat_fixture import fixture_server
-    with fixture_server() as (url, started, release, requests), chat_watchdog():
+    with fixture_server() as (url, started, release, requests), chat_watchdog(app):
         print('LOGISTICS_NATIVE_CHAT=initialize', flush=True)
         app.show_chat()
         print('LOGISTICS_NATIVE_CHAT=configure', flush=True)
