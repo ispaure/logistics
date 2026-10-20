@@ -88,7 +88,14 @@ callbacks and omission of operation return values from reports.
    before bridge locking completes. Sixty-four folder/private checks pass.
    A warmed 300-folder refresh measured 25.1 ms/18.9 ms loop delay before versus
    23.8 ms/13.7 ms after (host tracing enabled). No persistent discovery index.
-10. Lazy startup screens and document loading — pending.
+10. Lazy startup screens and document loading — implemented for phased primary
+    startup: durable model preparation/pruning and recent display metadata run in
+    a worker. Home is constructed first; inactive Documents/Workspaces pages and
+    restored editor content wait until requested. Only metadata is retained from
+    preparation; full recovery text is revalidated on actual open. Fifteen startup/
+    inventory checks pass, including deferred view construction, exact recovered
+    draft restoration and worker-thread execution. Native startup timing remains
+    unmeasured; synchronous scene/test construction retains its existing contract.
 11. Queued encrypted document history — pending.
 12. Conversation summary inventory — pending.
 13. Recycled conversation rows — pending.

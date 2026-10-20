@@ -75,6 +75,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self._startup_in_progress = True
         native = type(self._impl).__module__.startswith(('toga_iOS.', 'toga_android.'))
         if native and getattr(self, 'window_id', 'primary') == 'primary':
+            self._async_startup = True
             from .startup import begin_startup
             begin_startup(self)
         else:
@@ -83,6 +84,25 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             for _ in self._startup_steps():
                 pass
             self._startup_in_progress = False
+
+    async def _prepare_startup_phase(self, index):
+        if index != 1:
+            return
+        from .startup import load_startup_models
+        root = self.private_root
+        previous = _active_hosts.get(str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary'))
+        if previous is not None and previous is not self:
+            pending = getattr(previous, 'startup_task', None)
+            if pending is not None and not pending.done():
+                pending.cancel()
+            store = getattr(previous, 'store', None)
+            if store is not None:
+                store.flush_checkpoints()
+            if hasattr(previous, 'chat_current') and not previous.checkpoint_chat():
+                raise OSError('Could not preserve the previous conversation.')
+            previous.active_host = False
+        self._startup_models = await asyncio.to_thread(load_startup_models, root,
+            getattr(self, 'workspace_root', root))
 
     def _startup_steps(self):
         from .startup import STEPS
@@ -138,21 +158,23 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.navigation_generation = 0
         _active_hosts[host_identity] = self
         workspace_root = getattr(self, 'workspace_root', root)
-        self.preferences = Preferences(workspace_root)
+        models = self.__dict__.pop('_startup_models', None)
+        self.preferences = models['preferences'] if models is not None else Preferences(workspace_root)
         from .appearance import configure_android_eink
         configure_android_eink(self)
         yield STEPS[2]
-        self.store = DocumentStore(root / 'Documents')
+        self.store = models['store'] if models is not None else DocumentStore(root / 'Documents')
         from .recent_documents import RecentDocuments, MAX_RECENT
-        self.recent_documents = RecentDocuments(workspace_root)
-        self.workspace = Workspace(workspace_root)
+        self.recent_documents = models['recent'] if models is not None else RecentDocuments(workspace_root)
+        self.workspace = models['workspace'] if models is not None else Workspace(workspace_root)
+        self._startup_display = models['display'] if models is not None else {}
         from features.rclone.mobile.document_lists import CredentialDocumentLists
         async def reopen_reference(source):
             from .document_sources import reopen_file
             return await reopen_file(self, source)
         self.credential_document_lists = CredentialDocumentLists(self,
             references=self.recent_documents, max_recent=MAX_RECENT, reopen=reopen_reference)
-        if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
+        if models is None and self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
             self.clear_restored_documents()
         restored_reader = self.workspace.sessions.get(self.workspace.active)
         self.pending_reader_restore = None
@@ -189,7 +211,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
             active = self.workspace.sessions.get(self.workspace.active)
             if active is not None and active.provider == 'managed-text':
-                self.open_document(active.resource)
+                if getattr(self, '_async_startup', False):
+                    self._pending_managed_restore = active.resource
+                else:
+                    self.open_document(active.resource)
         elif self.labels:
             key = self.preferences.values['last_document']
             active = self.workspace.sessions.get(self.workspace.active)
@@ -197,10 +222,14 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 key = active.resource
             if self.preferences.values['restore_last_document'] != 'true' or key not in self.labels.values():
                 key = next(iter(self.labels.values()))
-            self.open_document(key)
+            if getattr(self, '_async_startup', False):
+                self._pending_managed_restore = key
+            else:
+                self.open_document(key)
         yield STEPS[6]
-        self.show_documents_hub()
-        self.show_folder_picker(initialize=False)
+        if not getattr(self, '_async_startup', False):
+            self.show_documents_hub()
+            self.show_folder_picker(initialize=False)
         self.show_home()
         self.save_workspace(capture=False)
         yield STEPS[7]
@@ -632,7 +661,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
 
     def show_documents(self, widget=None, *, resume=False, edit=False, destination=None, **kwargs):
         if self.current is None:
-            self.new_document()
+            pending = self.__dict__.pop('_pending_managed_restore', None)
+            if pending is None or not self.open_document(pending):
+                self.new_document()
         if self.current is None:
             return False
         self.pending_reader_restore = None
@@ -812,7 +843,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self._publish_document_summaries(documents, failures)
             return
         if getattr(self, '_startup_in_progress', False):
-            documents, failures = self.store.summaries()
+            documents, failures = ((self.store.cached_summaries(), [])
+                if getattr(self, '_async_startup', False) else self.store.summaries())
             self._publish_document_summaries(documents, failures)
             return
         self._publish_document_summaries(self.store.cached_summaries(), [])
@@ -847,6 +879,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                                      if failures else '')
 
     def open_document(self, key):
+        self.__dict__.pop('_pending_managed_restore', None)
         opened = False
         previous_view = self.document_view
         displaying = (hasattr(self, 'routes') and previous_view in self.routes.body().children)

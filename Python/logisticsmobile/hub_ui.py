@@ -340,7 +340,14 @@ class HubUI:
             details.append('File changed outside editor')
         if session.provider == 'managed-text' and owner is None:
             try:
-                document = self.store.open(session.resource)
+                prepared = getattr(self.app, '_startup_display', {}).get(session.resource)
+                if (prepared is not None
+                        and prepared['revision'] == self.store._recovery_revision(self.store.path(session.resource, '.json'))
+                        and prepared['source_revision'] == self.store._recovery_revision(self.store.path(session.resource, '.data'))):
+                    from types import SimpleNamespace
+                    document = SimpleNamespace(**prepared)
+                else:
+                    document = self.store.open(session.resource)
                 title = document.name
                 kind = text_document_kind(title)
                 if document.modified:

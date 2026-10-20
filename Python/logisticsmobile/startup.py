@@ -72,6 +72,38 @@ class StartupScreen:
         self.detail.text = 'Close and reopen the app to try again.'
 
 
+def load_startup_models(root, workspace_root):
+    """Prepare durable models and display metadata without constructing controls."""
+    from .preferences import Preferences
+    from .documents import DocumentStore
+    from .recent_documents import RecentDocuments
+    from .workspace import Workspace
+    preferences = Preferences(workspace_root)
+    store = DocumentStore(root / 'Documents')
+    recent = RecentDocuments(workspace_root)
+    workspace = Workspace(workspace_root)
+    display = {}
+    keys = {session.resource for session in workspace.sessions.values() if session.provider == 'managed-text'}
+    keys.update(item['resource'] for item in recent.items if item['provider'] == 'managed-text')
+    for key in keys:
+        try:
+            doc = store.open(key)
+            display[key] = dict(name=doc.name, modified=doc.modified, conflict=doc.conflict,
+                revision=store._recovery_revision(store.path(key, '.json')),
+                source_revision=store._recovery_revision(store.path(key, '.data')))
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    if preferences.values['clear_unmodified_documents_on_restart'] == 'true':
+        for session in list(workspace.sessions.values()):
+            if session.provider == 'managed-text':
+                info = display.get(session.resource)
+                if info is None or info['modified'] or info['conflict']:
+                    continue
+            workspace.close(session.id, guard=lambda value: True)
+    store.summaries()
+    return dict(preferences=preferences, store=store, recent=recent, workspace=workspace, display=display)
+
+
 async def finish_startup(app):
     """Run UI work on its native thread, allowing a frame between real phases."""
     try:
@@ -80,6 +112,9 @@ async def finish_startup(app):
             # A timed yield gives UIKit/Android a draw turn; sleep(0) can keep
             # draining Python callbacks without presenting the updated screen.
             await asyncio.sleep(1 / 60)
+            prepare = getattr(app, '_prepare_startup_phase', None)
+            if prepare is not None:
+                await prepare(index)
         app.startup_screen.progress.value = len(STEPS)
         app._startup_layout_ready = True
         app.resize_workspace()
