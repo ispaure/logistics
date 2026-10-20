@@ -332,7 +332,7 @@ the expected runtime, clean source commits, every case and zero failures or skip
 
 Both workflows run for changes to their mobile source paths on `alpha`; they also
 define manual Android/iOS/both controls. GitHub exposes manual controls after the
-workflow is present on the default branch. Native builds have a 45-minute upper
+workflow is present on the default branch. Native builds have a 60-minute upper
 bound; cold interpreter/testbed jobs have a 90-minute upper bound. Diagnostic
 artifacts remain available for 14 days. New mobile pushes supersede older mobile
 push runs. These workflows do not publish store releases or use signing secrets.

@@ -120,9 +120,10 @@ portable core, not unported desktop features or physical-device interactions.
 Standalone branch checks cannot cancel a release's mobile jobs, and tag runs
 retain their validation.
 Native app UI runs allow 25 minutes per iOS device, including Briefcase's cold
-simulator startup and installation, and 15 minutes on Android. The iOS job has
-a 60-minute overall budget for building and checking both devices; Android
-retains its 45-minute job budget. The large 256 MiB
+simulator startup and installation, and 40 minutes on Android. Hosted Android
+software rendering has reached the dark-theme audit after all 32 core cases at
+the former 25-minute deadline; the complete run also checks light appearance and
+native Back. Each native build job has a 60-minute overall budget. The large 256 MiB
 LocalCrypt seeding fixture allows four minutes for review revalidation and
 transfer; smaller reviews retain their 30-second budget. Complete native case
 reports and exact source identity are required before a gate can pass.

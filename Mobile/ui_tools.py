@@ -83,9 +83,10 @@ def run(target, device, *, local=False, require_independent_windows=False):
     path = logs / (target + '-native-ui.log')
     started_ns = time.time_ns()
     # Include cold startup, installation, all native cases and the visual audit.
-    # Hosted Android software rendering can finish the 32 core cases but still
-    # exceed 15 minutes in the audit. Keep both platforms bounded at 25 minutes.
-    timeout = 1500
+    # Hosted Android software rendering has completed all 32 core cases and
+    # advanced through the dark-theme audit at the 25-minute limit. Allow the
+    # remaining light-theme and Back checks within a bounded complete run.
+    timeout = 2400 if target == 'android' else 1500
     with path.open('w') as stream:
         process = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
         try:

@@ -315,6 +315,8 @@ async def exercise_ui_review(app):
     assert app.cloud_remote not in app.cloud_view.children
     await capture('transfers')
     async def appearance_mode(dark):
+        mode = 'dark' if dark else 'light'
+        print('LOGISTICS_UI_REVIEW=appearance:' + mode + ':begin', flush=True)
         if get_os() is OS.IOS:
             app.main_window._impl.native.overrideUserInterfaceStyle = 2 if dark else 1
         else:
@@ -330,7 +332,9 @@ async def exercise_ui_review(app):
                 await asyncio.sleep(.05)
             assert bool(native.getResources().getConfiguration().uiMode & 0x30 == 0x20) == dark
             assert app._impl.native.hashCode() == before, 'Theme change replaced the live activity'
+            print('LOGISTICS_UI_REVIEW=appearance:' + mode + ':native-ready', flush=True)
             app.refresh_native_theme()
+        print('LOGISTICS_UI_REVIEW=appearance:' + mode + ':refreshed', flush=True)
         await asyncio.sleep(.3)
 
     def editor_contrast(widget):
