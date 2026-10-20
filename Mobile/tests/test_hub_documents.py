@@ -630,6 +630,7 @@ class HubDocumentTests(unittest.TestCase):
     def test_disabled_clear_setting_restores_saved_documents(self):
         app = self.app
         app.show_settings()
+        app.settings_navigation.choose('App')
         app.clear_documents_choice.value = False
         app.save_preferences()
         key = app.current.id

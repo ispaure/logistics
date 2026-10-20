@@ -31,8 +31,9 @@ class FolderStatusTests(unittest.TestCase):
             self.assertEqual(header.status.value, message)
             self.assertEqual(header.caption.children, [header.folder_name, status] if message else [header.folder_name, header.storage_identity])
             self.assertLess(status.style.font_size, header.folder_name.style.font_size)
-            self.assertEqual(status.style.height, 18)
-        self.assertGreaterEqual(header.folder_name.style.font_size, 20)
+            self.assertEqual(status.style.height, 'none')
+        self.assertEqual(header.folder_name.style.font_size, 18)
+        self.assertEqual(header.folder_name.style.font_weight, 'normal')
         self.assertFalse(header.folder_name._impl._surface_eink_outlined)
         self.assertFalse(status._impl._surface_eink_outlined)
         status.value = 'Opening folder…'

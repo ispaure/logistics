@@ -97,7 +97,10 @@ class UXWorkflowTests(unittest.TestCase):
         adapter = SimpleNamespace(impl=impl, mode='bottom')
         app.native_host.adapter = adapter
         try:
-            with patch.object(type(app._impl), '__module__', 'toga_android.app'):
+            resources = SimpleNamespace(getDisplayMetrics=lambda: SimpleNamespace(density=2))
+            native = SimpleNamespace(getResources=lambda: resources)
+            with patch.object(type(app._impl), '__module__', 'toga_android.app'), \
+                    patch.object(app._impl, 'native', native, create=True):
                 app.adaptive.render()
                 self.assertEqual(app.routes.body().style.width, 540)
                 # Repeated layouts must not shrink from a child content minimum.

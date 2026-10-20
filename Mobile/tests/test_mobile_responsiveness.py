@@ -99,7 +99,9 @@ class ResponsivenessTests(unittest.TestCase):
             app.select_destination('files')
             self.assertEqual(icon(), 'folder_unlocked')
             app.change_folder_source('rclone')
-            self.assertIsNot(app.folder_list.children[0], locked_rows)
+            # The cached native hierarchy is updated in place when only its
+            # credential state changes; returning to it must not rebuild rows.
+            self.assertIs(app.folder_list.children[0], locked_rows)
             self.assertEqual(icon(), 'folder_unlocked')
             # Explicit refresh must notice a lock even with unchanged names.
             app.cloud_client.package_records = ()

@@ -112,7 +112,7 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertIs(ancestor, app.cloud_view)
                 self.assertIn(app.cloud_status, toolbar.caption.children)
                 self.assertFalse(hasattr(app, 'cloud_actions_button'))
-                self.assertLessEqual(app.cloud_status.style.height, 48)
+                self.assertEqual(app.cloud_status.style.height, 'none')
                 self.assertNotIn(app.cloud_cancel, toolbar.children)
                 self.assertIsNone(app.cloud_transfer_progress.parent)
                 self.assertEqual(app.cloud_up.control_icon, 'back')
