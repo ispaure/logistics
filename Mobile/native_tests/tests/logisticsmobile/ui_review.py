@@ -198,7 +198,7 @@ async def exercise_ui_review(app):
         if leave == app.show_settings:
             await capture('folder-picker')
         assert not hasattr(app, 'folder_refresh_button')
-        for source, action in (('rclone', None),
+        for source, action in (('rclone', app.folder_add_remote_button),
                                ('Network shares', app.folder_add_share_button), ('Local', None)):
             app.folder_source_buttons[source].on_press()
             assert list(app.folder_source_actions.children) == ([action] if action is not None else [])
