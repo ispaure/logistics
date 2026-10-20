@@ -42,7 +42,12 @@ callbacks and omission of operation return values from reports.
    elapsed 140.4 ms versus 159.8 ms baseline. The workspace preview-mode test
    fails identically when restoring synchronous checkpoint behavior; it is a
    pre-existing navigation failure, not attributed to batching.
-3. Coalesce chat draft saves — pending.
+3. Coalesce chat draft saves — implemented: 250 ms idle batching, one-second
+   maximum delay, serialized workers and explicit navigation/focus/exit saves.
+   Explicit saves invalidate older workers; out-of-order workers and external
+   revisions cannot overwrite newer records. Four storage tests and eleven UI
+   tests include a session API-key sentinel. Twenty draft changes on a synthetic
+   large-history record: 62.4 ms synchronous versus 0.18 ms queued callbacks.
 4. Background streaming Markdown parsing — pending.
 5. Incremental streaming DOM updates — pending.
 6. Lightweight asynchronous document inventory — pending.

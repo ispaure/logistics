@@ -439,7 +439,9 @@ class ChatUI:
         self.resize_chat_composer()
         if not self.chat_loading and self.chat_current is not None:
             self.chat_current['draft'] = widget.value
-            self.checkpoint_chat()
+            self.chat_store.queue_save(self.chat_current, self.loop,
+                failed=lambda error: self.set_chat_status('Chat not saved: ' + str(error))
+                    if self.active_host else None)
 
     def update_chat_transcript(self):
         self.chat_render_revision += 1

@@ -31,6 +31,15 @@ class ChatUITests(unittest.TestCase):
         self.app.chat_url.value = url
         self.app.chat_model.value = 'fixture-model'
 
+    def test_batched_drafts_never_persist_the_session_api_key(self):
+        self.app.chat_key.value = 'SESSION-ONLY-API-KEY-SENTINEL'
+        self.app.chat_prompt.value = 'Synthetic draft'
+        self.app.loop.run_until_complete(asyncio.sleep(.3))
+        self.app.loop.run_until_complete(asyncio.gather(*self.app.chat_store._writes))
+        self.assertEqual(self.app.chat_store.load(self.app.chat_current['id'])['draft'], 'Synthetic draft')
+        for path in self.app.private_root.rglob('*.json'):
+            self.assertNotIn(b'SESSION-ONLY-API-KEY-SENTINEL', path.read_bytes())
+
     def test_chat_drawer_uses_neutral_layers_and_keeps_live_content(self):
         from logisticsmobile.appearance import _surfaces
         app = self.app

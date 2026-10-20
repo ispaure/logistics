@@ -101,6 +101,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             store = getattr(previous_host, 'store', None)
             if store is not None:
                 store.flush_checkpoints()
+            if hasattr(previous_host, 'chat_current') and not previous_host.checkpoint_chat():
+                raise OSError('Could not preserve the previous conversation.')
             pending = getattr(previous_host, 'startup_task', None)
             if pending is not None and not pending.done():
                 pending.cancel()
@@ -929,6 +931,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if getattr(self, '_reset_scheduled', False):
             return True
         if not self.active_host:
+            return False
+        if hasattr(self, 'chat_current') and not self.checkpoint_chat():
             return False
         try:
             self.store.flush_checkpoints()

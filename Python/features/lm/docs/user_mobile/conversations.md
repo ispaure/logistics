@@ -22,7 +22,9 @@ These settings, URL and model persist privately. API keys remain in memory for
 this app session and are not written to configuration or conversation fields.
 Re-enter a required key after restarting. Opening chat alone makes no request.
 
-**New chat** at the bottom of the conversation drawer starts a private thread. Drafts are checkpointed while typing.
+**New chat** at the bottom of the conversation drawer starts a private thread.
+Draft recovery writes are batched briefly while typing and flushed when leaving
+the screen or backgrounding the app. Session API keys remain in memory.
 **Send** streams a text reply and preserves partial progress during generation.
 The same button becomes **Stop** during generation; it stops the connection and
 retains received text with cancelled status.
