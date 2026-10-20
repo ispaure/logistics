@@ -189,9 +189,9 @@ async def exercise_reviews(app):
     view = await ready()
     assert 'Add: linked.txt' in view.children[3].value
     assert 'excluded.skip' not in view.children[3].value
-    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
-        await view.children[-1].children[1].on_press()
-    assert await finish('options-push'), app.transfer_message
+    # Fresh validation can ask for another completed review. Follow the same
+    # bounded full-confirmation flow used by the other native transfer checks.
+    await approve_transfer(app)
     inferred = next(item for item in store.jobs.values() if item['target'] == folder)
     assert inferred['prefix'] == folder and inferred['remote'] == job['remote'] and not inferred['crypt']
     observed = await remote_files(client, inferred, 'linked.txt', 'excluded.skip')

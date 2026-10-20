@@ -376,3 +376,8 @@ The final mobile regression run passes 251 tests, and portable collection/reader
 contracts pass 29 tests. Each native target passes 10 collection cases, including
 a second-process index reopen without archive reads. Native runs cover 260 actual
 imports; the 5,001-entry scale check is portable, not a device performance claim.
+
+Closing a private iOS book WebView disables native callbacks and clears the live
+DOM before loading its blank document. This also covers a retired, hidden pane,
+where WKWebView can defer replacement navigation. Android continues to destroy
+the private native WebView. Closing is idempotent and rejects further content.

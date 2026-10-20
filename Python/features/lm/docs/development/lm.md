@@ -107,6 +107,11 @@ selects the first result, and persists the selection. Manual IDs remain availabl
 for servers without model discovery. Invalid saves stay in setup with feedback.
 Selection-list replacement suppresses change callbacks until the intended model
 is restored, so refreshing does not silently replace it with the first model.
+Initial conversation discovery can complete while a connection request owns the
+controls. Keep the initial selection pending during that request and refresh it
+when the controls become idle, so an existing draft is restored or an initial
+conversation is created before sending. `Mobile/tests/test_chat_inventory.py`
+checks both an existing conversation and an empty library under this ordering.
 
 `mobile_api_url` adds `/v1` only to addresses with no API path; profile validation
 and the HTTP client use the same normalization. Explicit paths remain unchanged.

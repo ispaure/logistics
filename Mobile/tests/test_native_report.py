@@ -135,6 +135,58 @@ class NativeReportTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_rejected_simulator_report_and_traceback_are_retained(self):
+        import os
+        from unittest.mock import patch
+        rejected = dict(self.report(), success=False, cases=[], error='AssertionError: iPad fixture')
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache = root / 'Library/Caches'
+            cache.mkdir(parents=True)
+            result = cache / 'logistics-native-ui-result.json'
+            error = cache / 'logistics-native-ui-error.txt'
+            result.write_text(json.dumps(rejected))
+            error.write_text('Traceback: actual iPad fixture\nAssertionError: iPad fixture\n')
+            for path in (result, error):
+                os.utime(path, ns=(3_000_000_000, 3_000_000_000))
+            logs = root / 'logs'
+            with patch.object(ui_tools.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=str(root))):
+                actual = ui_tools.simulator_report('ipad-device', 2_000_000_000, diagnostics=logs)
+            validated = logs / 'ios-native-ui.json'
+            with self.assertRaises(ValueError):
+                ui_tools.verify_report(actual, 'ios', validated)
+            self.assertFalse(validated.exists())
+            self.assertEqual(json.loads((logs / 'ios-native-ui-cached.json').read_text()), rejected)
+            self.assertEqual((logs / 'ios-native-ui-error.txt').read_text(), error.read_text())
+            self.assertNotIn('iphone', (logs / 'ios-native-ui-error.txt').read_text())
+
+    def test_diagnostics_use_the_failed_device_and_capture_before_relaunch(self):
+        import os
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                Path('logs').mkdir()
+                Path('logs/ios-native-ui-device.json').write_text(json.dumps(dict(
+                    device='failed-ipad', started_ns=123)))
+                events = []
+                def capture(device, started, **kwargs):
+                    events.append(('capture', device, started))
+                def run(command, **kwargs):
+                    events.append(('command', command))
+                    return SimpleNamespace(stdout=b'', stderr=b'')
+                with patch.object(ui_tools, 'simulator_report', side_effect=capture), \
+                        patch.object(ui_tools, 'ios_device', side_effect=AssertionError('Wrong-device fallback')), \
+                        patch.object(ui_tools.subprocess, 'run', side_effect=run), \
+                        patch.object(ui_tools.Path, 'home', return_value=Path(directory)):
+                    ui_tools.ios_diagnostics()
+                self.assertEqual(events[0], ('capture', 'failed-ipad', 123))
+                self.assertEqual(events[1][1][3], 'failed-ipad')
+                self.assertIn('failed-ipad', events[2][1])
+            finally:
+                os.chdir(previous)
+
     def test_process_failures_without_verified_result_still_fail(self):
         import os
         from unittest.mock import patch
@@ -147,5 +199,57 @@ class NativeReportTests(unittest.TestCase):
                     with patch.object(ui_tools, 'simulator_report', return_value=None):
                         with self.assertRaises(RuntimeError):
                             ui_tools.run('ios', 'device')
+            finally:
+                os.chdir(previous)
+
+    def test_complete_stdout_does_not_depend_on_simulator_service(self):
+        import os
+        from unittest.mock import patch
+        report = self.report()
+        def revision(args, **kwargs):
+            key = 'commonUtils_commit' if 'commonUtils' in args[2] else 'logistics_commit'
+            return report['source'][key]
+        def launch(command, *, stdout, **kwargs):
+            stdout.write(ui_tools.PREFIX + json.dumps(report) + '\n')
+            stdout.flush()
+            return SimpleNamespace(wait=lambda **kwargs: code)
+        with TemporaryDirectory() as directory, patch.object(ui_tools.subprocess, 'Popen', side_effect=launch), \
+                patch.object(ui_tools.subprocess, 'check_output', side_effect=revision), \
+                patch.object(ui_tools, 'simulator_report', side_effect=AssertionError('Simulator service unavailable')) as cache:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                for code in (0, 200):
+                    self.assertEqual(ui_tools.run('ios', 'device'), report)
+                    transport = json.loads(Path('logs/ios-report-transport.json').read_text())
+                    self.assertEqual(transport['transport'], 'stdout')
+                    self.assertEqual(transport['briefcase_exit_code'], code)
+                cache.assert_not_called()
+            finally:
+                os.chdir(previous)
+
+    def test_failed_structured_stdout_cannot_fall_back_to_successful_cache(self):
+        import os
+        from unittest.mock import patch
+        report = self.report()
+        def revision(args, **kwargs):
+            key = 'commonUtils_commit' if 'commonUtils' in args[2] else 'logistics_commit'
+            return report['source'][key]
+        def launch(command, *, stdout, **kwargs):
+            stdout.write(ui_tools.PREFIX + json.dumps(emitted) + '\n')
+            stdout.flush()
+            return SimpleNamespace(wait=lambda **kwargs: 0)
+        with TemporaryDirectory() as directory, patch.object(ui_tools.subprocess, 'Popen', side_effect=launch), \
+                patch.object(ui_tools.subprocess, 'check_output', side_effect=revision), \
+                patch.object(ui_tools, 'simulator_report', return_value=report) as cache:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                for emitted in (dict(report, success=False), dict(report, cases=[]),
+                                dict(report, source=dict(report['source'], logistics_commit='0' * 40))):
+                    with self.assertRaises(ValueError):
+                        ui_tools.run('ios', 'device')
+                cache.assert_not_called()
+                self.assertFalse(Path('logs/ios-native-ui.json').exists())
             finally:
                 os.chdir(previous)

@@ -149,6 +149,55 @@ class FolderStackTests(TestCase):
         self.routes.back()
         self.assertEqual(len(self.routes.screens['files']), 3)
 
+    def test_native_reader_return_restores_viewport_after_final_native_reflow(self):
+        self.show('Projects/Reports')
+        scroll = self.browser._scroll = SimpleNamespace(vertical_position=120, max_vertical_position=1000)
+        self.routes.show(toga.Label('Reader'), route='private:file')
+        scroll.vertical_position = 164
+        def shifted_layout():
+            scroll.vertical_position += 44
+        self.app.adaptive.render.side_effect = shifted_layout
+        nav = self.navigation[self.host.destinations.index('files')]
+        nav.viewControllers.pop()
+        self.routes.native_popped(nav)
+        self.loop.run_until_complete(asyncio.sleep(0))
+        self.assertEqual(scroll.vertical_position, 120)
+        self.assertFalse(self.loaded)
+        self.assertIs(self.routes.body().children[0], self.view)
+
+    def test_loading_replacement_preserves_original_viewport_through_explicit_back(self):
+        self.show('Projects/Reports')
+        scroll = self.browser._scroll = SimpleNamespace(vertical_position=120, max_vertical_position=1000)
+        self.routes.show(toga.Label('Opening'), route='file-loading:fixture')
+        scroll.vertical_position = 76
+        self.routes.show(toga.Label('Reader'), route='private:file')
+        nav = self.navigation[self.host.destinations.index('files')]
+        original = nav.popToViewController
+        def pop(controller, animated):
+            original(controller, animated=animated)
+            self.routes.native_popped(nav)
+        nav.popToViewController = pop
+        def shifted_layout():
+            scroll.vertical_position -= 44
+        self.app.adaptive.render.side_effect = shifted_layout
+        self.routes.back()
+        self.loop.run_until_complete(asyncio.sleep(0))
+        self.assertEqual(scroll.vertical_position, 120)
+        self.assertFalse(self.loaded)
+        self.assertIs(self.routes.body().children[0], self.view)
+
+    def test_queued_reader_restore_does_not_reset_a_new_folder_viewport(self):
+        self.show('Projects/Reports')
+        scroll = self.browser._scroll = SimpleNamespace(vertical_position=120, max_vertical_position=1000)
+        self.routes.show(toga.Label('Reader'), route='private:file')
+        nav = self.navigation[self.host.destinations.index('files')]
+        nav.viewControllers.pop()
+        self.routes.native_popped(nav)
+        self.show('Other')
+        scroll.vertical_position = 300
+        self.loop.run_until_complete(asyncio.sleep(0))
+        self.assertEqual(scroll.vertical_position, 300)
+
     def test_multi_level_native_pop_and_other_tab_reader_are_independent(self):
         reader = toga.Label('Home reader')
         self.host.activate('home')

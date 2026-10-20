@@ -80,18 +80,23 @@ class SourceEditorTests(unittest.TestCase):
     def test_closing_ios_preview_retires_delegates_before_loading_closed_content(self):
         owner = self.open('Closed.md')
         events = []
+        def clear_dom(script, **kwargs):
+            self.assertEqual(events, ['stop'])
+            self.assertIn('document.open()', script)
+            self.assertIn('Document closed.', script)
+            events.append('dom')
         native = SimpleNamespace(navigationDelegate=object(), UIDelegate=object(),
-                                 stopLoading=lambda: events.append('stop'))
+                                 stopLoading=lambda: events.append('stop'), evaluateJavaScript=clear_dom)
         class IOSWebView:
             __module__ = 'toga_iOS.widgets.webview'
         impl = IOSWebView()
         impl.native = native
         def clear(*args):
-            self.assertEqual(events, ['stop'])
+            self.assertEqual(events, ['stop', 'dom'])
             self.assertIsNone(native.navigationDelegate)
             self.assertIsNone(native.UIDelegate)
             events.append('clear')
         preview = SimpleNamespace(_impl=impl, set_content=clear)
         with patch.object(owner.formatted, 'view', preview):
             owner.dispose()
-        self.assertEqual(events, ['stop', 'clear'])
+        self.assertEqual(events, ['stop', 'dom', 'clear'])

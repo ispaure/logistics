@@ -181,7 +181,7 @@ async def exercise_localcrypt(app, passed):
             raise RuntimeError('Native provider fixture was not released')
         return original_open(*args, **kwargs)
     app.new_document()
-    app.show_documents()
+    app.show_documents(destination='documents')
     writer = app.editor_view
     app.show_cloud()
     key = fixture['copies']['note.md']['key']
@@ -193,7 +193,7 @@ async def exercise_localcrypt(app, passed):
                     break
                 await asyncio.sleep(.01)
             assert started.is_set()
-            app.show_documents()
+            app.show_documents(destination='documents')
             app.editor.value = 'Native ordinary draft during private opening'
             body = app.body
             release.set()
@@ -417,11 +417,21 @@ async def exercise_localcrypt(app, passed):
     browser.show_tiles()
     assert browser.mode == 'Tiles' and browser.buttons
     entry = next(entry for entry in browser.entries if entry.label == 'large-browser.cbz')
-    await browser.activate_entry(entry)
+    # Contextual selection requests metadata; a file tap deliberately skips it.
+    await browser.select(entry)
     await asyncio.gather(*tuple(browser.tasks))
     assert app.selected_file()[1] == 'large-browser.cbz'
     assert any('Title: Large native browser sentinel' == child.text for child in browser.info.children if hasattr(child, 'text'))
-    assert browser.icons[(entry.identity, entry.revision)].startswith(b'\x89PNG')
+    assert browser.thumbnail is None and not browser.icons
+    # Folder browsing must not decrypt covers automatically. Exercise the
+    # large-file native thumbnail API as an explicit preview request instead.
+    from logisticsmobile.browser_preview import callbacks
+    thumbnail, _ = callbacks(provider, app.cloud_client)
+    preview = await asyncio.to_thread(thumbnail, entry.payload, (160, 160), lambda: False)
+    assert preview.startswith(b'\x89PNG')
+    assert not browser.icons
+    await browser.activate_entry(entry)
+    assert app.private_sessions.active.crypt_reader.name == 'large-browser.cbz'
     browser.show_list()
     assert browser.mode == 'List'
     browser.sort.value = 'Name Z–A'

@@ -33,7 +33,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.target == 'android' && '[{"target":"android","os":"ubuntu-24.04"}]' || inputs.target == 'ios' && '[{"target":"ios","os":"xcode-27"}]' || '[{"target":"android","os":"ubuntu-24.04"},{"target":"ios","os":"xcode-27"}]') }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.target == 'ios' && 75 || 55 }}
+    timeout-minutes: ${{ matrix.target == 'ios' && 75 || 60 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

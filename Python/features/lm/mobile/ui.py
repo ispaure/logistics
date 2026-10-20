@@ -406,7 +406,8 @@ class ChatUI:
             listing.updating = False
         if warnings:
             self.set_chat_status(f'{len(warnings)} conversation(s) could not be read; originals preserved.')
-        if authoritative and getattr(self, '_chat_needs_initial_selection', False):
+        if (authoritative and not self.chat_busy
+                and getattr(self, '_chat_needs_initial_selection', False)):
             self._chat_needs_initial_selection = False
             if self.chat_labels:
                 self.open_chat(next(iter(self.chat_labels.values())))
@@ -417,7 +418,8 @@ class ChatUI:
         if widget.updating or self.chat_busy:
             return
         row = widget.selection
-        if row is not None and row.key in self.chat_labels.values():
+        if (row is not None and row.key in self.chat_labels.values()
+                and (self.chat_current is None or row.key != self.chat_current['id'])):
             self.open_chat(row.key)
 
     def checkpoint_chat(self):
@@ -448,7 +450,12 @@ class ChatUI:
 
     def select_chat(self, widget, **kwargs):
         if not self.chat_loading and not self.chat_busy and widget.value in self.chat_labels:
-            self.open_chat(self.chat_labels[widget.value])
+            key = self.chat_labels[widget.value]
+            # Android can deliver programmatic selection notifications after
+            # chat_loading clears. Reopening the current chat republishes its
+            # inventory and schedules another notification indefinitely.
+            if self.chat_current is None or key != self.chat_current['id']:
+                self.open_chat(key)
 
     def new_chat(self, widget=None, **kwargs):
         if self.chat_busy or not self.checkpoint_chat():
@@ -559,6 +566,11 @@ class ChatUI:
         self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
         self.update_chat_readiness()
         self.chat_conversation_list.enabled = not busy
+        if not busy and getattr(self, '_chat_needs_initial_selection', False):
+            # Initial discovery can finish while Connect owns the controls.
+            # Complete selection once idle instead of dropping it when the
+            # guarded new/open actions decline to run during that request.
+            self.refresh_chats()
 
     def chat_fields(self):
         settings = dict(self.chat_profile['settings'], context_tokens=int(self.chat_context.value),

@@ -1,6 +1,7 @@
 """Native document Back and tab return preserve the browser viewport."""
 import asyncio
 import base64
+import json
 from zipfile import ZipFile
 from commonUtils.runtime.platform import get_os, OS
 
@@ -68,7 +69,8 @@ async def exercise_browser_back(app):
     root = app.private_root / 'LocalFiles' / 'Back review'
     root.mkdir(exist_ok=True)
     (root / 'A Notes.md').write_text('# Browser note')
-    for index in range(30):
+    # Keep the measured offset well inside the scroll range on large iPads.
+    for index in range(60):
         (root / f'Item-{index:02}.txt').write_text('Native scroll fixture')
     with ZipFile(root / 'Comic.cbz', 'w') as archive:
         archive.writestr('page.webp', base64.b64decode('UklGRhwAAABXRUJQVlA4TA8AAAAvAYAAEAcQ/Y8CBiKi/wEA'))
@@ -81,6 +83,14 @@ async def exercise_browser_back(app):
     tree = browser.tree
     scroll = browser
     for filename in ('Comic.cbz', 'A Notes.md', 'Comic.cbz'):
+        def trace_viewport(phase):
+            if get_os() is OS.IOS:
+                native = browser.native_list._impl.native
+                print('LOGISTICS_BROWSER_VIEWPORT=' + json.dumps(dict(
+                    phase=phase, filename=filename, position=scroll.vertical_position,
+                    raw_y=float(native.contentOffset.y), inset_top=float(native.adjustedContentInset.top),
+                    content_inset_top=float(native.contentInset.top), height=float(native.bounds.size.height),
+                    content_height=float(native.contentSize.height), rows=len(browser.native_list.data))), flush=True)
         browser.search.value = ''
         # Clearing search still schedules the 400 ms query render. Finish it
         # before measuring the viewport; otherwise it can reset scroll while
@@ -100,9 +110,20 @@ async def exercise_browser_back(app):
             await asyncio.sleep(.05)
         position = scroll.vertical_position
         assert position > 0, 'Scroll fixture did not exceed the viewport'
+        assert scroll.max_vertical_position - position > 88, 'Scroll fixture is too close to its lower bound'
+        trace_viewport('before-activate')
         entry = next(item for item in browser.entries if item.label == filename)
-        await browser.activate_entry(entry)
-        assert app.native_host.state.destination == 'documents'
+        open_file = browser.on_open_file
+        def traced_open(payload):
+            trace_viewport('before-open-callback')
+            return open_file(payload)
+        browser.on_open_file = traced_open
+        try:
+            await browser.activate_entry(entry)
+        finally:
+            browser.on_open_file = open_file
+        trace_viewport('after-activate')
+        assert app.native_host.state.destination == 'files'
         owner = app.readers.active if filename.endswith('.cbz') else app.private_sessions.active
         if filename.endswith('.cbz'):
             from .reader_checks import wait_for_reader
@@ -114,8 +135,7 @@ async def exercise_browser_back(app):
             owner.show_reader_tools()
             await asyncio.sleep(.2)
             if get_os() is OS.IOS:
-                navigation = (app.adaptive.secondary if app.adaptive.split is not None else
-                              app.native_host.adapter.navigation[app.native_host.destinations.index('documents')])
+                navigation = app.native_host.adapter.navigation[app.native_host.destinations.index('files')]
                 navigation.popViewControllerAnimated(True)
             else:
                 app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
@@ -124,14 +144,15 @@ async def exercise_browser_back(app):
                     break
                 await asyncio.sleep(.05)
             assert app.body is reader_panel and owner.library_view in app.body.children, (
-                'Tools Back lost the reader', app.native_host.state.routes['documents'],
+                'Tools Back lost the reader', app.native_host.state.routes['files'],
                 [type(child).__name__ for child in app.body.children], app.body is reader_panel)
         else:
             owner.crypt_text.value = '# Unsaved note after opening from Files'
         await asyncio.sleep(.3)
+        trace_viewport('before-return')
         if get_os() is OS.IOS:
             app.native_host.adapter.navigation[
-                app.native_host.destinations.index('documents')].popViewControllerAnimated(True)
+                app.native_host.destinations.index('files')].popViewControllerAnimated(True)
         else:
             app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
         # didShow arrives after UIKit's transition and layout work. A fixed
@@ -145,6 +166,7 @@ async def exercise_browser_back(app):
             filename, app.body is panel, browser.tree is tree,
             app.native_host.state.routes['files'], app.file_path)
         assert app.file_path == 'Back review'
+        trace_viewport('after-return')
         assert abs(scroll.vertical_position - position) < 2, (position, scroll.vertical_position)
         assert owner.session.id in app.workspace.sessions
         assert not app._comic_chrome_hidden

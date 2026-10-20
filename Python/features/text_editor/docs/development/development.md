@@ -260,3 +260,9 @@ buttons and centers the document name; a clean buffer omits Save. The explicit
 Rename action edits the existing name control through its normal validation and
 change handler, preserving document/session identity and unsaved text. Native
 source inputs and formatted WebViews remain the same retained editing surfaces.
+
+On iOS, retiring a Markdown WebView disables its native callbacks and queues a
+replacement of the live DOM before navigating to the closed-document page.
+WKWebView may defer navigation while a compact sidebar hides the article; the
+old note must already be cleared independently of that navigation. Native Notes
+Library checks retire a hidden article and verify that its previous text is gone.

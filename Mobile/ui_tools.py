@@ -18,7 +18,7 @@ contract = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(contract)
 
 
-def verify(path, target, output, *, local_manifest=None):
+def read_report(path):
     reports = []
     chunks = []
     for line in Path(path).read_text(errors='replace').splitlines():
@@ -33,7 +33,11 @@ def verify(path, target, output, *, local_manifest=None):
         reports.append(json.loads(base64.b64decode(''.join(item['data'] for item in chunks), validate=True)))
     if len(reports) != 1:
         raise ValueError('Expected one native app UI report.')
-    return verify_report(reports[0], target, output, local_manifest=local_manifest)
+    return reports[0]
+
+
+def verify(path, target, output, *, local_manifest=None):
+    return verify_report(read_report(path), target, output, local_manifest=local_manifest)
 
 
 def verify_report(report, target, output, *, local_manifest=None):
@@ -59,7 +63,7 @@ def verify_report(report, target, output, *, local_manifest=None):
 
 
 
-def simulator_report(device, started_ns):
+def simulator_report(device, started_ns, *, diagnostics=None):
     """Read only a result written during this run, never a previous success."""
     result = subprocess.run(['xcrun', 'simctl', 'get_app_container', device,
         'io.github.ispaure.logisticsmobile', 'data'], capture_output=True, text=True,
@@ -69,7 +73,17 @@ def simulator_report(device, started_ns):
     path = Path(result.stdout.strip()) / 'Library/Caches/logistics-native-ui-result.json'
     if not path.is_file() or path.stat().st_mtime_ns < started_ns:
         return None
-    return json.loads(path.read_text())
+    raw = path.read_text()
+    if diagnostics is not None:
+        # Keep rejected results too. A failed iPad run must not leave only the
+        # earlier iPhone's validated report when Apple's log stream drops out.
+        diagnostics = Path(diagnostics)
+        diagnostics.mkdir(exist_ok=True)
+        (diagnostics / 'ios-native-ui-cached.json').write_text(raw)
+        error = path.with_name('logistics-native-ui-error.txt')
+        if error.is_file() and error.stat().st_mtime_ns >= started_ns:
+            shutil.copyfile(error, diagnostics / 'ios-native-ui-error.txt')
+    return json.loads(raw)
 
 
 def run(target, device, *, local=False, require_independent_windows=False):
@@ -82,11 +96,13 @@ def run(target, device, *, local=False, require_independent_windows=False):
     logs.mkdir(exist_ok=True)
     path = logs / (target + '-native-ui.log')
     started_ns = time.time_ns()
+    if target == 'ios':
+        (logs / 'ios-native-ui-device.json').write_text(json.dumps(dict(
+            device=device, started_ns=started_ns)) + '\n')
     # Include cold startup, installation, all native cases and the visual audit.
-    # Hosted Android software rendering can finish the core cases but still
-    # exceed 15 minutes in the audit. Include the repeated rotation matrix,
-    # while keeping each native run bounded at 30 minutes.
-    timeout = 1800
+    # Software-rendered Android audits need the published 40-minute budget.
+    # iOS also exercises the added rotation matrix; allow 30 minutes per device.
+    timeout = 2400 if target == 'android' else 1800
     with path.open('w') as stream:
         process = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
         try:
@@ -99,17 +115,32 @@ def run(target, device, *, local=False, require_independent_windows=False):
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
             raise RuntimeError(f'Native app UI run exceeded {timeout // 60} minutes; see retained logs.') from None
-    # Briefcase returns 200 when Apple's log stream closes before its exit
-    # marker, even after every native test passed. The cache result is written
-    # atomically before exit and must pass the same complete source contract.
-    cached = simulator_report(device, started_ns) if target == 'ios' and code in (0, 200) else None
     output = logs / (target + ('-native-ui-local.json' if local else '-native-ui.json'))
     manifest = Path('payload/source.json') if local else None
-    if cached is not None:
-        report = verify_report(cached, target, output, local_manifest=manifest)
-        (logs / 'ios-report-transport.json').write_text(json.dumps(dict(
-            transport='simulator-file', device=device, briefcase_exit_code=code)) + '\n')
-    else:
+    report = None
+    if target == 'ios' and code in (0, 200):
+        # A complete report already proves every case and exact source. Avoid
+        # depending on a responsive CoreSimulator service after app shutdown.
+        # Briefcase can also lose its exit marker after the full report arrives.
+        try:
+            incoming = read_report(path)
+        except ValueError:
+            incoming = None
+        if incoming is not None:
+            (logs / 'ios-native-ui-stdout.json').write_text(json.dumps(incoming, indent=2) + '\n')
+            transport = 'stdout'
+        else:
+            # The cache is atomic and fresh for this device/run; it still has
+            # to satisfy the same complete case, backend and source contract.
+            incoming = simulator_report(device, started_ns, diagnostics=logs)
+            transport = 'simulator-file'
+        if incoming is not None:
+            if incoming.get('error'):
+                print('Native iOS report error: ' + str(incoming['error']), flush=True)
+            report = verify_report(incoming, target, output, local_manifest=manifest)
+            (logs / 'ios-report-transport.json').write_text(json.dumps(dict(
+                transport=transport, device=device, briefcase_exit_code=code)) + '\n')
+    if report is None:
         if code:
             print(path.read_text(errors='replace')[-10000:])
             raise RuntimeError(f'Native app UI run failed ({code}); see retained logs.')
@@ -132,7 +163,11 @@ def ios_diagnostics():
     """Preserve startup stderr and crash reports after a failed native gate."""
     logs = Path('logs').resolve()
     logs.mkdir(exist_ok=True)
-    device = ios_device()
+    receipt = logs / 'ios-native-ui-device.json'
+    recorded = json.loads(receipt.read_text()) if receipt.is_file() else {}
+    device = recorded.get('device') or ios_device()
+    if recorded.get('started_ns'):
+        simulator_report(device, recorded['started_ns'], diagnostics=logs)
     command = ['xcrun', 'simctl', 'spawn', device, 'log', 'show', '--last', '10m',
                '--style', 'compact', '--predicate',
                'process == "Logistics Mobile" OR eventMessage CONTAINS "io.github.ispaure.logisticsmobile"']

@@ -194,11 +194,12 @@ async def exercise_ui_review(app):
                 break
             await asyncio.sleep(.05)
         assert app.native_host.state.destination == 'files'
+        assert await app.refresh_folder_hub()
         assert 'All files' in app.folder_picker_choices
         if leave == app.show_settings:
             await capture('folder-picker')
         assert not hasattr(app, 'folder_refresh_button')
-        for source, action in (('rclone', None),
+        for source, action in (('rclone', app.folder_add_remote_button),
                                ('Network shares', app.folder_add_share_button), ('Local', None)):
             app.folder_source_buttons[source].on_press()
             assert list(app.folder_source_actions.children) == ([action] if action is not None else [])
@@ -206,7 +207,11 @@ async def exercise_ui_review(app):
             assert all(button.enabled for button in app.folder_source_buttons.values())
             assert not app.folder_loading_box.children
         folder = app.folder_buttons['All files']
-        indicator = next(child for child in folder.parent.children
+        assert folder.text == 'Browse All Files'
+        # Browse All Files is a text action below the hierarchy. Folder glyphs
+        # belong to actual folder rows; verify one before tapping the root action.
+        folder_row = app.folder_buttons['UI Review']
+        indicator = next(child for child in folder_row.parent.children
                          if getattr(child, 'control_icon', '') == 'folder')
         if get_os() is OS.IOS:
             assert indicator._impl.native.imageForState(0) is not None
@@ -278,7 +283,8 @@ async def exercise_ui_review(app):
         density = viewport.getResources().getDisplayMetrics().density
         for control in (*header_controls, browser.close_search_button):
             assert control._impl.native.getWidth() / density >= 44, 'Browser icon hit target too narrow'
-    assert [control.control_icon for control in (*header_controls, app.file_actions_button)] == ['up', 'find', 'more']
+    icons = [control.control_icon for control in (*header_controls, app.file_actions_button)]
+    assert icons == ['up', 'find', 'overflow'], icons
     browser.close_search()
     while browser.tasks:
         await asyncio.gather(*tuple(browser.tasks))
@@ -309,6 +315,8 @@ async def exercise_ui_review(app):
     assert app.cloud_remote not in app.cloud_view.children
     await capture('transfers')
     async def appearance_mode(dark):
+        mode = 'dark' if dark else 'light'
+        print('LOGISTICS_UI_REVIEW=appearance:' + mode + ':begin', flush=True)
         if get_os() is OS.IOS:
             app.main_window._impl.native.overrideUserInterfaceStyle = 2 if dark else 1
         else:
@@ -324,7 +332,9 @@ async def exercise_ui_review(app):
                 await asyncio.sleep(.05)
             assert bool(native.getResources().getConfiguration().uiMode & 0x30 == 0x20) == dark
             assert app._impl.native.hashCode() == before, 'Theme change replaced the live activity'
+            print('LOGISTICS_UI_REVIEW=appearance:' + mode + ':native-ready', flush=True)
             app.refresh_native_theme()
+        print('LOGISTICS_UI_REVIEW=appearance:' + mode + ':refreshed', flush=True)
         await asyncio.sleep(.3)
 
     def editor_contrast(widget):

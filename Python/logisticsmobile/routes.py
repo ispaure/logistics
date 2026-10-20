@@ -43,6 +43,10 @@ class MobileRoutes(Routes):
         if self.apple and target in ('files', 'home') and not root and folder is not None and route in ('browser', 'remote-browser', 'workspace-browser'):
             self.folders.present(folder, target)
             return
+        if self.apple and not root:
+            # Capture before removing a loading route. Replacing that route
+            # must not overwrite the folder's original retained viewport.
+            self.folders.capture_viewport(target)
         screens = self.screens[target]
         if screens and screens[-1][0].startswith('file-loading:'):
             # The ready reader replaces its loading route. Back goes straight
@@ -96,6 +100,8 @@ class MobileRoutes(Routes):
             self.folders.restore(destination)
         if origin is not None and len(screens) < count:
             self.return_to(origin)
+        if self.apple and len(screens) < count and screens:
+            self.app.loop.call_soon(self.folders.restore_viewport, destination, screens[-1][0])
         return handled
 
     def install(self):
@@ -125,13 +131,21 @@ class MobileRoutes(Routes):
         count = len(screens)
         origin = self.origins.get((destination, screens[-1][0])) if screens else None
         super().native_popped(navigation)
-        if len(screens) < count:
+        popped = len(screens) < count
+        if popped:
             self.folders.restore(destination)
         if origin is not None and len(screens) < count:
             self.return_to(origin)
         # UIKit can re-enable its pop recognizers when a push completes too.
         # Reapply reader ownership after the navigation delegate has returned.
-        self.app.loop.call_soon(self.app.adaptive.render)
+        expected = screens[-1][0] if popped and screens else None
+        def reflow():
+            self.app.adaptive.render()
+            if expected is not None:
+                # UIKit and the native reader bars can move a retained table's
+                # offset during the final layout without changing its bounds.
+                self.folders.restore_viewport(destination, expected)
+        self.app.loop.call_soon(reflow)
 
     def sync_back(self, destination=None):
         if self.back_callback is not None:

@@ -78,8 +78,15 @@ class MobileDocumentsTests(unittest.TestCase):
         from logisticsmobile.documents import atomic_write_json
         doc = self.store.create(content=b'original')
         doc.text = 'unsaved edits'
-        # The file flush succeeds, but the directory flush fails after replace.
-        with patch('os.fsync', side_effect=[None, OSError('directory flush failed')]):
+        # Model a late durability failure after real publication. Windows has
+        # no directory fsync, so inject at the writer's acknowledgement boundary.
+        def fail_after_publication(*args, **kwargs):
+            self.assertTrue(kwargs['durable_directory'])
+            atomic_write_json(*args, **kwargs)
+            self.assertEqual(json.loads(self.store.path(doc.id, '.json').read_text())['text'],
+                             'unsaved edits')
+            raise OSError('durability acknowledgement failed')
+        with patch('logisticsmobile.documents.atomic_write_json', side_effect=fail_after_publication):
             with self.assertRaises(OSError):
                 self.store.checkpoint(doc)
         with patch('logisticsmobile.documents.atomic_write_json', wraps=atomic_write_json) as write:

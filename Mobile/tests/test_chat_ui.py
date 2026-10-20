@@ -72,6 +72,26 @@ class ChatUITests(unittest.TestCase):
             open_chat.assert_not_called()
             self.assertFalse(listing.enabled)
 
+    def test_delayed_selection_notifications_do_not_reopen_the_active_chat(self):
+        from types import SimpleNamespace
+        app = self.app
+        controller = app.chat_controller()
+        key = app.chat_current['id']
+        app.chat_prompt.value = 'Draft kept through delayed selection callbacks'
+        controller._publish_chat_inventory([dict(id=key, title='Active', updated='0'),
+            dict(id='f' * 32, title='Other', updated='1')], [])
+        listing = app.chat_conversation_list
+        with patch.object(controller, 'open_chat') as open_chat:
+            for _ in range(3):
+                controller.select_chat(SimpleNamespace(value='Active'))
+                listing.select_index(0)
+                listing.on_select()
+            open_chat.assert_not_called()
+            controller.select_chat(SimpleNamespace(value='Other'))
+            open_chat.assert_called_once_with('f' * 32)
+        self.assertEqual(app.chat_current['id'], key)
+        self.assertEqual(app.chat_prompt.value, 'Draft kept through delayed selection callbacks')
+
     def test_chat_drawer_uses_neutral_layers_and_keeps_live_content(self):
         from logisticsmobile.appearance import _surfaces
         app = self.app
