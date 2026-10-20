@@ -634,10 +634,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             'preview' if self.editor_view.session.kind == 'markdown' else 'edit')
         preview = not edit and ((resume and mode == 'preview')
             or (self.editor_view.session.kind == 'markdown' and not resume))
-        self.editor_view.session.view['markdown_mode'] = 'edit'
-        self.show_view(self.document_view, destination=destination, route='editor', title=self.current.name if self.current else 'New document')
         if preview:
-            return self.show_preview()
+            return self.show_preview(destination=destination)
+        self.editor_view.session.view['markdown_mode'] = 'edit'
+        return self.show_view(self.document_view, destination=destination, route='editor', title=self.current.name if self.current else 'New document')
 
     def show_editor_actions(self, owner):
         box = toga.Box(style=Pack(direction=COLUMN, margin=12))
@@ -792,8 +792,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             owner.preview_toolbar.insert(len(owner.preview_toolbar.children) - 1, speech.button)
         speech.close()
         self.preview_box = owner.preview_box
-        self.show_view(self.preview_box, route='preview', title=owner.document.name)
+        shown = self.show_view(self.preview_box, destination=kwargs.get('destination'),
+                               route='preview', title=owner.document.name)
         self.save_workspace()
+        return shown
 
     def refresh_documents(self):
         previous = self.loading

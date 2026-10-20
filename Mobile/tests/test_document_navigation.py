@@ -70,6 +70,51 @@ class DocumentNavigationTests(TestCase):
                 await self.app.readers.catalog.library_scan_task
         self.app.loop.run_until_complete(exercise())
 
+    def test_markdown_modes_share_one_route_and_back_returns_to_each_origin(self):
+        app = self.app
+        for destination in ('home', 'files', 'documents'):
+            with self.subTest(destination=destination):
+                if destination == 'home':
+                    app.show_home()
+                elif destination == 'files':
+                    app.loop.run_until_complete(app.show_files())
+                else:
+                    app.show_documents_hub()
+                origin = app.body
+                depth = len(app.routes.screens[destination])
+                document = app.store.create('Modes.md', b'# Original')
+                app.open_document(document.id)
+                app.show_documents(destination=destination)
+                owner = app.editor_view
+                panel = app.body
+                self.assertIs(panel.children[0], owner.preview_box)
+                self.assertEqual(len(app.routes.screens[destination]), depth + 1)
+                for _ in range(2):
+                    app.show_documents(edit=True)
+                    owner.editor.value = '# Unsaved mode changes'
+                    app.show_preview()
+                    self.assertIs(app.body, panel)
+                    self.assertEqual(len(app.routes.screens[destination]), depth + 1)
+                self.assertTrue(app.routes.back())
+                self.assertIs(app.body, origin)
+                self.assertEqual(owner.document.text, '# Unsaved mode changes')
+
+    def test_switching_tab_and_document_mode_retires_the_previous_presentation(self):
+        app = self.app
+        document = app.store.create('Modes.md', b'# Keep this draft')
+        app.open_document(document.id)
+        app.show_documents(destination='documents', edit=True)
+        owner = app.editor_view
+        owner.editor.value = '# Unsaved changes'
+        app.show_home()
+        origin = app.body
+        app.show_documents(destination='home')
+        self.assertIs(app.body.children[0], owner.preview_box)
+        self.assertFalse(app.routes.screens['documents'])
+        self.assertTrue(app.routes.back())
+        self.assertIs(app.body, origin)
+        self.assertEqual(owner.document.text, '# Unsaved changes')
+
     def test_reopening_retained_editor_in_another_tab_moves_view_and_keeps_draft(self):
         app = self.app
         app.show_documents_hub()

@@ -47,6 +47,10 @@ Local/private Markdown uses the same Formatted/Source switch and opens in
 preview. Remote previews remain read-only. Save changes before closing a private
 draft.
 
+Preview and Edit are modes of one document screen. Switching between them keeps
+the same draft and does not add a Back step; Back returns directly to the screen
+that opened the document.
+
 ## Show a document's folder
 
 Choose **Show in folder** from the document's **…** actions menu to browse its

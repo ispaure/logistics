@@ -37,6 +37,16 @@ multi-level pop callbacks, guarded Back, retained reader return, Home reveal,
 file selection and unsaved provider drafts. These mocked native and dummy-host
 checks do not certify physical iOS gesture rendering.
 
+## Managed document modes
+
+Managed text/Markdown Edit and Preview presentations share the `editor` route in
+both destination-local stacks and the native Documents secondary stack. Workspace
+chrome is prepared for the visible mode before route identity is normalized.
+Default Markdown opening presents Preview directly; toggling modes replaces the
+retained panel content without adding a controller. One native Back/pop therefore
+returns to the opening screen, while the editor buffer and preview WebView remain
+owned by the same text session.
+
 ## File loading panels
 
 `document_sources.opening_status` presents a temporary `file-loading:` route with

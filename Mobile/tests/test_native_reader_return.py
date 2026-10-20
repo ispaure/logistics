@@ -42,6 +42,17 @@ class NativeReaderReturnTests(unittest.TestCase):
         nav.viewControllers.pop()
         self.routes.native_popped(nav)
 
+    def test_native_document_mode_switch_reuses_controller_and_one_back_returns_to_origin(self):
+        self.routes.show(toga.Label('Editor'), route='editor', title='Note.md')
+        controller = self.routes.screens['files'][-1][2].controller
+        preview = toga.Label('Preview')
+        self.routes.show(preview, route='preview', title='Note.md')
+        self.assertEqual(len(self.routes.screens['files']), 1)
+        self.assertIs(self.routes.screens['files'][-1][2].controller, controller)
+        self.assertIs(self.routes.body().children[0], preview)
+        self.pop()
+        self.assertIs(self.routes.body().children[0], self.browser)
+
     def test_native_tools_back_keeps_reader_then_returns_to_browser(self):
         reader = toga.Label('Reader')
         self.routes.show(reader, route='reader:fixture')

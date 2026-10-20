@@ -35,6 +35,8 @@ class MobileRoutes(Routes):
         super().uninstall()
 
     def show(self, view, *, destination=None, route=None, title='', root=False):
+        # Preview and Edit are modes of the retained document screen.
+        route = 'editor' if route == 'preview' else route
         origin = self.host.state.destination
         target = destination or origin
         folder = getattr(view, '_folder_screen', None)
@@ -46,6 +48,12 @@ class MobileRoutes(Routes):
             # The ready reader replaces its loading route. Back goes straight
             # to the retained Home, Documents or workspace screen.
             self.trim(target, len(screens) - 1)
+        presentations = [view]
+        owner = getattr(self.app, 'editor_view', None)
+        if route == 'editor' and owner is not None:
+            modes = [getattr(owner, 'document_view', None), getattr(owner, 'preview_box', None)]
+            if view in modes:
+                presentations = [mode for mode in modes if mode is not None]
         # Session widgets have one native parent. Moving a retained document
         # between tabs retires its old presentation, preserving the screens
         # underneath rather than leaving an empty route behind.
@@ -53,7 +61,7 @@ class MobileRoutes(Routes):
             if previous == target:
                 continue
             index = next((index for index, (_, panel, _) in enumerate(screens)
-                          if view in panel.children), None)
+                          if any(mode in panel.children for mode in presentations)), None)
             if index is not None:
                 self.trim(previous, index)
                 if view.parent is not None:

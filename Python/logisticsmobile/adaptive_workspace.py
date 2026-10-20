@@ -98,6 +98,7 @@ class AdaptiveWorkspace:
         self.changing = False
 
     def present(self, view, *, route=None, title=''):
+        route = 'editor' if route == 'preview' else route
         from toga_iOS.container import ControlledContainer
         adapter = self.app.native_host.adapter
         if self.detail_routes and self.detail_routes[-1][0].startswith('file-loading:'):

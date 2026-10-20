@@ -43,11 +43,11 @@ class MobileUITests(unittest.TestCase):
             self.assertEqual(app.native_host.state.destination, 'documents')
             app.name.value = 'Notes.md'
             app.editor.value = '# Recovered\n'
-            app.native_host.root.current_tab = 'Settings'
-            app.native_host._selected(app.native_host.root)
+            app.native_host.root._impl._set_value('current_tab_index', app.native_host.destinations.index('settings'))
+            app.native_host.root.on_select()
             self.assertIs(app.body, app.routes.body('settings'))
-            app.native_host.root.current_tab = 'Documents'
-            app.native_host._selected(app.native_host.root)
+            app.native_host.root._impl._set_value('current_tab_index', app.native_host.destinations.index('documents'))
+            app.native_host.root.on_select()
             self.assertIs(app.body.children[0], app.document_view)
             self.assertEqual(app.editor.value, '# Recovered\n')
             recovered = app.store.open(first)
