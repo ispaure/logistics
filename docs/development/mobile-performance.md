@@ -48,7 +48,12 @@ callbacks and omission of operation return values from reports.
    revisions cannot overwrite newer records. Four storage tests and eleven UI
    tests include a session API-key sentinel. Twenty draft changes on a synthetic
    large-history record: 62.4 ms synchronous versus 0.18 ms queued callbacks.
-4. Background streaming Markdown parsing — pending.
+4. Background streaming Markdown parsing — implemented: immutable text-only
+   snapshots, a single renderer, 80 ms burst coalescing and conversation/generation
+   checks before native publication. Eighteen UI/presentation checks pass,
+   including switching conversations during a blocked worker. With tracing,
+   synthetic large-reply loop delay fell from 840.5 ms to 17.1 ms (elapsed parsing
+   850.4 versus 832.3 ms). No content is logged or cached on disk.
 5. Incremental streaming DOM updates — pending.
 6. Lightweight asynchronous document inventory — pending.
 7. Cached asynchronous library inventory — pending.

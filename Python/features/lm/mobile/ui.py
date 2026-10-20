@@ -469,9 +469,20 @@ class ChatUI:
                 data = self.chat_current
                 if data is None:
                     return
+                if data['messages'] and data['messages'][-1]['status'] == 'streaming':
+                    # One renderer owns each WebView; merge bursts while keeping
+                    # all native control access on the UI loop.
+                    await asyncio.sleep(.08)
                 force_latest, self.chat_force_latest = self.chat_force_latest, False
                 previous = self.chat_render_entries if self.chat_render_key == data['id'] else []
-                entries = transcript_entries(data['messages'], previous)
+                messages = [dict(role=entry['role'], status=entry['status'], content=entry['content'])
+                            for entry in data['messages']]
+                entries = await asyncio.to_thread(transcript_entries, messages, tuple(previous))
+                if not self.active_host:
+                    return
+                if generation != self.chat_render_generation or self.chat_current is not data:
+                    rendered = -1
+                    continue
                 start = 0
                 while start < min(len(entries), len(previous)) and entries[start] is previous[start]:
                     start += 1

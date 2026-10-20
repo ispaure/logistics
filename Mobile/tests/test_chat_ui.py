@@ -178,6 +178,37 @@ class ChatUITests(unittest.TestCase):
         self.assertEqual(len(scripts), 2)
         self.assertIn(app.chat_current['id'], scripts[-1])
 
+    def test_transcript_worker_cannot_publish_after_switching_conversations(self):
+        from threading import Event, get_ident
+        from features.lm.mobile.presentation import transcript_entries
+        started, release = Event(), Event()
+        old_key = self.app.chat_current['id']
+        threads, scripts = [], []
+        def parse(*args):
+            threads.append(get_ident())
+            started.set()
+            if not release.wait(3):
+                raise RuntimeError('Synthetic renderer timed out')
+            return transcript_entries(*args)
+        async def exercise():
+            self.app.chat_transcript_loaded()
+            try:
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                self.app.new_chat()
+                release.set()
+                await self.app.chat_render_task
+            finally:
+                release.set()
+                await self.app.chat_render_task
+        with patch('features.lm.mobile.ui.transcript_entries', side_effect=parse), \
+                patch.object(self.app.chat_transcript, 'evaluate_javascript',
+                             new=AsyncMock(side_effect=lambda script: scripts.append(script) or True)):
+            self.app.loop.run_until_complete(exercise())
+        self.assertTrue(threads)
+        self.assertTrue(all(thread != get_ident() for thread in threads))
+        self.assertTrue(scripts)
+        self.assertTrue(all(old_key not in script for script in scripts))
+
     def test_configuration_refreshes_heading_and_empty_state_without_connecting(self):
         app = self.app
         self.configure('http://127.0.0.1:1234/v1')
