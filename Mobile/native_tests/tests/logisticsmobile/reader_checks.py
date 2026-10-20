@@ -113,7 +113,12 @@ async def exercise_reader(app, passed):
         assert len(controller.navigationItem.rightBarButtonItems) > 0
         assert owner.reader_header not in owner.library_view.children
     else:
-        assert app._impl.native.getSupportActionBar().isShowing()
+        bar = app._impl.native.getSupportActionBar()
+        deadline = asyncio.get_running_loop().time() + 10
+        while not bar.isShowing() and asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(.05)
+        assert bar.isShowing(), ('Reader title bar did not restore',
+            app.native_host.state.destination, app.native_host.adapter.keyboard_chrome)
         assert app.native_host.adapter._reader_action_bar_buttons
     current_view().toggle_controls()
     assert owner.reader_immersive
