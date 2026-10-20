@@ -71,6 +71,7 @@ framework is needed.
 
 ## Further reading
 
+- [Mobile performance implementation and verification](mobile-performance.md)
 - [File browser development](browser-ownership.md)
 - [Feature and application infrastructure ownership](feature-infrastructure.md)
 - [Developing Logistics](getting-started.md)

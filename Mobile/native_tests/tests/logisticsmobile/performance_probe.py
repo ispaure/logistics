@@ -177,6 +177,9 @@ class Probe(LogisticsMobile):
             self.select_destination('files')
             assert 'Added folder' not in self.folder_buttons
             assert self.folder_picker_view is page
+            from .performance_workloads import measure_workloads
+            report['workloads'] = await measure_workloads(self)
+            report['memory_scope'] = 'Python allocations; native RSS requires platform profiler'
             report['regressions'] = ['retained page', 'source row reuse', 'unlock icons',
                                      'lock invalidates hidden sources', 'folder addition', 'folder removal']
             report['success'] = True
