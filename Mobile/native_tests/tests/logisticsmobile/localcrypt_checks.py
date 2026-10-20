@@ -230,6 +230,7 @@ async def exercise_localcrypt(app, passed):
 
     for name, password in (('plain.cbz', ''), ('encrypted.cbz', 'synthetic-archive-password'),
                            ('book.epub', ''), ('protected.epub', 'synthetic-archive-password')):
+        print('LOGISTICS_NATIVE_METADATA=' + name + ':open', flush=True)
         reader = await open_copy(name, password)
         before_page = reader.page(0)
         app.edit_crypt_metadata()
@@ -239,6 +240,7 @@ async def exercise_localcrypt(app, passed):
         app.close_crypt()
         assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None) is reader and app.private_dirty()
         app.edit_crypt_metadata()
+        print('LOGISTICS_NATIVE_METADATA=' + name + ':save', flush=True)
         await app.save_crypt_metadata()
         assert app.provider_sessions().active.crypt_metadata_status.text == 'Metadata saved encrypted locally.', app.provider_sessions().active.crypt_metadata_status.text
         assert not app.private_dirty()
@@ -249,10 +251,41 @@ async def exercise_localcrypt(app, passed):
         assert updated.page(0) == before_page
         app.close_crypt()
         if password:
+            import toga
+            from commonUtils.runtime.platform import get_os, OS
             app.crypt_password.value = 'wrong'
-            await app.open_crypt()
+            original_dialog = app.main_window.dialog
+            acknowledged = []
+            async def acknowledge_password_error(dialog):
+                assert isinstance(dialog, toga.InfoDialog), 'Unexpected native password-error dialog'
+                task = asyncio.create_task(original_dialog(dialog))
+                try:
+                    await asyncio.sleep(.2)
+                    native = dialog._impl.native
+                    if get_os() is OS.IOS:
+                        assert str(native.title) == 'Could not open document'
+                        message = str(native.message)
+                        assert native.presentingViewController is not None
+                        native.dismissViewControllerAnimated(False, completion=None)
+                        dialog._impl.response(None)
+                    else:
+                        from java import jclass
+                        assert native.isShowing()
+                        message = str(native.findViewById(jclass('android.R$id').message).getText())
+                        native.getButton(-1).performClick()
+                    assert 'password' in message.lower(), message
+                    acknowledged.append(message)
+                    return await asyncio.wait_for(task, 5)
+                finally:
+                    if not task.done():
+                        task.cancel()
+            print('LOGISTICS_NATIVE_METADATA=' + name + ':wrong-password', flush=True)
+            with patch.object(app.main_window, 'dialog', side_effect=acknowledge_password_error):
+                await asyncio.wait_for(app.open_crypt(), 30)
+            assert len(acknowledged) == 1, 'Wrong password did not show its native error'
             assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None) is None, 'Metadata save removed inner ZIP password'
             assert 'password' in app.cloud_status.value.lower()
+        print('LOGISTICS_NATIVE_METADATA=' + name + ':complete', flush=True)
     passed.append('native_localcrypt_metadata')
 
     reader = await open_copy('note.md')
