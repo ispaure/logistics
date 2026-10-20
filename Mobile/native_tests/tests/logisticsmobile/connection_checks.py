@@ -73,6 +73,7 @@ async def exercise_connections(app, fixtures, background_comic, passed):
     assert len(matches) == 1, app.cloud_import_message.text
     retained_key = matches[0][0]
     await app.lock_cloud()
+    assert await app.refresh_folder_hub()
     locked_choice = app.folder_choices().get('Fixture', {})
     assert any(copy['source'] == 'Remote' for copy in locked_choice.get('copies', ()))
     assert not await app.require_remote_credentials_async('Fixture')
@@ -89,6 +90,7 @@ async def exercise_connections(app, fixtures, background_comic, passed):
     app.credential_unlock_password.value = 'synthetic-fixture-password'
     await app.credential_unlock_button.on_press()
     assert app.loaded_remote_names() == ['Fixture'], app.credential_unlock_status.text
+    assert await app.refresh_folder_hub()
     assert any(copy['source'] == 'Remote' for copy in app.folder_choices()['Fixture']['copies'])
     assert cache.path(retained_key).is_file()
     assert vault.ciphertext.read_bytes() == encrypted
