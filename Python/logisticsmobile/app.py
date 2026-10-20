@@ -883,8 +883,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.labels[label] = doc.id
         self.selector.items = list(self.labels)
         if self.current:
-            self.selector.value = next((label for label, key in self.labels.items()
-                                        if key == self.current.id), None)
+            selected = next((label for label, key in self.labels.items()
+                             if key == self.current.id), None)
+            if selected is not None:
+                self.selector.value = selected
         self.loading = previous
         self.recovery_notice.text = (f'{len(failures)} recovery record(s) could not be opened; they were preserved.'
                                      if failures else '')

@@ -969,7 +969,8 @@ attachments, logs, a swipe recording and `report.json`. This validates the teste
 simulator flows; physical devices and live remote providers need separate checks.
 
 Native iOS folder pages center the storage icon and identity close below the folder
-title, removing the content margin above the subtitle. Disk/cloud icons describe
+title, removing the content margin and moving the subtitle 12 points further
+toward the title. Disk/cloud icons describe
 the storage; encrypted folders also show their locked/unlocked icon. Search and
 contextual actions occupy a separate trailing toolbar row.
 The recycled table and its ordinary cells use the window palette, so the list

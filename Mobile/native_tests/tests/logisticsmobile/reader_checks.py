@@ -169,7 +169,19 @@ async def exercise_reader(app, passed):
     passed.append('native_reader_presentation')
 
 
+def exercise_sampled_apple_decode(app):
+    backend = type(app._impl).__module__
+    if not backend.startswith('toga_iOS.'):
+        return
+    from .reader_parity_probe import image_bytes
+    from features.comics.mobile.decoding import decode_page
+    data = image_bytes(b'\xff\x00\x00\xff', width=1024, height=1536)
+    image = decode_page(data, (1024, 1536), (64, 96), backend)
+    assert (image.width, image.height) == (64, 96), (image.width, image.height)
+
+
 async def exercise_library(app, fixtures, epub, comic, passed):
+    exercise_sampled_apple_decode(app)
     app.show_library()
     record = await asyncio.to_thread(app.reader_manager().catalog.library_store.import_book, LocalDocuments(), epub)
     app.refresh_library()

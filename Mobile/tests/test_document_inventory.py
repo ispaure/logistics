@@ -73,3 +73,19 @@ class DocumentInventoryTests(TestCase):
             app.loop.run_until_complete(exercise())
         self.assertEqual(len(threads), 1)
         self.assertNotEqual(threads[0], get_ident())
+
+    def test_older_inventory_does_not_select_or_replace_a_new_draft(self):
+        from logisticsmobile.app import LogisticsMobile
+        LogisticsMobile.storage_root = self.store.root / 'App'
+        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+        app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.addCleanup(app.loop.close)
+        self.addCleanup(app.main_window.close)
+        old = app.store.summaries()[0]
+        app.new_document()
+        current = app.current
+        app.editor.value = 'Typed while inventory was scanning'
+        app._publish_document_summaries(old, [])
+        self.assertIs(app.current, current)
+        self.assertEqual(app.editor.value, 'Typed while inventory was scanning')
+        self.assertFalse(app.loading)

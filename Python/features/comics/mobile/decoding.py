@@ -40,7 +40,9 @@ def _apple_thumbnail(data, maximum):
     core.CFRelease.argtypes = [c_void_p]
     core.CFRelease.restype = None
     # Read the framework's actual CFString keys rather than assuming their value.
-    options = ns_from_py({ObjCInstance(c_void_p.in_dll(imageio, key)): value for key, value in (
+    # Rubicon's NSString proxies are unhashable; use their actual string values
+    # as Python keys, then let ns_from_py build the native dictionary.
+    options = ns_from_py({str(ObjCInstance(c_void_p.in_dll(imageio, key))): value for key, value in (
         ('kCGImageSourceCreateThumbnailFromImageAlways', True),
         ('kCGImageSourceThumbnailMaxPixelSize', int(maximum)),
         ('kCGImageSourceShouldCacheImmediately', True))})

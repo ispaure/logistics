@@ -142,8 +142,8 @@ class FolderLocationHeader(toga.Box):
         self.caption.style.margin_left = 0
         self.status.style.text_align = CENTER
         # Folder pages have a 12-point content margin below the native bar.
-        # Let the subtitle sit at that bar's lower edge, close to its title.
-        self.style.margin_top = -12
+        # Remove that gap and tuck the subtitle 12 points toward the title.
+        self.style.margin_top = -24
         self.center_storage_identity()
         self.style.direction = COLUMN
         del self.style.align_items

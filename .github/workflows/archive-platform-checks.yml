@@ -33,6 +33,11 @@ jobs:
           python-version: '3.12.2'
       - run: python -m pip install ruff==0.14.0 toga-dummy==0.5.7 markdown-it-py==4.2.0 pygments==2.19.2 pypdf==6.21.0 -r Mobile/requirements-testflight.txt
       - run: ruff check --config Python/pyproject.toml Python Mobile .github/scripts
+      - name: Install the browser used by mobile DOM regressions
+        run: |
+          npm install --prefix "$RUNNER_TEMP/mobile-dom" --no-save --ignore-scripts playwright@1.62.1
+          "$RUNNER_TEMP/mobile-dom/node_modules/.bin/playwright" install --with-deps chromium
+          echo "NODE_PATH=$RUNNER_TEMP/mobile-dom/node_modules" >> "$GITHUB_ENV"
       - name: Check native mobile widget and picker contracts
         env:
           PYTHONPATH: .:Python

@@ -81,6 +81,11 @@ must be retained when modifying the parser.
 
 Readers sort pages and sibling comics naturally and load without extraction.
 Qt decoding falls back to Pillow; display transforms must not modify archive bytes.
+iOS sampled decoding reads ImageIO's actual CFString option values and converts
+them to Python strings before building the options dictionary. Rubicon's native
+NSString proxies cannot be used as Python dictionary keys. Native reader checks
+decode a 1024 × 1536 page to 64 × 96 pixels to verify this bridge and the sampling
+limit together.
 Spread selection respects landscape/DoublePage pages and manga direction.
 Only the latest queued page load is displayed, and failed loads retain the current
 image with an error. Metadata saves refresh the archive snapshot and direction
