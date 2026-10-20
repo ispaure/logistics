@@ -353,6 +353,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if (getattr(self, '_startup_in_progress', False)
                 and not getattr(self, '_startup_layout_ready', False)):
             return
+        from .layout_events import native_resize_changed
+        if not native_resize_changed(self, widget):
+            return
         from .keyboard import fit_editors
         fit_editors(self)
         from .settings_ui import fit_section

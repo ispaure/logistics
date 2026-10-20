@@ -64,6 +64,13 @@ Text Editor feature, which retires WebKit delegates before releasing its view.
 
 ## Destination entry cost
 
+Android's global-layout callback also runs when child text is measured without
+a viewport change. The host compares native bounds, insets, navigation mode,
+destination and body identity before reflowing responsive panels. Unchanged
+native callbacks return without measuring those children again; keyboard,
+rotation, navigation and explicit application reflows remain active. This keeps
+Chat layout from starving completion callbacks for finished background work.
+
 Entering Workspaces with Local selected reuses the folder view and discovers
 local changes without constructing the cloud browser or credential settings.
 Selecting Cloud or Home Server still initializes remote controls and restores
