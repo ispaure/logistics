@@ -68,6 +68,12 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
 
     def set_book_busy(self, busy):
         self.book_busy = busy
+        if not hasattr(self, '_book_idle'):
+            self._book_idle = asyncio.Event()
+        if busy:
+            self._book_idle.clear()
+        else:
+            self._book_idle.set()
         header = getattr(self, 'comic_header', None)
         if header is not None:
             from features.comics.mobile.navigation import adjacent_comic
@@ -371,6 +377,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
     async def move_book_page(self, index):
         pending = getattr(self, '_epub_location_task', None)
         if pending is not None and not pending.done():
+            self.request_position_flush()
             await pending
         if self.book_busy or self.book_reader is None:
             return
@@ -436,6 +443,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
     async def toggle_bookmark(self, widget=None, **kwargs):
         pending = getattr(self, '_epub_location_task', None)
         if pending is not None and not pending.done():
+            self.request_position_flush()
             await pending
         if self.book_busy or self.book_record is None:
             return
@@ -461,14 +469,25 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         self._epub_pending = (reader, epoch, index, self.epub_offset)
         task = getattr(self, '_epub_location_task', None)
         if task is None or task.done():
+            self._epub_flush = asyncio.Event()
             self._epub_location_task = self.loop.create_task(self.save_epub_location())
         if action in {'next', 'previous'} and not self.book_busy:
             self.loop.create_task(self.epub_boundary(index, 1 if action == 'next' else -1))
 
+    def request_position_flush(self):
+        wake = getattr(self, '_epub_flush', None)
+        if wake is not None:
+            wake.set()
+
     async def save_epub_location(self):
+        # A fixed window bounds latency even while position events keep arriving.
+        try:
+            await asyncio.wait_for(self._epub_flush.wait(), .15)
+        except asyncio.TimeoutError:
+            pass
         while getattr(self, '_epub_pending', None) is not None:
             if self.book_busy:
-                await asyncio.sleep(.01)
+                await self._book_idle.wait()
                 continue
             reader, epoch, index, offset = self._epub_pending
             self._epub_pending = None
@@ -488,6 +507,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
     async def epub_boundary(self, index, direction):
         task = getattr(self, '_epub_location_task', None)
         if task is not None:
+            self.request_position_flush()
             await task
         if self.book_reader is not None and self.book_record['position'] == index:
             target = index + direction
@@ -617,6 +637,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
     async def save_book_metadata(self, widget=None, **kwargs):
         pending = getattr(self, '_epub_location_task', None)
         if pending is not None and not pending.done():
+            self.request_position_flush()
             await pending
         if self.book_busy or self.book_reader is None:
             return

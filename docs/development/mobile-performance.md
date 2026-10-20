@@ -169,7 +169,12 @@ callbacks and omission of operation return values from reports.
     EPUB/reader checks pass, including a failed writer that observes the mounted
     page and leaves it readable with an error message. Provider positions remain
     memory-only. Native paint latency remains unmeasured.
-22. Batched EPUB position updates — pending.
+22. Batched EPUB position updates — implemented: a fixed 150 ms window writes
+    the latest event once, with event-driven busy waits. Focus/checkpoint, chapter
+    navigation, bookmark actions and close attempts request an immediate flush;
+    close retains its existing wait-until-saved guard. Twenty-one EPUB/reader
+    checks pass, including twenty events producing one latest-position write.
+    Private provider locations continue to live only in the session dictionary.
 23. Event-driven reader layout — pending.
 24. Sampled comic decoding and reusable spreads — pending.
 25. Coordinated Python/native memory budgets — pending.

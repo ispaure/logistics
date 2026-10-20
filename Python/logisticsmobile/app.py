@@ -987,6 +987,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.editor_view.refresh_status()
 
     def checkpoint(self, *args, save_workspace=True, **kwargs):
+        readers = getattr(self, 'readers', None)
+        if readers is not None:
+            for owner in readers.controllers.values():
+                owner.request_position_flush()
         if getattr(self, '_startup_in_progress', False) and not hasattr(self, 'current'):
             return True
         if getattr(self, '_reset_scheduled', False):

@@ -51,6 +51,33 @@ class EpubUXTests(unittest.TestCase):
                 panel.dispose()
         asyncio.run(exercise())
 
+    def test_position_burst_writes_latest_once_and_focus_requests_flush(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            epub, _ = make_books(root)
+            LogisticsMobile.storage_root = root / 'app'
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), epub)
+                async def exercise():
+                    await app.open_book(record['id'])
+                    owner = app.readers.active
+                    with patch.object(owner.library_store, 'progress', wraps=owner.library_store.progress) as write:
+                        for offset in range(20):
+                            owner.epub_event(owner.book_reader, owner.book_epoch, 0, 'position', offset)
+                        await __import__('asyncio').sleep(0)
+                        app.checkpoint()
+                        self.assertTrue(owner._epub_flush.is_set())
+                        await owner._epub_location_task
+                        self.assertEqual(write.call_count, 1)
+                        self.assertEqual(owner.book_record['location']['offset'], min(19, owner.epub_text.length))
+                    await app.reader_manager().catalog.wait_for_refresh()
+                app.loop.run_until_complete(exercise())
+            finally:
+                app.main_window.close()
+                app.loop.close()
+                LogisticsMobile.storage_root = None
+
     def test_imported_page_is_mounted_before_progress_write_and_survives_failure(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

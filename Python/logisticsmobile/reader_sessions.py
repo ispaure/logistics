@@ -133,6 +133,7 @@ class Readers:
         owner = self.controllers.get(key)
         pending = getattr(owner, '_epub_location_task', None)
         if owner is not None and (owner.book_busy or (pending is not None and not pending.done())):
+            owner.request_position_flush()
             owner.book_status.text = 'Wait for this reader operation before closing.'
             return False
         if not self.app.workspace.close(key, guard=lambda session: True):
