@@ -75,3 +75,39 @@ class ChatInventoryTests(TestCase):
             if app.chat_render_task is not None:
                 await app.chat_render_task
         app.loop.run_until_complete(exercise())
+
+    def _verify_connect_during_discovery(self, existing):
+        from logisticsmobile.app import LogisticsMobile
+        if not existing:
+            self.store.path(self.data['id']).unlink()
+        LogisticsMobile.storage_root = self.root
+        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+        app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.addCleanup(app.loop.close)
+        self.addCleanup(app.main_window.close)
+
+        async def exercise():
+            app.show_chat()
+            controller = app.chat_controller()
+            app.set_chat_busy(True)
+            await controller._chat_inventory_task
+            self.assertIsNone(app.chat_current)
+            self.assertTrue(controller._chat_needs_initial_selection)
+            app.set_chat_busy(False)
+            await controller._chat_inventory_task
+            self.assertIsNotNone(app.chat_current)
+            self.assertFalse(controller._chat_needs_initial_selection)
+            if existing:
+                self.assertEqual(app.chat_current['id'], self.data['id'])
+                self.assertEqual(app.chat_prompt.value, self.data['draft'])
+            self.assertEqual(len(app.chat_store.summaries()[0]), 1)
+            if app.chat_render_task is not None:
+                await app.chat_render_task
+
+        app.loop.run_until_complete(exercise())
+
+    def test_connect_during_discovery_retains_existing_conversation(self):
+        self._verify_connect_during_discovery(True)
+
+    def test_connect_during_empty_discovery_creates_initial_conversation(self):
+        self._verify_connect_during_discovery(False)

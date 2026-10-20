@@ -401,7 +401,8 @@ class ChatUI:
             listing.updating = False
         if warnings:
             self.set_chat_status(f'{len(warnings)} conversation(s) could not be read; originals preserved.')
-        if authoritative and getattr(self, '_chat_needs_initial_selection', False):
+        if (authoritative and not self.chat_busy
+                and getattr(self, '_chat_needs_initial_selection', False)):
             self._chat_needs_initial_selection = False
             if self.chat_labels:
                 self.open_chat(next(iter(self.chat_labels.values())))
@@ -560,6 +561,11 @@ class ChatUI:
         self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
         self.update_chat_readiness()
         self.chat_conversation_list.enabled = not busy
+        if not busy and getattr(self, '_chat_needs_initial_selection', False):
+            # Initial discovery can finish while Connect owns the controls.
+            # Complete selection once idle instead of dropping it when the
+            # guarded new/open actions decline to run during that request.
+            self.refresh_chats()
 
     def chat_fields(self):
         settings = dict(self.chat_profile['settings'], context_tokens=int(self.chat_context.value),

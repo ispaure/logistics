@@ -68,6 +68,10 @@ async def exercise_chat(app, passed):
         await app.refresh_chat_models()
         print('LOGISTICS_NATIVE_CHAT=connected', flush=True)
         assert app.chat_model.value == 'fixture-model', app.chat_status.value
+        async def initial_conversation_ready():
+            while app.chat_current is None:
+                await asyncio.sleep(.03)
+        await asyncio.wait_for(initial_conversation_ready(), timeout=15)
         app.chat_prompt.value = 'Native chat fixture'
         print('LOGISTICS_NATIVE_CHAT=send', flush=True)
         await app.send_chat()
