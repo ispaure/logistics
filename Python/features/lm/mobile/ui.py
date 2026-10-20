@@ -412,7 +412,8 @@ class ChatUI:
         if widget.updating or self.chat_busy:
             return
         row = widget.selection
-        if row is not None and row.key in self.chat_labels.values():
+        if (row is not None and row.key in self.chat_labels.values()
+                and (self.chat_current is None or row.key != self.chat_current['id'])):
             self.open_chat(row.key)
 
     def checkpoint_chat(self):
@@ -443,7 +444,12 @@ class ChatUI:
 
     def select_chat(self, widget, **kwargs):
         if not self.chat_loading and not self.chat_busy and widget.value in self.chat_labels:
-            self.open_chat(self.chat_labels[widget.value])
+            key = self.chat_labels[widget.value]
+            # Android can deliver programmatic selection notifications after
+            # chat_loading clears. Reopening the current chat republishes its
+            # inventory and schedules another notification indefinitely.
+            if self.chat_current is None or key != self.chat_current['id']:
+                self.open_chat(key)
 
     def new_chat(self, widget=None, **kwargs):
         if self.chat_busy or not self.checkpoint_chat():

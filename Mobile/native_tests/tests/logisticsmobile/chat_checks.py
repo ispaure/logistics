@@ -5,13 +5,19 @@ from .web_checks import wait_for_text
 async def exercise_chat(app, passed):
     from logisticsmobile.chat_fixture import fixture_server
     with fixture_server() as (url, started, release, requests):
+        print('LOGISTICS_NATIVE_CHAT=initialize', flush=True)
         app.show_chat()
+        print('LOGISTICS_NATIVE_CHAT=configure', flush=True)
         app.chat_url.value = url
         app.chat_key.value = 'synthetic-native-key'
+        print('LOGISTICS_NATIVE_CHAT=connect', flush=True)
         await app.refresh_chat_models()
+        print('LOGISTICS_NATIVE_CHAT=connected', flush=True)
         assert app.chat_model.value == 'fixture-model', app.chat_status.value
         app.chat_prompt.value = 'Native chat fixture'
+        print('LOGISTICS_NATIVE_CHAT=send', flush=True)
         await app.send_chat()
+        print('LOGISTICS_NATIVE_CHAT=verify', flush=True)
         assert app.chat_current['messages'][-1]['status'] == 'complete', app.chat_status.value
         assert app.chat_current['messages'][-1]['content'] == 'Native fixture reply'
         await wait_for_text(app.chat_transcript, 'Native fixture reply')
