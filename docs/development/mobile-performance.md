@@ -76,7 +76,11 @@ callbacks and omission of operation return values from reports.
    reader/navigation checks pass. For 1,000 records, cached UI reads took 3.08 ms;
    warm worker scans 41.5 ms versus the audit's uncached 65.2 ms. Native device
    timing remains pending. No cache file or decrypted reader payload is added.
-8. Coalesced library discovery — pending.
+8. Coalesced library discovery — implemented: one discovery worker per catalog,
+   two-second reuse for identical credential/job snapshots, explicit refresh and
+   credential-generation invalidation. Twenty simultaneous requests invoke one
+   scan. Twelve inventory/catalog/reader checks pass. Reuse is memory-only and
+   never substitutes for credential checks when opening a folder.
 9. Background Workspaces discovery — pending.
 10. Lazy startup screens and document loading — pending.
 11. Queued encrypted document history — pending.

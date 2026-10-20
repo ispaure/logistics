@@ -2,6 +2,7 @@
 from features.rclone.mobile.storage_location import collection_path, CollectionFiles
 import asyncio
 import sqlite3
+import json
 from configparser import ConfigParser, Error as ConfigError
 from pathlib import Path
 import toga
@@ -154,6 +155,31 @@ class LibraryCatalog:
             self.library_rows.add(toga.Button('Open Workspaces', on_press=self.app.show_locations, style=Pack(height=48)))
 
     async def refresh_library_folders(self, widget=None, **kwargs):
+        """Serialize discovery and briefly reuse the same credential/config snapshot."""
+        app = self.app
+        while True:
+            task = getattr(self, '_library_discovery', None)
+            if task is not None and not task.done():
+                await asyncio.shield(task)
+                if not self.active_host:
+                    return
+                continue
+            client = getattr(app, 'cloud_client', None)
+            signature = (id(client), getattr(client, 'generation', None),
+                         json.dumps(list(app.mirror_store().jobs.values()), sort_keys=True),
+                         tuple(sorted(getattr(app, 'cloud_crypt_remotes', ()))),
+                         getattr(self, '_library_discovery_revision', 0))
+            cached = getattr(self, '_library_discovery_cached', None)
+            if widget is None and cached is not None and cached[0] == signature and self.loop.time() - cached[1] < 2:
+                return
+            self._library_discovery = task = self.loop.create_task(self._discover_library_folders())
+            await asyncio.shield(task)
+            if (self.active_host and client is getattr(app, 'cloud_client', None)
+                    and signature[1] == getattr(client, 'generation', None)):
+                self._library_discovery_cached = signature, self.loop.time()
+            return
+
+    async def _discover_library_folders(self):
         app = self.app
         epoch = self.library_scan_epoch = getattr(self, 'library_scan_epoch', 0) + 1
         client = getattr(app, 'cloud_client', None)
@@ -178,6 +204,8 @@ class LibraryCatalog:
 
 
     def refresh_library(self, widget=None, **kwargs):
+        if widget is not None:
+            self._library_discovery_revision = getattr(self, '_library_discovery_revision', 0) + 1
         try:
             asyncio.get_running_loop()
         except RuntimeError:

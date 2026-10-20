@@ -1,10 +1,12 @@
 """Library record caches invalidate on source revisions and expose copies only."""
 import json
+import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 from uuid import uuid4
+from types import SimpleNamespace
 
 from logisticsmobile.library import LibraryStore
 
@@ -38,3 +40,26 @@ class LibraryInventoryTests(TestCase):
         self.assertFalse(self.store.cached_items()[0])
         self.path.unlink()
         self.assertEqual(self.store.items(), ([], []))
+
+    def test_discovery_requests_coalesce_and_credentials_or_refresh_invalidate(self):
+        from logisticsmobile.app import LogisticsMobile
+        LogisticsMobile.storage_root = self.store.root / 'App'
+        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+        app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        self.addCleanup(app.loop.close)
+        self.addCleanup(app.main_window.close)
+        catalog = app.reader_manager().catalog
+        async def exercise(discover):
+            await asyncio.gather(*(catalog.refresh_library_folders() for _ in range(20)))
+            self.assertEqual(discover.call_count, 1)
+            await catalog.refresh_library_folders(widget=object())
+            self.assertEqual(discover.call_count, 2)
+            app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None)
+            await catalog.refresh_library_folders()
+            self.assertEqual(discover.call_count, 3)
+            app.cloud_client.generation = 2
+            await catalog.refresh_library_folders()
+            self.assertEqual(discover.call_count, 4)
+            await catalog.metadata_task
+        with patch('logisticsmobile.library_ui.discover_libraries', return_value=([], 0)) as discover:
+            app.loop.run_until_complete(exercise(discover))
