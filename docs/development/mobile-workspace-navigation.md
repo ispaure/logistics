@@ -25,8 +25,13 @@ filesystem or network access to display the parent rows.
 Native file tables disable automatic content-inset adjustment because their
 destination container already accounts for the navigation bar. This keeps the
 parent preview and live list aligned during UIKit transitions.
-Reader pops to the same folder keep its existing widgets
-without listing again. iOS omits the browser's separate parent button; Android
+Reader pops to the same folder keep its existing widgets without listing again.
+Before a reader or its loading route is pushed, the host captures the visible
+folder viewport. Replacing a loading route preserves that original capture.
+Back restores the offset after native return and the final adaptive reflow:
+UIKit can otherwise move a retained table by one row without changing its bounds
+or insets. Queued restores are scoped to the returning folder route, so another
+navigation action keeps its own viewport. iOS omits the browser's separate parent button; Android
 keeps its existing parent and system Back policy. Embedded document drawers keep
 their existing navigation policy. Home's full-page picker uses a scoped folder
 stack above its opening screen, with an explicit Cancel to trim that scope.

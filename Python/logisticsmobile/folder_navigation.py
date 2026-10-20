@@ -149,6 +149,28 @@ class FolderNavigation:
         self.restoring = 0
         self.task = None
 
+    def capture_viewport(self, destination=None):
+        destination = destination or self.routes.host.state.destination
+        screens = self.routes.screens[destination]
+        entry = self.screens.get((destination, screens[-1][0])) if screens else None
+        if entry is None or entry.view not in screens[-1][1].children:
+            return
+        entry.query = entry.browser.search.value
+        entry.selected = entry.browser.selected
+        scroll = getattr(entry.browser, '_scroll', None)
+        entry.scroll = scroll.vertical_position if scroll is not None else 0
+
+    def restore_viewport(self, destination, expected=None):
+        screens = self.routes.screens[destination]
+        if not screens or (expected is not None and screens[-1][0] != expected):
+            return
+        entry = self.screens.get((destination, screens[-1][0]))
+        if entry is None or entry.view not in screens[-1][1].children:
+            return
+        scroll = getattr(entry.browser, '_scroll', None)
+        if scroll is not None:
+            scroll.vertical_position = min(entry.scroll, scroll.max_vertical_position)
+
     def capture(self):
         routes = self.routes
         destination = routes.host.state.destination
@@ -264,7 +286,10 @@ class FolderNavigation:
         if not screens:
             return
         entry = self.screens.get((destination, screens[-1][0]))
-        if entry is None or entry.view in screens[-1][1].children:
+        if entry is None:
+            return
+        if entry.view in screens[-1][1].children:
+            self.restore_viewport(destination)
             return
         if self.task is not None and not self.task.done():
             self.task.cancel()
@@ -298,11 +323,9 @@ class FolderNavigation:
                     panel.remove(child)
                 panel.add(entry.view)
                 clear_snapshot(entry)
-                scroll = getattr(entry.browser, '_scroll', None)
-                if scroll is not None:
-                    scroll.vertical_position = min(entry.scroll, scroll.max_vertical_position)
                 if routes.host.state.destination == destination:
                     routes.render(destination)
+                self.restore_viewport(destination, expected)
             except (OSError, ValueError, KeyError):
                 clear_snapshot(entry)
                 for child in list(panel.children):
