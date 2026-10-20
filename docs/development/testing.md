@@ -127,6 +127,11 @@ native Back. Each native build job has a 60-minute overall budget. The large 256
 LocalCrypt seeding fixture allows four minutes for review revalidation and
 transfer; smaller reviews retain their 30-second budget. Complete native case
 reports and exact source identity are required before a gate can pass.
+The iOS host retains each fresh cache result as `ios-native-ui-cached.json` before
+validation, along with its fresh `ios-native-ui-error.txt` traceback. These are
+diagnostics, not passing evidence. Failure diagnostics target the device recorded
+for the current run, so an iPad failure cannot be hidden behind an earlier iPhone
+report or collected from the wrong simulator.
 Native WebView probes retry only the transient `WKErrorDomain Code=5` evaluation
 error during document replacement. A successful string result must contain the
 expected replacement text and exclude retired private content; repeated errors,
