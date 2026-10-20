@@ -238,6 +238,30 @@ class ResumeLockTests(unittest.TestCase):
             self.assertIs(self.app.main_window.content, self.original)
             self.privacy.backend = 'toga_dummy.app'
 
+    def test_browser_snapshot_and_selection_survive_repeated_password_resume(self):
+        from pathlib import Path
+        from logisticsmobile.browser_ui import FileBrowser
+        browser = FileBrowser()
+        self.addCleanup(lambda: self.app.loop.run_until_complete(browser.close()))
+        provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path)
+        rows = [dict(name=name, path=name, directory=True) for name in ('Books', 'Documents', 'Photos')]
+        browser.set_entries(provider, '', rows)
+        browser.sort.value = 'Name Z–A'
+        self.app.loop.run_until_complete(browser.select(browser.entries[1]))
+        snapshot, selected, epoch = browser.native_list.data, browser.native_list.selection, browser.epoch
+        self.app.main_window.content = browser.widget
+        for _ in range(3):
+            self.privacy.conceal()
+            self.privacy.reveal()
+            self.unlock('wrong')
+            self.assertIs(self.app.main_window.content, self.privacy.lock_view)
+            self.unlock('session-password')
+            self.assertIs(self.app.main_window.content, browser.widget)
+            self.assertIs(browser.native_list.data, snapshot)
+            self.assertIs(browser.native_list.selection, selected)
+            self.assertEqual(browser.epoch, epoch)
+            self.assertEqual([row.title for row in browser.native_list.data], ['Photos', 'Documents', 'Books'])
+
     def test_resume_never_restores_navigation_until_password_verified(self):
         self.privacy.conceal()
         self.assertIs(self.app.main_window.content, self.privacy.lock_view)

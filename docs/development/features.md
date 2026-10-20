@@ -2,6 +2,48 @@
 
 [Developer index](development.md)
 
+## Where new code belongs
+
+Use the feature as the primary owner. Follow this convention when the feature
+needs these layers; do not create empty packages for small integrations:
+
+```text
+Python/features/<stable_id>/
+    __init__.py              # lightweight, lazy registration
+    config.ini               # feature defaults, when needed
+    <domain modules>.py       # behavior named for its purpose
+    ui/                      # desktop presentation
+    mobile/                  # mobile presentation/adapters, when supported
+    mobile_sources.json      # selected mobile sources, when supported
+    README.md                # short link to docs/development/development.md
+    docs/
+        docs.md
+        development/development.md
+        user/user.md
+        user_mobile/user_mobile.md  # when supported
+    user_docs/index.md       # compatibility link to docs/user/user.md
+```
+
+The developer landing should begin with a small change-to-module/test table:
+where to change presentation, domain behavior, saved state and mobile adapters,
+with the actual focused test filenames. Link to the shared [validation commands](testing.md)
+rather than copying environment setup into every feature. Every documentation
+folder needs its own landing and parent links; see [documentation ownership](documentation-hierarchy.md).
+
+Follow factories in `__init__.py` to find canonical implementations. Old root-level
+modules may forward imports to `ui/`; keep compatibility where needed and put
+new behavior in the implementation. Do not create duplicate feature packages for
+core browser/Markdown hosting or Bulk Rename, which retains its existing `ui_new`
+owner. Registry/settings infrastructure also retains its current `features/`
+paths; see [infrastructure ownership](feature-infrastructure.md).
+
+Portable domain modules should import without Qt, Toga or the application host.
+Presentation depends on domain logic and explicit host contracts. The host owns
+navigation and application lifecycle; reusable mechanisms belong in commonUtils.
+For mobile changes, update the owner's payload manifest and run packaging checks.
+Feature IDs, saved keys, tests and shell packages are not renamed as incidental
+cleanup.
+
 ## Unified feature declarations
 
 New features expose `register() -> Feature(...)` from their package `__init__.py`.

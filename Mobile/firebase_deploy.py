@@ -16,8 +16,10 @@ from urllib.request import urlopen
 
 try:
     from . import android_deploy as android
+    from .deployment_confirmation import gui_input
 except ImportError:
     import android_deploy as android
+    from deployment_confirmation import gui_input
 
 ROOT = Path(__file__).resolve().parent
 PRIVATE = ROOT / '.android-beta'
@@ -71,7 +73,7 @@ def resolve_group(groups, requested):
     return matches[0]['name'].rsplit('/', 1)[-1]
 
 
-def preflight(cli, *, login=False):
+def preflight(cli, *, login=False, allow_login=True):
     config = json.loads((ROOT / 'firebase-distribution.json').read_text())
     match = re.fullmatch(r'1:(\d+):android:[a-f0-9]+', config['app_id'])
     if not match or config['bundle_id'] != android.BUNDLE:
@@ -81,6 +83,8 @@ def preflight(cli, *, login=False):
     else:
         accounts = firebase_json(cli, 'login:list')
         if not accounts:
+            if not allow_login:
+                raise ValueError('Firebase sign-in is needed. Run Mobile/deploy_android_firebase.command --login once, then retry.')
             print('Sign in with the Google account that owns your Firebase project.', flush=True)
             subprocess.run([cli, 'login'], cwd=ROOT / '.tools', check=True)
     projects = firebase_json(cli, 'projects:list')
@@ -186,6 +190,7 @@ def main():
     parser.add_argument('--login', action='store_true', help='Sign in and verify Firebase setup only')
     parser.add_argument('--check', action='store_true', help='Verify Firebase app/group without building')
     parser.add_argument('--build-only', action='store_true', help='Build/sign without uploading')
+    parser.add_argument('--gui', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     PRIVATE.mkdir(mode=0o700, exist_ok=True)
     PRIVATE.chmod(0o700)
@@ -193,14 +198,18 @@ def main():
         with (PRIVATE / 'deploy.lock').open('w') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             cli = firebase_cli()
-            config, group = preflight(cli, login=args.login)
+            config, group = preflight(cli, login=args.login, allow_login=not args.gui)
             if args.login or args.check:
                 return
             apk, notes = build()
             print('\nVerified APK: ' + str(apk), flush=True)
             if args.build_only:
                 return
-            answer = input('Upload this build to Firebase and notify ' + group + '? [y/N] ')
+            if args.gui:
+                ask = gui_input
+            else:
+                ask = input
+            answer = ask('Upload this build to Firebase and notify ' + group + '? [y/N] ')
             if answer.strip().lower() not in ('y', 'yes'):
                 print('Build saved. Nothing uploaded.')
                 return

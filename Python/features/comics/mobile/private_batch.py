@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from commonUtils.runtime.operations import check_cancelled, MutationIncomplete
 from features.comics.comicinfo import ComicInfoXML
-from .collection import scan_comics
+from features.comics.collection import scan_comics
 
 
 class PrivateCollectionBatch:

@@ -273,6 +273,8 @@ class TextEditorView:
                 self.status.text = str(error)
 
     def dispose(self):
+        if hasattr(self, "preview_search"):
+            self.preview_search.dispose()
         speech = getattr(self, "markdown_speech", None)
         if speech is not None:
             speech.close()

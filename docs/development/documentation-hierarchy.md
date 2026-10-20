@@ -5,8 +5,8 @@ and development guides. [Feature infrastructure](feature-infrastructure.md)
 explains feature ownership; each feature keeps its own `docs/` wiki. Common UI
 and Workspaces help belong to Logistics; Bulk Rename remains under `ui_new`.
 Shared commonUtils API guides and optional external feature internals stay in
-their own repositories. This migration moves existing manuals before editing
-or splitting them; compatibility entries contain links rather than copied guides.
+their own repositories. Compatibility entries contain links rather than copied guides.
+Historical migration reports do not override these current ownership rules.
 
 ## Pages and scopes
 

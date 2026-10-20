@@ -48,8 +48,19 @@ class LMPage(qt.QWidget):
     def active_message(self):
         return self.session.active_message
 
-    def __init__(self, parent=None, *, store=None, client=None):
+    def context_projects(self):
+        if self.project_context is not None:
+            return self.project_context.projects()
+        return registered_projects(self)
+
+    def context_buffers(self, project):
+        if self.project_context is not None:
+            return self.project_context.buffers(project)
+        return editor_context(self, project)
+
+    def __init__(self, parent=None, *, store=None, client=None, project_context=None):
         super().__init__(parent)
+        self.project_context = project_context
         self.store = store or Store()
         self.client = client or AgentClient(self)
         self.projects = {}
@@ -308,7 +319,7 @@ class LMPage(qt.QWidget):
         key = (self.data.get('project_id', '') if self.loading and self.data
                else self.project_picker.currentData())
         try:
-            self.projects = registered_projects(self)
+            self.projects = self.context_projects()
         except (ValueError, OSError) as error:
             self.status.setText(str(error))
             self.projects = {}
@@ -382,10 +393,10 @@ class LMPage(qt.QWidget):
     def attachment_context(self):
         if self.client.busy or self.mode.currentData() != 'code':
             raise ValueError('Select Code mode to attach project context.')
-        project = registered_projects(self).get(self.project_picker.currentData())
+        project = self.context_projects().get(self.project_picker.currentData())
         if project is None:
             raise ValueError('Choose a registered IDE project first.')
-        buffers, selections = editor_context(self, project)
+        buffers, selections = self.context_buffers(project)
         return ProjectTools(project, buffers), selections
 
     def append_attachment(self, text):
@@ -797,11 +808,11 @@ class LMPage(qt.QWidget):
             project_tools = None
             if self.data.get('mode') == 'code':
                 key = self.project_picker.currentData()
-                self.projects = registered_projects(self)
+                self.projects = self.context_projects()
                 project = self.projects.get(key)
                 if project is None:
                     raise ValueError('Choose a registered IDE project. Register one in IDE, then refresh projects.')
-                buffers, _ = editor_context(self, project)
+                buffers, _ = self.context_buffers(project)
                 project_tools = ProjectTools(project, buffers)
             payload, metadata = build_request(self.data, tools=TOOLS if project_tools else None,
                                              project_name=project_tools.name if project_tools else None)

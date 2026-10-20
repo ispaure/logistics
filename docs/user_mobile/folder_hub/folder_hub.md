@@ -60,9 +60,9 @@ On Android, it opens the managed Local folder.
 When you open a local folder directly from Workspaces, Back from that folder
 returns to Workspaces. Inside a subfolder, Back first returns to its parent.
 List mode uses compact native rows on both iOS and Android.
-Opening LocalCrypt shows source tabs for switching back to local files. Workspace
-actions are in the header menu; the back control returns to the parent folder or
-Workspaces. **Cloud File Browser** uses the same directory, search and listing
+LocalCrypt uses the same single folder header, without a second source strip.
+Choose another source in Workspaces. Workspace actions are in the header menu;
+the back control returns to the parent folder or Workspaces. **Cloud File Browser** uses the same directory, search and listing
 controls.
 
 The file browser keeps your current folder, selection, list/tile mode, search, sort and browse
@@ -76,8 +76,13 @@ Opening, download, result and error messages temporarily replace that line; the
 indicators return when the message clears. Tap the magnifying glass on the right to
 reveal search; close it with **×** to clear the filter and hide the field.
 Search and **…** share the title row at the upper right. On iOS they sit in the
-native navigation bar; Android keeps them beside the folder name and subtitle
-in one compact header. The listing starts directly below this header. iOS adds
+native navigation bar; Android keeps them beside the folder name and subtitle.
+They remain available after returning up the folder stack.
+An entry's three dots show commands in place: an anchored popup on Android and
+a native action sheet/popover on iOS. Selecting Rename or Move opens its form;
+opening the menu itself keeps you in the listing. Changing folders, refreshing
+the listing or locking the browser dismisses old row commands.
+The listing starts directly below this header. iOS adds
 an input row only while search is open, keeping the folder actions in the top bar.
 Local file search includes files and folders in every subfolder beneath the
 current location. Typing pauses briefly before searching; clearing search restores
@@ -109,8 +114,10 @@ combined folder-and-lock icon as Workspaces: an open blue padlock after successf
 unlocked browsing, or an orange closed padlock when locked.
 These indicators describe the folder currently open, including when a remote
 also has an on-device copy.
-In List mode, long-press an item on Android, or swipe left and choose **Select**
-on iOS, to select it and open its commands without opening its contents. Rename, Move, New folder and archive-password entry have focused
+In List mode, tap the **⋯** button beside an item on either Android or iOS to
+select it and open its commands without opening its contents. Tapping the row
+still opens it. Android long press and iOS's **Select** swipe action remain
+available as shortcuts. Rename, Move, New folder and archive-password entry have focused
 screens. **Details** shows metadata and bounded previews.
 Folders and search results show all matching items in one scrolling view, in
 both List and Tiles. There is no per-page limit or Previous/Next paging.
@@ -169,6 +176,15 @@ selection. Workspaces and the file browser use matching compact rows, regular
 titles, icon spacing and rounded row surfaces, with an overflow menu for each
 workspace folder. Loading status and
 progress appear only while a folder is opening or an error needs attention.
+Android folder and overflow icons sit centered within their touch targets,
+leaving room for the row outline. High contrast uses the same icon sizes,
+title sizes and content positions as regular appearance across all source tabs.
+File-browser lists sit in one rounded group on iOS and Android, with inset dividers between files. The group ends at the final row
+for short lists, leaving the surrounding page visible below it. Long lists
+scroll inside the available pane. Android High contrast / E Ink adds a black
+outline while keeping the same rounded corners and row spacing.
+On Android, the hierarchical workspace overview reserves a separate scrollbar
+gutter, so scrolling does not paint the thumb over folder outlines or actions.
 Each encrypted folder has a combined folder-and-lock icon before its name:
 blue with an open padlock when its credentials are available, orange with a
 closed padlock when locked. Both solid padlock bodies sit in the center of the

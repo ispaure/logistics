@@ -22,7 +22,7 @@ class NativeReaderReturnTests(unittest.TestCase):
     def setUp(self):
         self.host = NativeNavigationHost(DESTINATION_ITEMS)
         self.app = SimpleNamespace(select_destination=Mock(return_value=True),
-            loop=Mock(), adaptive=SimpleNamespace(render=Mock()))
+            loop=Mock(), adaptive=SimpleNamespace(render=Mock()), visible_reader=Mock(return_value=None))
         self.guard = Mock(return_value=True)
         self.routes = MobileRoutes(self.app, self.host, guard=self.guard, changed=Mock())
         self.navigation = [Navigation() for _ in self.host.destinations]
@@ -81,6 +81,14 @@ class NativeReaderReturnTests(unittest.TestCase):
         self.pop()
         self.assertEqual(self.host.state.destination, 'documents')
         self.assertFalse(self.routes.origins)
+
+    def test_native_back_from_close_prompt_cancels_the_pending_reader_exit(self):
+        self.app.keep_reader_editing = Mock()
+        self.routes.show(toga.Label('Reader'), route='reader:fixture')
+        self.routes.show(toga.Label('Close prompt'), route='close:fixture')
+        self.pop()
+        self.app.keep_reader_editing.assert_called_once_with('fixture')
+        self.assertEqual(self.routes.screens['files'][-1][0], 'reader:fixture')
 
     def test_native_swipe_pop_restores_same_origin_panel_in_each_tab(self):
         for destination in ('home', 'files', 'documents'):

@@ -16,13 +16,13 @@ class StartupScreen:
     def __init__(self):
         from .appearance import surface
         self.status = surface(toga.Label(STEPS[0], style=Pack(text_align=CENTER, margin_bottom=16)),
-                              radius=0, background='transparent', foreground='text', outlined=False)
+                              radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False)
         self.progress = toga.ProgressBar(max=len(STEPS), value=0, style=Pack(height=8, margin_bottom=12))
         self.detail = surface(toga.Label('Step 1 of ' + str(len(STEPS)), style=Pack(text_align=CENTER, font_size=12)),
-                              radius=0, background='transparent', foreground='muted', outlined=False)
+                              radius=0, background='transparent', foreground='muted', outlined=False, eink_outlined=False)
         title = surface(toga.Label('Logisticks', style=Pack(text_align=CENTER, font_size=28,
                             font_weight='bold', margin_bottom=24)), radius=0,
-                            background='transparent', foreground='text', outlined=False)
+                            background='transparent', foreground='text', outlined=False, eink_outlined=False)
         panel = toga.Box(children=[title, self.status, self.progress, self.detail],
                          style=Pack(direction=COLUMN, margin=32))
         self.view = surface(toga.Box(children=[panel],
@@ -120,6 +120,9 @@ async def finish_startup(app):
         app.resize_workspace()
         await app.startup_screen.reveal_workspace(app)
         app._startup_in_progress = False
+        start_cloud = getattr(app, '_start_background_cloud', None)
+        if start_cloud is not None:
+            start_cloud()
         return True
     except asyncio.CancelledError:
         cover = getattr(app.startup_screen, 'cover', None)
@@ -139,6 +142,23 @@ async def finish_startup(app):
         app.main_window.on_resize = None
         app.on_exit = lambda app: True
         return False
+
+
+async def restore_cloud_in_background(app):
+    """Start connections after Home's first draw, without owning navigation."""
+    await asyncio.sleep(1 / 60)
+    if not app.active_host:
+        return
+    try:
+        restore = app.start_cloud_restore()
+        if restore is not None:
+            await restore
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        # Connection errors must not turn an already usable Home into a
+        # startup failure, or log credential/provider details.
+        logging.getLogger(__name__).error('Background connection initialization failed')
 
 
 def begin_startup(app):

@@ -143,7 +143,7 @@ class ReaderNavigationTests(unittest.TestCase):
                             self.assertIs(app.body, origin)
                             self.assertEqual(app.file_path, file_path)
                             self.assertFalse(policy.call_args.args[0])
-                            self.assertIn(owner.session.id, app.workspace.sessions)
+                            self.assertNotIn(owner.session.id, app.workspace.sessions)
                 app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()

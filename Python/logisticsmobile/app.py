@@ -19,10 +19,12 @@ from .workspace_navigation import WorkspaceNavigation as AdaptiveWorkspace
 from .hub_ui import text_document_kind
 from .host_services import OwnedAttribute, composed_workflow
 from .provider_ui import ProviderUI
+from .reader_lifecycle import ReaderLifecycle
 
 _active_hosts = weakref.WeakValueDictionary()
 
 
+from features.comics.mobile.collection.workflows import ComicBatchController
 from features.lm.mobile.controller import ChatController
 from features.rclone.mobile.controller import CloudController
 from features.rclone.transfers.mobile.controller import TransferController
@@ -32,6 +34,7 @@ from logisticsmobile.locations_controller import LocationsController
 from logisticsmobile.storage_controller import StorageController
 
 
+@composed_workflow('comic_batch_controller', ComicBatchController)
 @composed_workflow('chat_controller', ChatController)
 @composed_workflow('cloud_controller', CloudController)
 @composed_workflow('transfer_controller', TransferController)
@@ -39,7 +42,7 @@ from logisticsmobile.storage_controller import StorageController
 @composed_workflow('hub_controller', HubController)
 @composed_workflow('locations_controller', LocationsController)
 @composed_workflow('storage_controller', StorageController)
-class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
+class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
@@ -52,6 +55,30 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         # wake-up callbacks. Desktop/iOS loops lack this method and are unchanged.
         from commonUtils.ui.native.event_loop import bind_cooperative_loop
         bind_cooperative_loop(self.loop)
+
+    def provider_book_controller(self):
+        from features.books.mobile.provider_controller import ProviderBookController
+        if not hasattr(self, '_provider_book_controller'):
+            self._provider_book_controller = ProviderBookController(self)
+        return self._provider_book_controller
+
+    def provider_comic_controller(self):
+        from features.comics.mobile.provider_controller import ProviderComicController
+        if not hasattr(self, '_provider_comic_controller'):
+            self._provider_comic_controller = ProviderComicController(self)
+        return self._provider_comic_controller
+
+    @property
+    def format_services(self):
+        from .feature_hosts import reading_presentation
+        return reading_presentation(self)
+
+    @property
+    def speech_presentation(self):
+        if not hasattr(self, '_speech_presentation'):
+            from .feature_hosts import speech_presentation
+            self._speech_presentation = speech_presentation(self)
+        return self._speech_presentation
 
     @property
     def presentation(self):
@@ -86,14 +113,6 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self._startup_in_progress = False
 
     async def _prepare_startup_phase(self, index):
-        if index == 6:
-            # Restore device-saved connections before Home renders its recent
-            # files. Retained session-only ZIPs still require their password.
-            self.show_cloud(present=False)
-            restore = getattr(self, 'cloud_restore_task', None)
-            if restore is not None:
-                await restore
-            return
         if index != 1:
             return
         from .startup import load_startup_models
@@ -114,6 +133,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             previous.active_host = False
         self._startup_models = await asyncio.to_thread(load_startup_models, root,
             getattr(self, 'workspace_root', root))
+
+    def _start_background_cloud(self):
+        from .startup import restore_cloud_in_background
+        self.cloud_startup_task = self.loop.create_task(restore_cloud_in_background(self))
 
     def _startup_steps(self):
         from .startup import STEPS
@@ -154,6 +177,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             if privacy is not None:
                 privacy.dispose()
             previous_host.active_host = False
+            background = getattr(previous_host, 'cloud_startup_task', None)
+            if background is not None:
+                background.cancel()
             if getattr(previous_host, 'cloud_client', None) is not None:
                 previous_host.cancel_cloud()
             picker = getattr(previous_host, '_editor_picker', None)
@@ -263,6 +289,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.routes.install()
         self.refresh_native_theme()
         self.adaptive.install()
+        from .snow import SeasonalSnow
+        self.seasonal_snow = SeasonalSnow(self)
         from .fold_layout import install as install_fold_layout
         install_fold_layout(self)
         from commonUtils.ui.native.memory import MemoryPressure
@@ -317,7 +345,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             # Render the new root and its toolbar against the selected tab.
             adaptive.render(destination=destination)
         from .reader_chrome import sync_comic_chrome
-        sync_comic_chrome(self, self.body)
+        sync_comic_chrome(self, self.body, destination=destination)
         # Material selection is reported before the shared destination commits.
         self.routes.sync_back(destination)
         key = self.pending_reader_restore
@@ -368,7 +396,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         fit_editors(self)
         from .settings_ui import fit_section
         if getattr(self, '_reset_scheduled', False):
-            fit_section(self.main_window.content, self.main_window.size.width)
+            content = self.main_window.content
+            fit_section(content.content if isinstance(content, toga.ScrollContainer) else content,
+                        self.main_window.size.width)
             return
         for overlay in tuple(getattr(self, '_speech_overlays', ())):
             overlay.reposition()
@@ -426,6 +456,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             return False
         self.mark_navigation()
         target = destination or self.native_host.state.destination
+        self.bind_reader_exit(view, route, target)
         view = self.adaptive.prepare(view, target, route=route, root=root)
         private = getattr(self, 'private_sessions', None)
         if private is not None:
@@ -454,16 +485,11 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.show_folder_picker()
 
     async def show_local_location(self, widget=None, **kwargs):
-        self.show_cloud(present=False)
-        restore = getattr(self, 'cloud_restore_task', None)
-        if restore is not None and not restore.done():
-            await restore
         await self.show_files()
 
     async def show_home_files(self, widget=None, **kwargs):
         # A local shortcut must not wait for credentials or reuse a previous
         # remote/private location and its search filter.
-        self.show_cloud(present=False)
         self.show_locations()
 
     def show_documents_hub(self, widget=None, **kwargs):
@@ -525,6 +551,12 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         return close
 
     def request_close_session(self, key):
+        if self.visible_reader() == key:
+            self.__dict__.setdefault('_reader_closing', set()).add(key)
+        readers = getattr(self, 'readers', None)
+        book = readers.controllers.get(key) if readers is not None else None
+        if book is not None and self.book_edits_dirty(book):
+            return self.request_book_close(book)
         private = self.provider_sessions().controllers.get(key)
         if private is not None and private.private_dirty():
             return self.request_provider_close(private)
@@ -540,23 +572,19 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 self.close_session(key, choice=choice)
             return action
         box.add(toga.Button('Save and close', on_press=choose('save'), style=Pack(height=48)))
-        if not getattr(owner.document, 'private', False):
-            box.add(toga.Button('Keep draft and close', on_press=choose('keep'), style=Pack(height=48)))
-        box.add(toga.Button('Discard changes and close', on_press=choose('discard'), style=Pack(height=48)))
-        async def delete_document(widget=None, **kwargs):
-            await self.request_delete_document(key)
-        box.add(toga.Button('Delete document…', on_press=delete_document, style=Pack(height=48)))
-        box.add(toga.Button('Cancel', on_press=lambda widget, **kw: self.cancel_close_session(key), style=Pack(height=48)))
+        box.add(toga.Button('Discard and close', on_press=choose('discard'), style=Pack(height=48)))
+        box.add(toga.Button('Keep editing', on_press=lambda widget, **kw: self.cancel_close_session(key), style=Pack(height=48)))
         self.close_notice = toga.Label('', style=Pack(margin_top=8))
         box.add(self.close_notice)
         return self.show_view(box, checkpoint=False, route='close:' + key, title='Close document')
 
     def cancel_close_session(self, key):
+        self.__dict__.setdefault('_reader_closing', set()).discard(key)
         owner = self.text_views.get(key)
         if owner is not None:
             owner.bind()
             self.workspace.activate(key)
-            self.show_documents()
+            self.show_documents(resume=True)
 
     async def request_delete_document(self, key):
         owner = self.text_views.get(key)
@@ -582,6 +610,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             return False
 
     def close_session(self, key, *, choice='keep'):
+        leaving_reader = key in self.__dict__.get('_reader_closing', ())
         if key not in self.workspace.sessions:
             return False
         if choice == 'cancel':
@@ -597,18 +626,18 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 owner.dispose()
             else:
                 self.workspace.close(key, guard=lambda session: True)
-            self.show_documents_hub()
+            self.reader_closed(key)
             return True
         if self.workspace.sessions[key].provider == 'credential-reference':
             self.credential_document_lists.closed(self.workspace.sessions[key])
             self.workspace.close(key, guard=lambda session: True)
             self.save_workspace()
-            self.show_documents_hub()
+            self.reader_closed(key)
             return True
         if self.workspace.sessions[key].provider == 'provider-session':
             if not self.provider_sessions().close(key, discard=choice == 'discard'):
                 return False
-            self.show_documents_hub()
+            self.reader_closed(key)
             return True
         if self.workspace.sessions[key].provider == 'library':
             return self.reader_manager().close(key)
@@ -643,6 +672,13 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             return False
         self.text_views.pop(key, None)
         if owner is not None:
+            from .reader_lifecycle import scroll_position
+            owner.capture()
+            positions = self.__dict__.setdefault('_closed_text_positions', {})
+            positions.pop(owner.session.resource, None)
+            positions[owner.session.resource] = (dict(owner.session.view), scroll_position(owner.preview))
+            while len(positions) > 256:
+                del positions[next(iter(positions))]
             owner.dispose()
         if was_current:
             self.current = None
@@ -654,8 +690,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 self.editor_view.bind()
         self.save_workspace()
         self.refresh_documents()
-        self.show_documents_hub()
-        if was_current and self.adaptive.split is not None:
+        self.reader_closed(key)
+        if was_current and self.adaptive.split is not None and not leaving_reader:
             if self.current is not None:
                 self.adaptive.present(self.document_view, route='editor', title=self.current.name if self.current else 'New document')
                 self.adaptive.show_list()
@@ -746,6 +782,18 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             root.remove(child)
         root.add(view)
 
+    def change_seasonal_snow(self, widget, **kwargs):
+        try:
+            self.preferences.save(seasonal_snow='true' if widget.value else 'false')
+        except (OSError, ValueError) as error:
+            widget.on_change = None
+            widget.value = self.preferences.values['seasonal_snow'] == 'true'
+            widget.on_change = self.change_seasonal_snow
+            self.settings_status.text = str(error)
+            return
+        self.seasonal_snow.refresh()
+        self.settings_status.text = 'Seasonal snow saved on this device.'
+
     def change_android_eink(self, widget, **kwargs):
         try:
             self.preferences.save(android_eink='true' if widget.value else 'false')
@@ -758,6 +806,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .appearance import configure_android_eink
         configure_android_eink(self)
         self.refresh_native_theme()
+        self.seasonal_snow.refresh()
         self.settings_status.text = 'High contrast / E Ink saved on this device.'
 
     def change_session_speech(self, widget, **kwargs):
@@ -830,7 +879,6 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         from .font_scaling import bind
         bind(self, owner.preview, lambda: owner.session.kind, web=True)
         self.preview = owner.preview
-        self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
         owner.session.view['markdown_mode'] = 'preview'
         token = self.workspace.token(owner.session.id)
         def back_to_editor(widget=None, **kwargs):
@@ -849,16 +897,28 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             owner.preview_box = toga.Box(children=[
                 owner.preview_toolbar,
                 owner.preview], style=Pack(direction=COLUMN, flex=1))
+            from commonUtils.ui.native.markdown_search import MarkdownPageSearch
+            owner.preview_search = MarkdownPageSearch(owner.preview, owner.preview_box, insertion_index=1,
+                valid=lambda: self.active_host and owner.session.id in self.workspace.sessions)
+            owner.preview.on_webview_load = owner.preview_search.loaded
             owner.preview_box._workspace_toolbar = owner.preview_toolbar
             owner.preview_box._native_reader_toolbar = owner.preview_toolbar
             owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.preview_actions_button]
             owner.preview_box._native_reader_title = lambda: owner.document.name
+        bind(self, owner.preview, lambda: owner.session.kind, web=True)
+        owner.preview_search.loading()
+        saved = self.__dict__.get('_closed_text_positions', {}).get(owner.session.resource)
+        if saved is not None:
+            from .reader_lifecycle import restore_loaded_scroll
+            restore_loaded_scroll(owner.preview, saved[1], lambda: self.workspace.accepts(token))
+        self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
         from .action_menu import ActionMenu
         from .document_sources import folder_action
         if hasattr(owner, 'preview_actions'):
             owner.preview_actions.dispose()
         owner.preview_actions = ActionMenu(owner.preview_actions_button, owner,
             folder_action(self, owner.session) + [
+                ('Find in this page…', owner.preview_search.show),
                 ('Read aloud…', lambda: owner.markdown_speech.show()),
                 ('Close document', lambda: self.request_close_session(owner.session.id)),
                 ('Delete document…', lambda: self.request_delete_document(owner.session.id))])
@@ -934,6 +994,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 'markdown' if doc.name.lower().endswith(('.md', '.markdown')) else 'text', doc.name)
             view = self.text_views.get(session.id)
             if view is None:
+                saved = self.__dict__.get('_closed_text_positions', {}).get(key)
+                if saved is not None:
+                    session.view.update(saved[0])
                 view = self.editor_view if self.editor_view.document is None else TextEditorView(self)
                 view.load(doc, session)
                 self.text_views[session.id] = view
@@ -1145,7 +1208,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if getattr(self, '_reset_scheduled', False):
             return True
         self.retire_private_comic_batch()
-        if getattr(self, 'cloud_busy', False):
+        background = getattr(self, 'cloud_startup_task', None)
+        restoring = background is not None and not background.done()
+        if getattr(self, 'cloud_busy', False) and not restoring:
             self.cancel_cloud()
             return False
         if getattr(self, 'private_sessions', None) is not None:
@@ -1159,6 +1224,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             return False
         saved = self.checkpoint()
         if saved:
+            if restoring:
+                self.active_host = False
+                background.cancel()
             from .markdown_speech import stop_markdown_speech
             stop_markdown_speech(self)
             from features.books.mobile.media_controls import stop_media
@@ -1171,6 +1239,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 picker.clear()
             self.memory_pressure.dispose()
             self.screen_privacy.dispose()
+            self.seasonal_snow.dispose()
         return saved
 
     def native_configuration_changed(self):
@@ -1317,6 +1386,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16, flex=1))
         box.add(toga.Label(textwrap.fill('Close ' + owner.session.title, 30), style=Pack(font_size=18)))
         box.add(toga.Label('Private edits stay in memory.\nSave or discard before closing.'))
+        status = toga.Label('')
         async def save(widget=None, **kwargs):
             if owner.session.id not in self.workspace.sessions or self.cloud_busy:
                 return
@@ -1324,11 +1394,16 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
                 await owner.save_crypt_metadata()
             else:
                 await owner.save_crypt()
-            if self.provider_sessions().close(owner.session.id):
-                self.show_documents_hub()
+            if owner.private_dirty():
+                status.text = getattr(owner, 'crypt_metadata_status', owner.crypt_title).text
+                return
+            self.close_session(owner.session.id)
         box.add(toga.Button('Save and close', on_press=save, style=Pack(height=48)))
         box.add(toga.Button('Discard and close', on_press=owner.discard_crypt, style=Pack(height=48)))
-        box.add(toga.Button('Cancel', on_press=owner.resume_crypt, style=Pack(height=48)))
+        def keep_editing(widget=None, **kwargs):
+            self.keep_reader_editing(owner.session.id)
+        box.add(toga.Button('Keep editing', on_press=keep_editing, style=Pack(height=48)))
+        box.add(status)
         self.show_view(box, route='private-close:' + owner.session.id, title='Close private document')
 
 

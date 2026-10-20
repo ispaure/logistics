@@ -107,7 +107,8 @@ class AppearanceTests(unittest.TestCase):
                     else:
                         drawable.setStroke.assert_not_called()
                     drawable.setColor.assert_called_with(argb(colors['surface']))
-                    drawable.setCornerRadius.assert_called_with(0 if eink else 16)
+                    # High contrast changes colors/outlines while preserving normal geometry.
+                    drawable.setCornerRadius.assert_called_with(16)
                     tint = impl.native.setTextColor.call_args.args[0]
                     self.assertEqual(tint.states, [[-1], []])
                     self.assertEqual(tint.colors, [argb(colors['muted']), argb(colors['text'])])

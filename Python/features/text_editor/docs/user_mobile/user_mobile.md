@@ -9,6 +9,13 @@ is hidden while reading. The top **page** icon returns to preview. Save is shown
 only after text changes, and disappears after saving or reverting. Reading uses
 one compact top toolbar in portrait and landscape on iOS and Android, with no
 separate edit/save footer or duplicate file-drawer row.
+In Markdown preview and Notes Library, choose **••• → Find in this page…**
+to highlight text in the open note. A compact panel above the page shows the
+current match and total, with Previous/Next arrows and **Done**. Done clears page
+marks. Notes Library's **Filter loaded file names** field filters the loaded
+filename list; it does not search the contents of every note. In the editor,
+**Find and replace…** searches Source mode and selects the current source match.
+
 Background memory cleanup preserves the active Markdown reading or editing
 surface when returning from sleep. Reading and formatted editing use the
 platform's default font, including the device-selected sans-serif font on Android;

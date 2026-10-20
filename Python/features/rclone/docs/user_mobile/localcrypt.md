@@ -20,6 +20,18 @@ Remotes using saved credentials and non-crypt remotes pull to Local without this
 choice. An existing copy keeps its storage type on subsequent pulls. Existing individual encrypted copies remain readable with matching
 credentials; the remote browser no longer creates them.
 
+Opening a locked LocalCrypt copy from Workspaces asks for its retained credential
+ZIP password, including immediately after startup. A wrong password keeps the
+prompt open; unlocking resumes the selected folder automatically. Home’s unlock
+button remains available too.
+
+The browser title shows the current folder name. LocalCrypt copies identify
+**On-device · Unlocked · LocalCrypt** underneath; credentials loaded for this
+session show **Unlocked (Session Only)**. On iOS, swipe a long description
+horizontally to read it in full. Android and iOS both use this single header;
+there is no extra “On this device / LocalCrypt” source strip. Choose another
+workspace to change sources.
+
 Remote browsing and unlocked copies show decrypted names. **Manage local files
 and folders** opens a local browser with **Local files** and existing
 **LocalCrypt** copies. **List** and **Tiles** show filenames and generic file/folder
@@ -50,6 +62,10 @@ open the manager and choose **Use selected offline encrypted copy**. Choose a
 private download similarly with **Use selected private download**. Existing copies
 are preserved until their transfer succeeds. Managed crypt files can be read and
 edited directly, including their comic/EPUB metadata.
+
+Markdown preview offers **••• → Find in this page…** with highlighted matches,
+a count and Previous/Next arrows above the page. **Done** clears page marks;
+closing or locking the private reader clears the retained search query.
 
 Markdown opened from the file browser starts in preview. **Edit Markdown** uses
 one formatted editing surface, with **Source** for exact syntax. **Open** from
@@ -162,7 +178,7 @@ including independent text edits and metadata forms. Opening the same resource
 returns to its existing item. Browsing folders or switching destinations keeps
 these edits in memory. Ordinary imported documents remain independently open.
 
-Private Close offers **Save and close**, **Discard and close**, and **Cancel**.
+Private Close offers **Save and close**, **Discard and close**, and **Keep editing**.
 Failed saves retain the item and its edits. Credential reload, replacement and
 forget check all unsaved provider items before clearing any of them. Save or
 explicitly discard private work before a file mutation or credential change.
@@ -170,7 +186,16 @@ explicitly discard private work before a file mutation or credential change.
 Provider items are session-only: their titles, paths, content and positions are
 excluded from workspace recovery. Reopen/unlock them after process termination.
 The four-item and 32 MiB retained-input limits reject a new item without evicting
-existing drafts. Inactive comic images and archive caches are released and
+existing drafts. Local, LocalCrypt and remote provider files share these limits.
+An on-screen explanation tells you when a limit prevents opening. Close an item
+in **Documents → Open documents**, saving any edits you want to keep, and retry.
+**X (Close document)** returns to the originating folder and releases the slot;
+Android Back does the same from the main reader. Unsaved edits prompt before
+closing. Page and EPUB passage positions remain in memory for reopening during
+the app session, until private readers are locked or the app restarts.
+A file exceeding the memory
+budget by itself cannot be opened by closing other items.
+Inactive comic images and archive caches are released and
 recreated on activation. Saving local text updates its local file; LocalCrypt
 continues to save encrypted bytes through the existing verified transaction.
 
@@ -220,6 +245,10 @@ Use **Pull…** from Workspaces for reviewed Local or LocalCrypt sync. The older
 snapshot-style repeatable-pull workflow has been removed. Existing downloaded
 folders remain on the device; they can still be browsed as local files. Sync can
 replace or delete destination files after confirmation, without a retained backup.
+Pull downloads missing local files and recreates missing destination folders for
+both Local and LocalCrypt, including when you choose **Proceed without full
+review…**. That choice skips the full comparison; it still checks storage access
+and unsafe filesystem links before downloading.
 
 ### LocalCrypt session and screen privacy
 

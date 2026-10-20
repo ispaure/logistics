@@ -98,7 +98,7 @@ class UXWorkflowTests(unittest.TestCase):
         app.native_host.adapter = adapter
         try:
             resources = SimpleNamespace(getDisplayMetrics=lambda: SimpleNamespace(density=2))
-            native = SimpleNamespace(getResources=lambda: resources)
+            native = SimpleNamespace(getResources=lambda: resources, getSupportActionBar=lambda: None)
             with patch.object(type(app._impl), '__module__', 'toga_android.app'), \
                     patch.object(app._impl, 'native', native, create=True):
                 app.adaptive.render()

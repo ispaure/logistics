@@ -15,6 +15,18 @@ from commonUtils.ui import pyside as qt
 
 
 class GitPreferenceTests(unittest.TestCase):
+    def test_failed_atomic_publication_preserves_existing_preferences_bytes(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'preferences.json'
+            preferences = Preferences(path)
+            preferences.save()
+            before = path.read_bytes()
+            preferences.last_repository = 'Changed repository'
+            with patch('features.git.preferences.atomic_write_bytes', side_effect=OSError('Publication failed')):
+                with self.assertRaises(OSError):
+                    preferences.save()
+            self.assertEqual(path.read_bytes(), before)
+
     def test_round_trip_and_reject_plaintext_secret_metadata(self):
         with TemporaryDirectory() as folder:
             prefs = Preferences(Path(folder) / 'git.json')

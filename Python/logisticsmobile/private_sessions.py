@@ -1,4 +1,8 @@
 """Bounded, memory-only provider sessions; private bytes never enter recovery."""
+from .host_services import composed_workflow
+from features.books.mobile.provider_controller import ProviderBookController
+from features.comics.mobile.provider_controller import ProviderComicController
+
 from hashlib import sha256
 from pathlib import Path
 from logisticsmobile.provider_ui import ProviderUI
@@ -10,15 +14,22 @@ from .reader_memory import PRIVATE_BUFFERS, private_buffer_bytes
 MAX_PRIVATE_BYTES = PRIVATE_BUFFERS
 
 
+@composed_workflow('provider_book_controller', ProviderBookController)
+@composed_workflow('provider_comic_controller', ProviderComicController)
 class PrivateController(ReaderHost, ProviderUI):
     def __init__(self, manager, session):
         self.manager, self.app, self.session = manager, manager.app, session
+        from .feature_hosts import reading_presentation
+        self.format_services = reading_presentation(self)
         self.crypt_reader = None
         self.crypt_metadata_fields = {}
         self.crypt_metadata_initial = {}
         self.crypt_metadata_values = {}
         self._crypt_cancel = None
         self.operation_busy = False
+        import asyncio
+        self.operation_idle = asyncio.Event()
+        self.operation_idle.set()
         self.presentation_destination = self.app.native_host.state.destination
         self.privacy_gate = None
 
@@ -28,6 +39,10 @@ class PrivateController(ReaderHost, ProviderUI):
 
     def set_cloud_busy(self, busy):
         self.operation_busy = busy
+        if busy:
+            self.operation_idle.clear()
+        else:
+            self.operation_idle.set()
         self.manager.update_session(self)
         if not busy:
             self.manager.revoke_stale()
@@ -53,7 +68,8 @@ class PrivateController(ReaderHost, ProviderUI):
         self.manager.bind(self)
         reader = self.crypt_reader
         document_title = Path(reader.name).name if reader is not None else self.session.title
-        kwargs.update(destination=self.__dict__.get('presentation_destination', 'documents'), route=kwargs.get('route') or 'private:' + self.session.id,
+        suffix = ':metadata' if view is getattr(self, 'crypt_metadata_view', None) else ''
+        kwargs.update(destination=self.__dict__.get('presentation_destination', 'documents'), route=kwargs.get('route') or 'private:' + self.session.id + suffix,
                       title=kwargs.get('title') or document_title or 'Private document')
         presented = self.app.show_view(view, **kwargs)
         if origin is not None:
@@ -69,19 +85,22 @@ class PrivateController(ReaderHost, ProviderUI):
             elif (mode == 'edit' and getattr(self.crypt_edit_mode, 'value', '') == 'Formatted'
                   and getattr(self, 'crypt_formatted', None) is None):
                 self.show_private_markdown_editor()
-            if getattr(self, 'page_suspended', False):
-                self.page_suspended = False
-                self.app.loop.create_task(self.read_crypt_page())
+            self.resume_suspended_page()
+
+    def resume_suspended_page(self):
+        """Reload released pixels without changing the retained route or chrome."""
+        task = getattr(self, '_resume_page_task', None)
+        if (not getattr(self, 'page_suspended', False) or self.cloud_busy
+                or not self.manager.available(self.session.id)
+                or (task is not None and not task.done())):
+            return
+        self._resume_page_task = self.app.loop.create_task(self.read_crypt_page())
 
     def close_crypt(self, widget=None, **kwargs):
-        if self.private_dirty():
-            return self.app.request_provider_close(self)
-        if self.manager.close(self.session.id):
-            self.app.show_documents_hub()
+        return self.app.request_reader_close(self.session.id)
 
     def discard_crypt(self, widget=None, **kwargs):
-        if self.manager.close(self.session.id, discard=True):
-            self.app.show_documents_hub()
+        return self.app.close_session(self.session.id, choice='discard')
 
     async def show_editor_open(self, widget=None, **kwargs):
         return await self.app.show_editor_open(widget, **kwargs)
@@ -98,6 +117,14 @@ class PrivateSessions:
         self.app = app
         self.controllers = {}
         self.active = None
+        self.positions = {}
+
+    async def opening_rejected(self, message):
+        """Admission failures must be visible from every folder entry point."""
+        import toga
+        self.app.cloud_status.value = message
+        await self.app.main_window.dialog(toga.InfoDialog('Could not open document', message))
+        return False
 
     def revoke_stale(self):
         """A credential replacement in any scene also retires displayed bytes."""
@@ -165,10 +192,53 @@ class PrivateSessions:
     def update_session(self, owner):
         owner.session.dirty = owner.private_dirty()
 
+    def remember_position(self, owner):
+        reader = owner.crypt_reader
+        if reader is None:
+            return
+        from .reader_lifecycle import scroll_position
+        position = self.positions.pop(owner.session.resource, {})
+        if reader.editable:
+            text = getattr(owner, 'crypt_text', None)
+            preview = getattr(owner, 'crypt_preview', None)
+            content = getattr(owner, 'crypt_content', None)
+            if content is not None and preview is not None and preview in content.children:
+                position['preview_scroll'] = scroll_position(preview)
+            if content is not None and text in content.children:
+                position['text_scroll'] = scroll_position(text)
+        else:
+            index = getattr(owner, '_provider_displayed_index', 0)
+            panel = getattr(owner, 'provider_epub_view', None)
+            offset = getattr(panel, 'offset', 0)
+            if panel is None and reader.book is not None:
+                offset = getattr(owner, '_provider_epub_locations', {}).get(reader.book.spine[index], 0)
+            position.update(index=index, offset=offset)
+        self.positions[owner.session.resource] = position
+        while len(self.positions) > 256:
+            del self.positions[next(iter(self.positions))]
+
+    async def restore_text_position(self, owner, position):
+        from .reader_lifecycle import restore_scroll, restore_loaded_scroll, restore_drawn_scroll
+        from .draw_ready import wait_for_draw
+        await wait_for_draw(owner.crypt_view)
+        if not self.available(owner.session.id):
+            return
+        restore_scroll(owner.crypt_text, position.get('text_scroll'))
+        preview = getattr(owner, 'crypt_preview', None)
+        if preview is None or position.get('preview_scroll') is None:
+            return
+        valid = lambda: self.available(owner.session.id) and owner.crypt_preview is preview
+        if not getattr(owner.crypt_preview_search, 'ready', False):
+            restore_loaded_scroll(preview, position['preview_scroll'],
+                valid)
+        if valid():
+            await restore_drawn_scroll(preview, position['preview_scroll'], valid)
+
     def suspend(self, *, except_owner=None, keep_active_markdown=False):
         for owner in self.controllers.values():
             if owner is except_owner:
                 continue
+            self.remember_position(owner)
             # Memory trimming also runs when Android backgrounds the activity.
             # The retained reader must still show the same surface on wake;
             # clearing its preview would expose the source input underneath.
@@ -200,13 +270,14 @@ class PrivateSessions:
 
     async def open(self, copies, key, *, prepared=None, destination=None, privacy_gate=None, edit=False):
         destination = destination or self.app.native_host.state.destination
-        from .files_ui import local_read_available
+        from .files_ui import local_read_available, ordinary_local_copies
         if not hasattr(self.app, 'cloud_view'):
             self.app.show_cloud(present=False)
             restore = getattr(self.app, 'cloud_restore_task', None)
-            if restore is not None:
+            if restore is not None and not ordinary_local_copies(copies):
                 await restore
-        independent = self.app.cloud_busy and local_read_available(self.app, private=True) and getattr(copies, 'offline', False)
+        independent = (self.app.cloud_busy and getattr(copies, 'offline', False)
+            and local_read_available(self.app, private=not ordinary_local_copies(copies)))
         if self.app.cloud_busy and not independent:
             return False
         identity = self.identity(copies, key)
@@ -225,8 +296,9 @@ class PrivateSessions:
                 existing.show_private_markdown_editor()
             return True
         if len(self.controllers) >= MAX_PRIVATE_SESSIONS:
-            self.app.cloud_status.value = 'Close a provider document before opening another (limit: 4). Unsaved edits were kept.'
-            return False
+            return await self.opening_rejected(
+                f'All {MAX_PRIVATE_SESSIONS} file document slots are in use. Local, LocalCrypt and remote files share this limit. '
+                'Go to Documents → Open documents and close one, then try again. Existing documents and unsaved edits were kept.')
         if prepared is None and not self.app.checkpoint():
             return False
         previous = self.active
@@ -243,7 +315,10 @@ class PrivateSessions:
                     self.app.workspace.close(pending.id, guard=lambda session: True)
         selection = self.app.workspace.active
         origin = self.app.native_host.state.destination, self.app.navigation_generation, selection
-        session = self.app.workspace.open('provider-session', identity, 'text', transient=True)
+        try:
+            session = self.app.workspace.open('provider-session', identity, 'text', transient=True)
+        except ValueError as error:
+            return await self.opening_rejected(str(error) + '\n\nGo to Documents → Open documents to manage open items.')
         self.app.workspace.active = selection
         owner = PrivateController(self, session)
         if getattr(copies, 'encrypted', True) or getattr(copies, 'remote_storage', False):
@@ -275,8 +350,17 @@ class PrivateSessions:
             total = private_buffer_bytes(self.controllers.values())
             if total > MAX_PRIVATE_BYTES:
                 retire_open()
-                self.app.cloud_status.value = 'Private content exceeds the 32 MiB memory budget. Close an item and retry; existing edits were kept.'
-                return False
+                return await self.opening_rejected(
+                    'This document would exceed the shared 32 MiB file content memory budget. '
+                    'Go to Documents → Open documents and close an item, then try again. '
+                    'A document that exceeds the budget by itself cannot be opened. Existing documents and unsaved edits were kept.')
+            position = self.positions.get(identity)
+            if position is not None and not reader.editable:
+                index, offset = position.get('index', 0), position.get('offset', 0)
+                index = min(index, len(reader.labels) - 1)
+                if reader.book is not None:
+                    owner._provider_epub_locations = {reader.book.spine[index]: offset}
+                await owner.move_private_page(index)
             session.kind = ('pdf' if reader.kind == '.pdf' else 'epub' if reader.kind == '.epub' else 'comic' if not reader.editable
                             else 'markdown' if reader.kind in {'.md', '.markdown'} else 'text')
             session.title = Path(reader.name).name
@@ -296,6 +380,8 @@ class PrivateSessions:
             else:
                 self.suspend(except_owner=self.active)
             self.app.save_workspace()
+            if position is not None and reader.editable:
+                await self.restore_text_position(owner, position)
             return True
         except Exception:
             retire_open()
@@ -316,7 +402,9 @@ class PrivateSessions:
     def activate(self, key, *, destination=None):
         destination = destination or self.app.native_host.state.destination
         owner = self.controllers.get(key)
-        if not self.available(key) or (self.app.cloud_busy and not ((getattr(self.app, 'transfer_busy', False) or getattr(self.app, 'remote_read_busy', False)) and self.offline_owner(owner))):
+        from .files_ui import ordinary_local_copies
+        local = ordinary_local_copies(getattr(owner, '_crypt_reader_store', None))
+        if not self.available(key) or (self.app.cloud_busy and not (local or ((getattr(self.app, 'transfer_busy', False) or getattr(self.app, 'remote_read_busy', False)) and self.offline_owner(owner)))):
             return False
         owner.presentation_destination = destination
         self.bind(owner)
@@ -332,7 +420,9 @@ class PrivateSessions:
         owner = self.controllers.get(key)
         if owner is None:
             return False
-        local = (getattr(self.app, 'transfer_busy', False) or getattr(self.app, 'remote_read_busy', False)) and self.offline_owner(owner)
+        from .files_ui import ordinary_local_copies
+        local = (ordinary_local_copies(getattr(owner, '_crypt_reader_store', None))
+            or ((getattr(self.app, 'transfer_busy', False) or getattr(self.app, 'remote_read_busy', False)) and self.offline_owner(owner)))
         if not force and ((self.app.cloud_busy and not local) or owner._crypt_cancel is not None or owner.operation_busy):
             return False
         if not force and owner.private_dirty() and not discard:
@@ -340,6 +430,8 @@ class PrivateSessions:
             owner.crypt_title.text = 'Unsaved changes: save,\nor discard and close.'
             return False
         reader = owner.crypt_reader
+        if reader is not None and not force:
+            self.remember_position(owner)
         if not ProviderUI.clear_private_reader(owner, discard=True):
             return False
         source = getattr(reader, 'source', None)
@@ -374,4 +466,5 @@ class PrivateSessions:
             return False
         for owner in owners:
             self.close(owner.session.id, discard=True, force=True)
+        self.positions.clear()
         return True

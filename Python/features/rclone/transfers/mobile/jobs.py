@@ -127,9 +127,10 @@ class MirrorJobs:
                 break
         return path
 
-    def inspect(self, path, cancelled=lambda: False, *, copy_links=False):
+    def inspect(self, path, cancelled=lambda: False, *, copy_links=False, allow_missing=False):
         self.guard(path)
-        return transfer_inventory(path, cancelled, copy_links=copy_links) if path.exists() else None
+        return transfer_inventory(path, cancelled, copy_links=copy_links,
+                                  allow_missing=allow_missing) if path.exists() else None
 
     @staticmethod
     def inspect_file(path):
@@ -363,11 +364,14 @@ class MirrorJobs:
             target.mkdir(parents=True, exist_ok=True, mode=0o700)
             # Inspect links before rclone receives an app-private path. Partial
             # transfers stay in the recorded destination, as with CLI sync.
-            self.inspect(target, cancelled, copy_links=not job['crypt'])
+            # A disappearing destination entry is missing data for Pull to
+            # download, not a changed source snapshot as it would be for Push.
+            self.inspect(target, cancelled, copy_links=not job['crypt'], allow_missing=True)
             self.save()
             self.sync(job, client, push=False, options=options, cancelled=cancelled, progress=progress)
             self.check(client, job, cancelled)
-            self.inspect(target, cancelled, copy_links=not job['crypt'])
+            if self.inspect(target, cancelled, copy_links=not job['crypt'], allow_missing=True) is None:
+                raise FileNotFoundError('Pull destination became unavailable. Check collection storage and retry.')
             self.save()
             return 'updated', None
 

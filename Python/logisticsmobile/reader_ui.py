@@ -7,12 +7,8 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 
 from .library import LibraryStore
-from features.books.mobile.content import indexed_chapter
-from features.books.locations import contents, link_destination
+from features.books.locations import contents
 from features.books.mobile.presentation import chapter_view
-from features.books.mobile.typography import options as typography_options
-from features.comics.mobile.presentation import page_view, SpreadView
-from features.comics.mobile.navigation import ComicNavigation
 from commonUtils.archives.zip_access import ArchivePasswordError
 from .reader_chrome import ReaderChrome
 from .library_ui import LibraryCatalog
@@ -98,7 +94,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             loaded = self.book_record is not None and self.book_reader is not None
             for control in (self.chapter_selector, self.bookmark_button, self.bookmark_selector):
                 control.enabled = loaded
-            self.previous_page.enabled = loaded and (self.book_record['position'] > 0 or (self.book_record['kind'] == 'epub' and getattr(self, 'epub_offset', 0) > 0))
+            self.previous_page.enabled = loaded and ((self.book_record['position'] > 0 or getattr(self, 'epub_offset', 0) > 0) if self.book_record['kind'] == 'epub' else self.comic_navigation.can_previous(self.book_record['position']))
             count = len(self.book_reader.spine if self.book_record['kind'] == 'epub' else self.book_reader.pages) if loaded else 0
             if loaded and self.book_record['kind'] == 'epub':
                 bridge = self.epub_view._chapter_bridge
@@ -264,47 +260,14 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if not 0 <= index < count:
             return
         if record['kind'] == 'epub':
-            content, chapter_text = await asyncio.to_thread(indexed_chapter, reader, index,
-                int(self.preferences.values['epub_font_size']), margin=int(self.preferences.values['reading_margin']),
-                theme=self.preferences.values['reading_theme'], links=True, **typography_options(self.preferences.values))
-            from .palette import themed_chapter
-            content = themed_chapter(content, self.preferences.values['reading_theme'])
-            if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
+            prepared_epub = await self.epub_controller().prepare_page(reader, record, index, epoch)
+            if prepared_epub is None:
                 return
-            target = getattr(self, '_epub_target', None)
-            self._epub_target = None
-            saved = record.get('location', {})
-            offset = saved.get('offset', 0) if saved.get('path') == reader.spine[index] else 0
-            if target is not None:
-                offset = (chapter_text.anchors.get(target, 0) if isinstance(target, str) else target)
-            offset = min(max(0, offset), chapter_text.length)
-            prepared_epub = (chapter_text, offset, content)
         else:
-            if getattr(self, '_comic_navigation_reader', None) is not reader:
-                self.comic_navigation = ComicNavigation(reader.read_page, len(reader.pages),
-                    double_pages=reader.double_pages, right_to_left=reader.right_to_left)
-                self._comic_navigation_reader = reader
-            indices, data = await asyncio.to_thread(self.comic_navigation.load, index,
-                viewport=self.comic_viewport(), mode=self.comic_layout_mode())
-            if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
+            prepared = await self.comic_controller().prepare_page(reader, record, index, epoch)
+            if prepared is None:
                 return
-            from commonUtils.ui.native.image_canvas import ImageCanvas
-            from .fold_layout import seam_fraction
-            seam = seam_fraction(self, self.book_content)
-            from features.images.validation import image_dimensions
-            page_width, page_height = image_dimensions(data[0])
-            portrait = page_width < page_height
-            if len(data) == 1 and (seam is None or not portrait):
-                view = page_view(data[0], canvas=ImageCanvas, on_page=self.swipe_book_page,
-                                 on_toggle=self.toggle_reading_mode)
-            else:
-                previous = self.book_content.children[0] if self.book_content.children else None
-                if isinstance(previous, SpreadView):
-                    view = previous.replace(data, right_to_left=reader.right_to_left,
-                        viewport=self.comic_viewport(), seam=seam)
-                else:
-                    view = SpreadView(data, canvas=ImageCanvas, on_page=self.swipe_book_page,
-                        on_toggle=self.toggle_reading_mode, right_to_left=reader.right_to_left, viewport=self.comic_viewport(), seam=seam)
+            view, indices = prepared
         location = dict(path=reader.spine[index], offset=prepared_epub[1]) if record['kind'] == 'epub' else None
         updated = dict(record, position=index)
         if location is not None:
@@ -320,7 +283,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         from .page_animation import page_direction, begin_page_slide, finish_page_slide
         direction = 0
         if record['kind'] == 'comic' and self.book_content.children:
-            direction = page_direction(record['position'], index,
+            direction = page_direction(record['position'] + self.comic_navigation.half / 2,
+                index + self.comic_navigation.prepared[1] / 2,
                 right_to_left=getattr(reader, 'right_to_left', False))
         begin_page_slide(self.book_content, direction, self.preferences.values)
         for child in list(self.book_content.children):
@@ -337,7 +301,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if record['kind'] == 'epub':
             self.watch_epub_width(reader, epoch)
         if record['kind'] == 'comic':
-            self.comic_navigation.visible = indices
+            self.comic_navigation.commit(indices)
+            updated['comic_half'] = self.comic_navigation.half
             self.watch_comic_layout(reader, epoch)
         if record['kind'] == 'comic' and not getattr(self, '_comic_mode_started', False):
             self._comic_mode_started = True
@@ -362,14 +327,14 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         title = reader.title if record['kind'] == 'epub' else record['name']
         direction = ' · Right-to-left manga' if getattr(reader, 'right_to_left', False) else ''
         position = str(index + 1) if record['kind'] == 'epub' or len(indices) == 1 else f'{indices[0] + 1}–{indices[-1] + 1}'
-        self.book_status.text = (f'Page {position}/{count}{direction}' if record['kind'] == 'comic'
+        self.book_status.text = (f'Page {position}/{count}{self.comic_navigation.part_label}{direction}' if record['kind'] == 'comic'
                                  else f'{title} · {position}/{count}{direction}')
         if hasattr(self, 'page_footer'):
             self.page_footer.sync(comic=record['kind'] == 'comic', count=count, index=index,
                                   right_to_left=getattr(reader, 'right_to_left', False))
             if record['kind'] == 'epub':
                 self.page_footer.chapter_progress(index, count, self.epub_offset, self.epub_text.length)
-        self.previous_page.enabled = index > 0 or (record['kind'] == 'epub' and self.epub_offset > 0)
+        self.previous_page.enabled = (index > 0 or self.epub_offset > 0) if record['kind'] == 'epub' else self.comic_navigation.can_previous(index)
         self.next_page.enabled = index + 1 < count if record['kind'] == 'epub' else self.comic_navigation.next(index) is not None
         self.book_loading = False
         # Initial EPUB content arrives after its reader route was presented.
@@ -378,7 +343,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         # Mount the prepared page before filesystem latency; the loop can paint
         # while the worker publishes ordinary imported-library progress.
         try:
-            saved = await asyncio.to_thread(self.library_store.progress, record, index, location=location)
+            saved = await asyncio.to_thread(self.library_store.progress, record, index, location=location,
+                **({'comic_half': self.comic_navigation.half} if record['kind'] == 'comic' else {}))
             if self.book_reader is reader and self.book_epoch == epoch and self.book_record['position'] == index:
                 self.book_record = saved
         except (OSError, ValueError) as error:
@@ -470,151 +436,49 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         finally:
             self.set_book_busy(False)
 
-    def epub_event(self, reader, epoch, index, action, offset):
-        if (self.book_reader is not reader or self.book_epoch != epoch or not self.active_host
-                or self.session.id not in self.workspace.sessions):
-            return
-        self.epub_offset = min(offset, self.epub_text.length)
-        if hasattr(self, 'page_footer'):
-            self.page_footer.chapter_progress(index, len(reader.spine), self.epub_offset, self.epub_text.length)
-        self._epub_pending = (reader, epoch, index, self.epub_offset)
-        task = getattr(self, '_epub_location_task', None)
-        if task is None or task.done():
-            self._epub_flush = asyncio.Event()
-            self._epub_location_task = self.loop.create_task(self.save_epub_location())
-        if action in {'next', 'previous'} and not self.book_busy:
-            self.loop.create_task(self.epub_boundary(index, 1 if action == 'next' else -1))
+    def epub_event(self, *args, **kwargs):
+        return self.epub_controller().epub_event(*args, **kwargs)
 
-    def request_position_flush(self):
-        wake = getattr(self, '_epub_flush', None)
-        if wake is not None:
-            wake.set()
+    def request_position_flush(self, *args, **kwargs):
+        return self.epub_controller().request_position_flush(*args, **kwargs)
 
-    async def save_epub_location(self):
-        # A fixed window bounds latency even while position events keep arriving.
-        try:
-            await asyncio.wait_for(self._epub_flush.wait(), .15)
-        except asyncio.TimeoutError:
-            pass
-        while getattr(self, '_epub_pending', None) is not None:
-            if self.book_busy:
-                await self._book_idle.wait()
-                continue
-            reader, epoch, index, offset = self._epub_pending
-            self._epub_pending = None
-            if self.book_reader is not reader or self.book_epoch != epoch or self.book_record['position'] != index:
-                continue
-            self.set_book_busy(True)
-            try:
-                updated = await asyncio.to_thread(self.library_store.progress, self.book_record, index,
-                    location=dict(path=reader.spine[index], offset=offset))
-                if self.book_reader is reader and self.book_epoch == epoch:
-                    self.book_record = updated
-            except (OSError, ValueError) as error:
-                self.book_status.text = 'Cannot save reading position: ' + str(error)[:300]
-            finally:
-                self.set_book_busy(False)
+    async def save_epub_location(self, *args, **kwargs):
+        return await self.epub_controller().save_epub_location(*args, **kwargs)
 
-    async def epub_boundary(self, index, direction):
-        task = getattr(self, '_epub_location_task', None)
-        if task is not None:
-            self.request_position_flush()
-            await task
-        if self.book_reader is not None and self.book_record['position'] == index:
-            target = index + direction
-            if 0 <= target < len(self.book_reader.spine):
-                self._epub_target = 0 if direction > 0 else 16 * 1024 * 1024
-                await self.move_book_page(target)
+    async def epub_boundary(self, *args, **kwargs):
+        return await self.epub_controller().epub_boundary(*args, **kwargs)
 
-    def epub_link(self, reader, epoch, index, href):
-        if (self.book_reader is not reader or self.book_epoch != epoch or self.book_busy
-                or self.manager.active is not self or not self.active_host):
-            return
-        try:
-            target, fragment = link_destination(reader, index, href)
-            self._epub_target = fragment
-            self.loop.create_task(self.move_book_page(target))
-        except ValueError as error:
-            self.book_status.text = str(error)
+    def epub_link(self, *args, **kwargs):
+        return self.epub_controller().epub_link(*args, **kwargs)
 
-    def show_epub_search(self, widget=None, **kwargs):
-        if self.book_reader is None or self.book_record['kind'] != 'epub':
-            return
-        self.epub_query = toga.TextInput(placeholder='Find in this chapter…',
-            on_confirm=self.find_epub_next, style=Pack(height=44))
-        self.epub_search_status = toga.Label('Search ignores case and wraps\nwithin this chapter.')
-        view = toga.Box(children=[self.epub_query,
-            toga.Button('Find next', on_press=self.find_epub_next, style=Pack(height=44)),
-            self.epub_search_status, toga.Button('Return to reading', on_press=self.show_library, style=Pack(height=44))],
-            style=Pack(direction=COLUMN, margin=12))
-        self.show_view(view, reader_route='search', title='Find in chapter')
+    def show_epub_search(self, *args, **kwargs):
+        return self.epub_controller().show_epub_search(*args, **kwargs)
 
-    async def find_epub_next(self, widget=None, **kwargs):
-        if self.book_busy or self.book_reader is None or self.book_record['kind'] != 'epub':
-            return
-        result = self.epub_text.find(self.epub_query.value, self.epub_offset + 1)
-        if result is None:
-            self.epub_search_status.text = 'No matching text in this chapter.'
-            return
-        start, end = result
-        self.epub_offset = start
-        self.epub_view._chapter_bridge.seek(start, end)
-        self.epub_event(self.book_reader, self.book_epoch, self.book_record['position'], 'position', start)
-        self.show_library()
+    async def find_epub_next(self, *args, **kwargs):
+        return await self.epub_controller().find_epub_next(*args, **kwargs)
 
 
-    def comic_seam(self):
-        from .fold_layout import seam_fraction
-        return seam_fraction(self, self.book_content)
+    def comic_seam(self, *args, **kwargs):
+        return self.comic_controller().comic_seam(*args, **kwargs)
 
-    def comic_layout_mode(self):
-        from .fold_layout import comic_mode
-        return comic_mode(self, self.book_content)
+    def comic_layout_mode(self, *args, **kwargs):
+        return self.comic_controller().comic_layout_mode(*args, **kwargs)
 
-    def comic_viewport(self):
-        layout = self.book_content.layout
-        return max(1, min(layout.content_width or self.main_window.size.width, self.main_window.size.width)), max(1, layout.content_height or 1)
+    def comic_viewport(self, *args, **kwargs):
+        return self.comic_controller().comic_viewport(*args, **kwargs)
 
-    async def move_comic(self, direction):
-        if self.book_busy or self.book_reader is None or self.book_record['kind'] != 'comic':
-            return
-        index = self.book_record['position']
-        if direction > 0:
-            target = self.comic_navigation.next(index)
-        else:
-            self.set_book_busy(True)
-            try:
-                target = await asyncio.to_thread(self.comic_navigation.previous, index,
-                    viewport=self.comic_viewport(), mode=self.comic_layout_mode())
-            except Exception as error:
-                self.book_status.text = 'Cannot read previous spread: ' + str(error)[:300]
-                return
-            finally:
-                self.set_book_busy(False)
-        if target is not None:
-            await self.move_book_page(target)
+    async def move_comic(self, *args, **kwargs):
+        return await self.comic_controller().move_comic(*args, **kwargs)
 
 
-    async def adjacent_book_comic(self, direction):
-        if self.book_busy or self.book_record is None or self.book_record['kind'] != 'comic':
-            return
-        from features.comics.mobile.navigation import adjacent_comic
-        key = self.book_record['id']
-        records, _ = await asyncio.to_thread(self.library_store.items)
-        if not self.active_host or self.manager.active is not self or self.book_record is None or self.book_record['id'] != key:
-            return
-        target = adjacent_comic([(r['id'], r['name']) for r in records if r['kind'] == 'comic'],
-                                self.book_record['id'], direction)
-        if target is not None:
-            immersive = self.reader_immersive
-            if await self.manager.open(target, destination=self.presentation_destination):
-                self.manager.active.set_reading_mode(immersive)
+    async def adjacent_book_comic(self, *args, **kwargs):
+        return await self.comic_controller().adjacent_book_comic(*args, **kwargs)
 
-    async def previous_comic_file(self, widget=None, **kwargs):
-        await self.adjacent_book_comic(-1)
+    async def previous_comic_file(self, *args, **kwargs):
+        return await self.comic_controller().previous_comic_file(*args, **kwargs)
 
-    async def next_comic_file(self, widget=None, **kwargs):
-        await self.adjacent_book_comic(1)
+    async def next_comic_file(self, *args, **kwargs):
+        return await self.comic_controller().next_comic_file(*args, **kwargs)
 
 
     def show_book_metadata(self, widget=None, **kwargs):
@@ -642,8 +506,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 children.append(suggestion_picker(key, field, choices[key]))
         children.extend([toga.Button('Save metadata', on_press=self.save_book_metadata, style=Pack(height=44)),
             toga.Button('Return to reading', on_press=self.show_library, style=Pack(height=44))])
-        self.show_view(toga.ScrollContainer(horizontal=False, content=toga.Box(children=children,
-            style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1)), reader_route='metadata', title='Edit metadata')
+        self.book_metadata_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=children,
+            style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+        self.show_view(self.book_metadata_view, reader_route='metadata', title='Edit metadata')
 
     async def save_book_metadata(self, widget=None, **kwargs):
         pending = getattr(self, '_epub_location_task', None)
@@ -690,40 +555,14 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.set_book_busy(False)
 
 
-    def watch_epub_width(self, reader, epoch):
-        task = getattr(self, '_epub_width_task', None)
-        if task is not None and not task.done():
-            return
-        from features.books.mobile.presentation import watch_width, pane_width
-        from .layout_events import layout_waiter
-        def width():
-            self.reflow_chapters()
-            available = pane_width(self.library_view, self.app.adaptive.content_width(self.presentation_destination, margin=0), 0)
-            sidebar = self.chapter_sidebar
-            return max(1, available - (sidebar.policy.sidebar_width + sidebar.policy.gap if sidebar.expanded else 0))
-        self._epub_width_task = self.loop.create_task(watch_width(
-            alive=lambda: self.book_reader is reader and self.book_epoch == epoch,
-            width=width,
-            view=lambda: self.epub_view, changed=layout_waiter(self.app)))
+    def watch_epub_width(self, *args, **kwargs):
+        return self.epub_controller().watch_epub_width(*args, **kwargs)
 
-    def watch_comic_layout(self, reader, epoch):
-        task = getattr(self, '_comic_layout_task', None)
-        if task is not None and not task.done():
-            return
-        from features.comics.mobile.presentation import watch_layout
-        from .layout_events import layout_waiter
-        self._comic_layout_task = self.loop.create_task(watch_layout(
-            alive=lambda: self.book_reader is reader and self.book_epoch == epoch and self.active_host,
-            available=lambda: not self.book_busy and self.manager.active is self,
-            viewport=lambda: (self.comic_viewport(), self.comic_layout_mode(), self.comic_seam()),
-            view=lambda: self.book_content.children[0] if self.book_content.children else None,
-            reload=lambda: self.move_book_page(self.book_record['position']),
-            changed=layout_waiter(self.app)))
+    def watch_comic_layout(self, *args, **kwargs):
+        return self.comic_controller().watch_comic_layout(*args, **kwargs)
 
-    async def first_comic_page(self, widget=None, **kwargs):
-        if self.book_record is not None and self.book_record['kind'] == 'comic':
-            await self.move_book_page(0)
+    async def first_comic_page(self, *args, **kwargs):
+        return await self.comic_controller().first_comic_page(*args, **kwargs)
 
-    async def last_comic_page(self, widget=None, **kwargs):
-        if self.book_record is not None and self.book_record['kind'] == 'comic':
-            await self.move_book_page(len(self.book_reader.pages) - 1)
+    async def last_comic_page(self, *args, **kwargs):
+        return await self.comic_controller().last_comic_page(*args, **kwargs)

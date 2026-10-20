@@ -20,8 +20,10 @@ class ResetUI:
         box.add(SettingsLabel('Erase all app data', style=Pack(font_size=22)))
         box.add(SettingsLabel('Deletes private documents and unsaved drafts, imported books, chat, saved credentials and device keys, settings, transfer mappings, reading progress, metadata and caches.'))
         box.add(SettingsLabel('Also deletes every file in On My iPhone / iPad → Logisticks, including Local and files you added in Files.' if ios
-            else 'Also deletes internal Local and LocalCrypt files. Android closes the app and resets its permissions.'))
-        box.add(SettingsLabel('SD-card and shared-storage Logistics folders, cloud files and SMB server files are kept. You will need the original credential ZIPs and passwords to unlock retained LocalCrypt files.'))
+            else 'Also deletes internal Local and LocalCrypt files and app-owned storage folders on SD cards. Android closes the app and resets its permissions.'))
+        box.add(SettingsLabel(('Cloud files and SMB server files are kept. ' if ios else
+            'Public shared-storage Logistics folders outside app-owned storage, cloud files and SMB server files are kept. ')
+            + 'You will need the original credential ZIPs and passwords to unlock retained LocalCrypt files.'))
         box.add(SettingsLabel('On iOS, erasure runs before startup after you fully close Logistics in the app switcher and reopen it. Until then the app is locked on a reset notice.' if ios
             else 'Android erases this app’s data immediately. Reopen Logistics to start fresh.'))
         box.add(SettingsLabel('This cannot be undone. Export anything you need first. Type ERASE to continue.'))
@@ -39,11 +41,14 @@ class ResetUI:
 
     def reset_phrase_changed(self, widget=None, **kwargs):
         if hasattr(self, 'reset_button'):
-            self.reset_button.enabled = self.reset_phrase.value == 'ERASE'
+            self.reset_button.enabled = (self.reset_phrase.value == 'ERASE'
+                and not getattr(self, '_reset_confirming', False)
+                and not getattr(self.app, '_reset_scheduled', False))
 
     async def confirm_app_reset(self, widget=None, **kwargs):
         app = self.app
-        if getattr(self, '_reset_confirming', False) or self.reset_phrase.value != 'ERASE':
+        if (getattr(app, '_reset_scheduled', False) or getattr(self, '_reset_confirming', False)
+                or self.reset_phrase.value != 'ERASE'):
             return
         self._reset_confirming = True
         self.reset_button.enabled = False
@@ -53,8 +58,9 @@ class ResetUI:
             ios = is_ios(app)
             if not await app.main_window.dialog(toga.ConfirmDialog('Permanently erase all app data?',
                 'All private app files, drafts, settings, metadata, chat and saved credentials will be lost. '
-                + ('All files in the Logisticks folder in Files will also be lost. Erasure starts when you fully close and reopen the app. ' if ios else 'Internal Local and LocalCrypt files will also be lost. Android will close the app. ')
-                + 'SD/shared collections and remote server files are kept. This cannot be undone.')):
+                + ('All files in the Logisticks folder in Files will also be lost. Erasure starts when you fully close and reopen the app. ' if ios else 'Internal Local and LocalCrypt files and app-owned SD-card folders will also be lost. Android will close the app. ')
+                + ('Remote server files are kept. ' if ios else 'Public shared collections outside app-owned storage and remote server files are kept. ')
+                + 'This cannot be undone.')):
                 return
             if not self.reset_available():
                 return
@@ -72,11 +78,12 @@ class ResetUI:
                     if client is not None:
                         client.cancel()
                 notice = toga.Box(style=Pack(direction=COLUMN, margin=24))
-                notice.add(SettingsLabel('Reset is ready', style=Pack(font_size=22)))
-                notice.add(SettingsLabel('Fully close Logistics in the app switcher, then reopen it. The listed app data will be erased before any documents or services load.'))
-                notice.add(SettingsLabel('The app stays locked until you restart it.'))
+                notice.add(SettingsLabel('Erase scheduled — restart required', style=Pack(font_size=22)))
+                notice.add(SettingsLabel('Your data has not been erased yet. Logistics is locked to prevent further changes.'))
+                notice.add(SettingsLabel('1. Open the app switcher (swipe up from the bottom and pause, or double-click the Home button).\n2. Swipe the Logistics app preview up to close it.\n3. Open Logistics again.'))
+                notice.add(SettingsLabel('Erasure runs before documents or services load. Sending the app to the Home Screen is not enough.'))
                 fit_section(notice, max(280, app.adaptive.content_width('settings')))
-                app.main_window.content = notice
+                app.main_window.content = toga.ScrollContainer(horizontal=False, content=notice, style=Pack(flex=1))
             else:
                 reset_android(app)
                 self.reset_status.text = 'Android is erasing app data. Reopen Logistics when it closes.'
@@ -84,7 +91,7 @@ class ResetUI:
             self.reset_status.text = 'Reset could not start: ' + str(error)
         finally:
             self._reset_confirming = False
-            self.reset_button.enabled = self.reset_phrase.value == 'ERASE'
+            self.reset_phrase_changed()
 
     def reset_available(self):
         app = self.app

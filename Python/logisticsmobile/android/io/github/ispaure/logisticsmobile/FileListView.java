@@ -2,12 +2,19 @@ package io.github.ispaure.logisticsmobile;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.InsetDrawable;
 import android.text.TextUtils;
 import android.util.SparseArray;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -15,6 +22,9 @@ import android.widget.TextView;
 
 /** A viewport-sized pool of rows. No Python callbacks are needed to bind text. */
 public final class FileListView extends ListView {
+    // Native dp/sp, matching logisticsmobile.ui_metrics (no Toga font conversion).
+    private static final int ROW_HEIGHT = 48;
+    private static final int BODY_TEXT = 17, CAPTION_TEXT = 13;
     public interface Listener {
         void onActivate(int index, int generation);
         void onVisible(int index, int generation);
@@ -30,20 +40,30 @@ public final class FileListView extends ListView {
     private final Rows rows = new Rows();
     private int createdRows;
     private boolean observeRows;
+    private boolean contextActions;
     private String rowKind = "File";
     private int textColor, mutedColor, surfaceColor, selectedTextColor, selectedColor, accentColor;
+    private final Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private boolean outlined;
+    private final Path groupClip = new Path();
+    private final RectF groupBounds = new RectF();
 
     public FileListView(Context context) {
         super(context);
+        // Reserve the scrollbar width plus a small gap outside the row outlines.
+        setScrollBarStyle(View.SCROLLBARS_OUTSIDE_INSET);
+        setPadding(0, 0, dp(4), 0);
         setAdapter(rows);
         setChoiceMode(CHOICE_MODE_SINGLE);
-        setDividerHeight(0);
+        setHeaderDividersEnabled(false);
+        setFooterDividersEnabled(false);
         setRecyclerListener(view -> scrub(view));
         setOnItemClickListener((parent, view, position, id) -> {
             selectRow(position);
             if (listener != null) listener.onActivate(position, generation);
         });
         setOnItemLongClickListener((parent, view, position, id) -> {
+            if (!contextActions || !isEnabled()) return false;
             selectRow(position);
             if (listener != null) listener.onContext(position, generation);
             return true;
@@ -52,16 +72,74 @@ public final class FileListView extends ListView {
 
     public void setListener(Listener value) { listener = value; }
     public void setObserveRows(boolean enabled) { observeRows = enabled; }
+    public void setContextActions(boolean enabled) {
+        contextActions = enabled;
+        invalidateViews();
+    }
     public void setRowKind(String kind) { rowKind = kind; }
-    public void setPalette(int text, int muted, int surface, int selectedText, int selected, int accent) {
+    public void setPalette(int text, int muted, int surface, int selectedText, int selected, int accent, int border, boolean highContrast) {
         textColor = text;
         mutedColor = muted;
         surfaceColor = surface;
         selectedTextColor = selectedText;
         selectedColor = selected;
         accentColor = accent;
-        setBackgroundColor(surface);
+        // Empty space below a short group belongs to the surrounding page.
+        setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        // Match the text column's first letter and end beyond the action target.
+        boolean rtl = getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+        setDivider(new InsetDrawable(new ColorDrawable(border), dp(rtl ? 8 : 48), 0,
+                dp(rtl ? 48 : 8), 0) {
+            @Override public void draw(Canvas canvas) {
+                int last = getChildCount() - 1;
+                // ListView can draw a divider after its final item. The group
+                // outline supplies that edge, so keep dividers between rows only.
+                if (last >= 0 && getLastVisiblePosition() == titles.length - 1
+                        && getBounds().top >= getChildAt(last).getBottom()) return;
+                super.draw(canvas);
+            }
+        });
+        setDividerHeight(dp(1));
+        outlined = highContrast;
+        outline.setColor(border);
+        outline.setStrokeWidth(dp(1));
+        outline.setStyle(Paint.Style.STROKE);
         invalidateViews();
+        invalidate();
+    }
+
+    private boolean clipGroup(Canvas canvas) {
+        if (getChildCount() == 0) return false;
+        float bottom = Math.min(getHeight(), getChildAt(getChildCount() - 1).getBottom());
+        groupBounds.set(getListPaddingLeft(), 0, getWidth() - getListPaddingRight(), bottom);
+        groupClip.reset();
+        float radius = dp(16);
+        groupClip.addRoundRect(groupBounds, radius, radius, Path.Direction.CW);
+        canvas.clipPath(groupClip);
+        return true;
+    }
+
+    @Override protected void onDraw(Canvas canvas) {
+        int saved = canvas.save();
+        if (clipGroup(canvas)) {
+            canvas.drawColor(surfaceColor);
+            super.onDraw(canvas);
+        }
+        canvas.restoreToCount(saved);
+    }
+
+    @Override protected void dispatchDraw(Canvas canvas) {
+        int saved = canvas.save();
+        if (clipGroup(canvas)) super.dispatchDraw(canvas);
+        canvas.restoreToCount(saved);
+        if (outlined && getChildCount() > 0) {
+            // Enclose short lists at their last row; long lists frame the viewport.
+            float halfStroke = outline.getStrokeWidth() / 2f;
+            float bottom = Math.min(getHeight(), getChildAt(getChildCount() - 1).getBottom());
+            canvas.drawRoundRect(getListPaddingLeft() + halfStroke, halfStroke,
+                    getWidth() - getListPaddingRight() - halfStroke,
+                    bottom - halfStroke, dp(16) - halfStroke, dp(16) - halfStroke, outline);
+        }
     }
     public void setRows(String[] names, String[] descriptions, boolean[] directories, int revision) {
         // Invalidate both attached and scrapped cells so private names/icons
@@ -114,22 +192,27 @@ public final class FileListView extends ListView {
     public int getVerticalPosition() {
         View first = getChildAt(0);
         return first == null ? 0 : Math.max(0,
-                getFirstVisiblePosition() * dp(44) - first.getTop() + getPaddingTop());
+                getFirstVisiblePosition() * rowStride() - first.getTop() + getPaddingTop());
     }
 
     public int getMaxVerticalPosition() {
-        return Math.max(0, titles.length * dp(44) - getHeight()
+        return Math.max(0, titles.length * dp(ROW_HEIGHT)
+                + Math.max(0, titles.length - 1) * getDividerHeight() - getHeight()
                 + getPaddingTop() + getPaddingBottom());
     }
 
     public void setVerticalPosition(int value) {
         int position = Math.max(0, Math.min(value, getMaxVerticalPosition()));
-        int height = dp(44);
+        int height = rowStride();
         setSelectionFromTop(position / height, -(position % height));
     }
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private int rowStride() {
+        return dp(ROW_HEIGHT) + getDividerHeight();
     }
 
     private void scrub(View view) {
@@ -138,7 +221,8 @@ public final class FileListView extends ListView {
         holder.title.setText("");
         holder.subtitle.setText("");
         holder.icon.setImageDrawable(null);
-        holder.chevron.setText("");
+        holder.actions.setOnClickListener(null);
+        holder.actions.setContentDescription("");
         view.setContentDescription("");
     }
 
@@ -148,14 +232,14 @@ public final class FileListView extends ListView {
         view.setBackgroundColor(selected ? selectedColor : surfaceColor);
         holder.title.setTextColor(foreground);
         holder.subtitle.setTextColor(selected ? foreground : mutedColor);
-        holder.chevron.setTextColor(selected ? foreground : mutedColor);
+        holder.actions.setTextColor(selected ? foreground : accentColor);
         if (holder.preview) holder.icon.clearColorFilter();
         else holder.icon.setColorFilter(selected ? foreground : accentColor);
     }
 
     private static final class Holder {
         ImageView icon;
-        TextView title, subtitle, chevron;
+        TextView title, subtitle, actions;
         boolean preview;
     }
 
@@ -171,7 +255,7 @@ public final class FileListView extends ListView {
                 LinearLayout row = new LinearLayout(getContext());
                 row.setGravity(Gravity.CENTER_VERTICAL);
                 row.setPadding(dp(8), 0, dp(8), 0);
-                row.setLayoutParams(new ListView.LayoutParams(-1, dp(44)));
+                row.setLayoutParams(new ListView.LayoutParams(-1, dp(ROW_HEIGHT)));
                 android.util.TypedValue background = new android.util.TypedValue();
                 getContext().getTheme().resolveAttribute(android.R.attr.activatedBackgroundIndicator,
                         background, true);
@@ -187,16 +271,20 @@ public final class FileListView extends ListView {
                 holder.title = new TextView(getContext());
                 holder.title.setSingleLine(true);
                 holder.title.setEllipsize(TextUtils.TruncateAt.MIDDLE);
-                holder.title.setTextSize(16);
+                holder.title.setTextSize(BODY_TEXT);
                 holder.subtitle = new TextView(getContext());
                 holder.subtitle.setSingleLine(true);
-                holder.subtitle.setTextSize(12);
+                holder.subtitle.setTextSize(CAPTION_TEXT);
                 text.addView(holder.title);
                 text.addView(holder.subtitle);
                 row.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
-                holder.chevron = new TextView(getContext());
-                holder.chevron.setTextSize(22);
-                row.addView(holder.chevron, new LinearLayout.LayoutParams(dp(18), -2));
+                holder.actions = new Button(getContext(), null, android.R.attr.borderlessButtonStyle);
+                holder.actions.setText("⋯");
+                holder.actions.setTextSize(24);
+                holder.actions.setGravity(Gravity.CENTER);
+                holder.actions.setFocusable(false);
+                holder.actions.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+                row.addView(holder.actions, new LinearLayout.LayoutParams(dp(ROW_HEIGHT), -1));
                 row.setTag(holder);
                 recycled = row;
             } else holder = (Holder) recycled.getTag();
@@ -206,7 +294,15 @@ public final class FileListView extends ListView {
             holder.icon.setImageBitmap(thumbnails.get(position,
                     folders[position] ? folderIcon : fileIcon));
             holder.preview = thumbnails.get(position) != null;
-            holder.chevron.setText(folders[position] ? "›" : "");
+            holder.actions.setVisibility(contextActions ? View.VISIBLE : View.GONE);
+            holder.actions.setContentDescription("Select " + titles[position]);
+            final int revision = generation;
+            holder.actions.setOnClickListener(view -> {
+                if (contextActions && FileListView.this.isEnabled() && generation == revision && listener != null) {
+                    selectRow(position);
+                    listener.onContext(position, revision);
+                }
+            });
             recycled.setActivated(isItemChecked(position));
             paint(recycled, isItemChecked(position));
             recycled.setContentDescription(titles[position] + (folders[position] ? ". Folder" : ". " + rowKind));

@@ -24,6 +24,11 @@ for connection scopes, encrypted storage, cancellation and credential persistenc
 
 ### Mobile folder navigation
 
+An entry's three-dot button offers its remote commands in place using the host's
+native popup or action sheet. Open folder/preview acts on the selected entry;
+archive-capable files also offer **Archive password…**. Only choosing the password
+command (or encountering an encrypted archive) opens the password form.
+
 Cloud folders open in **Cloud File Browser**. Open documents and Recent display
 cloud or device icons and a connection padlock beside filenames. Recent keeps up
 to ten eligible files. For password-protected session-only credential ZIPs, open
@@ -46,8 +51,11 @@ dismiss label. Credential, Local, LocalCrypt, Pull and Push terminology is retai
 Android and iOS both offer **Settings → Workspaces → Show Legacy** for Legacy
 folder and credential visibility. Android additionally offers **Local / LocalCrypt
 location…**: choose one drive for both `<drive>/Logistics/Local` and
-`<drive>/Logistics/LocalCrypt`. Android All files access is required for public
-SD-card folders. Downloads are copied and verified before switching, with the
+`<drive>/Logistics/LocalCrypt`. On Android 11 and newer, All files access is required
+for public SD-card folders. Android 7–10 instead offers Logistics' app-owned
+folder on each mounted drive, with no storage permission required; Android removes
+those app-owned folders on uninstall or clearing app data. Keep a separate backup.
+Downloads are copied and verified before switching, with the
 source retained as a recovery backup. Credentials and transfer associations stay
 internal. A missing card stops collection operations without an internal fallback.
 See the [mobile storage guide](../../../../../docs/user_mobile/settings/settings.md#local--localcrypt-location)

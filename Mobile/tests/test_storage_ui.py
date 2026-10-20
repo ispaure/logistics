@@ -20,9 +20,38 @@ class StorageUITests(unittest.TestCase):
         LogisticsMobile.storage_root = private
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
+        sdk = patch('logisticsmobile.storage_ui.android_sdk', return_value=30)
+        sdk.start()
+        self.addCleanup(sdk.stop)
         with patch('logisticsmobile.storage_ui.android_drives', return_value={'App internal storage': None, 'SD card': self.card}):
             self.app.show_collection_storage()
         self.app.collection_drive.value = 'SD card'
+
+    def test_android9_sd_card_copy_needs_no_all_files_grant(self):
+        source = collection_path(self.app.private_root)
+        source.mkdir(exist_ok=True)
+        (source / 'book.txt').write_bytes(b'keep this')
+        with patch('logisticsmobile.storage_ui.android_sdk', return_value=28), \
+                patch('logisticsmobile.storage_ui.android_drives', return_value={'App internal storage': None, 'SD card': self.card}), \
+                patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value=True)), \
+                patch.object(self.app, 'exit') as exit_app:
+            self.app.show_collection_storage()
+            text = ' '.join(str(getattr(child, 'text', '')) for child in self.app.collection_storage_page.children)
+            self.assertIn('No storage permission is needed', text)
+            self.assertIn('uninstall', text)
+            self.assertNotIn('Allow SD card / shared storage access', text)
+            self.app.collection_drive.value = 'SD card'
+            self.app.loop.run_until_complete(self.app.change_collection_storage())
+        self.assertEqual((self.card / 'Logistics/Local/book.txt').read_bytes(), b'keep this')
+        self.assertEqual((source / 'book.txt').read_bytes(), b'keep this')
+        self.assertEqual(collection_path(self.app.private_root), self.card / 'Logistics/Local')
+        exit_app.assert_called_once()
+
+    def test_android9_permission_action_refreshes_without_opening_settings(self):
+        with patch('logisticsmobile.storage_ui.android_sdk', return_value=28), \
+                patch.object(self.app, 'show_collection_storage') as refresh:
+            self.app.allow_collection_storage()
+        refresh.assert_called_once_with()
 
     def test_permission_is_required_without_writing_files(self):
         with patch('logisticsmobile.storage_ui.all_files_allowed', return_value=False):

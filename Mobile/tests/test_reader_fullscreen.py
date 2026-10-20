@@ -11,8 +11,9 @@ class ReaderFullscreenTests(unittest.TestCase):
     def test_text_fullscreen_keeps_margins_and_restores_controls(self):
         content, header, footer = toga.Box(), toga.Box(), toga.Box()
         frame = ReadingFrame(content, [header, footer])
-        app = NS(_impl=NS(), adaptive=NS(secondary=None, split=None),
-                 native_host=NS(chrome=Mock(), state=NS(destination='documents')))
+        app = NS(_impl=NS(), adaptive=NS(secondary=None, split=None, detail_routes=[]),
+                 routes=NS(screens={'documents': []}),
+                 native_host=NS(adapter=None, chrome=Mock(), state=NS(destination='documents')))
         for comic in (False, True):
             frame.set_immersive(True, comic=comic)
             sync_comic_chrome(app, frame.widget)

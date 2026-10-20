@@ -4,11 +4,95 @@ import weakref
 from commonUtils.ui.native.menus import NativeMenu
 
 
+class BrowserActions:
+    """Transient native row commands, scoped to the current browser selection."""
+    def __init__(self, browser, actions):
+        self.browser = weakref.ref(browser)
+        self.actions = tuple(actions)
+        self.epoch, self.selected = browser.epoch, browser.selected
+        self.disposed = False
+        self.native = None
+        self.blocks = []
+
+    def invoke(self, callback):
+        browser = self.browser()
+        if (self.disposed or browser is None or browser.closed or not browser._app.active_host
+                or browser.epoch != self.epoch or browser.selected != self.selected
+                or browser.navigation_busy):
+            return
+        result = callback()
+        if inspect.isawaitable(result):
+            browser._spawn(result)
+
+    def show(self):
+        browser = self.browser()
+        backend = browser.native_list.factory.DetailedList.__module__
+        if not backend.startswith(('toga_android.', 'toga_iOS.')):
+            return
+        native = browser.native_list._impl.native
+        if backend.startswith('toga_android.'):
+            from types import SimpleNamespace
+            anchor = native
+            offset = native.getCheckedItemPosition() - native.getFirstVisiblePosition()
+            if 0 <= offset < native.getChildCount():
+                row = native.getChildAt(offset)
+                anchor = row.getChildAt(row.getChildCount() - 1)
+            impl = type('BrowserMenuAnchor', (), {'__module__': 'toga_android.widgets'})()
+            impl.native = anchor
+            button = SimpleNamespace(_impl=impl)
+            self.native = NativeMenu(button, self.actions, invoke=self.invoke,
+                context=lambda: browser._app._impl.native, fallback=lambda: None)
+            self.native.show()
+        elif backend.startswith('toga_iOS.'):
+            from rubicon.objc import ObjCClass, Block, objc_id
+            sheet = ObjCClass('UIAlertController').alertControllerWithTitle(None, message=None, preferredStyle=0)
+            for title, callback in self.actions:
+                def selected(action, target=callback):
+                    self.invoke(target)
+                block = Block(selected, None, objc_id)
+                self.blocks.append(block)
+                sheet.addAction(ObjCClass('UIAlertAction').actionWithTitle(title, style=0, handler=block))
+            sheet.addAction(ObjCClass('UIAlertAction').actionWithTitle('Cancel', style=1, handler=None))
+            anchor = native
+            path = native.indexPathForSelectedRow
+            if path is not None:
+                cell = native.cellForRowAtIndexPath(path)
+                if cell is not None and cell.accessoryView is not None:
+                    anchor = cell.accessoryView
+            popover = sheet.popoverPresentationController
+            if popover is not None:
+                popover.sourceView, popover.sourceRect = anchor, anchor.bounds
+            presenter = browser._app.main_window._impl.native.rootViewController
+            while presenter.presentedViewController is not None:
+                presenter = presenter.presentedViewController
+            self.native = sheet
+            presenter.presentViewController(sheet, animated=True, completion=None)
+
+    def dispose(self):
+        if self.disposed:
+            return
+        self.disposed = True
+        if isinstance(self.native, NativeMenu):
+            self.native.dispose()
+        elif self.native is not None:
+            self.native.dismissViewControllerAnimated(True, completion=None)
+        self.native = None
+        self.actions = ()
+        self.blocks.clear()
+
+
+def show_browser_actions(browser, actions):
+    browser.dismiss_item_menu()
+    menu = browser._item_menu = BrowserActions(browser, actions)
+    menu.show()
+    return menu
+
+
 # Reading, presentation, file operations, navigation, then destructive actions.
 DOCUMENT_GROUPS = (
     ('View document', 'View Markdown', 'Edit Markdown', 'View source text',
      'Chapters and bookmarks…', 'Comic pages…', 'Pages and search',
-     'Find and replace…', 'Find in chapter…', 'Read aloud…'),
+     'Find and replace…', 'Find in this page…', 'Find in chapter…', 'Read aloud…'),
     ('Appearance…', 'Fullscreen', 'Reading mode', 'Fit comic page', 'Fit image'),
     ('File actions…', 'Reader tools…', 'Open / Metadata…', 'Rename document…',
      'Edit metadata…', 'Info…', 'Save', 'Save a copy', 'Save As…', 'Export…'),

@@ -11,9 +11,12 @@ class ReaderAppearance(toga.ScrollContainer):
             return toga.Selection(items=items, value=values[key], style=Pack(height=44))
         if kind == 'comic':
             self.layout_choice = select('comic_layout', ['single', 'auto', 'double'])
+            self.split_wide = toga.Switch('Split wide pages in portrait',
+                value=values.get('comic_split_wide', 'true') == 'true', style=Pack(height=48))
             self.status = toga.Label('Layout changes keep your current page.')
             content = toga.Box(children=[toga.Label('Comic page layout'), self.layout_choice,
                 toga.Label('Auto: one page in portrait; two pages when the reading area is wider than tall. Comic metadata controls reading direction.'),
+                self.split_wide, toga.Label('Swipe through overlapping halves in reading order. Landscape shows the whole wide page.'),
                 self.status, toga.Button('Apply and return', on_press=on_apply, style=Pack(height=44))],
                 style=Pack(direction=COLUMN, margin=12))
             super().__init__(horizontal=False, content=content, style=Pack(flex=1))
@@ -54,6 +57,6 @@ class ReaderAppearance(toga.ScrollContainer):
 
     def settings(self):
         if self.kind == 'comic':
-            return dict(comic_layout=self.layout_choice.value)
+            return dict(comic_layout=self.layout_choice.value, comic_split_wide='true' if self.split_wide.value else 'false')
         return dict(epub_font_size=self.font_choice.value, reading_margin=self.margin_choice.value,
                     reading_theme=self.theme_choice.value, **self.typography())

@@ -122,6 +122,9 @@ def button_icons(button, icons):
     button.leading_icons = tuple(icons)
     if not icons:
         return button
+    # Shared by recent/open/saved documents, settings and library rows. Reserve
+    # outline clearance on both platforms, independent of the current fill.
+    button._impl._content_inset = 12
     backend = type(button._impl).__module__
     width = 28 * len(icons) - 4
     labels = ' · '.join(label for _, label in icons)
@@ -130,6 +133,9 @@ def button_icons(button, icons):
         image = _apple_button_image(tuple(name for name, _ in icons), float(ObjCClass('UIScreen').mainScreen.scale))
         native = button._impl.native
         native.setImage(image, forState=0)
+        from rubicon.objc import UIEdgeInsets
+        native.contentEdgeInsets = UIEdgeInsets(0, button._impl._content_inset, 0,
+            getattr(button._impl, '_content_trailing_inset', button._impl._content_inset))
         native.accessibilityHint = ' · '.join(filter(None, (getattr(button, 'description', ''), labels)))
     elif backend.startswith('toga_android.'):
         from android.graphics import Path, Paint
@@ -150,6 +156,8 @@ def button_icons(button, icons):
         paint.setAntiAlias(True)
         native = button._impl.native
         density = native.getResources().getDisplayMetrics().density
+        inset = button._impl.scale_in(button._impl._content_inset)
+        native.setPaddingRelative(inset, native.getPaddingTop(), inset, native.getPaddingBottom())
         drawable.setBounds(0, 0, round(width * density), round(24 * density))
         native.setCompoundDrawablesRelative(drawable, None, None, None)
         native.setCompoundDrawablePadding(round(8 * density))

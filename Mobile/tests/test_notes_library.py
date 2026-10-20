@@ -63,12 +63,17 @@ class NotesLibraryTests(unittest.TestCase):
             await owner.open_note('Notes/Projects/Plan.MD')
             await owner.navigate_history(-1)
             self.assertEqual(owner.path, 'Notes/Home.md')
+            owner.show_page_search()
+            owner.page_search.query.value = 'Home'
+            self.assertTrue(owner.page_search.visible)
             key = owner.session.id
             self.app.show_documents_hub()
             self.app.session_opener(key)()
             self.assertEqual(self.app.native_host.state.destination, 'documents')
             self.app.close_session(key)
             self.assertNotIn(key, self.app.workspace.sessions)
+            self.assertTrue(owner.page_search.closed)
+            self.assertEqual(owner.page_search.query.value, '')
         self.run_async(exercise())
 
     def test_remote_action_has_no_search_and_never_lists_unopened_children(self):

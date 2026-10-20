@@ -43,6 +43,12 @@ class Probe(toga.App):
             browser = self.browser
             native = browser.native_list._impl.native
             android = browser.native_list.factory.DetailedList.__module__.startswith('toga_android.')
+            if android:
+                assert native.getDivider() is not None
+                assert native.getDividerHeight() > 0
+                from logisticsmobile.palette import android_palette, argb
+                colors = android_palette(native.getResources().getConfiguration().uiMode & 0x30 == 0x20)
+                assert native.getDivider().getDrawable().getColor() == argb(colors['border'])
             result['platform'] = 'android' if android else 'ios'
             result['initial_visible'] = int(native.getChildCount()) if android else len(native.visibleCells)
             assert 0 < result['initial_visible'] < 100, result
@@ -50,6 +56,12 @@ class Probe(toga.App):
             browser.native_list.scroll_to_bottom()
             await asyncio.sleep(.7)
             if android:
+                first = native.getFirstVisiblePosition()
+                top = native.getChildAt(0).getTop()
+                native.setVerticalPosition(native.getVerticalPosition())
+                await asyncio.sleep(.3)
+                assert native.getFirstVisiblePosition() == first
+                assert native.getChildAt(0).getTop() == top
                 position = native.getLastVisiblePosition()
                 cell = native.getChildAt(position - native.getFirstVisiblePosition())
                 native.performItemClick(cell, position, position)
@@ -89,6 +101,30 @@ class Probe(toga.App):
             await asyncio.sleep(1)
             result['thumbnail_rows'] = sum(row.thumbnail for row in browser.native_list.data)
             assert 0 < result['thumbnail_rows'] <= 64, result
+            # The resume lock replaces the entire window root and later
+            # restores it. UIKit may retain cells rather than request them anew.
+            browser.thumbnail = None
+            browser.set_entries(self.provider, '', [dict(path=f'Folder-{i:03d}',
+                name=f'Folder-{i:03d}', directory=True) for i in range(100)])
+            await asyncio.sleep(.3)
+            snapshot = browser.native_list.data
+            for _ in range(3):
+                content = self.main_window.content
+                self.main_window.content = toga.Box(children=[toga.Label('Synthetic lock screen')], style=Pack(flex=1))
+                await asyncio.sleep(.2)
+                self.main_window.content = content
+                await asyncio.sleep(.3)
+                assert browser.native_list.data is snapshot
+                if android:
+                    assert native.getCount() == 100
+                else:
+                    assert len(native.visibleCells) > 0
+                    for cell in native.visibleCells:
+                        path = native.indexPathForCell(cell)
+                        assert cell.textLabel.text == browser.native_list.data[path.row].title
+                        assert cell.imageView.image is not None
+                        assert cell.accessibilityLabel
+            result['retained_root_restore'] = True
             browser.stop()
             await asyncio.sleep(.3)
             assert len(browser.native_list.data) == 0

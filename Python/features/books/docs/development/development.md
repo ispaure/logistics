@@ -105,10 +105,11 @@ and metadata-writing workflows are unchanged; source-backed books are read-only.
 `locations.py` and `mobile/navigation.py` supply text locations, search, nested
 contents and chapter labels. `mobile/presentation.py` owns trusted WebView
 commands. `mobile/provider_reader.py` reuses that bridge for private rich EPUBs;
-`mobile/private_view.py` configures the nonpersistent iOS/Android backend and clears
-it on disposal. `mobile/text_reader.py` remains the unsupported-backend fallback.
+`mobile/private_view.py` retains the Books HTML byte policy over the shared
+nonpersistent native WebView, which clears content on disposal. `mobile/text_reader.py` remains the unsupported-backend fallback.
 `mobile/appearance.py` supplies the shared native Books & Comics appearance form.
-`mobile/metadata.py` owns field and patch semantics.
+`library/metadata.py` owns portable field/patch and catalogue mapping semantics;
+`mobile/metadata.py` preserves its compatibility imports.
 Mobile rendering and chapter labels are feature-owned; import records, provider
 transactions and session/privacy policy remain host-owned. See the
 [parity assessment](books-comics-parity.md) for remaining
@@ -122,14 +123,16 @@ reader and editing gaps. Shared parsing does not imply full reading parity.
 fonts are enumerated locally. The host stores preference values and reloads the
 current chapter; DOM offsets continue to index the same sanitized text.
 
-`mobile/speech.py` segments bounded UTF-16 utterances and owns generation-checked
-play/pause/resume/stop state. `mobile/speech_native.py` adapts AVSpeechSynthesizer
-and Android TextToSpeech using installed offline voices. Android progress/error
-callbacks are implemented in the feature's `mobile/android/` Java source; the host
-build stages that source and merges the feature-owned speech-service query.
+`mobile/speech.py` and `speech_native.py` preserve existing imports over reusable
+commonUtils speech sessions and native engines. The shared native Java root owns
+progress/error callbacks; the feature retains media controls, Android service
+resources and the speech-service query. `mobile/speech_host.py` declares explicit
+icon, overlay, saved-voice and playback factories; `speech_view.py` imports no
+mobile application modules. The host composes its existing presentation and
+locked-session policy through those factories.
 `Mobile/cloud_build.py` also refreshes the configured Java source roots in reused
 Gradle projects: Briefcase's source update alone does not apply newly added roots.
-Without this refresh, older projects can omit `BookSpeechListener` and report
+Without this refresh, older projects can omit the shared `SpeechListener` and report
 that speech support is missing even with an installed system voice.
 `mobile/speech_view.py` owns the floating native controls. Speed uses a native
 seven-detent slider over 0.5–2.0, snapping to 0.25 increments, with muted percent
@@ -286,3 +289,20 @@ that internal padding, so the calculated text width stays within the native safe
 when switching orientation. The mobile native release suite checks portrait and
 both landscape directions repeatedly, retaining the active reader and chapter
 browser state.
+
+## Reading and library controller ownership
+
+`mobile/reader_controller.py` owns imported EPUB page preparation, location-flush
+state/tasks, link/boundary navigation, chapter search and width observation.
+`mobile/provider_controller.py` owns provider EPUB tools and width-task state.
+Host compatibility accessors delegate to these owners, including deletion during
+suspension; state publication uses setters rather than bypassing them with a
+`__dict__` update. Host services supply layout events, themed HTML and lifecycle
+identity; storage, credential checks and writer ownership remain in Logistics.
+
+`library/index.py` owns the existing ordinary-import SQLite cache and its unchanged
+schema. `library/metadata.py` supplies bounded per-format metadata loaders.
+`mobile/library/catalog.py` owns mixed library filtering and incremental refresh,
+with `LibraryHost` callbacks for discovery snapshots, routing and presentation.
+Discovery itself stays in the host. Protected metadata is excluded from indexing.
+The catalogue and reader controllers retain their own tasks and generation guards.

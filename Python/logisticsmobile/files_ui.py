@@ -2,20 +2,16 @@
 from commonUtils.ui.native.password_input import PasswordInput
 from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
 
-from features.rclone.mobile.storage_location import collection_path, CollectionFiles
+from features.rclone.mobile.storage_location import collection_path
 import asyncio
-import threading
 from pathlib import Path
-from commonUtils.runtime.operations import MutationIncomplete
 import toga
 from .control_icons import icon_button
 from .host_services import OwnedAttribute
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.local_files import LocalFiles
-from commonUtils.runtime.resource_provider import resource_path
-from commonUtils.runtime.resource_mutations import move_resource, delete_resource, create_resource_folder, rename_resource
-from features.rclone.localcrypt.mobile.resources import encrypted_storage, encrypted_document
+from features.rclone.localcrypt.mobile.resources import encrypted_document
 
 
 def local_read_available(app, *, private=True):
@@ -24,7 +20,29 @@ def local_read_available(app, *, private=True):
             or getattr(app, 'transfer_busy', False) or getattr(app, 'remote_read_busy', False)))
 
 
+def ordinary_local_copies(copies):
+    provider = getattr(copies, 'provider', None)
+    return (isinstance(provider, LocalFiles) and not provider.private
+        and not getattr(copies, 'encrypted', True) and not getattr(copies, 'remote_storage', False))
+
+
 class FilesUI:
+    def folder_listing(self):
+        if not hasattr(self, '_folder_listing'):
+            from .folder_listing import FolderListing
+            self._folder_listing = FolderListing(active=lambda: self.active_host,
+                context=lambda: (id(self.file_browser),
+                    id(getattr(self, 'file_roots', {}).get(self.file_storage.value))),
+                location=lambda: (self.file_storage.value, self.file_location.value),
+                credentials=lambda: (self.cloud_client, getattr(self.cloud_client, 'generation', None)))
+        return self._folder_listing
+
+    def file_operations(self):
+        if not hasattr(self, '_file_operations'):
+            from .feature_hosts import file_operations
+            self._file_operations = file_operations(self)
+        return self._file_operations
+
     def set_file_items(self, items):
         self.file_selection.items = ['Select an item…', *items]
         # Toga 0.5.7's iOS picker can retain its previous row count after a
@@ -45,22 +63,20 @@ class FilesUI:
                 and (label == 'Local files' or label in getattr(self, 'file_roots', {})))
 
     async def browse_local_during_transfer(self, folder):
-        with self.file_browser.population_paused():
-            previous = getattr(self, '_local_browse_cancel', None)
-            if previous is not None:
-                previous.set()
-            cancel = self._local_browse_cancel = threading.Event()
+        listing = FilesUI.folder_listing(self)
+        work = listing.begin()
+        # Keep the existing cancellation handle available to compatibility callers.
+        self._local_browse_cancel = work.cancel
+        browser = self.file_browser
+        with browser.population_paused():
             label = self.file_storage.value
-            client = self.cloud_client
-            generation = getattr(client, 'generation', None)
+            request = None
             try:
                 provider = self.file_provider_for(label)
                 path = provider.relative(folder)
-                rows = await asyncio.to_thread(provider.list, path, cancelled=cancel.is_set)
-                if (not self.active_host or cancel.is_set()
-                        or (self.file_storage.value, self.file_location.value) != (label, folder)
-                        or (provider.private and (client is not self.cloud_client
-                            or generation != getattr(self.cloud_client, 'generation', None)))):
+                request = listing.capture(work, provider, path, (label, folder))
+                rows = await listing.read(request)
+                if rows is None:
                     return False
                 self.file_provider, self.file_path = provider, path
                 self.file_rows = {f'{i + 1}. {"Folder" if row["directory"] else "File"}: {row["name"]}' : row
@@ -71,10 +87,10 @@ class FilesUI:
                 self.file_status.value = ''
                 return True
             except Exception as error:
-                if (self.active_host and not cancel.is_set()
+                if (listing.accepts(work, request, private=request is None)
                         and (self.file_storage.value, self.file_location.value) == (label, folder)):
                     self.file_status.value = 'Could not browse local folder: ' + str(error)[:200]
-                    if self.file_provider is not None and self.file_browser.tree is not None:
+                    if self.file_provider is not None and browser.tree is not None:
                         self.file_changing_location = True
                         try:
                             self.file_storage.value, self.file_location.value = self.file_loaded_location
@@ -85,18 +101,14 @@ class FilesUI:
                         self.file_provider = None
                         self.file_rows = {}
                         self.file_selection.items = []
-                        self.file_browser.stop()
+                        browser.stop()
                 return False
 
     async def show_files(self, widget=None, *, local_root=False, location=None, **kwargs):
         # Files can be opened directly from Home/Documents on a cold launch.
-        # Initial credential restoration clears private browser state; finish
-        # it before constructing/publishing the new local browser controls.
+        # Ordinary local browsing does not depend on saved credentials.
         if not hasattr(self, 'cloud_view'):
             self.show_cloud(present=False)
-        restore = getattr(self, 'cloud_restore_task', None)
-        if restore is not None and not restore.done():
-            await asyncio.shield(restore)
         if not self.active_host or getattr(self, '_storage_changing', False):
             return
         try:
@@ -157,7 +169,7 @@ class FilesUI:
         self.file_selection = toga.Selection(style=Pack(height=48))
         from .browser_ui import FileBrowser as NativeBrowser
         self.file_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open)
-        self.file_browser.on_item_actions = lambda row: self.show_file_actions()
+        self.file_browser.on_item_actions = lambda row: self.file_browser.show_item_menu(self.file_item_commands())
         self.file_browser.navigation_controls.remove(self.file_browser.back_button)
         self.file_password = PasswordInput(placeholder='Inner archive password, when needed', style=Pack(height=48))
         self.file_name = toga.TextInput(placeholder='New name / folder name', style=Pack(height=48))
@@ -220,37 +232,13 @@ class FilesUI:
     def refresh_file_source_tabs(self):
         if not hasattr(self, 'file_source_tabs'):
             return
-        from .folder_hub_style import source_tab
+        # Workspaces owns source selection. A folder browser has one active
+        # provider, described by its location header on every platform.
         for child in list(self.file_source_tabs.children):
             self.file_source_tabs.remove(child)
-        selected = self.file_storage.value
-        roots = self.ordinary_file_roots()
-        if 'Shared files' in roots:
-            roots.pop('Local files')
-            if selected == 'Local files':
-                selected = 'Shared files'
-        if selected not in roots:
-            roots[selected] = self.file_roots.get(selected)
         self.file_source_buttons = {}
-        # Ordinary local browsing has no source choice. Keep the extra source
-        # strip only when an encrypted workspace actually offers a switch.
-        if len(roots) == 1:
-            if self.file_source_tabs.parent is not None:
-                self.file_source_tabs.parent.remove(self.file_source_tabs)
-            return
-        for label in roots:
-            def choose(widget=None, label=label, **kwargs):
-                if self.file_storage.value != label:
-                    self.file_storage.value = label
-            title = {'Local files': 'On this device', 'Shared files': 'On this device'}.get(label, label)
-            button = toga.Button(title, on_press=choose, style=Pack(height=44, flex=1, font_size=13, margin=2))
-            source_tab(button, selected == label)
-            self.file_source_buttons[label] = button
-            self.file_source_tabs.add(button)
-        if self.file_source_tabs.parent is None:
-            header = self.file_browser.location_bar
-            parent = header.parent
-            parent.insert(list(parent.children).index(header), self.file_source_tabs)
+        if self.file_source_tabs.parent is not None:
+            self.file_source_tabs.parent.remove(self.file_source_tabs)
 
     def change_file_storage(self, widget=None, **kwargs):
         # Check programmatic-change guards synchronously. Native async handlers
@@ -311,18 +299,7 @@ class FilesUI:
             box.add(self.file_location)
             box.add(self.file_commands[0])
         else:
-            commands = [('New folder…', lambda: self.show_file_actions(operation='new'))]
-            if self.file_storage.value == 'Local files':
-                commands.append(('Pin this folder', self.pin_local_folder))
-            if selected:
-                commands += [('Open', self.enter_file_folder if selected['directory'] else self.read_managed_file),
-                             ('Rename…', lambda: self.show_file_actions(operation='rename')),
-                             ('Move…', lambda: self.show_file_actions(operation='move')),
-                             ('Details', self.show_file_details), ('Delete…', self.delete_file)]
-            from features.rclone.localcrypt.mobile.resources import CryptFiles
-            if isinstance(self.file_provider, LocalFiles) and (not self.file_provider.private or isinstance(self.file_provider, CryptFiles)):
-                commands += [('Edit comics in this folder…', self.edit_local_comic_folder)]
-            commands += [('Archive password…', lambda: self.show_file_actions(operation='password'))]
+            commands = self.file_item_commands()
             for label, callback in commands:
                 async def run(widget=None, target=callback, **kw):
                     import inspect
@@ -333,6 +310,21 @@ class FilesUI:
         box.add(self.file_action_status)
         box.add(toga.Button('Return to files', on_press=self.show_files, style=Pack(height=48, margin_top=12)))
         self.show_view(self.file_operation_view, destination='files', route='file-actions', title='File actions')
+
+    def file_item_commands(self):
+        selected = self.file_rows.get(self.file_selection.value)
+        commands = [('New folder…', lambda: self.show_file_actions(operation='new'))]
+        if self.file_storage.value == 'Local files':
+            commands.append(('Pin this folder', self.pin_local_folder))
+        if selected:
+            commands += [('Open', self.enter_file_folder if selected['directory'] else self.read_managed_file),
+                         ('Rename…', lambda: self.show_file_actions(operation='rename')),
+                         ('Move…', lambda: self.show_file_actions(operation='move')),
+                         ('Details', self.show_file_details), ('Delete…', self.delete_file)]
+        from features.rclone.localcrypt.mobile.resources import CryptFiles
+        if isinstance(self.file_provider, LocalFiles) and (not self.file_provider.private or isinstance(self.file_provider, CryptFiles)):
+            commands += [('Edit comics in this folder…', self.edit_local_comic_folder)]
+        return commands + [('Archive password…', lambda: self.show_file_actions(operation='password'))]
 
     def show_file_details(self, widget=None, **kwargs):
         info = self.file_browser.info
@@ -425,49 +417,31 @@ class FilesUI:
 
     def storage_provider(self, label, roots):
         """One provider resolution path for browsing, moving and editor pickers."""
-        remote = roots[label]
-        if isinstance(remote, LocalFiles):
-            return remote
-        if remote is None:
-            return CollectionFiles(self.private_root)
-        return encrypted_storage(self.private_root, self.cloud_client, remote)
+        from .file_operations import FileDestination
+        location = roots[label]
+        if isinstance(location, LocalFiles):
+            return location
+        client = self.cloud_client if location is not None else None
+        return FileDestination(self.private_root, client, location, getattr(client, 'generation', None)).resolve()
 
     async def file_work(self, work, *, mutation=True):
-        if not self.active_host or self.cloud_busy or (mutation and not self.clear_private_reader()):
-            return False
-        # Capture selection on the GUI thread before handing work to a worker.
+        # Compatibility for existing callbacks; built-in commands use captured requests.
+        return await self.file_operations().run(lambda: work, mutation=mutation)
+
+    def capture_file_operation(self, kind):
+        from .file_operations import FileDestination, FileOperationRequest
         row = self.file_rows.get(self.file_selection.value)
-        self._file_selected = (self.file_provider, row['path'] if row else None)
-        controls = (self.file_storage, self.file_location, self.file_selection,
-                    self.file_name, self.file_destination, self.file_target, self.file_password, self.file_actions_button)
-        for control in controls:
-            control.enabled = False
-        self.set_cloud_busy(True)
-        self._crypt_cancel = threading.Event()
-        try:
-            await asyncio.to_thread(work, self._crypt_cancel.is_set)
-            if not self.active_host:
-                return False
-            self.file_status.value = 'Finished. Destination verified before removing the source.'
-            return True
-        except MutationIncomplete as error:
-            if self.active_host:
-                self.file_status.value = str(error) + '\nRefresh before retrying.'
-            return False
-        except Exception as error:
-            if self.active_host:
-                self.file_status.value = 'Operation failed: ' + str(error)[:300] + '\nRefresh to inspect any completed items.'
-            return False
-        finally:
-            self._crypt_cancel = None
-            if self.active_host:
-                self.file_action_status.text = self.file_status.value
-                self.set_cloud_busy(False)
-                self.refresh_downloads()
-                for control in controls:
-                    control.enabled = True
-            else:
-                self.cloud_busy = False
+        path = row['path'] if row else None
+        if kind == 'new':
+            return FileOperationRequest(kind, self.file_provider, self.file_path, self.file_name.value)
+        if kind == 'rename':
+            return FileOperationRequest(kind, self.file_provider, path, self.file_name.value)
+        if self.file_provider is None or path is None:
+            return FileOperationRequest(kind, self.file_provider, path)
+        client = self.cloud_client
+        destination = FileDestination(self.private_root, client, self.file_roots[self.file_destination.value],
+                                      getattr(client, 'generation', None))
+        return FileOperationRequest(kind, self.file_provider, path, self.file_target.value, destination)
 
     async def browse_files(self, widget=None, **kwargs):
         previous = getattr(self, '_local_browse_cancel', None)
@@ -498,8 +472,8 @@ class FilesUI:
         name = (Path(self.file_path).name if self.file_path else
                 'Local' if managed_root else
                 'On this device' if self.file_storage.value in ('Local files', 'Shared files') else self.file_storage.value)
-        self.file_browser.location_bar.update(self.file_path or ('Local' if managed_root else ''),
-            encrypted=self.file_provider.private, unlocked=True, name=name)
+        self.file_browser.location_bar.update_provider(self.file_path or ('Local' if managed_root else ''),
+            self.file_provider, name=name)
         from .folder_navigation import record
         record(getattr(self, 'app', self), self.files_view, self.file_browser, 'browser', self.file_storage.value,
                self.file_path, self.browser_file_location)
@@ -518,29 +492,15 @@ class FilesUI:
             return await self.browser_file_location((self.file_storage.value, row['path']))
 
     async def new_file_folder(self, widget=None, **kwargs):
-        name = self.file_name.value
-        def work(cancelled):
-            name_part = resource_path(name)
-            if not name_part or '/' in name_part or self.file_provider is None:
-                raise ValueError('Browse a folder and enter one new folder name.')
-            create_resource_folder(self.file_provider, '/'.join(p for p in (self.file_path, name_part) if p), cancelled=cancelled)
-        if await self.file_work(work):
+        if await self.file_operations().run(lambda: self.capture_file_operation('new')):
             await self.browse_files()
 
     async def rename_file(self, widget=None, **kwargs):
-        name = self.file_name.value
-        def work(cancelled):
-            provider, source = self._file_selected
-            if provider is None or source is None:
-                raise ValueError('Select a file first.')
-            part = resource_path(name)
-            if not part or '/' in part:
-                raise ValueError('Enter one new name.')
-            rename_resource(provider, source, '/'.join(p for p in (source.rpartition('/')[0], part) if p), cancelled=cancelled)
-        if await self.file_work(work):
+        if await self.file_operations().run(lambda: self.capture_file_operation('rename')):
             await self.browse_files()
 
     async def delete_file(self, widget=None, **kwargs):
+        from .file_operations import FileOperationRequest
         if self.cloud_busy:
             return
         try:
@@ -548,22 +508,16 @@ class FilesUI:
         except ValueError as error:
             self.file_status.value = str(error)
             return
+        request = FileOperationRequest('delete', provider, path)
         if not await self.main_window.dialog(toga.ConfirmDialog('Delete permanently', 'Delete this item and all contents? This cannot be undone.')):
             return
-        if await self.file_work(lambda cancelled: delete_resource(provider, path, cancelled=cancelled)):
+        if await self.file_operations().run(lambda: request):
             await self.browse_files()
 
     async def move_file(self, widget=None, **kwargs):
-        destination, target = self.file_destination.value, self.file_target.value
-        def work(cancelled):
-            provider, path = self._file_selected
-            if provider is None or path is None:
-                raise ValueError('Select a file first.')
-            move_resource(provider, path, self.file_provider_for(destination), target, cancelled=cancelled)
-        if await self.file_work(work):
+        if await self.file_operations().run(lambda: self.capture_file_operation('move')):
             await self.browse_files()
             await self.refresh_crypt()
-
 
     async def read_managed_file(self, widget=None, **kwargs):
         try:
@@ -670,150 +624,10 @@ class FilesUI:
 
 
     async def edit_local_comic_folder(self, widget=None, **kwargs):
-        if self.cloud_busy:
-            return
-        if self.file_provider.private:
-            return await self.edit_private_comic_folder()
-        from features.comics.mobile.collection import scan_comics, CollectionBatch, metadata_fields, suggestions, open_local_comic
-        from features.comics.mobile.metadata import batch_form
-        provider = self.file_provider
-        if not isinstance(provider, LocalFiles) or provider.private:
-            return
-        selected = self.file_rows.get(self.file_selection.value)
-        folder = selected['path'] if selected and selected['directory'] else self.file_path
-        cancel = threading.Event()
-        self.set_cloud_busy(True)
-        try:
-            def prepare():
-                entries = scan_comics(provider, folder, cancelled=cancel.is_set)
-                if not entries:
-                    raise ValueError('No CBZ/ZIP comics found in this folder.')
-                def document(path):
-                    return open_local_comic(provider._locate(path))
-                return CollectionBatch(entries, open_document=document,
-                    revision=lambda path: provider.entry(path)['revision'],
-                    publish=lambda path, doc, changes: doc.save(changes))
-            plan = await asyncio.to_thread(prepare)
-        except Exception as error:
-            self.file_action_status.text = 'Cannot edit folder: ' + str(error)[:200]
-            return
-        finally:
-            self.set_cloud_busy(False)
-        async def apply(changes):
-            if self.cloud_busy:
-                return 'Wait for the current operation.'
-            if not changes:
-                return 'No fields selected.'
-            self.set_cloud_busy(True)
-            cancel.clear()
-            try:
-                completed, failures = await asyncio.to_thread(plan.apply, changes, cancelled=cancel.is_set)
-                return (f'{len(completed)} saved; {len(failures)} failed; '
-                    f'{len(plan.entries) - len(completed) - len(failures)} unprocessed. '
-                    + ' '.join(message for _, message in failures)[:300])
-            finally:
-                self.set_cloud_busy(False)
-        choices = suggestions(metadata_fields('comic', document) for document in plan.documents)
-        async def back(widget=None, **kwargs):
-            await self.show_files()
-        view = batch_form(plan.documents, save=apply, choices=choices,
-            width=max(1, min(640, min(self.main_window.size) - 24)),
-            cancel=lambda w, **kw: cancel.set(), back=back)
-        self.local_comic_batch, self.local_comic_batch_view = plan, view
-        self.show_view(view, destination='files', route='comic-folder-batch', title='Edit folder comics')
+        return await self.comic_batch_controller().edit_local_comic_folder(widget, **kwargs)
 
     def retire_private_comic_batch(self, *, view=None, stale_only=False):
-        plan = getattr(self, 'private_comic_batch', None)
-        if plan is None or (view is not None and plan.view is view):
-            return
-        if stale_only and plan.valid():
-            return
-        plan.close()
-        self.private_comic_batch = None
-        privacy = getattr(self, 'screen_privacy', None)
-        if privacy is not None:
-            privacy.refresh()
+        return self.comic_batch_controller().retire_private_comic_batch(view=view, stale_only=stale_only)
 
     async def edit_private_comic_folder(self):
-        from contextlib import contextmanager
-        from features.rclone.localcrypt.mobile.resources import CryptFiles, encrypted_document
-        from features.comics.mobile.private_batch import PrivateCollectionBatch
-        from features.comics.mobile.collection import metadata_fields, suggestions
-        from features.comics.mobile.metadata import batch_form
-        from commonUtils.runtime.operations import OperationCancelled
-        provider = self.file_provider
-        if not isinstance(provider, CryptFiles) or self.cloud_busy:
-            return
-        if len(self.scene_manager.owners.hosts) > 1:
-            self.file_action_status.text = 'Close other windows before editing private collections.'
-            return
-        self.retire_private_comic_batch()
-        client, generation = self.cloud_client, self.cloud_client.generation
-        navigation = self.navigation_generation
-        def valid():
-            return (self.active_host and self.cloud_client is client and client.generation == generation
-                    and getattr(self, 'private_comic_batch', None) is plan)
-        def release(reader):
-            source = reader.source
-            if hasattr(source, 'close'):
-                source.close()
-            if hasattr(source, 'data'):
-                source.data = b''
-            reader.data, reader.password = None, ''
-            reader.book = None
-            reader.__dict__.pop('_comic', None)
-        @contextmanager
-        def opened(path):
-            copies, key = encrypted_document(provider, path)
-            reader = copies.open(key, cancelled=lambda: plan.closed or plan.cancel.is_set() or not valid())
-            try:
-                yield reader
-            finally:
-                release(reader)
-        def publish(reader, changes, *, cancelled):
-            copies, _ = encrypted_document(provider, reader.key)
-            return copies.save_metadata(reader, changes, cancelled=cancelled)
-        plan = PrivateCollectionBatch(valid=valid, open_reader=opened,
-            revision=lambda path: provider.entry(path)['revision'], publish=publish, release_reader=release)
-        self.private_comic_batch = plan
-        plan.privacy_gate = getattr(client, 'session_privacy', None)
-        self.screen_privacy.refresh()
-        selected = self.file_rows.get(self.file_selection.value)
-        folder = selected['path'] if selected and selected['directory'] else self.file_path
-        self.set_cloud_busy(True)
-        try:
-            await asyncio.to_thread(plan.prepare, provider, folder)
-            if not valid() or self.navigation_generation != navigation:
-                self.retire_private_comic_batch()
-                return
-            async def save(changes):
-                if self.cloud_busy or not valid() or plan.closed or plan.requires_reopen:
-                    return 'Private batch is unavailable. Reopen the folder.'
-                if not changes:
-                    return 'No fields selected.'
-                plan.cancel.clear()
-                self.set_cloud_busy(True)
-                count = len(plan.entries)
-                try:
-                    completed, failures = await asyncio.to_thread(plan.apply, changes)
-                    message = f'{len(completed)} saved encrypted locally; {len(failures)} failed; {count - len(completed) - len(failures)} unprocessed.'
-                    if plan.requires_reopen:
-                        message += ' A file may already be saved. Reopen the batch before retrying.'
-                    return message
-                finally:
-                    self.set_cloud_busy(False)
-            async def back(widget=None, **kwargs):
-                self.retire_private_comic_batch()
-                await self.show_files()
-            choices = suggestions(metadata_fields('comic', document) for document in plan.documents)
-            view = batch_form(plan.documents, save=save, back=back, choices=choices,
-                width=max(1, min(640, min(self.main_window.size) - 24)), cancel=lambda w, **kw: plan.cancel.set())
-            plan.view = view
-            self.show_view(view, destination='files', route='private-comic-batch', title='Edit private folder comics')
-        except OperationCancelled:
-            self.retire_private_comic_batch()
-        except Exception:
-            self.retire_private_comic_batch()
-            self.file_action_status.text = 'Private batch could not be opened. Check the folder, credentials and archive passwords.'
-        finally:
-            self.set_cloud_busy(False)
+        return await self.comic_batch_controller().edit_private_comic_folder()

@@ -9,16 +9,46 @@ Local files can be opened immediately after launching the app. LocalCrypt uses
 the unlocked connection to read its encrypted copy, keeping decoded content in
 memory. A failed open keeps the file drawer available and displays the error.
 
+Opening a document hides the app's destination tabs while keeping its title and
+Close control available. Tap **× (Close document)** on a reader or editor to finish
+and return to the previous tab and retained folder or screen, including its
+selection and scroll position. The destination tabs reappear, and the document's
+open-document slot is released.
+Android Back does the same from the main document screen, including fullscreen;
+open search, chapter lists and other secondary panels close first. Contents and
+appearance pages keep their usual Back step to the document. Unsaved text or
+metadata changes offer **Save and close**, **Discard and close**, or **Keep
+editing**; failed saves keep the edits open.
+Keeping the document open preserves whether you were previewing or editing it.
+
+Imported books retain saved reading progress. Folder/provider documents retain
+page, EPUB passage and supported text/Markdown scroll positions in memory for
+reopening during the app session, without retaining document contents.
+Locking private readers clears these remembered provider positions; they do not
+survive restarting the app. **All documents** in the document actions menu can
+return to the session list while keeping the document open.
+
+Provider-backed documents (including Local text/Markdown, LocalCrypt and remote
+files) share four open file slots and a 32 MiB retained-content budget. If either limit is reached, an
+explanation appears. Go to **Documents → Open documents**, close an item and
+retry; save any edits you want to keep before closing. Switching app sections
+does not close its document. Reopening an already open file uses its existing
+slot. The workspace also has a separate limit of 32 open documents overall.
+A file that exceeds the memory budget by itself cannot be opened by closing
+other items.
+
 Open EPUB and comic sessions now give content the main area, with compact page
 navigation and a format-specific Actions menu. EPUB offers contents, bookmarks,
 text appearance, chapter search and read-aloud; comics offer page navigation,
 page layout, fit and neighboring-comic actions where supported. EPUB pages turn using Previous/Next or horizontal swipes, with no vertical
 scrolling. Its hamburger opens a nested chapter sidebar without a search field.
 EPUB keeps Previous/Next and chapter progress in a compact footer. Speech and
-Actions stay above the content. On iOS, readers and editors share the native
-title bar: Back and the relevant browser are on the left, a centered document
+Actions stay above the content. On iOS and Android, readers and editors share the native
+title bar: Close and the relevant browser are on the left, a centered document
 title is in the middle, and supported actions are on the right. Long names
-shorten in the middle. Appearance and fullscreen are in Actions.
+shorten in the middle. Android replaces its inline document/workspace headers
+with this single bar; leaving the document hides it again. Appearance and
+fullscreen are in Actions.
 
 Document **•••** menus group reading, appearance, file, navigation and close/delete
 options in the same order across formats. **Show in folder** is available for
@@ -58,6 +88,9 @@ actions. Markdown reading uses a single top toolbar, including its file drawer
 and speech control, without an edit/save footer. On iOS the buttons share the
 native title bar; Android uses one compact row. Provider-backed
 Markdown uses the same single-surface editor and retains its existing save rules.
+On iOS, Close, the file drawer and independent document actions use separate
+native button backgrounds. Related previous/next comic actions can share one
+background; the icons have no extra solid fill inside the system glass.
 On iOS, Markdown's **•••** menu includes **Read aloud…**, keeping room for the
 title beside the pencil. During editing, **Save** takes the primary action slot
 when the buffer changes; **View document** remains in **•••**.

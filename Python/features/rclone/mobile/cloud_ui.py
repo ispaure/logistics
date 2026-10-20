@@ -8,7 +8,7 @@ from pathlib import Path
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from features.rclone.mobile.cloud import CloudClient, Downloads, PACKAGE_LIMIT, download_name
+from features.rclone.mobile.cloud import CloudClient, CredentialBusyError, Downloads, PACKAGE_LIMIT, download_name
 from features.rclone.localcrypt.mobile.ui import LocalCryptUI
 
 
@@ -88,25 +88,42 @@ class CloudUI(LocalCryptUI):
                 bar.stop()
                 bar.max, bar.value = 100, 0
 
+    def prepare_cloud(self):
+        """Prepare connection state without constructing browser/settings views."""
+        if getattr(self, '_cloud_prepared', False):
+            return
+        self.cloud_path = ''
+        self.cloud_open_remote = None
+        self.cloud_rows = {}
+        self.cloud_crypt_remotes = set()
+        self.cloud_pending_zip = None
+        self._cloud_setup_error = ''
+        if self.cloud_client is None:
+            try:
+                from features.rclone.mobile.credential_vault import ProtectedVault
+                self.cloud_client = CloudClient(vault=ProtectedVault.for_app(self.app))
+            except Exception:
+                self._cloud_setup_error = 'The native remote engine or device credential protection is unavailable.'
+        self._cloud_prepared = True
+
+    def start_cloud_restore(self):
+        """Load saved credentials once, independently of the connection screens."""
+        if getattr(self, '_storage_changing', False):
+            return
+        self.prepare_cloud()
+        task = getattr(self, 'cloud_restore_task', None)
+        if task is None and self.cloud_client is not None and getattr(self.cloud_client, 'vault', None) is not None:
+            self.set_cloud_busy(True)
+            task = self.cloud_restore_task = self.loop.create_task(self.restore_cloud(initial=True))
+        return task
+
     def show_cloud(self, widget=None, *, present=True, **kwargs):
         if getattr(self, '_storage_changing', False):
             return
+        self.prepare_cloud()
         if not hasattr(self, 'cloud_view'):
-            self.cloud_busy = False
-            self.cloud_path = ''
-            self.cloud_open_remote = None
-            self.cloud_rows = {}
-            self.cloud_crypt_remotes = set()
             self.downloads = Downloads(self.private_root / 'Downloads')
-            self.cloud_client = getattr(self, 'cloud_client', None)
-            error = ''
-            if self.cloud_client is None:
-                try:
-                    from features.rclone.mobile.credential_vault import ProtectedVault
-                    self.cloud_client = CloudClient(vault=ProtectedVault.for_app(self.app))
-                except Exception:
-                    error = 'The native remote engine or device credential protection is unavailable.'
-            self.cloud_pending_zip = None
+            error = getattr(self, '_cloud_restore_error', '') or self._cloud_setup_error
             self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=self.choose_cloud_package, style=Pack(height=44))
             self.cloud_selected_zip = toga.Label('No ZIP selected', style=Pack(font_size=14))
             self.cloud_import_message = toga.Label(import_hint('Choose a ZIP, then enter its password and tap Load remotes.'), style=Pack(font_size=14))
@@ -192,10 +209,12 @@ class CloudUI(LocalCryptUI):
                 self.remote_browser.scroll_container()],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
             self.refresh_downloads()
-            self.set_cloud_busy(False)
-            if self.cloud_client is not None and getattr(self.cloud_client, 'vault', None) is not None:
-                self.set_cloud_busy(True)
-                self.cloud_restore_task = self.loop.create_task(self.restore_cloud(initial=True))
+            self.set_loaded_remote_names(self.loaded_remote_names())
+            self.cloud_package.text = self.loaded_package_label() if self.cloud_client is not None else 'Credential package: none'
+            if getattr(self, '_cloud_restored', False):
+                self._publish_restored_connections(self.loaded_remote_names())
+            self.start_cloud_restore()
+            self.set_cloud_busy(self.cloud_busy)
         if getattr(self, 'cloud_remote_generation', getattr(self.cloud_client, 'generation', None)) != getattr(self.cloud_client, 'generation', None):
             self.set_loaded_remote_names(self.loaded_remote_names())
             self.cloud_package.text = self.loaded_package_label()
@@ -231,6 +250,11 @@ class CloudUI(LocalCryptUI):
             self.crypt_password.value, password.value = password.value, ''
             return await self.open_remote_document(row)
         password.on_confirm = open_item
+        if not password_required:
+            actions = [('Open folder' if row['directory'] else 'Open preview', open_item)]
+            if not row['directory'] and Path(row['path']).suffix.lower() in {'.cbz', '.zip', '.epub'}:
+                actions.append(('Archive password…', lambda: self.show_remote_item_actions(row, password_required=True)))
+            return self.remote_browser.show_item_menu(actions)
         controls = [toga.Label(private_label(row['path']), style=Pack(font_size=18))]
         if not row['directory']:
             controls.append(toga.Label('Remote preview · Read-only'))
@@ -247,6 +271,7 @@ class CloudUI(LocalCryptUI):
 
     def show_cloud_connections(self, widget=None, **kwargs):
         self.show_cloud(present=False)
+        self._cloud_connections_opened = True
         self.refresh_retained_credentials()
         self.show_view(self.cloud_connections_view, destination='settings', route='connections', title='rclone connections')
 
@@ -259,6 +284,8 @@ class CloudUI(LocalCryptUI):
         self.show_view(self.cloud_import_view, destination='settings', route='import-credentials', title='Import credential ZIP')
 
     def refresh_retained_credentials(self):
+        if not getattr(self, '_cloud_connections_opened', False):
+            return
         for child in list(self.cloud_retained_box.children):
             self.cloud_retained_box.remove(child)
         try:
@@ -322,7 +349,8 @@ class CloudUI(LocalCryptUI):
         if records:
             names = self.visible_remote_names([name for item in records for name in item['remotes']])
         self.cloud_remote_generation = getattr(self.cloud_client, 'generation', None)
-        self.cloud_remote.items = names
+        if hasattr(self, 'cloud_remote'):
+            self.cloud_remote.items = names
 
     async def lock_cloud(self, widget=None, **kwargs):
         if self.cloud_busy or self.cloud_client is None or not self.clear_private_reader():
@@ -451,6 +479,7 @@ class CloudUI(LocalCryptUI):
         if not hasattr(self, 'cloud_import_entry'):
             # Storage recovery must work before the cloud browser is created,
             # including when its selected collection drive is unavailable.
+            self.refresh_folder_actions()
             return
         for item in (self.cloud_import_entry, self.cloud_settings_toggle, self.cloud_choose, self.cloud_password, self.cloud_import, self.cloud_probe, self.cloud_remote,
                      self.cloud_location, self.cloud_browse, self.cloud_up, self.cloud_entries,
@@ -490,6 +519,8 @@ class CloudUI(LocalCryptUI):
     def refresh_cloud_remote_help(self):
         if not hasattr(self, 'cloud_remote_help'):
             return
+        if not hasattr(self, 'cloud_remote_help'):
+            return
         selected = self.selected_cloud_remote()
         if not selected:
             message = 'Load a credential ZIP to see its remotes.'
@@ -506,7 +537,11 @@ class CloudUI(LocalCryptUI):
     async def _load_crypt_remote_names(self):
         # Alternate client adapters may not expose crypt support.
         kinds = getattr(self.cloud_client, 'crypt_remotes', lambda: ())
-        self.cloud_crypt_remotes = set(await asyncio.to_thread(kinds))
+        records = getattr(self.cloud_client, 'package_records', ())
+        if records and all('crypt_identities' in record for record in records):
+            self.cloud_crypt_remotes = {remote for record in records for remote in record['crypt_identities']}
+        else:
+            self.cloud_crypt_remotes = set(await asyncio.to_thread(kinds))
         try:
             cache = self.retained_packages()
             update = getattr(cache, 'update_crypt_remotes', None)
@@ -538,15 +573,16 @@ class CloudUI(LocalCryptUI):
 
     def remember_credential_association(self, name, remotes, *, session_only):
         import json
-        packages = json.loads(self.preferences.values['remote_packages'])
-        packages = [item for item in packages if item['zip'] != name and not item['session_only']]
+        previous = json.loads(self.preferences.values['remote_packages'])
+        packages = [item for item in previous if item['zip'] != name and not item['session_only']]
         association = dict(zip=name, remotes=list(remotes), session_only=session_only)
         sessions = [item for item in getattr(self, 'session_credential_packages', ()) if item['zip'] != name]
         self.session_credential_packages = [*sessions, association] if session_only else sessions
         if session_only:
             return
         packages.append(association)
-        self.preferences.save(remote_packages=json.dumps(packages[-32:]))
+        if packages[-32:] != previous:
+            self.preferences.save(remote_packages=json.dumps(packages[-32:]))
 
     def visible_remote_names(self, names):
         exclusions = self.rclone_ui.exclusions
@@ -572,7 +608,7 @@ class CloudUI(LocalCryptUI):
     def loaded_package_label(self):
         records = getattr(self.cloud_client, 'package_records', ())
         if not records:
-            return 'Credential package: ' + (self.cloud_client.package_name or 'none')
+            return 'Credential package: ' + (getattr(self.cloud_client, 'package_name', '') or 'none')
         return 'Loaded:\n' + '\n'.join(item['package_name'] + (' (saved)' if item['saved'] else ' (session only)') for item in records)
 
     def credential_groups(self, choices=None):
@@ -760,32 +796,47 @@ class CloudUI(LocalCryptUI):
     async def restore_cloud(self, widget=None, *, initial=False, **kwargs):
         if (self.cloud_busy and not initial) or self.cloud_client is None:
             return
-        if not self.clear_private_reader():
+        if not initial and not self.clear_private_reader():
             return
-        self.set_cloud_busy(True)
+        if not initial:
+            self.set_cloud_busy(True)
+        self._cloud_restore_error = ''
         try:
-            self.clear_private_catalog()
+            # Initial restore has no old credential state to retire. Home and
+            # ordinary local browsers may already be in use while it runs.
+            if not initial:
+                self.clear_private_catalog()
             names = await asyncio.to_thread(self.cloud_client.restore)
+            if not self.active_host:
+                return
             await self._load_crypt_remote_names()
             visible_remotes = self.rclone_ui.visible_remotes
             self.set_loaded_remote_names(self.visible_remote_names(names))
             if names and self.cloud_client.package_name:
                 self.remember_loaded_packages(self.cloud_client.package_name, names, session_only=False)
-            self.cloud_entries.items = []
-            self.cloud_rows = {}
-            self.cloud_open_remote = None
-            self.cloud_location.value = self.cloud_path = ''
-            self.cloud_package.text = self.loaded_package_label()
-            if self.cloud_pending_zip is None and names:
-                saved = [item['package_name'] for item in getattr(self.cloud_client, 'package_records', ()) if item['saved']]
-                self.cloud_selected_zip.text = import_hint('Saved packages: ' + ', '.join(saved) if saved else 'Loaded ZIP: ' + (self.cloud_client.package_name or 'saved package'))
-                self.cloud_import_message.text = import_hint('Loaded remotes are ready. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.\nChoose another ZIP to add another credential package.')
-            self.cloud_status.value = (f'{len(names)} total remote(s) available. Saved packages reloaded; active session-only packages were kept.'
-                                       if names else 'No saved credential package. Import a ZIP to get started.')
+            self._cloud_restored = True
+            self._publish_restored_connections(names)
         except Exception:
-            self.cloud_status.value = 'Saved credentials are unavailable. Unlock the device and reload, or forget saved credentials to import again.'
+            self._cloud_restore_error = 'Saved credentials are unavailable. Unlock the device and reload, or forget saved credentials to import again.'
+            if hasattr(self, 'cloud_status'):
+                self.cloud_status.value = self._cloud_restore_error
         finally:
             self.set_cloud_busy(False)
+
+    def _publish_restored_connections(self, names):
+        if not hasattr(self, 'cloud_view'):
+            return
+        self.cloud_entries.items = []
+        self.cloud_rows = {}
+        self.cloud_open_remote = None
+        self.cloud_location.value = self.cloud_path = ''
+        self.cloud_package.text = self.loaded_package_label()
+        if self.cloud_pending_zip is None and names:
+            saved = [item['package_name'] for item in getattr(self.cloud_client, 'package_records', ()) if item['saved']]
+            self.cloud_selected_zip.text = import_hint('Saved packages: ' + ', '.join(saved) if saved else 'Loaded ZIP: ' + (self.cloud_client.package_name or 'saved package'))
+            self.cloud_import_message.text = import_hint('Loaded remotes are ready. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.\nChoose another ZIP to add another credential package.')
+        self.cloud_status.value = (f'{len(names)} total remote(s) available. Saved packages reloaded; active session-only packages were kept.'
+                                   if names else 'No saved credential package. Import a ZIP to get started.')
 
     async def probe_cloud(self, widget=None, **kwargs):
         if self.cloud_busy or self.cloud_client is None:
@@ -870,6 +921,9 @@ class CloudUI(LocalCryptUI):
             self.cloud_import_message.text = import_hint(f'{len(names)} total remote(s) available. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.' + cache_error)
             self.app.credential_document_lists.refresh()
             self.cloud_status.value = f'{selected.name} loaded ({"saved" if self.cloud_remember.value else "session only"}). {len(names)} total remote(s) available. Open Workspaces to browse. No connection has been made yet.'
+        except CredentialBusyError as error:
+            self.cloud_status.value = str(error)
+            self.cloud_import_message.text = import_hint(str(error))
         except Exception as error:
             self.cloud_status.value = 'Import failed: ' + str(error)[:300]
             self.cloud_import_message.text = import_hint('Could not load ZIP. Check the password and tap Load remotes again.\n' + str(error)[:150])
@@ -919,6 +973,8 @@ class CloudUI(LocalCryptUI):
                     self.remote_browser.set_entries(provider, folder, [dict(row, name=Path(row['path']).name, modified='') for row in rows], location=(remote, folder))
                     self.remote_browser.location_bar.update(folder, remote=True,
                         encrypted=remote in self.cloud_crypt_remotes, unlocked=True,
+                        session_only=any(remote in record.get('remotes', ()) and not record.get('saved', False)
+                                         for record in getattr(self.cloud_client, 'package_records', ())),
                         name=Path(folder).name if folder else remote)
                 self.rclone_ui.record_folder(self.cloud_view, self.remote_browser, 'remote-browser', remote, folder,
                                              self.browser_cloud_location)
@@ -1040,7 +1096,8 @@ class CloudUI(LocalCryptUI):
                 owner._crypt_cancel.set()
         if self.cloud_client:
             self.cloud_client.cancel()
-            self.cloud_status.value = 'Cancelling the remote request…'
+            if hasattr(self, 'cloud_status'):
+                self.cloud_status.value = 'Cancelling the remote request…'
 
     async def clear_cloud(self, widget=None, **kwargs):
         if self.cloud_busy or self.cloud_client is None:
@@ -1094,9 +1151,6 @@ class CloudUI(LocalCryptUI):
         destination = destination or self.native_host.state.destination
         if not hasattr(self, 'cloud_view'):
             self.show_cloud(present=False)
-            restore = getattr(self, 'cloud_restore_task', None)
-            if restore is not None:
-                await restore
         selected = path if path is not None else self.download_labels.get(self.download_selector.value)
         selected = Path(selected) if selected is not None else None
         if selected is not None and Path(selected).suffix.lower() == '.pdf':
@@ -1104,7 +1158,7 @@ class CloudUI(LocalCryptUI):
             from commonUtils.runtime.local_files import LocalFiles
             selected = Path(selected)
             return await self.open_crypt(copies=PDFCopies(LocalFiles(selected.parent)), key=selected.name, destination=destination)
-        independent = (self.cloud_busy and getattr(self, 'transfer_busy', False) and path is not None
+        independent = (self.cloud_busy and path is not None
                        and selected.resolve().is_relative_to((collection_path(self.private_root)).resolve()))
         if (self.cloud_busy and not independent) or selected is None:
             return False

@@ -87,6 +87,8 @@ class CredentialDocumentLists:
         self.views_pending = False
         if self.app.active_host and hasattr(self.app, 'routes'):
             for destination in ('home', 'documents'):
+                if destination == 'documents' and not hasattr(self.app, 'documents_sections'):
+                    continue
                 self.app.refresh_hub(destination)
 
     def records(self):

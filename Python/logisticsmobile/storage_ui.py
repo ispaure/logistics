@@ -8,11 +8,32 @@ from toga.style.pack import COLUMN
 from features.rclone.mobile.storage_location import collection_base, selection, switch_location, recover_location, wipe_destination, start_empty_location, describe_location
 
 
+def android_sdk():
+    from java import jclass
+    return int(jclass('android.os.Build$VERSION').SDK_INT)
+
+
 def android_drives(app):
     from java import jclass
     Context = jclass('android.content.Context')
     manager = app._impl.native.getSystemService(Context.STORAGE_SERVICE)
     drives = {'App internal storage': None}
+    if android_sdk() < 30:
+        # Pre-Android 11 has no all-files grant. WRITE_EXTERNAL_STORAGE also
+        # cannot grant arbitrary writes to a removable card. Use the public,
+        # permission-free app directories rather than hidden volume APIs or
+        # guessing /storage paths. Null entries represent unavailable volumes.
+        Environment = jclass('android.os.Environment')
+        for directory in app._impl.native.getExternalFilesDirs(None):
+            if directory is None or str(Environment.getExternalStorageState(directory)) != 'mounted':
+                continue
+            volume = manager.getStorageVolume(directory)
+            if volume is None:
+                continue
+            path = Path(str(directory.getAbsolutePath()))
+            label = str(volume.getDescription(app._impl.native))
+            drives[f'{label} · app storage · {path}'] = path
+        return drives
     volumes = manager.getStorageVolumes()
     for index in range(volumes.size()):
         volume = volumes.get(index)
@@ -25,6 +46,10 @@ def android_drives(app):
 
 
 def all_files_allowed():
+    # Older Android drive choices are restricted to our app-owned directories;
+    # these need no runtime storage permission, including on removable cards.
+    if android_sdk() < 30:
+        return True
     from java import jclass
     return bool(jclass('android.os.Environment').isExternalStorageManager())
 
@@ -67,8 +92,13 @@ class StorageUI:
         box.add(self.collection_drive)
         self.collection_target_status = SettingsLabel('')
         box.add(self.collection_target_status)
-        box.add(toga.Button('Allow SD card / shared storage access…', on_press=self.allow_collection_storage, style=Pack(height=48)))
-        box.add(SettingsLabel('Android requires All files access. Local files are readable by other apps with storage access. LocalCrypt stays encrypted.'))
+        if android_sdk() < 30:
+            box.add(SettingsLabel('SD card and device storage use Logistics’ app storage folders. No storage permission is needed. '
+                'Android removes these folders if you uninstall Logistics or clear its app data. Keep a separate backup. '
+                'LocalCrypt stays encrypted.'))
+        else:
+            box.add(toga.Button('Allow SD card / shared storage access…', on_press=self.allow_collection_storage, style=Pack(height=48)))
+            box.add(SettingsLabel('Android requires All files access. Local files are readable by other apps with storage access. LocalCrypt stays encrypted.'))
         self.collection_copy = toga.Button('Copy current files here, then use them…', on_press=self.change_collection_storage, style=Pack(height=48))
         self.collection_existing = toga.Button('Use existing files here — no copy…', on_press=self.recover_collection_storage, style=Pack(height=48))
         self.collection_empty = toga.Button('Start empty here — keep old files…', on_press=self.start_empty_collection, style=Pack(height=48))
@@ -112,6 +142,10 @@ class StorageUI:
         fit_text(self.collection_target_status, max(248, self.app.adaptive.content_width('settings') - 32))
 
     def allow_collection_storage(self, widget=None, **kwargs):
+        if android_sdk() < 30:
+            # The all-files settings action does not exist on these versions.
+            self.show_collection_storage()
+            return
         from java import jclass
         Intent, Uri = jclass('android.content.Intent'), jclass('android.net.Uri')
         intent = Intent('android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION')

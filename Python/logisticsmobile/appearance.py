@@ -247,6 +247,18 @@ def apple_color(role):
     return _apple_colors[role]
 
 
+def _set_android_background(native, drawable):
+    """A colour/outline repaint must not replace the control's content insets.
+
+    Android drawables can supply their own padding (including an empty Rect),
+    which View.setBackground otherwise copies over the current layout.
+    """
+    padding = (native.getPaddingLeft(), native.getPaddingTop(),
+               native.getPaddingRight(), native.getPaddingBottom())
+    native.setBackground(drawable)
+    native.setPadding(*padding)
+
+
 def paint_surface(impl, radius):
     pending = _pending_surfaces.get()
     if pending is not None:
@@ -257,6 +269,12 @@ def paint_surface(impl, radius):
     border = 'control_border' if hasattr(impl.interface, 'on_press') and outlined else 'border'
     if backend.startswith('toga_iOS.'):
         native = impl.native
+        # Navigation bars supply the glass. Reapply this on trait/style refresh
+        # as well as mounting, so an app surface never appears inside it.
+        bar_control = getattr(impl, '_native_bar_control', False)
+        glass_control = getattr(impl, '_native_glass_control', False) and not bar_control
+        if bar_control or glass_control:
+            background, outlined, radius = 'transparent', False, 0
         impl._default_background_color = apple_color(background)
         native.backgroundColor = impl._default_background_color
         native.layer.cornerRadius = radius
@@ -264,11 +282,20 @@ def paint_surface(impl, radius):
         native.layer.borderColor = apple_color(border).resolvedColorWithTraitCollection(native.traitCollection).CGColor
         if hasattr(impl.interface, 'on_press'):
             from rubicon.objc import UIEdgeInsets
-            inset = 8 if background != 'transparent' and not getattr(impl.interface, 'control_icon', None) else 0
-            native.contentEdgeInsets = UIEdgeInsets(0, inset, 0, inset)
+            inset = getattr(impl, '_content_inset',
+                            8 if background != 'transparent' and not getattr(impl.interface, 'control_icon', None) else 0)
+            native.contentEdgeInsets = UIEdgeInsets(0, inset, 0, getattr(impl, '_content_trailing_inset', inset))
         if foreground:
             if hasattr(impl.interface, 'on_press'):
                 native.configuration = None
+                if glass_control:
+                    from rubicon.objc import ObjCClass, SEL
+                    configuration = ObjCClass('UIButtonConfiguration')
+                    config = (configuration.glassButtonConfiguration()
+                              if configuration.respondsToSelector(SEL('glassButtonConfiguration'))
+                              else configuration.grayButtonConfiguration())
+                    config.cornerStyle = 4
+                    native.configuration = config
                 native.tintColor = apple_color(foreground)
                 native.setTitleColor(apple_color(foreground), forState=0)
                 native.setTitleColor(apple_color('muted'), forState=2)
@@ -291,7 +318,7 @@ def paint_surface(impl, radius):
         has_outline = getattr(impl, '_surface_eink_outlined', True) if eink else outlined
         drawable = _android_background(types,
             background=0 if background == 'transparent' else argb(colors.get(background, colors['surface'])),
-            radius=0 if eink else impl.scale_in(radius),
+            radius=impl.scale_in(radius),
             stroke=max(1, impl.scale_in(1)) if has_outline else 0,
             border=argb(colors[border]), hover=argb(colors['hover']), button=button)
         if foreground:
@@ -308,7 +335,7 @@ def paint_surface(impl, radius):
             impl.native.setBackgroundTintList(None)
             impl.native.setStateListAnimator(None)
             impl.native.setElevation(0)
-        impl.native.setBackground(drawable)
+        _set_android_background(impl.native, drawable)
         if hasattr(impl, '_control_drawable'):
             from .control_icons import tint_android
             tint_android(impl)
@@ -628,6 +655,9 @@ def install_appearance(app):
 
 def refresh_appearance(app):
     """Recolour live chrome without replacing editors or transfer owners."""
+    snow = getattr(app, 'seasonal_snow', None)
+    if snow is not None:
+        snow.refresh()
     for listing in tuple(getattr(app, '_recycled_file_lists', ())):
         listing.refresh_palette()
     if type(app._impl).__module__.startswith('toga_iOS.'):
@@ -747,6 +777,8 @@ def refresh_android_navigation(host):
                 bar.setItemIconTintList(colours)
                 bar.setItemTextColor(colours)
             bar.setBackgroundColor(background)
+            if index == 1 and hasattr(bar, 'setRailDividerColor'):
+                bar.setRailDividerColor(argb('#000000') if eink_enabled() else 0)
 
 
 def configure_android_eink(app):
@@ -766,7 +798,7 @@ def restore_eink_button(impl):
     saved = getattr(impl, '_eink_button_style', None)
     if saved is not None and not eink_enabled():
         background, animator, elevation = saved
-        impl.native.setBackground(background)
+        _set_android_background(impl.native, background)
         impl.native.setStateListAnimator(animator)
         impl.native.setElevation(elevation)
         del impl._eink_button_style
@@ -781,9 +813,10 @@ def paint_eink_button(impl, *, outlined=True):
     background = '#000000' if filled else '#ffffff'
     drawable = GradientDrawable()
     drawable.setColor(argb(background))
+    drawable.setCornerRadius(impl.scale_in(_surfaces.get(impl, 8)))
     if outlined and not getattr(impl, '_eink_borderless', False):
         drawable.setStroke(max(1, impl.scale_in(1)), argb('#000000'))
-    impl.native.setBackground(drawable)
+    _set_android_background(impl.native, drawable)
     impl.native.setBackgroundTintList(ColorStateList.valueOf(argb(background)))
     impl.native.setTextColor(argb('#ffffff' if filled else '#000000'))
     impl.native.setStateListAnimator(None)

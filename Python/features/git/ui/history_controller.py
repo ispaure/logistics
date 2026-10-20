@@ -59,7 +59,7 @@ class RepositoryHistory:
         def show(model):
             if view.path == path and not view.closing:
                 dialog = DiffDialog(model, view, left_name=names[0], right_name=names[1], path=path/change.path)
-                from features.code_font import bind_code_views
+                from services.editors.ui.fonts import bind_code_views
                 bind_code_views(dialog)
                 dialog.show()
         view._job('Compare file versions', read, show)

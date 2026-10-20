@@ -11,8 +11,8 @@ Home provides Open/New actions and five recent files. **See all in Documents**
 opens the full workspace, where **All open** puts the active document first and
 provides close controls. **Recent** lists closed history entries, and **Saved
 documents** lists other saved text and Markdown files. **Search documents**
-filters all three sections by filename. The Books & Comics library is available
-below those lists.
+filters all three sections by filename. **Open Books & Comics library** is available
+below those lists. Empty lists show plain informational text without a rounded block.
 
 In a book, comic or provider-backed document reader, open the **…** actions menu
 and choose **All documents** to return to the Documents list without closing the

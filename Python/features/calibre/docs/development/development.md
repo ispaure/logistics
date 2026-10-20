@@ -64,3 +64,6 @@ executable; macOS retains the existing bundled-archive installation fallback.
 launchers. It covers naming, collisions, links, copy failures, changed files,
 disconnected storage and Linux launcher selection. Actual device exports and
 desktop launching still require platform validation.
+
+`ui/folder_widget.py` owns desktop folder presentation. The root
+`folder_widget.py` keeps its public widget import for existing consumers.

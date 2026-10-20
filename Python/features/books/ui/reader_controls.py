@@ -134,7 +134,7 @@ def build_controls(page):
                             start_provider=page.text.location)
     page.speech.positionChanged.connect(page.follow_speech)
     page.menus.view.addAction(page.speech.action)
-    page.speech.anchor = reader_button(page, 'Read aloud', action=page.speech.action, text='Read aloud')
+    page.speech.anchor = reader_button(page, 'Read aloud', action=page.speech.action, icon='speaker')
     header.addWidget(page.speech.anchor)
     page.text.textChanged.connect(page.speech.stop)
     page.text.setMaximumWidth(page.reading_width.value())

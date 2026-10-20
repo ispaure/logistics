@@ -29,15 +29,16 @@ type snapshot struct {
 	Packages map[string]snapshot          `json:"packages,omitempty"`
 }
 type vaultStorage struct {
-	mu            sync.Mutex
-	values        snapshot
-	path, id      string
-	key, expected []byte
-	failed        bool
-	generation    uint64
-	parent        *vaultStorage
-	packageID     string
-	origins       map[string]credentialOrigin
+	mu               sync.Mutex
+	values           snapshot
+	path, id         string
+	key, expected    []byte
+	failed           bool
+	generation       uint64
+	parent           *vaultStorage
+	packageID        string
+	origins          map[string]credentialOrigin
+	validatedCiphers cryptCipherCache // Transient; never part of the saved snapshot.
 }
 
 func newStore() *vaultStorage {
@@ -152,6 +153,7 @@ func (s *vaultStorage) detach() {
 	s.path = ""
 	s.parent = nil
 	s.origins = nil
+	s.validatedCiphers = nil
 	s.generation++
 	s.values = snapshot{Remotes: map[string]map[string]string{}}
 }
@@ -304,7 +306,8 @@ func openVault(p, id string, key []byte) (*vaultStorage, error) {
 	if err != nil {
 		return nil, vaultError
 	}
-	if json.Unmarshal(plain, &s.values) != nil || validateCredentialEnvelope(s.values) != nil {
+	s.validatedCiphers = snapshotCryptCiphers(nil)
+	if json.Unmarshal(plain, &s.values) != nil || validateCredentialEnvelope(s.values, s.validatedCiphers) != nil {
 		return nil, vaultError
 	}
 

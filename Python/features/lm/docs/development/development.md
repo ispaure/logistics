@@ -178,3 +178,14 @@ records; arbitrary Markdown resources remain blocked.
 ## Mobile source manifest
 
 `../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
+
+## Injected desktop adapters
+
+`Store(..., lock_factory=...)` accepts a path-to-lock factory. The default
+`ui/leases.py` adapter constructs Qt locks lazily. Storage still chooses lock
+names, nonblocking acquisition, stale-lock handling and conflict errors; leases
+must implement `setStaleLockTime`, `tryLock`, `unlock` and `isLocked` where used.
+`LMPage(..., project_context=...)` optionally accepts an object with `projects()`
+and `buffers(project)`. Default context still uses the lazy IDE integration;
+injected hosts avoid global IDE widget discovery. Conversation formats and
+session ownership are unchanged.

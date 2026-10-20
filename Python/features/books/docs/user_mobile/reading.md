@@ -56,7 +56,9 @@ Other backends use bounded native text passages.
 
 Tap the **speaker** icon in the EPUB reader toolbar to open **Read aloud** (also
 available in the reader actions menu). Playback controls float over the page
-without resizing or reformatting it. The speed slider snaps in 25% steps from
+without resizing or reformatting it. Tap the speaker again to hide the panel, or
+tap outside it. Hiding the panel keeps playback active; tap the speaker to bring
+its controls back. The speed slider snaps in 25% steps from
 **50%** to **200%**, with small gray limit labels and the current percentage above
 the track. Choose speed and press **Play**. Choose your
 installed offline voice in **Settings → Read aloud → Read-aloud voice**; the
@@ -128,7 +130,12 @@ to hide app navigation and system bars. Text retains its reading margins and saf
 areas. **Show reading controls** remains available below the text so you can restore
 Contents, Appearance, bookmarks and navigation without a gesture that interferes
 with text selection or links. Imported and provider/private EPUBs support this mode;
-private positions and bookmarks retain their existing session-only lifetime.
+private bookmarks retain their session-only lifetime. The main reader's **Back arrow**
+closes the reader and returns to its originating folder or screen. Android Back
+does the same after dismissing chapter/search panels; secondary screens retain
+Back to reading. Unsaved metadata edits prompt before close. Imported reading
+progress stays saved. Provider EPUB passage positions remain in memory for
+reopening until private readers are locked or the app restarts.
 
 ### Mobile EPUB speech and expanded appearance
 

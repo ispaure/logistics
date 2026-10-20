@@ -1,5 +1,14 @@
 # Local iPhone and iPad deployment
 
+For the combined PySide test-device and tester-distribution window, use
+`Mobile/deploy_test_devices.command`; see the
+[window guide](mobile-launchers.md#simple-deployment-window). It reuses the iOS
+configuration below and remembers discovered Android devices locally.
+The window runs iOS alongside Android in separate ignored platform workspaces;
+the saved iOS devices remain sequential. Its iOS build and deployment logs live
+under `Mobile/.deploy-workspaces/ios/logs/`. Standalone `device_tools.py` keeps
+the paths described below.
+
 `Mobile/device_tools.py` owns the local physical-device workflow; the executable
 `Mobile/deploy_ios.command` anchors paths to its own directory and uses the
 ignored `Mobile/.venv` and optional `Mobile/.tools/go` installation. See the

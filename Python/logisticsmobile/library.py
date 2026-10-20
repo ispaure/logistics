@@ -98,6 +98,8 @@ class LibraryStore(LibraryEdits):
                 or any(type(i) is not int or not 0 <= i < 5000 for i in bookmarks)
                 or len(set(bookmarks)) != len(bookmarks)):
             raise ValueError('Invalid library bookmarks; record was preserved.')
+        if 'comic_half' in record and (record['kind'] != 'comic' or type(record['comic_half']) is not int or record['comic_half'] not in (0, 1)):
+            raise ValueError('Invalid comic viewing position; record was preserved.')
         from features.books.locations import valid_location
         if 'location' in record and not valid_location(record['location']):
             raise ValueError('Invalid EPUB reading location; record was preserved.')
@@ -276,7 +278,7 @@ class LibraryStore(LibraryEdits):
         while len(self.verified) > 32:
             self.verified.popitem(last=False)
 
-    def progress(self, record, position, *, bookmark=False, location=None):
+    def progress(self, record, position, *, bookmark=False, location=None, comic_half=None):
         current, original = self.read_record(record['id'])
         if current != record:
             raise OSError('Reading progress changed; reopen the book before saving.')
@@ -284,6 +286,12 @@ class LibraryStore(LibraryEdits):
             raise ValueError('Invalid reading position.')
         updated = dict(record, position=position, revision=record['revision'] + 1,
                        bookmarks=list(record['bookmarks']))
+        if comic_half is not None:
+            if record['kind'] != 'comic' or type(comic_half) is not int or comic_half not in (0, 1):
+                raise ValueError('Invalid comic viewing position.')
+            updated['comic_half'] = comic_half
+        elif record['kind'] == 'comic' and position != record['position']:
+            updated['comic_half'] = 0
         if location is not None:
             from features.books.locations import valid_location
             if record['kind'] != 'epub' or not valid_location(location):

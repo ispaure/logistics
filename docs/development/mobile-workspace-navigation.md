@@ -6,7 +6,57 @@ the same relative file under the currently registered Logistics Documents root.
 Recovery requires an existing file and applies only to iOS application Documents
 paths; unrelated missing paths keep their original identity.
 
+## Content geometry across themes
+
+`appearance._set_android_background` preserves native view padding whenever a
+surface, high-contrast outline or original button background is installed.
+Drawables can otherwise overwrite the control's content insets. Icon-and-title
+buttons use a 12-unit horizontal inset on both platforms; iOS Settings reserves
+32 points at the trailing edge for its overlaid disclosure. Theme and icon
+refreshes retain those insets. Decorative startup and speech speed labels stay
+borderless rather than acquiring outlines against tightly fitted text.
+
+`hub_ui.document_group` owns one rounded surface per Home/Document list section.
+Its rows and close buttons are transparent and borderless; inset dividers
+separate complete rows, including their status text. Both native backends clip
+pressed states to the group's corners. Home includes its See all action inside
+the Recent group; Documents keeps independent All open, Recent and Saved groups.
+`document_list` creates a group only when it has document rows. Empty-state and
+search-result messages use transparent, borderless muted labels directly on the
+page, including in high contrast. Home keeps its empty Recent label outside the
+group containing See all. The library button uses the explicit action label
+**Open Books & Comics library**.
+Group construction preserves the existing document identities and callbacks.
+
+`folder_hub_style.folder_scroll` reserves the Android tree scrollbar's native
+width plus a 4-dp gap in the content layout (at least 8 dp), on the scrollbar's
+layout-direction edge. The bar remains inside the viewport: changing native
+inset padding alone would not reduce Toga's independently sized content width.
+This applies to the workspace hierarchy, independently of native file lists.
+
+The [mobile spacing evidence](mobile-evidence/2026-10-20-mobile-outline-spacing.json)
+records the source audit, synthetic native phone/tablet checks and validation
+limits. `test_workspace_surfaces.py` covers background-padding preservation and
+the iOS disclosure reservation.
+
+Native file lists use 16-unit outer group corners and inset separators. Android
+clips list drawing and child selection to the group's visible extent, ending
+short groups at the final row; high contrast adds a black outline with the same extent and rounded
+corners. UIKit masks only the first and last cells' outer corners and clears
+those masks when cells are recycled into the middle. Its empty footer is
+installed after Toga publishes the initial data source, since assigning the
+footer can synchronously query row counts. Every UIKit row, including the last
+and single-row groups, keeps the same bounded separator inset: oversized leading
+insets also shift native cell content and can hide the final entry on iPhone.
+See the [native group checks and Boox
+deployment](mobile-evidence/2026-10-20-rounded-file-lists.json).
+
 ## iOS Workspaces folder ancestry
+
+Wide `WorkspaceFrame` layouts reserve a 16-unit gutter between paired panes on
+both platforms. Each pane gives up half the gutter so a fold seam remains centered
+in the gap. Restore clears the detail's leading margin before compact layout;
+UIKit's ancestor preview reproduces the same gutter beside its sidebar snapshot.
 
 `folder_navigation.FolderNavigation` adds a native route for each ancestor of a
 successfully listed Workspaces folder. A local workspace shortcut starts its
@@ -47,7 +97,10 @@ work and releases its widgets/snapshots; credential invalidation clears private
 previews and snapshots before they can be revealed.
 Native folder pages put their folder title, storage subtitle, Search and folder
 actions in UIKit's navigation bar, including ancestor previews. Existing buttons
-retain their callbacks and anchored native menus inside a single trailing custom
+are reattached from the live browser after Back restores a parent. Preview
+headers are only mounted on inactive ancestors, so their disabled Search and
+missing commands cannot replace the active browser toolbar.
+The live buttons retain their callbacks and anchored native menus inside a single trailing custom
 bar group with 48-point-wide controls. The content header has no idle action row;
 it appears only for an operation status or an open search field. Home pickers
 omit a source selector when only one source is available; it reappears when
@@ -165,8 +218,18 @@ across Home, Documents and Workspaces, failure recovery and Back during loading.
 `logisticsmobile.navigation.install_android_navigation_appearance` hides the
 redundant activity ActionBar after startup restores native chrome. Page headings
 and in-page Back controls remain owned by their existing screens. Both bottom
-navigation and the tablet rail use this policy; rail menus explicitly use
-`Gravity.TOP` on initial installation and after presentation changes. The app
+navigation and the tablet rail use this policy. Logistics supplies its own
+`DestinationRailView` subclass of Material's rail: 56 dp wide, 26 dp outline icons,
+48 dp buttons, top-aligned primary destinations and bottom-aligned Settings.
+Explicit 4 dp item margins leave room for the icon and 40 dp rounded selection
+indicator inside each button. High contrast / E Ink draws a 1 dp black divider
+along the rail's full content edge; theme refresh removes it in normal mode.
+Labels remain available to accessibility and native long-press tooltips. The menu
+fills the rail's actual height so the footer's touch and accessibility bounds
+follow its visual placement; short windows fall back to Material's menu layout.
+`navigation.create_android_destination_rail` copies the existing menu icons and
+preserves item IDs. Initial tablet installation and later width transitions use
+the shared adapter's normal selection/keyboard rebinding. The app
 window title remains available as metadata. Reader fullscreen and keyboard
 chrome snapshots therefore normally capture an already hidden activity bar.
 Home uses an 8-point content top margin without an additional heading top margin.
@@ -906,10 +969,13 @@ protects its root from mutations. Entering it switches to `CollectionFiles`.
 Local lists imported folders and downloaded/synced copies individually, alongside
 shared subfolders. The root choice is marked `browser_root` and rendered as a
 **Browse All Files** action below the folder tree, without a workspace menu.
-The ordinary local browser omits the single-source strip and places its actions
+The local and LocalCrypt browser omit the source strip and places its actions
 button at the trailing edge of `FolderLocationHeader`, alongside Search. The
 `overflow` icon uses `ellipsis.circle` on iOS and vertical dots on Android.
-Only an opened encrypted source adds the source-switching strip.
+Workspaces owns source selection; opening an encrypted source keeps the same
+single folder header. Locked Workspaces opens initialize the shared cloud
+controls before entering credential checks, so cold-start unlocking uses the same
+password prompt and resume callback as Home unlock.
 Private app data is never used as the shared root. Managed copies continue using
 `CollectionFiles` and their transfer mappings.
 Regression coverage is in `Mobile/tests/test_folder_source_tabs.py` and the hub
@@ -996,6 +1062,22 @@ nested-page return, Duo seam sizing and Android/iOS category availability;
 
 ## Reader gestures and document origins
 
+Document routes suppress destination tabs/rails independently of immersive
+reading. `reader_chrome.sync_document_tabs` runs after fullscreen restoration and
+updates native keyboard restoration state, so keyboard dismissal and rotation
+cannot reveal destinations while a document or its secondary routes are visible.
+The main document's leading Back arrow uses `request_reader_close`, including
+unsaved-change prompts; secondary routes retain their normal Back step.
+Selection callbacks pass the incoming destination explicitly because native
+selection is reported before the host commits it. Reopening a retained session
+captures a new return screen when its former presentation has been removed,
+including when the new screen belongs to the same destination. Android's reader
+bar also updates the keyboard restoration snapshot when entering or leaving a
+document, preventing an empty retired bar from reappearing after dismissal.
+Cancelling a managed-document close resumes its saved Preview/Edit mode. UIKit's
+native Back from a close prompt clears the pending exit intent through the same
+keep-editing path as the app's Back handler.
+
 Local imports, provider readers, direct remote readers, recent entries and open
 sessions present in the selected destination. Reader and private controllers
 capture that destination before opening work; text editors and file pickers use
@@ -1021,6 +1103,41 @@ platform animation settings and E Ink mode. Library and provider content swaps
 share this animation policy; private pixels remain in their native view layers.
 
 ## Native navigation validation
+
+The October 20 physical BOOX Note Air5 C check (Android 15) verified system Back,
+unsaved-change cancellation, keyboard dismissal before document exit, toolbar
+Back with the keyboard open, and returning to Home, Workspaces and Documents.
+Both its default rail and a test-forced native bottom bar passed. A real swipe
+established the folder viewport; closing the document preserved its filter,
+selection and exact scroll offset in both layouts. See the
+[Android navigation evidence](mobile-evidence/2026-10-20-android-document-navigation.json)
+for source hashes and coverage limits. The separate synthetic QA installation
+does not update the production app.
+
+The separate Android 16 phone-emulator check used a 360 × 640 dp display and
+required the actual under-400-dp keyboard suppression branch. Portrait and
+landscape suppressed the bars; first Back dismissed the IME without reaching the
+document-close handler, and second Back closed the document. Rotation, native bar
+snapshot transfer, retiring a document while suppression was active, and folder
+search keyboard dismissal passed. Closing restored the same filter, selection
+and exact native scroll offset. See the [phone keyboard evidence](mobile-evidence/2026-10-20-android-phone-keyboard.json)
+for measurements, source hashes and the cutout-adjusted landscape breakpoint.
+
+The Android 16 predictive-Back follow-up used real left/right edge swipes and
+explicitly cancelled touch streams. Cancelled gestures retained clean/dirty
+readers, the close prompt and IME state. With an unsaved draft and keyboard open,
+the committed gesture dismissed the IME; the next gesture opened the close prompt.
+Back from that prompt retained the draft. Native cold Workspaces unlock, wrong
+password retry, automatic LocalCrypt folder resume and the single browser header
+also passed. See [predictive Back and LocalCrypt evidence](mobile-evidence/2026-10-20-android-predictive-back-localcrypt.json)
+for input details, callback evidence and physical-device/animation limits.
+
+The physical BOOX Note Air5 C follow-up verified the cold Workspaces LocalCrypt
+path using real native folder and Unlock button taps. Wrong-password retry,
+automatic encrypted-folder resume, a detached source strip and one visible folder
+header in the tablet workspace frame passed. See [BOOX LocalCrypt evidence](mobile-evidence/2026-10-20-boox-localcrypt-workspaces.json)
+for source hashes, input details and scope. The synthetic QA installation did not
+replace the normal app or use user credentials.
 
 The October 2026 simulator check exercised synthetic local managed and provider
 Markdown on iPhone and iPad with iOS 27.0. Native Back, completed and cancelled

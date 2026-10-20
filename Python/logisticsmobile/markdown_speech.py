@@ -84,13 +84,13 @@ class MarkdownSpeech:
 
     def show(self, widget=None, **kwargs):
         if self.panel is not None and not self.panel.closed:
-            self.panel.show_over(self.container)
+            self.panel.toggle_over(self.container, anchor=self.button)
             return
         stop_markdown_speech(self.app)
         self.panel = MarkdownSpeechPanel(loop=self.app.loop, source=self.source,
             on_range=self.highlight, close=self.close, app=self.app, privacy_gate=self.privacy_gate, valid=self.valid,
             document_title=self.document_title)
-        self.panel.show_over(self.container)
+        self.panel.show_over(self.container, anchor=self.button)
 
     async def source(self):
         generation = self.generation

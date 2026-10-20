@@ -132,6 +132,9 @@ class MainWindow(pyside.Window):
         self.documents.workspace.active_changed.connect(self._sync_menus)
         self._sync_menus()
 
+        from .snow import SnowOverlay
+        self.snow = SnowOverlay(self.dlg)
+
     def _build_layout(self):
         central_widget = self.launch_surface = LaunchSurface()
         outer = pyside.QVBoxLayout(central_widget)

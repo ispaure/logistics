@@ -54,21 +54,31 @@ def spread_geometry(sizes, viewport=None, *, seam=None, single_right=False):
     return (x - gap, height), rects
 
 
-def compose_spread(data, *, right_to_left=False, viewport=None, seam=None):
+def compose_spread(data, *, right_to_left=False, viewport=None, seam=None, crop=None):
     """Decode validated pages and draw into an owned native bitmap, without files."""
     import toga
     from toga.platform import get_factory
     from features.images.validation import image_dimensions
     # Validate the complete spread before any native decoding/allocation.
     sizes = [image_dimensions(page) for page in data]
+    if crop is not None and (len(data) != 1 or not 0 <= crop[0] < crop[1] <= 1):
+        raise ValueError('A crop requires one page and normalized horizontal bounds.')
     if right_to_left:
         data, sizes = list(reversed(data)), list(reversed(sizes))
     # Keep half-point window centers representable and avoid rasterizing a
     # portrait spread at only one bitmap pixel per logical point.
     if seam is not None and viewport:
         viewport = tuple(max(1, round(value * 2)) for value in viewport)
-    size, rects = spread_geometry(sizes, viewport=viewport, seam=seam,
-                                  single_right=len(data) == 1 and right_to_left)
+    if crop is None:
+        size, rects = spread_geometry(sizes, viewport=viewport, seam=seam,
+                                      single_right=len(data) == 1 and right_to_left)
+    else:
+        # Bound the full decoded page as well as its cropped output. Drawing
+        # with an offset clips at the output bounds on every native backend.
+        (width, height), _ = spread_geometry(sizes)
+        left, right = round(width * crop[0]), round(width * crop[1])
+        size = (max(1, right - left), height)
+        rects = [(-left, 0, width, height)]
     from .decoding import decode_page
     backend = get_factory().Image.__module__
     if backend.startswith('toga_android.'):
@@ -117,6 +127,6 @@ def compose_spread(data, *, right_to_left=False, viewport=None, seam=None):
         bitmap = Image.new('RGBA', size)
         for page, source_size, (x, y, width, height) in zip(data, sizes, rects):
             image = decode_page(page, source_size, (width, height), backend)
-            bitmap.alpha_composite(image._impl.native.raw.convert('RGBA').resize((width, height)), (x, y))
+            bitmap.alpha_composite(image._impl.native.raw.convert('RGBA').resize((round(width), round(height))), (round(x), round(y)))
         return toga.Image(src=get_factory().Image.RAW_TYPE(bitmap))
     raise RuntimeError('Composite comic rendering requires Android or iOS.')

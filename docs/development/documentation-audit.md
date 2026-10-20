@@ -11,7 +11,12 @@ application extension contracts. Implementation and regression fixtures are the
 source of truth. commonUtils is a read-only Git submodule; optional local feature
 links are outside the distributed documentation inventory.
 
-The final navigation is:
+The pre-migration navigation recorded below is historical. In particular,
+`user_docs/README.md` and the hard-coded help-loader references below are
+superseded by feature `docs/` wikis and `services.documentation`; follow the
+current hierarchy guide when editing documentation.
+
+The navigation proposed at the time was:
 
 - Root `README.md`: product overview, installation and task-oriented guide links.
 - Root `docs/user/user.md`: application navigation and links to canonical guides.

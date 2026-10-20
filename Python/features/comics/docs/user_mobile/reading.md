@@ -46,7 +46,7 @@ single. Automatic is the mobile default: a reading area wider than tall shows tw
 portrait pages; a taller or square area shows one. Existing explicit Single or Two
 pages choices remain available. ComicInfo `Manga=YesAndRightToLeft` places the
 earlier page on the right; left-to-right comics place it on the left.
-Comic appearance shows only page layout. EPUB font, spacing, text width, margins
+Comic appearance shows page layout and the portrait wide-page switch. EPUB font, spacing, text width, margins
 and theme controls do not appear in comics, and applying comic layout leaves
 those preferences unchanged. Comic menus omit read-aloud, chapter search and
 bookmarks; **Comic pages…** in an imported reader opens the page selector.
@@ -61,7 +61,23 @@ visibility. Neither file switching nor All documents appears in the overflow men
 import, `remote:path` for a remote preview, or the logical LocalCrypt location
 for a folder-backed encrypted file. Imported copies show their current stored
 path; their original import location is not reconstructed.
-Previous/Next and swipes advance past the displayed spread. Imported and provider
+**Appearance → Split wide pages in portrait** is enabled by default, including
+when an older preferences file has no value for this setting. In a taller-than-wide
+reading area, a landscape source image is displayed as two overlapping views.
+Next/swipe moves from the first half to the second, then to the next source page;
+Previous reverses this order and enters a preceding wide page at its second half.
+Left-to-right comics start on the left; right-to-left manga starts on the right.
+Both halves include the central 8% of the original image so centre details remain
+visible. The page status adds **1/2** or **2/2**; page counts and the scrubber still
+refer to original archive pages. Imported comics remember the half when reopened;
+provider readers retain it within their session. Pinch zoom and panning work on
+the displayed half, with swipes turning only at fit size. Landscape and square
+reading areas show the complete wide image. Turn the switch off to view complete
+wide pages in portrait as well. The setting is separate from Single/Automatic/Two
+pages and applies to imported, Local, LocalCrypt and remote comics.
+
+Previous/Next and swipes advance past the displayed spread, or through each half
+of a split wide page. Imported and provider
 readers show a page slider between the arrows when reading controls are visible;
 drag and release it to jump directly to a page. Manga places Next on the left and
 Previous on the right, with slider progress running from right to left.
@@ -92,6 +108,9 @@ Swipes turn pages only at fit size; while zoomed, dragging pans the spread.
 Rotating while zoomed retains the current spread until you fit it. A failed page
 decode or spread composition keeps the displayed spread and its zoom. Private
 spreads stay in memory and are cleared on suspend/close; returning starts fitted.
+After unlocking a session-only reader, a page released during background memory
+cleanup reloads at the current page with fullscreen preserved. If reloading fails,
+reading controls return with the error so you can navigate or close the comic.
 
 Imported reader menus include First/Last page and Previous/Next comic. The page
 selector also supports direct jumps. Neighboring imported comics use natural

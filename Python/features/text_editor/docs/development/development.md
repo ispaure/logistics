@@ -14,6 +14,7 @@ contributions while retaining open documents for re-enablement.
 | Module | Responsibility |
 | --- | --- |
 | `contributions.py`, `ui/page.py` | Lazy feature registration, entry point and browser integration |
+| `mobile/provider_markdown.py` | Provider Markdown modes, web surfaces, preview tasks, search/speech attachment and cleanup; test with `Mobile/tests/test_provider_markdown.py` and `test_markdown_editor.py` |
 | `ui/service.py` | Per-document window ownership and browser save notifications |
 | `ui/window.py` | Single-document presentation, menus, status and close lifecycle |
 | `ui/document.py` | Per-document snapshot, encoding and editing metadata |
@@ -130,6 +131,32 @@ Comparisons now refresh after each accepted hunk and use resizable, linked panes
 
 ## Mobile editor
 
+`mobile/provider_markdown.py` owns one `ProviderMarkdown` workflow per provider-backed
+Markdown document. Its `source` is the session's existing code input: formatted
+edits update that same input, without a second draft or persistence owner.
+The controller owns preview/formatted surfaces, mode, render token/task, search,
+speech attachment and Markdown controls. Suspend clears transient surfaces while
+retaining the mode and draft; close disposes them permanently. Render results and
+errors must still match the source, reader, access stamp and live document before
+publication. Cancellation alone does not make a worker result current.
+
+`ProviderMarkdownHost` enumerates rendering, image resources, font/appearance,
+validity, busy state, speech, menu and toolbar callbacks. Composition lives in
+`logisticsmobile.feature_hosts.provider_markdown`; the feature never imports the
+application host. `ProviderUI` retains forwarding methods and state aliases for
+existing callers, plus non-Markdown controls. Private sessions keep document
+identity, credentials, saving, Save As, conflicts, memory budgets and dirty-close
+policy. Prepared replacement adopts the new workflow after retiring the previous
+one, including when changing back to plain text.
+
+Run `python3 dev.py test mobile test_provider_markdown.py` for ownership, stale
+results/errors, lock/close and replacement regressions. Also run
+`test_markdown_*.py`, `test_private_sessions.py` and `test_remote_readers.py`.
+`Python/tests/test_mobile_packaging.py` checks allowlist omissions;
+`Mobile/tests/test_packaged_startup.py` opens a provider Markdown view and switches between preview and editing
+using only freshly staged sources. See the root [validation guide](../../../../../docs/development/testing.md)
+for environment setup (`py` instead of `python3` on Windows).
+
 `mobile/ui.py` owns native editor widgets and per-document callbacks.
 `mobile/markdown_editor.py` supplies the offline formatted Markdown surface used
 by managed and provider-backed documents. It preserves exact untouched block
@@ -229,7 +256,11 @@ reads and immediate-child filtering. Desktop `notes_actions.py` contributes the
 location command; `ui/notes_library.py` owns its lazy Documents window and
 cooperative workers. Mobile resolves the same location scopes in
 `logisticsmobile.notes_actions` and presents them through the retained adaptive
-reader. No shared commonUtils API changes are required.
+reader. `mobile/notes_library.py` owns that presentation through a declared
+`NotesHost` contract. The host retains entry-point routing, workspace sessions,
+provider resolution and credential lifetimes. The shared native private WebView
+supplies memory-only rendering; Notes Library containment and URL policy remain
+feature-owned.
 
 Remote providers never get a search widget or recursive index. Private note data
 stays in memory and credential revocation retires the document. See the
@@ -260,6 +291,14 @@ buttons and centers the document name; a clean buffer omits Save. The explicit
 Rename action edits the existing name control through its normal validation and
 change handler, preserving document/session identity and unsaved text. Native
 source inputs and formatted WebViews remain the same retained editing surfaces.
+
+Provider Markdown records the source represented by its current preview.
+Unchanged native text notifications do not reload that preview and reset its
+scroll position; actual edits still schedule the existing live render. The
+mobile host owns close/reopen scroll state and restores it after native drawing
+and pending font/viewport reflow. WebView load hooks retain their existing
+search and font handlers. Close requests use the shared host lifecycle and
+prompt for unsaved edits before releasing the document session.
 
 On iOS, retiring a Markdown WebView disables its native callbacks and queues a
 replacement of the live DOM before navigating to the closed-document page.

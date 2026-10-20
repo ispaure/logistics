@@ -3,6 +3,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import tomllib
 import xml.etree.ElementTree as ET
 from Mobile.cloud_build import configure_android_appearance, configure_android_sources
 
@@ -16,7 +17,7 @@ class ReaderBuildTests(unittest.TestCase):
             existing = ('plugins { id "com.android.application" }\n'
                 'android.sourceSets.main.java.srcDir(new File(rootProject.projectDir, '
                 '"../../../../payload/commonUtils/ui/native/android"))\n')
-            gradle.write_text(existing)
+            gradle.write_text(existing + 'android {\n    defaultConfig {\n        versionCode 1\n    }\n}\n')
             configure_android_sources(root)
             self.assertEqual((root / 'app/extract-packages.txt').read_text(), '')
             metadata = root / 'app/src/main/res/values/briefcase.xml'
@@ -24,6 +25,10 @@ class ReaderBuildTests(unittest.TestCase):
             metadata.write_text('<resources><string name="main_module">tests.logisticsmobile</string></resources>')
             (root / 'app/extract-packages.txt').write_text('tests')
             first = gradle.read_text()
+            config = tomllib.loads((Path(__file__).parents[1] / 'pyproject.toml').read_text())
+            code = config['tool']['briefcase']['app']['logisticsmobile']['android']['version_code']
+            self.assertIn('versionCode ' + str(code), first)
+            self.assertNotIn('versionCode 1\n', first)
             configure_android_sources(root)
             self.assertNotIn('tests.logisticsmobile', metadata.read_text())
             self.assertEqual((root / 'app/extract-packages.txt').read_text(), '')

@@ -128,12 +128,14 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertTrue(nav.wide)
         self.assertEqual(list(nav.children), [nav.sidebar, nav.detail])
 
-    def test_android_and_ios_have_categories_and_only_android_has_appearance(self):
-        for backend, appearance in (('toga_android.app', True), ('toga_iOS.app', False)):
-            with self.subTest(backend=backend), patch.object(type(self.app._impl), '__module__', backend):
+    def test_android_and_ios_have_appearance_categories(self):
+        for backend in ('toga_android.app', 'toga_iOS.app'):
+            # Native toolbar mounting has separate platform fixtures; this checks categories.
+            with self.subTest(backend=backend), patch.object(type(self.app._impl), '__module__', backend), \
+                    patch('logisticsmobile.android_reader_chrome.sync'):
                 self.app.show_settings(rebuild=True)
                 nav = self.app.settings_navigation
-                self.assertEqual('Appearance' in nav.sections, appearance)
+                self.assertIn('Appearance', nav.sections)
                 self.assertIn('Workspaces', nav.sections)
                 self.assertIn('About', nav.sections)
                 for width in (900, 390):

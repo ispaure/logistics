@@ -260,6 +260,46 @@ class MirrorUITests(unittest.TestCase):
             finally:
                 release.set()
 
+    def test_proceed_without_review_downloads_missing_local_and_localcrypt_content(self):
+        import shutil
+        class Client(MirrorClient):
+            def crypt_remotes(self): return ['Secret']
+            def cancel(self): pass
+            def request(self, action, **values):
+                if action == 'mirror_review':
+                    raise FileNotFoundError('Synthetic incomplete comparison')
+                return super().request(action, **values)
+        for remote, storage, filename in (('Remote', 'Local', 'note.txt'),
+                                          ('Secret', 'LocalCrypt', 'opaque-name')):
+            for state in ('new', 'missing-file', 'missing-tree'):
+                with self.subTest(storage=storage, state=state), TemporaryDirectory() as directory:
+                    LogisticsMobile.storage_root = Path(directory)
+                    app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                    try:
+                        client = app.cloud_client = Client()
+                        app.show_cloud(present=False)
+                        store = app.mirror_store()
+                        job = store.prepare_review(client, remote, 'folder', storage=storage)
+                        target = store.target(job)
+                        if state != 'new':
+                            job, _ = store.create(client, remote, 'folder', storage=storage)
+                            if state == 'missing-file':
+                                (target / filename).unlink()
+                            else:
+                                shutil.rmtree(target)
+                        async def exercise():
+                            with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
+                                app.begin_transfer_review(None if state == 'new' else job['id'],
+                                    remote=remote, folder='folder', storage=storage)
+                                self.assertTrue(await drive_review(app, early=True), app.transfer_message)
+                        app.loop.run_until_complete(exercise())
+                        self.assertEqual((target / filename).read_bytes(),
+                                         client.data[job['prefix'] + '/' + filename])
+                    finally:
+                        app.main_window.close()
+                        app.loop.close()
+                        LogisticsMobile.storage_root = None
+
     def test_completed_review_detects_changes_after_confirmation(self):
         class Client(MirrorClient):
             def crypt_remotes(self): return []

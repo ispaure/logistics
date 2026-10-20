@@ -25,6 +25,16 @@ They are reserved for future nested destinations even when all current features
 have their own rail buttons. Do not delete this code or glyph unless the user
 explicitly asks for its removal.
 
+## Boox test-app cleanup
+
+After testing on the user's Boox, uninstall temporary Logistics test, probe and
+QA apps installed for that work. Save needed test evidence before uninstalling.
+Verify that the only remaining Logistics package is the main app,
+`io.github.ispaure.logisticsmobile`. Preserve that app and its data; never
+uninstall it or clear its storage during cleanup. If cleanup cannot finish,
+report the remaining test packages rather than silently leaving them installed.
+Keep test apps only when the user explicitly requests it.
+
 ## Documentation ownership and maintenance
 
 Read [the developer index](docs/development/development.md) before structural changes.

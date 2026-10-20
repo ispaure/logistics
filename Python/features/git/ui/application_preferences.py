@@ -50,7 +50,7 @@ class ApplicationPreferences:
         if self.changes.default_push != options['push_after_commit'] and self.changes.push_immediately.isEnabled():
             self.changes.push_immediately.setChecked(options['push_after_commit'])
         self.changes.default_push = options['push_after_commit']
-        from features.code_font import code_font
+        from services.editors.ui.fonts import code_font
         code_font().bind(self.preview.editor)
         colors = self.preferences.color_overrides(self.palette())
         self.preview.editor.diff_color_overrides = colors

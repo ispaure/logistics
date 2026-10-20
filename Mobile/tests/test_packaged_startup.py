@@ -22,6 +22,11 @@ class PackagedStartupTests(unittest.TestCase):
             code = '''
 from pathlib import Path
 import logisticsmobile
+import sys
+from logisticsmobile.folder_discovery import FolderDiscovery
+from logisticsmobile.file_operations import FileOperations
+from logisticsmobile.folder_listing import FolderListing
+assert not any(name.startswith(('PySide', 'toga')) for name in sys.modules)
 from features.rclone.transfers.transfer_options import TransferOptions
 assert TransferOptions().copy_links
 from features.rclone.mobile.cloud import CloudClient
@@ -61,6 +66,47 @@ for saved_document in (False, True):
     assert owner.catalog.root == Path(logisticsmobile.__file__).resolve().parent / 'help/docs'
     assert not (Path(logisticsmobile.__file__).parent / 'help/Python/features/emulation').exists()
     assert not (Path(logisticsmobile.__file__).parent / 'help/Python/commonUtils').exists()
+    app.show_locations()
+    assert app.loop.run_until_complete(app.refresh_folder_hub())
+    discovery = app.folder_controller().discovery
+    assert type(discovery).__module__ == 'logisticsmobile.folder_discovery'
+    assert 'All files' in discovery.cached_choices()
+    assert 'All files' in app.folder_picker_choices
+    from commonUtils.runtime.local_files import LocalFiles
+    from features.text_editor.resources import LocalTextCopies
+    notes = root / 'provider-notes'
+    notes.mkdir(exist_ok=True)
+    (notes / 'Note.md').write_text('# Packaged Markdown')
+    assert app.loop.run_until_complete(app.open_crypt(copies=LocalTextCopies(LocalFiles(notes)), key='Note.md'))
+    reader = app.private_sessions.active
+    assert type(reader._provider_markdown).__module__ == 'features.text_editor.mobile.provider_markdown'
+    assert reader.crypt_content.children == [reader.crypt_preview]
+    reader.toggle_private_preview()
+    assert reader.crypt_content.children == [reader.crypt_formatted.view]
+    assert reader.crypt_text.value == '# Packaged Markdown'
+    assert app.private_sessions.close(reader.session.id, discard=True)
+    app.loop.run_until_complete(app.show_files())
+    created_name, renamed_name = 'PackagedFolder-' + str(saved_document), 'RenamedFolder-' + str(saved_document)
+    app.file_name.value = created_name
+    app.loop.run_until_complete(app.new_file_folder())
+    provider = app.file_provider
+    assert (provider.root / created_name).is_dir()
+    assert type(app.file_operations()).__module__ == 'logisticsmobile.file_operations'
+    app.browser_file_selected(provider.entry(created_name))
+    app.file_name.value = renamed_name
+    app.loop.run_until_complete(app.rename_file())
+    assert (provider.root / renamed_name).is_dir()
+    assert not (provider.root / created_name).exists()
+    assert type(app.folder_listing()).__module__ == 'logisticsmobile.folder_listing'
+    app.file_location.value = renamed_name
+    assert app.loop.run_until_complete(app.browse_files())
+    assert app.file_path == renamed_name
+    from logisticsmobile.workspace_navigation import FileDrawer
+    drawer = FileDrawer(app.adaptive, 'home')
+    assert app.loop.run_until_complete(drawer.refresh())
+    assert type(drawer.listing).__module__ == 'logisticsmobile.folder_listing'
+    assert any(row['name'] == renamed_name for row in drawer.provider.list(''))
+    assert not app.cloud_busy and app._crypt_cancel is None
     app.main_window.close()
     app.loop.close()
 print('PACKAGED_HOME_OK')

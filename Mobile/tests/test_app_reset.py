@@ -121,6 +121,8 @@ class AppResetUITests(unittest.TestCase):
 
     def test_android_invokes_own_app_clear_data_only_after_confirmation(self):
         self.app.reset_phrase.value = 'ERASE'
+        text = ' '.join(str(getattr(child, 'text', '')) for child in self.app.reset_page.children)
+        self.assertIn('app-owned storage folders on SD cards', text)
         with patch('logisticsmobile.reset_ui.reset_android') as erase, \
                 patch.object(self.app.main_window, 'dialog', AsyncMock(return_value=True)):
             self.run_reset()
@@ -135,6 +137,15 @@ class AppResetUITests(unittest.TestCase):
         self.assertEqual(json.loads((self.app.private_root / RESET_MARKER).read_text()), {'schema': 1})
         self.assertTrue(self.app._reset_scheduled)
         self.assertFalse(self.app.active_host)
+        self.assertFalse(self.app.reset_button.enabled)
+        self.app.reset_phrase_changed()
+        self.assertFalse(self.app.reset_button.enabled)
+        notice = ' '.join(child.text for child in self.app.main_window.content.content.children)
+        self.assertIn('not been erased yet', notice)
+        self.assertIn('Home Screen is not enough', notice)
+        with patch('logisticsmobile.reset_ui.schedule_reset') as schedule:
+            self.run_reset()
+        schedule.assert_not_called()
         with patch.object(self.app.store, 'checkpoint') as checkpoint:
             self.assertTrue(self.app.checkpoint())
             self.assertTrue(self.app.exit_app(self.app))

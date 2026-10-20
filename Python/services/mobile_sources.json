@@ -7,13 +7,15 @@
     "documents/archive_access.py",
     "documents/limits.py",
     "documents/metadata.py",
+    "documents/mobile_reading.py",
     "documents/readers.py",
     "documents/zip_passwords.py",
     "folders/__init__.py",
-    "folders/policy.py",
     "folders/appearance.py",
+    "folders/policy.py",
     "identifiers.py",
     "mobile_presentation.py",
-    "workflow_host.py"
+    "workflow_host.py",
+    "seasonal.py"
   ]
 }

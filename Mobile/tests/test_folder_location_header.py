@@ -37,9 +37,72 @@ class FolderLocationTests(unittest.TestCase):
             self.assertEqual(header.caption.children, [header.folder_name, header.storage_identity])
             self.assertEqual(header.storage_identity.children[-1].value,
                              ('Cloud' if online else 'On-device') +
-                             ((' · Unlocked' if unlocked else ' · Locked') if encrypted else ''))
+                             ((' · Unlocked' if unlocked else ' · Locked') if encrypted else '') +
+                             (' · LocalCrypt' if encrypted and not online else ''))
             self.assertEqual(button.control_icon, 'up' if path else 'back')
             self.assertEqual(button.accessible_name, 'Parent folder' if path else 'Back to Workspaces')
+
+    def test_localcrypt_root_uses_folder_name_and_loaded_session_status(self):
+        from types import SimpleNamespace
+        from logisticsmobile.folder_navigation import FolderScreen
+        provider = SimpleNamespace(private=True, remote='Secret', client=SimpleNamespace(
+            package_records=[dict(remotes=['Secret'], saved=False)]))
+        header = FolderLocationHeader(toga.Label(''), icon_button('up', 'Parent folder'))
+        header.update_provider('', provider, name='LocalCrypt: Secret (pulled)')
+        self.assertEqual(header.folder_name.value, 'Secret')
+        self.assertEqual(header.storage_identity.children[-1].value,
+                         'On-device · Unlocked (Session Only) · LocalCrypt')
+        screen = FolderScreen(None, SimpleNamespace(search_provider=provider), None,
+                              'LocalCrypt: Secret (pulled)', '', 'browser')
+        self.assertEqual(screen.title, 'Secret')
+        provider.client.package_records[0]['saved'] = True
+        header.update_provider('', provider)
+        self.assertEqual(header.storage_identity.children[-1].value,
+                         'On-device · Unlocked · LocalCrypt')
+        screen.path = 'Books/Reference'
+        self.assertEqual(screen.title, 'Reference')
+
+    def test_ios_description_scrolls_full_text_and_centers_short_text(self):
+        import sys
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock
+        from logisticsmobile.folder_title import mount
+
+        for measured_width in (30, 400):
+            with self.subTest(measured_width=measured_width):
+                instances = {}
+                def factory(name):
+                    def new(*args):
+                        view = Mock()
+                        view.sizeThatFits.return_value = NS(width=measured_width)
+                        instances.setdefault(name, []).append(view)
+                        return view
+                    allocated = Mock()
+                    allocated.init.side_effect = new
+                    allocated.initWithFrame.side_effect = new
+                    allocated.initWithImage.side_effect = new
+                    cls = Mock()
+                    cls.alloc.return_value = allocated
+                    return cls
+                backend = type('HeaderImpl', (), {'__module__': 'toga_iOS.widgets.box'})()
+                header = Mock(_impl=backend, _storage_kinds=[('storage_local', ''), ('folder_unlocked', '')],
+                              storage_identity=NS(children=[NS(text='On-device · Unlocked (Session Only) · LocalCrypt')]),
+                              window=NS(_impl=NS(native=NS(bounds=NS(size=NS(width=390))))))
+                controller = NS(navigationItem=NS())
+                objc = NS(ObjCClass=factory, CGRect=lambda origin, size: (origin, size),
+                          CGSize=lambda width, height: (width, height))
+                with patch.dict(sys.modules, {'rubicon.objc': objc}), \
+                        patch('logisticsmobile.folder_title.mount_actions'), \
+                        patch('logisticsmobile.appearance.apple_color'), \
+                        patch('logisticsmobile.hub_icons.icon'):
+                    mount(header, controller, 'Secret')
+                scroll = instances['UIScrollView'][0]
+                self.assertEqual(scroll.contentSize[1], 15)
+                self.assertGreaterEqual(scroll.contentSize[0], measured_width)
+                self.assertEqual(scroll.contentSize[0] > 174, measured_width > 174)
+                scroll.addSubview.assert_called_once_with(instances['UIStackView'][0])
+                self.assertEqual(instances['UILabel'][-1].text,
+                                 'On-device · Unlocked (Session Only) · LocalCrypt')
 
     def test_root_navigation_returns_to_hub_even_when_cloud_busy(self):
         self.app.show_cloud(present=False)

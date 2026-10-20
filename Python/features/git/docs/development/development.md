@@ -204,3 +204,11 @@ stdin with captured output suppressed, and delegates GitHub browser login to GCM
 Secrets are excluded from the account schema. Backend discard backups and submodule
 checks remain in `repository.py`. The shared diff editor only adds a reusable
 per-editor color override; application settings stay in this feature.
+
+## Persistence and editor adapter
+
+Preferences serialize the existing indented JSON payload and use shared atomic
+byte publication. Sparse INI settings, legacy custom-path fields and malformed
+file protection remain feature-owned. Git, IDE and Text Editor use the neutral
+`services/editors/ui/fonts.py` adapter for custom preference paths; default font
+coordination remains shared styling.

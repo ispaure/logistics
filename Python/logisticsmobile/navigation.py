@@ -13,43 +13,34 @@ DESTINATION_ITEMS = (
 )
 
 # Application destinations use explicit artwork rather than OEM menu icons.
-# The 24-point outlines match the meaning of the Apple navigation symbols.
+# The 24-point outlines follow the desktop destination artwork.
 ANDROID_DESTINATION_PATHS = {
     'documents': (
-        ((7, 3), (15, 3), (20, 8), (20, 18), (7, 18), (7, 3)),
-        ((15, 3), (15, 8), (20, 8)),
-        ((4, 6), (4, 21), (17, 21)),
-        ((10, 11), (17, 11)), ((10, 14), (17, 14)),
+        ((6, 3), (21, 3), (21, 21), (6, 21), (6, 3)),
+        ((3, 6), (3, 21), (17, 21)),
+        ((10, 8), (17, 8)), ((10, 12), (17, 12)), ((10, 16), (17, 16)),
     ),
     'chat': (
-        ((16, 13), (20, 13), (23, 16), (23, 5), (9, 5), (9, 7)),
-        ((2, 8), (17, 8), (17, 18), (7, 18), (2, 22), (2, 8)),
-        ((6, 12), (13, 12)), ((6, 15), (11, 15)),
+        ((5, 4), (19, 4), (22, 7), (22, 15), (19, 18),
+         (10, 18), (5, 22), (5, 18), (2, 15), (2, 7), (5, 4)),
     ),
     'settings': (
-        ((9, 1), (15, 1), (15.5, 4), (17, 5), (20, 4), (23, 9),
-         (20.5, 11), (20.5, 13), (23, 15), (20, 20), (17, 19),
-         (15.5, 20), (15, 23), (9, 23), (8.5, 20), (7, 19),
-         (4, 20), (1, 15), (3.5, 13), (3.5, 11), (1, 9),
-         (4, 4), (7, 5), (8.5, 4), (9, 1)),
+        ((3, 5), (6, 5)), ((10, 5), (21, 5)),
+        ((3, 12), (14, 12)), ((18, 12), (21, 12)),
+        ((3, 19), (8, 19)), ((12, 19), (21, 19)),
     ),
 }
 
 
 def eink_selection_indicator(bar, enabled, original=None):
-    """Give checked Android destinations a square backing; preserve theme geometry."""
+    """Make monochrome selection visible without changing native geometry."""
     if enabled:
-        from com.google.android.material.shape import ShapeAppearanceModel
         if original is None:
             original = (bar.isItemActiveIndicatorEnabled(),
                         bar.getItemActiveIndicatorWidth(), bar.getItemActiveIndicatorHeight(),
                         bar.getItemActiveIndicatorShapeAppearance())
         # MaterialComponents themes can disable indicators entirely. A white
         # checked icon needs an explicitly enabled backing in both presentations.
-        size = round(40 * bar.getResources().getDisplayMetrics().density)
-        bar.setItemActiveIndicatorShapeAppearance(ShapeAppearanceModel.builder().build())
-        bar.setItemActiveIndicatorWidth(size)
-        bar.setItemActiveIndicatorHeight(size)
         bar.setItemActiveIndicatorEnabled(True)
         return original
     if original is not None:
@@ -80,8 +71,10 @@ def install_destination_icons(host):
             path.moveTo(*line[0])
             for point in line[1:]:
                 path.lineTo(*point)
-        if destination == 'settings':
-            path.addCircle(12, 12, 3.5, Path.Direction.CW)
+        circles = {'chat': ((7, 11, .8), (12, 11, .8), (17, 11, .8)),
+                   'settings': ((8, 5, 2), (16, 12, 2), (10, 19, 2))}
+        for x, y, radius in circles.get(destination, ()):
+            path.addCircle(x, y, radius, Path.Direction.CW)
         drawable = ShapeDrawable(PathShape(path, 24, 24))
         paint = drawable.getPaint()
         paint.setStyle(Paint.Style.STROKE)
@@ -98,6 +91,24 @@ def install_destination_icons(host):
                 bar.getMenu().getItem(index).setIcon(drawable.getConstantState().newDrawable().mutate())
 
 
+def create_android_destination_rail(host):
+    """Build the app rail without changing the shared navigation adapter contract."""
+    adapter = host.adapter
+    from android.view import ContextThemeWrapper
+    from com.google.android.material import R as MaterialR
+    from java import jclass
+    context = ContextThemeWrapper(adapter.impl._native_activity,
+        MaterialR.style.Theme_MaterialComponents_DayNight)
+    rail = jclass('io.github.ispaure.logisticsmobile.DestinationRailView')(
+        context, host.destinations.index('settings') + 1)
+    for index, label in enumerate(host.labels):
+        item = rail.getMenu().add(0, index + 1, index, label)
+        icon = adapter.bottom.getMenu().getItem(index).getIcon()
+        item.setIcon(icon.getConstantState().newDrawable().mutate())
+        item.setContentDescription(label)
+    return rail
+
+
 def install_android_navigation_appearance(host):
     """Keep Android chrome compact, including rails first created by a resize."""
     adapter = host.adapter
@@ -106,17 +117,21 @@ def install_android_navigation_appearance(host):
     original = adapter.set_mode
 
     def compact_chrome():
-        # Screens own their headings and Back controls. The activity bar only
-        # repeats the application name and consumes a full row on every page.
+        # Ordinary screens own their headings. Document routes explicitly opt
+        # into a custom native bar containing their title and existing actions.
         bar = adapter.impl._native_activity.getSupportActionBar()
-        if bar is not None and bar.isShowing():
+        if bar is not None and bar.isShowing() and not getattr(adapter, '_reader_action_bar_active', False):
             bar.hide()
         if adapter.rail is not None:
             from android.view import Gravity
             adapter.rail.setMenuGravity(Gravity.TOP)
+        if getattr(host.window.app, '_document_tabs_hidden', False):
+            adapter.impl.native_navigationview.setVisibility(8)
 
     def set_mode(mode):
         previous = adapter.mode
+        if mode == 'rail' and adapter.rail is None:
+            adapter.rail = create_android_destination_rail(host)
         original(mode)
         if adapter.mode != previous:
             compact_chrome()
@@ -125,6 +140,19 @@ def install_android_navigation_appearance(host):
 
     adapter.set_mode = set_mode
     adapter._logistics_appearance_installed = True
+    # The shared host may already have mounted its default tablet rail before
+    # application appearance is installed. Rebind through its normal route-safe
+    # transition so OptionItem references and keyboard ownership follow the view.
+    if adapter.rail is not None:
+        mounted = adapter.mode == 'rail'
+        if mounted:
+            original('bottom')
+        # Saved E Ink geometry belongs to the old native instance.
+        getattr(adapter, '_eink_bar_styles', {}).pop(1, None)
+        adapter.rail = None
+        adapter.rail = create_android_destination_rail(host)
+        if mounted:
+            original('rail')
     compact_chrome()
 
 

@@ -12,21 +12,23 @@ import tomllib
 
 try:
     from .tools import stage
+    from .deployment_paths import output_root, prepare_workspace
 except ImportError:
     from tools import stage
+    from deployment_paths import output_root, prepare_workspace
 
 ROOT = Path(__file__).resolve().parent
 BUNDLE = 'io.github.ispaure.logisticsmobile'
-PROJECT = ROOT / 'build/logisticsmobile/android/gradle'
+PROJECT = output_root(ROOT) / 'build/logisticsmobile/android/gradle'
 
 
 def run(command, env, *, log=None):
     if log is None:
-        return subprocess.run(command, cwd=ROOT, env=env, check=True, capture_output=True, text=True, timeout=20).stdout
+        return subprocess.run(command, cwd=output_root(ROOT), env=env, check=True, capture_output=True, text=True, timeout=20).stdout
     log.parent.mkdir(parents=True, exist_ok=True)
     print('Running ' + str(command[0]) + '; log: ' + str(log), flush=True)
     with log.open('w') as output:
-        result = subprocess.run(command, cwd=ROOT, env=env, stdout=output, stderr=subprocess.STDOUT)
+        result = subprocess.run(command, cwd=output_root(ROOT), env=env, stdout=output, stderr=subprocess.STDOUT)
     if result.returncode:
         raise RuntimeError('Android deployment stopped. See ' + str(log) + '\n' + '\n'.join(log.read_text(errors='replace').splitlines()[-18:]))
 
@@ -113,17 +115,17 @@ def select_device(output, requested=None, *, ask=input):
 
 
 def refresh_sources(env):
-    (ROOT / 'build').mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix='logistics-android-', dir=ROOT / 'build') as temporary:
+    workspace = prepare_workspace(ROOT)
+    with tempfile.TemporaryDirectory(prefix='logistics-android-', dir=workspace / 'build') as temporary:
         replacement = Path(temporary) / 'payload'
         stage(ROOT.parent, replacement, allow_dirty=True)
-        payload = ROOT / 'payload'
+        payload = workspace / 'payload'
         previous = Path(temporary) / 'previous-payload'
         if payload.exists():
             payload.rename(previous)
         replacement.rename(payload)
         try:
-            run([sys.executable, 'cloud_build.py', 'licenses'], env, log=ROOT / 'logs/android-licenses.log')
+            run([sys.executable, str(ROOT / 'cloud_build.py'), 'licenses'], env, log=workspace / 'logs/android-licenses.log')
         except Exception:
             shutil.rmtree(payload)
             if previous.exists():
@@ -133,7 +135,7 @@ def refresh_sources(env):
     command = [sys.executable, '-m', 'briefcase', action, 'android', '--no-input']
     if action == 'update':
         command.append('--update-requirements')
-    run(command, env, log=ROOT / 'logs/android-update.log')
+    run(command, env, log=workspace / 'logs/android-update.log')
 
 
 def deploy(device=None, *, build_only=False):
@@ -147,8 +149,8 @@ def deploy(device=None, *, build_only=False):
     settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps({name: env[name] for name in ('ANDROID_HOME', 'BRIEFCASE_HOME') if name in env}))
     # The bridge helper also installs current launcher/appearance resources.
-    run([sys.executable, 'cloud_build.py', 'android'], env, log=ROOT / 'logs/android-bridge.log')
-    run([sys.executable, '-m', 'briefcase', 'build', 'android', '--no-input'], env, log=ROOT / 'logs/android-build.log')
+    run([sys.executable, str(ROOT / 'cloud_build.py'), 'android'], env, log=output_root(ROOT) / 'logs/android-bridge.log')
+    run([sys.executable, '-m', 'briefcase', 'build', 'android', '--no-input'], env, log=output_root(ROOT) / 'logs/android-build.log')
     apk = PROJECT / 'app/build/outputs/apk/debug/app-debug.apk'
     if not apk.is_file():
         raise ValueError('Expected debug APK was not produced: ' + str(apk))
@@ -157,9 +159,14 @@ def deploy(device=None, *, build_only=False):
         return
     discover_wireless(adb, env)
     serial = select_device(run([str(adb), 'devices'], env), device)
+    install_apk(adb, env, serial, apk)
+
+
+def install_apk(adb, env, serial, apk):
+    """Update one authorized target without changing its identity or data."""
     prefix = [str(adb), '-s', serial]
     # In-place update only. Signature/version failures never trigger uninstall.
-    run([*prefix, 'install', '-r', str(apk)], env, log=ROOT / 'logs/android-install.log')
+    run([*prefix, 'install', '-r', str(apk)], env, log=output_root(ROOT) / 'logs/android-install.log')
     run([*prefix, 'shell', 'am', 'force-stop', BUNDLE], env)
     result = run([*prefix, 'shell', 'am', 'start', '-W', '-n', BUNDLE + '/org.beeware.android.MainActivity'], env)
     if 'Error' in result or 'Exception' in result:

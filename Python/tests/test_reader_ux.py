@@ -42,6 +42,18 @@ class ReaderUXTests(QtTestCase):
         self.comic.show()
         self.settle()
 
+    def test_epub_appearance_button_toggles_popup(self):
+        self.book.appearance_button.click()
+        self.assertTrue(self.book.appearance.isVisible())
+        self.assertTrue(self.book.appearance.testAttribute(qt.Qt.WidgetAttribute.WA_NoMouseReplay))
+        self.book.appearance_button.click()
+        self.assertFalse(self.book.appearance.isVisible())
+        self.book.appearance_button.click()
+        self.assertTrue(self.book.appearance.isVisible())
+        self.book.appearance.hide()
+        self.assertFalse(self.book.speech.anchor.icon().isNull())
+        self.assertEqual(self.book.speech.anchor.toolButtonStyle(), qt.Qt.ToolButtonStyle.ToolButtonIconOnly)
+
     def test_remote_readers_hide_metadata_controls_and_restore_them_for_local_files(self):
         from types import SimpleNamespace
         remote = SimpleNamespace(remote_storage=True)

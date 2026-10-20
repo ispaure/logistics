@@ -24,6 +24,19 @@ class FolderScreen:
     snapshot: object = None
     base: int = 0
     scope: str = ''
+    root_title: str = ''
+
+    def __post_init__(self):
+        provider = getattr(self.browser, 'search_provider', None)
+        provider = getattr(provider, 'provider', provider)
+        if getattr(provider, 'private', False) and not getattr(provider, 'remote_storage', False):
+            self.root_title = getattr(provider, 'remote', self.source)
+        else:
+            self.root_title = self.source
+
+    @property
+    def title(self):
+        return PurePosixPath(self.path).name if self.path else self.root_title
 
     @property
     def route(self):
@@ -47,9 +60,12 @@ class FolderPreview:
         header.remove(parent)
         header.use_native_title()
         self.browser.search_button.enabled = False
-        header.update(entry.path, remote=entry.kind == 'remote-browser',
-                      encrypted=self.private, unlocked=True,
-                      name=PurePosixPath(entry.path).name if entry.path else entry.source)
+        header.update_provider(entry.path, owner, name=entry.title)
+        if entry.kind == 'remote-browser':
+            source_header = entry.browser.location_bar
+            remote, encrypted, unlocked, session_only = source_header._identity_key
+            header.update(entry.path, remote=remote, encrypted=encrypted, unlocked=unlocked,
+                          session_only=session_only, name=entry.title)
         self.view = toga.Box(children=[header, self.browser.scroll_container()],
                              style=Pack(direction=COLUMN, flex=1, margin=12))
         self.sidebar_snapshot = None
@@ -59,6 +75,7 @@ class FolderPreview:
             from toga.style.pack import ROW
             content = self.view
             content.style.margin = 0
+            content.style.margin_left = 16
             left = toga.Box(style=Pack(width=sidebar.style.width, flex=0))
             self.view = toga.Box(children=[left, content], style=Pack(direction=ROW, flex=1, margin=12))
             self.sidebar_snapshot = native_snapshot(sidebar)
@@ -241,7 +258,7 @@ class FolderNavigation:
             else:
                 retained = self.screens[destination, entry.route]
                 retained.view, retained.browser, retained.navigate = info.view, info.browser, info.navigate
-            title = PurePosixPath(entry.path).name if entry.path else entry.source
+            title = entry.title
             retained = self.screens[destination, entry.route]
             if entry.path == info.path:
                 view = info.view
@@ -277,10 +294,11 @@ class FolderNavigation:
             retained = self.screens.get((destination, route))
             if retained is None or container is None:
                 continue
-            browser = retained.preview.browser if retained.preview is not None else retained.browser
+            browser = (retained.preview.browser if retained.preview is not None
+                       and retained.path != info.path else retained.browser)
             header = getattr(browser, 'location_bar', None)
             if header is not None:
-                title = PurePosixPath(retained.path).name if retained.path else retained.source
+                title = retained.title
                 mount(header, container.controller, title)
         header = getattr(info.browser, 'location_bar', None)
         if header is not None:
@@ -298,7 +316,14 @@ class FolderNavigation:
         entry = self.screens.get((destination, screens[-1][0]))
         if entry is None:
             return
+        def mount_live_header():
+            header = getattr(entry.browser, 'location_bar', None)
+            container = screens[-1][2]
+            if header is not None and container is not None:
+                from .folder_title import mount
+                mount(header, container.controller, entry.title)
         if entry.view in screens[-1][1].children:
+            mount_live_header()
             self.restore_viewport(destination)
             return
         if self.task is not None and not self.task.done():
@@ -335,6 +360,7 @@ class FolderNavigation:
                 clear_snapshot(entry)
                 if routes.host.state.destination == destination:
                     routes.render(destination)
+                mount_live_header()
                 self.restore_viewport(destination, expected)
             except (OSError, ValueError, KeyError):
                 clear_snapshot(entry)

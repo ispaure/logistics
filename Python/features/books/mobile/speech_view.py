@@ -7,28 +7,30 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from .speech import PlaybackTimer, SpeechSession
 from .speech_native import NativeSpeech
+from .speech_host import SpeechPresentation
 
 
 class ReadAloudPanel(toga.Box):
     def __init__(self, *, loop, source, on_range, close, engine=None, app=None, privacy_gate=lambda: None, valid=lambda: True,
-                 document_title=lambda: ''):
-        from logisticsmobile.control_icons import icon_button
+                 document_title=lambda: '', presentation=None):
+        self.presentation = presentation or (app.speech_presentation if app is not None else SpeechPresentation())
+        icon_button = self.presentation.icon_button
         self.playback = None
         self.source, self.closed = source, False
         self.document_title = document_title
         self.engine = engine or NativeSpeech(loop)
         self.status = toga.Label('Starting system speech engine…', style=Pack(height=20, font_size=12, margin_top=8))
-        self.speech_app = app
         self.voice = ''
         self.overlay = None
         self.speed_choice = toga.Slider(min=.5, max=2, tick_count=7, value=1,
             style=Pack(height=32, flex=1))
         self.speed_value = toga.Label('100%', style=Pack(font_size=14, font_weight='bold', text_align='right'))
-        from logisticsmobile.appearance import surface, accessible_name
+        surface, accessible_name = self.presentation.surface, self.presentation.accessible_name
         accessible_name(self.speed_choice, 'Reading speed')
         def muted(text, font_size=11, **style):
             return surface(toga.Label(text, style=Pack(font_size=font_size, **style)),
-                           background='transparent', foreground='muted', radius=0)
+                           background='transparent', foreground='muted', radius=0,
+                           outlined=False, eink_outlined=False)
         self.speed_minimum, self.speed_maximum = muted('50%'), muted('200%')
         ticks = toga.Box(style=Pack(direction=ROW, margin_left=14, margin_right=14, height=12))
         for index in range(7):
@@ -67,16 +69,20 @@ class ReadAloudPanel(toga.Box):
             style=Pack(direction=COLUMN, margin=16))
         self.speed_choice.on_change = self.change_speed
         self.timer_choice.on_change = self.change_timer
-        if app is not None:
-            from .media_controls import SpeechPlayback
-            self.playback = SpeechPlayback(self, app, gate=privacy_gate, valid=valid)
+        self.playback = self.presentation.playback(self, gate=privacy_gate, valid=valid)
+        if self.playback is not None:
             self.session.can_speak = self.playback.can_start
         self.ready_task = loop.create_task(self.wait_ready())
 
-    def show_over(self, owner):
-        from logisticsmobile.speech_overlay import SpeechOverlay
+    def toggle_over(self, owner, *, anchor=None):
+        if self.overlay is not None:
+            self.hide()
+        else:
+            self.show_over(owner, anchor=anchor)
+
+    def show_over(self, owner, *, anchor=None):
         if not self.closed and self.overlay is None:
-            self.overlay = SpeechOverlay(self, owner, self.speech_app)
+            self.overlay = self.presentation.overlay(self, owner, anchor=anchor)
 
     def hide(self, widget=None, **kwargs):
         if self.overlay is not None:
@@ -125,7 +131,7 @@ class ReadAloudPanel(toga.Box):
             return
         if self.engine.ready:
             voices = sorted(self.engine.voices)
-            saved = self.speech_app.preferences.values.get('speech_voice', '') if self.speech_app is not None else ''
+            saved = self.presentation.voice()
             self.voice = saved if saved in voices else self.engine.default_voice or next((v for v in voices if v.startswith('en-US')), voices[0])
             self.play_button.enabled = True
             self.set_status('Select text, or read from here.')
@@ -138,7 +144,7 @@ class ReadAloudPanel(toga.Box):
             if self.playback is not None:
                 self.playback.changed(state)
             self.set_status(message)
-            from logisticsmobile.control_icons import apply_icon
+            apply_icon = self.presentation.apply_icon
             self.skip_back.enabled = self.skip_forward.enabled = state in ('speaking', 'paused')
             apply_icon(self.play_button, 'pause' if state == 'speaking' else 'play',
                 'Pause read-aloud' if state == 'speaking' else 'Resume read-aloud' if state == 'paused' else 'Play read-aloud')

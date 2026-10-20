@@ -1,6 +1,7 @@
 """Discover logical mobile folders without creating crypt storage or copying files."""
 from features.rclone.mobile.storage_location import collection_path
 from pathlib import Path
+from dataclasses import dataclass
 from features.rclone.transfers.mobile.jobs import copy_target
 from services.folders.policy import read_exclusions, visible_name, folder_parts
 
@@ -102,3 +103,84 @@ def folder_browse_copy(entry, source):
     if source == 'rclone':
         return next((copy for copy in copies if copy['source'] == 'Remote'), entry)
     return entry
+
+
+@dataclass(frozen=True)
+class FolderDiscoverySnapshot:
+    """Detached input captured on the UI thread; no clients or widget callbacks."""
+    private_root: Path
+    jobs: dict
+    remote_names: tuple
+    retained_packages: tuple
+    crypt_locations: tuple
+    crypt_roots: dict
+
+
+@dataclass(frozen=True)
+class FolderDiscoveryResult:
+    choices: dict
+    crypt_locations: tuple
+
+
+def discover_folder_choices(snapshot):
+    """Read local directories and group known locations without mutating the snapshot."""
+    jobs = snapshot.jobs
+    # Retained metadata is a discovery index, never permission to browse.
+    # Opening any locked remote still goes through the matching ZIP guard.
+    retained = snapshot.retained_packages
+    remotes = sorted(set(snapshot.remote_names) | {
+        remote for package in retained for remote in package['remotes']}, key=str.casefold)
+    crypt = dict(snapshot.crypt_locations)
+    roots = snapshot.crypt_roots
+    if roots:
+        # The account identities were resolved at credential load. Recheck
+        # just their local directories, including copies created since then.
+        base = collection_path(snapshot.private_root, True)
+        crypt = {}
+        for label, (remote, identity) in roots.items():
+            path = base / identity
+            if path.is_dir() and not path.is_symlink() and any(path.iterdir()):
+                crypt[label] = remote
+    # Rendering and menu opening must never enter the native bridge. A
+    # credential load updates this discovery snapshot.
+    choices = {'All files': dict(source='Local', kind='local', value='', name='Browse All Files', copies=[], browser_root=True)}
+    for name, parts, copies in hub_entries(snapshot.private_root, jobs, remotes, crypt.items()):
+        for source, (kind, value) in copies:
+            title = (name if not jobs[value]['prefix'] else jobs[value]['target']) if kind == 'job' else name
+            if kind == 'remote':
+                value = value, ''
+            remote = jobs[value]['remote'] if kind == 'job' else name if kind in ('crypt', 'remote') else None
+            copy = dict(source=source, kind=kind, value=value, name=title, remote=remote)
+            group = choices.setdefault(title, dict(copy, copies=[]))
+            group['copies'].append(copy)
+    for group in choices.values():
+        if group['copies']:
+            primary = min(group['copies'], key=lambda copy: (copy['kind'] != 'job', copy['source'] == 'Remote'))
+            group.update(primary)
+            # Browse the mapped scope, rather than accidentally opening the
+            # remote root for a pulled subfolder. Decode crypt paths on open.
+            if primary['kind'] == 'job':
+                job = jobs[primary['value']]
+                # The mapping already identifies this online folder even
+                # before credentials load. Opening it uses the usual unlock
+                # guard and resolves its mapped scope after authentication.
+                group['copies'] = [copy for copy in group['copies'] if copy['source'] != 'Remote']
+                group['copies'].append(dict(source='Remote', kind='job-remote',
+                                            value=job['id'], name=primary['name'], remote=job['remote']))
+            elif primary['kind'] == 'crypt' and not any(copy['source'] == 'Remote' for copy in group['copies']):
+                group['copies'].append(dict(source='Remote', kind='remote',
+                                            value=(primary['remote'], ''), name=primary['name'],
+                                            remote=primary['remote']))
+    from .local_sources import shared_files
+    shared = shared_files(snapshot.private_root)
+    if shared is not None:
+        # Imported folders and mapped copies stay individually accessible.
+        # The shared directory is a separate browse action below the list.
+        choices['All files'] = dict(source='Local', kind='shared-local', value='',
+                                    name='Browse All Files', copies=[], browser_root=True)
+        for row in shared.list():
+            if row['directory'] and row['name'] != 'Local':
+                title = row['name']
+                key = title if title not in choices else title + ' (Local)'
+                choices[key] = dict(source='Local', kind='shared-local', value=title, name=title, copies=[])
+    return FolderDiscoveryResult(choices, tuple(crypt.items()) if roots else snapshot.crypt_locations)

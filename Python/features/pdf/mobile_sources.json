@@ -2,13 +2,18 @@
   "schema": 1,
   "modules": [
     "__init__.py",
-    "document.py",
+    "backends/__init__.py",
+    "backends/android.py",
+    "backends/apple.py",
+    "backends/qt.py",
     "contents.py",
+    "document.py",
+    "limits.py",
     "mobile/__init__.py",
     "mobile/canvas.py",
-    "mobile/copies.py",
     "mobile/contents.py",
-    "search.py",
-    "mobile/search.py"
+    "mobile/copies.py",
+    "mobile/search.py",
+    "search.py"
   ]
 }

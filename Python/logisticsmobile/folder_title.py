@@ -4,6 +4,7 @@
 def mount_actions(header, controller):
     """Keep the existing buttons and their native menus in the trailing bar."""
     from rubicon.objc import ObjCClass, CGRect
+    from .ios_reader_chrome import bar_control
     buttons = header.title_actions
     # Use one group so iPad does not collapse separate custom items into More.
     group = ObjCClass('UIStackView').alloc().initWithFrame(CGRect((0, 0), (48 * len(buttons), 48)))
@@ -16,7 +17,7 @@ def mount_actions(header, controller):
         if button.parent is not None:
             button.parent.remove(button)
         button.app, button.window = header.app, header.window
-        native = button._impl.native
+        native = bar_control(button)
         native.translatesAutoresizingMaskIntoConstraints = False
         group.addArrangedSubview(native)
     controller.navigationItem.rightBarButtonItems = [item] if buttons else []
@@ -29,7 +30,7 @@ def mount(header, controller, title):
         return
     header.use_native_title()
     mount_actions(header, controller)
-    from rubicon.objc import ObjCClass, CGRect
+    from rubicon.objc import ObjCClass, CGRect, CGSize
     from .appearance import apple_color
     from .hub_icons import icon
     # Leave symmetric room for Back and both 48-point actions on a narrow phone.
@@ -48,9 +49,13 @@ def mount(header, controller, title):
     label.textColor = apple_color('text')
     label.autoresizingMask = 2
     view.addSubview(label)
-    row = ObjCClass('UIStackView').alloc().initWithFrame(CGRect((0, 22), (width, 15)))
+    scroll = ObjCClass('UIScrollView').alloc().initWithFrame(CGRect((0, 22), (width, 15)))
+    scroll.autoresizingMask = 2
+    scroll.showsHorizontalScrollIndicator = False
+    scroll.showsVerticalScrollIndicator = False
+    scroll.directionalLockEnabled = True
+    row = ObjCClass('UIStackView').alloc().initWithFrame(CGRect((0, 0), (width, 15)))
     row.axis, row.alignment, row.spacing = 0, 1, 4
-    row.autoresizingMask = 2
     leading, trailing = [ObjCClass('UIView').alloc().init() for _ in range(2)]
     row.addArrangedSubview(leading)
     for name, _ in header._storage_kinds:
@@ -66,11 +71,20 @@ def mount(header, controller, title):
     subtitle.text = identity.text
     subtitle.font = ObjCClass('UIFont').systemFontOfSize(subtitle_size)
     subtitle.textColor = apple_color('muted')
-    subtitle.lineBreakMode = 5
+    subtitle.numberOfLines = 1
+    subtitle.accessibilityLabel = identity.text
     row.addArrangedSubview(subtitle)
     row.addArrangedSubview(trailing)
     leading.widthAnchor.constraintEqualToAnchor(trailing.widthAnchor).active = True
-    view.addSubview(row)
+    # Give the description its full measured width so a horizontal swipe can
+    # reveal every word while short descriptions remain centered.
+    text_width = float(subtitle.sizeThatFits(CGSize(100000, 15)).width)
+    content_width = max(width, text_width + 16 * len(header._storage_kinds) + 8)
+    row.frame = CGRect((0, 0), (content_width, 15))
+    scroll.contentSize = CGSize(content_width, 15)
+    scroll.accessibilityLabel = identity.text
+    scroll.addSubview(row)
+    view.addSubview(scroll)
     controller.navigationItem.titleView = view
     header._native_title_mounted = True
     header.refresh_status()

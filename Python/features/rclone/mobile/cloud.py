@@ -9,6 +9,10 @@ from pathlib import Path, PurePosixPath
 PACKAGE_LIMIT = 1024 * 1024
 
 
+class CredentialBusyError(ValueError):
+    """Credential publication was refused without waiting for active work."""
+
+
 class CloudClient:
     supports_streaming = True
     # The native bridge is process-global, including across iPad scenes. Every
@@ -93,8 +97,13 @@ class CloudClient:
         if action in {'import', 'clear', 'vault_open', 'add_smb'}:
             # Serialize publication with the native commit across iPad scenes;
             # local reads and transfers keep their independent native scopes.
-            with CloudClient._state_lock:
+            blocking = action == 'clear'
+            if not CloudClient._state_lock.acquire(blocking=blocking):
+                raise CredentialBusyError('Credentials are in use. Stop the active operation, then retry loading the credential ZIP.')
+            try:
                 return self._request(action, **values)
+            finally:
+                CloudClient._state_lock.release()
         return self._request(action, **values)
 
     def _request(self, action, **values):
@@ -115,6 +124,8 @@ class CloudClient:
         finally:
             self.free(pointer)
         if not reply.get('ok'):
+            if reply.get('error_code') == 'credentials_busy':
+                raise CredentialBusyError(reply['error'])
             if reply.get('error_code') == 'archive_password':
                 from commonUtils.archives.zip_access import ArchivePasswordError
                 raise ArchivePasswordError(reply.get('error', 'Inner ZIP password required.'))

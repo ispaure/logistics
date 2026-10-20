@@ -58,6 +58,9 @@ class StartupModelTests(TestCase):
                 self.assertEqual(app.current.text, 'Unsaved synthetic draft')
             finally:
                 if app is not None:
+                    background = getattr(app, 'cloud_startup_task', None)
+                    if background is not None:
+                        background.cancel()
                     app.main_window.close()
                     app.loop.run_until_complete(asyncio.sleep(0))
                     app.loop.close()

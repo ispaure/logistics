@@ -102,12 +102,19 @@ class MirrorUI(TransferReviewUI):
         if client is None or not hasattr(client, 'request'):
             return result
         visible_remotes = self.rclone_ui.visible_remotes
+        # Published fingerprints are sufficient to discover local directories;
+        # actual crypt reads still pass native admission/identity checks.
+        identities = {remote: identity for record in getattr(client, 'package_records', ())
+                      for remote, identity in record.get('crypt_identities', {}).items()}
+        base = None
         for remote in visible_remotes(getattr(self, 'cloud_crypt_remotes', ())):
             try:
-                identity = client.request('crypt_path', remote=remote, path='', directory=True)['identity']
+                identity = identities.get(remote) or client.request('crypt_path', remote=remote, path='', directory=True)['identity']
                 if roots is not None:
                     roots['LocalCrypt: ' + remote] = (remote, identity)
-                path = collection_path(self.private_root, True) / identity
+                if base is None:
+                    base = collection_path(self.private_root, True)
+                path = base / identity
                 if path.is_dir() and not path.is_symlink() and any(path.iterdir()):
                     result['LocalCrypt: ' + remote] = remote
             except (OSError, ValueError):

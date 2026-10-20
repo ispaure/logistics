@@ -66,7 +66,7 @@ class Preview(qt.QWidget):
         controls.addWidget(self.ignore_whitespace)
         layout.addLayout(controls)
         self.editor = DiffEdit()
-        from features.code_font import code_font
+        from services.editors.ui.fonts import code_font
         code_font().bind(self.editor)
         self.editor.setReadOnly(True)
         self.editor.indent_guides = False

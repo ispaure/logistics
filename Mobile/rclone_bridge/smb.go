@@ -72,5 +72,5 @@ func addSMB(name, host, user, password, domain, port string, sessionOnly bool) (
 		return nil, errors.New("up to 64 connections per credential package are supported")
 	}
 	pending.Remotes[name] = values
-	return installCredentialPackage(pending, sessionOnly)
+	return installCredentialPackage(pending, sessionOnly, nil)
 }

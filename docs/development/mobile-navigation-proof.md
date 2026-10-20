@@ -195,9 +195,12 @@ popping the reader returns to the retained file browser, including its viewport.
 UIKit delegate pops and explicit Back follow the same origin policy. Readers
 opened inside Documents return to that tab's root.
 
-The iOS reader action group uses a native stack with equal-width controls so
-widget refreshes cannot collapse their frames onto one another. Screenshot checks
-also assert the visible buttons' spacing and minimum width after layout.
+The iOS reader uses constrained native stacks with equal-width controls so
+widget refreshes cannot collapse their frames onto one another. Independent
+actions have separate glass backgrounds; adjacent comic previous/next controls
+share a stack. App-painted button fills are removed inside UIKit bar backgrounds,
+including on appearance refresh. Screenshot checks assert visible controls'
+spacing and minimum width after layout.
 
 The disposable native test app atomically writes `logistics-native-ui-result.json`
 in its cache before printing the chunked stdout report. `ui_tools.py` can read that

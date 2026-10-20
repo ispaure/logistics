@@ -19,7 +19,7 @@ class MobileWorkflowTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
-    def test_browser_back_keeps_folder_listing_and_open_sessions(self):
+    def test_browser_return_retains_dirty_drafts_and_back_closes_clean_readers(self):
         import base64
         from zipfile import ZipFile
         app = self.app
@@ -42,11 +42,18 @@ class MobileWorkflowTests(unittest.TestCase):
             if filename.endswith('.md'):
                 owner.crypt_text.value = '# Unsaved browser draft'
             self.assertTrue(app.routes.back())
+            if filename.endswith('.md'):
+                self.assertIsNot(app.body, panel)  # Unsaved changes need a decision.
+                self.assertIn(owner.session.id, app.workspace.sessions)
+                self.assertTrue(app.routes.back())  # Keep editing.
+                self.assertEqual(owner.crypt_text.value, '# Unsaved browser draft')
+                app.loop.run_until_complete(app.show_files())
+            else:
+                self.assertNotIn(owner.session.id, app.workspace.sessions)
             self.assertIs(app.body, panel)
             self.assertIs(browser.tree, tree)
             self.assertEqual(app.file_path, 'Shelf')
             self.assertEqual(browser.search.value, filename)
-            self.assertIn(owner.session.id, app.workspace.sessions)
             self.assertFalse(getattr(app, '_comic_chrome_hidden', False))
         note = next(owner for owner in app.private_sessions.controllers.values() if owner.session.title == 'Notes.md')
         self.assertEqual(note.crypt_text.value, '# Unsaved browser draft')
@@ -208,7 +215,9 @@ class MobileWorkflowTests(unittest.TestCase):
                 self.assertIs(app.private_sessions.active, text_owner)
                 self.assertEqual(text_owner.crypt_text.value, '# Draft while pulling')
                 owners = set(app.private_sessions.controllers)
+                app.main_window._impl.dialog_responses['InfoDialog'] = [None]
                 await tap('Invalid.txt')
+                self.assertEqual(app.main_window._impl.dialog_responses['InfoDialog'], [])
                 self.assertEqual(set(app.private_sessions.controllers), owners)
                 self.assertEqual(text_owner.crypt_text.value, '# Draft while pulling')
                 self.assertIn('failed', app.cloud_status.value.lower())

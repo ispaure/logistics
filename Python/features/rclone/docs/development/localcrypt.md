@@ -449,6 +449,17 @@ Workspaces filters private folder contributions before running availability dete
 
 ## Shared mobile browsing and streaming
 
+Automatic mobile credential loading uses `CloudUI.prepare_cloud` and the shared
+`start_cloud_restore` task. These initialize the client, restore protected
+credentials and prepare folder identities without constructing browser/settings
+controls. Workspaces' Cloud source uses the same model task. `show_cloud` builds
+the remote UI on demand, preserves the credential generation and busy state, and
+publishes already loaded names without restoring again. The retained-package
+settings list is built on its first visit; subsequent credential/busy updates
+still refresh it. Credential document-list publication skips an unopened Documents
+page while continuing to refresh Home icons. Encrypted-folder discovery validates
+the collection base once per scan rather than once per remote.
+
 The native host uses commonUtils' portable browse snapshots and Toga list/tile
 presentation for Local files, LocalCrypt, remote listings and the editor picker.
 Logistics retains storage selection, credentials, navigation and mutations.
@@ -457,8 +468,31 @@ either List or Tiles mode. Merely displaying, sorting or searching names does
 not open archives, inspect covers or decrypt file contents. Explicit information
 selection can use the metadata callback; file taps open their reader directly.
 Clearing credentials stops browsers and clears decoded labels and details.
-Crypt ciphers are cached within the native credential session and discarded on
-session changes.
+Crypt ciphers are cached in memory by encryption settings, independently of each
+remote's connection identity and backing path. Cache fingerprints normalize
+rclone-obscured password/salt spellings; password, salt and filename settings
+remain part of the key. No fingerprint or derived cipher is written to disk.
+Vault/ZIP validation uses a private candidate cache, sharing one derivation across
+the envelope and its packages. Missing distinct configurations are prepared by
+up to four workers, bounded by Go's available parallelism. Workers use independent
+results rather than concurrently mutating the candidate map, and a failed batch
+publishes none of its results. The cap bounds simultaneous scrypt working memory
+to approximately 64 MiB; rclone's derivation parameters and saved format are unchanged.
+Successful publication carries those prepared
+ciphers into the active cache and retains only settings referenced by admitted
+credentials. Failed validation/publication leaves the active cache unchanged.
+Folder discovery and LocalCrypt reads reuse the prepared ciphers without changing
+their existing connection-identity checks. Automatic restore takes crypt names and
+local directory fingerprints from the published credential records, avoiding a
+second native query and one native identity call per folder. Alternate adapters
+without those fields keep the native-query fallback. These fingerprints are local
+discovery metadata; opening/decrypting still validates native admission and identity.
+Unchanged saved-package associations do not rewrite preferences. Lock clears the active cache; replacing
+credentials removes ciphers no longer referenced by any loaded package.
+`crypt_cipher_cache_test.go` covers reuse across 16 separately obscured remotes,
+vault restoration, failed/changed credential replacement, lock retirement,
+encryption-option separation, parallel/sequential encryption equivalence, batch
+failure atomicity and concurrent filename reads.
 
 `CryptFiles.list` enumerates direct children with `scandir`, checks each child's
 link/type/independent-file constraints, and validates the parent/collection at
@@ -526,6 +560,16 @@ opens are bound to the current client and credential generation. Encrypted sourc
 discovery and reader-store construction are feature-owned adapter functions.
 
 The embedded `mirrorSync` uses rclone accounting scoped to its transaction ID.
+Mobile Pull creates missing destination folders and downloads missing local files,
+including after proceeding without a full review. Its Python filesystem checks
+tolerate destination entries removed between listing and metadata inspection;
+missing collection roots, permission errors and unsafe links still fail. Push
+inventories remain strict because local files are the upload source.
+The native preflight also tolerates confirmed missing destination descendants
+on Pull. If Android removable storage returns `readdirent` ENOENT for a directory
+that still exists, it retries that directory's complete link validation once with
+a fresh directory read. A second failure, missing root, permission error or unsafe
+link still stops the scan. Push does not relax its source checks.
 `mirror_progress` returns transferred/total known bytes, completed/total known
 files, active transfers, listed entries and checks. It publishes a final snapshot
 before resetting the accounting group. It also reports attempt/max-attempt counts

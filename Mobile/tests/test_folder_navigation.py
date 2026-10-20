@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import toga
 from commonUtils.ui.native.navigation import NativeNavigationHost
@@ -21,7 +21,8 @@ class FolderStackTests(TestCase):
         self.addCleanup(self.loop.close)
         self.host = NativeNavigationHost(DESTINATION_ITEMS)
         self.app = SimpleNamespace(loop=self.loop, native_host=self.host, active_host=True,
-            select_destination=Mock(return_value=True), adaptive=SimpleNamespace(render=Mock()))
+            select_destination=Mock(return_value=True), visible_reader=Mock(return_value=None),
+            adaptive=SimpleNamespace(render=Mock()))
         self.routes = self.app.routes = MobileRoutes(self.app, self.host, guard=lambda: True, changed=Mock())
         self.navigation = [Navigation() for _ in self.host.destinations]
         def push(destination, panel, title):
@@ -63,7 +64,10 @@ class FolderStackTests(TestCase):
         self.assertEqual(self.loaded, [('Local files', 'Projects')])
         self.assertIs(self.routes.body().children[0], self.view)
         self.routes.back()
-        self.finish()
+        with patch('logisticsmobile.folder_title.mount') as mount:
+            self.finish()
+            self.assertIs(mount.call_args.args[0], self.header)
+            self.assertEqual(mount.call_args.args[2], 'Local files')
         self.assertEqual(self.loaded[-1], ('Local files', ''))
         self.routes.back()
         self.assertFalse(self.routes.screens['files'])
@@ -234,7 +238,7 @@ class ShowInFolderTests(TestCase):
         host = NativeNavigationHost(DESTINATION_ITEMS)
         owner = SimpleNamespace(loop=app.loop, native_host=host, active_host=True,
             folder_path_visible=app.folder_path_visible, adaptive=SimpleNamespace(wide=False),
-            select_destination=Mock(return_value=True))
+            select_destination=Mock(return_value=True), visible_reader=Mock(return_value=None))
         routes = owner.routes = MobileRoutes(owner, host, guard=lambda: True, changed=Mock())
         navigation = [Navigation() for _ in host.destinations]
         def push(destination, panel, title):
@@ -279,23 +283,22 @@ class ShowInFolderTests(TestCase):
             await asyncio.sleep(0)
         app.loop.run_until_complete(exercise())
 
-    def test_home_file_action_does_not_open_in_a_tab_selected_during_restore(self):
+    def test_home_file_action_opens_local_browser_while_cloud_restore_is_blocked(self):
         app = self.app
         async def exercise():
             app.show_home()
-            started, release = asyncio.Event(), asyncio.Event()
+            release = asyncio.Event()
             async def restore():
-                started.set()
                 await release.wait()
             app.cloud_restore_task = app.loop.create_task(restore())
-            opening = app.loop.create_task(app.open_hub_file())
-            await started.wait()
-            app.show_settings()
-            panel = app.body
-            release.set()
-            self.assertFalse(await opening)
-            self.assertIs(app.body, panel)
-            self.assertEqual(app.native_host.state.destination, 'settings')
+            try:
+                self.assertTrue(await asyncio.wait_for(app.open_hub_file(), 1))
+                self.assertFalse(app.cloud_restore_task.done())
+                self.assertEqual(app.native_host.state.destination, 'home')
+                self.assertEqual(app.adaptive.browser('home').storage.value, 'Local files')
+            finally:
+                release.set()
+                await app.cloud_restore_task
         app.loop.run_until_complete(exercise())
 
     def test_home_picker_cancel_returns_to_its_origin_and_reopening_has_separate_controls(self):
@@ -415,7 +418,7 @@ class ShowInFolderTests(TestCase):
         from logisticsmobile.document_sources import show_in_folder, folder_action
         app = self.app
         app.cloud_client = client = RemoteClient()
-        app.cloud_remote.items = ['Files']
+        app.set_loaded_remote_names(['Files'])
         async def exercise():
             app.show_home()
             self.assertTrue(await app.open_crypt(copies=RemoteReaders(client, 'Files'), key='note.txt'))

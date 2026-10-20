@@ -8,6 +8,47 @@ from logisticsmobile import appearance
 
 
 class WorkspaceSurfacesTests(TestCase):
+    def test_ios_icon_refresh_and_repaint_keep_disclosure_space(self):
+        from logisticsmobile.control_icons import button_icons
+        class Impl:
+            __module__ = 'toga_iOS.widgets.button'
+        impl = Impl()
+        impl.native = MagicMock()
+        impl._content_trailing_inset = 32
+        button = NS(_impl=impl, on_press=lambda: None)
+        impl.interface = button
+        bridge = NS(ObjCClass=lambda name: NS(mainScreen=NS(scale=2)),
+                    UIEdgeInsets=lambda *values: values)
+        with patch.dict('sys.modules', {'rubicon.objc': bridge}), patch(
+                'logisticsmobile.control_icons._apple_button_image', return_value=object()), patch.object(
+                appearance, 'apple_color', return_value=MagicMock()):
+            button_icons(button, [('storage_local', 'Local')])
+            self.assertEqual(impl.native.contentEdgeInsets, (0, 12, 0, 32))
+            appearance.surface(button, background='transparent')
+            self.assertEqual(impl.native.contentEdgeInsets, (0, 12, 0, 32))
+
+    def test_startup_labels_do_not_gain_tight_high_contrast_borders(self):
+        from logisticsmobile.startup import StartupScreen
+        screen = StartupScreen()
+        labels = [screen.status, screen.detail, screen.view.children[0].children[0]]
+        self.assertTrue(all(not label._impl._surface_eink_outlined for label in labels))
+
+    def test_background_replacement_preserves_asymmetric_content_padding(self):
+        class Native:
+            padding = (12, 6, 32, 8)
+            def getPaddingLeft(self): return self.padding[0]
+            def getPaddingTop(self): return self.padding[1]
+            def getPaddingRight(self): return self.padding[2]
+            def getPaddingBottom(self): return self.padding[3]
+            def setBackground(self, drawable):
+                # Android applies drawable-supplied padding on replacement.
+                self.padding = (0, 0, 0, 0)
+            def setPadding(self, *padding): self.padding = padding
+        native = Native()
+        for _ in range(3):
+            appearance._set_android_background(native, object())
+            self.assertEqual(native.padding, (12, 6, 32, 8))
+
     def test_nested_offscreen_style_batch_applies_only_final_roles(self):
         class Impl:
             __module__ = 'toga_android.widgets.button'

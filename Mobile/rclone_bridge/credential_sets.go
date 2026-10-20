@@ -160,7 +160,7 @@ func publishCredentialSets() {
 	credentialView = view
 	config.SetData(view)
 }
-func installCredentialPackage(pending snapshot, sessionOnly bool) ([]string, error) {
+func installCredentialPackage(pending snapshot, sessionOnly bool, validated cryptCipherCache) ([]string, error) {
 	ensureCredentialSets()
 	id := packageID(pending.Label)
 	if len(credentialSets) >= 32 && credentialSets[id] == nil {
@@ -192,6 +192,7 @@ func installCredentialPackage(pending snapshot, sessionOnly bool) ([]string, err
 			return nil, err
 		}
 	}
+	ciphers := snapshotCryptCiphers(validated)
 	shutdownClients()
 	if previous := credentialSets[id]; previous != nil {
 		previous.storage.detach()
@@ -199,6 +200,7 @@ func installCredentialPackage(pending snapshot, sessionOnly bool) ([]string, err
 	credentialSets[id] = next
 	latestCredential = pending.Label
 	publishCredentialSets()
+	publishCryptCiphers(ciphers)
 	return store.GetSectionList(), nil
 }
 func installSavedCredentials(next *vaultStorage) error {
@@ -229,6 +231,7 @@ func installSavedCredentials(next *vaultStorage) error {
 		}
 		additions[id] = set
 	}
+	ciphers := snapshotCryptCiphers(next.validatedCiphers)
 	shutdownClients()
 	oldRoot := savedCredentials
 	for id, set := range credentialSets {
@@ -248,6 +251,8 @@ func installSavedCredentials(next *vaultStorage) error {
 		latestCredential = next.values.Label
 	}
 	publishCredentialSets()
+	publishCryptCiphers(ciphers)
+	next.validatedCiphers = nil
 	return nil
 }
 func credentialSource(name string) (*vaultStorage, string) {
@@ -298,7 +303,7 @@ func credentialPackageInfo() []map[string]any {
 	return result
 }
 
-func validateCredentialSnapshot(value snapshot) error {
+func validateCredentialSnapshot(value snapshot, ciphers cryptCipherCache) error {
 	if !validLabel(value.Label) || len(value.Remotes) == 0 || len(value.Remotes) > 64 || len(value.Pins) > 64 || len(value.Aliases) > 64 {
 		return vaultError
 	}
@@ -312,7 +317,7 @@ func validateCredentialSnapshot(value snapshot) error {
 			return vaultError
 		}
 	}
-	if validateCryptRemotes(value.Remotes) != nil {
+	if validateCryptRemotes(value.Remotes, ciphers) != nil {
 		return vaultError
 	}
 	for name, pin := range value.Pins {
@@ -329,13 +334,13 @@ func validateCredentialSnapshot(value snapshot) error {
 	}
 	return nil
 }
-func validateCredentialEnvelope(value snapshot) error {
-	if validateCredentialSnapshot(value) != nil || len(value.Packages) > 32 {
+func validateCredentialEnvelope(value snapshot, ciphers cryptCipherCache) error {
+	if validateCredentialSnapshot(value, ciphers) != nil || len(value.Packages) > 32 {
 		return vaultError
 	}
 	used := map[string]bool{}
 	for id, item := range value.Packages {
-		if id != packageID(item.Label) || len(item.Packages) > 0 || validateCredentialSnapshot(item) != nil {
+		if id != packageID(item.Label) || len(item.Packages) > 0 || validateCredentialSnapshot(item, ciphers) != nil {
 			return vaultError
 		}
 		for name := range item.Remotes {

@@ -43,17 +43,19 @@ class WorkspaceUITests(unittest.TestCase):
             self.assertIs(app.editor_view, a)
             self.assertIs(app.body.children[0], app.preview_box)
             app.routes.back()
-            # System Back returns to the opening screen and keeps preview mode.
-            # The explicit Edit Markdown action below still targets its owner.
-            self.assertIs(app.body, app.routes.roots['home'])
+            # Back prompts for this owner's draft; Back again keeps editing.
+            self.assertEqual(app.routes.screens['home'][-1][0], 'close:' + a.session.id)
+            self.assertTrue(app.routes.back())
+            self.assertIs(app.body.children[0], a.preview_box)
             self.assertEqual(a.session.view['markdown_mode'], 'preview')
             self.assertIn(a.session.id, app.workspace.sessions)
+            app.show_home()
             app.session_opener(b.session.id)()
             back()
             self.assertIs(app.editor_view, a)
             self.assertEqual(a.session.view['markdown_mode'], 'edit')
             self.assertEqual(app.editor.value, '# A')
-            app.close_session(a.session.id)
+            self.assertTrue(app.close_session(a.session.id, choice='discard'))
             back()
             self.assertIs(app.editor_view, b)
 

@@ -2,6 +2,13 @@
 
 [Developer index](development.md) · [Current code map](code-map.md)
 
+This page is a historical assessment and migration record, not the onboarding
+checklist. Use [feature conventions](features.md) and the current code map for
+new work. Larger source refactors remain separate from onboarding/tooling.
+
+For the work identified against the October 20 working tree, see the
+[feature ownership audit](ownership-audit.md). Its local implementation builds on the completed migrations below.
+
 Assessment: October 16, 2026. This proposal records the initial local source tree;
 the implementation status below distinguishes completed local work from plans.
 The goal is to make ownership predictable for a new programmer while retaining
@@ -75,10 +82,15 @@ Python/features/<stable_id>/
     <domain modules>.py # portable behavior, named for their purpose
     ui/                 # desktop Qt presentation
     mobile/             # mobile presentation/adapters when supported
-    README.md           # implementation and test pointers
+    README.md           # short link to the developer guide
+    docs/
+        docs.md         # feature wiki landing
+        development/development.md # implementation and test pointers
+        user/user.md    # canonical desktop user guide
+        user_mobile/user_mobile.md # where supported
     user_docs/
-        README.md       # canonical user guide
         index.md        # in-app compatibility link
+    mobile_sources.json # payload allowlist where supported
 ```
 
 Portable modules must remain importable without loading Qt or Toga. Desktop and

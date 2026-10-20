@@ -44,6 +44,12 @@ The **INI files** tab holds feature configuration, including software download
 settings. Switching tabs retains unsaved INI edits and credential-panel state.
 Use **User Guide** to return to these instructions.
 
+Credential loading works offline. ZIP decoding and saved-config writing run in the
+background, so the window stays responsive. **Cancel** stops loading before
+publication; a config write that has already completed remains loaded. Loading
+does not test whether the remote server or account is reachable. If the ZIP is in
+a cloud file provider, make it available locally before loading it offline.
+
 ## Transfer files
 
 Use the selected folder's **Push…** or **Pull** action. Review the direction and

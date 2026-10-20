@@ -1,6 +1,20 @@
 # Development and validation
 
-## Python and dependencies
+## Set up a checkout
+
+From a fresh clone:
+
+```sh
+git clone --recurse-submodules https://github.com/ispaure/logistics.git
+cd logistics
+```
+
+For an existing checkout with missing shared files, use
+`git submodule update --init --recursive` after preserving any submodule edits.
+Read [AGENTS.md](../../AGENTS.md) for repository conventions. Open the platform
+launcher listed in the [root README](../../README.md#get-started) to run the desktop
+app. An editor can open the repository root; `Python/` is the application import
+root, not a second checkout.
 
 The existing launchers install `uv` when needed, select Python 3.12.2, and
 synchronize [Python/pyproject.toml](../../Python/pyproject.toml) and its
@@ -9,11 +23,81 @@ access. [launch_config.ini](../../launch_config.ini) controls launcher paths; th
 point is `Python/launch.py`. Feature-specific software and credentials are covered
 in [configuration](../user/configuration.md).
 
-Both application manifests pin PySide6 6.12.0. Regenerate `Python/uv.lock`
+The desktop manifest pins PySide6 6.12.0. Mobile uses its own Briefcase manifest
+and Toga backends; it does not use desktop Qt. Regenerate `Python/uv.lock`
 with `uv lock --project Python` after changing dependencies; CI exports it with
 `--locked`. The published Qt wheels require macOS 14+, Linux glibc 2.34+ on
 x86-64 or 2.39+ on ARM64, and Windows 10/11. Test runtime upgrades in a separate
 environment before synchronizing the environment used by a running application.
+
+## Run everyday checks
+
+The root [dev.py](../../dev.py) selects the suite's environment, sets import paths
+and headless backends, and delegates to the existing runners. It works from any
+working directory when invoked by its path. It does not install dependencies or
+build/deploy an app. From the repository root, use `python3` on macOS/Linux or
+`py` on Windows; this bootstrap Python only needs the standard library.
+
+Install the pinned desktop environment and developer tools with uv. These commands
+explicitly target the root `.venv`, so activation is unnecessary. The desktop
+launcher installs uv if needed.
+
+```sh
+# macOS / Linux
+UV_PROJECT_ENVIRONMENT="$PWD/.venv" uv sync --project Python --locked --python 3.12.2
+```
+
+```powershell
+# Windows PowerShell
+$env:UV_PROJECT_ENVIRONMENT = "$PWD/.venv"
+uv sync --project Python --locked --python 3.12.2
+```
+
+Then run the smallest relevant check:
+
+```sh
+python3 dev.py test desktop test_feature_registry.py
+python3 dev.py test desktop 'test_git_*.py'
+python3 dev.py test desktop test_documentation_layout.py
+python3 dev.py lint
+```
+
+Replace `python3` with `py` on Windows. Quote wildcard patterns so the shell does
+not expand them. Omit the filename/pattern to run the whole selected suite.
+No matching files is an error. Each test file runs in a fresh process; failing
+files or timeouts fail the command. The helper returns the check's exit status.
+Lint covers `dev.py`, `Python`, `Mobile` and `.github/scripts`, matching CI's scope.
+
+For **mobile host tests**, use a separate environment, without installing a
+native SDK or Briefcase just to run dummy-backend checks:
+
+```sh
+# macOS / Linux; use py -3.12 and Mobile/.venv/Scripts/python.exe on Windows
+python3.12 -m venv Mobile/.venv
+Mobile/.venv/bin/python -m pip install toga-dummy==0.5.7 markdown-it-py==4.2.0 pygments==2.19.2 pypdf==6.21.0 -r Mobile/requirements-testflight.txt
+python3 dev.py test mobile test_editor_picker.py
+```
+
+The helper uses root `.venv` for desktop/lint and `Mobile/.venv` for mobile,
+including Windows `Scripts/python.exe` paths. For a differently located environment,
+append `--python /path/to/python`. Append `--dry-run` to inspect the command without
+running it. Mobile tests use `TOGA_BACKEND=toga_dummy`; desktop tests use offscreen
+Qt. These checks do not certify native appearance or interactions. See the
+[mobile handbook](mobile-handbook.md) when you need an actual device build.
+
+## Make your first change
+
+1. Find your workflow in the [code map](code-map.md), then read its owning user
+   guide and developer module/test map.
+2. Follow the registration factory or mobile callback to the implementation.
+   A compatibility forwarding module is a pointer, not the place to add behavior.
+3. Change the smallest owning module. For mobile imports, update the owner's
+   `mobile_sources.json` and run `python3 dev.py test desktop test_mobile_packaging.py`.
+4. Run the focused tests below, then `python3 dev.py lint`. UI changes also need
+   interaction checks on the affected platform.
+5. Update the owning documentation using the [hierarchy rules](documentation-hierarchy.md).
+   Review `git diff` and `git status` so generated output and unrelated work stay
+   out of your change.
 
 ## Testing
 
@@ -31,8 +115,8 @@ environment before synchronizing the environment used by a running application.
 | Mobile source selection and import isolation | `Python/tests/test_mobile_packaging.py`, `test_mobile_portability.py`, `Mobile/tests/test_packaged_startup.py` |
 
 The [mobile owner map](mobile-runtime.md) explains controller
-and packaging boundaries. For focused desktop runs, pass a filename to the
-regression runner's `--pattern`. Preserve the flat test layout: its isolated
+and packaging boundaries. For focused runs, use `dev.py test desktop <filename>` or
+`dev.py test mobile <filename>`. Preserve the flat test layout: its isolated
 mode requires a nonempty flat directory. The runner puts the selected suite first
 on the import path so mobile and desktop files with the same test-module name
 cannot shadow each other. Use the separate mobile environment
@@ -40,31 +124,9 @@ and [host validation commands](mobile-launchers.md#host-validation) for Toga
 widget tests. Loopback fixtures need permission to bind localhost; native file
 watchers also need functioning OS notification access.
 
-The Windows platform runner starts with one native Qt startup smoke using the
-`windows` platform plugin. It constructs the real public main window, applies
-theme/font settings, runs its event loop and closes it under isolated preferences
-and caches. Feature initialization hooks are excluded. Fatal startup exits report
-the Windows exception code and Python faulthandler trace before running headless
-regressions. Cleanup uses the shared Qt fixture lifecycle. Mixed-DPI monitor
-crossings additionally need physical Windows hardware validation; synthetic
-native-message tests cover the preservation policy on every CI host.
-The startup smoke also checks the rendered application font against the shared
-reference size. Shared styling tests measure text at 72, 96 and 120 font DPI and
-verify that editor zoom persists the reference value. Launch-card tests exercise
-the macOS conversion at maximum size and several window widths. Offscreen tests
-alone use 96 DPI even on macOS, so native macOS font measurements remain relevant.
-Native startup logs include Git history font, row and header metrics to distinguish
-list density from screen scaling. Filesystem-refresh tests check that activity
-settles without index writes; native watcher notification counts are not portable.
-
-Run the regression suite from the repository root:
-
-```sh
-# macOS / Linux
-PYTHONPATH=Python .venv/bin/python Python/tests/run_regressions.py Python/tests --isolate-modules
-```
-
-On Windows PowerShell, set `$env:PYTHONPATH = "Python"` and run `.venv/Scripts/python.exe Python/tests/run_regressions.py Python/tests --isolate-modules`.
+Run the complete desktop suite from the repository root with
+`python3 dev.py test desktop` (`py dev.py test desktop` on Windows).
+For the complete mobile host suite, use `python3 dev.py test mobile`.
 
 For both repositories' suites and the historical comic compression comparison,
 use the same project interpreter:
@@ -85,9 +147,8 @@ and installed drivers require separate validation.
 
 ## Correctness checks and test ownership
 
-Normal launchers synchronize runtime dependencies only. Install developer tools
-with `UV_PROJECT_ENVIRONMENT=.venv uv sync --project Python --locked`, then run
-`.venv/bin/ruff check --config Python/pyproject.toml Python .github/scripts`.
+Normal launchers synchronize runtime dependencies only. Use the environment setup
+above to install developer tools, then run `python3 dev.py lint` (`py` on Windows).
 The initial lint policy checks syntax and correctness without forcing a formatting
 rewrite. `commonUtils.tests.qt_test_case.QtTestCase` gives GUI tests ownership of
 new windows: it requests worker shutdown, drains deferred deletion and deletes
@@ -98,6 +159,25 @@ creating the directory. Use `wait_until()` for condition-based Qt waits with
 operation-specific timeout messages. Tests must not depend on windows retained by
 other tests. See the [shared test guide](../../Python/commonUtils/tests/README.md)
 for lifecycle details.
+
+## CI, release gates and advanced validation
+
+The Windows platform runner starts with one native Qt startup smoke using the
+`windows` platform plugin. It constructs the real public main window, applies
+theme/font settings, runs its event loop and closes it under isolated preferences
+and caches. Feature initialization hooks are excluded. Fatal startup exits report
+the Windows exception code and Python faulthandler trace before running headless
+regressions. Cleanup uses the shared Qt fixture lifecycle. Mixed-DPI monitor
+crossings additionally need physical Windows hardware validation; synthetic
+native-message tests cover the preservation policy on every CI host.
+The startup smoke also checks the rendered application font against the shared
+reference size. Shared styling tests measure text at 72, 96 and 120 font DPI and
+verify that editor zoom persists the reference value. Launch-card tests exercise
+the macOS conversion at maximum size and several window widths. Offscreen tests
+alone use 96 DPI even on macOS, so native macOS font measurements remain relevant.
+Native startup logs include Git history font, row and header metrics to distinguish
+list density from screen scaling. Filesystem-refresh tests check that activity
+settles without index writes; native watcher notification counts are not portable.
 
 Platform checks also run on main pushes and launcher changes.
 

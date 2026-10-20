@@ -457,11 +457,13 @@ class WorkspaceNavigationTests(unittest.TestCase):
             frame = app.body.children[0]._workspace_frame
             self.assertEqual(list(frame.row.children), [frame.folder_master, frame.main])
             self.assertLessEqual(abs(frame.folder_master.style.width - frame.main.style.width), 1)
+            self.assertEqual(frame.main.style.margin_left, 16)
             self.assertFalse(any(button.text == 'Remove mapping (keep files)'
                                  for button, _ in app.folder_action_controls))
             with patch.object(self.navigation, 'width', return_value=390):
                 self.navigation.render()
                 self.assertEqual(list(frame.row.children), [frame.main])
+                self.assertEqual(frame.main.style.margin_left, 0)
             self.navigation.render()
             self.assertEqual(list(frame.row.children), [frame.folder_master, frame.main])
 
@@ -496,8 +498,9 @@ class WorkspaceNavigationTests(unittest.TestCase):
             with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.54):
                 self.navigation.render()
                 available = self.navigation.content_width('files', margin=24)
-                self.assertAlmostEqual(frame.folder_master.style.width, available * .54, delta=1)
-                self.assertAlmostEqual(frame.main.style.width, available * .46, delta=1)
+                self.assertAlmostEqual(frame.folder_master.style.width + 8, available * .54, delta=1)
+                self.assertAlmostEqual(frame.main.style.width + 8, available * .46, delta=1)
+                self.assertEqual(frame.main.style.margin_left, 16)
             self.navigation.render()
             self.assertAlmostEqual(frame.folder_master.style.width, frame.main.style.width)
         app.loop.run_until_complete(app.file_browser.close())
@@ -549,8 +552,14 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertFalse(self.navigation.menu_open['documents'])
             self.assertEqual(first.document.text, 'Keep the original draft')
             self.assertEqual(app.private_sessions.active.crypt_text.value, '# Other file')
+            opened = app.private_sessions.active.session.id
             self.assertTrue(app.routes.back())
+            self.assertNotIn(opened, app.workspace.sessions)
+            self.assertIn(first.session.id, app.workspace.sessions)
+            self.assertEqual(first.document.text, 'Keep the original draft')
             self.assertIs(app.body.children[0], first.document_view)
+            self.assertTrue(self.navigation.menu_open['documents'])
+            self.assertEqual(drawer.folder, 'Notes')
 
     def test_duo_switches_browser_and_two_editors_and_collapses_without_copying_widgets(self):
         app = self.app

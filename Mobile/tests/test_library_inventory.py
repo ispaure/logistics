@@ -87,7 +87,7 @@ class LibraryInventoryTests(TestCase):
             catalog.library_records.append(dict(name='SESSION-ONLY-SECRET', folder='secret',
                 source='LocalCrypt', provider=private, client=app.cloud_client,
                 generation=getattr(app.cloud_client, 'generation', None)))
-            with patch('logisticsmobile.library_ui.toga.Button', side_effect=AssertionError('No per-row widgets')):
+            with patch('features.books.mobile.library.catalog.toga.Button', side_effect=AssertionError('No per-row widgets')):
                 catalog.filter_library()
             self.assertEqual(len(catalog.library_folder_list.data), 1001)
             self.assertEqual(list(catalog.library_rows.children), [catalog.library_folder_list])

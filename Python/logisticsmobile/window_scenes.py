@@ -280,6 +280,7 @@ class SceneManager:
             view.dispose()
         host.memory_pressure.dispose()
         host.screen_privacy.dispose()
+        host.seasonal_snow.dispose()
         host.adaptive.uninstall()
         host.routes.uninstall()
         host.native_host.dispose()

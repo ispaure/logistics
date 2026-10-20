@@ -35,8 +35,10 @@ before returning to the screen that opened them.
 Reader tools, Settings categories, connection forms and transfer pages each
 have their own return step. Leaving a transfer comparison cancels that review;
 leaving an active transfer's details lets the transfer continue. Returning from
-a document keeps its open session and draft; use the document's Close command
-to close it explicitly.
+a main document with **× (Close document)** closes its session and returns to
+the previous screen. Editors use the same Close control: unsaved changes offer
+**Save and close**, **Discard and close**, or **Keep editing**. Failed saves
+retain the edits. Secondary document panels keep their usual Back step.
 
 Each bottom tab or rail destination retains its own place. Back follows the
 current destination's screens. Opening a file from Workspaces keeps that tab selected; after leaving the file,
@@ -75,13 +77,14 @@ if only Legacy is available and Show Legacy is off, the button stays hidden.
 Passwords are never saved.
 
 Documents shows **Search documents**, **All open**, **Recent**, **Saved documents**,
-and access to the **Books & Comics library**. All open lists every visible open
+and **Open Books & Comics library**. All open lists every visible open
 document, with the active one first and a Close button beside each. Recent shows
 closed entries from the ten-file history; open entries stay in All open. Other
 saved text and Markdown files appear in Saved documents without repeating files
 already listed above. Search filters all three sections by filename, ignoring
 case. Clearing search restores the lists. Closing keeps saved files and retains
-the existing unsaved-change choices. An empty section shows **No open documents**.
+the existing unsaved-change choices. Empty sections show plain messages, such as
+**No open documents**, outside the rounded document groups.
 
 **Currently open** appears as plain status text beneath recent filenames for documents
 still open in the workspace. Select the filename to return to that document. **Unsaved changes** and

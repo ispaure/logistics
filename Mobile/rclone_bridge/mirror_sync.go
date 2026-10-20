@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -63,25 +64,9 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 		return 0, errors.New("linked sync storage is not supported")
 	}
 	if !missing {
-		err = filepath.WalkDir(localPath, func(p string, entry os.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			linked := entry.Type()&os.ModeSymlink != 0
-			if linked && cipher == nil {
-				info, e := os.Stat(p)
-				linked = e != nil || !info.Mode().IsRegular()
-			}
-			if linked {
-				return errors.New("linked sync storage is not supported")
-			}
-			return nil
-		})
+		err = filepath.WalkDir(localPath, mirrorStorageCheck(ctx, localPath, cipher == nil, push))
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("checking local sync storage: %w", err)
 		}
 	}
 	remoteName := name
@@ -136,6 +121,7 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 	ctx = accounting.WithStatsGroup(ctx, run)
 	stats := accounting.Stats(ctx)
 	defer stats.ResetCounters()
+	clearStaleFilesystemCache()
 	online, err := fs.NewFs(ctx, remoteName+":"+remoteRoot)
 	if err != nil {
 		return 0, err

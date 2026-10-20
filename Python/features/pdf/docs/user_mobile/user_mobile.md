@@ -15,7 +15,11 @@ Previous/Next and the page count stay in a compact footer. Fullscreen hides the
 title and controls. The PDF reader does not show EPUB chapter or speech actions.
 
 PDFs are read-only, limited to 32 MiB and 10,000 pages. Pages are fitted to the
-reading pane and rasterized on demand. Reading positions stay in this session.
+reading pane and rasterized on demand. The **Back arrow** closes the reader
+and returns to its originating folder or screen; Android Back does the same
+after dismissing open search/tools. Reopening resumes the page during the app
+session. Remembered provider positions clear when private readers are locked
+or the app restarts.
 Decrypted bytes and page images stay in memory and clear on close; remote and
 LocalCrypt sessions also retire when credentials change. Password-protected and
 damaged PDFs cannot be opened. PDF password entry and PDF annotation editing

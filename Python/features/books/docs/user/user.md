@@ -60,7 +60,7 @@ Alt+Left/Right moves between chapters.
 
 ## Read aloud
 
-Choose **Read aloud** in the toolbar or **View → Read aloud…**. Select a passage
+Choose the **speaker** icon in the toolbar or **View → Read aloud…**. Select a passage
 first to read only that passage; otherwise reading starts at the visible page
 and continues through the current chapter. Choose a language, installed voice
 and speed, then press **Play**. The same button changes to **Pause** while speaking
@@ -129,6 +129,9 @@ Page turns advance past the displayed pages, and resizing follows the current
 text location. The bottom track shows estimated whole-book progress, weighted
 by chapter resource size. Taller ticks mark higher-level contents entries;
 click anywhere on the track to jump to that part of the book.
+
+The speaker and Aa toolbar buttons toggle their floating panels. Clicking outside
+a floating panel also closes it; hiding speech controls preserves playback.
 
 Read aloud opens a compact panel anchored to its toolbar button. The reader
 highlights the spoken word when the platform engine reports word progress;
@@ -199,4 +202,3 @@ for supported reading and storage workflows.
 ## Native mobile reading
 
 See [Books mobile workflows](../user_mobile/reading.md#native-mobile-reading).
-

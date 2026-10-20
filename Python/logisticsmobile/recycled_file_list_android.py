@@ -51,7 +51,8 @@ class AndroidFileList(Widget):
         selected_text = '#ffffff' if eink_enabled() else colors['text']
         selected_fill = '#000000' if eink_enabled() else colors['hover']
         self.native.setPalette(*[Color.parseColor(value) for value in
-            (colors['text'], colors['muted'], colors['surface'], selected_text, selected_fill, colors['accent'])])
+            (colors['text'], colors['muted'], colors['surface'], selected_text, selected_fill,
+             colors['accent'], colors['border'])], eink_enabled())
 
     def change_source(self, source):
         self.generation += 1
@@ -87,7 +88,7 @@ class AndroidFileList(Widget):
         pass
 
     def set_primary_action_enabled(self, enabled):
-        pass
+        self.native.setContextActions(bool(enabled))
 
     def set_secondary_action_enabled(self, enabled):
         pass

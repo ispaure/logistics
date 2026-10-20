@@ -92,10 +92,12 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.sidebar.setCurrentIndex(1)
 
     def show_appearance(self):
+        from commonUtils.ui.readers.reader_chrome import show_reader_popup
+        if self.appearance.isVisible():
+            self.appearance.hide()
+            return
         self.appearance.adjustSize()
-        self.appearance.move(self.appearance_button.mapToGlobal(
-            qt.QPoint(self.appearance_button.width() - self.appearance.width(), self.appearance_button.height())))
-        self.appearance.show()
+        show_reader_popup(self.appearance, self.appearance_button, align_right=True)
 
     def reading_font(self):
         # An empty shared family means Automatic. QFont('') can resolve to an

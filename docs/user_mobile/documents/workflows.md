@@ -17,7 +17,7 @@ the entire device filesystem. Choose **New document** from Home or Document acti
 name and select **Plain text (.txt)** or **Markdown (.md)**, then tap
 **Create document**. The selected extension is added when needed. Markdown also
 offers an optional title, inserted as the first heading. **Cancel** creates nothing.
-Books and comics are available through Workspaces or Documents’ Books & Comics library;
+Books and comics are available through Workspaces or Documents’ **Open Books & Comics library**;
 Chat has its own bottom navigation button between Documents and Settings. Native tab
 controls adapt to the Apple layout; Android uses bottom navigation in compact
 windows and a rail at 600 dp or wider. Switching destinations retains each

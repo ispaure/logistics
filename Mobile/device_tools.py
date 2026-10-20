@@ -14,17 +14,19 @@ import tomllib
 try:
     from .select_ios_sdk import choose, installed
     from .tools import stage
+    from .deployment_paths import output_root, prepare_workspace
 except ImportError:
     from select_ios_sdk import choose, installed
     from tools import stage
+    from deployment_paths import output_root, prepare_workspace
 
 ROOT = Path(__file__).resolve().parent
-PROJECT = ROOT / 'build/logisticsmobile/ios/xcode'
+PROJECT = output_root(ROOT) / 'build/logisticsmobile/ios/xcode'
 PBX = PROJECT / 'Logistics Mobile.xcodeproj/project.pbxproj'
 INFO = PROJECT / 'LogisticsMobile/LogisticsMobile-Info.plist'
 CONFIG = ROOT / '.device.json'
 BUNDLE = 'io.github.ispaure.logisticsmobile'
-DERIVED = ROOT / 'build/physical-device'
+DERIVED = output_root(ROOT) / 'build/physical-device'
 APP = DERIVED / 'Build/Products/Debug-iphoneos/Logistics Mobile.app'
 
 
@@ -33,11 +35,11 @@ def run(args, *, env=None, log=None):
         log.parent.mkdir(parents=True, exist_ok=True)
         print(f'Running {args[0]}; log: {log}', flush=True)
         with log.open('w') as stream:
-            result = subprocess.run(args, cwd=ROOT, env=env, stdout=stream, stderr=subprocess.STDOUT)
+            result = subprocess.run(args, cwd=output_root(ROOT), env=env, stdout=stream, stderr=subprocess.STDOUT)
         if result.returncode:
             raise RuntimeError(f'{args[0]} failed. See {log}\n' + '\n'.join(log.read_text(errors='replace').splitlines()[-18:]))
     else:
-        subprocess.run(args, cwd=ROOT, env=env, check=True)
+        subprocess.run(args, cwd=output_root(ROOT), env=env, check=True)
 
 
 def device_json(args, env):
@@ -130,15 +132,16 @@ def validate_app(app, team, udid):
 
 def refresh_sources(env):
     # Stage first; a failed staging attempt leaves the old payload untouched.
-    with tempfile.TemporaryDirectory(prefix='logistics-stage-', dir=ROOT / 'build') as temporary:
+    workspace = prepare_workspace(ROOT)
+    with tempfile.TemporaryDirectory(prefix='logistics-stage-', dir=workspace / 'build') as temporary:
         replacement = Path(temporary) / 'payload'
         stage(ROOT.parent, replacement, allow_dirty=True)
-        payload = ROOT / 'payload'
+        payload = workspace / 'payload'
         if payload.exists():
             payload.rename(Path(temporary) / 'previous-payload')
         replacement.rename(payload)
         try:
-            run([sys.executable, 'cloud_build.py', 'licenses'], env=env, log=ROOT / 'logs/device-licenses.log')
+            run([sys.executable, str(ROOT / 'cloud_build.py'), 'licenses'], env=env, log=workspace / 'logs/device-licenses.log')
         except Exception:
             shutil.rmtree(payload)
             previous = Path(temporary) / 'previous-payload'
@@ -151,8 +154,8 @@ def refresh_sources(env):
         # Briefcase otherwise refreshes sources but retains stale app_packages.
         command.append('--update-requirements')
     run(command, env=env,
-        log=ROOT / 'logs/device-update.log')
-    run([sys.executable, 'cloud_build.py', 'ios'], env=env, log=ROOT / 'logs/device-bridge.log')
+        log=workspace / 'logs/device-update.log')
+    run([sys.executable, str(ROOT / 'cloud_build.py'), 'ios'], env=env, log=workspace / 'logs/device-bridge.log')
 
 
 def saved_config():
@@ -172,7 +175,7 @@ def launch_app(config, env, developer, sdk, *, allow_wired=False, install=False)
         raise RuntimeError(f'Expected wireless transport, found {transport}. Unplug USB, unlock the device, and use the same Wi-Fi.')
     report = dict(config['signing_identity'], device_id=config['device_id'], developer_dir=developer, sdk=sdk,
                   transport=transport, installed=False, launched=False)
-    report_path = ROOT / 'logs/device-deployment.json'
+    report_path = output_root(ROOT) / 'logs/device-deployment.json'
     report_path.parent.mkdir(exist_ok=True)
     if install:
         # Never uninstall, reset, unpair, or retry with another identity.
@@ -229,7 +232,7 @@ def main():
         return
     developer, sdk = choose(installed())
     env = dict(os.environ, DEVELOPER_DIR=developer)
-    ROOT.joinpath('build').mkdir(exist_ok=True)
+    prepare_workspace(ROOT)
     if args.command == 'configure':
         if not args.team or not re.fullmatch(r'[A-Z0-9]{10}', args.team):
             parser.error('configure requires the existing 10-character --team ID.')
@@ -263,7 +266,7 @@ def main():
     run(['xcodebuild', '-project', str(PBX.parent), '-scheme', 'Logistics Mobile',
          '-configuration', 'Debug', '-sdk', 'iphoneos', '-destination', f"id={config['device_id']}",
          '-derivedDataPath', str(DERIVED), '-allowProvisioningUpdates',
-         '-allowProvisioningDeviceRegistration', 'build'], env=env, log=ROOT / 'logs/device-build.log')
+         '-allowProvisioningDeviceRegistration', 'build'], env=env, log=output_root(ROOT) / 'logs/device-build.log')
     identity = validate_app(APP, config['team_id'], config['device_id'])
     if config.get('signing_identity') and config['signing_identity'] != identity:
         raise RuntimeError('Previously built signing/keychain identity differs; refusing deployment.')

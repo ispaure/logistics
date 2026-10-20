@@ -151,7 +151,7 @@ class DocumentMenuTests(TestCase):
         from features.rclone.mobile.remote_readers import RemoteReaders
         app = self.app
         app.cloud_client = client = RemoteClient()
-        app.cloud_remote.items = ['Files']
+        app.set_loaded_remote_names(['Files'])
         async def exercise():
             for server, expected in ((False, 'rclone'), (True, 'Network shares')):
                 if server:

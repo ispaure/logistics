@@ -94,6 +94,7 @@ have separate workspaces and prevent duplicate writers. Crypt files offer both e
 offline copies and direct remote previews. A Mac can build, install and launch
 the iPhone app over Wi-Fi using the [paired-device workflow](docs/development/mobile-launchers.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
 A [double-click Android launcher](docs/development/mobile-launchers.md#double-click-android-deployment) stages local sources, builds and installs on a connected Android device.
+A [simple deployment window](docs/development/mobile-launchers.md#simple-deployment-window) updates iOS and Android test devices concurrently and offers separate Firebase and TestFlight buttons using existing settings.
 A [Firebase beta launcher](docs/development/mobile-launchers.md#double-click-android-firebase-distribution) builds and signs Android APKs for invited testers; a combined launcher runs device installs and both beta distributions.
 An [opt-in TestFlight workflow](docs/development/mobile-testflight.md) prepares
 archives and uploads with the same app identity after developer enrollment approval.
@@ -142,7 +143,8 @@ development hierarchies. Feature manuals live in each owner’s `docs/` folder.
 - [Development](docs/development/development.md): project structure, extension guides and testing.
 - [Publishing releases](docs/development/releasing.md): package checks and release troubleshooting.
 
-For contributions, use the [development and validation guide](docs/development/testing.md).
+For contributions, start with [Developing Logistics](docs/development/development.md)
+for setup, code ownership and focused checks through `python3 dev.py --help` (`py dev.py --help` on Windows).
 Feature changes should include updates to their user guides. The application uses
 Python 3.12.2 and pinned dependencies; normal launchers manage that environment.
 Git and optional external tools are installed/configured separately.

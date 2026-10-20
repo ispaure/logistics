@@ -28,6 +28,7 @@ class HubController(HubUI):
     session_closer = HostAttribute('session_closer')
     session_opener = HostAttribute('session_opener')
     show_cloud = HostAttribute('show_cloud')
+    start_cloud_restore = HostAttribute('start_cloud_restore')
     show_documents = HostAttribute('show_documents')
     show_home_files = HostAttribute('show_home_files')
     show_library = HostAttribute('show_library')

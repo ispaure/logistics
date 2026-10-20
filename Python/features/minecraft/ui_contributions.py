@@ -22,7 +22,7 @@ def _get_actions(_entry: FolderEntry):
 def _create_widget(entry: FolderEntry, parent=None):
     """Create the Minecraft server selector/action section for a folder."""
 
-    from features.minecraft.folder_widget import MinecraftFolderWidget
+    from features.minecraft.ui.folder_widget import MinecraftFolderWidget
 
     return MinecraftFolderWidget(entry, parent=parent)
 

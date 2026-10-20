@@ -54,12 +54,16 @@ SHARED_REQUIRED_MODULES += ('runtime/document_access.py', 'runtime/protected_key
                             'filesystem/snapshots.py', 'archives/rebuilding.py',
                             'ui/native/event_loop.py', 'ui/native/memory.py',
                             'ui/native/documents.py', 'ui/native/menus.py',
-                            'ui/native/presentation.py', 'ui/native/editor_search.py',
+                            'ui/native/presentation.py', 'ui/native/editor_search.py', 'ui/native/markdown_search.py',
                             'ui/native/password_input.py')
 SHARED_REQUIRED_MODULES += ('ui/appearance/formatting_glyphs.py',)
 SHARED_REQUIRED_MODULES += ('formats/code_syntax.py', 'formats/code_spans.py', 'formats/code_blade.py',
                             'ui/native/code_input.py',
                             'ui/native/android/io/github/ispaure/commonutils/CodeEditorSupport.java')
+
+SHARED_REQUIRED_MODULES += ('runtime/speech.py', 'formats/image_headers.py',
+                            'ui/native/speech.py', 'ui/native/private_webview.py',
+                            'ui/native/android/io/github/ispaure/commonutils/SpeechListener.java')
 
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):

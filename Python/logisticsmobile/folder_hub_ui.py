@@ -1,22 +1,22 @@
 """A folder list and focused, source-owned folder actions."""
 from features.rclone.mobile.storage_location import collection_path
 import asyncio
-from copy import deepcopy
 from types import SimpleNamespace
 from contextlib import nullcontext
 import toga
 from .control_icons import icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
-from .folder_hub import hub_entries, folder_tree, credential_choices, source_choices, folder_storage_label, folder_browse_copy
+from .folder_hub import folder_tree, credential_choices, source_choices, folder_storage_label, folder_browse_copy
 from features.rclone.mobile.messages import import_hint
 from textwrap import fill
 from .appearance import list_button, batch_surfaces
 from .appearance import action_button, accessible_name
+from .ui_metrics import TOUCH_TARGET, BODY_TEXT, CONTROL_TEXT, CAPTION_TEXT, toga_font_size
 from .folder_hub_style import (
     surface, source_tab, compact_icon, toolbar_button, folder_row, folder_name,
     source_actions, SOURCE_LABELS, ROW_HEIGHT, ROW_GAP, ENTRY_ICON_SLOT, ENTRY_ICON_SIZE,
-    tree_anchor, tree_guide, TREE_LABEL_GAP, align_group_label,
+    tree_anchor, tree_guide, TREE_LABEL_GAP, align_group_label, folder_scroll,
 )
 
 
@@ -65,7 +65,7 @@ class FolderHubUI:
         # Credentials already supply the remote/crypt snapshot. Refresh only
         # rereads local folder names and mappings; it must not wait on rclone,
         # including while a transfer or credential operation owns the bridge.
-        self.show_cloud(present=False)
+        self.start_cloud_restore()
         recovering = bool(getattr(self, 'folder_hub_error', ''))
         try:
             choices = await self._schedule_folder_choices()
@@ -102,142 +102,24 @@ class FolderHubUI:
 
     def folder_choices(self):
         if type(self._impl).__module__.startswith(('toga_iOS.', 'toga_android.')):
-            client = getattr(self, 'cloud_client', None)
-            token = id(client), getattr(client, 'generation', None)
-            self._schedule_folder_choices()
-            if getattr(self, '_folder_choices_token', None) == token:
-                return deepcopy(self._folder_choices_cache)
-            self._folder_choices_cache = {}
-            self._folder_choices_token = None
-            # A credential change must not reveal a prior session's names while
-            # its replacement snapshot is still being discovered.
-            return {'All files': dict(source='Local', kind='local', value='',
-                name='Browse All Files', copies=[], browser_root=True)}
-        return self._discover_folder_choices()
+            self.discovery.request()
+            return self.discovery.cached_choices()
+        # Dummy/desktop hosts retain the synchronous path used by their callers.
+        result = self.discovery.discover_now()
+        self.hub_crypt_locations = list(result.crypt_locations)
+        return result.choices
 
     def _schedule_folder_choices(self):
-        self._folder_refresh_again = True
-        task = getattr(self, '_folder_discovery_task', None)
-        if task is not None and not task.done():
-            return task
-        async def scan():
-            while self.active_host and self._folder_refresh_again:
-                self._folder_refresh_again = False
-                epoch = getattr(self, '_folder_discovery_epoch', 0)
-                client = getattr(self, 'cloud_client', None)
-                token = id(client), getattr(client, 'generation', None)
-                from features.rclone.transfers.mobile.jobs import resolved_job
-                jobs = {key: dict(resolved_job(client, job)) for key, job in self.mirror_store().jobs.items()}
-                remotes = tuple(self.loaded_remote_names())
-                retained = deepcopy(self.retained_credential_associations())
-                snapshot = SimpleNamespace(private_root=self.private_root, cloud_client=None,
-                    mirror_store=lambda: SimpleNamespace(jobs=jobs),
-                    loaded_remote_names=lambda: remotes,
-                    retained_credential_associations=lambda: retained,
-                    hub_crypt_locations=list(getattr(self, 'hub_crypt_locations', ())),
-                    hub_crypt_roots=deepcopy(getattr(self, 'hub_crypt_roots', {})))
-                try:
-                    choices = await asyncio.to_thread(FolderHubUI._discover_folder_choices, snapshot)
-                except (OSError, ValueError, IndexError, KeyError) as error:
-                    if self.active_host:
-                        self.folder_hub_error = str(error)[:300]
-                        if hasattr(self, 'folder_loading_status'):
-                            self.set_folder_loading('Refresh failed: ' + self.folder_hub_error)
-                    return None
-                if not self.active_host:
-                    return None
-                if epoch != getattr(self, '_folder_discovery_epoch', 0):
-                    return None
-                if token != (id(self.cloud_client), getattr(self.cloud_client, 'generation', None)):
-                    self._folder_refresh_again = True
-                    continue
-                if self._folder_refresh_again:
-                    continue
-                self._folder_choices_cache, self._folder_choices_token = choices, token
-                self.hub_crypt_locations = snapshot.hub_crypt_locations
-                if hasattr(self, 'folder_list'):
-                    self.update_folder_list(choices)
-                return choices
-            return None
-        self._folder_discovery_task = self.app.loop.create_task(scan())
-        return self._folder_discovery_task
+        return self.discovery.request()
 
     def invalidate_folder_discovery(self):
-        self._folder_discovery_epoch = getattr(self, '_folder_discovery_epoch', 0) + 1
-        self._folder_refresh_again = False
-        self._folder_choices_cache = {}
-        self._folder_choices_token = None
-
-    def _discover_folder_choices(self):
-        from features.rclone.transfers.mobile.jobs import resolved_job
-        client = getattr(self, 'cloud_client', None)
-        jobs = {key: resolved_job(client, job) for key, job in self.mirror_store().jobs.items()}
-        # Retained metadata is a discovery index, never permission to browse.
-        # Opening any locked remote still goes through the matching ZIP guard.
-        retained = self.retained_credential_associations()
-        remotes = sorted(set(self.loaded_remote_names()) | {
-            remote for package in retained for remote in package['remotes']}, key=str.casefold)
-        crypt = dict(getattr(self, 'hub_crypt_locations', ()))
-        roots = getattr(self, 'hub_crypt_roots', {})
-        if roots:
-            # The account identities were resolved at credential load. Recheck
-            # just their local directories, including copies created since then.
-            base = collection_path(self.private_root, True)
-            crypt = {}
-            for label, (remote, identity) in roots.items():
-                path = base / identity
-                if path.is_dir() and not path.is_symlink() and any(path.iterdir()):
-                    crypt[label] = remote
-            self.hub_crypt_locations = list(crypt.items())
-        # Rendering and menu opening must never enter the native bridge. A
-        # credential load updates this discovery snapshot.
-        choices = {'All files': dict(source='Local', kind='local', value='', name='Browse All Files', copies=[], browser_root=True)}
-        for name, parts, copies in hub_entries(self.private_root, jobs, remotes, crypt.items()):
-            for source, (kind, value) in copies:
-                title = (name if not jobs[value]['prefix'] else jobs[value]['target']) if kind == 'job' else name
-                if kind == 'remote':
-                    value = value, ''
-                remote = jobs[value]['remote'] if kind == 'job' else name if kind in ('crypt', 'remote') else None
-                copy = dict(source=source, kind=kind, value=value, name=title, remote=remote)
-                group = choices.setdefault(title, dict(copy, copies=[]))
-                group['copies'].append(copy)
-        for group in choices.values():
-            if group['copies']:
-                primary = min(group['copies'], key=lambda copy: (copy['kind'] != 'job', copy['source'] == 'Remote'))
-                group.update(primary)
-                # Browse the mapped scope, rather than accidentally opening the
-                # remote root for a pulled subfolder. Decode crypt paths on open.
-                if primary['kind'] == 'job':
-                    job = jobs[primary['value']]
-                    # The mapping already identifies this online folder even
-                    # before credentials load. Opening it uses the usual unlock
-                    # guard and resolves its mapped scope after authentication.
-                    group['copies'] = [copy for copy in group['copies'] if copy['source'] != 'Remote']
-                    group['copies'].append(dict(source='Remote', kind='job-remote',
-                                                value=job['id'], name=primary['name'], remote=job['remote']))
-                elif primary['kind'] == 'crypt' and not any(copy['source'] == 'Remote' for copy in group['copies']):
-                    group['copies'].append(dict(source='Remote', kind='remote',
-                                                value=(primary['remote'], ''), name=primary['name'],
-                                                remote=primary['remote']))
-        from .local_sources import shared_files
-        shared = shared_files(self.private_root)
-        if shared is not None:
-            # Imported folders and mapped copies stay individually accessible.
-            # The shared directory is a separate browse action below the list.
-            choices['All files'] = dict(source='Local', kind='shared-local', value='',
-                                        name='Browse All Files', copies=[], browser_root=True)
-            for row in shared.list():
-                if row['directory'] and row['name'] != 'Local':
-                    title = row['name']
-                    key = title if title not in choices else title + ' (Local)'
-                    choices[key] = dict(source='Local', kind='shared-local', value=title, name=title, copies=[])
-        return choices
+        self.discovery.invalidate()
 
     def show_folder_picker(self, *, initialize=True):
         if self.window_id != 'primary':
             return self.show_window_boundary()
         if initialize and getattr(self, 'folder_source', 'Local') != 'Local':
-            self.show_cloud(present=False)
+            self.start_cloud_restore()
         box = self.folder_picker_or_error()
         self.show_view(box, destination='files', root=True)
 
@@ -299,7 +181,8 @@ class FolderHubUI:
                 if self.folder_source != selected:
                     self.change_folder_source(selected)
             button = toga.Button(SOURCE_LABELS[source], on_press=select_source,
-                                 style=Pack(flex=1, height=44, font_size=13, margin=2))
+                                 style=Pack(flex=1, height=TOUCH_TARGET,
+                                            font_size=toga_font_size(CONTROL_TEXT), margin=2))
             self.folder_source_buttons[source] = button
             self.folder_source_tabs.add(button)
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
@@ -309,15 +192,16 @@ class FolderHubUI:
         self.folder_credentials = self.credential_groups(source_choices(choices, 'rclone', self.network_share_remotes()))
         selected = getattr(self, 'folder_credential_name', 'All')
         self.folder_credential = toga.Selection(items=list(self.folder_credentials),
-            value=selected if selected in self.folder_credentials else 'All', style=Pack(flex=1, height=44, font_size=14))
+            value=selected if selected in self.folder_credentials else 'All',
+            style=Pack(flex=1, height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT)))
         self.folder_credential.on_change = self.change_folder_credential
-        self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=44, font_size=13, flex=1))
+        self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT), flex=1))
         toolbar_button(self.folder_transfers_button, 'arrow.up.arrow.down')
         self.folder_add_share_button = toga.Button('Add share…', on_press=self.show_smb_connection,
-                                                  style=Pack(height=44, font_size=13, flex=1))
+                                                  style=Pack(height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT), flex=1))
         toolbar_button(self.folder_add_share_button, 'plus')
         self.folder_add_remote_button = toga.Button('Add Remote…', on_press=self.show_cloud_connections,
-                                                   style=Pack(height=44, font_size=13, flex=1))
+                                                   style=Pack(height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT), flex=1))
         toolbar_button(self.folder_add_remote_button, 'plus')
         self.folder_loading_status = toga.Label('', style=Pack(font_size=12, margin_bottom=4))
         self.folder_loading_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=4, margin_bottom=8))
@@ -327,7 +211,7 @@ class FolderHubUI:
         elif backend.startswith('toga_android.'):
             self.folder_add_share_button._impl.native.setContentDescription('Add SMB / Mac share')
         self.folder_credential_row = toga.Box(children=[surface(toga.Label('Credential',
-                style=Pack(font_size=13, width=80, margin_right=12)),
+                style=Pack(font_size=toga_font_size(CAPTION_TEXT), width=80, margin_right=12)),
                 background='window', foreground='muted', outlined=False),
                 self.folder_credential], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
         self.folder_picker_header = toga.Box(style=Pack(direction=COLUMN))
@@ -335,7 +219,7 @@ class FolderHubUI:
         self.folder_loading_box = toga.Box(style=Pack(direction=COLUMN))
         box = toga.Box(children=[self.folder_source_tabs, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box,
-            toga.ScrollContainer(horizontal=False, content=self.folder_list, style=Pack(flex=1))],
+            folder_scroll(self.folder_list)],
             style=Pack(direction=COLUMN, margin=(8, 16, 12, 16), flex=1))
         self.update_folder_list(choices)
         host = self.app
@@ -471,12 +355,12 @@ class FolderHubUI:
                     def options(widget=None, selected=name, **kwargs):
                         self.choose_folder(selected)
                     record.menu = icon_button('more', 'Workspace actions for ' + name, on_press=options)
-                    compact_icon(record.menu, width=44, size=18)
+                    compact_icon(record.menu, width=TOUCH_TARGET, size=18)
                     row.add(record.indicator, record.button, record.menu)
                     folder_row(row)
                 else:
                     record.group = surface(toga.Label(title,
-                        style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=15,
+                        style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=toga_font_size(BODY_TEXT),
                                    margin_left=TREE_LABEL_GAP if len(path) > 1 else 0,
                                    font_weight='bold', flex=1)), radius=0,
                         background='transparent', foreground='text', outlined=False)
@@ -591,10 +475,9 @@ class FolderHubUI:
                 for remote in item['remotes']}
 
     def change_folder_source(self, source):
-        # The startup hub is built before the remote UI. Native tab navigation
-        # reuses that page, so entering a remote source must start saved restore.
+        # Source names and lock states need credentials, not a remote browser.
         if source in ('rclone', 'Network shares'):
-            self.show_cloud(present=False)
+            self.start_cloud_restore()
         self.folder_source = source
         self.folder_credential_name = 'All'
         # Resetting a native Selection can emit on_change synchronously. The
@@ -682,8 +565,7 @@ class FolderHubUI:
         self.folder_browse_button = action_button(toga.Button('Browse ' + entry['source'], on_press=browse,
             enabled=not self.cloud_busy or entry['source'] == 'Local'
             or (entry['source'] == 'LocalCrypt' and (getattr(self, 'transfer_busy', False) or getattr(self, 'remote_read_busy', False))), style=Pack(height=48)))
-        box = toga.Box(children=[toga.Button('Choose another workspace', on_press=self.show_locations, style=Pack(height=48)),
-            toga.Label(fill(entry['name'], width=24), style=Pack(font_size=22, margin_top=12)),
+        box = toga.Box(children=[toga.Label(fill(entry['name'], width=24), style=Pack(font_size=22, margin_top=12)),
             toga.Label(descriptions[entry['source']], style=Pack(font_size=12, margin_bottom=12)), self.folder_browse_button],
             style=Pack(direction=COLUMN, margin=12, flex=1))
         self.folder_action_controls.append((self.folder_browse_button, entry['source'] == 'Remote'))
@@ -766,6 +648,9 @@ class FolderHubUI:
             self.folder_picker_status.text = 'This connection is busy. Local folders remain available. Cancel the current request to use this online folder.'
             return False
         if entry['source'] != 'Local':
+            # Workspaces may be the first credential entry point after startup.
+            # Initialize the shared unlock/status controls before using them.
+            self.show_cloud(present=False)
             remote = entry.get('remote')
             job = self.mirror_store().jobs.get(value) if kind in ('job', 'job-remote') else None
             remote = job['remote'] if job else remote or (value[0] if kind == 'remote' else '')

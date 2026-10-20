@@ -52,6 +52,7 @@ var cancellation sync.Mutex
 var active context.CancelFunc
 var admitted = map[string]bool{}
 var clients = map[string]fs.Fs{}
+var staleFilesystemCache bool
 var allowed = map[string]string{
 	"crypt":    "remote password password2 filename_encryption directory_name_encryption filename_encoding suffix",
 	"drive":    "token client_id client_secret scope root_folder_id team_drive",
@@ -191,19 +192,29 @@ func shutdownClients() {
 	comparisonState.Lock()
 	comparisonState.current = nil
 	comparisonState.Unlock()
-	cache.Clear()
+	// Cache eviction can itself disconnect network clients. Defer it until
+	// the next explicit online operation, before it creates a filesystem.
+	staleFilesystemCache = true
 	cryptCipherMu.Lock()
 	clear(cryptCiphers)
 	cryptCipherMu.Unlock()
+	// Detach synchronously, then retire old network clients independently. A
+	// backend's disconnect must never delay a local credential import/unlock.
+	retired := clients
+	clients = map[string]fs.Fs{}
+	if len(retired) > 0 {
+		go retireClients(retired)
+	}
+}
+
+func retireClients(retired map[string]fs.Fs) {
 	ctx, stop := context.WithTimeout(context.Background(), 15*time.Second)
 	defer stop()
-	for _, client := range clients {
+	for _, client := range retired {
 		if shutdown := client.Features().Shutdown; shutdown != nil {
 			_ = shutdown(ctx)
 		}
 	}
-
-	clients = map[string]fs.Fs{}
 }
 
 func clearSession() {
@@ -285,7 +296,8 @@ func importPackageWithAliases(data []byte, password, label string, sessionOnly b
 	if len(pending) == 0 {
 		return nil, errors.New("no credential TXT files found")
 	}
-	if err := validateCryptRemotes(pending); err != nil {
+	validated := snapshotCryptCiphers(nil)
+	if err := validateCryptRemotes(pending, validated); err != nil {
 		return nil, err
 	}
 	// Publish authenticated settings to disk before replacing the session.
@@ -293,17 +305,25 @@ func importPackageWithAliases(data []byte, password, label string, sessionOnly b
 	if !validLabel(label) {
 		return nil, errors.New("invalid credential package name")
 	}
-	names, err := installCredentialPackage(snapshot{Label: label, Remotes: pending, Pins: initialConnectionPins(pending), Aliases: aliases}, sessionOnly)
+	names, err := installCredentialPackage(snapshot{Label: label, Remotes: pending, Pins: initialConnectionPins(pending), Aliases: aliases}, sessionOnly, validated)
 	if err == nil {
 		installDocumentListKey(label, data, password, sessionOnly)
 	}
 	return names, err
 }
 
+func clearStaleFilesystemCache() {
+	if staleFilesystemCache {
+		cache.Clear()
+		staleFilesystemCache = false
+	}
+}
+
 func remote(ctx context.Context, name string) (fs.Fs, error) {
 	if !admitted[name] {
 		return nil, errors.New("import a credential package first")
 	}
+	clearStaleFilesystemCache()
 	kind, _ := store.GetValue(name, "type")
 	if kind == "crypt" && ctx.Value(mirrorLogicalKey{}) != true {
 		return nil, errors.New("crypt uses the bounded encrypted-copy interface")
@@ -413,7 +433,17 @@ func dispatch(action, input string) (output string) {
 	if action == "mirror_review_progress" || action == "mirror_review_clear" {
 		return reviewProgress(input, action == "mirror_review_clear")
 	}
-	ctx, done := scopedOperation(action)
+	var ctx context.Context
+	var done func()
+	if action == "import" || action == "vault_open" || action == "add_smb" {
+		var acquired bool
+		ctx, done, acquired = tryCredentialLoad()
+		if !acquired {
+			return `{"ok":false,"error_code":"credentials_busy","error":"Credentials are in use. Stop the active operation, then retry loading the credential ZIP."}`
+		}
+	} else {
+		ctx, done = scopedOperation(action)
+	}
 	defer done()
 	var request struct {
 		Host           string            `json:"host"`

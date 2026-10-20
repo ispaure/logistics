@@ -2,7 +2,8 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+from toga_dummy.utils import EventLog
 from commonUtils.runtime.local_files import LocalFiles
 from logisticsmobile.app import LogisticsMobile
 from features.text_editor.resources import LocalTextCopies
@@ -56,6 +57,77 @@ class PrivateSessionTests(unittest.TestCase):
             self.assertEqual(present.call_args.kwargs['title'], 'First.md')
             first.show_view(first.crypt_view, title='Reading appearance')
             self.assertEqual(present.call_args.kwargs['title'], 'Reading appearance')
+
+    def test_fullscreen_comic_reloads_released_page_only_after_unlock(self):
+        import asyncio
+        import base64
+        import io
+        import json
+        from zipfile import ZipFile
+        from features.rclone.mobile.session_privacy import ResumePassword
+        fixture = json.loads((Path(__file__).parents[1] / 'native_tests/tests/logisticsmobile/comic_fixture.json').read_text())
+        data = io.BytesIO()
+        with ZipFile(data, 'w') as archive:
+            for index in range(4):
+                archive.writestr(f'{index}.png', base64.b64decode(fixture['page']))
+        from services.documents.readers import PrivateReader
+        reader = PrivateReader('resume.cbz', data.getvalue())
+        reader.key = 'resume.cbz'
+        with patch.object(self.copies, 'open', return_value=reader):
+            owner = self.open('resume.cbz', data.getvalue())
+        owner.privacy_gate = ResumePassword('session-password')
+
+        async def exercise():
+            await owner.move_private_page(2)
+            if not owner.crypt_immersive:
+                owner.toggle_private_reading_mode()
+            page = owner.crypt_page.value
+            body = self.app.body
+            privacy = self.app.screen_privacy
+            for _ in range(2):
+                privacy.conceal()
+                self.app.release_disposable_resources()
+                self.assertTrue(owner.page_suspended)
+                self.assertFalse(owner.crypt_content.children)
+                privacy.reveal()
+                privacy.lock_password.value = 'wrong'
+                await privacy.unlock()
+                self.assertTrue(owner.page_suspended)
+                self.assertFalse(owner.crypt_content.children)
+                privacy.lock_password.value = 'session-password'
+                await privacy.unlock()
+                # Repeated lifecycle signals must not queue duplicate reloads.
+                task = owner._resume_page_task
+                privacy.reveal()
+                self.assertIs(owner._resume_page_task, task)
+                await task
+                self.assertFalse(owner.page_suspended)
+                self.assertTrue(owner.crypt_content.children)
+                self.assertIsNotNone(owner.provider_spread.canvas.image)
+                self.assertEqual(owner.crypt_page.value, page)
+                self.assertTrue(owner.crypt_immersive)
+                self.assertIs(self.app.body, body)
+                self.assertIs(self.app.main_window.content, self.app.native_host.root)
+            await owner.move_provider_comic(1)
+            self.assertNotEqual(owner.crypt_page.value, page)
+            privacy.conceal()
+            self.app.release_disposable_resources()
+            privacy.reveal()
+            with patch.object(owner, 'provider_page_content', side_effect=OSError('Source unavailable')):
+                privacy.lock_password.value = 'session-password'
+                await privacy.unlock()
+                await owner._resume_page_task
+            self.assertTrue(owner.page_suspended)
+            self.assertFalse(owner.crypt_immersive)
+            self.assertIn('Cannot read page', owner.crypt_title.text)
+            self.assertIn(owner.crypt_title, owner.reading_frame.widget.children)
+            await owner.read_crypt_page()
+            self.assertFalse(owner.page_suspended)
+            self.assertTrue(owner.crypt_content.children)
+            self.assertTrue(self.app.private_sessions.close(owner.session.id))
+            await asyncio.sleep(0)
+
+        self.run_async(exercise())
 
     def test_nested_document_headers_show_filename_and_keep_source_path(self):
         (self.local / 'nested').mkdir()
@@ -301,11 +373,51 @@ class PrivateSessionTests(unittest.TestCase):
         self.assertEqual(a.crypt_text.value, 'retained draft')
         self.assertEqual((self.local / 'A.txt').read_bytes(), b'external')
         (self.local / 'B.txt').write_bytes(b'original')
-        with patch('logisticsmobile.private_sessions.MAX_PRIVATE_BYTES', 1):
+        with patch('logisticsmobile.private_sessions.MAX_PRIVATE_BYTES', 1), \
+                patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock) as dialog:
             self.assertFalse(self.run_async(self.app.open_crypt(copies=self.copies, key='B.txt')))
+        message = EventLog.performed_actions(dialog.call_args.args[0], 'create InfoDialog')[0]['message']
+        self.assertIn('32 MiB', message)
+        self.assertIn('Documents → Open documents', message)
         self.assertIn(a.session.id, self.app.private_sessions.controllers)
         self.assertEqual(a.crypt_text.value, 'retained draft')
         self.assertEqual(len(self.app.private_sessions.controllers), 1)
+
+    def test_full_file_slots_show_visible_explanation_and_allow_retry_after_close(self):
+        owners = [self.open(f'{index}.txt') for index in range(4)]
+        owners[0].crypt_text.value = 'Keep this draft'
+        (self.local / 'next.txt').write_text('Next')
+        self.app.show_home()
+        origin = self.app.body
+        with patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock) as dialog, \
+                patch.object(self.copies, 'open', wraps=self.copies.open) as read:
+            self.assertFalse(self.run_async(self.app.open_crypt(copies=self.copies, key='next.txt')))
+            read.assert_not_called()
+            dialog.assert_awaited_once()
+            message = EventLog.performed_actions(dialog.call_args.args[0], 'create InfoDialog')[0]['message']
+            self.assertIn('All 4', message)
+            self.assertIn('Local, LocalCrypt and remote', message)
+            self.assertIn('Documents → Open documents', message)
+            self.assertIs(self.app.body, origin)
+            self.assertIsNone(self.app._file_loading)
+            # Resuming an existing document consumes no additional slot.
+            self.assertTrue(self.run_async(self.app.open_crypt(copies=self.copies, key='0.txt')))
+            self.assertEqual(owners[0].crypt_text.value, 'Keep this draft')
+        self.assertTrue(self.app.private_sessions.close(owners[1].session.id))
+        self.assertTrue(self.run_async(self.app.open_crypt(copies=self.copies, key='next.txt')))
+        self.assertEqual(len(self.app.private_sessions.controllers), 4)
+
+    def test_workspace_capacity_failure_is_visible_without_leaking_a_file_slot(self):
+        owner = self.open('first.txt')
+        (self.local / 'next.txt').write_text('Next')
+        self.app.show_home()
+        origin = self.app.body
+        with patch('logisticsmobile.workspace.MAX_SESSIONS', 1), \
+                patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock) as dialog:
+            self.assertFalse(self.run_async(self.app.open_crypt(copies=self.copies, key='next.txt')))
+        self.assertIn('Close an open document', EventLog.performed_actions(dialog.call_args.args[0], 'create InfoDialog')[0]['message'])
+        self.assertIs(self.app.body, origin)
+        self.assertEqual(list(self.app.private_sessions.controllers), [owner.session.id])
 
     def test_provider_cancellation_and_busy_state_are_owned_by_the_document(self):
         from threading import Event

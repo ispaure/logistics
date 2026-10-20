@@ -13,6 +13,16 @@ See [worker lifetime and cancellation](architecture.md#long-running-workflows-an
 
 ## Desktop Workspaces details
 
+### Seasonal snow
+
+`services.seasonal.snow_enabled` owns the local-date season (December 15 through
+January 2, inclusive) and high-contrast exclusion shared with mobile. `ui_new.snow.SnowOverlay`
+paints an input-transparent child of the main window. It observes Qt accessibility
+contrast changes and polls the saved setting/date once per second; its drawing
+timer stops for inactive or minimized windows. The Appearance panel saves
+`configFile.ini`'s `[Appearance] seasonal_snow_bool` in the selected settings scope.
+Focused desktop coverage is in `test_seasonal_snow.py`.
+
 ### Shared locked/unlocked folder artwork
 
 Edit [`Python/services/folders/appearance.py`](../../Python/services/folders/appearance.py)

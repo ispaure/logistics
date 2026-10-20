@@ -7,18 +7,58 @@ User behavior belongs in [the mobile user guide](../user_mobile/user_mobile.md).
 
 ## Owners
 
+`logisticsmobile.snow.SeasonalSnow` uses `services.seasonal` for the shared
+December 15–January 2 season, including both endpoints. The default-on `seasonal_snow` preference is edited
+in Appearance on both platforms. A touch-transparent UIView with animated
+CALayers on iOS and `SnowView.java` on Android provide the decoration. A one-second
+watcher removes it for system high contrast, Android E Ink, inactive privacy
+state, or a disabled preference. Window disposal cancels the watcher. Owner source
+manifests include the policy and Android view. `test_seasonal_snow.py` covers
+preferences/settings; `native_tests/tests/logisticsmobile/snow_probe.py` is the
+isolated native overlay smoke test.
+
+Workspace navigation sizes are defined in `logisticsmobile.ui_metrics`: 17 native
+pt/sp body text, 16 control text, 13 caption text and 48 pt/dp touch targets.
+`toga_font_size()` converts native design sizes by 72/96 because both pinned Toga
+mobile font backends multiply explicit fonts by 96/72. Pack requires integer
+font sizes, so the helper rounds (17 native becomes 13 Toga, about 17.3 native).
+Do not apply this conversion
+to geometry or direct UIKit/Android font APIs. Android retains system sp scaling
+and reported density; there is no BOOX model multiplier or physical-DPI detection.
+`folder_hub_style` and `folder_hub_ui` consume these metrics; native file lists
+use 48-unit rows on both platforms (the Java adapter mirrors the constants).
+Android scroll-position calculations must use the same row height as binding.
+The Android adapter adds a 1dp native list divider using the palette border color,
+inset 48dp at the text start and 8dp at the action end (mirrored for RTL).
+Its high-contrast group outline encloses the populated portion of short lists
+or the viewport for long lists, painted after children so selected fills cannot
+cover it. Folder icons and accessibility descriptions identify folders without
+Android disclosure chevrons; iOS keeps its native disclosure and selection.
+The Android scrollbar reserves its own width outside the rows, with a 4dp gap;
+the group outline follows the inset row bounds so it stays clear of the thumb.
+Scroll offsets include spacing between rows, with no extra trailing divider height.
+Workspace folder surfaces opt into the existing E Ink outline role, which paints
+a square black border on Android; noninteractive group headings stay borderless.
+This policy covers workspace and file navigation, not all feature UI or readers;
+system accessibility extremes still require native layout validation.
+
 | Change | Owner |
 | --- | --- |
 | Startup, navigation composition and managed text-document lifetime | `app.py` |
 | Workspace identities, generations and sessions | `workspace.py`, `window_owners.py`, `window_scenes.py` |
 | Adaptive panes and destination drawers | `workspace_navigation.py`, `adaptive_workspace.py` |
+| Workspaces discovery task, cache and invalidation | `folder_discovery.py`, composed by `folder_controller.py`; snapshot/result building in `folder_hub.py` |
 | Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`, `folder_hub_style.py` |
+| File create/rename/move/delete coordination | `file_operations.py`, composed by `feature_hosts.file_operations`; `files_ui.py` retains forms, confirmation and forwarding methods |
+| Main and workspace browser listing requests | `folder_listing.py`; presentation in `files_ui.py` and `workspace_navigation.py` |
 | Local file management and comic batch entry points | `files_ui.py` |
 | Text Open/Save As, picker widgets and pending bytes | `editor_picker.py` |
 | Saved-import inventory and confirmed deletion | `saved_files_ui.py`: composed `SavedFilesController` |
 | Explicit host dependencies and legacy state access | `host_services.py` |
 | Managed text bytes, checkpoints and editing widgets | `documents.py` (host recovery), `features/text_editor/mobile/ui.py` (widgets) |
+| Provider Markdown modes, controls and preview lifecycle | `features/text_editor/mobile/provider_markdown.py`, composed by `feature_hosts.provider_markdown`; session source input remains authoritative |
 | Ordinary and provider reader ownership | `reader_sessions.py`, `private_sessions.py` |
+| Main document Close, source return and shared native scroll restoration | `reader_lifecycle.py` |
 | Temporary file-opening presentation and measured read progress | `document_sources.py`, `loading_progress.py` |
 | Reader-facing host services and shared controls | `reader_host.py`, `reader_controls.py`, `reader_chrome.py` |
 | Device screen locking and sensitive-content protection | `screen_privacy.py` |
@@ -47,7 +87,7 @@ their existing control row instead of adding a second header. UIKit still mounts
 the drawer in its native navigation bar. Reading views also expose native
 button/toolbar handles so UIKit hosts the existing buttons as title-bar custom
 views, preserving callbacks, menus, accessibility labels and enabled states.
-Updates cache the controller/button set and only rebuild the action group when
+Updates cache the controller/button set and only rebuild the action groups when
 its buttons change. Error prompts remain visible. Text editors use top pencil/page mode
 icons, and rebuild their native action menu only when clean/dirty state changes;
 clean documents omit Save. Provider Markdown likewise inserts its Save icon only
@@ -58,6 +98,20 @@ and their supported action buttons through the same title-bar contract. The
 host's `ios_reader_chrome.reader_title` centers the label relative to the native
 window during UIKit layout, allowing asymmetric action groups without shifting
 the visible title. Fullscreen continues to hide the entire native bar.
+UIKit owns navigation-button backgrounds: `ios_reader_chrome.bar_control` marks
+mounted controls so surface/trait refreshes keep their backgrounds clear, remove
+app outlines and avoid a second button configuration inside the system glass.
+Independent reader actions (including speech and More) have separate bar items
+and fixed-space separators. Adjacent previous/next comic controls share one
+constrained stack; Close and the workspace drawer are separate. Folder title
+actions retain their shared stack with transparent contents. Standalone drawer
+buttons use one native glass configuration (gray on older systems), restored on
+trait refresh. `test_ios_bar_controls.py` covers grouping/repaint policy and the
+disposable `ios_bubble_probe.py` checks native layout, menus, fullscreen return,
+light/dark rendering and existing save/cancel/discard/conflict guards.
+The [October 20 glass-button evidence](mobile-evidence/2026-10-20-ios-bubbles.json)
+records iOS 27 iPhone/iPad simulator results, portrait/landscape return, source
+hashes and screenshots. The disposable apps were removed after evidence capture.
 Native-only filename/status controls are detached to avoid duplicate titles;
 managed editor renaming remains available through its action menu. PDF tools
 stay above the canvas when open, and single-image readers omit page navigation.
@@ -70,6 +124,99 @@ The pinned Toga iOS backend queues scroll-view refreshes during layout. The
 host's `appearance.py` adapter ignores refresh/scroll callbacks after their weak
 Python interface has been released. Editor preview shutdown remains with the
 Text Editor feature, which retires WebKit delegates before releasing its view.
+
+## Folder listing ownership
+
+Each main file browser and workspace drawer owns a separate `FolderListing`.
+It starts and invalidates reads, supplies a cooperative cancellation event, and
+rejects late results and errors after a newer request, location change, host or
+browser replacement, or private credential replacement/generation change. Locking
+private storage explicitly invalidates these reads. The worker receives a captured
+provider (or drawer `ResourceSelection`) and folder, and never reads widgets.
+
+`files_ui.py` retains provider resolution, row labels, search/sort, successful
+location recording and failed-navigation recovery. `workspace_navigation.py`
+retains root discovery, refresh coalescing, extension filters, breadcrumbs and its
+existing error presentation. Drawer generations also invalidate active requests.
+Main listing continues to call the provider directly; drawers continue through
+`ResourceSelection`. Listing has no mutation busy guard, so local browsing during
+transfers keeps its existing policy. Open/Save As pickers and remote connection
+setup remain separate workflows.
+
+Run `python3 dev.py test mobile test_folder_listing.py`, `test_files_ui.py`,
+`test_workspace_navigation.py`, `test_folder_navigation_performance.py` and
+`test_private_sessions.py`. `test_packaged_startup.py` exercises both listing
+adapters from the staged payload; desktop `test_mobile_packaging.py` checks manifest
+closure.
+
+## File operation ownership
+
+`FilesUI.file_operations()` owns one `FileOperations` coordinator. The UI captures
+an immutable `FileOperationRequest` on the UI thread: operation, source provider,
+path, entered name/target and destination specification. The worker receives no
+widgets. `FileDestination` preserves existing provider objects and captures the
+root, client, generation and remote for locations requiring resolution. Native
+encrypted destination resolution stays in the worker and rejects a changed
+credential generation before construction.
+
+The host adapter in `feature_hosts.file_operations` retains transfer/busy and
+unsaved-reader policy, snapshots controls/status and connects the coordinator's
+cancellation event to the existing `_crypt_cancel`/Cancel path. The coordinator
+owns its request and task until the worker retires. Cancelling an awaiting task
+signals cancellation and waits for its thread before releasing the busy guard;
+there is no new parallel mutation path. Existing `file_work` callbacks remain
+supported, including the selected-provider/path compatibility snapshot.
+
+The UI still confirms Delete before submitting its captured target. Selection
+changes during the dialog do not retarget that request. Success refreshes the
+current browser; navigation, provider/credential replacement or host retirement
+prevents old completion/error messages from replacing newer status. Cleanup
+restores captured controls and releases only its own cancellation/busy ownership.
+
+Actual writes, no-clobber publication, verification and deletion remain in
+commonUtils resource operations. Cancellation is cooperative and does not promise
+rollback: incomplete mutations retain their existing refresh-before-retry warning.
+No preference, storage schema or confirmation wording changes are introduced.
+
+Run `python3 dev.py test mobile test_file_operations.py` and `test_files_ui.py`
+(`py` on Windows). Checks cover captured requests, worker destination resolution,
+confirmed delete identity, overwrite refusal, partial failures, busy/dirty guards,
+late status and cancellation cleanup. Staged startup creates and renames a folder
+from the payload, and packaging checks reject an omitted coordinator module.
+See [validation](testing.md) for environment setup.
+
+## Workspaces folder discovery
+
+`FolderController.discovery` owns the refresh task, cache, credential stamp and
+invalidation epoch. `folder_discovery.py` receives explicit snapshot, publication,
+error and host-liveness callbacks; it does not depend on folder widgets. Requests
+during a scan share its task and coalesce into one rescan. Invalidating clears
+cached private names immediately. A subsequent request is retained even if the
+retired worker has not finished yet.
+
+The controller captures a detached `FolderDiscoverySnapshot` on the UI thread:
+resolved mappings, known remote names, retained package metadata and cached crypt
+locations/identities. `folder_hub.discover_folder_choices` reads local directories
+and returns a `FolderDiscoveryResult`; it neither mutates the snapshot nor
+receives a client or application-shaped callback object. It preserves existing
+folder grouping, copy precedence and the shared Local root. Discovery does not
+fetch remote contents or authorize access to a listed location. Native crypt
+identity discovery still happens separately when credentials load.
+
+Results and errors are published on the UI thread only while their epoch,
+credential-client identity/generation and refresh request remain current. Old
+errors cannot replace status for a locked or newer session. Native hosts read a
+copy of the credential-matching cache while refreshing; dummy/desktop hosts keep
+the existing synchronous discovery path. `folder_hub_ui.py` retains presentation,
+navigation and forwarding methods; opening folders still uses existing credential
+guards.
+
+Run `python3 dev.py test mobile 'test_folder_*.py'` for discovery, grouping, tabs,
+selection and navigation checks (`py` on Windows). The discovery tests include
+snapshot isolation, worker/UI ownership, refresh coalescing, stale results/errors,
+lock/shutdown and retry recovery. Packaging checks reject an omitted discovery
+module, and staged startup exercises an actual Workspaces refresh using only the
+payload. See [validation](testing.md) for environments and packaging commands.
 
 ## Destination entry cost
 
@@ -137,6 +284,31 @@ are outside this workflow. Chat, Cloud, Transfers, Workspaces, Home/Documents, L
 
 ## Packaging and verification
 
+Main reader/editor surfaces expose `_reader_session_id` and
+`_reader_close_button`. The native bars mount this Close control in place of
+Back; secondary tools, metadata and appearance routes keep Back. Android's
+system Back dismisses overlays/search/chapters first, then requests the same
+close, including in fullscreen. UIKit's interactive pop is disabled on main
+document surfaces so it cannot bypass unsaved-edit handling. Closing uses each
+session owner's existing cleanup/save guards, flushes pending EPUB progress,
+and retires document/close-prompt routes before restoring the retained origin
+folder and viewport. Section changes continue to retain sessions.
+
+`PrivateSessions.positions` is a bounded, memory-only cache keyed by the existing
+opaque source identity. It retains page indices, EPUB offsets and supported
+native text/Markdown scroll offsets after Close, without content or filenames.
+Restoration occurs on the newly opened owner, with WebView scroll restoration
+waiting for its load callback, pending font reflow and native drawing. Explicit private-reader clearing also clears
+this cache. Imported books retain their existing durable progress policy.
+Managed text sessions retain their view state in a bounded host-memory cache
+for close/reopen. Tests live in `test_reader_lifecycle.py`, `test_android_back.py`,
+`test_android_reader_chrome.py` and `test_reader_navigation.py`; the disposable
+`reader_exit_probe.py` validates native control activation and draft guards.
+`reader_close_icon_probe.py` additionally checks native X artwork/labels, closing
+comics, and cancel/save/discard/conflict behavior for edited documents. The
+[October 20 focused results](mobile-evidence/2026-10-20-close-icon.json) cover
+iPhone/iPad simulators and a physical Android BOOX using isolated synthetic files.
+
 Add host modules to `Python/logisticsmobile/mobile_sources.json` and feature/service modules to their owning manifests in the same change as imports. `Mobile/tools.py` aggregates and validates these declarations.
 `editor_picker.py` and `host_services.py` are explicitly staged. Do not edit
 generated `Mobile/payload/` or Briefcase projects as application source.
@@ -160,6 +332,23 @@ in `Mobile/native_tests/tests/logisticsmobile/localcrypt_checks.py`.
 `features/lm/mobile/controller.py` owns chat state; rclone owns cloud and transfer controllers. Host navigation workflows have dedicated `*_controller.py` modules. `services/workflow_host.py` supplies explicit read/write host attributes. `host_services.composed_workflow` installs only declared compatibility names. Transfer/review cancellation is independent from file/cloud cancellation; global Cancel dispatches to both. Ownership and cancellation are exercised by `Mobile/tests/test_workflow_ownership.py`.
 
 ## Native source editor and live Markdown
+
+Android document chrome consumes the same `_native_reader_*` contract as
+UIKit. `android_reader_chrome.py` mounts the existing buttons in a custom
+ActionBar view, with symmetric title clearance, native Back and the relevant
+drawer. It detaches redundant inline toolbars/workspace headers. Button-set
+changes release retired native parents before reuse (including dirty/clean
+Save transitions); ordinary routes clear the title and hide the document bar.
+Error prompts remain visible in the native header. Locking clears its text,
+accessibility descriptions and native button parents before it can be shown
+again. Fullscreen restoration runs before the incoming route sets the final
+bar visibility. Native List rows
+on both platforms expose a visible contextual ellipsis, while retaining
+tap-to-open and the platform's existing selection gesture. Recycled controls
+validate their row/source identity before invoking contextual commands.
+Open-only document drawers omit contextual selection controls. See the
+[native parity checks](mobile-evidence/2026-10-20-chrome-parity.json) for the
+tested scope and screenshots.
 
 The Text Editor mobile owner uses `commonUtils.ui.native.code_input.CodeInput`
 for source editing and the existing offline renderer for live Markdown. Preview
@@ -217,6 +406,21 @@ phase. Its bar counts completed phases; it does not estimate time, bytes or remo
 requests. Status labels contain no document paths, filenames or credential names.
 Native title bars are hidden while loading and restored before installing the
 normal navigation host. The same window is reused for the ready workspace.
+Home readiness does not depend on cloud storage. After the workspace is revealed,
+`restore_cloud_in_background` starts the shared `start_cloud_restore` task,
+preparing connection state and restoring device-saved credentials without
+constructing the remote-browser or connection-settings controls. `show_cloud`
+constructs those controls when needed and adopts the current loaded/busy state;
+opening them during restoration shares the same task. Credential publication
+refreshes Home and already constructed Documents hubs; it does not construct an
+unopened Documents page. When Home's visible file summaries, sources, notices and
+unlock action are unchanged, it retains its root/actions/recent-file controls and
+updates credential glyphs and accessibility descriptions in place. Content changes
+still rebuild Home, and retained detail routes remain untouched. Initial restore does not clear local
+browser or reader state. Ordinary local browsing and local text reads can proceed
+while restoration is pending. Cloud-backed reopens await restoration and validate
+the saved connection identity before exposing content. Retained session-only ZIPs
+still require their password. Background connection failure leaves Home usable.
 On Android, a native snapshot of the final loading frame covers the attached
 workspace while navigation and content receive their real viewport measurements.
 A pre-draw listener waits for positive, unchanged content bounds and no pending
@@ -289,8 +493,15 @@ Only cells requested by a native viewport queue optional thumbnail work, with
 bounded concurrency/pending requests and the existing bounded byte cache. Local
 and LocalCrypt browsing still does not enable thumbnail content reads. Recycled
 cells clear old text, accessibility descriptions and images when retired; stopping
-clears the native source, selection and provider snapshot. Tiles retain their
-existing shared renderer and separate scroll container.
+clears the native source, selection and provider snapshot. On iOS, retirement
+only clears a cell no longer associated with a table row. Every `willDisplayCell`
+rebinds its text, image, disclosure, accessibility and palette from the current
+source, including when the resume-password screen restores a retained window
+root without another `cellForRowAtIndexPath` request. This preserves the browser
+snapshot, sorting and selection instead of refetching the directory on unlock.
+`test_recycled_file_list_ios.py` covers detached-cell redisplay and late retirement;
+`test_screen_privacy.py` checks repeated password restoration of the same listing.
+Tiles retain their existing shared renderer and separate scroll container.
 
 The disposable `recycled_list_probe.py` under `Mobile/native_tests/tests/logisticsmobile/`
 uses 10,005 synthetic file records to validate native viewport bounds, scrolling
@@ -651,6 +862,20 @@ The collection UI separately previews explicit paths and selected/active state.
 old collection. `recover_location` is presented as using existing files without
 copying. `wipe_destination` remains forbidden for the active location.
 
+Android collection drive discovery in `storage_ui` uses mounted `StorageVolume`
+roots and the All files access grant on API 30+. On API 24–29 it uses
+`Context.getExternalFilesDirs(None)` and `StorageManager.getStorageVolume(File)`
+to expose mounted app-owned directories, including removable cards. These paths
+support ordinary Python/native bridge file access without storage permissions;
+legacy storage permission cannot authorize arbitrary removable-card writes.
+No hidden APIs or guessed mount paths are used. Existing copy/verify, location
+markers and missing-card checks apply to the selected app directory. Android
+removes these directories on uninstall or clearing app data, so legacy storage
+UI and guides call out the backup requirement. `test_android_storage.py` checks
+strict API 24/28/29 and API 30/35 surfaces; storage UI tests cover a permission-free
+copy and preservation of the original files. These are host checks, not physical
+Android 9 SD-card validation.
+
 The app-only UserDefaults reset is declared with CA92.1 in
 `Mobile/privacy/App.xcprivacy`, copied as a target resource before signing and
 verified in exported apps. Platform API references:
@@ -687,3 +912,20 @@ list items; native source inputs keep their platform alignment. EPUB's portable
 typography options include `justify` for initial chapter rendering and the
 in-reader appearance form saves the same preference as Settings. Settings reload
 discards stale switch references and rebuilds the categories lazily.
+
+## October 20 ownership cleanup
+
+Books and Comics now own imported/provider format controllers, and Books owns
+mixed library presentation and its portable metadata index. Text Editor owns the
+mobile Notes Library browser. The host composes explicit presentation services
+in `feature_hosts.py` and keeps storage/provider discovery, workspace identities,
+credentials and private publication. Reader and private-session compatibility
+accessors delegate format state to its owning controller; prepared view handoff
+uses setters so state cannot bypass these owners.
+
+Comic folder batch plans/views are owned by a composed feature controller.
+Generic speech, private WebView and image-header mechanisms live in commonUtils;
+voice preferences, media privacy gates and document routing remain here. Native
+payload allowlists include all moved modules and explicitly stage new shared
+modules in dirty local development payloads. See the
+[ownership audit and implementation status](ownership-audit.md).

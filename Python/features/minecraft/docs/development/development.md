@@ -20,7 +20,7 @@ Provides Minecraft server integration for Logistics.
 
 - `detection.py` finds directories containing `server.properties`.
 - `server.py` contains the `MinecraftServer` model and server actions.
-- `folder_widget.py` contains the server selector and controls.
+- `ui/folder_widget.py` contains the server selector and controls.
 - `ui_contributions.py` contributes the Minecraft section to Folders.
 
 ## Detection
@@ -44,3 +44,6 @@ wiki = https://minecraft.wiki/
 ```
 
 Script paths are relative to the server directory. Include entries for the platforms you use. Missing launch settings prevent launching; missing documentation prevents opening the wiki. Property edits modify the server's `server.properties`.
+
+`ui/folder_widget.py` owns desktop folder presentation. The root
+`folder_widget.py` keeps its public widget import for existing consumers.

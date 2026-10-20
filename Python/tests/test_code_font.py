@@ -7,7 +7,7 @@ from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor import CodeEdit
-from features.code_font import code_font
+from services.editors.ui.fonts import code_font
 from features.text_editor.preferences import Preferences
 
 
@@ -45,11 +45,11 @@ class CodeFontTests(QtTestCase):
         from features.ide.ui.documents import EditorDocument
         from features.git.ui.preview import Preview
         from features.text_editor.ui.window import EditorWindow
-        from features.code_font import bind_code_views
+        from services.editors.ui.fonts import bind_code_views
         with TemporaryDirectory() as directory:
             root = Path(directory)
             path = root / 'preferences.ini'
-            with patch('features.code_font.Preferences', side_effect=lambda value=None: Preferences(value or path)):
+            with patch('services.editors.ui.fonts.Preferences', side_effect=lambda value=None: Preferences(value or path)):
                 source = root / 'example.py'
                 source.write_text('print(1)\n')
                 ide = EditorDocument(read_text_file(source))
@@ -81,7 +81,7 @@ class CodeFontTests(QtTestCase):
             controller = styling().code_font
             original = controller.size
             try:
-                with patch('features.code_font.Preferences', return_value=preferences):
+                with patch('services.editors.ui.fonts.Preferences', return_value=preferences):
                     controller.set_size(17, save=False)
                     window._configure_document(window.current)
                     window.split_document(qt.Qt.Orientation.Horizontal)

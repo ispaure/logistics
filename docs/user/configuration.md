@@ -267,6 +267,11 @@ use `configuration/features/<feature>/config.ini`. Launcher overrides use
 integration files, reading positions, bookmarks, accounts and recovery records
 retain their own storage and are not software defaults.
 
+**Appearance & shared controls → Seasonal snow** is on by default. Decorative,
+input-transparent snow falls from December 15 through January 2, inclusive, each
+year, using the local date. High-contrast mode suppresses the effect without
+changing your saved choice. The switch saves immediately in the selected scope.
+
 **Appearance & shared controls → Styling** contains 11 settings: theme, accent,
 dark surface tint, and font family/point size for interface/dialogs, file browsers,
 reading, and code. EPUB and Markdown share reading fonts. Text Editor, IDE, Git

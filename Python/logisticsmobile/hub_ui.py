@@ -49,11 +49,51 @@ def status_badges(details, *, currently_open=False):
             row = toga.Box(style=Pack(direction=ROW, margin_bottom=4))
             box.add(row)
             length = 0
-        badge = surface(toga.Box(children=[toga.Label(detail, style=Pack(font_size=12, margin=4))],
-                                 style=Pack(direction=COLUMN, margin_right=4)), radius=6)
+        badge = toga.Box(children=[toga.Label(detail, style=Pack(font_size=12, margin=4))],
+                         style=Pack(direction=COLUMN, margin_right=4))
         row.add(badge)
         length += len(detail) + 2
     return box
+
+
+def document_group(rows):
+    """One rounded surface for a document section, with quiet inset dividers."""
+    group = surface(toga.Box(style=Pack(direction=COLUMN, margin_bottom=8)), radius=16)
+    group._document_group = True
+    def borderless(widget):
+        if isinstance(widget, toga.Button):
+            surface(widget, radius=0, background='transparent', foreground='text',
+                    outlined=False, eink_outlined=False)
+        elif isinstance(widget, toga.Box):
+            surface(widget, radius=0, background='transparent', outlined=False, eink_outlined=False)
+        for child in widget.children:
+            borderless(child)
+    for index, row in enumerate(rows):
+        if index:
+            group.add(surface(toga.Box(style=Pack(height=1, margin_left=16, margin_right=16)),
+                radius=0, background='border', outlined=False, eink_outlined=False))
+        row.style.margin_bottom = 8 if index == len(rows) - 1 else 0
+        row.style.margin_top = 8 if index == 0 else 0
+        row.style.margin_left = row.style.margin_right = 8
+        borderless(row)
+        group.add(row)
+    backend = type(group._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        group._impl.native.layer.masksToBounds = True
+    elif backend.startswith('toga_android.'):
+        group._impl.native.setClipToOutline(True)
+    return group
+
+
+def empty_document_row(text):
+    """Informational copy sits directly on the page, outside action surfaces."""
+    return surface(toga.Label(text, style=Pack(font_size=13, margin_bottom=12)),
+                   radius=0, background='transparent', foreground='muted',
+                   outlined=False, eink_outlined=False)
+
+
+def document_list(rows, empty_text):
+    return document_group(rows) if rows else empty_document_row(empty_text)
 
 
 def panel(title, detail, glyph, actions):
@@ -154,6 +194,17 @@ class HubSections(toga.Box):
                     scroll.style.flex = 1
 
 
+def _home_state(hub, recent):
+    """Compare visible content, excluding credential badges refreshed in place."""
+    from copy import deepcopy
+    from .document_sources import session_source
+    rows = [(session.id, session.identity, summary[0], summary[1], tuple(summary[2]),
+             session.id in hub.workspace.sessions, deepcopy(session_source(hub.app, session)))
+            for session, summary in recent]
+    return (rows, bool(hub.app.home_unlock_candidates()),
+            getattr(getattr(hub.app, 'recovery_notice', None), 'text', ''), hub.workspace.error)
+
+
 class HubUI:
     def session_visible(self, session):
         if session.provider == 'credential-reference':
@@ -229,6 +280,7 @@ class HubUI:
         name = list_button(toga.Button(title, on_press=opener, style=Pack(height=48, flex=1)))
         middle_filename(name)
         self.document_button_icons(name, session)
+        row.document_button = name
         row.add(toga.Box(children=[name],
             style=Pack(direction=ROW, align_items=CENTER)))
         currently_open = session.id in self.workspace.sessions
@@ -237,9 +289,12 @@ class HubUI:
         return row
 
     def build_home(self):
+        recent = self.recent_items()[:5]
+        self._home_content_state = _home_state(self, recent)
+        self._home_recent_buttons = []
         box = toga.Box(style=Pack(direction=COLUMN, margin=(8, 16, 16, 16)))
         title = toga.Label('Your workspace', style=Pack(font_size=22, font_weight='bold', margin_bottom=16))
-        if self.app.home_unlock_candidates():
+        if self._home_content_state[1]:
             title.style.flex = 1
             unlock = surface(icon_button('storage_crypt', 'Unlock credentials',
                 on_press=self.app.show_home_unlock), foreground='text')
@@ -256,18 +311,20 @@ class HubUI:
             style=Pack(direction=ROW))
         self.home_content = box
         box.add(self.home_actions)
-        recent = self.recent_items()[:5]
         recent_box = toga.Box(style=Pack(direction=COLUMN))
         recent_box.add(heading('Recent'))
+        recent_rows = []
         for session, summary in recent:
-            recent_box.add(self.recent_row(session, summary))
+            row = self.recent_row(session, summary)
+            self._home_recent_buttons.append(row.document_button)
+            recent_rows.append(row)
         if not recent:
-            recent_box.add(toga.Label('Recently opened files will appear here.', style=Pack(font_size=13)))
+            recent_box.add(empty_document_row('No recent documents.'))
         def see_all(widget=None, **kwargs):
             self.documents_query = ''
             self.app.show_documents_hub()
-        recent_box.add(toga.Button('See all in Documents', on_press=see_all,
-                                  style=Pack(height=48)))
+        recent_rows.append(toga.Button('See all in Documents', on_press=see_all, style=Pack(height=48)))
+        recent_box.add(document_group(recent_rows))
         box.add(recent_box)
         notice = getattr(getattr(self.app, 'recovery_notice', None), 'text', '')
         if notice:
@@ -299,7 +356,7 @@ class HubUI:
         self.document_recent_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_saved_list = toga.Box(style=Pack(direction=COLUMN))
         history = toga.Box(children=[self.document_recent_list, self.document_saved_list,
-            toga.Button('Books & Comics library', on_press=self.show_library, style=Pack(height=48))],
+            toga.Button('Open Books & Comics library', on_press=self.show_library, style=Pack(height=48))],
             style=Pack(direction=COLUMN))
         box.add(self.document_open_list, history)
         self.refresh_document_list()
@@ -330,40 +387,34 @@ class HubUI:
         entries.add(heading('All open'))
         entries.add(toga.Label('Closing keeps saved files. You’ll be asked about unsaved edits.',
                               style=Pack(font_size=12, margin_bottom=8)))
-        found = False
+        rows = []
         for session in sessions:
             summary = self.session_summary(session)
             if matches(summary):
-                entries.add(self.session_panel(session, close=True, summary=summary))
-                found = True
-        if not found:
-            entries.add(toga.Label('No matching open documents.' if query else 'No open documents.',
-                                   style=Pack(font_size=13)))
+                rows.append(self.session_panel(session, close=True, summary=summary))
+        entries.add(document_list(rows,
+            'No matching open documents.' if query else 'No open documents.'))
         recent = self.recent_items(excluding=[session.identity for session in sessions])
         self.document_recent_list.add(heading('Recent'))
-        found = False
+        rows = []
         for session, summary in recent:
             if matches(summary):
-                self.document_recent_list.add(self.recent_row(session, summary))
-                found = True
-        if not found:
-            self.document_recent_list.add(toga.Label('No matching recent documents.' if query else
-                'Closed recent documents will appear here.', style=Pack(font_size=13)))
+                rows.append(self.recent_row(session, summary))
+        self.document_recent_list.add(document_list(rows,
+            'No matching recent documents.' if query else 'No closed recent documents.'))
         represented = {session.identity for session in sessions}
         represented.update(session.identity for session, _ in recent)
         self.document_saved_list.add(heading('Saved documents'))
-        found = False
+        rows = []
         for record in self.store.cached_summaries():
             if ('managed-text', record.id) in represented:
                 continue
             summary = record.name, text_document_kind(record.name), []
             if matches(summary):
                 session = Session('', 'managed-text', record.id, summary[1], title=record.name)
-                self.document_saved_list.add(self.recent_row(session, summary))
-                found = True
-        if not found:
-            self.document_saved_list.add(toga.Label('No matching saved documents.' if query else
-                'Other saved text and Markdown documents will appear here.', style=Pack(font_size=13)))
+                rows.append(self.recent_row(session, summary))
+        self.document_saved_list.add(document_list(rows,
+            'No matching saved documents.' if query else 'No other saved documents.'))
 
     async def open_document_category(self, category):
         extensions = {
@@ -378,7 +429,10 @@ class HubUI:
 
     def document_button_icons(self, button, session):
         from .document_sources import source_icons
-        return button_icons(button, source_icons(self.app, session))
+        icons = source_icons(self.app, session)
+        if getattr(button, 'leading_icons', None) != tuple(icons):
+            button_icons(button, icons)
+        return button
 
     def session_summary(self, session):
         """Resolve display metadata from its owner; workspace manifests omit names."""
@@ -432,19 +486,21 @@ class HubUI:
             details = [DOCUMENT_TYPES.get(kind, 'Document'), *details]
         # One compact row per item; names are the primary navigation target.
         box = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
-        if details:
-            box.add(status_badges(details))
         box.session_id = session.id
         button = list_button(toga.Button(title, on_press=self.session_opener(session.id), style=Pack(height=48, flex=1)))
         from .browser_ui import middle_filename
         middle_filename(button)
         self.document_button_icons(button, session)
+        box.document_button = button
         if close:
             close_button = icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id))
+            box.close_button = close_button
             box.add(toga.Box(children=[button, close_button], style=Pack(direction=ROW)))
         else:
             box.add(toga.Box(children=[button],
                              style=Pack(direction=ROW)))
+        if details:
+            box.add(status_badges(details))
         return box
 
     def new_hub_document(self, widget=None, **kwargs):
@@ -453,10 +509,6 @@ class HubUI:
     async def open_hub_file(self, widget=None, **kwargs):
         destination = self.app.native_host.state.destination
         navigation = self.app.navigation_generation
-        self.show_cloud(present=False)
-        restore = getattr(self, 'cloud_restore_task', None)
-        if restore is not None:
-            await restore
         if (not self.app.active_host or self.app.native_host.state.destination != destination
                 or self.app.navigation_generation != navigation):
             return False
@@ -468,7 +520,7 @@ class HubUI:
             return
         if destination == 'files' and self.window_id == 'primary':
             if getattr(self, 'folder_source', 'Local') != 'Local':
-                self.show_cloud(present=False)
+                self.start_cloud_restore()
             view = self.folder_picker_or_error()
             root = self.routes.roots['files']
             if list(root.children) == [view]:
@@ -487,6 +539,12 @@ class HubUI:
             return
         if destination == 'documents':
             self.refresh_documents()
+        if destination == 'home' and hasattr(self, 'home_sections'):
+            recent = self.recent_items()[:5]
+            if _home_state(self, recent) == getattr(self, '_home_content_state', None):
+                for button, (session, _) in zip(self._home_recent_buttons, recent):
+                    self.document_button_icons(button, session)
+                return
         root = self.routes.roots[destination]
         view = self.build_home() if destination == 'home' else self.build_documents_hub()
         view = self.adaptive.prepare(view, destination, root=True)

@@ -6,6 +6,11 @@ from pathlib import Path
 import subprocess
 import sys
 
+try:
+    from .deployment_confirmation import gui_input
+except ImportError:
+    from deployment_confirmation import gui_input
+
 ROOT = Path(__file__).resolve().parent
 
 
@@ -39,9 +44,13 @@ def deploy(build, *, ask=input):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build-number', help='Optional explicit unique, increasing build number')
+    parser.add_argument('--gui', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
-        deploy(args.build_number or next_build())
+        if args.gui:
+            deploy(args.build_number or next_build(), ask=gui_input)
+        else:
+            deploy(args.build_number or next_build())
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print('TestFlight stopped: ' + str(error), file=sys.stderr)
         print('See Mobile/build/testflight/<build>/logs/ for build details.', file=sys.stderr)

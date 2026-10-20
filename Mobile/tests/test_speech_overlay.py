@@ -28,6 +28,9 @@ class SpeechOverlayTests(unittest.TestCase):
                 speech.show()
                 panel = speech.panel
                 await panel.ready_task
+                for label in (panel.speed_minimum, panel.speed_maximum, *panel.speed_track.children[1].children):
+                    if isinstance(label, toga.Label):
+                        self.assertFalse(label._impl._surface_eink_outlined)
                 self.assertEqual(list(container.children), [web])
                 self.assertIsNone(panel.parent)
                 self.assertFalse(hasattr(panel, 'voice_choice'))
@@ -65,6 +68,11 @@ class SpeechOverlayTests(unittest.TestCase):
                 speech.show()
                 self.assertIs(speech.panel, panel)
                 self.assertEqual(panel.session.token, token)
+                speech.show()  # The same speaker control dismisses without stopping playback.
+                self.assertIsNone(panel.overlay)
+                self.assertEqual(panel.session.token, token)
+                speech.show()
+                self.assertIsNotNone(panel.overlay)
                 overlay = panel.overlay
                 speech.close()
                 self.assertTrue(panel.closed)

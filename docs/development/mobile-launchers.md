@@ -18,6 +18,66 @@ Qt application or install its dependency list.
 See the [user guide](../user_mobile/user_mobile.md) and
 [architecture and validation guide](mobile-preparation.md).
 
+## Simple deployment window
+
+Double-click `Mobile/deploy_test_devices.command` for the small PySide window.
+It uses the root `.venv` for PySide6 and `Mobile/.venv` for build tools. Existing
+SDK, Go, signing, device and tester-group settings are reused.
+
+- **Deploy test devices** checks availability first, builds Android once, updates
+  each authorized Android device and deploys to the available saved physical
+  iPhones/iPads in `.device.json`. Android and iOS run at the same time, with
+  devices within each platform updated one at a time. Offline devices are skipped; failed updates
+  are reported while remaining devices are attempted. Discovery failures make
+  the operation report failure even if other available devices were updated.
+  Choose **All available devices** or one named device in **Deploy to** before
+  clicking. A single-device selection updates only that device. If it becomes
+  unavailable, deployment stops before building and never falls back to another
+  device. Refresh preserves the selected device. This selection affects only
+  local installation; Firebase and TestFlight still use their configured groups.
+- **Firebase → Friends** builds/signs with the current Firebase parameters.
+- **TestFlight → Friends** archives/exports with the current TestFlight parameters;
+  it retains the existing requirement for committed, clean release sources.
+- **Refresh** reads device availability again. **Open logs** opens the isolated
+  workspaces after test-device operations, or `Mobile/logs` after tester operations;
+  distribution output also identifies its build-specific log directory.
+
+Tester buttons ask once in the window after the build is prepared and verified,
+before upload and notification. Declining keeps the prepared build on disk.
+Firebase sign-in, if expired or missing, must first be completed using
+`Mobile/deploy_android_firebase.command --login`; the window reports this rather
+than waiting for a hidden terminal answer. Apple processing/review can delay
+TestFlight availability. Button labels reflect the current Friends configuration;
+the underlying distribution configuration remains authoritative.
+
+Android devices are remembered automatically in ignored
+`Mobile/.tools/test-devices.json`, using hardware serials to combine USB and
+wireless connections to the same device. New authorized Android connections are
+included automatically. iOS membership stays in `.device.json`. Connect the
+Galaxy S8+ by USB, enable USB debugging and accept the computer authorization
+prompt, then Refresh. Direct APK installation does not require the Play Store.
+Older Android wireless ADB requires initial USB setup; modern TLS pairing
+discovery does not provide that setup.
+
+The window remains responsive while subprocesses build and deploy. Deployment
+buttons are disabled during an operation, and a second launcher window is
+prevented. Wait for completion before closing. Existing identity checks and
+in-place installation remain in force; deployment never uninstalls the app or
+clears its data. The S8+ is not considered validated until it has actually been
+connected, installed and tested.
+
+Test-device deployments use separate persistent workspaces under ignored
+`Mobile/.deploy-workspaces/android/` and `Mobile/.deploy-workspaces/ios/`. Each
+owns its staged payload, Briefcase project/cache, generated native libraries,
+build products and logs. The first run creates new projects; later runs reuse
+them. Canonical sources, SDK settings and the saved iOS signing/device identity
+still come from `Mobile/`; credentials are not copied into these workspaces.
+`logs/deployment.log` under each workspace captures that platform's full worker
+output; the window prefixes progress with `[Android]` or `[iOS]`. A failed
+platform does not cancel the other, and the batch waits for both before reporting
+success or failure. A file lock prevents simultaneous batches from changing the
+same workspace. The older standalone launchers retain their existing paths.
+
 ## Double-click Android deployment
 
 Connect and authorize an Android device with USB debugging, or start an emulator,
@@ -31,6 +91,9 @@ Briefcase provisions its Android SDK/JDK during setup; the helper also recognize
 environment are required as for iOS. The first Android build may download large
 SDK/NDK dependencies. This is a local debug build, not Play Store distribution.
 Signature or version mismatches stop installation; it never uninstalls the app.
+The native build helper synchronizes the generated Gradle `versionCode` from
+`Mobile/pyproject.toml`, including when reusing an existing Briefcase project.
+The configured code must be at least as new as the device's installed build.
 
 Optional Terminal usage: `Mobile/deploy_android.command --device SERIAL` or
 `Mobile/deploy_android.command --build-only`. Build/install logs are under
@@ -304,23 +367,30 @@ first uploaded build.
 
 ## Host validation
 
-```sh
-PYTHONPATH=Python:Python/tests python -m logisticsmobile.smoke --target host
-PYTHONPATH=Python python -m unittest discover -s Python/tests -p 'test_mobile_*.py' -v
-```
-
-For the widget contract check, install the dummy backend and pinned host-only
-authentication dependency in the separate environment, then run:
+Use the [shared environment setup and check commands](testing.md#run-everyday-checks)
+for desktop and mobile host tests. From the repository root (`py` instead of
+`python3` on Windows):
 
 ```sh
-python -m pip install toga-dummy==0.5.7 -r Mobile/requirements-testflight.txt
-PYTHONPATH=.:Python TOGA_BACKEND=toga_dummy python Python/tests/run_regressions.py Mobile/tests --isolate-modules
+python3 dev.py test desktop 'test_mobile_*.py'
+python3 dev.py test mobile
 ```
 
-The widget suite starts each test module in a fresh process to keep retained
-dummy-backend GUI state from slowing later modules and expiring asynchronous
-fixtures. Every discovered module runs; failures and per-module timeouts fail
-the suite. These commands verify host behavior; they do not certify device interfaces.
+The first command runs desktop-side mobile contracts using root `.venv`; the
+second runs widget/workflow contracts using `Mobile/.venv` and the dummy Toga
+backend. A filename or quoted glob selects a focused file or group. Each file
+runs in a fresh process; failures and per-file timeouts fail the command.
+These host checks do not certify device interfaces.
+
+For the standalone host smoke, use the desktop environment directly:
+
+```sh
+# macOS / Linux
+PYTHONPATH=Python:Python/tests .venv/bin/python -m logisticsmobile.smoke --target host
+```
+
+On Windows PowerShell, set `$env:PYTHONPATH = "Python;Python/tests"` and run
+`.venv/Scripts/python.exe -m logisticsmobile.smoke --target host`.
 
 ## Hosted builds and runtime checks
 

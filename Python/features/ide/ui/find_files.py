@@ -118,7 +118,7 @@ class FindFiles(qt.QFrame):
         preview_layout.addWidget(self.preview_title)
         self.preview = CodeEdit()
         self.preview.setReadOnly(True)
-        from features.code_font import code_font
+        from services.editors.ui.fonts import code_font
         code_font().bind(self.preview)
         self.highlighter = SyntaxHighlighter(self.preview, 'text')
         preview_layout.addWidget(self.preview)

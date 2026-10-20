@@ -1,5 +1,8 @@
 """Owned workflow state and explicit application services."""
+from copy import deepcopy
 from services.workflow_host import HostAttribute
+from .folder_discovery import FolderDiscovery, FolderDiscoveryHost
+from .folder_hub import FolderDiscoverySnapshot
 from logisticsmobile.folder_hub_ui import FolderHubUI
 
 
@@ -9,6 +12,34 @@ class FolderController(FolderHubUI):
 
     def __init__(self, app):
         self.app = app
+        self.discovery = FolderDiscovery(FolderDiscoveryHost(loop=app.loop,
+            active=lambda: self.active_host, stamp=self.discovery_stamp,
+            snapshot=self.discovery_snapshot, publish=self.publish_discovery,
+            error=self.discovery_error))
+
+    def discovery_stamp(self):
+        client = getattr(self, 'cloud_client', None)
+        return id(client), getattr(client, 'generation', None)
+
+    def discovery_snapshot(self):
+        from features.rclone.transfers.mobile.jobs import resolved_job
+        client = getattr(self, 'cloud_client', None)
+        return FolderDiscoverySnapshot(private_root=self.private_root,
+            jobs=deepcopy({key: resolved_job(client, job) for key, job in self.mirror_store().jobs.items()}),
+            remote_names=tuple(self.loaded_remote_names()),
+            retained_packages=tuple(deepcopy(self.retained_credential_associations())),
+            crypt_locations=tuple(getattr(self, 'hub_crypt_locations', ())),
+            crypt_roots=deepcopy(getattr(self, 'hub_crypt_roots', {})))
+
+    def publish_discovery(self, result):
+        self.hub_crypt_locations = list(result.crypt_locations)
+        if hasattr(self, 'folder_list'):
+            self.update_folder_list(result.choices)
+
+    def discovery_error(self, message):
+        self.folder_hub_error = message[:300]
+        if hasattr(self, 'folder_loading_status'):
+            self.set_folder_loading('Refresh failed: ' + self.folder_hub_error)
 
     _impl = HostAttribute('_impl')
     active_host = HostAttribute('active_host')
@@ -48,6 +79,7 @@ class FolderController(FolderHubUI):
     session_credential_packages = HostAttribute('session_credential_packages')
     set_cloud_busy = HostAttribute('set_cloud_busy')
     show_cloud = HostAttribute('show_cloud')
+    start_cloud_restore = HostAttribute('start_cloud_restore')
     show_cloud_connections = HostAttribute('show_cloud_connections')
     show_files = HostAttribute('show_files')
     show_legacy_session = HostAttribute('show_legacy_session')

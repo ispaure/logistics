@@ -4,14 +4,17 @@
 
 Settings opens a category list: **App**, **Read aloud**, **Markdown**, **Text**,
 **EPUB**, **Books & Comics**, **LM Chat**, **Workspaces**, **Help**, and **About**.
-Android also includes **Appearance** for High contrast / E Ink. On a phone, tap
+Both platforms include **Appearance** for Seasonal snow; Android also offers
+High contrast / E Ink there. On a phone, tap
 one category to see its options and use Back to return to the list.
 Categories and related options share rounded groups with inset dividers, like
 system Settings. Category icons and trailing chevrons identify pages you can
 open; immediate commands use the accent color. Descriptions and status text use
 gray in light and dark mode. Switches and pickers retain their native controls.
-Android High contrast / E Ink uses square outlined groups, black text, and a
+Android High contrast / E Ink uses rounded outlined groups, black text, and a
 solid selected-category highlight in the wide layout.
+Category icons keep clearance from the group outline. On iOS, long category
+titles leave a separate space for the trailing chevron.
 
 With at least 640 points/dp of usable width, Settings shows categories on the
 left and the selected category's options on the right. This applies to Android
@@ -27,15 +30,55 @@ page stays open during a resize; Back returns to its category in the new layout.
 Preferences still save immediately, and each window keeps its own category
 selection.
 
-## Android appearance and E Ink status
+## Appearance and E Ink status
+
+**Seasonal snow** is on by default and saves immediately on this device.
+Decorative snow falls from December 15 through January 2, inclusive, each year,
+using the local date. It lets touches pass through. System high contrast and
+Android High contrast / E Ink suppress snow without changing the saved choice.
+
+### Interface size on phones and tablets
+
+Workspaces uses the same approximately 17-point/sp title size and 48-point/dp row targets on
+phones and tablets. Source tabs and credential pickers use 16-point/sp text.
+Native file lists also use 48-unit rows, with 17-point/sp primary text on Android
+and the native iOS body font. Larger windows provide more room for content and
+panes rather than reducing these sizes. These are logical units, not screen pixels;
+Android's reported display density still determines their physical size.
+
+If the entire interface looks small on BOOX, increase Logistics' per-app DPI in
+BOOX's app optimization settings, then fully close and reopen Logistics. Vendor
+labels and available controls vary by model and firmware. A “universal DPI” choice
+does not guarantee the same physical scale as an iPhone. Start with a modest
+increase (for example, about 15%), compare a few rows and buttons, then adjust to
+comfort. Increasing DPI makes controls larger and leaves less room for content;
+it can also change when the app switches between a rail and bottom navigation.
+Logistics does not change the device's density or override BOOX optimization.
+
+On other Android tablets, use the system **Display size** control if the whole
+interface is small, or **Font size** for text. Android native text follows system
+font scaling; fixed-height rows have not been validated at every accessibility
+size. The document font controls below affect reading content separately from
+navigation. The E Ink switch changes contrast, not interface scale.
+
+### Contrast
 
 Android normally follows the device's light/dark mode. This remains the default.
 To opt in, open **Settings → Appearance → High contrast / E Ink**. The Android-only switch saves
 immediately on this device and persists after restarting the app.
 
-While enabled, the app uses black text on white, black outlines and simpler
-square controls. The selected destination (Home, Workspaces, Documents, Chat or
-Settings) has a white icon inside a solid black square on both the bottom bar
+While enabled, the app uses black text on white and adds black outlines while
+keeping the same layout, sizes and corner shapes as normal appearance.
+Interactive Workspaces folder rows have a black rounded outline enclosing their icon, title and actions; group headings keep
+their plain presentation. Android file-browser lists have a thin separator
+between entries in normal and high-contrast modes, inset from the filename's
+first letter to just beyond the three-dot action. High contrast adds one black
+outline around the list, like a Settings group. Android folder rows omit the
+disclosure arrow; tap the folder name to browse or the three dots for actions.
+Colors follow the current appearance. Wide workspace/browser panes have a
+16-unit gutter on Android and iOS; compact layouts use the full available width.
+The selected destination (Home, Workspaces, Documents, Chat or
+Settings) has a white icon inside a solid black rounded indicator on both the bottom bar
 and the left navigation rail. The icon's transparent areas remain transparent, and unselected
 icons and labels stay black on white. Rotating into a sidebar applies this
 treatment immediately, without toggling the preference again.
@@ -143,10 +186,19 @@ inspects it; it does not switch storage. The page shows the current location,
 whether the selected location is in use, and the exact Local and LocalCrypt
 paths and whether they are empty or contain files.
 
-On a shared drive, the two folders are `<drive>/Logistics/Local` and
+On Android 11 and newer, the two shared-drive folders are `<drive>/Logistics/Local` and
 `<drive>/Logistics/LocalCrypt`. Internal copies use the app's private
 `LocalFiles` and `LocalCryptFolders`. Enable **All files access** using
 **Allow SD card / shared storage access…** before accessing shared drives.
+
+On Android 7–10 (including Android 9 on a Galaxy S8+), drive choices use
+Logistics' app-owned device-storage or SD-card directory. No storage permission
+is required. On an SD card the collections are normally under
+`<card>/Android/data/io.github.ispaure.logisticsmobile/files/Logistics/Local`
+and `LocalCrypt` beside it; the page shows the exact paths. These versions cannot
+use arbitrary SD-card folders through this setting. Android deletes the app-owned
+folders when you uninstall Logistics or clear its app data, including through
+the app's Reset action. Keep a separate backup before doing so.
 
 | Action | Result | Files kept |
 | --- | --- | --- |
@@ -155,7 +207,8 @@ On a shared drive, the two folders are `<drive>/Logistics/Local` and
 | **Start empty here — keep old files…** | Creates/selects empty collection folders without copying. Refuses a location containing files. Works even if the previously selected card is unavailable. | Current files stay at their old location. Private documents, credentials and metadata remain. |
 | **Erase collection files at this location…** | Permanently deletes only the displayed Local and LocalCrypt folders, their contents, interrupted `.storage-copy-*` folders and the location marker. Does not select another location. | Unrelated folders, private documents, credentials, settings and metadata remain. Disabled/refused for the collection currently in use. |
 
-After reinstalling or resetting the app, select the SD card and choose **Use
+For retained shared-drive folders on Android 11 and newer, after reinstalling or
+resetting the app, select the SD card and choose **Use
 existing files here — no copy…** to reconnect retained collections. This checks
 the collection folder paths and saves the location without scanning subfolders,
 reading file contents or calculating checksums. It is not an integrity check;
@@ -179,7 +232,7 @@ Credentials, transfer mappings, preferences, imported standalone books, text
 imports and recovery drafts remain in internal app storage. Local is readable
 storage; other apps with access to the card can read it. LocalCrypt preserves
 its encrypted filenames and bytes and still requires the matching credentials.
-The public collections survive app uninstall, but private credentials and
+Only public shared-drive collections outside app-owned storage survive app uninstall; private credentials and
 transfer associations do not. Reinserting the card alone cannot recover those.
 
 If the card is missing or permission is revoked, local collection operations
@@ -219,10 +272,11 @@ other Logistics windows first. This is irreversible.
 This deletes private documents and unsaved drafts, imported books, chat,
 credentials and their device keys, settings/configuration, transfer mappings,
 reading progress, metadata, thumbnails and caches. On Android it also deletes
-internal Local and LocalCrypt files. On iOS it deletes **all files under On My
+internal Local and LocalCrypt files and app-owned SD-card storage (used on
+Android 7–10). On iOS it deletes **all files under On My
 iPhone/iPad → Logisticks**, including Local and files added using Files.
 
-SD/shared-drive `Logistics` folders and files on cloud/SMB servers are kept.
+Public SD/shared-drive `Logistics` folders outside app-owned storage and files on cloud/SMB servers are kept.
 Their app-side mappings and saved credentials are removed. To use retained
 LocalCrypt data again, you need the original credential ZIPs and passwords;
 resetting the app cannot recreate encryption credentials. To erase SD contents,
@@ -232,6 +286,9 @@ Android uses the system's Clear app data operation, closes the app, and clears
 runtime permissions/provider grants. Reopen it and grant access again as needed.
 On iOS the button says **Erase on next launch…**: after confirmation the app
 locks on a reset notice. Fully close it in the app switcher and reopen it.
+The notice explains that erasure is still pending and gives the close/reopen
+steps. Returning to the Home Screen alone does not complete the reset, and
+the erase control remains disabled once the request is scheduled.
 Erasure runs before migration, document restoration or services load. A durable
 request retries interrupted erasure on the next launch; a Keychain error stops
 before deleting credential records. Unlock the device and reopen to retry.

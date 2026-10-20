@@ -7,6 +7,23 @@ from logisticsmobile import appearance, folder_hub_style, palette
 
 
 class FolderHubContrastTests(unittest.TestCase):
+    def test_tree_scroll_reserves_native_bar_width_and_gap_in_both_directions(self):
+        import toga
+        for rtl in (False, True):
+            for width in (4, 12):
+                with self.subTest(rtl=rtl, width=width):
+                    content = toga.Box()
+                    scroll = self.widget(button=False)
+                    scroll._impl.native.getVerticalScrollbarWidth.return_value = width * 2
+                    scroll._impl.native.getLayoutDirection.return_value = int(rtl)
+                    scroll._impl.scale_out = lambda value: value / 2
+                    with patch('toga.ScrollContainer', return_value=scroll), patch.dict('sys.modules', {
+                            'android.view': NS(View=NS(SCROLLBARS_INSIDE_OVERLAY=0, LAYOUT_DIRECTION_RTL=1))}):
+                        self.assertIs(folder_hub_style.folder_scroll(content), scroll)
+                    self.assertEqual(content.style.margin_left if rtl else content.style.margin_right, width + 4)
+                    self.assertEqual(content.style.margin_right if rtl else content.style.margin_left, 0)
+                    scroll._impl.native.setScrollBarStyle.assert_called_with(0)
+
     def setUp(self):
         self.addCleanup(palette.set_eink_enabled, False)
         self.drawable = Mock()
@@ -83,10 +100,17 @@ class FolderHubContrastTests(unittest.TestCase):
         folder_hub_style.source_tab(tab, False)
         self.drawable.return_value.setColor.assert_called_with(palette.argb('#ffffff'))
 
-    def test_shared_surface_rows_and_titles_remain_borderless_in_monochrome(self):
+    def test_monochrome_outline_encloses_the_row_without_child_borders(self):
         palette.set_eink_enabled(True)
-        folder_hub_style.folder_row(self.widget(button=False))
+        row = self.widget(button=False)
+        folder_hub_style.folder_row(row)
+        self.drawable.return_value.setStroke.assert_called_with(1, palette.argb('#000000'))
+        self.drawable.return_value.setCornerRadius.assert_called_with(8)
+        palette.set_eink_enabled(False)
+        self.drawable.reset_mock()
+        appearance.paint_surface(row._impl, 8)
         self.drawable.return_value.setStroke.assert_not_called()
+        palette.set_eink_enabled(True)
         self.drawable.reset_mock()
         folder_hub_style.surface(self.widget(), outlined=False)
         self.drawable.return_value.setStroke.assert_not_called()
@@ -105,6 +129,28 @@ class FolderHubContrastTests(unittest.TestCase):
         self.drawable.return_value.setStroke.assert_not_called()
         title._impl.native.setElevation.assert_called_with(0)
 
+    def test_surface_radius_is_identical_when_contrast_changes(self):
+        row = self.widget(button=False)
+        for enabled in (False, True, False):
+            palette.set_eink_enabled(enabled)
+            appearance.surface(row, radius=16)
+            self.drawable.return_value.setCornerRadius.assert_called_with(16)
+
+    def test_compact_icons_stay_centered_inside_touch_targets_in_both_modes(self):
+        for contrast in (False, True):
+            palette.set_eink_enabled(contrast)
+            for width, height, size in ((48, 48, 24), (48, 48, 18), (28, 32, 22)):
+                with self.subTest(contrast=contrast, size=size):
+                    button = self.widget()
+                    button._impl.scale_in = lambda value: round(value * 2)
+                    button._impl._control_drawable = Mock()
+                    folder_hub_style.compact_icon(button, width=width, height=height, size=size)
+                    button._impl._control_drawable.setBounds.assert_called_once_with(
+                        0, 0, size * 2, size * 2)
+                    button._impl.native.setPadding.assert_called_with(
+                        width - size, height - size, width - size, height - size)
+                    self.assertEqual((button.style.width, button.style.height), (width, height))
+
     def test_rows_keep_compact_spacing_inside_shared_group(self):
         palette.set_eink_enabled(True)
         row = self.widget(button=False)
@@ -115,4 +161,4 @@ class FolderHubContrastTests(unittest.TestCase):
         self.assertEqual(row.children[-1].style.margin_right, 0)
         self.assertTrue(all(child.style.margin_top == child.style.margin_bottom == 0
                             for child in row.children))
-        self.drawable.return_value.setStroke.assert_not_called()
+        self.drawable.return_value.setStroke.assert_called_with(1, palette.argb('#000000'))

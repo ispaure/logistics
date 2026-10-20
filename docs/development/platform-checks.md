@@ -68,19 +68,20 @@ bits run only on POSIX hosts; archive and password checks run on every platform.
 
 The suite runner reports the active test and completed count every 60 seconds.
 Native crashes also produce Python tracebacks. The outer platform runner allows
-ten minutes per suite and uploads its logs; macOS jobs also collect native Python
+ten minutes for the shared suite and fifteen for Logistics and uploads its logs; macOS jobs also collect native Python
 crash reports when available. To run the application suite with these diagnostics:
 
 ```sh
-QT_QPA_PLATFORM=offscreen PYTHONPATH=Python .venv/bin/python Python/tests/run_regressions.py Python/tests
+python3 dev.py test desktop
 ```
 
 Qt tests use `QtTestCase` to stop workers and release new windows between tests.
-The shared suite runs every test file in a fresh process so unrelated fixtures do
+Both suites run every test file in a fresh process so unrelated fixtures do
 not share Qt application state. An assertion failure, abnormal exit or timeout
 still fails validation; later files run to provide the remaining results. To run
-the same shared checks locally, replace `Python/tests` above with
-`Python/commonUtils/tests --isolate-modules`.
+the shared suite directly, use the project interpreter with
+`Python/tests/run_regressions.py Python/commonUtils/tests --isolate-modules`
+and `PYTHONPATH=Python`. Use [the validation guide](testing.md) for environment setup.
 
-The full Logistics application suite stays in one process to exercise combined
-startup, document hosting and worker lifetimes. Both complete suites must pass.
+Both complete suites must pass; each file owns its GUI state in an isolated
+process. See `Python/tests/run_platform_checks.py` for the current orchestration.

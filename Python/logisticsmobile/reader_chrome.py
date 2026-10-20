@@ -7,7 +7,7 @@ from .action_menu import FeatureCommands
 from .reader_controls import ReadingFrame, PageFooter, ComicHeader, comic_actions, comic_pages
 
 
-def sync_comic_chrome(app, view):
+def sync_comic_chrome(app, view, *, destination=None):
     """Host decides when to hide chrome; shared adapters own native restoration."""
     def immersive(widget):
         return (getattr(widget, '_reader_fullscreen', False)
@@ -18,13 +18,64 @@ def sync_comic_chrome(app, view):
         return getattr(widget, '_comic_fullscreen', False) or any(comic(child) for child in widget.children)
     app._comic_chrome_hidden = comic(view)
     app._reader_chrome_hidden = hidden
-    navigation = app.adaptive.secondary if app.adaptive.split is not None and app.native_host.state.destination == 'documents' else None
+    destination = destination or app.native_host.state.destination
+    adapter = app.native_host.adapter
+    navigation = None
+    if app.adaptive.split is not None and destination == 'documents':
+        navigation = app.adaptive.secondary
+    elif adapter is not None and hasattr(adapter, 'navigation'):
+        navigation = adapter.navigation[app.native_host.destinations.index(destination)]
     app.native_host.chrome.set_hidden(hidden, navigation=navigation)
+    sync_document_tabs(app, view, fullscreen=hidden, destination=destination)
     from .ios_reader_chrome import sync
     sync(app)
     def page_swipes(widget):
-        return getattr(widget, 'page_swipes_at_edges', False) or any(page_swipes(child) for child in widget.children)
+        return (getattr(widget, 'page_swipes_at_edges', False) or hasattr(widget, '_reader_session_id')
+                or any(page_swipes(child) for child in widget.children))
     app.native_host.chrome.set_page_swipes(page_swipes(view), navigation=navigation)
+
+
+def sync_document_tabs(app, view, *, fullscreen=False, destination=None):
+    """Document routes hide destinations without hiding their Back/title bar.
+
+    Apply after immersive restoration, which can restore an older tab state.
+    Keyboard snapshots must also use the current route's visibility so dismissing
+    the keyboard cannot reveal destinations over an open document.
+    """
+    from .reader_lifecycle import session_route
+    destination = destination or app.native_host.state.destination
+    screens = app.routes.screens[destination]
+    details = app.adaptive.detail_routes if destination == 'documents' else ()
+
+    def document(widget):
+        return (hasattr(widget, '_reader_session_id')
+                or any(document(child) for child in widget.children))
+
+    hidden = fullscreen or document(view) or any(
+        session_route(route) for route, *_ in (*screens, *details))
+    app._document_tabs_hidden = hidden
+    adapter = app.native_host.adapter
+    if adapter is None:
+        return
+    if hasattr(adapter, 'navigation'):
+        from rubicon.objc import SEL
+        modern = bool(adapter.controller.respondsToSelector(SEL('setTabBarHidden:animated:')))
+        keyboard = adapter.keyboard_tab_visibility
+        if keyboard is not None:
+            adapter.keyboard_tab_visibility = (modern, hidden)
+        effective = hidden or keyboard is not None
+        if adapter.tabs_hidden() != effective:
+            adapter.set_keyboard_tabs_hidden(modern, effective)
+    elif hasattr(adapter, 'bottom'):
+        bar = adapter.impl.native_navigationview
+        keyboard = adapter.keyboard_chrome
+        visibility = 8 if hidden else 0
+        if keyboard is not None:
+            saved_bar, _, title, showing = keyboard
+            adapter.keyboard_chrome = (saved_bar, visibility, title, showing)
+        effective = 8 if keyboard is not None else visibility
+        if bar.getVisibility() != effective:
+            bar.setVisibility(effective)
 
 
 class ReaderChrome:
@@ -217,7 +268,7 @@ class ReaderChrome:
             return
         panel = getattr(self, 'speech_panel', None)
         if panel is not None and not panel.closed:
-            panel.show_over(self.book_content)
+            panel.toggle_over(self.book_content, anchor=getattr(self, 'reader_speech_button', None))
             return
         self.close_read_aloud()
         from features.books.mobile.speech_view import ReadAloudPanel
@@ -233,7 +284,7 @@ class ReaderChrome:
             self.epub_event(self.book_reader, self.book_epoch, self.book_record['position'], 'position', start)
         self.speech_panel = ReadAloudPanel(loop=self.loop, source=source, on_range=follow, close=self.close_read_aloud,
             app=self.app, document_title=lambda: self.book_record['name'])
-        self.speech_panel.show_over(self.book_content)
+        self.speech_panel.show_over(self.book_content, anchor=getattr(self, 'reader_speech_button', None))
 
     def close_read_aloud(self, widget=None, **kwargs):
         panel = getattr(self, 'speech_panel', None)

@@ -1,4 +1,5 @@
 """Document entry points preserve the selected tab and retained source panels."""
+import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -31,6 +32,54 @@ class DocumentNavigationTests(TestCase):
         path.write_bytes(PDF)
         self.paths.append(path)
 
+    def press(self, label):
+        def widgets(view):
+            yield view
+            for child in view.children:
+                yield from widgets(child)
+        button = next(view for view in widgets(self.app.body) if getattr(view, 'text', None) == label)
+        return button.on_press()
+
+    def test_local_browse_and_text_open_do_not_wait_for_initial_cloud_restore(self):
+        app = self.app
+        async def exercise():
+            release = asyncio.Event()
+            app.cloud_restore_task = asyncio.create_task(release.wait())
+            app.set_cloud_busy(True)
+            try:
+                self.assertTrue(await asyncio.wait_for(app.open_hub_file(), 1))
+                browser = app.adaptive.browser('home')
+                await browser.open_folder({'path': 'Fixtures'})
+                self.assertTrue(await browser.open_file({'path': 'Fixtures/note.txt'}))
+                owner = app.private_sessions.active
+                self.assertEqual(owner.crypt_text.value, 'Retained text')
+                self.assertFalse(app.cloud_restore_task.done())
+                self.assertTrue(app.provider_sessions().activate(owner.session.id))
+                self.assertTrue(app.provider_sessions().close(owner.session.id))
+                await asyncio.wait_for(app.show_local_location(), 1)
+                self.assertEqual(app.native_host.state.destination, 'files')
+                self.assertFalse(app.cloud_restore_task.done())
+            finally:
+                release.set()
+                await app.cloud_restore_task
+                app.set_cloud_busy(False)
+        app.loop.run_until_complete(exercise())
+
+    def test_tab_selection_uses_the_incoming_destinations_document_state(self):
+        app = self.app
+        app.show_documents_hub()
+        app.create_chosen_document('txt')
+        host = app.native_host
+        def tap(destination):
+            host.root._impl._set_value('current_tab_index', host.destinations.index(destination))
+            host.root.on_select()
+        tap('home')
+        self.assertFalse(app._document_tabs_hidden)
+        tap('documents')
+        self.assertTrue(app._document_tabs_hidden)
+        tap('home')
+        self.assertFalse(app._document_tabs_hidden)
+
     def test_all_formats_keep_home_or_workspace_and_back_restores_same_panel(self):
         from Mobile.tests.test_pdf_reader import native_pdf
 
@@ -52,6 +101,7 @@ class DocumentNavigationTests(TestCase):
                         query = self.app.file_browser.search.value if destination == 'files' else None
                         with patch('features.pdf.document.PDFDocument.open', native_pdf):
                             self.assertTrue(await self.app.open_download(path=path))
+                            self.assertTrue(self.app._document_tabs_hidden)
                             self.assertEqual(self.app.native_host.state.destination, destination)
                             self.assertFalse(self.app.routes.origins)
                             session = self.app.workspace.active
@@ -61,7 +111,8 @@ class DocumentNavigationTests(TestCase):
                         self.assertIs(self.app.body, panel)
                         self.assertEqual(list(panel.children), children)
                         self.assertEqual(self.app.routes.screens[destination], routes)
-                        self.assertIn(session, self.app.workspace.sessions)
+                        self.assertNotIn(session, self.app.workspace.sessions)
+                        self.assertFalse(self.app._document_tabs_hidden)
                         if destination == 'files':
                             self.assertEqual(self.app.file_path, 'Fixtures')
                             self.assertEqual(self.app.file_browser.search.value, query)
@@ -96,6 +147,9 @@ class DocumentNavigationTests(TestCase):
                     self.assertIs(app.body, panel)
                     self.assertEqual(len(app.routes.screens[destination]), depth + 1)
                 self.assertTrue(app.routes.back())
+                self.assertIn(owner.session.id, app.workspace.sessions)
+                self.assertEqual(owner.document.text, '# Unsaved mode changes')
+                self.press('Save and close')
                 self.assertIs(app.body, origin)
                 self.assertEqual(owner.document.text, '# Unsaved mode changes')
 
@@ -112,6 +166,8 @@ class DocumentNavigationTests(TestCase):
         self.assertIs(app.body.children[0], owner.preview_box)
         self.assertFalse(app.routes.screens['documents'])
         self.assertTrue(app.routes.back())
+        self.assertIn(owner.session.id, app.workspace.sessions)
+        self.press('Save and close')
         self.assertIs(app.body, origin)
         self.assertEqual(owner.document.text, '# Unsaved changes')
 
@@ -133,7 +189,9 @@ class DocumentNavigationTests(TestCase):
         self.assertFalse(hasattr(owner.document_view, '_workspace_frame'))
         self.assertEqual(owner.editor.value, 'Unsaved draft stays with this session')
         self.assertTrue(app.routes.back())
-        self.assertIs(app.body, origin)
+        self.assertIsNot(app.body, origin)
+        self.assertIn(session, app.workspace.sessions)
+        self.press('Keep editing')
         app.show_documents_hub()
         app.session_opener(session)()
         self.assertEqual(owner.document_view._workspace_frame.destination, 'documents')
@@ -154,9 +212,12 @@ class DocumentNavigationTests(TestCase):
             owner.crypt_text.value = 'Provider draft retained'
             self.assertEqual(app.native_host.state.destination, 'home')
             self.assertTrue(app.routes.back())
-            self.assertIs(app.body, panel)
             self.assertEqual(browser.folder, 'Fixtures')
             self.assertEqual(owner.crypt_text.value, 'Provider draft retained')
+            self.assertIn(owner.session.id, app.workspace.sessions)
+            self.press('Discard and close')
+            self.assertIs(app.body, panel)
+            self.assertNotIn(owner.session.id, app.workspace.sessions)
             self.assertTrue(app.routes.back())
             self.assertIs(app.body, origin)
         app.loop.run_until_complete(exercise())

@@ -108,7 +108,7 @@ class DocumentationViewerTests(QtTestCase):
                             item = iterator.value(); break
                         iterator += 1
                     self.assertIsNotNone(item, str(landing))
-                    viewer.wiki.tree.itemClicked.emit(item, 0)
+                    viewer.wiki.tree.setCurrentItem(item)
                     self.assert_scope(viewer, landing, scope)
                     expected = folder.parent / (folder.parent.name + '.md')
                     viewer.wiki.up_button.click()

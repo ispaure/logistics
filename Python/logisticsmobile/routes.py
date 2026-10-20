@@ -91,6 +91,14 @@ class MobileRoutes(Routes):
             self.render(destination)
 
     def back(self):
+        screens = self.screens[self.host.state.destination]
+        if screens and screens[-1][0].startswith(('private-close:', 'close:')):
+            self.app.keep_reader_editing(screens[-1][0].split(':')[1])
+            return True
+        key = self.app.visible_reader()
+        if key is not None:
+            self.app.request_reader_close(key)
+            return True
         destination = self.host.state.destination
         screens = self.screens[destination]
         count = len(screens)
@@ -129,9 +137,15 @@ class MobileRoutes(Routes):
         destination = self.host.destinations[self.host.adapter.navigation.index(navigation)]
         screens = self.screens[destination]
         count = len(screens)
+        previous = screens[-1][0] if screens else ''
         origin = self.origins.get((destination, screens[-1][0])) if screens else None
         super().native_popped(navigation)
         popped = len(screens) < count
+        if (len(screens) == count - 1
+                and previous.startswith(('private-close:', 'close:'))):
+            # UIKit's own Back button bypasses back(); cancelling a close
+            # prompt must retire the pending exit intent through the same path.
+            self.app.keep_reader_editing(previous.split(':')[1])
         if popped:
             self.folders.restore(destination)
         if origin is not None and len(screens) < count:
@@ -242,8 +256,6 @@ class MobileRoutes(Routes):
             chapters = getattr(reader, 'chapter_sidebar', None)
             if chapters is not None and not chapters.expanded and chapters.sidebar_open:
                 return self.invoke_back(chapters.show_detail)
-            if getattr(reader, 'reader_immersive', False):
-                return self.invoke_back(reader.toggle_reading_mode)
 
         private = getattr(app, 'private_sessions', None)
         reader = private.active if private is not None else None
@@ -260,8 +272,10 @@ class MobileRoutes(Routes):
             tools = getattr(reader, 'pdf_tools', None)
             if tools is not None and contains(body, tools.panel):
                 return self.invoke_back(tools.close)
-            if getattr(reader, 'crypt_immersive', False):
-                return self.invoke_back(reader.toggle_private_reading_mode)
+
+        key = app.visible_reader()
+        if key is not None:
+            return self.invoke_back(lambda: app.request_reader_close(key))
 
         if self.screens[destination]:
             cancel = getattr(app, '_cancel_transfer_review', None)

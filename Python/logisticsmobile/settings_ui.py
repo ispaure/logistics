@@ -122,8 +122,13 @@ def disclosure(button):
     button._settings_disclosure = True
     backend = type(button._impl).__module__
     if backend.startswith('toga_iOS.'):
-        from rubicon.objc import ObjCClass
+        from rubicon.objc import ObjCClass, UIEdgeInsets
         native = button._impl.native
+        # The accessory is an overlaid subview, unlike Android's end drawable.
+        # Reserve its width and a gap in the title's actual layout as well as
+        # the text-fitting estimate, including after a theme repaint.
+        button._impl._content_trailing_inset = 32
+        native.contentEdgeInsets = UIEdgeInsets(0, native.contentEdgeInsets.left, 0, 32)
         image = ObjCClass('UIImage').systemImageNamed('chevron.right')
         accessory = ObjCClass('UIImageView').alloc().initWithImage(image)
         accessory.translatesAutoresizingMaskIntoConstraints = False
@@ -653,6 +658,14 @@ def settings_sections(app):
 
     def appearance():
         box = category('Appearance')
+        app.snow_choice = toga.Switch('Seasonal snow',
+            value=app.preferences.values['seasonal_snow'] == 'true', style=Pack(height=48))
+        box.add(switch_row(app, 'Seasonal snow', app.snow_choice,
+            'Snow from December 15 through January 2, inclusive. On by default. '
+            'Disabled in high-contrast / E Ink mode. Saved immediately.'))
+        app.snow_choice.on_change = app.change_seasonal_snow
+        if not type(app._impl).__module__.startswith('toga_android.'):
+            return box
         app.android_eink_choice = toga.Switch('High contrast / E Ink',
             value=app.preferences.values['android_eink'] == 'true', style=Pack(height=48))
         box.add(switch_row(app, 'High contrast / E Ink', app.android_eink_choice,
@@ -743,9 +756,7 @@ def settings_sections(app):
         box.add(app.build_version_label)
         return box
 
-    sections = {'App': application}
-    if type(app._impl).__module__.startswith('toga_android.'):
-        sections['Appearance'] = appearance
+    sections = {'App': application, 'Appearance': appearance}
     sections['Read aloud'] = speech
     sections['Markdown'] = lambda: text_size('Markdown', 'markdown_font_size')
     sections['Text'] = lambda: text_size('Text', 'text_font_size')

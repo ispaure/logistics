@@ -24,9 +24,10 @@ def apple_dismissal_class():
                 if self.overlay is None or self.overlay.container is None:
                     return False
                 native = self.overlay.container.native
+                anchor = getattr(getattr(self.overlay.anchor, '_impl', None), 'native', None)
                 view = native_value(touch.view)
                 while view is not None:
-                    if view == native:
+                    if view == native or (anchor is not None and view == anchor):
                         return False
                     view = native_value(view.superview)
                 return True
@@ -36,7 +37,8 @@ def apple_dismissal_class():
 
 
 class SpeechOverlay:
-    def __init__(self, panel, owner, app):
+    def __init__(self, panel, owner, app, *, anchor=None):
+        self.anchor = anchor
         self.panel = panel
         self.reposition = lambda: None
         self.container = self.popup = None
@@ -94,7 +96,9 @@ class SpeechOverlay:
         self.outside_tap = ObjCClass('UITapGestureRecognizer').alloc().initWithTarget(
             self.dismissal, action=SEL('outsideTap:'))
         self.outside_tap.delegate = self.dismissal
-        self.outside_tap.cancelsTouchesInView = False
+        # Consume dismissal taps, including native navigation-bar copies of the
+        # speaker button, so their touch-up cannot reopen the dismissed panel.
+        self.outside_tap.cancelsTouchesInView = True
         window.addGestureRecognizer(self.outside_tap)
 
     def android(self, owner):

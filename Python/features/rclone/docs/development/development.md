@@ -34,10 +34,27 @@ corresponding ZIP. Initialization only creates the config directory; it never
 merges credentials into a global config. The checkout's credentials directory
 may be empty, and Logistics Local folders work without this feature.
 
-Loading uses `zipUtils.unzip_file` and shared ZIP access with an explicit credential
-password, supporting plain, ZipCrypto and AES packages. Each load has an isolated
-temporary workspace cleaned on success/failure. Failed extraction must not publish
-a generated config. Comics' ancestor INI passwords and unlock caches do not apply.
+Desktop Settings decodes credential ZIPs in an `OperationProgress` worker using
+`session.read_package`. It validates password-protected TXT entries in memory and
+atomically writes the config for **Load on Disk**; **Load for Session** publishes
+values on the GUI thread. It never extracts TXT files or starts rclone. Cancellation
+before publication preserves existing credentials; once the disk write commits,
+completion reports success. Closing Settings requests cancellation and defers
+closure until the worker stops. Completion updates the selected row without
+rescanning cloud-backed credential roots. The legacy programmatic
+`load_remote_from_zip_to_config` helper still uses a private extraction workspace
+for disk loads. Comics' ancestor INI passwords and unlock caches do not apply.
+
+Mobile imports, saved-vault restores and SMB credential additions use a nonblocking
+native credential-publication scope. Active network operations or local readers
+produce `credentials_busy` immediately, preserving credentials and the active
+operation's cancellation handle; callers must retry after stopping that operation.
+The Python scene-publication lock also refuses contention for these actions.
+Credential metadata and package protection run outside the network queue.
+Backend disconnects run after detachment in a background task. Global rclone cache
+eviction, which can also disconnect backends, is deferred until the next explicit
+online filesystem operation. Import itself never opens or validates an online
+filesystem. Unlocking to resume a requested online action may subsequently run it.
 
 ## Folder identity and context
 

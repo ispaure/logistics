@@ -4,8 +4,8 @@
 
 Start with [setup and validation](testing.md), then use this map to find the
 owner of your change. Paths below describe the current checkout, not a proposed
-directory layout. The [restructuring assessment](restructuring.md) explains the
-recommended next steps.
+directory layout. The [feature conventions](features.md#where-new-code-belongs) explain where to
+put new code. The [restructuring record](restructuring.md) retains migration history.
 
 ## Repository map
 
@@ -44,6 +44,9 @@ not the source to edit. Root platform launchers remain desktop entry points.
 | LM transport, saved data or desktop chat | `Python/features/lm/{transport,storage,session}.py`, `Python/features/lm/ui/` | [LM integration](../../Python/features/lm/docs/development/lm.md) |
 | EPUB or comic format behavior | `Python/features/books/`, `Python/features/comics/` | The owning feature's `README.md` |
 | Mobile app composition and navigation | `Python/logisticsmobile/{app,workspace,workspace_navigation}.py` | [Mobile workspace](mobile-workspace-navigation.md) |
+| Mobile Workspaces discovery and refresh state | `Python/logisticsmobile/{folder_discovery,folder_controller,folder_hub}.py` | [Discovery ownership](mobile-runtime.md#workspaces-folder-discovery) |
+| Mobile main/workspace folder listing requests | `Python/logisticsmobile/folder_listing.py`; adapters in `files_ui.py`, `workspace_navigation.py` | [Listing ownership](mobile-runtime.md#folder-listing-ownership) |
+| Mobile create, rename, move and delete | `Python/logisticsmobile/file_operations.py`, `feature_hosts.file_operations`; forms in `files_ui.py` | [File operation ownership](mobile-runtime.md#file-operation-ownership) |
 | Mobile folders and file operations | `Python/logisticsmobile/{folder_hub,folder_hub_ui,files_ui}.py` | [Mobile workspace](mobile-workspace-navigation.md) |
 | Mobile text Open/Save As | `Python/logisticsmobile/editor_picker.py`; `app.editor_picker()` owns the instance | [Mobile host owners](mobile-runtime.md) |
 | Saved-import inventory/deletion | `Python/logisticsmobile/saved_files_ui.py`; `app.saved_files()` owns the instance | [Mobile host owners](mobile-runtime.md) |
@@ -80,8 +83,11 @@ For a first contribution:
    from the repository root on macOS/Linux:
 
    ```sh
-   PYTHONPATH=Python .venv/bin/python Python/tests/run_regressions.py Python/tests --pattern test_feature_registry.py --isolate-modules
+   python3 dev.py test desktop test_feature_registry.py
    ```
+
+   Use `py` instead of `python3` on Windows. The helper selects the environment
+   and import paths; see setup in the validation guide.
 
 5. Update the owning user guide for behavior changes, or the developer contract
    for architecture changes. Native interaction needs native validation.

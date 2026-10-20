@@ -62,7 +62,7 @@ class HunkCards(qt.QScrollArea):
             editor.diff_color_overrides = getattr(self.preview, 'diff_color_overrides', {})
             editor.setReadOnly(True); editor.indent_guides = False
             editor.setFont(self.preview.editor.font())
-            from features.code_font import code_font
+            from services.editors.ui.fonts import code_font
             code_font().bind(editor)
             editor.setAccessibleName(label)
             editor.highlighter = DiffHighlighter(editor)

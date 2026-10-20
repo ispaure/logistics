@@ -6,6 +6,50 @@ _installed = False
 _title_view_type = None
 
 
+def bar_control(button):
+    """Use UIKit's bar background, retaining the live button and its menu."""
+    from .appearance import paint_surface
+    button._impl._native_bar_control = True
+    paint_surface(button._impl, 0)
+    return button._impl.native
+
+
+def bar_group(buttons, *, size=44):
+    """Constrain custom controls so Toga refresh cannot collapse their frames."""
+    from rubicon.objc import ObjCClass, CGRect
+    group = ObjCClass('UIStackView').alloc().initWithFrame(CGRect((0, 0), (size * len(buttons), size)))
+    group.axis, group.distribution, group.alignment, group.spacing = 0, 1, 0, 0
+    group.widthAnchor.constraintEqualToConstant(size * len(buttons)).active = True
+    group.heightAnchor.constraintEqualToConstant(size).active = True
+    item = ObjCClass('UIBarButtonItem').alloc().initWithCustomView(group)
+    for button in buttons:
+        native = bar_control(button)
+        native.translatesAutoresizingMaskIntoConstraints = False
+        group.addArrangedSubview(native)
+        button._native_reader_item = item
+    return item, group
+
+
+def bar_separator():
+    """A fixed space splits UIKit's shared glass, including on iOS 26+."""
+    from rubicon.objc import ObjCClass
+    item = ObjCClass('UIBarButtonItem').alloc().initWithBarButtonSystemItem(6, target=None, action=None)
+    item.width = 8
+    return item
+
+
+def action_groups(buttons):
+    """Only adjacent previous/next comic actions form one semantic group."""
+    groups = []
+    for button in buttons:
+        if (groups and getattr(groups[-1][-1], 'control_icon', None) == 'previous_comic'
+                and getattr(button, 'control_icon', None) == 'next_comic'):
+            groups[-1].append(button)
+        else:
+            groups.append([button])
+    return groups
+
+
 def reader_title(text, width, actions):
     """Keep the visible title centered even with asymmetric UIKit bar groups."""
     global _title_view_type

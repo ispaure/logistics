@@ -30,13 +30,9 @@ def menu_button(callback, label='Browse files'):
         # A scroll starting on this control must not open a drawer on touch-down.
         native.removeTarget(native, action=SEL('onPress:'), forControlEvents=1)
         native.addTarget(native, action=SEL('onPress:'), forControlEvents=1 << 6)
-        configuration = ObjCClass('UIButtonConfiguration')
-        if configuration.respondsToSelector(SEL('glassButtonConfiguration')):
-            config = configuration.glassButtonConfiguration()
-        else:
-            config = configuration.grayButtonConfiguration()
-        config.cornerStyle = 4  # capsule
-        native.configuration = config
+        from .appearance import paint_surface
+        button._impl._native_glass_control = True
+        paint_surface(button._impl, 0)
         symbol = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(22, weight=5)
         native.setPreferredSymbolConfiguration(symbol, forImageInState=0)
         native.accessibilityLabel = label
@@ -71,8 +67,11 @@ def mount_native_menu(app, menu, destination):
 def sync_reader_toolbar(app, view, destination=None):
     """Share UIKit's title bar rather than spending a second row on reading."""
     if not app.routes.apple:
+        if type(app._impl).__module__.startswith('toga_android.'):
+            from .android_reader_chrome import sync
+            sync(app, view, destination or app.native_host.state.destination)
         return
-    from rubicon.objc import ObjCClass, CGRect
+    from .ios_reader_chrome import bar_control, bar_group, bar_separator, action_groups
     adapter = app.native_host.adapter
     destination = destination or app.native_host.state.destination
     controller = adapter.navigation[app.native_host.destinations.index(destination)].topViewController
@@ -104,27 +103,19 @@ def sync_reader_toolbar(app, view, destination=None):
     buttons = [] if getattr(view, '_reader_fullscreen', False) else list(controls())
     state = (controller.ptr.value, tuple(id(button) for button in buttons))
     if getattr(app, '_reader_toolbar_state', None) != state:
-        # One group prevents iPad's combined tab/navigation bar from moving
-        # individual custom-view actions into an unlabeled overflow item.
-        group = ObjCClass('UIStackView').alloc().initWithFrame(CGRect((0, 0), (44 * len(buttons), 44)))
-        group.axis = 0
-        group.distribution = 1  # fill equally
-        group.alignment = 0  # fill
-        group.spacing = 0
-        group.widthAnchor.constraintEqualToConstant(44 * len(buttons)).active = True
-        group.heightAnchor.constraintEqualToConstant(44).active = True
-        item = ObjCClass('UIBarButtonItem').alloc().initWithCustomView(group)
         for button in buttons:
             detach(button)
             button.app, button.window = app, app.main_window
-            native = button._impl.native
-            # Toga can refresh a detached widget's frame back to (0, 0).
-            # UIKit owns arranged-subview geometry after toolbar mounting.
-            native.translatesAutoresizingMaskIntoConstraints = False
-            group.addArrangedSubview(native)
-            button._native_reader_item = item
-        controller.navigationItem.rightBarButtonItems = [item] if buttons else []
-        app._reader_toolbar_group = group
+        mounted = [bar_group(group) for group in action_groups(buttons)]
+        items = []
+        # UIKit orders trailing items from the outside edge inward.
+        for item, group in reversed(mounted):
+            if items:
+                items.append(bar_separator())
+            items.append(item)
+        controller.navigationItem.rightBarButtonItems = items
+        app._reader_toolbar_groups = [group for _, group in mounted]
+        app._reader_toolbar_group = mounted[0][1] if mounted else None
         app._reader_toolbar_state = state
     status = getattr(view, '_native_reader_status', None)
     text = status.text if status is not None else ''
@@ -139,7 +130,7 @@ def sync_reader_toolbar(app, view, destination=None):
     text = str(title() if callable(title) else title or controller.navigationItem.title or '').replace('\n', ' ')
     leading = 104 if getattr(view, '_workspace_menu_button', None) is not None or hasattr(view, '_workspace_frame') else 52
     width = max(44, min(320, app.adaptive.content_width(destination, margin=0)
-                        - 2 * max(leading, 44 * len(buttons)) - 24))
+                        - 2 * max(leading, 44 * len(buttons) + 8 * max(0, len(action_groups(buttons)) - 1)) - 24))
     title_state = (controller.ptr.value, text, width, state)
     if getattr(app, '_reader_title_state', None) != title_state:
         from .ios_reader_chrome import reader_title
@@ -148,6 +139,22 @@ def sync_reader_toolbar(app, view, destination=None):
         app._reader_title_label = label
         app._reader_title_state = title_state
     app._reader_title_controller = controller
+    close = getattr(view, '_reader_close_button', None)
+    if close is not None:
+        detach(close)
+        close.app, close.window = app, app.main_window
+        if not hasattr(close, '_native_reader_close_item'):
+            close._native_reader_close_item, close._native_reader_close_group = bar_group([close])
+            close._native_reader_close_item.accessibilityLabel = close.accessible_name
+        bar_control(close)
+        frame = getattr(view, '_workspace_frame', None)
+        menu = frame.menu if frame is not None else getattr(view, '_workspace_menu_button', None)
+        items = [close._native_reader_close_item]
+        if menu is not None:
+            items.extend([bar_separator(), mount_native_menu(app, menu, destination)])
+        controller.navigationItem.leftItemsSupplementBackButton = False
+        controller.navigationItem.hidesBackButton = True
+        controller.navigationItem.leftBarButtonItems = items
 
 
 class WorkspaceNavigation(AdaptiveWorkspace):
@@ -380,8 +387,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                     frame.render()
                     frame.finish_transition(transition)
                 self.last_layout = layout
-            if view is not None:
-                sync_reader_toolbar(self.app, view, destination or self.app.native_host.state.destination)
+            android = type(self.app._impl).__module__.startswith('toga_android.')
             if frame is not None:
                 frame.sync_native_header()
             elif view is not None and self.app.routes.apple:
@@ -389,7 +395,11 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 if menu is not None:
                     mount_native_menu(self.app, menu, destination or self.app.native_host.state.destination)
             from .reader_chrome import sync_comic_chrome
-            sync_comic_chrome(self.app, body)
+            sync_comic_chrome(self.app, body, destination=destination)
+            if view is not None:
+                # Fullscreen restoration can restore the old ActionBar visibility.
+                # The incoming route owns the final document-bar state.
+                sync_reader_toolbar(self.app, view, destination or self.app.native_host.state.destination)
             if hasattr(self.app, 'render_chat_workspace'):
                 self.app.render_chat_workspace()
             from .appearance import reserve_navigation
@@ -437,6 +447,7 @@ class WorkspaceFrame:
 
     def restore(self):
         self.compact_open = False
+        self.main.style.margin_left = 0
         del self.row.style.width
         if type(self.main._impl).__module__.startswith('toga_iOS.'):
             self.main._impl.native.userInteractionEnabled = True
@@ -581,9 +592,12 @@ class WorkspaceFrame:
             from .fold_layout import seam_fraction
             seam = seam_fraction(navigation.app, self.row, include_open=True) if destination == 'files' else None
             half = max(1, available * (seam if seam is not None else .5))
-            left.style.width, left.style.flex = half, 0
+            # Leave a real gutter between navigation and content on both backends.
+            gap = 16
+            left.style.width, left.style.flex = max(1, half - gap / 2), 0
             right = self.folder_placeholder if left is self.main else self.main
-            right.style.width, right.style.flex = max(1, available - half), 0
+            right.style.margin_left = gap
+            right.style.width, right.style.flex = max(1, available - half - gap / 2), 0
             if left is self.main:
                 self.row.add(right)
                 return
@@ -602,8 +616,15 @@ class FileDrawer:
         self.generation = 0
         self.task = None
         self.refresh_requested = False
+        from .folder_listing import FolderListing
+        self.listing = FolderListing(active=lambda: self.app.active_host,
+            context=lambda: (self.generation, id(self.browser)),
+            location=lambda: (self.storage.value, self.folder),
+            credentials=lambda: (getattr(self.app, 'cloud_client', None),
+                getattr(getattr(self.app, 'cloud_client', None), 'generation', None)))
         self.storage = toga.Selection(items=['Local files'], style=Pack(height=48))
-        self.browser = FileBrowser(folder_visible=self.app.folder_path_visible, selected=lambda row: None, open_folder=self.open_folder,
+        self.browser = FileBrowser(folder_visible=self.app.folder_path_visible, contextual_selection=False,
+                                   selected=lambda row: None, open_folder=self.open_folder,
                                    navigate=self.navigate, open_file=self.open_file, preview=False)
         self.status = self.browser.status_label('')
         self.parent_button = browser_command(toga.Button('Parent folder', on_press=self.up,
@@ -662,6 +683,8 @@ class FileDrawer:
         if not self.app.checkpoint():
             return
         self.app.mark_navigation()
+        self.listing.invalidate()
+        self.refresh_requested = False
         if self.destination == 'documents' and self.app.adaptive.split is not None:
             self.app.adaptive.trim_details(self.page._folder_detail_return_count)
             if self.app.adaptive.detail_routes:
@@ -704,6 +727,7 @@ class FileDrawer:
 
     def schedule_refresh(self):
         self.generation += 1
+        self.listing.invalidate()
         self.refresh_requested = True
         if self.destination == 'documents':
             self.refresh_menu()
@@ -733,16 +757,17 @@ class FileDrawer:
         with self.browser.population_paused():
             self.generation += 1
             generation = self.generation
+            work = self.listing.begin()
             try:
                 roots = await asyncio.to_thread(self.available_roots)
             except (OSError, ValueError) as error:
                 # A failed credential query must not strand the menu refresh task.
                 # Keep Local files usable and report the connection error in-place.
-                if generation != self.generation or not self.app.active_host:
+                if not self.listing.accepts(work, private=True):
                     return False
                 self.status.value = str(error)[:160]
                 return False
-            if generation != self.generation or not self.app.active_host:
+            if not self.listing.accepts(work, private=True):
                 return False
             scope = getattr(self, 'scoped_provider', None)
             if scope is not None:
@@ -760,6 +785,7 @@ class FileDrawer:
                     detach(self.storage)
                 elif self.storage.parent is None:
                     self.browser_widget.insert(0, self.storage)
+            request = None
             try:
                 if selected != 'Local files' and not local_read_available(self.app):
                     raise ValueError('This connection is busy. Local files remain available.')
@@ -770,23 +796,17 @@ class FileDrawer:
                         raise ValueError('Unlock the library connection again.')
                 else:
                     provider = self.app.storage_provider(selected, roots)
-                client = getattr(self.app, 'cloud_client', None)
-                credential_generation = getattr(client, 'generation', None)
                 model = ResourceSelection(provider, extensions=self.extensions or ())
                 folder = self.folder
-                rows = await asyncio.to_thread(model.list, folder)
-                if (not self.app.active_host or generation != self.generation
-                        or (selected, folder) != (self.storage.value, self.folder)):
+                request = self.listing.capture(work, provider, folder, (selected, folder), source=model)
+                rows = await self.listing.read(request)
+                if rows is None:
                     return False
-                if provider.private and (client is not self.app.cloud_client
-                        or credential_generation != getattr(client, 'generation', None)):
-                    raise ValueError('Unlock the library connection again.')
                 self.provider = provider
                 self.provider_client = getattr(self.app, 'cloud_client', None)
                 self.provider_generation = getattr(self.provider_client, 'generation', None)
                 self.browser.set_entries(model, folder, rows, location=(selected, folder))
-                self.browser.location_bar.update(folder, remote=getattr(provider, 'remote_storage', False),
-                                                 encrypted=provider.private, unlocked=True)
+                self.browser.location_bar.update_provider(folder, provider)
                 self.parent_button.enabled = bool(folder)
                 if hasattr(self, 'page'):
                     from .folder_navigation import record
@@ -800,6 +820,8 @@ class FileDrawer:
                         self.refresh_menu()
                 return True
             except (OSError, ValueError) as error:
+                if not self.listing.accepts(work, request, private=request is None):
+                    return False
                 self.provider = None
                 self.browser.stop()
                 self.status.value = str(error)[:160]

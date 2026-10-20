@@ -26,6 +26,68 @@ def open_documents(content):
 
 
 class HubDocumentTests(unittest.TestCase):
+    def test_document_sections_have_one_outline_and_borderless_row_actions(self):
+        import toga
+        from logisticsmobile import palette
+        self.addCleanup(palette.set_eink_enabled, False)
+        self.app.editor.value = 'Retain draft status'
+        for contrast in (False, True):
+            palette.set_eink_enabled(contrast)
+            self.app.build_documents_hub()
+            for section in (self.app.document_open_list, self.app.document_recent_list, self.app.document_saved_list):
+                groups = [widget for widget in widgets(section) if getattr(widget, '_document_group', False)]
+                self.assertEqual(len(groups), 1 if section is self.app.document_open_list else 0)
+                if not groups:
+                    continue
+                self.assertTrue(groups[0]._impl._surface_eink_outlined)
+                for child in widgets(groups[0]):
+                    if child is not groups[0]:
+                        self.assertFalse(getattr(child._impl, '_surface_eink_outlined', False))
+                        if isinstance(child, toga.Box) and child.style.height != 1:
+                            self.assertEqual(child._impl._surface_roles[0], 'transparent')
+            home = self.app.build_home()
+            # The whole Recent section can move to the trailing pane on tablets.
+            recent = home.trailing
+            groups = [widget for widget in widgets(recent) if getattr(widget, '_document_group', False)]
+            self.assertEqual(len(groups), 1)
+            self.assertIn('See all in Documents', [getattr(widget, 'text', '') for widget in widgets(groups[0])])
+
+    def test_empty_document_messages_stay_outside_action_groups(self):
+        import toga
+        from unittest.mock import patch
+        from logisticsmobile import palette
+        self.addCleanup(palette.set_eink_enabled, False)
+        app = self.app
+        app.workspace.sessions.clear()
+        with patch.object(app, 'recent_items', return_value=[]), \
+                patch.object(app.store, 'cached_summaries', return_value=[]), \
+                patch.object(app, 'show_library') as show_library:
+            for contrast in (False, True):
+                palette.set_eink_enabled(contrast)
+                for query in ('', 'missing'):
+                    app.documents_query = query
+                    hub = app.build_documents_hub()
+                    app.document_search.value = query
+                    for section in (app.document_open_list, app.document_recent_list, app.document_saved_list):
+                        self.assertFalse(any(getattr(widget, '_document_group', False) for widget in widgets(section)))
+                        message = section.children[-1]
+                        self.assertIsInstance(message, toga.Label)
+                        self.assertEqual(message._impl._surface_roles[:2], ('transparent', 'muted'))
+                        self.assertFalse(message._impl._surface_eink_outlined)
+                        self.assertIn('No matching' if query else 'No ', message.text)
+                    action = next(widget for widget in widgets(hub) if isinstance(widget, toga.Button)
+                                  and widget.text == 'Open Books & Comics library')
+                    action.on_press()
+            self.assertEqual(show_library.call_count, 4)
+            home = app.build_home()
+            message = next(widget for widget in widgets(home.trailing) if isinstance(widget, toga.Label)
+                           and widget.text == 'No recent documents.')
+            self.assertIs(message.parent, home.trailing)
+            groups = [widget for widget in widgets(home.trailing) if getattr(widget, '_document_group', False)]
+            self.assertEqual(len(groups), 1)
+            self.assertNotIn(message, list(widgets(groups[0])))
+            self.assertIn('See all in Documents', [getattr(widget, 'text', '') for widget in widgets(groups[0])])
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.directory.name)
@@ -303,7 +365,6 @@ class HubDocumentTests(unittest.TestCase):
                 reader.assert_awaited_with(path=folder / name, destination='home')
 
     def test_home_browse_refreshes_local_root_after_other_views_and_search(self):
-        import asyncio
         import toga
         app = self.app
         def button(widget):
@@ -541,7 +602,6 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(Preferences(app.private_root).values['document_card_overview'], 'false')
 
     def test_settings_have_no_card_overview_and_keep_feature_groups(self):
-        import toga
         app = self.app
         app.show_settings()
         categories = app.settings_navigation.sections
@@ -602,7 +662,7 @@ class HubDocumentTests(unittest.TestCase):
         app.store.path(doc.id, '.json').unlink()
         row = app.session_panel(session, close=True, show_kind=False)
         self.assertTrue(any('Unavailable' in text for text in labels(row)))
-        self.assertEqual(row.children[-1].children[-1].text, '×')
+        self.assertEqual(row.close_button.text, '×')
 
     def test_restart_clears_clean_sessions_keeps_drafts_conflicts_and_stored_bytes(self):
         app = self.app

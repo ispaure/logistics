@@ -51,6 +51,44 @@ class FolderHubTests(unittest.TestCase):
                 cloud.assert_not_called()
             self.assertFalse(app.folder_loading_box.children)
 
+    def test_cold_workspace_unlock_retries_and_resumes_localcrypt_browser(self):
+        from logisticsmobile.app import LogisticsMobile
+        from features.rclone.mobile.credential_packages import CredentialPackages
+        from test_credential_packages import CacheClient, PACKAGE
+        from types import SimpleNamespace
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.cloud_client = client = CacheClient()
+            client.loaded = False
+            vault = SimpleNamespace(root=Path(directory) / 'retained', unlock=lambda **kw: dict(key='fixture'))
+            vault.root.mkdir()
+            cache = CredentialPackages(vault, client)
+            cache.remember(SimpleNamespace(name='Personal.zip', data=PACKAGE), {'Secret': 'a' * 64})
+            copy = dict(name='Secret', source='LocalCrypt', kind='crypt', value='LocalCrypt: Secret', remote='Secret')
+            with patch.object(app, 'retained_packages', return_value=cache), \
+                    patch.object(app, 'refresh_hub_crypt_locations', new_callable=AsyncMock), \
+                    patch.object(app, 'existing_crypt_locations', return_value={}):
+                app.build_folder_picker(choices={'Secret': dict(copy, copies=[copy])})
+                app.show_view(app.folder_picker_view, destination='files', root=True)
+                self.assertFalse(hasattr(app, 'cloud_view'))
+                self.assertFalse(app.loop.run_until_complete(app.open_picker_folder(copy)))
+                self.assertEqual(app.routes.screens['files'][-1][0], 'unlock-credential')
+                app.credential_unlock_password.value = 'wrong'
+                app.loop.run_until_complete(app.credential_unlock_button.on_press())
+                self.assertIn('Unlock failed', app.credential_unlock_status.text)
+                self.assertEqual(app.routes.screens['files'][-1][0], 'unlock-credential')
+                with patch.object(app, 'show_files', new_callable=AsyncMock), \
+                        patch.object(app, 'browser_file_location', new_callable=AsyncMock) as browse:
+                    app.credential_unlock_password.value = 'correct'
+                    app.loop.run_until_complete(app.credential_unlock_button.on_press())
+                    browse.assert_awaited_once_with(('LocalCrypt: Secret', ''))
+                self.assertTrue(client.loaded)
+                self.assertFalse(app.cloud_busy)
+
     def test_startup_rclone_tab_restores_saved_remotes_and_shows_cloud_and_lock(self):
         from logisticsmobile.app import LogisticsMobile
         from types import SimpleNamespace
@@ -322,6 +360,7 @@ class FolderHubTests(unittest.TestCase):
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
             self.addCleanup(app.loop.close)
             self.addCleanup(app.main_window.close)
+            app.show_cloud(present=False)
             app.show_locations()
             app.hub_crypt_roots = {'LocalCrypt: Secret': ('Secret', 'a' * 64)}
             path = app.private_root / 'LocalCryptFolders' / ('a' * 64)

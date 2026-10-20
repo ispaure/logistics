@@ -1,5 +1,190 @@
 # Mobile performance implementation and verification
 
+## BOOX background publication and retained Home controls — 2026-10-20
+
+A separate diagnostic run isolates work outside the native vault request: Home
+reconstruction takes 193.5 ms (182.9 ms building its controls), connection model
+preparation 39.1 ms, protected-key unlock 28.2 ms, crypt metadata/discovery 64.4 ms,
+and package-association updates 14.6 ms. These spans are diagnostic samples and
+can nest or overlap; they do not account for all native/async scheduling latency.
+A separate function profile confirms 33 widget constructions during Home refresh.
+
+Home now compares its visible summaries, source references, open states, notices
+and unlock-action availability. If these match, it retains its root, actions and
+recent rows and updates only changed credential glyphs/accessibility descriptions.
+Changed content still rebuilds Home; active detail routes retain their existing
+guards. The optimized diagnostic records no Home construction and a 14.3 ms Home
+refresh. Package associations skip unchanged preferences, reducing that observed
+step to 2.2 ms. Crypt names and local-directory fingerprints use published records,
+removing the extra crypt-remotes query and 16 crypt-path requests in this workload.
+Alternate adapters keep native-query fallback, and actual opening/decrypting still
+passes native credential checks. Metadata/discovery wall time did not improve in
+the single diagnostic pair (76.9 ms after), so request removal alone is not claimed
+as a measured wall-time improvement.
+
+Matched minimally instrumented build `202610249` uses identical native code for
+three baseline and five optimized cold-process launches. The baseline probe only
+disables these three Python performance changes in generated files. Medians are:
+
+| Measurement | Baseline | Optimized |
+| --- | ---: | ---: |
+| Background setup outside vault request | 559.8 ms | 312.8 ms |
+| Whole background connection setup | 813.5 ms | 601.4 ms |
+| Python entry to all connection preparation complete | 3617.6 ms | 3325.0 ms |
+
+Outside-vault latency falls 44.1%; total background setup falls 26.1%. Every run
+passes all 35 unlocked-badge checks, without constructing remote UI or unopened
+Documents. All samples remain in the evidence, including one optimized 1215.6 ms
+outlier; its vault request also rises to 591.8 ms. The other four optimized runs
+span 579.9–627.1 ms. Other user-authorized Android chats were using the shared
+workspace/device, so these are noisy shared-device measurements. Timings exclude
+native/interpreter boot and physical E Ink refresh.
+
+Go checks, 99 focused host checks, correctness Ruff and whitespace checks pass.
+Host coverage includes retained button identity across unlock/relock, changed
+history/notices/unlock action, metadata-only discovery, and unchanged preference
+writes. A Java cast correction also resolves the current rail source's build error.
+The shared signed release `202610250` supersedes the measured release; APK inspection
+confirms identical native Go code and bytecode for the three performance owners,
+with no startup probes. Its navigation rendering differs, and its latency is not
+separately timed. Device data is retained. [Numeric evidence](mobile-evidence/2026-10-20-boox-background-publication.json)
+contains every trial and diagnostic method span; real-device captures remain in
+ignored logs.
+
+## BOOX native vault stages — 2026-10-20
+
+Temporary Go stage timers on the physical BOOX Note Air5 C isolate the remaining
+vault restore cost. Across three baseline cold-process launches (probe build
+`202610245`), eight distinct cipher creations take 505–522 ms. Their median is
+506.6 ms, versus 511.0 ms for all of `openVault`. Median read, AES-GCM decrypt,
+JSON decode and remote parsing spans are 0.19, 0.56, 1.23 and 0.67 ms respectively;
+installation and metadata take 0.33 and 0.88 ms. Parsing and cipher creation are
+nested within validation/open and must not be added again. The primary work is
+rclone cipher creation, whose expensive operation is scrypt key derivation.
+
+Missing distinct configurations now derive with up to four workers, sharing the
+existing private candidate cache only after every worker succeeds. The scrypt
+parameters and saved credential format are unchanged, and automatic loading still
+prepares every cipher before credential publication. Simultaneous scrypt scratch
+memory is bounded to approximately 64 MiB. No derived key cache is persisted.
+
+Three optimized launches (probe build `202610246`) produce these medians:
+
+| Measurement | Sequential | Bounded parallel |
+| --- | ---: | ---: |
+| Native validation wall time | 508.8 ms | 265.1 ms |
+| Whole bridge vault restore | 517.9 ms | 284.7 ms |
+| Background connection preparation | 946.2 ms | 767.8 ms |
+| Python entry to connection preparation complete | 3805.3 ms | 3562.8 ms |
+
+Vault request latency falls 45.0%, and background preparation falls 18.9%. Home
+remains independent of restoration (about 2.8 seconds from Python entry). These
+clocks exclude native/interpreter boot and physical E Ink refresh. Parallel
+per-cipher elapsed spans overlap and their sum is not preparation wall time or
+CPU time. Worker scheduling and memory contention limit the improvement.
+
+All 35 credential badge checks remain unlocked in every trial. Native inspection
+also confirms populated Cloud sources with unlocked icons, without opening a
+remote. Full Go tests, targeted race checks, and 41 focused mobile host tests pass.
+Tests cover encryption equivalence, reuse and failed-batch atomicity. Signed
+release `202610247` removes all probes and is installed over existing device data.
+[Numeric evidence](mobile-evidence/2026-10-20-boox-vault-stages.json) records each
+stage and trial; real-device captures remain in ignored local logs.
+
+## BOOX connection setup without hidden UI — 2026-10-20
+
+Build `202610243` separates automatic credential preparation from remote-browser
+and connection-settings construction. The diagnostic background function profile
+found 229 widget constructions, five busy-state updates and five hidden retained
+package-list rebuilds. Credential publication also built an unopened Documents
+hub and triggered additional document-list refreshes. These cumulative profile
+timings include profiling overhead and are not additive.
+
+`prepare_cloud` and `start_cloud_restore` now load credentials independently of
+the screens. Cloud source navigation shares the same task and displays names and
+lock states without constructing a browser. `show_cloud` builds controls when
+needed and adopts the current names/busy state, including when opened mid-restore.
+Package settings cards wait for their first visit. Credential publication updates
+Home and existing Documents hubs without constructing unopened Documents. LocalCrypt
+discovery shares collection-base validation across the scan.
+
+Using the previous release's minimal timing probes on the same BOOX Note Air5 C,
+three optimized cold-process runs measured 978.61, 983.58 and 984.20 ms of background
+setup, versus the previous 2,267.17 ms median: a 56.6% reduction. Median Python entry
+to complete connection preparation fell from 5,092.69 to 3,809.57 ms. Home readiness
+remained about 2.8 seconds. These clocks exclude native/interpreter boot and physical
+E Ink refresh. Vault restoration still takes about 524 ms; a separate detailed
+timing run measured about 167 ms refreshing Home and 70 ms preparing crypt metadata.
+
+All 35 loaded-credential badge checks were unlocked in every run, and neither the
+remote UI nor Documents was constructed. Native inspection confirmed the Cloud
+folder icons and first-visit connection settings; visiting settings did not repeat
+vault restoration. Focused cloud, credential, startup, navigation, discovery, reader,
+storage and transfer checks pass, as does the Go bridge suite during the release
+build. The final deployment restores the signed release without probes and retains
+device data. [Per-run evidence](mobile-evidence/2026-10-20-boox-connection-setup.json)
+contains only numeric metrics and fixed workload names; actual UI captures remain
+in ignored local logs.
+
+## BOOX credential cipher reuse — 2026-10-20
+
+Build `202610242` keeps automatic saved-credential loading and the existing
+connection identities and unlocked icons. Native validation now reuses ciphers
+for equivalent encryption settings, then transfers prepared ciphers into the
+admitted credential session. Different backing paths retain distinct connection
+identities while sharing an equivalent cipher. Lock clears the cache; credential
+replacement prunes settings no longer referenced by loaded packages. The cache
+remains in memory. See the [LocalCrypt contract](../../Python/features/rclone/docs/development/localcrypt.md#shared-mobile-browsing-and-streaming).
+
+On the same physical BOOX Note Air5 C and existing storage, four previous runs
+versus three optimized runs measured these medians:
+
+| Work | Previous | Optimized |
+| --- | ---: | ---: |
+| Vault restoration | 2,117 ms | 535 ms |
+| Sixteen encrypted-folder identity calls, combined | 991 ms | 11 ms |
+| Background connection preparation after Home | 5,324 ms | 2,267 ms |
+| Python entry to all connection preparation complete | 8,171 ms | 5,093 ms |
+
+Home remains available in 2.7–3.0 seconds from Python entry. The clock excludes
+native/interpreter boot and physical E Ink refresh. All 35 loaded-credential badge
+checks were unlocked in each trial. Native inspection confirmed a populated Cloud
+tab with unlocked folder icons; the recorded bridge actions were local
+`vault_open`, `crypt_remotes` and `crypt_path`, without opening a remote or starting
+a transfer. Full Go tests, targeted cipher-lifecycle race checks and eleven Python
+credential checks pass. The final deployment restores the release without probes
+and retains device data. [Numeric evidence](mobile-evidence/2026-10-20-boox-cipher-reuse.json)
+records each run. Screenshots and UI dumps remain in ignored local logs.
+
+## BOOX Home startup — 2026-10-20
+
+Home no longer awaits connection-control construction, credential restoration or
+LocalCrypt folder discovery. Initial restore starts after the native workspace
+cover is removed and does not clear an ordinary local browser or reader opened
+during loading. Saved-connection publication updates the document hubs without
+replacing a retained detail route. Home's Open file action, local browsing and
+ordinary local text reads do not wait for restoration. Cloud-backed reopens still
+await matching credentials; the editor-specific Open/Save As picker retains its
+shared credential-loading guard.
+
+On the physical BOOX Note Air5 C, two before runs measured 8.887 and 8.906 seconds
+from Python entry to native workspace reveal. Four after runs measured
+2.986, 2.745, 2.801 and 2.761 seconds: a 68.7% median reduction. Connection work
+continued for another 4.7–5.5 seconds. These clocks exclude interpreter/native
+boot and physical E Ink refresh. A native tap of Home's Open file button while
+restoration was pending opened the local browser, which remained visible after
+completion. The final device installation is release build `202610241`, without
+the temporary timing probes; existing data was retained.
+
+The [numeric evidence](mobile-evidence/2026-10-20-boox-home-startup.json) records
+the measurement scope and checks. Fifty-two focused startup, credential,
+document-navigation, reader/loading and packaged-startup tests pass. Broader
+navigation/workflow suites retain nine existing failures reproduced with the
+affected local-action changes reverted. Actual screenshots and UI dumps remain
+in ignored local logs because they contain real device metadata.
+
+## Earlier performance work
+
 The 2026-10-19 audit approved the following ordered changes. Complete and verify
 one point, then commit it before starting the next. Preserve unrelated work.
 Session-only content, credentials and decrypted bytes must never enter persistent

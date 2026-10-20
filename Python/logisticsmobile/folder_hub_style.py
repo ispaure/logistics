@@ -1,15 +1,37 @@
 """Workspaces presentation using native controls and dynamic app colour roles."""
 from .appearance import surface as app_surface
+from .ui_metrics import TOUCH_TARGET, BODY_TEXT, toga_font_size
 
 SOURCE_LABELS = {'Local': 'Local', 'rclone': 'Cloud', 'Network shares': 'Home Server'}
-ROW_HEIGHT = 48
+ROW_HEIGHT = TOUCH_TARGET
 ROW_GAP = 4
 ENTRY_ICON_SIZE = 24
-ENTRY_ICON_MARGIN = 6
+ENTRY_ICON_MARGIN = (TOUCH_TARGET - ENTRY_ICON_SIZE) // 2
 ENTRY_ICON_SLOT = ENTRY_ICON_SIZE + 2 * ENTRY_ICON_MARGIN
 TREE_INDENT = 40
 TREE_STROKE = 2
 TREE_LABEL_GAP = 8
+
+
+def folder_scroll(content):
+    """Leave a dedicated scrollbar gutter beside the Android folder tree."""
+    import toga
+    from toga.style import Pack
+    scroll = toga.ScrollContainer(horizontal=False, content=content, style=Pack(flex=1))
+    if type(scroll._impl).__module__.startswith('toga_android.'):
+        from math import ceil
+        from android.view import View
+        native = scroll._impl.native
+        # Toga sizes its content from the full viewport, independently of
+        # Android's scrollbar inset padding. Keep the bar inside the viewport
+        # and reserve its actual width in Pack so row outlines stop before it.
+        native.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY)
+        gutter = max(8, ceil(scroll._impl.scale_out(native.getVerticalScrollbarWidth())) + 4)
+        if native.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL:
+            content.style.margin_left = gutter
+        else:
+            content.style.margin_right = gutter
+    return scroll
 
 
 def align_group_label(label):
@@ -107,7 +129,13 @@ def compact_icon(button, *, width=24, height=48, size=17, background='transparen
         native = button._impl.native
         pixels = button._impl.scale_in(size)
         button._impl._control_drawable.setBounds(0, 0, pixels, pixels)
-        native.setPadding(0, 0, 0, 0)
+        # Android places a start compound drawable against the content edge,
+        # even with an empty, centered title. Reserve the same space on both
+        # sides so the glyph sits inside its touch target instead of against
+        # the row outline. This geometry is shared by both colour modes.
+        horizontal = button._impl.scale_in(max(0, (width - size) / 2))
+        vertical = button._impl.scale_in(max(0, (height - size) / 2))
+        native.setPadding(horizontal, vertical, horizontal, vertical)
 
 
 def toolbar_button(button, symbol):
@@ -125,7 +153,7 @@ def folder_row(row):
     """Shared list surface for workspace locations and browser entries."""
     row.style.margin_bottom = ROW_GAP
     backend = type(row._impl).__module__
-    app_surface(row, radius=8, background='surface', outlined=False, eink_outlined=False)
+    app_surface(row, radius=8, background='surface', outlined=False, eink_outlined=True)
     if backend.startswith('toga_iOS.'):
         row._impl.native.layer.masksToBounds = True
     elif backend.startswith('toga_android.'):
@@ -136,7 +164,7 @@ def folder_row(row):
 def folder_name(button):
     """Shared single-line title metrics, inside the row's own surface."""
     button.style.height = ROW_HEIGHT
-    button.style.font_size = 15
+    button.style.font_size = toga_font_size(BODY_TEXT)
     button.style.font_weight = 'normal'
     if type(button._impl).__module__.startswith('toga_android.'):
         # Keep the platform's default button family from changing row metrics.

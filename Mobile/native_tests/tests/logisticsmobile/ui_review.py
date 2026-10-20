@@ -50,18 +50,18 @@ async def exercise_ui_review(app):
         print('LOGISTICS_UI_REVIEW=begin:' + name, flush=True)
         await asyncio.sleep(.4)
         if get_os() is OS.IOS:
-            group = getattr(app, '_reader_toolbar_group', None)
-            window = group.window if group is not None else None
-            window = window() if callable(window) else window
-            children = group.subviews if group is not None else []
-            children = children() if callable(children) else children
-            if window is not None and len(children):
-                group.layoutIfNeeded()
-                frames = [(float(button.frame.origin.x), float(button.frame.size.width))
-                          for button in children]
-                assert all(width >= 40 and abs(x - 44 * index) < 1
-                           for index, (x, width) in enumerate(frames)), (name, frames)
-                toolbar_checks.append(name)
+            for group in getattr(app, '_reader_toolbar_groups', ()):
+                window = group.window
+                window = window() if callable(window) else window
+                children = group.subviews
+                children = children() if callable(children) else children
+                if window is not None and len(children):
+                    group.layoutIfNeeded()
+                    frames = [(float(button.frame.origin.x), float(button.frame.size.width))
+                              for button in children]
+                    assert all(width >= 40 and abs(x - 44 * index) < 1
+                               for index, (x, width) in enumerate(frames)), (name, frames)
+                    toolbar_checks.append(name)
         path = app.storage_root / ('ui-review-' + name + '.png')
         from .fixtures import capture_window
         await capture_window(app, path)

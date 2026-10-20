@@ -37,7 +37,7 @@ class ReaderParityUITests(unittest.TestCase):
                     archive.writestr('ComicInfo.xml', '<ComicInfo><Manga>' + ('YesAndRightToLeft' if rtl else 'No') + '</Manga></ComicInfo>')
                 record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), source)
                 async def exercise():
-                    with patch('logisticsmobile.reader_ui.ReaderUI.comic_viewport', return_value=(1100, 1000)):
+                    with patch('features.comics.mobile.reader_controller.ComicController.comic_viewport', return_value=(1100, 1000)):
                         await app.open_book(record['id'])
                         owner = app.readers.active
                         self.assertEqual(owner.book_reader.right_to_left, rtl)

@@ -21,6 +21,8 @@ class DocumentationReader(MarkdownWikiView):
             valid=lambda: app.active_host and getattr(app, 'documentation', None) is self and self.path is not None)
         self.speech.button.on_press = self.show_speech
         self.speech.button.enabled = self.path is not None
+        from .control_icons import apply_icon
+        apply_icon(self.page_search.button, 'find', 'Find in this page')
         self.navigation.add(self.speech.button)
         from .workspace_navigation import menu_button
         from .control_icons import icon_button
@@ -52,6 +54,7 @@ class DocumentationReader(MarkdownWikiView):
             actions.append(('Next page', self.forward))
         if self.up_button.enabled:
             actions.append(('Parent folder page', self.up))
+        actions.append(('Find in this page…', self.show_page_search))
         actions.append(('Browse documentation', self.toggle_browse))
         self.reader_actions = FeatureCommands(self.reader_actions_button, self.host_app, actions, self.show_browse)
 
@@ -82,6 +85,11 @@ class DocumentationReader(MarkdownWikiView):
             accessible_name(button, entry.title + (' — Open folder page' if directory and entry.page is not None else ''))
             selected = self.path is not None and entry.page == self.path
             hierarchy_row_style(row, selected)
+
+    def show_page_search(self, widget=None, **kwargs):
+        self.reading = True
+        self.layout()
+        self.page_search.show()
 
     def show_speech(self, widget=None, **kwargs):
         self.reading = True

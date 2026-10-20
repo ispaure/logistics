@@ -77,6 +77,34 @@ ComicRack crashes. Do not apply metadata-only preservation to compression. The
 [compatibility policy and evidence](compression.md#comicrack-compatibility-rebuilding-page-records)
 must be retained when modifying the parser.
 
+## Portrait wide pages on mobile
+
+`comic_split_wide` is a separate boolean mobile preference, defaulting to `true`
+for new and existing preference files without that key. The shared comic appearance
+form exposes it alongside page layout. It does not change EPUB preferences.
+`mobile/navigation.py` stages `(source index, half, split)` until native rendering
+succeeds; hosts call `commit()` only after publishing the prepared view. Next and
+Previous visit both halves in source reading order, reversing the visual order for
+right-to-left manga. A strict landscape source in a strict portrait viewport is
+eligible, independently of Single/Automatic/Two-page layout. Square viewports and
+landscape windows keep the whole image.
+
+Horizontal source bounds are `[0, .54]` and `[.46, 1]`, with 8% source-width
+overlap. `mobile/composite.py` draws the source at an offset into a bounded, RAM-only
+native bitmap; archive bytes and page counts are unchanged. Android, iOS and the
+Toga dummy backend share the crop contract. Swipes and page buttons use the same
+navigation path; manual zoom retains the existing pan/fit gesture contract. Layout
+watchers reflow fitted views after rotation or preference changes. Provider readers
+also reconcile their initial window estimate with the mounted reading pane.
+
+Imported records persist validated `comic_half` values of 0 or 1 alongside the
+original source position; older records default to the first half. Provider half
+state remains in memory with its reader. Rendering errors preserve the committed
+half, visible pixels and source position. `Mobile/tests/test_comic_split.py` checks
+crops, directions, swipe traversal, boundary buttons, failed composition, setting
+persistence, imported resume and landscape restoration with Toga's dummy backend.
+Native device appearance and gestures still require device/simulator validation.
+
 ## Reader and catalog contracts
 
 Readers sort pages and sibling comics naturally and load without extraction.
@@ -181,6 +209,14 @@ LocalCrypt share a decoded archive facade and retain the same ComicDocument/Comi
 platform password UI stays in logisticsmobile; native decoder policy lives under
 `features/comics/mobile`.
 
+After foregrounding or completing resume-password verification, `ScreenPrivacy`
+asks only the visible private owner to reload a suspended page. The owner retains
+its page, route and immersive state and coalesces pending resume reads; suspension
+clears only after successful page presentation. A failed suspended fullscreen
+read exposes controls and its error. `Mobile/tests/test_private_sessions.py`
+covers repeated password resume after memory cleanup, wrong-password protection,
+page navigation after resume and recovery from a failed reload.
+
 `mobile/pages.py` applies the native PNG/JPEG/WebP policy to `comic_page_names`.
 Imports, provider readers and ordinary browser covers use that policy, including
 macOS resource-fork exclusions. Unsupported image pages fail explicitly rather
@@ -213,7 +249,7 @@ retain the old pixels and logical position. Private session disposal clears the
 single composite image and its callbacks.
 
 
-Native collection search and recursive metadata plans live in `mobile/collection.py`.
+Portable comic selection and metadata plans live in `collection/`.
 The host owns provider identities, imported-record signatures, async work and
 publication callbacks. The feature owns metadata extraction, token matching,
 suggestion generation, natural recursive selection bounds and all-file preflight.
@@ -233,7 +269,7 @@ publication transaction. Navigation, concealment, memory release and credential
 revocation retire its plan and wipe the feature-owned form. No private batch state
 is serialized. The host prevents concurrent private batches and additional scenes.
 
-`mobile/index.py` owns a disposable SQLite index for ordinary imports, incremental
+`features/books/library/index.py` owns the mixed Books & Comics disposable SQLite index for ordinary imports, incremental
 digest/stat signatures, bounded field extraction, Unicode token matching,
 suggestions and 50-row paging. It scans every import, commits chunks of 25, resumes
 partial scans and retries errors. Protected archives retain filename search only;
@@ -258,3 +294,22 @@ merges current preferences before saving, and broadcasts updates across retained
 readers and windows. Native lens corner buttons and image transforms belong to
 commonUtils. One held image touch plus a corner-button tap changes the saved zoom
 without paging or toggling fullscreen.
+
+## Collection and reader workflows
+
+`collection/` owns portable bounded scans, per-comic preflight/publication and
+suggestions. `collection/metadata.py` supplies bounded ComicInfo snapshots for
+both Comics batch workflows and the mixed Books catalogue; comic-only consumers
+do not load Books. `collection/pages.py` preserves the mobile decoder format-acceptance
+policy without importing a native toolkit. `mobile/collection/` owns imported
+batch forms and a composed `ComicBatchController` for local/private folder forms.
+Its declared host services supply providers, navigation and credential lifetimes;
+its batch plans, cancellation and retained views are controller-owned. Legacy
+mobile collection/index imports remain compatibility entries. EPUB metadata
+mapping is coordinated by Books, rather than dispatched by the comic domain.
+
+`mobile/reader_controller.py` owns page/spread preparation, neighboring-file
+navigation and layout-task state for imports. `mobile/provider_controller.py`
+owns equivalent provider presentation state. Layout and privacy services are
+injected explicitly. The host retains workspace identities, provider operations,
+metadata publication, revocation and shutdown.

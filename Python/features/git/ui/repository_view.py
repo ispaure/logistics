@@ -697,7 +697,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
             dialog = MergeDialog(model, self, path=inputs.path,
                 left_name='Index stage 2 — rebased onto' if rebase else 'Index stage 2 — current branch',
                 right_name='Index stage 3 — commit being replayed' if rebase else 'Index stage 3 — incoming changes')
-            from features.code_font import bind_code_views
+            from services.editors.ui.fonts import bind_code_views
             bind_code_views(dialog)
             stage = qt.QCheckBox('Stage resolved file after saving', dialog)
             dialog.layout().insertWidget(1, stage)

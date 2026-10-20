@@ -49,26 +49,42 @@ def remove_generated(root, name, version):
     path.unlink()
 
 
-def transfer_inventory(root, cancelled=lambda: False, *, copy_links=False):
-    """Validate entries and capture versions without reading file contents."""
+def transfer_inventory(root, cancelled=lambda: False, *, copy_links=False, allow_missing=False):
+    """Validate entries; Pull may omit destination entries removed during a scan.
+
+    Push and revision snapshots remain strict. Missing roots, links and errors
+    other than ENOENT must still fail rather than hide unavailable storage.
+    """
     root = Path(root)
     if root.is_symlink() or not root.is_dir():
         raise ValueError('Transfer root must be an unlinked directory.')
     result, pending = {}, [root]
     while pending:
-        for path in sorted(pending.pop().iterdir()):
+        directory = pending.pop()
+        check_cancelled(cancelled)
+        try:
+            children = sorted(directory.iterdir())
+        except FileNotFoundError:
+            if not allow_missing or directory == root:
+                raise
+            continue
+        for path in children:
             check_cancelled(cancelled)
             linked = path.is_symlink() or getattr(path, 'is_junction', lambda: False)()
             if linked and (not copy_links or not path.is_file()):
                 raise ValueError('Linked directories and LocalCrypt links cannot be transferred.')
             key = path.relative_to(root).as_posix()
-            if path.is_dir():
-                result[key] = stamp(path.stat()), stamp(path.lstat())
-                pending.append(path)
-            else:
-                before = stamp(path.stat())
-                link_before = stamp(path.lstat())
-                if not stat.S_ISREG(before[2]) or (not copy_links and path.stat().st_nlink != 1):
-                    raise ValueError('Choose regular transfer files.')
-                result[key] = before, link_before
+            try:
+                if path.is_dir():
+                    result[key] = stamp(path.stat()), stamp(path.lstat())
+                    pending.append(path)
+                else:
+                    before = stamp(path.stat())
+                    link_before = stamp(path.lstat())
+                    if not stat.S_ISREG(before[2]) or (not copy_links and path.stat().st_nlink != 1):
+                        raise ValueError('Choose regular transfer files.')
+                    result[key] = before, link_before
+            except FileNotFoundError:
+                if not allow_missing or linked or path.is_symlink():
+                    raise
     return result

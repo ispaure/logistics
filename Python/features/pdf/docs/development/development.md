@@ -104,3 +104,11 @@ session before publishing or navigating, and keeps page jump/search available
 when parsing fails. It uses `commonUtils.ui.native.presentation.HierarchyList`;
 the host injects colours through `hierarchy_row_style`. `Mobile/tests/test_contents_hierarchy.py`
 covers real PDF destinations, disclosure independence and stale-session guards.
+
+## Backend layout
+
+`document.py` retains bounded input and document lifetime. `backends/qt.py`,
+`backends/apple.py` and `backends/android.py` own the platform rasterizers;
+`limits.py` supplies the shared render edge. Backend toolkit imports stay lazy
+inside adapter construction, so a mobile import does not load Qt. Existing public
+backend class imports and the document facade remain available.

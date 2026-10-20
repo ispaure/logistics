@@ -77,6 +77,74 @@ class RcloneSessionTests(unittest.TestCase):
 
 
 class RcloneCredentialScreenTests(unittest.TestCase):
+    def _wait_for_load(self, page, app):
+        from time import monotonic
+        from commonUtils.ui import pyside as qt
+        deadline = monotonic() + 5
+        while page.load_operation.busy and monotonic() < deadline:
+            app.processEvents()
+            qt.QThread.msleep(1)
+        self.assertFalse(page.load_operation.busy)
+
+    def test_slow_decode_keeps_event_loop_live_and_cancel_preserves_credentials(self):
+        import threading
+        from commonUtils.ui import pyside as qt
+        from commonUtils.filesystem.files import File
+        from features.rclone.ui.page import RclonePage
+        app = qt.QApplication.instance() or qt.QApplication([])
+        started, release = threading.Event(), threading.Event()
+        gui_thread = threading.get_ident()
+        worker_threads = []
+        def slow_read(*args):
+            worker_threads.append(threading.get_ident())
+            started.set()
+            if not release.wait(3):
+                raise RuntimeError('test decode timed out')
+            return {'New': {'type': 'local'}}
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = root / 'Accounts.zip'
+            package.touch()
+            saved = root / 'Accounts.conf'
+            saved.write_text('[Existing]\ntype=local\n')
+            with patch.object(credentials, 'get_logistics_remote_credentials_zip_lst', return_value=[File(package)]), \
+                 patch.object(configuration, 'get_rclone_config_dir', return_value=root), \
+                 patch.object(session, 'read_package', side_effect=slow_read), \
+                 patch.object(credentials.ui, 'display_msg_box_ok') as popup:
+                page = RclonePage()
+                try:
+                    page.password_input.setText('synthetic-password')
+                    page.load_button.click()
+                    self.assertTrue(started.wait(1))
+                    self.assertNotEqual(worker_threads, [gui_thread])
+                    self.assertTrue(page.load_operation.busy)
+                    self.assertFalse(page.load_button.isEnabled())
+                    self.assertEqual(page.password_input.text(), '')
+                    pulse = []
+                    qt.QTimer.singleShot(0, lambda: pulse.append(True))
+                    app.processEvents()
+                    self.assertEqual(pulse, [True])
+                    self.assertFalse(page.can_close())
+                    release.set()
+                    self._wait_for_load(page, app)
+                    self.assertEqual(saved.read_text(), '[Existing]\ntype=local\n')
+                    self.assertIsNone(session.names(root / 'Accounts.session'))
+                    self.assertTrue(page.load_button.isEnabled())
+                    popup.assert_not_called()
+                    with patch.object(session, 'read_package', side_effect=ValueError('synthetic decode failure')):
+                        page.password_input.setText('wrong-password')
+                        page.load_session_button.click()
+                        self._wait_for_load(page, app)
+                    self.assertIn('failed', page.status_label.text())
+                    self.assertTrue(page.load_button.isEnabled())
+                    self.assertEqual(saved.read_text(), '[Existing]\n' 'type=local\n')
+                    popup.assert_not_called()
+                finally:
+                    release.set()
+                    self._wait_for_load(page, app)
+                    page.close()
+                    app.processEvents()
+
     def test_session_choice_labels_and_forgets_the_package_without_files(self):
         from types import SimpleNamespace
         from commonUtils.ui import pyside as qt
@@ -95,6 +163,7 @@ class RcloneCredentialScreenTests(unittest.TestCase):
                 try:
                     page.password_input.setText('synthetic-password')
                     page.load_session_button.click()
+                    self._wait_for_load(page, app)
                     self.assertEqual(page.loaded_status.text(), 'Session only')
                     self.assertEqual(page.remote_list.item(0).text(), 'Fixture')
                     self.assertIn('Accounts.zip', page.status_label.text())
@@ -102,6 +171,7 @@ class RcloneCredentialScreenTests(unittest.TestCase):
                     self.assertEqual(list(root.iterdir()), [package])
                     page.password_input.setText('synthetic-password')
                     page.load_button.click()
+                    self._wait_for_load(page, app)
                     self.assertEqual(page.loaded_status.text(), 'Saved')
                     self.assertTrue((root / 'Accounts.conf').is_file())
                     self.assertEqual(session.names(root / 'Accounts.session'), ['Fixture'])

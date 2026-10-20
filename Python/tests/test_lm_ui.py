@@ -154,6 +154,16 @@ class LMUITests(QtTestCase):
         self.page.composer.setPlainText(text)
         self.page.send()
 
+    def test_injected_project_context_does_not_discover_ide_widgets(self):
+        from types import SimpleNamespace
+        project = object()
+        self.page.project_context = SimpleNamespace(
+            projects=lambda: {'fixture': project}, buffers=lambda selected: ({'file.py': 'unsaved'}, []))
+        with patch('features.lm.ui.page.registered_projects', side_effect=AssertionError('IDE discovery')), \
+             patch('features.lm.ui.page.editor_context', side_effect=AssertionError('IDE buffers')):
+            self.assertEqual(self.page.context_projects(), {'fixture': project})
+            self.assertEqual(self.page.context_buffers(project), ({'file.py': 'unsaved'}, []))
+
     def configure_code(self):
         from features.ide.projects import Project
         project = Project('Project fixture', self.temp.name, id='project-fixture')

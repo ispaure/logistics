@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import platform
 import plistlib
+import re
 import shlex
 import shutil
 import subprocess
@@ -13,8 +14,10 @@ import tomllib
 
 try:
     from .icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
+    from .deployment_paths import output_root
 except ImportError:
     from icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
+    from deployment_paths import output_root
 
 ROOT = Path(__file__).resolve().parent
 FLAGS = '-s -w -X github.com/rclone/rclone/fs.Version=v1.74.1'
@@ -35,6 +38,12 @@ def configure_android_sources(project):
     android = config['tool']['briefcase']['app']['logisticsmobile']['android']
     gradle = Path(project) / 'app/build.gradle'
     text = gradle.read_text()
+    # Briefcase update retains the generated project's original version code.
+    # Keep in-place device updates aligned with the current source manifest.
+    text, count = re.subn(r'(?m)^([ \t]*versionCode[ \t]+)\d+[ \t]*$',
+                         lambda match: match[1] + str(android['version_code']), text)
+    if count != 1:
+        raise ValueError('Expected one Android versionCode in generated build.gradle.')
     for line in android['build_gradle_extra_content'].splitlines():
         if line.startswith('android.sourceSets.main.java.srcDir(') and line not in text.splitlines():
             text += '\n' + line + '\n'
@@ -103,7 +112,7 @@ def android():
         run(str(manager), 'ndk;27.2.12479018')
     host = 'linux-x86_64' if platform.system() == 'Linux' else 'darwin-x86_64'
     tools = ndk / 'toolchains/llvm/prebuilt' / host / 'bin'
-    project = ROOT / 'build/logisticsmobile/android/gradle'
+    project = output_root(ROOT) / 'build/logisticsmobile/android/gradle'
     configure_android_sources(project)
     configure_android_appearance(project)
     configure_android_icons(project)
@@ -124,7 +133,7 @@ def android():
 
 
 def ios(project=None):
-    project = Path(project) if project is not None else ROOT / 'build/logisticsmobile/ios/xcode'
+    project = Path(project) if project is not None else output_root(ROOT) / 'build/logisticsmobile/ios/xcode'
     configure_ios_icons(project)
     from scene_build import configure
     configure(project)
@@ -169,7 +178,7 @@ def licenses(destination=None):
         module = value.get('Module', {})
         if module.get('Version'):
             modules[module['Path']] = module
-    destination = Path(destination) if destination is not None else ROOT / 'payload/logisticsmobile/native-licenses'
+    destination = Path(destination) if destination is not None else output_root(ROOT) / 'payload/logisticsmobile/native-licenses'
     destination.mkdir(parents=True, exist_ok=True)
     manifest = []
     for name, module in sorted(modules.items()):

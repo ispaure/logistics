@@ -176,7 +176,7 @@ class FolderLocationHeader(toga.Box):
         if visible not in self.caption.children:
             self.caption.add(visible)
 
-    def update(self, path, *, remote=False, encrypted=False, unlocked=False, name=None):
+    def update(self, path, *, remote=False, encrypted=False, unlocked=False, name=None, session_only=False):
         self.folder_name.value = name if name is not None else PurePosixPath(path).name if path else 'Root'
         apply_icon(self.parent_button, 'up' if path else 'back',
                    'Parent folder' if path else 'Back to Workspaces')
@@ -185,7 +185,8 @@ class FolderLocationHeader(toga.Box):
         if encrypted:
             state = 'unlocked' if unlocked else 'locked'
             kinds.append(('folder_' + state, 'Encrypted folder, ' + state))
-        if kinds == getattr(self, '_storage_kinds', None):
+        identity_key = (remote, encrypted, unlocked, session_only)
+        if identity_key == getattr(self, '_identity_key', None):
             return
         for child in list(self.storage_icons.children):
             self.storage_icons.remove(child)
@@ -200,7 +201,12 @@ class FolderLocationHeader(toga.Box):
                     foreground=name if name.startswith('folder_') else 'accent',
                     outlined=False, eink_outlined=False)
             self.storage_icons.add(indicator)
-        identity = ('Cloud' if remote else 'On-device') + ((' · Unlocked' if unlocked else ' · Locked') if encrypted else '')
+        identity = 'Cloud' if remote else 'On-device'
+        if encrypted:
+            state = 'Unlocked (Session Only)' if unlocked and session_only else 'Unlocked' if unlocked else 'Locked'
+            identity += ' · ' + state
+            if not remote:
+                identity += ' · LocalCrypt'
         self.storage_identity.add(BrowserStatusLabel(identity, style=Pack(
             font_size=self.folder_name.style.font_size * .75, margin=0)))
         surface(self.storage_identity.children[-1], radius=0, background='transparent', foreground='muted',
@@ -208,6 +214,25 @@ class FolderLocationHeader(toga.Box):
         if getattr(self, 'native_actions', None) is not None:
             self.center_storage_identity()
         self._storage_kinds = kinds
+        self._identity_key = identity_key
+
+    def update_provider(self, path, provider, *, name=None):
+        provider = getattr(provider, 'provider', provider)
+        remote = getattr(provider, 'remote_storage', False)
+        encrypted = bool(getattr(provider, 'private', False))
+        if not path and encrypted and not remote:
+            name = getattr(provider, 'remote', name)
+        self.update(path, remote=remote, encrypted=encrypted, unlocked=True,
+                    name=name, session_only=provider_session_only(provider))
+
+
+def provider_session_only(provider):
+    """Read the loaded credential publication without querying the bridge."""
+    provider = getattr(provider, 'provider', provider)
+    remote = getattr(provider, 'remote', None)
+    records = getattr(getattr(provider, 'client', None), 'package_records', ())
+    return any(remote in record.get('remotes', ()) and not record.get('saved', False)
+               for record in records)
 
 
 class FileBrowser(NativeBrowser):
@@ -220,6 +245,7 @@ class FileBrowser(NativeBrowser):
         return max(1, len(self.entries))
 
     def __init__(self, *, open_file=None, item_actions=None, folder_visible=None, bounded_pages=True,
+                 contextual_selection=True,
                  **kwargs):
         self._app = toga.App.app
         self._loop = self._app.loop
@@ -268,7 +294,8 @@ class FileBrowser(NativeBrowser):
         self.page_label.style.font_size = 12
         from .recycled_file_list import RecycledFileList
         self.native_list = RecycledFileList(on_select=self._list_selected,
-            on_primary_action=self._list_context, on_visible=self._row_visible,
+            primary_action='Select' if contextual_selection else None,
+            on_primary_action=self._list_context if contextual_selection else None, on_visible=self._row_visible,
             style=Pack(flex=1))
         self.empty_label = toga.Label('', style=Pack(margin=12))
         self._tile_scroll = toga.ScrollContainer(horizontal=False, content=self.items,
@@ -301,6 +328,7 @@ class FileBrowser(NativeBrowser):
         super().set_entries(provider, directory, rows, location=location)
 
     def set_tree(self, tree):
+        self.dismiss_item_menu()
         self._population_epoch += 1
         self._decoded_thumbnails.clear()
         return super().set_tree(tree)
@@ -566,6 +594,7 @@ class FileBrowser(NativeBrowser):
             self._thumbnail_pending.discard(token)
 
     def stop(self):
+        self.dismiss_item_menu()
         self._clear_tiles()
         self._decoded_thumbnails.clear()
         self.native_list.clear()
@@ -577,6 +606,16 @@ class FileBrowser(NativeBrowser):
         self._thumbnail_pending.clear()
         super().stop()
         self.entry_rows = {}
+
+    def show_item_menu(self, actions):
+        from .action_menu import show_browser_actions
+        return show_browser_actions(self, actions)
+
+    def dismiss_item_menu(self):
+        menu = getattr(self, '_item_menu', None)
+        if menu is not None:
+            menu.dispose()
+            self._item_menu = None
 
     TILE_ROW_HEIGHT = 164
 

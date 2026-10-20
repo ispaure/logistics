@@ -82,7 +82,10 @@ class NativeSpeechOverlayTests(TestCase):
             outside = SimpleNamespace(superview=None)
             self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, SimpleNamespace(view=child)))
             self.assertTrue(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, SimpleNamespace(view=outside)))
-            self.assertFalse(gesture.cancelsTouchesInView)
+            overlay.anchor = SimpleNamespace(_impl=SimpleNamespace(native=outside))
+            self.assertFalse(delegate.gestureRecognizer_shouldReceiveTouch_(gesture, SimpleNamespace(view=outside)))
+            overlay.anchor = None
+            self.assertTrue(gesture.cancelsTouchesInView)
             window.addGestureRecognizer.assert_called_once_with(gesture)
             delegate.outsideTap_(gesture)
             overlay.panel.hide.assert_called_once()

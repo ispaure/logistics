@@ -88,6 +88,17 @@ class ConfigurationPanel(qt.QWidget):
 class CommonUtilsPanel(ConfigurationPanel):
     def __init__(self, parent=None, *, layered=False, scope='application'):
         super().__init__([settings_path()], parent, layered=layered, scope=scope, scoped=not layered)
+        from ui_new.snow import CONFIG, FIELD
+        self._snow_store = settings_store(CONFIG)
+        self.snow_choice = qt.QCheckBox('Seasonal snow')
+        self.snow_choice.setToolTip('Snow from December 15 through January 2, inclusive. Disabled in high-contrast mode. Saved immediately.')
+        self.snow_status = qt.QLabel()
+        self.snow_status.setWordWrap(True)
+        self.layout().insertWidget(0, self.snow_status)
+        self.layout().insertWidget(0, self.snow_choice)
+        self._snow_field = FIELD
+        self._load_snow()
+        self.snow_choice.toggled.connect(self._save_snow)
         if layered:
             return
         appearance = qt.QHBoxLayout()
@@ -102,6 +113,24 @@ class CommonUtilsPanel(ConfigurationPanel):
         appearance.addWidget(self.theme_mode)
         appearance.addStretch()
         self.layout().insertLayout(0, appearance)
+
+    def _load_snow(self):
+        with qt.QSignalBlocker(self.snow_choice):
+            self.snow_choice.setChecked(self._snow_store.safe_values(self.scope).get(self._snow_field, 'true').lower() == 'true')
+
+    def _save_snow(self, enabled):
+        try:
+            self._snow_store.save({self._snow_field: str(enabled).lower()}, scope=self.scope)
+            self.snow_status.setText('')
+        except (OSError, ValueError) as error:
+            self._load_snow()
+            self.snow_status.setText(str(error))
+
+    def set_scope(self, scope):
+        super().set_scope(scope)
+        self.scope = scope
+        if hasattr(self, 'snow_choice'):
+            self._load_snow()
 
     def _appearance_changed(self, index):
         from commonUtils.ui.appearance.theme import apply_theme
@@ -362,6 +391,9 @@ class SettingsPage(qt.QWidget):
                 editor.pending.clear()
                 if not editor.reload(initial=True):
                     raise ValueError('A personal settings editor could not reload')
+        appearance = self.panels.get('commonutils')
+        if appearance is not None:
+            appearance._load_snow()
 
     def _changed(self):
         qt.QTimer.singleShot(0, self.refresh)

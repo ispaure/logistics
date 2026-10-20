@@ -33,7 +33,11 @@ def folder_name(value):
 
 
 class Store:
-    def __init__(self, root=None):
+    def __init__(self, root=None, *, lock_factory=None):
+        if lock_factory is None:
+            from .ui.leases import lock_file
+            lock_factory = lock_file
+        self.lock_factory = lock_factory
         if root is None:
             from features.preferences import preferences_path
             root = preferences_path().parent / 'LM'
@@ -47,10 +51,9 @@ class Store:
 
     def lease(self, key):
         """Nonblocking OS-backed Qt lock with automatic dead-process recovery."""
-        from PySide6.QtCore import QLockFile
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.folder_path(create=True)
-        lock = QLockFile(str(self.folder / (identity(key) + '.lock')))
+        lock = self.lock_factory(str(self.folder / (identity(key) + '.lock')))
         lock.setStaleLockTime(0)
         if not lock.tryLock(0):
             raise ConflictError('This conversation is open in another Logistics window. Close it there, then reopen here.')
@@ -137,8 +140,7 @@ class Store:
     def _publication(self):
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.folder_path(create=True)
-        from PySide6.QtCore import QLockFile
-        lock = QLockFile(str(self.root / 'publication.lock'))
+        lock = self.lock_factory(str(self.root / 'publication.lock'))
         lock.setStaleLockTime(0)
         if not lock.tryLock(0):
             raise ConflictError('LM storage is busy in another instance. Retry saving.')
@@ -253,9 +255,8 @@ class Store:
         return result
 
     def save_profiles(self, profiles, expected):
-        from PySide6.QtCore import QLockFile
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        lock = QLockFile(str(self.root / 'profiles.lock'))
+        lock = self.lock_factory(str(self.root / 'profiles.lock'))
         lock.setStaleLockTime(0)
         if not lock.tryLock(0):
             raise ConflictError('Server profiles are busy; retry.')

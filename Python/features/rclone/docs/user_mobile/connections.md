@@ -8,6 +8,16 @@ online file browser. Credential setup is under
 executable, shell, mount, or separate RC server is required. **Advanced & troubleshooting → Check rclone engine**
 performs an offline in-memory read and displays the engine version.
 
+Home opens before saved connections finish loading in the background. You can
+browse and open ordinary local files during that work. Saved connections load
+automatically without a confirmation prompt or an online connectivity check;
+connection badges update when ready. Opening a cloud-backed file waits for its
+matching saved credentials. Password-protected session-only ZIPs still need their
+password after a restart or lock. Push/Pull review and permanent local-folder
+deletion retain their confirmation dialogs.
+The editor-specific **Open / Save As** picker still waits for initial credential
+loading because it includes encrypted destinations.
+
 Workspaces's **Cloud** tab includes remotes from retained password-protected ZIPs
 even before a local copy exists. Tap a locked remote to enter its ZIP password and
 continue browsing online. A wrong password leaves it locked.
@@ -46,6 +56,12 @@ ZIPs are limited to 1 MiB, 64 entries and 256 KiB per TXT entry. Duplicate remot
 names within a ZIP, unsafe archive paths and unsupported settings are rejected
 before changing any loaded package. Reloading the same ZIP filename replaces only that package's
 remote list; it makes no remote connection by itself.
+Loading and unlocking work offline once the ZIP is available on the device.
+If another operation is using credentials, loading returns a busy message
+immediately. Stop that operation and retry; it does not queue behind a network
+request or test the account online. Old network clients disconnect in the
+background. Unlocking a remote to continue browsing resumes that online action
+only after the local unlock succeeds.
 
 This first mobile adapter includes Google Drive, Dropbox, OneDrive, S3 and WebDAV,
 plus the memory backend used by the offline diagnostic. Existing authenticated

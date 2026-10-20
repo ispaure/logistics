@@ -4,7 +4,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+from toga_dummy.utils import EventLog
 
 import toga
 from commonUtils.runtime.local_files import LocalFiles
@@ -150,7 +151,11 @@ class FileLoadingTests(TestCase):
             self.app.loop.run_until_complete(exercise())
 
     def test_failure_restores_opening_screen(self):
-        self.delayed_open(fail=True)
+        with patch.object(self.app.main_window, 'dialog', new_callable=AsyncMock) as dialog:
+            self.delayed_open(fail=True)
+        dialog.assert_awaited_once()
+        self.assertEqual(EventLog.performed_actions(dialog.call_args.args[0], 'create InfoDialog')[0]['title'], 'Could not open document')
+        self.assertIn('Unavailable file', EventLog.performed_actions(dialog.call_args.args[0], 'create InfoDialog')[0]['message'])
 
     def test_back_during_loading_keeps_origin_after_completion(self):
         self.delayed_open(back=True)

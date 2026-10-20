@@ -3,9 +3,11 @@
   "modules": [
     "__init__.py",
     "__main__.py",
+    "ui_metrics.py",
     "action_menu.py",
     "adaptive_workspace.py",
     "android_markdown_font.py",
+    "android_reader_chrome.py",
     "app.py",
     "app_reset.py",
     "appearance.py",
@@ -23,10 +25,13 @@
     "draw_ready.py",
     "editor_picker.py",
     "feature_hosts.py",
+    "file_operations.py",
     "files_ui.py",
     "fold_layout.py",
     "font_scaling.py",
     "folder_controller.py",
+    "folder_discovery.py",
+    "folder_listing.py",
     "folder_navigation.py",
     "folder_title.py",
     "folder_hub.py",
@@ -63,6 +68,7 @@
     "reader_controls.py",
     "page_animation.py",
     "reader_host.py",
+    "reader_lifecycle.py",
     "reader_memory.py",
     "reader_sessions.py",
     "reader_ui.py",
@@ -85,6 +91,9 @@
     "recycled_file_list_android.py",
     "recycled_file_list_ios.py",
     "android/io/github/ispaure/logisticsmobile/FileListView.java",
-    "android/io/github/ispaure/logisticsmobile/DrawReady.java"
+    "android/io/github/ispaure/logisticsmobile/DrawReady.java",
+    "android/io/github/ispaure/logisticsmobile/DestinationRailView.java",
+    "snow.py",
+    "android/io/github/ispaure/logisticsmobile/SnowView.java"
   ]
 }

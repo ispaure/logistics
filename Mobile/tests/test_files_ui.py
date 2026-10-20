@@ -6,7 +6,7 @@ from logisticsmobile.app import LogisticsMobile
 
 
 class FileUITests(unittest.TestCase):
-    def test_cold_files_open_waits_for_initial_restore_before_building_browser(self):
+    def test_cold_local_files_open_while_initial_cloud_restore_is_blocked(self):
         import asyncio
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory).resolve()
@@ -15,21 +15,25 @@ class FileUITests(unittest.TestCase):
             self.assertFalse(app.cloud_busy)
             self.assertIsNone(app.cloud_client)
             self.assertFalse(hasattr(app, 'cloud_view'))
-            restored = []
+            release = asyncio.Event()
             original = app.show_cloud
             def initialize(*args, **kwargs):
                 original(*args, **kwargs)
                 async def restore():
-                    await asyncio.sleep(0)
-                    self.assertFalse(hasattr(app, 'files_view'))
-                    restored.append(True)
+                    await release.wait()
                 app.cloud_restore_task = asyncio.create_task(restore())
+            async def exercise():
+                try:
+                    with patch.object(app, 'show_cloud', side_effect=initialize):
+                        await asyncio.wait_for(app.show_files(), 1)
+                    self.assertFalse(app.cloud_restore_task.done())
+                    self.assertIn('Local files', [row.value for row in app.file_storage.items])
+                    self.assertIsNotNone(app.file_browser)
+                finally:
+                    release.set()
+                    await app.cloud_restore_task
             try:
-                with patch.object(app, 'show_cloud', side_effect=initialize):
-                    app.loop.run_until_complete(app.show_files())
-                self.assertEqual(restored, [True])
-                self.assertIn('Local files', [row.value for row in app.file_storage.items])
-                self.assertIsNotNone(app.file_browser)
+                app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()
                 app.loop.close()

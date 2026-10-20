@@ -7,6 +7,7 @@ from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils import ui
 from commonUtils.ui import pyside
 from commonUtils.ui.appearance.status_line import StatusLine
+from commonUtils.ui.tasks.operation_progress import OperationProgress
 
 from features.rclone import configuration, credentials
 
@@ -59,6 +60,10 @@ class RclonePage(pyside.QWidget):
 
         self.status_label = StatusLine()
         self.status_label.setWordWrap(True)
+
+        self.load_operation = OperationProgress(self)
+        self.load_operation.completed.connect(self._credentials_loaded)
+        self._loading_package = None
 
         self._build_layout()
         self._connect_signals()
@@ -179,6 +184,7 @@ class RclonePage(pyside.QWidget):
         layout.addWidget(package_group)
         layout.addWidget(remotes_group, 1)
         layout.addWidget(global_group)
+        layout.addWidget(self.load_operation)
         layout.addWidget(self.status_label)
 
         return widget
@@ -199,6 +205,8 @@ class RclonePage(pyside.QWidget):
     def refresh(self):
         """Refresh credential packages and generated config state."""
 
+        if self.load_operation.busy:
+            return
         selected_package_path = None
         current_item = self.credential_list.currentItem()
 
@@ -346,6 +354,8 @@ class RclonePage(pyside.QWidget):
         return path
 
     def _load_selected_credentials(self, *, remember=True):
+        if self.load_operation.busy:
+            return
         package = self._get_selected_package()
 
         if package is None:
@@ -365,20 +375,84 @@ class RclonePage(pyside.QWidget):
             )
             return
 
-        if not credentials.load_remote_from_zip_to_config(
-            package.path,
-            password, remember=remember
-        ):
-            return
+        from features.rclone import session
+        from commonUtils.persistence import atomic_write_bytes
+        config_path = configuration.get_credential_config_path(package.path)
+        self._loading_package = package, remember, config_path
+        for widget in self._credential_controls():
+            widget.setEnabled(False)
 
-        self._active_modes[package.path] = remember
-        config_path = self._selected_config_path(package)
+        def load(report, cancelled):
+            try:
+                values = session.read_package(package.path, password)
+            except Exception:
+                raise ValueError('The password or credential ZIP is invalid. Existing credentials were preserved.') from None
+            if cancelled():
+                return None
+            if remember:
+                # Publish only a fully validated package, without extracted TXT files.
+                content = '\n\n'.join(
+                    '[' + name + ']\n' + '\n'.join(f'{key} = {value}' for key, value in settings.items())
+                    for name, settings in values.items()) + '\n'
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                atomic_write_bytes(config_path, content.encode('utf-8'))
+            return values
 
-        self.password_input.clear()
-        self.refresh()
-        self.status_label.setText(
-            f'Loaded "{package.path.name}" ' + ('for this session.' if config_path.suffix == '.session' else f'into "{config_path.name}".')
-        )
+        self.load_operation.start(load, message='Loading credentials locally…')
+
+    def _credential_controls(self):
+        return (self.credential_list, self.password_input, self.load_button,
+                self.load_session_button, self.remove_button, self.clear_all_button,
+                self.clear_sessions_button)
+
+    def _credentials_loaded(self, values, error):
+        from features.rclone import session
+        package, remember, config_path = self._loading_package
+        self._loading_package = None
+        self.load_operation.hide()
+        for widget in self._credential_controls():
+            widget.setEnabled(True)
+        if values is not None and not error:
+            if remember:
+                from features.rclone.remote_resources import invalidate_config
+                invalidate_config(config_path)
+            else:
+                config_path = config_path.with_suffix('.session')
+                session.remember(config_path, values, package_path=package.path)
+            self._active_modes[package.path] = remember
+            # Do not rescan credential roots (which may be cloud-backed) on completion.
+            self.loaded_status.setText('Saved' if remember else 'Session only')
+            self.generated_config_path.setText(str(config_path) if remember else 'Memory only — no file created')
+            self.remote_list.clear()
+            self.remote_list.addItems(sorted(values))
+            item = self.credential_list.currentItem()
+            label = item.text().replace(' [Saved]', '').replace(' [Session]', '')
+            if remember or config_path.with_suffix('.conf').is_file():
+                label += ' [Saved]'
+            if session.names(config_path.with_suffix('.session')) is not None:
+                label += ' [Session]'
+            item.setText(label)
+            self.remove_button.setEnabled(True)
+            self.status_label.setText(f'Loaded "{package.path.name}" locally. No connection has been made.')
+        else:
+            self.remove_button.setEnabled(self.loaded_status.text() in ('Saved', 'Session only'))
+            self.status_label.setText('Credential loading failed. Check the ZIP password and local file access.'
+                                      if error else 'Credential loading cancelled.')
+        self._refresh_clear_all_state()
+
+    def can_close(self):
+        if self.load_operation.busy:
+            self.load_operation.request_cancel()
+            return False
+        return True
+
+    prepare_close = can_close
+
+    def closeEvent(self, event):
+        if self.can_close():
+            super().closeEvent(event)
+        else:
+            event.ignore()
 
     def _remove_selected_config(self):
         package = self._get_selected_package()

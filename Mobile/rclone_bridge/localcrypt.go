@@ -50,7 +50,7 @@ func cryptBacking(values map[string]string, remotes map[string]map[string]string
 	return name, root, nil
 }
 
-func validateCryptRemotes(remotes map[string]map[string]string) error {
+func validateCryptRemotes(remotes map[string]map[string]string, ciphers cryptCipherCache) error {
 	for _, values := range remotes {
 		if values["type"] != "crypt" {
 			continue
@@ -58,14 +58,11 @@ func validateCryptRemotes(remotes map[string]map[string]string) error {
 		if _, _, err := cryptBacking(values, remotes); err != nil {
 			return err
 		}
-		if _, err := cryptCipher(values); err != nil {
-			return err
-		}
 	}
-	return nil
+	return ciphers.prepare(remotes)
 }
 
-var cryptCiphers = map[string]*crypt.Cipher{}
+var cryptCiphers = cryptCipherCache{}
 var cryptCipherMu sync.Mutex
 
 func cryptConnection(name string) (*crypt.Cipher, string, string, string, error) {
@@ -89,13 +86,9 @@ func cryptConnection(name string) (*crypt.Cipher, string, string, string, error)
 	identity := hex.EncodeToString(digest[:])
 	cryptCipherMu.Lock()
 	defer cryptCipherMu.Unlock()
-	cipher := cryptCiphers[identity]
-	if cipher == nil {
-		cipher, err = cryptCipher(values)
-		if err != nil {
-			return nil, "", "", "", err
-		}
-		cryptCiphers[identity] = cipher
+	cipher, err := cryptCiphers.get(values)
+	if err != nil {
+		return nil, "", "", "", err
 	}
 	return cipher, backing, root, identity, nil
 }

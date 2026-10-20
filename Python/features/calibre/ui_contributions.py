@@ -22,7 +22,7 @@ def _get_actions(_entry: FolderEntry):
 def _create_widget(entry: FolderEntry, parent=None):
     """Create the Calibre library selector/action section for a folder."""
 
-    from features.calibre.folder_widget import CalibreFolderWidget
+    from features.calibre.ui.folder_widget import CalibreFolderWidget
 
     return CalibreFolderWidget(entry, parent=parent)
 

@@ -65,6 +65,8 @@ Desktop.ini
 /Mobile/.testflight-keys/
 /Mobile/.tools/
 /Mobile/.android-beta/
+# Isolated Android/iOS test-deployment projects, payloads, device IDs and logs.
+/Mobile/.deploy-workspaces/
 *.p8
 *.p12
 *.mobileprovision

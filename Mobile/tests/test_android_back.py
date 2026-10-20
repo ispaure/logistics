@@ -276,7 +276,7 @@ class AndroidBackTests(unittest.TestCase):
         self.assertTrue(self.routes.system_back())
         app._cancel_transfer_review.assert_not_called()
 
-    def test_comic_back_reveals_controls_then_tools_return_to_reader_then_origin(self):
+    def test_comic_tools_back_returns_to_reader_then_back_closes_to_origin(self):
         from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
         app = self.app
         folder = app.private_root / 'fixtures'
@@ -287,9 +287,6 @@ class AndroidBackTests(unittest.TestCase):
         app.loop.run_until_complete(app.open_download(path=comic))
         reader = app.readers.active
         self.assertTrue(reader.reader_immersive)
-        self.assertTrue(self.routes.system_back())
-        self.assertFalse(reader.reader_immersive)
-        self.assertIn(reader.library_view, app.body.children)
         panel = app.body
         reader.show_reader_tools()
         self.assertTrue(self.routes.system_back())
@@ -297,9 +294,9 @@ class AndroidBackTests(unittest.TestCase):
         self.assertTrue(self.routes.system_back())
         self.assertEqual(app.native_host.state.destination, 'files')
         self.assertIs(app.body, origin)
-        self.assertIn(reader.session.id, app.workspace.sessions)
+        self.assertNotIn(reader.session.id, app.workspace.sessions)
 
-    def test_pdf_back_closes_search_then_fullscreen_then_returns_to_origin(self):
+    def test_pdf_back_closes_search_then_closes_fullscreen_reader_to_origin(self):
         from Mobile.tests.test_pdf_reader import native_pdf, PDF
         app = self.app
         path = app.private_root / 'fixture.pdf'
@@ -317,10 +314,9 @@ class AndroidBackTests(unittest.TestCase):
             reader.toggle_private_reading_mode()
             self.assertTrue(reader.crypt_immersive)
             self.assertTrue(self.routes.system_back())
-            self.assertFalse(reader.crypt_immersive)
-            self.assertTrue(self.routes.system_back())
             self.assertEqual(app.native_host.state.destination, 'files')
             self.assertIs(app.body, origin)
+            self.assertNotIn(reader.session.id, app.workspace.sessions)
 
     def test_epub_back_closes_compact_chapters_before_leaving_reader(self):
         from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books

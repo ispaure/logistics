@@ -161,6 +161,7 @@ class LocalCryptUITests(unittest.TestCase):
                 with patch.object(app.crypt_copies, 'open', return_value=reader('Before')):
                     app.loop.run_until_complete(app.open_crypt())
                 owner = app.provider_sessions().active
+                app.loop.run_until_complete(owner.operation_idle.wait())
                 app.edit_crypt_metadata()
                 owner.crypt_metadata_fields['Title'].value = 'After'
                 app.close_crypt()

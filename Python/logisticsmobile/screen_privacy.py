@@ -156,8 +156,18 @@ class ScreenPrivacy:
     def reveal(self):
         self.inactive = False
         self.refresh()
+        self.resume_reader()
         from .browser_ui import sync_browser_population
         sync_browser_population(self.app)
+
+    def resume_reader(self):
+        """Memory pressure can retire the visible page while the lock is up."""
+        if self.inactive or self.saved_content is not None or any(gate.locked for gate in self.gates()):
+            return
+        private = getattr(self.app, 'private_sessions', None)
+        owner = getattr(private, 'active', None)
+        if owner is not None and self.app.visible_reader() == owner.session.id:
+            owner.resume_suspended_page()
 
     def refresh(self):
         gates = self.gates()
@@ -267,6 +277,11 @@ class ScreenPrivacy:
                     self.saved_lock_layout = container.on_native_layout
                     container.on_native_layout = self.layout_lock_view
                 self.app.main_window.content = self.lock_view
+                if self.backend.startswith('toga_android.'):
+                    host = getattr(self.app, 'native_host', None)
+                    if host is not None and getattr(host.adapter, '_reader_action_bar_active', False):
+                        from .android_reader_chrome import sync
+                        sync(self.app, object(), host.state.destination)
                 if self.backend.startswith('toga_iOS.'):
                     self.layout_lock_view(container)
         elif self.saved_content is not None:
@@ -276,6 +291,9 @@ class ScreenPrivacy:
             self.app.main_window.content = self.saved_content
             self.saved_content = None
             self.lock_gates = ()
+            if self.backend.startswith('toga_android.'):
+                self.app.adaptive.render()
+            self.resume_reader()
 
     def layout_lock_view(self, container):
         # The normal root hosts native navigation controllers, whose leaf

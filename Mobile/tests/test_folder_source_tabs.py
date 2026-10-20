@@ -144,17 +144,34 @@ class FolderSourceTabTests(unittest.TestCase):
         group = app.folder_tree_buttons[('Server', 'Lib')]
         folder = app.folder_buttons['Server-Perforce']
         self.assertEqual(group.style.font_size, folder.style.font_size)
+        # Pinned native backends convert Toga CSS points to native pt/sp.
+        self.assertAlmostEqual(folder.style.font_size * 96 / 72, 17, delta=2 / 3)
         self.assertEqual(group.style.font_weight, 'bold')
         self.assertEqual(folder.style.font_weight, 'normal')
         self.assertEqual(group.parent.style.height, folder.parent.style.height)
         self.assertEqual(group._impl._surface_roles[1], 'text')
         self.assertEqual(folder._impl._surface_roles[1], 'text')
+        self.assertTrue(folder.parent._impl._surface_eink_outlined)
+        self.assertFalse(group._impl._surface_eink_outlined)
         for heading in app.folder_tree_buttons.values():
             self.assertEqual(list(heading.parent.children), [heading])
             self.assertEqual(heading._impl._surface_roles[1], 'text')
         self.assertFalse(hasattr(group, 'on_press'))
         self.assertEqual([child.control_icon for child in folder.parent.children
                           if hasattr(child, 'control_icon')], ['folder', 'more'])
+        menu = folder.parent.children[-1]
+        self.assertGreaterEqual(folder.parent.children[0].style.width, 48)
+        self.assertGreaterEqual(menu.style.width, 48)
+        self.assertGreaterEqual(menu.style.height, 48)
+
+    def test_source_controls_keep_full_targets_and_consistent_native_text_size(self):
+        app = self.app
+        app.show_locations()
+        for control in [*app.folder_source_buttons.values(), app.folder_credential,
+                        app.folder_transfers_button, app.folder_add_share_button,
+                        app.folder_add_remote_button]:
+            self.assertGreaterEqual(control.style.height, 48)
+            self.assertEqual(control.style.font_size * 96 / 72, 16)
 
     def test_ios_local_tab_opens_files_beside_local_and_other_subfolders(self):
         app = self.app
@@ -250,7 +267,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(app.file_provider.root, documents / 'Local')
         self.assertEqual(app.file_path, 'Managed')
 
-    def test_source_strip_mounts_only_for_encrypted_workspace_inside_browser_frame(self):
+    def test_encrypted_workspace_keeps_one_location_header_without_source_strip(self):
         app = self.app
         app.loop.run_until_complete(app.show_files())
         header = app.file_browser.location_bar
@@ -264,9 +281,10 @@ class FolderSourceTabTests(unittest.TestCase):
             app.file_storage.value = 'LocalCrypt: Secret'
             app.refresh_file_source_tabs()
             app.refresh_file_source_tabs()
-            self.assertIs(app.file_source_tabs.parent, parent)
-            self.assertEqual(list(parent.children).count(app.file_source_tabs), 1)
-            self.assertEqual(set(app.file_source_buttons), {'Local files', 'LocalCrypt: Secret'})
+            self.assertIsNone(app.file_source_tabs.parent)
+            self.assertEqual(app.file_source_buttons, {})
+            self.assertIs(parent.children[0], header)
+            self.assertEqual(app.file_storage.value, 'LocalCrypt: Secret')
             app.file_storage.value = 'Local files'
             app.refresh_file_source_tabs()
             self.assertIsNone(app.file_source_tabs.parent)
@@ -374,7 +392,7 @@ class FolderSourceTabTests(unittest.TestCase):
             def cancel(self): pass
         app = self.app
         app.cloud_client = Client()
-        app.cloud_remote.items = ['Remote', 'Secret', 'Online']
+        app.set_loaded_remote_names(['Remote', 'Secret', 'Online'])
         store = app.mirror_store()
         local, _ = store.create(app.cloud_client, 'Remote', 'folder', storage='Local')
         crypt, _ = store.create(app.cloud_client, 'Secret', 'folder', storage='LocalCrypt')

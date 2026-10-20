@@ -43,6 +43,21 @@ class DocumentationTests(unittest.TestCase):
         self.assertTrue(owner.forward())
         self.assertEqual(owner.catalog.root, feature_scope)
 
+    def test_same_named_root_indents_and_reveals_child(self):
+        root = Path(self.temporary.name).resolve() / 'docs'
+        root.mkdir()
+        (root / 'docs.md').write_text('# Home')
+        child = root / 'child.md'
+        child.write_text('# Child')
+        owner = MarkdownWikiView(root)
+        self.assertEqual(len(owner.rows.children), 2)
+        self.assertEqual([row.children[0].style.width for row in owner.rows.children], [0, 20])
+        owner.rows.children[1].children[-1].on_press()
+        self.assertEqual(owner.path, child)
+        self.assertIn(root, owner.expanded)
+        self.assertTrue(owner.up())
+        self.assertEqual(owner.path, root / 'docs.md')
+
     def test_expansion_indents_pages_and_folders_in_same_columns(self):
         root = Path(self.temporary.name).resolve() / 'docs'
         nested = root / 'folder' / 'nested'
@@ -272,4 +287,5 @@ class DocumentationTests(unittest.TestCase):
         self.assertEqual(self.app.native_host.state.destination, destination)
         self.assertTrue(self.app.routes.back())
         self.assertIs(self.app.body, origin)
-        self.assertTrue(any(session.title == 'sample.py' for session in self.app.workspace.sessions.values()))
+        self.assertFalse(any(session.title == 'sample.py' for session in self.app.workspace.sessions.values()))
+        self.assertFalse(self.app._document_tabs_hidden)

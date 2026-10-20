@@ -2,15 +2,35 @@
 
 ## Using the mobile panels
 
+Android windows at least 600 dp wide use a compact, icon-only destination rail.
+Home, Workspaces, Documents and Chat sit at the top; Settings sits at the bottom.
+The outline icons follow the desktop rail, with 48 dp touch targets and accessible
+destination names. Long-press an icon for its label. Narrower windows show labeled
+bottom navigation. High contrast / E Ink adds a black divider down the full
+content edge of the rail. Resizing preserves the selected destination.
+
 Home offers **Open file…**, **New document**, five recent files and **See all in
 Documents**. Documents lists every open session under **All open** and shows closed Recent entries as compact rows without
 text-preview cards. Tap a filename to continue. The **×** button closes an open
 session through the existing unsaved-change guard. Card overview is permanently
 off and has no Settings switch. Other saved text and Markdown files appear under
 **Saved documents**. **Search documents** filters open, recent and saved filenames.
+Home's Recent entries share one rounded block, including **See all in Documents**.
+Documents uses separate rounded blocks for populated **All open**, **Recent** and **Saved
+documents** lists, with inset dividers between rows. Empty sections and unmatched
+searches show plain informational text outside the blocks. Home also keeps its
+empty Recent message outside the **See all in Documents** action block.
+Status text appears below each
+filename without extra boxes, and close buttons stay inside open-document rows.
+High contrast adds one black outline per block while preserving the same shape
+and spacing as regular appearance.
+Source icons and filenames have space inside their row boundaries. Android
+High contrast / E Ink retains the same content insets and icon sizes as normal
+appearance, including after switching modes. This also applies to shared browser,
+reader and speech buttons.
 Settings groups feature options under Text & Markdown, Books & Comics, LM Chat
 and Workspaces; reader appearance stays in each open reader. Home provides the
-Open/New actions; Documents provides **Books & Comics library** access. Chat has
+Open/New actions; Documents provides **Open Books & Comics library**. Chat has
 its own bottom navigation destination.
 
 The library is a searchable list of configured library folders. Tap a folder to
@@ -28,7 +48,7 @@ Tap a folder row to open its action page. **Browse Local**, **Browse LocalCrypt*
 Managed copies offer **Pull…** and **Push…**. Folders with a loaded remote offer
 Pull to create or associate a copy. Local folders also offer **Delete local
 folder…**, with native confirmation; online files are kept. Deletion waits until
-transfers finish. **Choose another workspace** returns to the list. At widths of at
+transfers finish. **Back** returns to the list. At widths of at
 least 640 points/dp, the tree remains on the left and actions appear on the right,
 in equal panes centered in the available content. Narrow windows use a separate
 action screen. Mapping removal is not offered on this page.
@@ -121,8 +141,11 @@ tap to reveal controls, use Previous/Next or swipe at fit size, and use Fit to
 return to the centered page. LocalCrypt bookmarks remain in memory until close;
 ordinary library bookmarks retain their saved behavior.
 
-Contents and appearance screens have their own Back step. A reader opened from
-Workspaces returns first to reading and then to the same folder. Each provider document
+Contents and appearance screens have their own Back step to reading. The main
+reader uses a **Back arrow** to close its session and return to the same
+folder or originating screen. Android Back does the same, including fullscreen,
+after dismissing any open search or chapter panel. Unsaved edits prompt before
+closing. Each provider document
 owns its request and cancellation; cancelling that document does not cancel a
 separate pull. Wait for its operation to finish before closing it.
 

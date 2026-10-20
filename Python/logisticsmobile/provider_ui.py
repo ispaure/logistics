@@ -30,7 +30,41 @@ from .files_ui import FilesUI
 from .reader_controls import ReadingFrame, PageFooter, page_buttons, schedule_swipe
 
 
+class _MarkdownState:
+    """Compatibility names expose the workflow's single state owner."""
+    def __init__(self, name):
+        self.name = name
+        self.fallback = '_legacy_markdown_' + name
+
+    def __get__(self, owner, cls=None):
+        if owner is None:
+            return self
+        workflow = owner.__dict__.get('_provider_markdown')
+        if workflow is not None:
+            return getattr(workflow, self.name)
+        if self.fallback in owner.__dict__:
+            return owner.__dict__[self.fallback]
+        raise AttributeError(self.name)
+
+    def __set__(self, owner, value):
+        workflow = owner.__dict__.get('_provider_markdown')
+        if workflow is not None:
+            setattr(workflow, self.name, value)
+        else:
+            owner.__dict__[self.fallback] = value
+
+
 class ProviderUI(FilesUI):
+    crypt_preview = _MarkdownState('preview')
+    crypt_formatted = _MarkdownState('formatted')
+    crypt_preview_search = _MarkdownState('search')
+    markdown_speech = _MarkdownState('speech')
+    crypt_markdown_mode = _MarkdownState('mode')
+    _private_preview_token = _MarkdownState('token')
+    _private_preview_pending = _MarkdownState('pending')
+    _text_menu_state = _MarkdownState('menu_state')
+    crypt_actions_menu = _MarkdownState('actions_menu')
+
 
     def private_dirty(self):
         return bool(self.crypt_reader and ((self.crypt_reader.editable and self.crypt_text.value != self.crypt_reader.text)
@@ -78,12 +112,9 @@ class ProviderUI(FilesUI):
         if hasattr(self, 'crypt_metadata_view'):
             self.crypt_metadata_view.content = None
             self.crypt_metadata_status.text = ''
-        self.clear_private_preview()
-        preview = getattr(self, 'crypt_preview', None)
-        if preview is not None:
-            from features.text_editor.mobile.markdown_editor import retire_webview
-            retire_webview(preview)
-            self.crypt_preview = None
+        workflow = getattr(self, '_provider_markdown', None)
+        if workflow is not None:
+            workflow.dispose()
         if hasattr(self, 'crypt_text'):
             self.crypt_text.value = ''
             dispose = getattr(self.crypt_text, 'dispose', None)
@@ -125,6 +156,7 @@ class ProviderUI(FilesUI):
             self.readers.catalog.clear_private_libraries()
         for drawer in getattr(self.adaptive, 'browsers', {}).values():
             drawer.generation += 1
+            drawer.listing.invalidate()
             drawer.scoped_provider = None
             if drawer.provider is not None and drawer.provider.private:
                 drawer.provider = None
@@ -133,6 +165,9 @@ class ProviderUI(FilesUI):
             if drawer.destination == 'documents':
                 drawer.refresh_menu()
         self.editor_picker().clear()
+        listing = getattr(self, '_folder_listing', None)
+        if listing is not None:
+            listing.invalidate()
         for name in ('file_browser', 'remote_browser'):
             browser = getattr(self, name, None)
             if browser is not None:
@@ -173,6 +208,7 @@ class ProviderUI(FilesUI):
                 reader = await asyncio.to_thread(copies.open, key,
                     password=password, cancelled=self._crypt_cancel.is_set, **opening_options(copies))
                 self._provider_comic_mode = self.private_comic_mode()
+                self._provider_viewport = (max(1, self.main_window.size.width), max(1, self.main_window.size.height))
                 kind, content = await asyncio.to_thread(self.provider_page_content, reader, 0)
             else:
                 reader, kind, content = prepared
@@ -251,7 +287,11 @@ class ProviderUI(FilesUI):
                 return False
             self._crypt_cancel = None
             self.clear_private_reader(discard=True)
-            self.__dict__.update(vars(view))
+            self._provider_markdown = getattr(view, '_provider_markdown', None)
+            for name, value in vars(view).items():
+                if self._provider_markdown is not None and isinstance(getattr(type(self), name, None), _MarkdownState):
+                    continue
+                setattr(self, name, value)
             if reader.editable and not getattr(reader, 'read_only', False) and reader.kind in {'.md', '.markdown'}:
                 if edit:
                     self.show_private_markdown_editor()
@@ -282,6 +322,8 @@ class ProviderUI(FilesUI):
                 from features.rclone.remote_policy import LOCAL_COPY_MESSAGE
                 await self.main_window.dialog(toga.InfoDialog('Remote preview unavailable',
                     str(error)[:200] + '\n\n' + LOCAL_COPY_MESSAGE))
+            else:
+                await self.main_window.dialog(toga.InfoDialog('Could not open document', str(error)[:300]))
         finally:
             if (prepared is None and getattr(copies, 'remote_storage', False) and reader is not None
                     and getattr(self, 'crypt_reader', None) is not reader):
@@ -414,13 +456,15 @@ class ProviderUI(FilesUI):
             if isinstance(previous, SpreadView) and previous in view.crypt_content.children:
                 prepared_spread = previous.replace(data,
                     right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
-                    viewport=controller.private_comic_viewport(view), seam=controller.private_comic_seam(view))
+                    viewport=controller.private_comic_viewport(view), seam=controller.private_comic_seam(view),
+                    crop=view.crypt_reader.comic_navigation.crop)
             else:
                 prepared_spread = SpreadView(data, canvas=ImageCanvas,
                     on_page=controller.swipe_crypt_page, on_toggle=controller.toggle_private_reading_mode,
                     right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
                     viewport=controller.private_comic_viewport(view),
-                    seam=controller.private_comic_seam(view))
+                    seam=controller.private_comic_seam(view),
+                    crop=view.crypt_reader.comic_navigation.crop)
             from .magnifier import bind
             bind(controller, prepared_spread)
         from .page_animation import page_direction, begin_page_slide, finish_page_slide
@@ -428,7 +472,10 @@ class ProviderUI(FilesUI):
         direction = 0
         if (kind in {'spread', 'image'} and view.crypt_reader.kind in {'.cbz', '.zip'}
                 and view.crypt_content.children):
-            direction = page_direction(getattr(view, '_provider_displayed_index', None), index,
+            previous_index = getattr(view, '_provider_displayed_index', None)
+            half = view.crypt_reader.comic_navigation.prepared[1] if kind == 'spread' else 0
+            direction = page_direction(None if previous_index is None else previous_index + getattr(view, '_provider_displayed_half', 0) / 2,
+                index + half / 2,
                 right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
         begin_page_slide(view.crypt_content, direction, self.preferences.values)
         for child in list(view.crypt_content.children):
@@ -482,7 +529,9 @@ class ProviderUI(FilesUI):
         elif kind == 'spread':
             view.provider_spread = prepared_spread
             view.crypt_content.add(prepared_spread)
-            view.crypt_reader.comic_navigation.visible = indices
+            view.crypt_reader.comic_navigation.commit(indices)
+            view.crypt_title.text = private_label(f'Page {index + 1}/{len(view.crypt_reader.labels)}' +
+                view.crypt_reader.comic_navigation.part_label)
         elif kind == 'image':
             view.crypt_image.image = toga.Image(src=content)
             view.crypt_content.add(view.crypt_image)
@@ -494,6 +543,7 @@ class ProviderUI(FilesUI):
         for child in view.crypt_content.children:
             if hasattr(child, 'magnifier_enabled'):
                 child.magnifier_enabled = (comic or view.crypt_reader.kind == '.pdf') and getattr(view, 'crypt_immersive', False)
+        view._provider_displayed_half = view.crypt_reader.comic_navigation.half if kind == 'spread' else 0
         view._provider_displayed_index = view.crypt_reader.labels.index(view.crypt_page.value)
         if view.crypt_reader.kind == '.pdf' and hasattr(view, 'pdf_number'):
             view.pdf_number.value = str(view._provider_displayed_index + 1)
@@ -519,18 +569,23 @@ class ProviderUI(FilesUI):
             self._show_crypt_content(kind, content)
             self.page_suspended = False
             if reader.kind in {'.pdf', '.cbz', '.zip'}:
-                self.crypt_title.text = private_label(f'Page {index + 1}/{len(reader.labels)}')
+                self.crypt_title.text = private_label(f'Page {index + 1}/{len(reader.labels)}' +
+                    (reader.comic_navigation.part_label if hasattr(reader, 'comic_navigation') else ''))
             self.refresh_private_bookmarks()
             self.watch_provider_layout()
             self.watch_provider_epub_width()
             self.page_footer.sync(comic=reader.kind in {'.cbz', '.zip'}, count=len(reader.labels),
                                   index=index, right_to_left=getattr(reader, 'right_to_left', False))
-            self.previous_page.enabled = reader.book is not None or index > 0
+            self.previous_page.enabled = reader.book is not None or (reader.comic_navigation.can_previous(index) if hasattr(reader, 'comic_navigation') else index > 0)
             self.next_page.enabled = reader.book is not None or (reader.comic_navigation.next(index) is not None if hasattr(reader, 'comic_navigation') else index + 1 < len(reader.labels))
         except Exception as error:
             self.crypt_title.text = private_label('Cannot read page: ' + str(error)[:200])
             if self.crypt_reader is not None:
                 self.crypt_page.value = self.crypt_reader.labels[getattr(self, '_provider_displayed_index', 0)]
+            if getattr(self, 'page_suspended', False) and getattr(self, 'crypt_immersive', False):
+                # A released fullscreen page has no pixels or controls to tap.
+                # Expose the error, retry and Close instead of trapping the user.
+                self.toggle_private_reading_mode()
         finally:
             self.crypt_read_page.enabled = True
             self.set_cloud_busy(False)
@@ -721,16 +776,10 @@ class ProviderUI(FilesUI):
                               style=Pack(direction=ROW, margin_top=4))
             view.crypt_save.style.flex = 1
             if view.crypt_reader.kind in {'.md', '.markdown'}:
-                from .control_icons import apply_icon
-                apply_icon(view.crypt_save, 'save', 'Save Markdown')
-                if view.crypt_save in footer.children:
-                    footer.remove(view.crypt_save)
-                view.crypt_preview_button = icon_button('view', 'View Markdown', on_press=self.toggle_private_preview)
-                view.reader_toolbar.insert(len(view.reader_toolbar.children) - 1, view.crypt_preview_button)
-                if not getattr(view.crypt_reader, 'read_only', False):
-                    view.crypt_edit_mode = toga.Selection(items=['Formatted', 'Source'],
-                        on_change=self.private_edit_mode_changed, style=Pack(flex=1, height=44))
-                    footer.add(view.crypt_edit_mode)
+                from .feature_hosts import provider_markdown
+                view._provider_markdown = provider_markdown(self, view, footer)
+                view.crypt_preview_button = view._provider_markdown.preview_button
+                view.crypt_edit_mode = view._provider_markdown.edit_mode
                 view.crypt_markdown_footer = footer
             if footer.children:
                 controls.append(footer)
@@ -791,13 +840,14 @@ class ProviderUI(FilesUI):
                 view.crypt_view._workspace_menu_button = reader_menu
             view.crypt_controls = view.reading_frame.controls
             view.previous_page.enabled = False
-            view.next_page.enabled = view.crypt_reader.book is not None or len(view.crypt_reader.labels) > 1
+            view.next_page.enabled = (view.crypt_reader.comic_navigation.next(0) is not None if comic
+                                      else view.crypt_reader.book is not None or len(view.crypt_reader.labels) > 1)
         else:
             markdown = view.crypt_reader.kind in {'.md', '.markdown'}
             view.crypt_view = toga.Box(children=controls, style=Pack(direction=COLUMN, margin=0 if markdown else 12, flex=1))
             if markdown:
                 view.crypt_view._workspace_toolbar = view.reader_toolbar
-                view._native_reading_buttons = [view.crypt_preview_button, view.crypt_actions]
+                view._native_reading_buttons = view._provider_markdown.native_buttons
                 view.crypt_view._native_reader_toolbar = view.reader_toolbar
                 view.crypt_view._native_reader_status = view.crypt_title
                 view.crypt_view._native_reader_buttons = lambda: view._native_reading_buttons
@@ -837,45 +887,15 @@ class ProviderUI(FilesUI):
         self.resume_crypt()
 
     def clear_private_preview(self):
-        self._private_preview_token = None
-        footer = getattr(self, 'crypt_markdown_footer', None)
-        mode = getattr(self, 'crypt_edit_mode', None)
-        if footer is not None and mode is not None and mode not in footer.children:
-            footer.add(mode)
-        speech = getattr(self, "markdown_speech", None)
-        if speech is not None:
-            speech.close()
-            toolbar = getattr(self, 'reader_toolbar', None)
-            if toolbar is not None and speech.button in toolbar.children:
-                toolbar.remove(speech.button)
-        formatted = getattr(self, 'crypt_formatted', None)
-        if formatted is not None:
-            formatted.dispose()
-            if formatted.view in self.crypt_content.children:
-                self.crypt_content.remove(formatted.view)
-            self.crypt_formatted = None
-            if self.crypt_text not in self.crypt_content.children:
-                self.crypt_content.add(self.crypt_text)
-        pending = getattr(self, '_private_preview_pending', None)
-        if pending is not None:
-            pending.cancel()
-            self._private_preview_pending = None
-        preview = getattr(self, 'crypt_preview', None)
-        if preview is not None:
-            native = getattr(preview._impl, 'native', None)
-            if native is not None:
-                native.stopLoading()
-            preview.set_content('https://logistics.invalid/closed/', '<p>Preview closed.</p>')
-            if preview in self.crypt_content.children:
-                self.crypt_content.remove(preview)
-                if self.crypt_text not in self.crypt_content.children:
-                    self.crypt_content.add(self.crypt_text)
-            from .control_icons import apply_icon
-            apply_icon(self.crypt_preview_button, 'view', 'View Markdown')
-        self.refresh_private_text_controls()
+        workflow = getattr(self, '_provider_markdown', None)
+        if workflow is not None:
+            return workflow.clear()
 
     def refresh_private_text_controls(self, *, view=None):
         owner = view or self
+        workflow = getattr(owner, '_provider_markdown', None)
+        if workflow is not None:
+            return workflow.refresh_controls(reader=getattr(owner, 'crypt_reader', None))
         reader = getattr(owner, 'crypt_reader', None)
         toolbar = getattr(owner, 'reader_toolbar', None)
         if reader is None or toolbar is None or not reader.editable:
@@ -887,225 +907,69 @@ class ProviderUI(FilesUI):
             toolbar.insert(len(toolbar.children) - 1, owner.crypt_save)
         elif not dirty and owner.crypt_save in toolbar.children:
             toolbar.remove(owner.crypt_save)
-        footer = getattr(owner, 'crypt_markdown_footer', None)
-        if footer is not None:
-            # A hidden source-mode selector must not leave a blank footer row.
-            footer.style.margin_top = 0
-            if footer.children:
-                del footer.style.height
-            else:
-                footer.style.height = 0
         buttons = getattr(owner, '_native_reading_buttons', None)
         if buttons is not None:
-            buttons[:] = ([owner.crypt_save] if dirty else [])
-            markdown = reader.kind in {'.md', '.markdown'}
-            if markdown and not dirty:
-                buttons.append(owner.crypt_preview_button)
-            speech = getattr(owner, 'markdown_speech', None)
-            preview = getattr(owner, 'crypt_preview', None)
-            reading = speech is not None and preview is not None and preview in owner.crypt_content.children
-            menu_state = dirty, reading
-            if markdown and menu_state != getattr(owner, '_text_menu_state', None):
-                from .action_menu import FeatureCommands
-                actions = list(owner.crypt_action_items)
-                mode = ('View source text' if getattr(reader, 'read_only', False) else 'Edit Markdown') if reading else 'View Markdown'
-                actions.insert(0, (mode, self.toggle_private_preview))
-                if reading:
-                    actions.insert(0, ('Read aloud…', speech.show))
-                owner.crypt_actions_menu.dispose()
-                owner.crypt_actions_menu = FeatureCommands(owner.crypt_actions, self, actions, self.show_private_tools, document=True)
-                owner._text_menu_state = menu_state
-            buttons.append(owner.crypt_actions)
+            buttons[:] = ([owner.crypt_save] if dirty else []) + [owner.crypt_actions]
             app = getattr(self, 'app', self)
-            body = app.routes.body()
-            if owner.crypt_view in body.children:
+            if owner.crypt_view in app.routes.body().children:
                 from .workspace_navigation import sync_reader_toolbar
                 sync_reader_toolbar(app, owner.crypt_view)
 
     def private_source_changed(self, widget, **kwargs):
         if widget is not getattr(self, 'crypt_text', None):
             return
+        workflow = getattr(self, '_provider_markdown', None)
+        if workflow is not None:
+            return workflow.source_changed(widget, **kwargs)
         self.refresh_private_text_controls()
-        formatted = getattr(self, 'crypt_formatted', None)
-        if formatted is not None and formatted.view in self.crypt_content.children:
-            try:
-                formatted.load(widget.value)
-            except ValueError as error:
-                self.crypt_title.text = private_label(str(error))
-        speech = getattr(self, 'markdown_speech', None)
-        if speech is not None:
-            speech.close()
-        preview = getattr(self, 'crypt_preview', None)
-        if preview is None or preview not in self.crypt_content.children:
-            return
-        self.schedule_private_preview(delay=.25)
 
     def schedule_private_preview(self, *, delay=0):
-        pending = getattr(self, '_private_preview_pending', None)
-        if pending is not None:
-            pending.cancel()
-        token = object()
-        self._private_preview_token = token
-        reader, store = self.crypt_reader, self._crypt_reader_store
-        preview, text = self.crypt_preview, self.crypt_text.value
-        size = int(self.preferences.values['markdown_font_size'])
-        client = getattr(self, 'credential_client', None)
-        generation = getattr(client, 'generation', None)
-        async def render():
-            try:
-                if delay:
-                    await asyncio.sleep(delay)
-                from .preview import markdown_preview, reader_image_source
-                content = await asyncio.to_thread(markdown_preview, text, size,
-                    image_source=reader_image_source(store, reader))
-                if (getattr(self, '_private_preview_token', None) is not token
-                        or self.crypt_reader is not reader or self.crypt_text.value != text
-                        or preview not in self.crypt_content.children
-                        or getattr(client, 'generation', None) != generation
-                        or (client is not None and getattr(self.app, 'cloud_client', None) is not client)):
-                    return
-                preview.set_content('https://logistics.invalid/live/', content)
-            except (ValueError, OSError) as error:
-                if getattr(self, '_private_preview_token', None) is token:
-                    self.crypt_title.text = private_label(str(error))
-            finally:
-                if getattr(self, '_private_preview_token', None) is token:
-                    self._private_preview_pending = None
-        if self.loop.is_running():
-            self._private_preview_pending = self.loop.create_task(render())
-        else:
-            self.loop.run_until_complete(render())
+        workflow = getattr(self, '_provider_markdown', None)
+        if workflow is not None:
+            return workflow.schedule_preview(delay=delay)
 
     def toggle_private_preview(self, widget=None, *, initial=False, rendered=None, **kwargs):
-        if (not initial and self.cloud_busy and not getattr(self, 'transfer_busy', False)) or self.crypt_reader is None or not self.crypt_reader.editable:
-            return
-        preview = getattr(self, 'crypt_preview', None)
-        if preview is not None and preview in self.crypt_content.children:
-            self.crypt_markdown_mode = 'source'
-            self.clear_private_preview()
-            if not getattr(self.crypt_reader, 'read_only', False):
-                self.show_private_markdown_editor()
-            return
-        from uuid import uuid4
-        content = rendered if rendered is not None else '<p>Loading preview…</p>'
-        if preview is None:
-            self.crypt_preview = preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
-                                                       style=Pack(flex=1))
-        from .font_scaling import bind
-        bind(self, preview, 'markdown', web=True)
-        preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
-        self.crypt_markdown_mode = 'preview'
-        footer = getattr(self, 'crypt_markdown_footer', None)
-        mode = getattr(self, 'crypt_edit_mode', None)
-        if footer is not None and mode is not None and mode in footer.children:
-            footer.remove(mode)
-        self.crypt_content.clear()
-        self.crypt_content.add(preview)
-        from .markdown_speech import MarkdownSpeech
-        speech = getattr(self, "markdown_speech", None)
-        if speech is None:
-            self.markdown_speech = speech = MarkdownSpeech(getattr(self, "app", self), preview, self.crypt_content,
-                privacy_gate=lambda: getattr(self, "privacy_gate", None), valid=lambda: speech_session_valid(self))
-        speech.close()
-        speech.web = preview
-        if speech.button not in self.reader_toolbar.children:
-            self.reader_toolbar.insert(len(self.reader_toolbar.children) - 1, speech.button)
-        from .control_icons import apply_icon
-        apply_icon(self.crypt_preview_button, 'view' if getattr(self.crypt_reader, 'read_only', False) else 'edit',
-            'View source text' if getattr(self.crypt_reader, 'read_only', False) else 'Edit Markdown')
-        self.refresh_private_text_controls()
-        if rendered is None:
-            self.schedule_private_preview()
+        workflow = getattr(self, '_provider_markdown', None)
+        if workflow is not None:
+            return workflow.toggle_preview(widget, initial=initial, rendered=rendered, **kwargs)
 
     def private_edit_mode_changed(self, widget=None, **kwargs):
-        if getattr(self, 'crypt_reader', None) is None:
-            return
-        if getattr(self.crypt_reader, 'read_only', False):
-            return
-        self.clear_private_preview()
-        self.show_private_markdown_editor()
+        workflow = getattr(self, '_provider_markdown', None)
+        if workflow is not None:
+            return workflow.edit_mode_changed(widget, **kwargs)
 
     def show_private_markdown_editor(self):
-        if self.crypt_reader is None or getattr(self.crypt_reader, 'read_only', False):
-            return
-        self.crypt_markdown_mode = 'edit'
-        if getattr(self.crypt_edit_mode, 'value', 'Formatted') == 'Source':
-            return
-        from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
-        reader = self.crypt_reader
-        def changed(text):
-            if (self.crypt_reader is reader and reader is not None and self.active_host
-                    and formatted.view in self.crypt_content.children):
-                self.crypt_text.value = text
-        from .preview import reader_image_source
-        from .palette import css_variables
-        formatted = FormattedMarkdownInput(changed, font_size=int(self.preferences.values['markdown_font_size']),
-            stylesheet=css_variables(),
-            image_source=lambda: reader_image_source(self._crypt_reader_store, reader))
-        try:
-            formatted.load(self.crypt_text.value)
-        except ValueError as error:
-            formatted.dispose()
-            self.crypt_title.text = private_label(str(error))
-            return
-        from .font_scaling import bind
-        bind(self, formatted.view, 'markdown', web=True, formatted=formatted)
-        self.crypt_formatted = formatted
-        self.crypt_content.clear()
-        self.crypt_content.add(formatted.view)
+        workflow = getattr(self, '_provider_markdown', None)
+        if workflow is not None:
+            return workflow.show_editor()
 
     def show_private_tools(self, widget=None, **kwargs):
         if not self.cloud_busy:
             title = 'Comic pages' if self.crypt_reader is not None and self.crypt_reader.kind in {'.cbz', '.zip'} else 'Private document actions'
             self.show_view(self.crypt_tools_view, route='private-tools', title=title)
 
-    async def show_provider_comic_info(self, widget=None, **kwargs):
-        if (self.crypt_reader is None or self.crypt_reader.kind not in {'.cbz', '.zip'}
-                or not self.manager.available(self.session.id)):
-            return
-        from .reader_controls import provider_comic_path
-        path = provider_comic_path(self._crypt_reader_store, self.crypt_reader)
-        await self.main_window.dialog(toga.InfoDialog('Comic path', path))
+    async def show_provider_comic_info(self, *args, **kwargs):
+        return await self.provider_comic_controller().show_provider_comic_info(*args, **kwargs)
 
-    def fit_private_page(self, widget=None, **kwargs):
-        view = getattr(self, 'provider_spread', self.crypt_image)
-        view.fit_page()
-        from .layout_events import notify_layout
-        notify_layout(getattr(self, 'app', self))
+    def fit_private_page(self, *args, **kwargs):
+        return self.provider_comic_controller().fit_private_page(*args, **kwargs)
 
     def close_crypt(self, widget=None, **kwargs):
         if not self.cloud_busy and self.clear_private_reader():
             self.show_cloud()
 
 
-    def show_provider_epub_find(self, widget=None, **kwargs):
-        panel = getattr(self, 'provider_epub_view', None)
-        if panel is not None and not self.cloud_busy:
-            if hasattr(panel, 'show_find'):
-                panel.show_find()
-            else:
-                panel.tools.toggle()
+    def show_provider_epub_find(self, *args, **kwargs):
+        return self.provider_book_controller().show_provider_epub_find(*args, **kwargs)
 
-    def toggle_provider_epub_tools(self, widget=None, **kwargs):
-        panel = getattr(self, 'provider_epub_view', None)
-        if not self.cloud_busy and panel is not None:
-            panel.tools.toggle()
+    def toggle_provider_epub_tools(self, *args, **kwargs):
+        return self.provider_book_controller().toggle_provider_epub_tools(*args, **kwargs)
 
-    async def show_provider_epub_navigation(self, widget=None, **kwargs):
-        if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.book is None:
-            return
-        if getattr(self, 'page_suspended', False):
-            await self.read_crypt_page()
-        self.resume_crypt()
-        panel = getattr(self, 'provider_epub_view', None)
-        if panel is not None and panel.tools.panel not in panel.tools.widget.children:
-            panel.tools.toggle()
+    async def show_provider_epub_navigation(self, *args, **kwargs):
+        return await self.provider_book_controller().show_provider_epub_navigation(*args, **kwargs)
 
-    def open_provider_epub_chapter(self, index, fragment=''):
-        if self.cloud_busy or self.crypt_reader is None:
-            return
-        self._provider_epub_target = fragment
-        self.loop.create_task(self.move_private_page(index))
+    def open_provider_epub_chapter(self, *args, **kwargs):
+        return self.provider_book_controller().open_provider_epub_chapter(*args, **kwargs)
 
 
     def provider_page_content(self, reader, index):
@@ -1124,78 +988,27 @@ class ProviderUI(FilesUI):
             reader.comic_navigation = provider_navigation(reader)
         viewport = getattr(self, '_provider_viewport', (1, 1))
         return 'spread', reader.comic_navigation.load(index, viewport=viewport,
-            mode=getattr(self, '_provider_comic_mode', self.preferences.values['comic_layout']))
+            mode=getattr(self, '_provider_comic_mode', self.preferences.values['comic_layout']),
+            split_wide=self.preferences.values.get('comic_split_wide', 'true') == 'true')
 
-    async def move_provider_comic(self, direction):
-        if self.cloud_busy or self.crypt_reader is None:
-            return
-        reader = self.crypt_reader
-        index = reader.labels.index(self.crypt_page.value)
-        nav = reader.comic_navigation
-        if direction > 0:
-            target = nav.next(index)
-        else:
-            self.set_cloud_busy(True)
-            try:
-                target = await asyncio.to_thread(nav.previous, index,
-                    viewport=getattr(self, '_provider_viewport', (1, 1)), mode=self.private_comic_mode())
-            except Exception as error:
-                self.crypt_title.text = private_label('Cannot read previous spread: ' + str(error)[:200])
-                return
-            finally:
-                self.set_cloud_busy(False)
-        if target is not None:
-            await self.move_private_page(target)
+    async def move_provider_comic(self, *args, **kwargs):
+        return await self.provider_comic_controller().move_provider_comic(*args, **kwargs)
 
 
-    def watch_provider_epub_width(self):
-        task = getattr(self, '_provider_width_task', None)
-        if not hasattr(self, 'provider_epub_view'):
-            return
-        panel = self.provider_epub_view
-        if task is not None and not task.done():
-            if getattr(self, '_provider_width_panel', None) is panel:
-                return
-            task.cancel()
-        self._provider_width_panel = panel
-        from features.books.mobile.presentation import watch_width, pane_width
-        from .layout_events import layout_waiter
-        def width():
-            available = pane_width(self.crypt_content, self.main_window.size.width, 0)
-            if hasattr(panel, 'reflow'):
-                panel.reflow(available, immersive=self.crypt_immersive)
-            return available
-        self._provider_width_task = self.loop.create_task(watch_width(
-            alive=lambda: getattr(self, 'provider_epub_view', None) is panel,
-            width=width, view=lambda: panel, changed=layout_waiter(self.app)))
+    def watch_provider_epub_width(self, *args, **kwargs):
+        return self.provider_book_controller().watch_provider_epub_width(*args, **kwargs)
 
-    def private_comic_seam(self, view=None):
-        from .fold_layout import seam_fraction
-        return seam_fraction(self, (view or self).crypt_content)
+    def private_comic_seam(self, *args, **kwargs):
+        return self.provider_comic_controller().private_comic_seam(*args, **kwargs)
 
-    def private_comic_mode(self):
-        from .fold_layout import comic_mode
-        return comic_mode(self, getattr(self, 'crypt_content', self.main_window.content))
+    def private_comic_mode(self, *args, **kwargs):
+        return self.provider_comic_controller().private_comic_mode(*args, **kwargs)
 
-    def private_comic_viewport(self, view=None):
-        layout = (view or self).crypt_content.layout
-        return max(1, min(layout.content_width or self.main_window.size.width, self.main_window.size.width)), max(1, layout.content_height or 1)
+    def private_comic_viewport(self, *args, **kwargs):
+        return self.provider_comic_controller().private_comic_viewport(*args, **kwargs)
 
-    def watch_provider_layout(self):
-        task = getattr(self, '_provider_layout_task', None)
-        reader = self.crypt_reader
-        if (reader is None or not hasattr(reader, 'comic_navigation')
-                or (task is not None and not task.done())):
-            return
-        from features.comics.mobile.presentation import watch_layout
-        from .layout_events import layout_waiter
-        self._provider_layout_task = self.loop.create_task(watch_layout(
-            alive=lambda: self.crypt_reader is reader and self.active_host
-                and hasattr(self, 'provider_spread') and not getattr(self, 'page_suspended', False),
-            available=lambda: not self.cloud_busy and self.manager.active is self,
-            viewport=lambda: (self.private_comic_viewport(), self.private_comic_mode(), self.private_comic_seam()),
-            view=lambda: getattr(self, 'provider_spread', None), reload=self.read_crypt_page,
-            changed=layout_waiter(self.app)))
+    def watch_provider_layout(self, *args, **kwargs):
+        return self.provider_comic_controller().watch_provider_layout(*args, **kwargs)
 
     def show_provider_layout(self, widget=None, **kwargs):
         if (self.crypt_reader is None or self.crypt_reader.editable
@@ -1225,63 +1038,18 @@ class ProviderUI(FilesUI):
         await self.read_crypt_page()
         self.resume_crypt()
 
-    async def refresh_provider_comic_neighbors(self):
-        header = getattr(self, 'comic_header', None)
-        reader = self.crypt_reader
-        provider = getattr(self._crypt_reader_store, 'provider', None)
-        if header is None or reader is None or provider is None:
-            return
-        header.sync(False, False)
-        token = self.workspace.token(self.session.id)
-        key = reader.key
-        try:
-            rows = await asyncio.to_thread(provider.list, key.rpartition('/')[0])
-        except Exception:
-            return
-        if not self.active_host or self.crypt_reader is not reader or not self.workspace.accepts(token):
-            return
-        from features.comics.mobile.navigation import adjacent_comic
-        comics = [(row['path'], row['name']) for row in rows
-                  if not row['directory'] and Path(row['name']).suffix.lower() in {'.cbz', '.zip'}]
-        header.sync(adjacent_comic(comics, key, -1) is not None,
-                    adjacent_comic(comics, key, 1) is not None)
+    async def refresh_provider_comic_neighbors(self, *args, **kwargs):
+        return await self.provider_comic_controller().refresh_provider_comic_neighbors(*args, **kwargs)
 
-    async def adjacent_provider_comic(self, direction):
-        if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.book is not None or self.crypt_reader.editable:
-            return
-        store = self._crypt_reader_store
-        provider = getattr(store, 'provider', None)
-        if provider is None:
-            self.crypt_title.text = private_label('Open a folder-backed comic to navigate neighboring files.')
-            return
-        from features.comics.mobile.navigation import adjacent_comic
-        key = self.crypt_reader.key
-        token = self.workspace.token(self.session.id)
-        try:
-            rows = await asyncio.to_thread(provider.list, key.rpartition('/')[0])
-        except Exception as error:
-            self.crypt_title.text = private_label('Cannot list neighboring comics: ' + str(error)[:200])
-            return
-        if not self.active_host or not self.workspace.accepts(token) or self.manager.active is not self:
-            return
-        target = adjacent_comic([(row['path'], row['name']) for row in rows
-            if not row['directory'] and Path(row['name']).suffix.lower() in {'.cbz', '.zip'}], key, direction)
-        if target is not None:
-            immersive = self.crypt_immersive
-            if await self.manager.open(store, target, destination=self.presentation_destination):
-                owner = self.manager.active
-                if owner.crypt_immersive != immersive:
-                    owner.toggle_private_reading_mode()
+    async def adjacent_provider_comic(self, *args, **kwargs):
+        return await self.provider_comic_controller().adjacent_provider_comic(*args, **kwargs)
 
-    async def previous_provider_comic_file(self, widget=None, **kwargs):
-        await self.adjacent_provider_comic(-1)
+    async def previous_provider_comic_file(self, *args, **kwargs):
+        return await self.provider_comic_controller().previous_provider_comic_file(*args, **kwargs)
 
-    async def next_provider_comic_file(self, widget=None, **kwargs):
-        await self.adjacent_provider_comic(1)
+    async def next_provider_comic_file(self, *args, **kwargs):
+        return await self.provider_comic_controller().next_provider_comic_file(*args, **kwargs)
 
 
-    def show_provider_read_aloud(self, widget=None, **kwargs):
-        panel = getattr(self, 'provider_epub_view', None)
-        if panel is not None and hasattr(panel, 'show_read_aloud') and not self.cloud_busy:
-            panel.show_read_aloud(self.loop, app=self.app, privacy_gate=lambda: self.privacy_gate,
-                valid=lambda: speech_session_valid(self))
+    def show_provider_read_aloud(self, *args, **kwargs):
+        return self.provider_book_controller().show_provider_read_aloud(*args, **kwargs)

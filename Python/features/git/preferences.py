@@ -1,10 +1,10 @@
 """Feature-owned user settings; no repository-specific config in Logistics core."""
 import json
-from configparser import Error as ConfigError
 import os
+from configparser import Error as ConfigError
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 from weakref import WeakSet
+from commonUtils.persistence import atomic_write_bytes
 from .options import validate_options
 
 
@@ -117,23 +117,15 @@ class Preferences:
             self._loaded_systemic = {key: self.options[key] for key in FIELDS}
             self._loaded_executable = self.executable
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = None
-        try:
-            with NamedTemporaryFile('w', encoding='utf-8', dir=self.path.parent, delete=False) as stream:
-                temporary = Path(stream.name)
-                if not self.custom:
-                    from .configuration import FIELDS
-                    options = {key: value for key, value in options.items() if key not in FIELDS and key not in ('diff_font', 'diff_colors')}
-                payload = {'repositories': self.repositories, 'last_repository': self.last_repository,
-                           'subtrees': self.subtrees, 'options': options}
-                if self.custom:
-                    payload['executable'] = self.executable
-                json.dump(payload, stream, indent=2)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary, self.path)
-        finally:
-            if temporary is not None: temporary.unlink(missing_ok=True)
+        if not self.custom:
+            from .configuration import FIELDS
+            options = {key: value for key, value in options.items() if key not in FIELDS and key not in ('diff_font', 'diff_colors')}
+        payload = {'repositories': self.repositories, 'last_repository': self.last_repository,
+                   'subtrees': self.subtrees, 'options': options}
+        if self.custom:
+            payload['executable'] = self.executable
+        content = json.dumps(payload, indent=2).replace('\n', os.linesep).encode('utf-8')
+        atomic_write_bytes(self.path, content)
 
     def remember(self, path):
         value = str(Path(path))
