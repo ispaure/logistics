@@ -181,7 +181,7 @@ async def exercise_localcrypt(app, passed):
             raise RuntimeError('Native provider fixture was not released')
         return original_open(*args, **kwargs)
     app.new_document()
-    app.show_documents()
+    app.show_documents(destination='documents')
     writer = app.editor_view
     app.show_cloud()
     key = fixture['copies']['note.md']['key']
@@ -193,7 +193,7 @@ async def exercise_localcrypt(app, passed):
                     break
                 await asyncio.sleep(.01)
             assert started.is_set()
-            app.show_documents()
+            app.show_documents(destination='documents')
             app.editor.value = 'Native ordinary draft during private opening'
             body = app.body
             release.set()

@@ -35,7 +35,8 @@ async def exercise_obsidian(app, encrypted):
         await capture_window(app, output / (label + '-button.png'))
         await button.on_press()
         owner = app.vault_browser
-        assert app.native_host.state.destination == 'documents'
+        assert app.native_host.state.destination == 'files'
+        assert owner.destination == 'files'
         assert owner.session.provider == 'notes-library'
         assert owner is not None and owner.provider.root == provider.root
         if label == 'localcrypt':
