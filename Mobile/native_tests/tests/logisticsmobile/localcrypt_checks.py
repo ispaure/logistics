@@ -422,7 +422,14 @@ async def exercise_localcrypt(app, passed):
     await asyncio.gather(*tuple(browser.tasks))
     assert app.selected_file()[1] == 'large-browser.cbz'
     assert any('Title: Large native browser sentinel' == child.text for child in browser.info.children if hasattr(child, 'text'))
-    assert browser.icons[(entry.identity, entry.revision)].startswith(b'\x89PNG')
+    assert browser.thumbnail is None and not browser.icons
+    # Folder browsing must not decrypt covers automatically. Exercise the
+    # large-file native thumbnail API as an explicit preview request instead.
+    from logisticsmobile.browser_preview import callbacks
+    thumbnail, _ = callbacks(provider, app.cloud_client)
+    preview = await asyncio.to_thread(thumbnail, entry.payload, (160, 160), lambda: False)
+    assert preview.startswith(b'\x89PNG')
+    assert not browser.icons
     await browser.activate_entry(entry)
     assert app.private_sessions.active.crypt_reader.name == 'large-browser.cbz'
     browser.show_list()
