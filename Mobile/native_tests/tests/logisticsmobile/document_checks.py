@@ -33,7 +33,7 @@ async def exercise_loading_layout(app):
 async def exercise_documents(app, passed):
     await exercise_loading_layout(app)
     await exercise_loading_progress(app)
-    app.show_documents()
+    app.show_documents(destination='documents')
     app.editor.value = 'Draft survives actual Back'
     import toga
     app.show_view(toga.Label('Route detail'), route='route-check', title='Route detail')
@@ -58,9 +58,10 @@ async def exercise_documents(app, passed):
     assert app.editor.value == 'Draft survives actual Back'
     passed.append('native_route_back')
     app.show_settings()
-    app.font_choice.value = '18'
+    app.settings_navigation.choose('Text')
+    app.text_font_size_choice.value = '18'
     app.save_preferences()
-    assert Preferences(app.private_root).values['font_size'] == '18'
+    assert Preferences(app.private_root).values['text_font_size'] == '18'
     passed.append('native_preferences')
     app.show_documents()
     app.name.value = 'Native.md'
