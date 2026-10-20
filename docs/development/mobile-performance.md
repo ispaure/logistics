@@ -135,7 +135,12 @@ callbacks and omission of operation return values from reports.
     checks pass. A 500-cached-image render performs zero decodes; viewing one row
     decodes once and revisiting it reuses that image. Retired rows cannot update
     native cells. Native device frame timing remains pending.
-16. Bounded tile rendering — pending.
+16. Bounded tile rendering — implemented: a maximum of 80 live cards, reused
+    overlapping rows and fixed-height spacers retain the full scroll extent.
+    Offscreen thumbnail work is cancelled and evicted callbacks are rejected.
+    Twenty-four browser/keyboard checks pass, including 10,005 entries and exact
+    last-file activation. Stop clears retained names/images and entry snapshots.
+    Native scrolling and frame timing remain pending.
 17. Formatted Markdown changed-block bridge — pending.
 18. Background provider Markdown previews — pending.
 19. Background EPUB text indexes — pending.

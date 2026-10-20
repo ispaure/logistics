@@ -130,6 +130,35 @@ class RecycledBrowserTests(unittest.TestCase):
             self.assertIs(browser.native_list.selection.entry, entry)
             self.assertFalse(browser.buttons)
 
+    def test_ten_thousand_tiles_keep_a_bounded_window_reuse_cards_and_reach_last_file(self):
+        browser = self.browser
+        browser.set_entries(self.provider, '', self.rows(10005))
+        entries = tuple(browser.entries)
+        browser.show_tiles()
+        self.assertLessEqual(len(browser.buttons), 80)
+        overlap = entries[4].identity
+        card = browser.buttons[overlap]
+        browser._update_tile_window(browser.TILE_ROW_HEIGHT * 4)
+        self.assertIs(browser.buttons[overlap], card)
+        browser._update_tile_window(browser.TILE_ROW_HEIGHT * 5002)
+        self.assertLessEqual(len(browser.buttons), 80)
+        last = entries[-1]
+        self.assertIn(last.identity, browser.buttons)
+        extent = (browser._tile_top.style.height + browser._tile_bottom.style.height
+                  + len(browser._tile_row_views) * browser.TILE_ROW_HEIGHT)
+        self.assertEqual(extent, 5003 * browser.TILE_ROW_HEIGHT)
+        self.app.loop.run_until_complete(card.on_press())
+        self.assertFalse(self.opened)
+        self.app.loop.run_until_complete(browser.buttons[last.identity].on_press())
+        self.assertEqual(self.opened[-1]['path'], 'file-10004.md')
+        last_button = browser.buttons[last.identity]
+        browser.stop()
+        self.assertFalse(browser._tile_entries)
+        self.assertFalse(browser._tile_cards)
+        self.assertIsNone(browser._tile_rows)
+        self.assertEqual(last_button.text, '')
+
+
     def test_thumbnails_are_requested_only_for_visible_rows_and_cannot_return_after_stop(self):
         browser = self.browser
         browser.thumbnail = lambda *args: b''

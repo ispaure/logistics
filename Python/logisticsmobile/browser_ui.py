@@ -3,6 +3,7 @@ import inspect
 from contextlib import contextmanager
 from collections import OrderedDict
 import weakref
+from threading import Event
 from pathlib import PurePosixPath
 import toga
 from .control_icons import apply_icon
@@ -192,6 +193,9 @@ class FileBrowser(NativeBrowser):
         self._list_query = None
         self._list_thumbnail_rows = OrderedDict()
         self._decoded_thumbnails = OrderedDict()
+        self._tile_cards = {}
+        self._tile_row_views = {}
+        self._tile_range = None
         self._population_epoch = 0
         self._thumbnail_requested = set()
         self._thumbnail_pending = set()
@@ -228,6 +232,7 @@ class FileBrowser(NativeBrowser):
         self.empty_label = toga.Label('', style=Pack(margin=12))
         self._tile_scroll = toga.ScrollContainer(horizontal=False, content=self.items,
                                                 style=Pack(flex=1))
+        self._tile_scroll.on_scroll = self._tile_scrolled
         self.widget.style.flex = 1
         self.widget.add(self.native_list)
 
@@ -317,6 +322,7 @@ class FileBrowser(NativeBrowser):
             self.widget.add(view)
 
     def _render_list(self):
+        self._clear_tiles()
         from .recycled_file_list import file_list_icon
         self._cancel()
         self.page = 0
@@ -394,7 +400,7 @@ class FileBrowser(NativeBrowser):
         if self.mode == 'List':
             return (self._list_query == (self.search.value, self.sort.value)
                     and entry.identity in self._list_rows)
-        return entry in self.entries
+        return entry.identity in self.buttons
 
     def _set_row_thumbnail(self, row, image):
         from .recycled_file_list import thumbnail_image, file_list_icon
@@ -451,6 +457,7 @@ class FileBrowser(NativeBrowser):
             self._thumbnail_pending.discard(token)
 
     def stop(self):
+        self._clear_tiles()
         self._decoded_thumbnails.clear()
         self.native_list.clear()
         self._list_entries = ()
@@ -462,25 +469,137 @@ class FileBrowser(NativeBrowser):
         super().stop()
         self.entry_rows = {}
 
+    TILE_ROW_HEIGHT = 164
+
+    def _clear_tiles(self):
+        restore = getattr(self, '_tile_restore', None)
+        if restore is not None:
+            restore.cancel()
+        self._tile_entries = ()
+        for identity in tuple(self._tile_cards):
+            self._retire_tile(identity)
+        self._tile_row_views.clear()
+        rows = getattr(self, '_tile_rows', None)
+        if rows is not None:
+            for child in list(rows.children):
+                rows.remove(child)
+        self._tile_rows = None
+        self._tile_range = None
+        if hasattr(self, 'items'):
+            for child in list(self.items.children):
+                self.items.remove(child)
+
     def _render_tiles(self):
         if self.closed:
             return
-        super().render()
-        entries = self.entries
+        self._cancel()
+        self._clear_tiles()
+        self.buttons.clear()
         self.entry_rows = {}
-        for entry in entries:
-            button = self.buttons[entry.identity]
-            button.text = entry.payload.get('display_name') or PurePosixPath(entry.label).name
-            list_button(button)
-            middle_filename(button)
-            tile = button.parent
-            if not any(isinstance(child, toga.ImageView) for child in tile.children):
-                tile.insert(0, entry_icon(entry.container))
-            self.entry_rows[entry.identity] = tile
-        self.highlight_selection()
-        from .keyboard import bind_browser
-        bind_browser(self)
+        self._tile_entries = tuple(self.entries)
+        self._tile_top = toga.Box(style=Pack(height=0))
+        self._tile_rows = toga.Box(style=Pack(direction=COLUMN))
+        self._tile_bottom = toga.Box(style=Pack(height=0))
+        self.items.add(self._tile_top, self._tile_rows, self._tile_bottom)
+        if not self._tile_entries:
+            self._tile_rows.add(toga.Label('No matching items.' if self.search.value else 'This folder is empty.'))
+        else:
+            self._update_tile_window(0)
         self.page_label.text = ''
+
+    def _tile_scrolled(self, widget, **kwargs):
+        if not self.closed and self.mode == 'Tiles' and not getattr(self, '_tile_updating', False):
+            self._tile_scroll_serial = getattr(self, '_tile_scroll_serial', 0) + 1
+            self._update_tile_window(widget.vertical_position)
+
+    def _update_tile_window(self, position):
+        entries = self._tile_entries
+        total = (len(entries) + 1) // 2
+        if not total:
+            return
+        height = self._tile_scroll.layout.content_height or self._app.main_window.size.height or 640
+        count = min(40, max(6, int(height / self.TILE_ROW_HEIGHT) + 5))
+        start = min(max(0, total - count), max(0, int(position / self.TILE_ROW_HEIGHT) - 2))
+        end = min(total, start + count)
+        if self._tile_range == (start, end):
+            return
+        self._tile_range = start, end
+        self._tile_updating = True
+        try:
+            for row_index in set(self._tile_row_views) - set(range(start, end)):
+                self._tile_rows.remove(self._tile_row_views.pop(row_index))
+                for entry in entries[row_index * 2:row_index * 2 + 2]:
+                    self._retire_tile(entry.identity)
+            self._tile_top.style.height = start * self.TILE_ROW_HEIGHT
+            self._tile_bottom.style.height = (total - end) * self.TILE_ROW_HEIGHT
+            for offset, row_index in enumerate(range(start, end)):
+                if row_index in self._tile_row_views:
+                    continue
+                row = toga.Box(style=Pack(direction=ROW, height=self.TILE_ROW_HEIGHT))
+                for entry in entries[row_index * 2:row_index * 2 + 2]:
+                    row.add(self._tile_card(entry))
+                if len(row.children) == 1:
+                    row.add(toga.Box(style=Pack(flex=1)))
+                self._tile_row_views[row_index] = row
+                self._tile_rows.insert(offset, row)
+            self.highlight_selection()
+            from .keyboard import bind_browser
+            bind_browser(self)
+        finally:
+            self._tile_updating = False
+        epoch, serial = self.epoch, getattr(self, '_tile_scroll_serial', 0)
+        def restore():
+            if (not self.closed and self.mode == 'Tiles' and self.epoch == epoch
+                    and self._tile_range == (start, end)
+                    and getattr(self, '_tile_scroll_serial', 0) == serial):
+                # The total extent is unchanged. Avoid clamping to a stale
+                # native maximum while the recycled rows are being laid out.
+                self._tile_scroll._impl.set_position(0, int(position))
+        self._tile_restore = self._loop.call_soon(restore)
+
+    def _retire_tile(self, identity):
+        _, card, button, cancelled, task = self._tile_cards.pop(identity)
+        cancelled.set()
+        if task is not None:
+            task.cancel()
+        button.text = ''
+        for view in card.children[0].children:
+            if isinstance(view, toga.ImageView):
+                view.image = None
+        self.buttons.pop(identity, None)
+        self.entry_rows.pop(identity, None)
+
+    def _tile_card(self, entry):
+        preview = toga.ImageView(style=Pack(width=96, height=96)) if self.thumbnail and not entry.container else entry_icon(entry.container)
+        image_box = toga.Box(children=[preview], style=Pack(height=96, align_items='center', justify_content='center'))
+        button = toga.Button(entry.payload.get('display_name') or PurePosixPath(entry.label).name,
+            on_press=partial(self._select_pressed, entry), style=Pack(height=44))
+        list_button(button)
+        middle_filename(button)
+        card = toga.Box(children=[image_box, button], style=Pack(direction=COLUMN, flex=1, margin=4))
+        cancelled = Event()
+        task = None
+        cached = self.icons.get((entry.identity, entry.revision))
+        if cached and self.thumbnail and not entry.container:
+            preview.image = toga.Image(src=cached)
+        elif self.thumbnail and not entry.container:
+            browser, epoch = self, self.epoch
+            class Target:
+                @property
+                def image(self):
+                    return preview.image
+                @image.setter
+                def image(self, image):
+                    if (not cancelled.is_set() and not browser.closed and browser.epoch == epoch
+                            and entry.identity in browser._tile_cards):
+                        preview.image = image
+            task = self._loop.create_task(self._load_thumbnail(entry, Target(), epoch, cancelled))
+            self.tasks.add(task)
+            task.add_done_callback(self.tasks.discard)
+        self._tile_cards[entry.identity] = entry, card, button, cancelled, task
+        self.buttons[entry.identity] = button
+        self.entry_rows[entry.identity] = card
+        return card
 
     async def _select_pressed(self, entry, widget, **kwargs):
         with self.population_paused():
