@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
-from logisticsmobile.startup import STEPS, begin_startup, finish_startup
+from logisticsmobile.startup import STEPS, AndroidStartupCover, begin_startup, finish_startup
 from logisticsmobile.app import LogisticsMobile
 
 
@@ -17,7 +17,7 @@ class StartupProgressTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_native_running_callback_waits_for_ready_and_receives_app(self):
         running = AsyncMock()
-        screen = SimpleNamespace(view=object(), show_step=Mock(), hide_chrome=Mock(), progress=SimpleNamespace(value=0))
+        screen = SimpleNamespace(reveal_workspace=AsyncMock(), view=object(), show_step=Mock(), hide_chrome=Mock(), progress=SimpleNamespace(value=0))
         app = SimpleNamespace(loop=asyncio.get_running_loop(), on_running=running,
             _startup_steps=lambda: iter(STEPS), _startup_in_progress=True, resize_workspace=Mock())
         window = Mock()
@@ -37,7 +37,7 @@ class StartupProgressTests(unittest.IsolatedAsyncioTestCase):
             for index, name in enumerate(STEPS):
                 yield name
                 events.append(('work', index))
-        screen = SimpleNamespace(show_step=lambda index, name: events.append(('stage', index)),
+        screen = SimpleNamespace(reveal_workspace=AsyncMock(), show_step=lambda index, name: events.append(('stage', index)),
                                  progress=SimpleNamespace(value=0))
         app = SimpleNamespace(_startup_steps=steps, startup_screen=screen,
                               _startup_in_progress=True, resize_workspace=Mock())
@@ -57,7 +57,7 @@ class StartupProgressTests(unittest.IsolatedAsyncioTestCase):
         def steps():
             yield STEPS[0]
             raise OSError('private/path/account-name')
-        screen = SimpleNamespace(show_step=Mock(), progress=SimpleNamespace(value=0),
+        screen = SimpleNamespace(reveal_workspace=AsyncMock(), show_step=Mock(), progress=SimpleNamespace(value=0),
                                  failed=Mock(), view=object())
         app = SimpleNamespace(_startup_steps=steps, startup_screen=screen,
             _startup_in_progress=True, resize_workspace=Mock(),
@@ -75,10 +75,73 @@ class StartupProgressTests(unittest.IsolatedAsyncioTestCase):
         def steps():
             yield STEPS[0]
             raise asyncio.CancelledError
-        screen = SimpleNamespace(show_step=Mock(), progress=SimpleNamespace(value=0), failed=Mock())
+        screen = SimpleNamespace(reveal_workspace=AsyncMock(), show_step=Mock(), progress=SimpleNamespace(value=0), failed=Mock())
         app = SimpleNamespace(_startup_steps=steps, startup_screen=screen,
                               _startup_in_progress=True, resize_workspace=Mock())
         with self.assertRaises(asyncio.CancelledError):
             await finish_startup(app)
         screen.failed.assert_not_called()
         app.resize_workspace.assert_not_called()
+
+
+class StartupCoverTests(unittest.IsolatedAsyncioTestCase):
+    async def test_android_cover_waits_for_measured_reflow_and_clean_draw(self):
+        root, content = Mock(), Mock()
+        for native in (root, content):
+            native.getWidth.return_value = 0
+            native.getHeight.return_value = 800
+            native.isLayoutRequested.return_value = False
+        app = SimpleNamespace(navigation=SimpleNamespace(
+            _impl=SimpleNamespace(native=root, native_content=content), refresh=Mock()),
+            resize_workspace=Mock())
+        cover = object.__new__(AndroidStartupCover)
+        cover.app, cover.parent, cover.geometry = app, Mock(), None
+        cover.future = asyncio.get_running_loop().create_future()
+        cover.before_draw()
+        self.assertFalse(cover.future.done())
+        app.resize_workspace.assert_not_called()
+        root.getWidth.return_value = 900
+        content.getWidth.return_value = 820
+        root.isLayoutRequested.return_value = True
+        cover.before_draw()
+        self.assertFalse(cover.future.done())
+        root.isLayoutRequested.return_value = False
+        cover.before_draw()
+        app.resize_workspace.assert_called_once_with()
+        app.navigation.refresh.assert_called_once_with()
+        self.assertFalse(cover.future.done())
+        # A rail resize before the next draw must reflow again under the cover.
+        content.getWidth.return_value = 810
+        cover.before_draw()
+        self.assertEqual(app.resize_workspace.call_count, 2)
+        self.assertFalse(cover.future.done())
+        cover.before_draw()
+        self.assertTrue(cover.future.result())
+
+    async def test_startup_stays_cancellable_until_workspace_is_revealed(self):
+        ready = asyncio.Event()
+        async def reveal(app):
+            self.assertTrue(app._startup_in_progress)
+            self.assertTrue(app._startup_layout_ready)
+            await ready.wait()
+        screen = SimpleNamespace(show_step=Mock(), progress=SimpleNamespace(value=0),
+            reveal_workspace=reveal, cover=SimpleNamespace(dispose=Mock()))
+        app = SimpleNamespace(_startup_steps=lambda: iter(()), startup_screen=screen,
+            _startup_in_progress=True, resize_workspace=Mock())
+        task = asyncio.create_task(finish_startup(app))
+        await asyncio.sleep(0)
+        self.assertFalse(task.done())
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        screen.cover.dispose.assert_called_once_with()
+
+    async def test_reveal_removes_cover_when_native_measurement_fails(self):
+        from logisticsmobile.startup import StartupScreen
+        screen = object.__new__(StartupScreen)
+        cover = screen.cover = SimpleNamespace(ready=AsyncMock(side_effect=ValueError('layout')),
+                                                dispose=Mock())
+        with self.assertRaises(ValueError):
+            await screen.reveal_workspace(SimpleNamespace())
+        cover.dispose.assert_called_once_with()
+        self.assertIsNone(screen.cover)

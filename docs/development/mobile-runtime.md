@@ -175,6 +175,14 @@ phase. Its bar counts completed phases; it does not estimate time, bytes or remo
 requests. Status labels contain no document paths, filenames or credential names.
 Native title bars are hidden while loading and restored before installing the
 normal navigation host. The same window is reused for the ready workspace.
+On Android, a native snapshot of the final loading frame covers the attached
+workspace while navigation and content receive their real viewport measurements.
+A pre-draw listener waits for positive, unchanged content bounds and no pending
+layout, with a workspace reflow between measured passes, before removing the
+cover. It blocks taps and hides unfinished descendants from accessibility;
+readiness callbacks wait for the reveal. Cancellation and failures remove the
+snapshot and its listener. This handoff uses layout readiness rather than a
+fixed startup delay.
 
 Toga's `on_running` callback waits for successful initialization. Native probes
 and other startup consumers must begin UI interaction there, rather than directly

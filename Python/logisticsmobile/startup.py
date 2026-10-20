@@ -49,6 +49,19 @@ class StartupScreen:
             else:
                 self.bar.setNavigationBarHidden(not self.bar_visible, animated=False)
 
+    def cover_workspace(self, app):
+        if type(app._impl).__module__.startswith('toga_android.'):
+            self.cover = AndroidStartupCover(app, self.view)
+
+    async def reveal_workspace(self, app):
+        cover = getattr(self, 'cover', None)
+        if cover is not None:
+            try:
+                await cover.ready()
+            finally:
+                cover.dispose()
+                self.cover = None
+
     def show_step(self, index, name):
         self.status.text = name
         self.progress.value = index
@@ -68,10 +81,15 @@ async def finish_startup(app):
             # draining Python callbacks without presenting the updated screen.
             await asyncio.sleep(1 / 60)
         app.startup_screen.progress.value = len(STEPS)
-        app._startup_in_progress = False
+        app._startup_layout_ready = True
         app.resize_workspace()
+        await app.startup_screen.reveal_workspace(app)
+        app._startup_in_progress = False
         return True
     except asyncio.CancelledError:
+        cover = getattr(app.startup_screen, 'cover', None)
+        if cover is not None:
+            cover.dispose()
         raise
     except Exception:
         logging.getLogger(__name__).exception('Application startup failed')
@@ -79,6 +97,9 @@ async def finish_startup(app):
         app._startup_in_progress = True
         app.startup_screen.failed()
         app.main_window.content = app.startup_screen.view
+        cover = getattr(app.startup_screen, 'cover', None)
+        if cover is not None:
+            cover.dispose()
         app.main_window.on_lose_focus = None
         app.main_window.on_resize = None
         app.on_exit = lambda app: True
@@ -100,3 +121,79 @@ def begin_startup(app):
             if inspect.isawaitable(result):
                 await result
     app.on_running = when_ready
+
+
+class AndroidStartupCover:
+    """Keep the last loading frame above the live, measuring workspace."""
+    def __init__(self, app, view):
+        from android.graphics import Bitmap, Canvas
+        from android.widget import FrameLayout, ImageView
+        from android.view import ViewTreeObserver
+        from java import dynamic_proxy
+        self.app = app
+        self.parent = app.main_window._impl.container.native_parent
+        native = view._impl.native
+        self.bitmap = Bitmap.createBitmap(max(1, native.getWidth()), max(1, native.getHeight()),
+                                          Bitmap.Config.ARGB_8888)
+        native.draw(Canvas(self.bitmap))
+        self.image = ImageView(self.parent.getContext())
+        self.image.setImageBitmap(self.bitmap)
+        self.image.setScaleType(ImageView.ScaleType.FIT_XY)
+        self.image.setClickable(True)
+        self.image.setContentDescription('Opening your workspace…')
+        self.image.setImportantForAccessibility(1)
+        self.root = app.navigation._impl.native
+        self.accessibility = self.root.getImportantForAccessibility()
+        self.root.setImportantForAccessibility(4)  # Hide unfinished descendants.
+        self.parent.addView(self.image, FrameLayout.LayoutParams(-1, -1))
+        self.future = app.loop.create_future()
+        self.geometry = None
+        self.observer = None
+        cover = self
+
+        class Listener(dynamic_proxy(ViewTreeObserver.OnPreDrawListener)):
+            def onPreDraw(self):
+                try:
+                    cover.before_draw()
+                except Exception as error:
+                    if not cover.future.done():
+                        cover.future.set_exception(error)
+                return True
+
+        self.listener = Listener()
+
+    async def ready(self):
+        self.observer = self.parent.getViewTreeObserver()
+        self.observer.addOnPreDrawListener(self.listener)
+        self.parent.invalidate()
+        await self.future
+
+    def before_draw(self):
+        if self.future.done():
+            return
+        root = self.app.navigation._impl.native
+        content = self.app.navigation._impl.native_content
+        geometry = (root.getWidth(), root.getHeight(), content.getWidth(), content.getHeight())
+        if min(geometry) <= 0 or root.isLayoutRequested() or content.isLayoutRequested():
+            self.parent.invalidate()
+            return
+        if geometry != self.geometry:
+            self.geometry = geometry
+            # Android has now allocated the final rail/content viewport. Reflow
+            # against those measurements while the loading snapshot stays up.
+            self.app.resize_workspace()
+            self.app.navigation.refresh()
+            self.parent.invalidate()
+            return
+        self.future.set_result(True)
+
+    def dispose(self):
+        if self.observer is not None and self.observer.isAlive():
+            self.observer.removeOnPreDrawListener(self.listener)
+        self.root.setImportantForAccessibility(self.accessibility)
+        self.parent.removeView(self.image)
+        self.image.setImageDrawable(None)
+        # Let Android release the bitmap after its last display list is retired.
+        self.bitmap = None
+        if not self.future.done():
+            self.future.cancel()

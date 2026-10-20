@@ -200,6 +200,7 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         self.save_workspace(capture=False)
         yield STEPS[7]
         if hasattr(self, 'startup_screen'):
+            self.startup_screen.cover_workspace(self)
             self.startup_screen.restore_chrome(self)
         self.main_window.content = self.navigation
         self.main_window.show()
@@ -308,7 +309,8 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
             self.editor_view.session.view['markdown_mode'] = 'edit'
 
     def resize_workspace(self, widget=None, *args, **kwargs):
-        if getattr(self, '_startup_in_progress', False):
+        if (getattr(self, '_startup_in_progress', False)
+                and not getattr(self, '_startup_layout_ready', False)):
             return
         from .keyboard import fit_editors
         fit_editors(self)
