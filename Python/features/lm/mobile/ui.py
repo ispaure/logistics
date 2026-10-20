@@ -143,11 +143,8 @@ class ChatUI:
             self.chat_view = toga.Box(children=[self.chat_header, self.chat_setup_box, self.chat_workspace],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
             self.presentation.surface(self.chat_view, radius=0, background='chat_background', outlined=False)
+            self._chat_needs_initial_selection = True
             self.refresh_chats()
-            if self.chat_labels:
-                self.open_chat(next(iter(self.chat_labels.values())))
-            else:
-                self.new_chat()
             if error:
                 self.set_chat_status(error)
             self.chat_transcript.set_content('https://logistics.invalid/chat/', transcript_document(theme_css=self.presentation.css_variables()))
@@ -354,7 +351,27 @@ class ChatUI:
             self.set_chat_status(str(error))
 
     def refresh_chats(self):
-        records, warnings = self.chat_store.items()
+        try:
+            asyncio.get_running_loop()
+            asynchronous = True
+        except RuntimeError:
+            asynchronous = type(self._impl).__module__.startswith(('toga_iOS.', 'toga_android.'))
+        if not asynchronous:
+            self._publish_chat_inventory(*self.chat_store.summaries(), authoritative=True)
+            return
+        self._publish_chat_inventory(*self.chat_store.cached_summaries())
+        self._chat_inventory_again = True
+        task = getattr(self, '_chat_inventory_task', None)
+        if task is None or task.done():
+            async def refresh():
+                while self.active_host and self._chat_inventory_again:
+                    self._chat_inventory_again = False
+                    records, warnings = await asyncio.to_thread(self.chat_store.summaries)
+                    if self.active_host and not self._chat_inventory_again:
+                        self._publish_chat_inventory(records, warnings, authoritative=True)
+            self._chat_inventory_task = self.loop.create_task(refresh())
+
+    def _publish_chat_inventory(self, records, warnings, *, authoritative=False):
         self.chat_loading = True
         labels = {}
         for record in records:
@@ -390,6 +407,12 @@ class ChatUI:
             self.chat_conversation_buttons.append(button)
         if warnings:
             self.set_chat_status(f'{len(warnings)} conversation(s) could not be read; originals preserved.')
+        if authoritative and getattr(self, '_chat_needs_initial_selection', False):
+            self._chat_needs_initial_selection = False
+            if self.chat_labels:
+                self.open_chat(next(iter(self.chat_labels.values())))
+            else:
+                self.new_chat()
 
     def checkpoint_chat(self):
         if self.chat_current is None:
@@ -404,6 +427,7 @@ class ChatUI:
     def open_chat(self, key):
         if self.chat_busy or not self.checkpoint_chat():
             return
+        self._chat_needs_initial_selection = False
         try:
             self.chat_current = self.chat_store.load(key)
             self.chat_loading = True
@@ -423,6 +447,7 @@ class ChatUI:
     def new_chat(self, widget=None, **kwargs):
         if self.chat_busy or not self.checkpoint_chat():
             return
+        self._chat_needs_initial_selection = False
         try:
             self.chat_current = self.chat_store.new(self.chat_profile['settings'])
             self.chat_loading = True

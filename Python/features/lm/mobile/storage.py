@@ -29,6 +29,8 @@ class ChatStore:
         self._generation = {}
         self._sequence = {}
         self._published = {}
+        self._summaries = {}
+        self._summary_lock = RLock()
 
     def queue_save(self, data, loop, *, failed=None):
         """Queue only conversation state; the UI's API key never enters this store."""
@@ -129,6 +131,46 @@ class ChatStore:
                 warnings.append(str(error))
         return sorted(records, key=lambda d: d['updated'], reverse=True), warnings
 
+    def cached_summaries(self):
+        with self._summary_lock:
+            rows = [dict(value[1]) for value in self._summaries.values()]
+        return sorted(rows, key=lambda row: row['updated'], reverse=True), []
+
+    def _remember_summary(self, data, path):
+        info = path.stat()
+        revision = info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+        summary = {field: data[field] for field in ('id', 'title', 'updated')}
+        with self._summary_lock:
+            self._summaries[data['id']] = revision, summary
+
+    def summaries(self):
+        rows, warnings, retained = [], [], set()
+        for candidate in sorted(self.root.glob('*.json')):
+            if candidate.name == 'profile.json':
+                continue
+            try:
+                path = self.path(candidate.stem)
+                info = path.stat()
+                revision = info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+                with self._summary_lock:
+                    cached = self._summaries.get(path.stem)
+                if cached is None or cached[0] != revision:
+                    data = self.validate(json.loads(self._bytes(path)))
+                    if data['id'] != path.stem:
+                        raise ValueError('Conversation identity mismatch.')
+                    self._remember_summary(data, path)
+                    summary = {field: data[field] for field in ('id', 'title', 'updated')}
+                else:
+                    summary = dict(cached[1])
+                rows.append(summary)
+                retained.add(path.stem)
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                warnings.append(str(error))
+        with self._summary_lock:
+            for key in set(self._summaries) - retained:
+                self._summaries.pop(key, None)
+        return sorted(rows, key=lambda row: row['updated'], reverse=True), warnings
+
     def new(self, settings=None):
         data = conversation(settings or DEFAULT_SETTINGS, profile_id='mobile')
         self.save(data)
@@ -164,6 +206,7 @@ class ChatStore:
                 raise OSError('Conversation changed while saving; current copy was preserved.')
         atomic_write_bytes(path, encoded, validate=check)
         data.update(revision=saved['revision'], updated=saved['updated'])
+        self._remember_summary(saved, path)
 
     def profile(self):
         path = self.root / 'profile.json'

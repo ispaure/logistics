@@ -105,7 +105,13 @@ callbacks and omission of operation return values from reports.
     invoke one seal. Twenty-seven credential-list/private checks pass, including
     plaintext sentinels and cancellation on forget/replacement. Crypto primitives
     are unchanged; these lifecycle tests use the existing opaque bridge fixture.
-12. Conversation summary inventory — pending.
+12. Conversation summary inventory — implemented: memory-only ID/title/updated
+    summaries, revision-aware worker scans and cached UI publication. Cold first
+    visits wait for inventory before selecting an existing conversation; explicit
+    user selection cancels automatic initial selection. Twenty-five chat/storage/
+    UI checks pass. For 500 synthetic conversations, full reads took 50.8 ms,
+    warm scans 7.36 ms and cached UI reads 0.092 ms. Summaries contain no drafts,
+    message bodies or API keys and add no persistent index.
 13. Recycled conversation rows — pending.
 14. Recycled library-folder rows — pending.
 15. Visible-only browser thumbnail decoding — pending.
