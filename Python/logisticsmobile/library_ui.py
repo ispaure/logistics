@@ -178,9 +178,26 @@ class LibraryCatalog:
 
 
     def refresh_library(self, widget=None, **kwargs):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            self._publish_library_inventory(*self.library_store.items())
+            return
+        self._publish_library_inventory(*self.library_store.cached_items())
+        self._library_refresh_again = True
+        task = getattr(self, '_library_inventory_task', None)
+        if task is None or task.done():
+            async def refresh():
+                while self.active_host and self._library_refresh_again:
+                    self._library_refresh_again = False
+                    records, failures = await asyncio.to_thread(self.library_store.items)
+                    if self.active_host and not self._library_refresh_again:
+                        self._publish_library_inventory(records, failures)
+            self._library_inventory_task = self.loop.create_task(refresh())
+
+    def _publish_library_inventory(self, records, failures):
         previous = self.book_loading
         self.book_loading = True
-        records, failures = self.library_store.items()
         self.imported_records = records
         if hasattr(self, 'library_rows'):
             self.refresh_imported_metadata(records)

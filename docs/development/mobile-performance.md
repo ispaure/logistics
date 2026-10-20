@@ -69,7 +69,13 @@ callbacks and omission of operation return values from reports.
    scan is addressed by point 10. The old Home loading test expects an embedded
    banner and fails with both inventory implementations; point 26 will align it
    with the already implemented separate loading panel.
-7. Cached asynchronous library inventory — pending.
+7. Cached asynchronous library inventory — implemented: background live scans,
+   immediate copied metadata snapshots and an 8 MiB serialized-record cache keyed
+   by filesystem revision. Journal recovery still precedes authoritative reads;
+   corruption/deletion invalidate cached entries. Twenty-two inventory/catalog/
+   reader/navigation checks pass. For 1,000 records, cached UI reads took 3.08 ms;
+   warm worker scans 41.5 ms versus the audit's uncached 65.2 ms. Native device
+   timing remains pending. No cache file or decrypted reader payload is added.
 8. Coalesced library discovery — pending.
 9. Background Workspaces discovery — pending.
 10. Lazy startup screens and document loading — pending.

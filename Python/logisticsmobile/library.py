@@ -1,6 +1,8 @@
 """Private, bounded EPUB/CBZ imports and conflict-aware reading progress."""
 from hashlib import sha256
 from collections import OrderedDict
+from copy import deepcopy
+from threading import RLock
 from commonUtils.runtime.archive_source import LocalArchiveSource
 from commonUtils.runtime.streams import iter_chunks, file_sha256
 import json
@@ -28,6 +30,10 @@ class LibraryStore(LibraryEdits):
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.verified = OrderedDict()
         self.archive_client = archive_client
+        self._record_cache = OrderedDict()
+        self._record_cache_bytes = 0
+        self._record_lock = RLock()
+        self._record_io_lock = RLock()
 
     def path(self, key, suffix):
         if (not isinstance(key, str) or len(key) != 32 or any(c not in '0123456789abcdef' for c in key)
@@ -43,11 +49,36 @@ class LibraryStore(LibraryEdits):
         return self._read_record(key)
 
     def _read_record(self, key):
-        with self.path(key, '.json').open('rb') as stream:
-            data = stream.read(MAX_RECORD + 1)
-        if len(data) > MAX_RECORD:
-            raise ValueError('Library record is too large; it was preserved.')
-        return self.decode_record(key, data), data
+        with self._record_io_lock:
+            path = self.path(key, '.json')
+            info = path.stat()
+            revision = info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+            with self._record_lock:
+                cached = self._record_cache.get(key)
+                if cached is not None and cached[0] == revision:
+                    self._record_cache.move_to_end(key)
+                    return deepcopy(cached[1]), cached[2]
+            with path.open('rb') as stream:
+                data = stream.read(MAX_RECORD + 1)
+            if len(data) > MAX_RECORD:
+                raise ValueError('Library record is too large; it was preserved.')
+            record = self.decode_record(key, data)
+            with self._record_lock:
+                previous = self._record_cache.pop(key, None)
+                if previous is not None:
+                    self._record_cache_bytes -= len(previous[2])
+                self._record_cache[key] = revision, deepcopy(record), data
+                self._record_cache_bytes += len(data)
+                while self._record_cache_bytes > 8 * 1024 * 1024:
+                    _, removed = self._record_cache.popitem(last=False)
+                    self._record_cache_bytes -= len(removed[2])
+            return record, data
+
+    def cached_items(self):
+        """An in-memory inventory only; authoritative refreshes check revisions."""
+        with self._record_lock:
+            records = [deepcopy(value[1]) for value in self._record_cache.values()]
+        return sorted(records, key=lambda record: record['name'].casefold()), []
 
     @staticmethod
     def decode_record(key, data):
@@ -83,6 +114,11 @@ class LibraryStore(LibraryEdits):
                 records.append(self.read_record(path.stem)[0])
             except (OSError, ValueError, KeyError, TypeError) as error:
                 failures.append((path.name, str(error)))
+        retained = {record['id'] for record in records}
+        with self._record_lock:
+            for key in set(self._record_cache) - retained:
+                removed = self._record_cache.pop(key)
+                self._record_cache_bytes -= len(removed[2])
         return sorted(records, key=lambda r: r['name'].casefold()), failures
 
     def stored_files(self):
@@ -116,6 +152,10 @@ class LibraryStore(LibraryEdits):
             for path in (*paths, journal):
                 path.unlink(missing_ok=True)
             self.verified.clear()
+            with self._record_lock:
+                previous = self._record_cache.pop(key, None)
+                if previous is not None:
+                    self._record_cache_bytes -= len(previous[2])
 
     @staticmethod
     def validate_archive(path, kind='epub'):
