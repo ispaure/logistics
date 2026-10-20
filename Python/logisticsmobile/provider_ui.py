@@ -792,6 +792,7 @@ class ProviderUI(FilesUI):
         self.resume_crypt()
 
     def clear_private_preview(self):
+        self._private_preview_token = None
         footer = getattr(self, 'crypt_markdown_footer', None)
         mode = getattr(self, 'crypt_edit_mode', None)
         if footer is not None and mode is not None and mode not in footer.children:
@@ -879,22 +880,43 @@ class ProviderUI(FilesUI):
         preview = getattr(self, 'crypt_preview', None)
         if preview is None or preview not in self.crypt_content.children:
             return
+        self.schedule_private_preview(delay=.25)
+
+    def schedule_private_preview(self, *, delay=0):
         pending = getattr(self, '_private_preview_pending', None)
         if pending is not None:
             pending.cancel()
-        reader = self.crypt_reader
-        def render():
-            self._private_preview_pending = None
-            if self.crypt_reader is not reader or reader is None:
-                return
-            from .preview import markdown_preview, reader_image_source
+        token = object()
+        self._private_preview_token = token
+        reader, store = self.crypt_reader, self._crypt_reader_store
+        preview, text = self.crypt_preview, self.crypt_text.value
+        size = int(self.preferences.values['markdown_font_size'])
+        client = getattr(self, 'credential_client', None)
+        generation = getattr(client, 'generation', None)
+        async def render():
             try:
-                preview.set_content('https://logistics.invalid/live/',
-                    markdown_preview(widget.value, int(self.preferences.values['markdown_font_size']),
-                        image_source=reader_image_source(self._crypt_reader_store, reader)))
-            except ValueError as error:
-                self.crypt_title.text = private_label(str(error))
-        self._private_preview_pending = self.loop.call_later(.25, render)
+                if delay:
+                    await asyncio.sleep(delay)
+                from .preview import markdown_preview, reader_image_source
+                content = await asyncio.to_thread(markdown_preview, text, size,
+                    image_source=reader_image_source(store, reader))
+                if (getattr(self, '_private_preview_token', None) is not token
+                        or self.crypt_reader is not reader or self.crypt_text.value != text
+                        or preview not in self.crypt_content.children
+                        or getattr(client, 'generation', None) != generation
+                        or (client is not None and getattr(self.app, 'cloud_client', None) is not client)):
+                    return
+                preview.set_content('https://logistics.invalid/live/', content)
+            except (ValueError, OSError) as error:
+                if getattr(self, '_private_preview_token', None) is token:
+                    self.crypt_title.text = private_label(str(error))
+            finally:
+                if getattr(self, '_private_preview_token', None) is token:
+                    self._private_preview_pending = None
+        if self.loop.is_running():
+            self._private_preview_pending = self.loop.create_task(render())
+        else:
+            self.loop.run_until_complete(render())
 
     def toggle_private_preview(self, widget=None, *, initial=False, rendered=None, **kwargs):
         if (not initial and self.cloud_busy and not getattr(self, 'transfer_busy', False)) or self.crypt_reader is None or not self.crypt_reader.editable:
@@ -906,15 +928,8 @@ class ProviderUI(FilesUI):
             if not getattr(self.crypt_reader, 'read_only', False):
                 self.show_private_markdown_editor()
             return
-        from .preview import markdown_preview, reader_image_source
         from uuid import uuid4
-        try:
-            content = rendered if rendered is not None else markdown_preview(
-                self.crypt_text.value, int(self.preferences.values['markdown_font_size']),
-                image_source=reader_image_source(self._crypt_reader_store, self.crypt_reader))
-        except ValueError as error:
-            self.crypt_title.text = private_label(str(error))
-            return
+        content = rendered if rendered is not None else '<p>Loading preview…</p>'
         if preview is None:
             self.crypt_preview = preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
                                                        style=Pack(flex=1))
@@ -941,6 +956,8 @@ class ProviderUI(FilesUI):
         apply_icon(self.crypt_preview_button, 'view' if getattr(self.crypt_reader, 'read_only', False) else 'edit',
             'View source text' if getattr(self.crypt_reader, 'read_only', False) else 'Edit Markdown')
         self.refresh_private_text_controls()
+        if rendered is None:
+            self.schedule_private_preview()
 
     def private_edit_mode_changed(self, widget=None, **kwargs):
         if getattr(self, 'crypt_reader', None) is None:

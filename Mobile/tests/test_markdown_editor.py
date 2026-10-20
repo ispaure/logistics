@@ -59,6 +59,30 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertIs(owner.preview_edit.parent, owner.preview_toolbar)
         self.assertIs(owner.preview_box._workspace_menu_button.parent, owner.preview_toolbar)
 
+    def test_provider_preview_conversion_runs_in_worker(self):
+        import threading
+        from unittest.mock import patch
+        from commonUtils.runtime.local_files import LocalFiles
+        from features.text_editor.resources import LocalTextCopies
+        from logisticsmobile.preview import markdown_preview
+        root = Path(self.temporary.name) / 'worker-preview'
+        root.mkdir()
+        (root / 'Note.md').write_text('# Private worker sentinel')
+        run = self.app.loop.run_until_complete
+        run(self.app.open_crypt(copies=LocalTextCopies(LocalFiles(root)), key='Note.md'))
+        owner = self.app.private_sessions.active
+        owner.toggle_private_preview()  # Edit.
+        threads = []
+        def render(*args, **kwargs):
+            threads.append(threading.get_ident())
+            return markdown_preview(*args, **kwargs)
+        with patch('logisticsmobile.preview.markdown_preview', side_effect=render):
+            owner.toggle_private_preview()
+        self.assertTrue(threads)
+        self.assertNotIn(threading.get_ident(), threads)
+        owner.clear_private_preview()
+        self.assertIsNone(owner._private_preview_token)
+
     def test_provider_markdown_uses_one_toolbar_and_no_clean_save(self):
         from commonUtils.runtime.local_files import LocalFiles
         from features.text_editor.resources import LocalTextCopies

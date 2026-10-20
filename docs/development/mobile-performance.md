@@ -147,7 +147,11 @@ callbacks and omission of operation return values from reports.
     per-load nonces reject stale updates; cumulative payloads tolerate coalesced
     navigation. Twelve Markdown checks pass, including Unicode/CRLF preservation,
     undo, invalid indexes, out-of-order messages and disposal. Source stays in RAM.
-18. Background provider Markdown previews — pending.
+18. Background provider Markdown previews — implemented: delayed edits and
+    preview toggles render Markdown/sibling images in workers. Per-render tokens,
+    exact text, reader identity and credential generation gate publication; clearing
+    previews retires tokens and tasks. Twenty-six Markdown/private-session checks
+    pass, including proof that conversion runs off the UI thread. No disk cache.
 19. Background EPUB text indexes — pending.
 20. Cached EPUB DOM text indexes — pending.
 21. Present pages before progress persistence — pending.
