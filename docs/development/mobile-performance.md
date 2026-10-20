@@ -54,7 +54,12 @@ callbacks and omission of operation return values from reports.
    including switching conversations during a blocked worker. With tracing,
    synthetic large-reply loop delay fell from 840.5 ms to 17.1 ms (elapsed parsing
    850.4 versus 832.3 ms). No content is logged or cached on disk.
-5. Incremental streaming DOM updates — pending.
+5. Incremental streaming DOM updates — implemented: reconcile sanitized top-level
+   blocks while retaining unchanged nodes, the message container and Copy button.
+   Seven presentation/browser checks pass in headless Chrome with all network
+   requests blocked. Stable paragraph selection survives partial/final code-fence
+   updates, final markup matches the complete renderer, and at most three blocks
+   are removed across the two updates. Native WebView/device timing remains open.
 6. Lightweight asynchronous document inventory — pending.
 7. Cached asynchronous library inventory — pending.
 8. Coalesced library discovery — pending.

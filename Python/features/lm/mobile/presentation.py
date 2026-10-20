@@ -96,11 +96,27 @@ data.entries.forEach((entry, offset) => {
  let article = root.children[index];
  if (!article) { article = document.createElement('article'); root.append(article); }
  article.className = entry.role;
- const label = document.createElement('div'); label.className = entry.label.includes(' · ') ? 'role' : 'role complete'; label.textContent = entry.label;
- const content = document.createElement('div'); content.innerHTML = entry.html;
- article.replaceChildren(label, content);
- if (entry.role === 'assistant' && entry.text) {
+ if (!article.chatContent) {
+  article.chatLabel = document.createElement('div');
+  article.chatContent = document.createElement('div');
+  article.append(article.chatLabel, article.chatContent);
+ }
+ const label = article.chatLabel, content = article.chatContent;
+ label.className = entry.label.includes(' · ') ? 'role' : 'role complete';
+ if (label.textContent !== entry.label) label.textContent = entry.label;
+ // Reconcile sanitized top-level blocks. Stable paragraphs/code blocks keep
+ // their DOM identity, selection and layout while the unfinished tail changes.
+ const template = document.createElement('template'); template.innerHTML = entry.html;
+ const next = Array.from(template.content.childNodes);
+ next.forEach((node, position) => {
+  const old = content.childNodes[position];
+  if (!old) content.append(node);
+  else if (!old.isEqualNode(node)) old.replaceWith(node);
+ });
+ while (content.childNodes.length > next.length) content.lastChild.remove();
+ if (entry.role === 'assistant' && entry.text && !article.chatCopy) {
   const copy = document.createElement('button'); copy.className = 'copy'; copy.textContent = 'Copy';
+  article.chatCopy = copy;
   copy.setAttribute('aria-label', 'Copy assistant message');
   copy.onclick = () => {
    const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(content);
