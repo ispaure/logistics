@@ -34,6 +34,7 @@ async def exercise_mirrors(app, comic_key):
             (local / 'Local note.txt').write_text('Unrelated local file')
             cancel = app.transfer_controller()._transfer_cancel
             app.show_locations()
+            assert await app.refresh_folder_hub()
             assert 'Browse during pull' in app.folder_picker_choices
             assert 'Fixture' in app.folder_picker_choices
             app.choose_folder('Fixture')
@@ -47,7 +48,8 @@ async def exercise_mirrors(app, comic_key):
             assert await app.browser_file_location(('Local files', 'Browse during pull'))
             assert any(item.label == 'Local note.txt' for item in app.file_browser.entries)
             await app.parent_file_folder()
-            assert app.file_path == ''
+            assert app.file_path == 'Browse during pull'
+            assert not app.routes.screens['files']
             assert app.cloud_busy and app.transfer_busy and app.transfer_controller()._transfer_cancel is cancel
             assert not cancel.is_set()
             import base64
@@ -88,7 +90,7 @@ async def exercise_mirrors(app, comic_key):
             # Close the synthetic draft to keep later crypt fixtures isolated.
             assert app.private_sessions.close(local_editor.session.id, discard=True)
             assert app.transfer_controller()._transfer_cancel is cancel
-            app.show_documents()
+            app.show_documents(destination='documents')
             app.editor.value = 'Ordinary draft during a native pull\n'
             assert app.checkpoint()
             await app.open_book(comic_key)
@@ -181,6 +183,7 @@ async def exercise_crypt_mirror(app, fixture):
     assert app.clear_private_reader(discard=True)
     async def files_route():
         app.show_locations()
+        assert await app.refresh_folder_hub()
         entry = next(entry for entry in app.folder_picker_choices.values()
                      if entry['source'] == 'LocalCrypt' and entry.get('remote') == remote)
         app.show_picker_folder(entry)
@@ -192,7 +195,7 @@ async def exercise_crypt_mirror(app, fixture):
         await app.read_managed_file()
 
     async def documents_route():
-        app.show_documents()
+        app.show_documents(destination='documents')
         drawer = app.adaptive.browser('documents')
         label = 'LocalCrypt: ' + remote + ' (pulled)'
         assert await drawer.show_main_browser(label, folder='mobile-mirror-fixture'), drawer.status.text
