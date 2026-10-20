@@ -3,6 +3,7 @@ import contextlib
 import os
 import sys
 import threading
+import time
 import traceback
 
 from .web_checks import wait_for_text
@@ -27,6 +28,8 @@ def chat_watchdog():
             # test process after retaining three snapshots rather than spending
             # the entire host timeout on an unresponsive application.
             print('LOGISTICS_NATIVE_TIMEOUT=chat', flush=True)
+            print('>>>>>>>>>> EXIT 1 <<<<<<<<<<', flush=True)
+            time.sleep(.25)
             os._exit(1)
 
     threading.Thread(target=diagnose, name='native-chat-watchdog', daemon=True).start()
