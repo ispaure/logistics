@@ -51,6 +51,28 @@ class EpubUXTests(unittest.TestCase):
                 panel.dispose()
         asyncio.run(exercise())
 
+    def test_prepared_private_chapter_reuses_worker_index(self):
+        from features.books.mobile.content import indexed_chapter
+        import threading
+        with TemporaryDirectory() as directory:
+            epub, _ = make_books(Path(directory))
+            book = EPUBBook(epub)
+            async def prepare():
+                from features.books.locations import ChapterText
+                threads = []
+                def index(content):
+                    threads.append(threading.get_ident())
+                    return ChapterText(content)
+                with patch('features.books.locations.ChapterText', side_effect=index):
+                    result = await asyncio.to_thread(indexed_chapter, book, 0, links=True)
+                self.assertNotIn(threading.get_ident(), threads)
+                return result
+            prepared = asyncio.run(prepare())
+            with patch('features.books.mobile.text_reader.ChapterText', side_effect=AssertionError('UI indexing')):
+                panel = TextBookView(book, 0, prepared=prepared, on_chapter=Mock(), on_position=Mock())
+            self.assertIs(panel.chapter, prepared[1])
+            panel.dispose()
+
     def test_private_tools_preserve_passage_and_search_feedback(self):
         class MemoryWebView(toga.WebView):
             def clear_private_content(self):

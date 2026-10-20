@@ -11,10 +11,10 @@ from .navigation import ChapterTools
 
 class TextBookView(toga.Box):
     """Exact passage anchors, nested contents and search without browser storage."""
-    def __init__(self, book, index, *, offset=0, font_size=16, on_chapter, on_position):
+    def __init__(self, book, index, *, offset=0, font_size=16, prepared=None, on_chapter, on_position):
         self.book, self.index = book, index
         self.on_chapter, self.on_position = on_chapter, on_position
-        self.chapter = ChapterText(chapter_html(book, index, links=True))
+        self.chapter = prepared[1] if prepared is not None else ChapterText(chapter_html(book, index, links=True))
         self.units = array('I', [0])
         for char in self.chapter.text:
             self.units.append(self.units[-1] + utf16_length(char))

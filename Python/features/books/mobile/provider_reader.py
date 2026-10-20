@@ -11,12 +11,15 @@ from .navigation import ChapterList
 
 
 class RichBookView(toga.Box):
-    def __init__(self, book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, on_chapter, on_position):
+    def __init__(self, book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, prepared=None, on_chapter, on_position):
         self.book, self.index, self.offset = book, index, offset
         self.on_chapter, self.on_position = on_chapter, on_position
         self.disposed, self.loading = False, True
-        content = chapter_html(book, index, font_size, margin=margin, theme=theme, links=True, **(typography or {}))
-        self.chapter = ChapterText(content)
+        if prepared is None:
+            content = chapter_html(book, index, font_size, margin=margin, theme=theme, links=True, **(typography or {}))
+            self.chapter = ChapterText(content)
+        else:
+            content, self.chapter = prepared
         self.offset = min(max(0, offset), self.chapter.length)
         self.choices = {f'{n+1}. ' + '  '*entry.depth + entry.label: entry
                         for n, entry in enumerate(contents(book))}
@@ -164,9 +167,9 @@ class RichBookView(toga.Box):
             del self.speech_panel
 
 
-def provider_view(book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, on_chapter, on_position):
+def provider_view(book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, prepared=None, on_chapter, on_position):
     if private_webview_supported():
-        return RichBookView(book, index, offset=offset, font_size=font_size, margin=margin, theme=theme, typography=typography,
+        return RichBookView(book, index, offset=offset, font_size=font_size, margin=margin, theme=theme, typography=typography, prepared=prepared,
             on_chapter=on_chapter, on_position=on_position)
-    return TextBookView(book, index, offset=offset, font_size=font_size,
+    return TextBookView(book, index, offset=offset, font_size=font_size, prepared=prepared,
         on_chapter=on_chapter, on_position=on_position)

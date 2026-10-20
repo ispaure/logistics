@@ -7,8 +7,8 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 
 from .library import LibraryStore
-from features.books.mobile.content import chapter_html
-from features.books.locations import ChapterText, contents, link_destination
+from features.books.mobile.content import indexed_chapter
+from features.books.locations import contents, link_destination
 from features.books.mobile.presentation import chapter_view
 from features.books.mobile.typography import options as typography_options
 from features.comics.mobile.presentation import page_view, SpreadView
@@ -255,12 +255,11 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if not 0 <= index < count:
             return
         if record['kind'] == 'epub':
-            content = await asyncio.to_thread(chapter_html, reader, index,
+            content, chapter_text = await asyncio.to_thread(indexed_chapter, reader, index,
                 int(self.preferences.values['epub_font_size']), margin=int(self.preferences.values['reading_margin']),
                 theme=self.preferences.values['reading_theme'], links=True, **typography_options(self.preferences.values))
             if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
                 return
-            chapter_text = ChapterText(content)
             target = getattr(self, '_epub_target', None)
             self._epub_target = None
             saved = record.get('location', {})

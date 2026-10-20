@@ -105,3 +105,10 @@ def chapter_text(book, index):
     parser = Text()
     parser.feed(chapter_html(book, index))
     return ''.join(parser.parts)
+
+
+def indexed_chapter(book, index, font_size=16, **options):
+    """Prepare inert HTML and its UTF-16 text index together in a worker."""
+    from features.books.locations import ChapterText
+    content = chapter_html(book, index, font_size, **options)
+    return content, ChapterText(content)

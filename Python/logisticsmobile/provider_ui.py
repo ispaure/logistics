@@ -443,10 +443,8 @@ class ProviderUI(FilesUI):
             controller._provider_epub_target = None
             offset = locations.get(book.spine[index], 0)
             if target is not None:
-                from features.books.locations import ChapterText
-                from features.books.mobile.content import chapter_html
-                offset = ChapterText(chapter_html(book, index)).anchors.get(target, 0) if isinstance(target, str) else target
-            view.provider_epub_view = provider_view(book, index, offset=offset,
+                offset = content[1].anchors.get(target, 0) if isinstance(target, str) else target
+            view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
                 font_size=int(self.preferences.values['epub_font_size']),
                 margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
                 on_chapter=controller.open_provider_epub_chapter,
@@ -1049,6 +1047,14 @@ class ProviderUI(FilesUI):
 
 
     def provider_page_content(self, reader, index):
+        if reader.book is not None:
+            from features.books.mobile.content import indexed_chapter
+            from features.books.mobile.typography import options
+            return 'epub', indexed_chapter(reader.book, index,
+                int(self.preferences.values['epub_font_size']),
+                margin=int(self.preferences.values['reading_margin']),
+                theme=self.preferences.values['reading_theme'], links=True,
+                **options(self.preferences.values))
         if reader.kind == '.pdf' or reader.book is not None or reader.editable or getattr(reader, 'image_document', False):
             return reader.page(index)
         from features.comics.mobile.navigation import provider_navigation

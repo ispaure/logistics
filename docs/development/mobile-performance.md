@@ -152,7 +152,11 @@ callbacks and omission of operation return values from reports.
     exact text, reader identity and credential generation gate publication; clearing
     previews retires tokens and tasks. Twenty-six Markdown/private-session checks
     pass, including proof that conversion runs off the UI thread. No disk cache.
-19. Background EPUB text indexes — pending.
+19. Background EPUB text indexes — implemented: imported and provider workers
+    prepare inert chapter HTML and UTF-16 indexes together. Private rich/text
+    surfaces consume the prepared index; fragment lookup reuses it. Thirty-two
+    reader/session checks pass, including worker-thread indexing and no repeat
+    indexing during native text-surface construction. No persistent chapter cache.
 20. Cached EPUB DOM text indexes — pending.
 21. Present pages before progress persistence — pending.
 22. Batched EPUB position updates — pending.
