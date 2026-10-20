@@ -9,6 +9,26 @@ from features.text_editor.mobile.markdown_editor import editor_blocks, editor_ht
 
 
 class MarkdownEditorTests(unittest.TestCase):
+    def test_ios_retirement_clears_live_document_before_replacement_navigation(self):
+        from types import SimpleNamespace
+        from features.text_editor.mobile.markdown_editor import retire_webview
+        events = []
+        native = SimpleNamespace(stopLoading=lambda: events.append('stop'),
+            evaluateJavaScript=lambda script, **kwargs: events.append(('clear', script)),
+            navigationDelegate=object(), UIDelegate=object())
+        backend = type('IOSWebView', (), {'__module__': 'toga_iOS.widgets.webview'})()
+        backend.native = native
+        view = SimpleNamespace(_impl=backend,
+            set_content=lambda url, content: events.append(('navigate', url, content)))
+        retire_webview(view)
+        self.assertEqual(events[0], 'stop')
+        self.assertEqual(events[1][0], 'clear')
+        self.assertIn('document.open()', events[1][1])
+        self.assertIn('Document closed.', events[1][1])
+        self.assertEqual(events[2][0], 'navigate')
+        self.assertIsNone(native.navigationDelegate)
+        self.assertIsNone(native.UIDelegate)
+
     def setUp(self):
         self.temporary = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.temporary.name)

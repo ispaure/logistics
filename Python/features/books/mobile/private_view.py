@@ -76,9 +76,12 @@ class PrivateWebView(toga.WebView):
         native = self._impl.native
         native.stopLoading()
         if self.factory.WebView.__module__.startswith('toga_iOS.'):
-            native.loadHTMLString('', baseURL=None)
             native.navigationDelegate = None
             native.UIDelegate = None
+            # A hidden WKWebView may defer the blank navigation. Remove its
+            # live document first, independently of the next rendered page.
+            native.evaluateJavaScript('document.open();document.write("");document.close();', completionHandler=None)
+            native.loadHTMLString('', baseURL=None)
         else:
             native.loadData('', 'text/html', 'utf-8')
             native.clearHistory()

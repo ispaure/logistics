@@ -70,12 +70,18 @@ async def exercise_obsidian(app, encrypted):
         # visible Notes Library so the rendered cleanup proof can complete.
         owner.present()
         await asyncio.sleep(.2)
+        # Compact navigation retires a hidden article too. Its live DOM must
+        # clear even when WKWebView defers an offscreen replacement load.
+        owner.sidebar.show_sidebar()
         owner.dispose()
         assert owner.path is None and not owner.rows.children
         if hasattr(owner.web, 'private_closed'):
             # Android deliberately destroys a private WebView; evaluating JS on
             # a destroyed view cannot produce a callback.
             assert owner.web.private_closed
+            if owner.web.factory.WebView.__module__.startswith('toga_iOS.'):
+                from .web_checks import wait_for_text
+                await wait_for_text(owner.web, '', absent='Nested Markdown note')
         else:
             from .web_checks import wait_for_text
             await wait_for_text(owner.web, 'Document closed.', absent='Nested Markdown note')

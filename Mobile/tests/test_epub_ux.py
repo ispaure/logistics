@@ -16,6 +16,28 @@ from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class EpubUXTests(unittest.TestCase):
+    def test_private_ios_retirement_clears_live_dom_before_blank_load(self):
+        from types import SimpleNamespace
+        from features.books.mobile.private_view import PrivateWebView
+        events = []
+        native = SimpleNamespace(stopLoading=lambda: events.append('stop'),
+            evaluateJavaScript=lambda script, **kwargs: events.append(('clear', script)),
+            loadHTMLString=lambda content, **kwargs: events.append(('blank', content)),
+            navigationDelegate=object(), UIDelegate=object())
+        view = SimpleNamespace(private_closed=False, _impl=SimpleNamespace(native=native),
+            factory=SimpleNamespace(WebView=type('IOSWebView', (), {'__module__': 'toga_iOS.widgets.webview'})))
+        PrivateWebView.clear_private_content(view)
+        self.assertTrue(view.private_closed)
+        self.assertEqual(events[0], 'stop')
+        self.assertEqual(events[1][0], 'clear')
+        self.assertIn('document.open()', events[1][1])
+        self.assertEqual(events[2], ('blank', ''))
+        self.assertIsNone(native.navigationDelegate)
+        self.assertIsNone(native.UIDelegate)
+        count = len(events)
+        PrivateWebView.clear_private_content(view)
+        self.assertEqual(len(events), count)
+
     def test_stop_then_play_queries_visible_page_and_keeps_selection_bounds(self):
         import json
         from types import SimpleNamespace

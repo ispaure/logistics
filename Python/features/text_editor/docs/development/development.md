@@ -251,3 +251,9 @@ adapter, such as the mobile host's byte-counting stream. It delegates the same
 path, revision checks and cancellation to `ResourceTextSession`; the original
 provider remains responsible for later saves. The feature does not import the
 host's progress presentation.
+
+On iOS, retiring a Markdown WebView disables its native callbacks and queues a
+replacement of the live DOM before navigating to the closed-document page.
+WKWebView may defer navigation while a compact sidebar hides the article; the
+old note must already be cleared independently of that navigation. Native Notes
+Library checks retire a hidden article and verify that its previous text is gone.
