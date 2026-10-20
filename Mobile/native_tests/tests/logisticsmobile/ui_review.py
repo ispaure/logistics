@@ -194,6 +194,7 @@ async def exercise_ui_review(app):
                 break
             await asyncio.sleep(.05)
         assert app.native_host.state.destination == 'files'
+        assert await app.refresh_folder_hub()
         assert 'All files' in app.folder_picker_choices
         if leave == app.show_settings:
             await capture('folder-picker')
@@ -206,7 +207,11 @@ async def exercise_ui_review(app):
             assert all(button.enabled for button in app.folder_source_buttons.values())
             assert not app.folder_loading_box.children
         folder = app.folder_buttons['All files']
-        indicator = next(child for child in folder.parent.children
+        assert folder.text == 'Browse All Files'
+        # Browse All Files is a text action below the hierarchy. Folder glyphs
+        # belong to actual folder rows; verify one before tapping the root action.
+        folder_row = app.folder_buttons['UI Review']
+        indicator = next(child for child in folder_row.parent.children
                          if getattr(child, 'control_icon', '') == 'folder')
         if get_os() is OS.IOS:
             assert indicator._impl.native.imageForState(0) is not None
