@@ -26,6 +26,10 @@ widget.renamed.connect(lambda receipt: browser.refresh())
 `open_bulk_rename()` reveals the retained main-window page when Logistics is running, or retains a standalone window until it is closed. `widget.preview_ready`
 signals a `RenamePlan`; `widget.renamed` signals a successful `RenameResult` after applying or undoing a batch.
 `selected_paths()`, `load_directory(path)`, `apply()` and `undo()` are available.
+The folder tree retains its filesystem root while revealing the current folder.
+Reveal explicitly fetches unloaded folder contents, including empty folders that
+Qt does not expand, and waits for ancestor loads before releasing the pending
+selection. Later load notifications do not reopen user-collapsed branches.
 An embedding host should honor `widget.can_close()` (false while work is running,
 with cancellation requested) and retry closing on `widget.idle` if it initiated
 that close. Do not destroy a running widget or its worker.

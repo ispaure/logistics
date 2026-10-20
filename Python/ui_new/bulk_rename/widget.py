@@ -327,6 +327,11 @@ class BulkRenameWidget(qt.QWidget):
         index = self.folder_model.index(str(path))
         if not index.isValid():
             return
+        # Empty folders may not expand in QTreeView, so expansion alone never
+        # asks QFileSystemModel to load them or emits directoryLoaded. Request
+        # that load explicitly before waiting for the branch to settle.
+        if self.folder_model.canFetchMore(index):
+            self.folder_model.fetchMore(index)
         depth = 1
         ancestor = index.parent()
         while ancestor.isValid():
