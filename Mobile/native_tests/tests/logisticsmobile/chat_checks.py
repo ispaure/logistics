@@ -1,5 +1,6 @@
 """Native streamed chat, transcript layout and credential exclusion."""
 import contextlib
+import os
 import sys
 import threading
 import traceback
@@ -21,6 +22,12 @@ def chat_watchdog():
             for ident, frame in sys._current_frames().items():
                 print(f'LOGISTICS_NATIVE_THREAD={names.get(ident, ident)}\n'
                       + ''.join(traceback.format_stack(frame)), flush=True)
+        if not stopped.is_set():
+            # A blocked native bridge cannot run an asyncio timeout. Fail the
+            # test process after retaining three snapshots rather than spending
+            # the entire host timeout on an unresponsive application.
+            print('LOGISTICS_NATIVE_TIMEOUT=chat', flush=True)
+            os._exit(1)
 
     threading.Thread(target=diagnose, name='native-chat-watchdog', daemon=True).start()
     try:
