@@ -1,10 +1,37 @@
 """Native streamed chat, transcript layout and credential exclusion."""
+import contextlib
+import sys
+import threading
+import traceback
+
 from .web_checks import wait_for_text
+
+
+@contextlib.contextmanager
+def chat_watchdog():
+    """Retain Python stacks when a native bridge call blocks the event loop."""
+    stopped = threading.Event()
+
+    def diagnose():
+        for attempt in range(3):
+            if stopped.wait(45):
+                return
+            print(f'LOGISTICS_NATIVE_CHAT_STACKS={attempt + 1}', flush=True)
+            names = {thread.ident: thread.name for thread in threading.enumerate()}
+            for ident, frame in sys._current_frames().items():
+                print(f'LOGISTICS_NATIVE_THREAD={names.get(ident, ident)}\n'
+                      + ''.join(traceback.format_stack(frame)), flush=True)
+
+    threading.Thread(target=diagnose, name='native-chat-watchdog', daemon=True).start()
+    try:
+        yield
+    finally:
+        stopped.set()
 
 
 async def exercise_chat(app, passed):
     from logisticsmobile.chat_fixture import fixture_server
-    with fixture_server() as (url, started, release, requests):
+    with fixture_server() as (url, started, release, requests), chat_watchdog():
         print('LOGISTICS_NATIVE_CHAT=initialize', flush=True)
         app.show_chat()
         print('LOGISTICS_NATIVE_CHAT=configure', flush=True)
