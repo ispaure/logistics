@@ -51,6 +51,30 @@ class EpubUXTests(unittest.TestCase):
                 panel.dispose()
         asyncio.run(exercise())
 
+    def test_imported_page_is_mounted_before_progress_write_and_survives_failure(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            epub, _ = make_books(root)
+            LogisticsMobile.storage_root = root / 'app'
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), epub)
+                def write(*args, **kwargs):
+                    owner = next(iter(app.readers.controllers.values()))
+                    self.assertTrue(owner.book_content.children)
+                    self.assertIs(owner.book_content.children[0], owner.epub_view)
+                    raise OSError('synthetic progress failure')
+                with patch('logisticsmobile.library.LibraryStore.progress', side_effect=write):
+                    app.loop.run_until_complete(app.open_book(record['id']))
+                owner = app.readers.active
+                self.assertTrue(owner.book_content.children)
+                self.assertIn('Cannot save reading position', owner.book_status.text)
+            finally:
+                app.loop.run_until_complete(app.reader_manager().catalog.wait_for_refresh())
+                app.main_window.close()
+                app.loop.close()
+                LogisticsMobile.storage_root = None
+
     def test_prepared_private_chapter_reuses_worker_index(self):
         from features.books.mobile.content import indexed_chapter
         import threading

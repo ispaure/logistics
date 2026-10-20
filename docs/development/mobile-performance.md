@@ -163,7 +163,12 @@ callbacks and omission of operation return values from reports.
     A synthetic 2,000-paragraph browser chapter performs one TreeWalker build
     across 100 Unicode selections and visible-position queries. Browser fixture
     notifications are intercepted to model the native navigation bridge.
-21. Present pages before progress persistence — pending.
+21. Present pages before progress persistence — implemented: mount the page,
+    controls and navigation state before awaiting the progress writer. Writes
+    retain the original compare-and-swap record and reader/epoch guards. Twenty
+    EPUB/reader checks pass, including a failed writer that observes the mounted
+    page and leaves it readable with an error message. Provider positions remain
+    memory-only. Native paint latency remains unmeasured.
 22. Batched EPUB position updates — pending.
 23. Event-driven reader layout — pending.
 24. Sampled comic decoding and reusable spreads — pending.

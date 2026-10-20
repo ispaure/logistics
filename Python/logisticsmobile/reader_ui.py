@@ -290,9 +290,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 view = SpreadView(data, canvas=ImageCanvas, on_page=self.swipe_book_page,
                     on_toggle=self.toggle_reading_mode, right_to_left=reader.right_to_left, viewport=self.comic_viewport(), seam=seam)
         location = dict(path=reader.spine[index], offset=prepared_epub[1]) if record['kind'] == 'epub' else None
-        updated = await asyncio.to_thread(self.library_store.progress, record, index, location=location)
-        if epoch != self.book_epoch or self.book_reader is not reader or not self.active_host:
-            return
+        updated = dict(record, position=index)
+        if location is not None:
+            updated['location'] = location
         if record['kind'] == 'epub':
             self.epub_text, self.epub_offset, content = prepared_epub
             self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
@@ -358,6 +358,15 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         # Initial EPUB content arrives after its reader route was presented.
         from .reader_chrome import sync_comic_chrome
         sync_comic_chrome(self.app, self.app.body)
+        # Mount the prepared page before filesystem latency; the loop can paint
+        # while the worker publishes ordinary imported-library progress.
+        try:
+            saved = await asyncio.to_thread(self.library_store.progress, record, index, location=location)
+            if self.book_reader is reader and self.book_epoch == epoch and self.book_record['position'] == index:
+                self.book_record = saved
+        except (OSError, ValueError) as error:
+            if self.book_reader is reader and self.book_epoch == epoch:
+                self.book_status.text = 'Cannot save reading position: ' + str(error)[:300]
 
     async def move_book_page(self, index):
         pending = getattr(self, '_epub_location_task', None)
