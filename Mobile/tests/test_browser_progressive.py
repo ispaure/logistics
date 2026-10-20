@@ -156,6 +156,55 @@ class RecycledBrowserTests(unittest.TestCase):
         self.assertFalse(browser.tree)
         self.assertFalse(browser.buttons)
 
+    def test_cached_images_decode_only_when_visible_and_reuse_native_thumbnails(self):
+        from base64 import b64decode
+        from logisticsmobile.hub_icons import ICONS
+        browser = self.browser
+        browser.thumbnail = lambda *args: b''
+        browser.set_entries(self.provider, '', self.rows(500))
+        encoded = b64decode(ICONS['documents'])
+        browser.icons.update(((entry.identity, entry.revision), encoded) for entry in browser.entries)
+        with patch('logisticsmobile.browser_ui.toga.Image', wraps=toga.Image) as decode:
+            browser.render()
+            self.assertEqual(decode.call_count, 0)
+            browser.native_list.row_visible(7)
+            self.assertEqual(decode.call_count, 1)
+            image = browser.native_list.data[7].icon
+            browser.render()
+            browser.native_list.row_visible(7)
+            self.assertEqual(decode.call_count, 1)
+            self.assertIs(browser.native_list.data[7].icon, image)
+        browser.stop()
+        self.assertFalse(browser._decoded_thumbnails)
+
+
+    def test_ios_thumbnail_changes_update_one_cell_and_reject_retired_rows(self):
+        import ast
+        import sys
+        from unittest.mock import Mock
+        path = Path(__file__).parents[2] / 'Python/logisticsmobile/recycled_file_list_ios.py'
+        source = ast.parse(path.read_text())
+        owner = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'IOSFileList')
+        method = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == 'source_change')
+        namespace = {}
+        exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), namespace)
+        image = object()
+        row = SimpleNamespace(index=0, icon=SimpleNamespace(_impl=SimpleNamespace(native=image)))
+        cell = SimpleNamespace(imageView=SimpleNamespace(image=None), setNeedsLayout=Mock())
+        native = Mock()
+        native.cellForRowAtIndexPath.return_value = cell
+        host = SimpleNamespace(interface=SimpleNamespace(data=[row]), native=native)
+        libs = SimpleNamespace(NSIndexPath=SimpleNamespace(indexPathForRow=lambda *args, **kwargs: 0))
+        with patch.dict(sys.modules, {'toga_iOS.libs': libs}):
+            namespace['source_change'](host, item=row)
+            self.assertIs(cell.imageView.image, image)
+            native.reloadData.assert_not_called()
+            native.reset_mock()
+            host.interface.data = [object()]
+            namespace['source_change'](host, item=row)
+            native.cellForRowAtIndexPath.assert_not_called()
+
+
     def test_file_activation_skips_metadata_and_rechecks_navigation_after_callback(self):
         browser = self.browser
         browser.details = lambda *args: self.fail('Opening must not fetch metadata')

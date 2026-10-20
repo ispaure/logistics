@@ -128,7 +128,13 @@ callbacks and omission of operation return values from reports.
     to 28.3 ms/1.12 MB. A refresh barrier waits for inventory-triggered metadata
     work; integration tests use it before retiring fixtures. Read-only inventory
     no longer creates edit-journal directories. Native visual checks pending.
-15. Visible-only browser thumbnail decoding — pending.
+15. Visible-only browser thumbnail decoding — implemented: lightweight source rows
+    defer cached image decoding until visible, reuse a 64-entry decoded cache and
+    clear it on folder replacement/stop. iOS updates only the still-current visible
+    cell instead of reloading the table for thumbnail changes. Sixteen browser
+    checks pass. A 500-cached-image render performs zero decodes; viewing one row
+    decodes once and revisiting it reuses that image. Retired rows cannot update
+    native cells. Native device frame timing remains pending.
 16. Bounded tile rendering — pending.
 17. Formatted Markdown changed-block bridge — pending.
 18. Background provider Markdown previews — pending.

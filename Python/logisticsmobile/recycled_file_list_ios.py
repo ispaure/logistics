@@ -30,12 +30,24 @@ class FileTableController(TogaTableViewController):
         cell.textLabel.textColor = apple_color('text')
         cell.detailTextLabel.textColor = apple_color('muted')
         self.interface.row_visible(indexPath.row)
+        # A cached visible-row callback may have supplied its image synchronously.
+        cell.imageView.image = row.icon._impl.native
         return cell
 
 
 class IOSFileList(DetailedList):
     def set_enabled(self, enabled):
         self.native.userInteractionEnabled = bool(enabled)
+
+    def source_change(self, *, item):
+        if item.index >= len(self.interface.data) or self.interface.data[item.index] is not item:
+            return
+        from toga_iOS.libs import NSIndexPath
+        cell = self.native.cellForRowAtIndexPath(NSIndexPath.indexPathForRow(item.index, inSection=0))
+        if cell is not None:
+            cell.imageView.image = item.icon._impl.native
+            cell.setNeedsLayout()
+
 
     def primary_action_handler(self, index):
         row = self.interface.data[index]

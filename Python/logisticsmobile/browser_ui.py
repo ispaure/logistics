@@ -191,6 +191,7 @@ class FileBrowser(NativeBrowser):
         self._list_indices = {}
         self._list_query = None
         self._list_thumbnail_rows = OrderedDict()
+        self._decoded_thumbnails = OrderedDict()
         self._population_epoch = 0
         self._thumbnail_requested = set()
         self._thumbnail_pending = set()
@@ -255,6 +256,7 @@ class FileBrowser(NativeBrowser):
 
     def set_tree(self, tree):
         self._population_epoch += 1
+        self._decoded_thumbnails.clear()
         return super().set_tree(tree)
 
     @property
@@ -315,7 +317,7 @@ class FileBrowser(NativeBrowser):
             self.widget.add(view)
 
     def _render_list(self):
-        from .recycled_file_list import file_list_icon, thumbnail_image
+        from .recycled_file_list import file_list_icon
         self._cancel()
         self.page = 0
         self.previous.enabled = self.next.enabled = False
@@ -334,14 +336,11 @@ class FileBrowser(NativeBrowser):
             # Delayed native callbacks cannot activate a replaced folder/query.
             records = []
             for index, entry in enumerate(self._list_entries):
-                cached = self.icons.get((entry.identity, entry.revision))
-                image = thumbnail_image(toga.Image(src=cached)) if cached else file_list_icon(entry.container)
                 records.append(dict(
                     title=entry.payload.get('display_name') or PurePosixPath(entry.label).name,
-                    subtitle='', icon=image, folder=entry.container, entry=entry,
-                    epoch=self.epoch, thumbnail=bool(cached), index=index))
-            # Publish one source change, including cached images. Mutating Row
-            # attributes afterward would reload UIKit once per cached thumbnail.
+                    subtitle='', icon=file_list_icon(entry.container), folder=entry.container, entry=entry,
+                    epoch=self.epoch, thumbnail=False, index=index))
+            # Publish lightweight rows once. Only visible cells decode images.
             self.native_list.data = records
             self._list_rows = {row.entry.identity: row for row in self.native_list.data}
             self._list_indices = {row.entry.identity: row.index for row in self.native_list.data}
@@ -399,8 +398,16 @@ class FileBrowser(NativeBrowser):
 
     def _set_row_thumbnail(self, row, image):
         from .recycled_file_list import thumbnail_image, file_list_icon
+        key = row.entry.identity, row.entry.revision
+        decoded = self._decoded_thumbnails.get(key)
+        if decoded is None:
+            decoded = thumbnail_image(image)
+            self._decoded_thumbnails[key] = decoded
+        self._decoded_thumbnails.move_to_end(key)
+        while len(self._decoded_thumbnails) > 64:
+            self._decoded_thumbnails.popitem(last=False)
         row.thumbnail = True
-        row.icon = thumbnail_image(image)
+        row.icon = decoded
         self._list_thumbnail_rows[row.entry.identity] = row
         self._list_thumbnail_rows.move_to_end(row.entry.identity)
         while len(self._list_thumbnail_rows) > 64:
@@ -416,6 +423,10 @@ class FileBrowser(NativeBrowser):
                 or len(self._thumbnail_pending) >= 24):
             return
         self._thumbnail_requested.add(row.entry.identity)
+        decoded = self._decoded_thumbnails.get((row.entry.identity, row.entry.revision))
+        if decoded is not None:
+            self._set_row_thumbnail(row, decoded)
+            return
         cached = self.icons.get((row.entry.identity, row.entry.revision))
         if cached:
             self._set_row_thumbnail(row, toga.Image(src=cached))
@@ -440,6 +451,7 @@ class FileBrowser(NativeBrowser):
             self._thumbnail_pending.discard(token)
 
     def stop(self):
+        self._decoded_thumbnails.clear()
         self.native_list.clear()
         self._list_entries = ()
         self._list_rows.clear()
