@@ -283,7 +283,8 @@ async def exercise_ui_review(app):
         density = viewport.getResources().getDisplayMetrics().density
         for control in (*header_controls, browser.close_search_button):
             assert control._impl.native.getWidth() / density >= 44, 'Browser icon hit target too narrow'
-    assert [control.control_icon for control in (*header_controls, app.file_actions_button)] == ['up', 'find', 'more']
+    icons = [control.control_icon for control in (*header_controls, app.file_actions_button)]
+    assert icons == ['up', 'find', 'overflow'], icons
     browser.close_search()
     while browser.tasks:
         await asyncio.gather(*tuple(browser.tasks))
