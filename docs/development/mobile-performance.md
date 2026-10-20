@@ -34,7 +34,14 @@ callbacks and omission of operation return values from reports.
 
 1. Performance baseline — implemented; host workloads and two helper tests pass;
    native device measurements pending.
-2. Coalesce document recovery saves — pending.
+2. Coalesce document recovery saves — implemented: idle batching (250 ms, maximum
+   1 second), worker publication, and explicit flushes on navigation, focus loss
+   and host replacement. Session-only buffers never queue; privatize/delete/save
+   serialize with workers and retire pending snapshots. Fifty edits produce one
+   worker write. Thirty-five recovery/private tests pass. Instrumented typing
+   elapsed 140.4 ms versus 159.8 ms baseline. The workspace preview-mode test
+   fails identically when restoring synchronous checkpoint behavior; it is a
+   pre-existing navigation failure, not attributed to batching.
 3. Coalesce chat draft saves — pending.
 4. Background streaming Markdown parsing — pending.
 5. Incremental streaming DOM updates — pending.

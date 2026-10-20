@@ -98,6 +98,9 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
         previous_host = _active_hosts.get(host_identity)
         if previous_host is not None:
+            store = getattr(previous_host, 'store', None)
+            if store is not None:
+                store.flush_checkpoints()
             pending = getattr(previous_host, 'startup_task', None)
             if pending is not None and not pending.done():
                 pending.cancel()
@@ -926,6 +929,11 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         if getattr(self, '_reset_scheduled', False):
             return True
         if not self.active_host:
+            return False
+        try:
+            self.store.flush_checkpoints()
+        except (OSError, ValueError) as error:
+            self.status.text = 'Could not preserve edits: ' + str(error)
             return False
         if self.current is None or self.loading:
             return True

@@ -267,7 +267,10 @@ class TextEditorView:
             self.refresh_status()
             return
         try:
-            self.app.store.checkpoint(self.document)
+            def failed(error):
+                if self.session.id in self.app.workspace.sessions and self.app.active_host:
+                    self.status.text = 'Could not preserve edits: ' + str(error)
+            self.app.store.queue_checkpoint(self.document, self.app.loop, failed=failed)
             self.refresh_status()
         except (OSError, ValueError) as error:
             self.status.text = 'Could not preserve edits: ' + str(error)

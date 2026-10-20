@@ -1,10 +1,13 @@
 """App-private text documents and durable, conflict-aware recovery records."""
 import base64
+import asyncio
 from dataclasses import dataclass
+from functools import wraps
 import json
 import os
 from pathlib import Path
 from uuid import uuid4
+from threading import RLock
 
 from commonUtils.persistence import atomic_write_json
 from commonUtils.persistence.text import decode_bytes, write_text_file, FileConflictError
@@ -14,6 +17,14 @@ MAX_RECORD = 4 * 1024 * 1024
 
 
 from features.text_editor.names import document_name
+
+
+def serialized(method):
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        with self._write_lock:
+            return method(self, *args, **kwargs)
+    return call
 
 
 @dataclass
@@ -36,6 +47,11 @@ class DocumentStore:
             raise ValueError('The mobile host must supply an absolute app-private directory.')
         self.root = root.resolve()
         self._checkpoints = {}
+        self._write_lock = RLock()
+        self._queue_lock = RLock()
+        self._pending = {}
+        self._timers = {}
+        self._writes = set()
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def path(self, key, suffix):
@@ -77,7 +93,71 @@ class DocumentStore:
         return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns,
                 info.st_ctime_ns, info.st_mode, info.st_nlink)
 
+    def queue_checkpoint(self, doc, loop, *, failed=None):
+        """Batch edits in RAM; native UI values are captured by the caller."""
+        if getattr(doc, 'private', False):
+            self.cancel_checkpoint(doc.id)
+            return
+        snapshot = Document(doc.id, doc.name, doc.snapshot, doc.text, doc.conflict)
+        with self._queue_lock:
+            previous = self._pending.get(doc.id)
+            since = previous[2] if previous is not None else loop.time()
+            self._pending[doc.id] = (doc, snapshot, since)
+            timer = self._timers.pop(doc.id, None)
+            if timer is not None:
+                timer.cancel()
+            delay = min(.25, max(0, 1 - (loop.time() - since)))
+            self._timers[doc.id] = loop.call_later(delay, self._start_checkpoint, doc.id, loop, failed)
+
+    def cancel_checkpoint(self, key):
+        with self._queue_lock:
+            self._pending.pop(key, None)
+            timer = self._timers.pop(key, None)
+            if timer is not None:
+                timer.cancel()
+
+    def _start_checkpoint(self, key, loop, failed):
+        async def publish():
+            try:
+                await asyncio.to_thread(self._publish_checkpoint, key)
+            except (OSError, ValueError) as error:
+                if failed is not None:
+                    failed(error)
+        task = loop.create_task(publish())
+        self._writes.add(task)
+        task.add_done_callback(self._writes.discard)
+
+    @serialized
+    def _publish_checkpoint(self, key):
+        with self._queue_lock:
+            pending = self._pending.pop(key, None)
+            self._timers.pop(key, None)
+        if pending is None:
+            return
+        original, snapshot, _ = pending
+        if getattr(original, 'private', False):
+            return
+        try:
+            self._checkpoint(snapshot)
+        except (OSError, ValueError):
+            # Retain the latest live buffer for an explicit navigation retry.
+            with self._queue_lock:
+                self._pending.setdefault(key, pending)
+            raise
+
+    @serialized
+    def flush_checkpoints(self):
+        with self._queue_lock:
+            documents = [value[0] for value in self._pending.values()]
+        for doc in documents:
+            self.checkpoint(doc)
+
+    @serialized
     def checkpoint(self, doc):
+        self.cancel_checkpoint(doc.id)
+        return self._checkpoint(doc)
+
+    def _checkpoint(self, doc):
         if getattr(doc, "private", False):
             return
         path = self.path(doc.id, '.json')
@@ -99,13 +179,19 @@ class DocumentStore:
         # Only a successful durable publication may suppress a future write.
         self._checkpoints[doc.id] = (state, self._recovery_revision(path))
 
+    @serialized
     def privatize(self, doc):
         """Keep the draft in memory and replace its recovery record with the baseline."""
         doc.private = True
         baseline = Document(doc.id, doc.name, doc.snapshot, doc.snapshot.text)
         self.checkpoint(baseline)
 
+    @serialized
     def open(self, key):
+        with self._queue_lock:
+            pending = self._pending.get(key)
+        if pending is not None:
+            self.checkpoint(pending[0])
         path = self.path(key, '.json')
         with path.open('rb') as stream:
             content = stream.read(MAX_RECORD + 1)
@@ -139,6 +225,7 @@ class DocumentStore:
                 failures.append((path.name, str(error)))
         return sorted(documents, key=lambda doc: doc.name.casefold()), failures
 
+    @serialized
     def save(self, doc):
         content = doc.snapshot.encode(doc.text)
         if len(content) > MAX_BYTES:
@@ -156,8 +243,10 @@ class DocumentStore:
     def save_copy(self, doc, name=None):
         return self.create(name or doc.name, doc.snapshot.encode(doc.text))
 
+    @serialized
     def delete(self, doc):
         """Remove one app-owned document and its recovery record."""
+        self.cancel_checkpoint(doc.id)
         source = self.path(doc.id, '.data')
         recovery = self.path(doc.id, '.json')
         # Leave recovery available if removing the saved bytes fails.
@@ -165,6 +254,7 @@ class DocumentStore:
         recovery.unlink(missing_ok=True)
         self._checkpoints.pop(doc.id, None)
 
+    @serialized
     def discard(self, doc):
         """Reset recovery to the current saved bytes without writing the source."""
         source = self.path(doc.id, '.data')
