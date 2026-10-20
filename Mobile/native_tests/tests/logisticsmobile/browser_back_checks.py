@@ -68,7 +68,10 @@ async def exercise_browser_back(app):
     root = app.private_root / 'LocalFiles' / 'Back review'
     root.mkdir(exist_ok=True)
     (root / 'A Notes.md').write_text('# Browser note')
-    for index in range(30):
+    # Keep the measured offset away from the bottom even on a large iPad.
+    # Reader chrome can enlarge the returning viewport by one navigation bar;
+    # a short list then clamps 120 to its new maximum of 76 legitimately.
+    for index in range(60):
         (root / f'Item-{index:02}.txt').write_text('Native scroll fixture')
     with ZipFile(root / 'Comic.cbz', 'w') as archive:
         archive.writestr('page.webp', base64.b64decode('UklGRhwAAABXRUJQVlA4TA8AAAAvAYAAEAcQ/Y8CBiKi/wEA'))
@@ -100,6 +103,7 @@ async def exercise_browser_back(app):
             await asyncio.sleep(.05)
         position = scroll.vertical_position
         assert position > 0, 'Scroll fixture did not exceed the viewport'
+        assert scroll.max_vertical_position - position > 88, 'Scroll fixture is too close to its lower bound'
         entry = next(item for item in browser.entries if item.label == filename)
         await browser.activate_entry(entry)
         assert app.native_host.state.destination == 'files'
