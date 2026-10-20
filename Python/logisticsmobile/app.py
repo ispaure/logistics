@@ -1230,9 +1230,10 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         key = key if key is not None else self.crypt_labels.get(self.crypt_selector.value)
         if key is None:
             return False
-        from .document_sources import opening_status
+        from .document_sources import opening_status, opening_ready
         with opening_status(self, dict(key=key), destination=destination):
-            await asyncio.sleep(0)
+            if not await opening_ready(self):
+                return False
             return await self.provider_sessions().open(copies, key, prepared=prepared, destination=destination, privacy_gate=privacy_gate, edit=edit)
 
     def private_dirty(self):

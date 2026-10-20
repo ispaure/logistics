@@ -102,7 +102,7 @@ def opening_status(app, source, *, destination=None):
                      style=Pack(direction=COLUMN, flex=1))
     destination = destination or app.native_host.state.destination
     route = 'file-loading:' + str(id(panel))
-    state = dict(task=task, route=route, destination=destination)
+    state = dict(task=task, route=route, destination=destination, panel=panel, ready=False)
     app._file_loading = state
     # Loading is presentation, not a new user intent. Preserve the generation
     # used by provider readers to reject completion after navigation away.
@@ -118,6 +118,8 @@ def opening_status(app, source, *, destination=None):
         yield
     finally:
         progress.stop()
+        label.text = ''
+        image.image = None
         if getattr(app, '_file_loading', None) is state:
             app._file_loading = None
         screens = adaptive.detail_routes if split else routes.screens[destination]
@@ -137,10 +139,27 @@ def opening_status(app, source, *, destination=None):
                 routes.render(destination)
 
 
+async def opening_ready(app):
+    state = getattr(app, '_file_loading', None)
+    if state is None:
+        await asyncio.sleep(0)
+        return True
+    if not state['ready']:
+        from .draw_ready import wait_for_draw
+        state['draw_acknowledged'] = await wait_for_draw(state['panel'])
+        state['ready'] = True
+    adaptive = app.adaptive
+    split = adaptive.split is not None and state['destination'] == 'documents'
+    screens = adaptive.detail_routes if split else app.routes.screens[state['destination']]
+    return (getattr(app, '_file_loading', None) is state and app.active_host
+            and app.native_host.state.destination == state['destination']
+            and bool(screens) and screens[-1][0] == state['route'])
+
+
 async def reopen_file(app, source):
     with opening_status(app, source):
-        # Let native controls paint before credential resolution or file I/O.
-        await asyncio.sleep(0)
+        if not await opening_ready(app):
+            return False
         return await _reopen_file(app, source)
 
 

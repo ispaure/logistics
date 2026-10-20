@@ -198,4 +198,48 @@ callbacks and omission of operation return values from reports.
     Python accounting/private/remote checks pass. Native Go tests verify budget
     accounting without content disclosure, release, offline access and revocation.
     Real-device peak RSS remains unmeasured.
-26. Native loading-panel draw readiness — pending.
+26. Native loading-panel draw readiness — implemented: Android acknowledges a
+    draw traversal through a removable one-shot listener; iOS uses a transparent
+    UIView draw probe. A 500 ms bound supports detached/hidden views; fallback
+    yields are explicitly not native draw acknowledgements. Open work rechecks
+    the destination/route afterward. Cancellation removes listeners and late
+    callbacks cannot publish; panel retirement scrubs filename/image. Fifty
+    opening/history/session checks pass, including Home, Documents and Workspaces
+    waiting before I/O and rejecting completion after navigation. Native visual/
+    first-draw timing remains pending; Android platform SDK is unavailable.
+
+
+## Final host verification (2026-10-20)
+
+The combined regression selection covers 193 checks. Two localhost HTTP fixture
+checks initially hit the sandbox's listener restriction; all thirteen chat UI
+checks pass when rerun with the required local-network permission. Thirteen
+additional build/checkpoint/keyboard checks pass. Both offline browser fixtures
+pass (stable transcript DOM/selection and one EPUB text-index walk). A separate
+synthetic formatted-editor browser check sends one small changed-block payload
+for a 1,001-paragraph document and restores exact original source on undo. Native
+Go archive accounting/offline/revocation checks pass. Ruff and diff checks pass
+for this implementation. Unrelated working-tree changes remain unstaged.
+
+Final review found that Toga's Image/backend reference cycle could retain sampled
+Apple scratch images past the autorelease pool. Explicitly clearing their native
+reference now retires those pixels after drawing, including draw failures. Four
+composition checks pass after that correction; actual Apple decoding is still
+awaiting native execution.
+
+Fresh disposable dummy-backend run, with the same allocation instrumentation:
+
+| Workload | Elapsed ms | Maximum loop delay ms |
+| --- | ---: | ---: |
+| Typing 20 edits | 142.7 | 132.2 |
+| Folder with 1,000 entries | 639.7 | 139.3 |
+| Open text | 38.7 | 17.6 |
+| Comic next page | 3.9 | 2.1 |
+| Streaming 20 updates | 3622.2 | 259.0 |
+
+Typing improves modestly in this aggregate fixture; the other aggregate numbers
+show no demonstrated improvement. The streaming fixture calls the parser directly
+and does not exercise the worker/coalescing UI path. Targeted results above prove
+bounded allocations, fewer publications and removal of specific UI-thread work;
+they do not establish a device-wide speedup. Real iOS/Android visual checks,
+first-draw timings, scrolling frame times and native peak RSS remain pending.
