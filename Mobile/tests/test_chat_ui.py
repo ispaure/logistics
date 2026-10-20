@@ -40,6 +40,28 @@ class ChatUITests(unittest.TestCase):
         for path in self.app.private_root.rglob('*.json'):
             self.assertNotIn(b'SESSION-ONLY-API-KEY-SENTINEL', path.read_bytes())
 
+    def test_large_conversation_inventory_uses_one_recycled_control_and_stable_keys(self):
+        app = self.app
+        records = [dict(id=f'{index:032x}', title=f'Conversation {index}', updated=str(index))
+                   for index in range(1000)]
+        controller = app.chat_controller()
+        with patch('features.lm.mobile.ui.toga.Button', side_effect=AssertionError('No per-conversation controls')):
+            controller._publish_chat_inventory(records, [])
+        listing = app.chat_conversation_list
+        self.assertEqual(len(listing.data), 1000)
+        self.assertEqual(app.chat_conversation_buttons, [])
+        self.assertIs(listing.parent, app.chat_sidebar_content)
+        with patch.object(controller, 'open_chat') as open_chat:
+            listing.select_index(17)
+            listing.on_select()
+            open_chat.assert_called_once_with(records[17]['id'])
+            open_chat.reset_mock()
+            app.set_chat_busy(True)
+            listing.select_index(18)
+            listing.on_select()
+            open_chat.assert_not_called()
+            self.assertFalse(listing.enabled)
+
     def test_chat_drawer_uses_neutral_layers_and_keeps_live_content(self):
         from logisticsmobile.appearance import _surfaces
         app = self.app

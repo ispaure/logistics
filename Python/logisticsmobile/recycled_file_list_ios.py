@@ -24,7 +24,7 @@ class FileTableController(TogaTableViewController):
         cell.imageView.image = row.icon._impl.native
         cell.accessoryType = 1 if row.folder else 0
         cell.textLabel.lineBreakMode = 5  # Middle truncation preserves extensions.
-        cell.accessibilityLabel = row.title + ('. Folder' if row.folder else '. File')
+        cell.accessibilityLabel = row.title + ('. Folder' if row.folder else '. ' + self.interface.row_kind)
         from .appearance import apple_color
         cell.backgroundColor = apple_color('surface')
         cell.textLabel.textColor = apple_color('text')
@@ -34,6 +34,9 @@ class FileTableController(TogaTableViewController):
 
 
 class IOSFileList(DetailedList):
+    def set_enabled(self, enabled):
+        self.native.userInteractionEnabled = bool(enabled)
+
     def primary_action_handler(self, index):
         row = self.interface.data[index]
         def selected(action: ObjCInstance, view: ObjCInstance, completion: ObjCInstance) -> None:

@@ -112,7 +112,14 @@ callbacks and omission of operation return values from reports.
     UI checks pass. For 500 synthetic conversations, full reads took 50.8 ms,
     warm scans 7.36 ms and cached UI reads 0.092 ms. Summaries contain no drafts,
     message bodies or API keys and add no persistent index.
-13. Recycled conversation rows — pending.
+13. Recycled conversation rows — implemented through the host presentation
+    contract using existing UITableView/ListView recycling. Rows use conversation
+    IDs, one shared icon, proper accessibility labels and no nested scrolling
+    container. Busy state disables interaction and callbacks retain their guard.
+    Eighteen chat/inventory/browser checks pass, including 1,000 rows without any
+    per-row Button construction. Host update: 147.2 ms/8.27 MB peak allocations
+    before versus 14.5 ms/1.29 MB after. Native compilation/device checks remain
+    pending (no Android platform SDK is installed in this host environment).
 14. Recycled library-folder rows — pending.
 15. Visible-only browser thumbnail decoding — pending.
 16. Bounded tile rendering — pending.

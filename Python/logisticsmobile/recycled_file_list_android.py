@@ -7,6 +7,9 @@ from io.github.ispaure.logisticsmobile import FileListView
 
 
 class AndroidFileList(Widget):
+    def set_enabled(self, enabled):
+        self.native.setEnabled(bool(enabled))
+
     def create(self):
         self.native = FileListView(self._native_activity)
         owner = weakref.ref(self)
@@ -44,10 +47,11 @@ class AndroidFileList(Widget):
     def change_source(self, source):
         self.generation += 1
         self.native.setObserveRows(bool(getattr(self.interface, 'observe_rows', False)))
+        self.native.setRowKind(getattr(self.interface, 'row_kind', 'File'))
         self.native.setRows([row.title for row in source], [row.subtitle for row in source],
                             [row.folder for row in source], self.generation)
         from .hub_icons import icon
-        self.native.setIcons(icon('files')._impl.native, icon('documents')._impl.native)
+        self.native.setIcons(icon('files')._impl.native, icon(getattr(self.interface, 'icon_kind', 'documents'))._impl.native)
         for index, row in enumerate(source):
             if getattr(row, 'thumbnail', False):
                 self.native.setRowIcon(index, row.icon._impl.native, self.generation)

@@ -31,10 +31,22 @@ def file_list_icon(folder):
 
 
 class RecycledFileList(toga.DetailedList):
-    def __init__(self, *, on_visible=None, **kwargs):
+    @property
+    def enabled(self):
+        return getattr(self, '_enabled', True)
+
+    @enabled.setter
+    def enabled(self, value):
+        self._enabled = bool(value)
+        setter = getattr(getattr(self, '_impl', None), 'set_enabled', None)
+        if setter is not None:
+            setter(self._enabled)
+
+    def __init__(self, *, on_visible=None, primary_action='Select', row_kind='File', icon_kind='documents', **kwargs):
         self.on_visible = on_visible
         self.updating = False
-        super().__init__(primary_action='Select', secondary_action=None, **kwargs)
+        self.row_kind, self.icon_kind = row_kind, icon_kind
+        super().__init__(primary_action=primary_action, secondary_action=None, **kwargs)
         app = toga.App.app
         if not hasattr(app, '_recycled_file_lists'):
             app._recycled_file_lists = weakref.WeakSet()
@@ -94,3 +106,11 @@ class RecycledFileList(toga.DetailedList):
             self.select_index(None)
         finally:
             self.updating = False
+
+
+def summary_list(*, kind, icon_kind, on_select, **kwargs):
+    from .hub_icons import icon
+    widget = RecycledFileList(on_select=on_select, primary_action=None,
+                              row_kind=kind, icon_kind=icon_kind, **kwargs)
+    widget.row_icon = icon(icon_kind)
+    return widget

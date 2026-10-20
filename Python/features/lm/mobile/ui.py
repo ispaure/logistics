@@ -106,12 +106,14 @@ class ChatUI:
                 self.chat_actions_button._impl.native.accessibilityLabel = 'Conversation actions'
             elif backend.startswith('toga_android.'):
                 self.chat_actions_button._impl.native.setContentDescription('Conversation actions')
-            self.chat_conversation_list = toga.Box(style=Pack(direction=COLUMN))
+            self.chat_conversation_list = self.presentation.summary_list(kind='Conversation',
+                icon_kind='chat', on_select=self._select_conversation_row, style=Pack(flex=1))
+            self.chat_conversation_buttons = []  # Compatibility; rows are recycled natively.
             self.chat_drawer_settings = self.presentation.icon_button('more', 'Chat settings', on_press=self.show_chat_configuration)
             self.chat_sidebar_title = toga.Label('Conversations',
                 style=Pack(font_size=22, font_weight='bold', margin_bottom=20))
             self.chat_sidebar_content = sidebar = toga.Box(children=[self.chat_sidebar_title,
-                toga.ScrollContainer(horizontal=False, content=self.chat_conversation_list, style=Pack(flex=1)),
+                self.chat_conversation_list,
                 toga.Box(children=[self.chat_new, toga.Box(style=Pack(flex=1)), self.chat_drawer_settings],
                          style=Pack(direction=ROW, margin_top=16))],
                 style=Pack(direction=COLUMN, flex=1, margin=16))
@@ -382,29 +384,21 @@ class ChatUI:
         self.chat_labels = labels
         self.chat_selector.items = list(labels)
         if self.chat_current:
-            self.chat_selector.value = next((label for label, key in labels.items() if key == self.chat_current['id']), None)
+            selected_label = next((label for label, key in labels.items() if key == self.chat_current['id']), None)
+            if selected_label is not None:
+                self.chat_selector.value = selected_label
         self.chat_loading = False
-        from commonUtils.ui.native.presentation import list_button
-        for child in list(self.chat_conversation_list.children):
-            self.chat_conversation_list.remove(child)
-        self.chat_conversation_buttons = []
-        for label, key in labels.items():
-            def select(widget=None, selected=key, **kwargs):
-                self.open_chat(selected)
-            current = self.chat_current is not None and self.chat_current['id'] == key
-            button = list_button(toga.Button(label, on_press=select,
-                enabled=not self.chat_busy, style=Pack(height=56, margin_bottom=8, font_size=17)))
-            self.presentation.surface(button, radius=16, background='chat_selected' if current else 'chat_background',
-                    foreground='text', outlined=True)
-            backend = type(button._impl).__module__
-            if backend.startswith('toga_iOS.'):
-                from rubicon.objc import UIEdgeInsets
-                button._impl.native.contentEdgeInsets = UIEdgeInsets(0, 16, 0, 16)
-            elif backend.startswith('toga_android.'):
-                inset = button._impl.scale_in(16)
-                button._impl.native.setPadding(inset, 0, inset, 0)
-            self.chat_conversation_list.add(button)
-            self.chat_conversation_buttons.append(button)
+        listing = self.chat_conversation_list
+        listing.updating = True
+        try:
+            listing.data = [dict(title=label, subtitle='', key=key, index=index,
+                folder=False, thumbnail=False, icon=listing.row_icon)
+                for index, (label, key) in enumerate(labels.items())]
+            selected = next((index for index, row in enumerate(listing.data)
+                if self.chat_current is not None and row.key == self.chat_current['id']), None)
+            listing.select_index(selected)
+        finally:
+            listing.updating = False
         if warnings:
             self.set_chat_status(f'{len(warnings)} conversation(s) could not be read; originals preserved.')
         if authoritative and getattr(self, '_chat_needs_initial_selection', False):
@@ -413,6 +407,13 @@ class ChatUI:
                 self.open_chat(next(iter(self.chat_labels.values())))
             else:
                 self.new_chat()
+
+    def _select_conversation_row(self, widget, **kwargs):
+        if widget.updating or self.chat_busy:
+            return
+        row = widget.selection
+        if row is not None and row.key in self.chat_labels.values():
+            self.open_chat(row.key)
 
     def checkpoint_chat(self):
         if self.chat_current is None:
@@ -545,8 +546,7 @@ class ChatUI:
                    'Stop' if self.chat_generating else 'Send')
         self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
         self.update_chat_readiness()
-        for control in self.chat_conversation_buttons:
-            control.enabled = not busy
+        self.chat_conversation_list.enabled = not busy
 
     def chat_fields(self):
         settings = dict(self.chat_profile['settings'], context_tokens=int(self.chat_context.value),

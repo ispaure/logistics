@@ -30,4 +30,5 @@ def mobile_presentation(app):
     from logisticsmobile.pickers import export_document
     from logisticsmobile.preview import markdown_preview
     from logisticsmobile.palette import css_variables
-    return MobilePresentation(icon_button=icon_button, apply_icon=apply_icon, action_button=action_button, ActionMenu=ActionMenu, surface=surface, apple_color=apple_color, menu_button=menu_button, export_document=lambda owner, *args, **kwargs: export_document(app, *args, **kwargs), markdown_preview=markdown_preview, css_variables=css_variables)
+    from logisticsmobile.recycled_file_list import summary_list
+    return MobilePresentation(icon_button=icon_button, apply_icon=apply_icon, action_button=action_button, ActionMenu=ActionMenu, surface=surface, apple_color=apple_color, menu_button=menu_button, export_document=lambda owner, *args, **kwargs: export_document(app, *args, **kwargs), markdown_preview=markdown_preview, css_variables=css_variables, summary_list=summary_list)

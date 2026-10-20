@@ -15,3 +15,4 @@ class MobilePresentation:
     export_document: Callable
     markdown_preview: Callable
     css_variables: Callable
+    summary_list: Callable

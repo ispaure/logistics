@@ -30,6 +30,7 @@ public final class FileListView extends ListView {
     private final Rows rows = new Rows();
     private int createdRows;
     private boolean observeRows;
+    private String rowKind = "File";
     private int textColor, mutedColor, surfaceColor, selectedTextColor, selectedColor, accentColor;
 
     public FileListView(Context context) {
@@ -51,6 +52,7 @@ public final class FileListView extends ListView {
 
     public void setListener(Listener value) { listener = value; }
     public void setObserveRows(boolean enabled) { observeRows = enabled; }
+    public void setRowKind(String kind) { rowKind = kind; }
     public void setPalette(int text, int muted, int surface, int selectedText, int selected, int accent) {
         textColor = text;
         mutedColor = muted;
@@ -190,7 +192,7 @@ public final class FileListView extends ListView {
             holder.chevron.setText(folders[position] ? "›" : "");
             recycled.setActivated(isItemChecked(position));
             paint(recycled, isItemChecked(position));
-            recycled.setContentDescription(titles[position] + (folders[position] ? ". Folder" : ". File"));
+            recycled.setContentDescription(titles[position] + (folders[position] ? ". Folder" : ". " + rowKind));
             if (listener != null && observeRows) listener.onVisible(position, generation);
             return recycled;
         }
