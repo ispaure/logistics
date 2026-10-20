@@ -29,6 +29,7 @@ async def exercise_workspace(app):
         pair = width(folder_frame.folder_master), width(folder_frame.main)
         assert abs(pair[0] - pair[1]) <= 2, ('Unequal native Workspaces panes', pair)
         assert max(pair) <= app.adaptive.content_width('files') / 2 + 2
+    app.show_documents_hub()
     app.create_chosen_document('md')
     app.name.value = 'Left draft.md'
     first = app.editor_view
