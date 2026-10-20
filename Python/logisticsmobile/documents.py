@@ -40,6 +40,12 @@ class Document:
         return self.text != self.snapshot.text
 
 
+@dataclass(frozen=True)
+class DocumentSummary:
+    id: str
+    name: str
+
+
 class DocumentStore:
     def __init__(self, root):
         root = Path(root)
@@ -52,6 +58,8 @@ class DocumentStore:
         self._pending = {}
         self._timers = {}
         self._writes = set()
+        self._summaries = {}
+        self._summary_lock = RLock()
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def path(self, key, suffix):
@@ -178,6 +186,8 @@ class DocumentStore:
                           durable_directory=True)
         # Only a successful durable publication may suppress a future write.
         self._checkpoints[doc.id] = (state, self._recovery_revision(path))
+        with self._summary_lock:
+            self._summaries[doc.id] = (self._recovery_revision(path), DocumentSummary(doc.id, doc.name))
 
     @serialized
     def privatize(self, doc):
@@ -225,6 +235,47 @@ class DocumentStore:
                 failures.append((path.name, str(error)))
         return sorted(documents, key=lambda doc: doc.name.casefold()), failures
 
+    def cached_summaries(self):
+        with self._summary_lock:
+            records = [value[1] for value in self._summaries.values()]
+        return sorted(records, key=lambda doc: doc.name.casefold())
+
+    def summaries(self):
+        """Read changed metadata only; never decode original bytes for a list."""
+        records, failures, retained = [], [], set()
+        for path in sorted(self.root.glob('*.json')):
+            try:
+                with self._write_lock:
+                    key = path.stem
+                    self.path(key, '.json')  # Reject links and invalid identities.
+                    revision = self._recovery_revision(path)
+                    with self._summary_lock:
+                        cached = self._summaries.get(key)
+                    if cached is None or cached[0] != revision:
+                        with path.open('rb') as stream:
+                            raw = stream.read(MAX_RECORD + 1)
+                        if len(raw) > MAX_RECORD:
+                            raise ValueError('Recovery record exceeds the inventory limit.')
+                        record = json.loads(raw)
+                        if not isinstance(record, dict) or record.get('schema') != 1 or record.get('id') != key:
+                            raise ValueError('Invalid recovery summary.')
+                        summary = DocumentSummary(key, document_name(record['name']))
+                        with self._summary_lock:
+                            self._summaries[key] = (revision, summary)
+                    else:
+                        summary = cached[1]
+                    retained.add(key)
+                    records.append(summary)
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                failures.append((path.name, str(error)))
+        with self._write_lock, self._summary_lock:
+            # A writer may have added another record during the scan. Remove
+            # only entries whose recovery file really disappeared.
+            for key in set(self._summaries) - retained:
+                if not self.path(key, '.json').exists():
+                    self._summaries.pop(key, None)
+        return sorted(records, key=lambda doc: doc.name.casefold()), failures
+
     @serialized
     def save(self, doc):
         content = doc.snapshot.encode(doc.text)
@@ -253,6 +304,8 @@ class DocumentStore:
         source.unlink(missing_ok=True)
         recovery.unlink(missing_ok=True)
         self._checkpoints.pop(doc.id, None)
+        with self._summary_lock:
+            self._summaries.pop(doc.id, None)
 
     @serialized
     def discard(self, doc):

@@ -60,7 +60,15 @@ callbacks and omission of operation return values from reports.
    requests blocked. Stable paragraph selection survives partial/final code-fence
    updates, final markup matches the complete renderer, and at most three blocks
    are removed across the two updates. Native WebView/device timing remains open.
-6. Lightweight asynchronous document inventory — pending.
+6. Lightweight asynchronous document inventory — implemented: in-memory name/ID
+   summaries keyed by recovery-file revision; live refreshes coalesce background
+   scans and publish cached metadata immediately. Full open still validates
+   original bytes and conflicts. Five inventory tests and 24 document/navigation
+   checks pass. For 100 synthetic 50 KB documents, full reads took 160.1 ms,
+   warm summaries 1.74 ms, cached UI reads 0.009 ms. Startup's synchronous initial
+   scan is addressed by point 10. The old Home loading test expects an embedded
+   banner and fails with both inventory implementations; point 26 will align it
+   with the already implemented separate loading panel.
 7. Cached asynchronous library inventory — pending.
 8. Coalesced library discovery — pending.
 9. Background Workspaces discovery — pending.

@@ -805,9 +805,31 @@ class LogisticsMobile(ReaderWorkspace, ProviderUI, toga.App):
         return shown
 
     def refresh_documents(self):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            documents, failures = self.store.summaries()
+            self._publish_document_summaries(documents, failures)
+            return
+        if getattr(self, '_startup_in_progress', False):
+            documents, failures = self.store.summaries()
+            self._publish_document_summaries(documents, failures)
+            return
+        self._publish_document_summaries(self.store.cached_summaries(), [])
+        self._document_refresh_again = True
+        task = getattr(self, '_document_refresh_task', None)
+        if task is None or task.done():
+            async def refresh():
+                while self.active_host and self._document_refresh_again:
+                    self._document_refresh_again = False
+                    records, warnings = await asyncio.to_thread(self.store.summaries)
+                    if self.active_host and not self._document_refresh_again:
+                        self._publish_document_summaries(records, warnings)
+            self._document_refresh_task = self.loop.create_task(refresh())
+
+    def _publish_document_summaries(self, documents, failures):
         previous = self.loading
         self.loading = True
-        documents, failures = self.store.documents()
         self.stored_document_kinds = {doc.id: text_document_kind(doc.name) for doc in documents}
         counts, self.labels = {}, {}
         for doc in documents:
