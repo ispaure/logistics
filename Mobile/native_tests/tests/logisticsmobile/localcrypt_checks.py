@@ -402,8 +402,7 @@ async def exercise_localcrypt(app, passed):
     assert app.editor.value == source.snapshot.text
     assert 'private handoff native sentinel' not in app.store.path(source.id, '.json').read_text()
     app.close_crypt()
-    app.show_view(app.files_view)
-    assert await app.browser_file_location((crypt_label, '')), app.file_status.value
+    assert await app.show_files(location=(crypt_label, '')), app.file_status.value
     select('destination')
     app.file_destination.value = 'Local files'
     app.file_target.value = 'exported'
