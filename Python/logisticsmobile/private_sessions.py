@@ -255,6 +255,8 @@ class PrivateSessions:
                 if task is not None:
                     task.cancel()
                     setattr(owner, name, None)
+            from .page_animation import cancel_page_slide
+            cancel_page_slide(getattr(owner, 'crypt_content', None))
             owner.clear_private_preview()
             for name in ('provider_spread', 'provider_epub_view'):
                 view = getattr(owner, name, None)

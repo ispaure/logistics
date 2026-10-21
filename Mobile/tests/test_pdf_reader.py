@@ -62,6 +62,11 @@ class PDFMobileTests(unittest.TestCase):
                 owner = app.private_sessions.active
                 self.assertEqual(owner.crypt_reader.pdf.count, 3)
                 self.assertIsNotNone(owner.crypt_image.image)
+                with patch('logisticsmobile.page_animation.begin_page_slide') as begin:
+                    await owner.move_private_page(1)
+                    self.assertEqual(begin.call_args.args[1], 1)
+                    await owner.move_private_page(0)
+                    self.assertEqual(begin.call_args.args[1], -1)
                 self.assertTrue(owner.clear_private_reader())
             app.loop.run_until_complete(check())
 

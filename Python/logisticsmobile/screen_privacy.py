@@ -143,6 +143,8 @@ class ScreenPrivacy:
 
     def conceal(self):
         self.inactive = True
+        from .page_animation import cancel_visible_slides
+        cancel_visible_slides(self.app)
         from .ios_content_background import clear
         clear(self.app)
         from .browser_ui import sync_browser_population

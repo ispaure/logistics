@@ -20,8 +20,15 @@ SCRIPT = r'''
  document.documentElement.style.overflow='hidden';
  Object.assign(document.body.style,{overflow:'hidden',height:'100vh',boxSizing:'border-box'});
  Object.assign(pages.style,{columnFill:'auto',columnGap:'0px',position:'relative'});
- let page=0, pageWidth=1, pageCount=1, touch=null, disposed=false;
+ let page=0, pageWidth=1, pageCount=1, touch=null, disposed=false, pageAnimation=null;
+ const stopMotion=()=>{if(pageAnimation){pageAnimation.cancel();pageAnimation=null;}};
+ const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+ const motionChanged=()=>{if(reducedMotion.matches || document.getElementById('logistics-eink'))stopMotion();};
+ reducedMotion.addEventListener('change',motionChanged);
+ const contrastObserver=new MutationObserver(motionChanged);
+ contrastObserver.observe(document.head,{childList:true,subtree:true});
  const layout=()=>{
+   stopMotion();
    const css=getComputedStyle(document.body);
    pageWidth=Math.max(1,document.body.clientWidth-parseFloat(css.paddingLeft)-parseFloat(css.paddingRight));
    pages.style.width=pageWidth+'px';pages.style.columnWidth=pageWidth+'px';
@@ -30,7 +37,7 @@ SCRIPT = r'''
    for(const image of pages.querySelectorAll('img')) Object.assign(image.style,{maxHeight:pages.style.height,maxWidth:'100%',objectFit:'contain',breakInside:'avoid'});
    pageCount=Math.max(1,Math.ceil((pages.scrollWidth-1)/pageWidth));
  };
- const place=value=>{page=Math.max(0,Math.min(pageCount-1,value));pages.style.transform='translateX('+(-page*pageWidth)+'px)';scrollTo(0,0);};
+ const place=value=>{stopMotion();page=Math.max(0,Math.min(pageCount-1,value));pages.style.transform='translateX('+(-page*pageWidth)+'px)';scrollTo(0,0);};
  layout();
  let anchor = options.offset, selectedCache = null, speechRange = null;
  // Inert chapter text is immutable for this bridge's lifetime. Index once.
@@ -55,6 +62,7 @@ SCRIPT = r'''
    window.location.href = options.root + action + '?offset=' + value + '&end=' + (page===pageCount-1 ? '1' : '0');
  };
  const visible = () => {
+   if(pageAnimation && pageAnimation.playState==='running')return anchor;
    let total = 0;
    const bounds=document.body.getBoundingClientRect();
    const left=bounds.left+parseFloat(getComputedStyle(document.body).paddingLeft), right=left+pageWidth;
@@ -76,6 +84,7 @@ SCRIPT = r'''
    return anchor;
  };
  const seek = (offset, end=null) => {
+   stopMotion();
    const p = point(offset); if (!p) return;
    selectedCache = end !== null ? {start:offset,end} : null;
    anchor = Math.max(0, offset);
@@ -144,10 +153,17 @@ SCRIPT = r'''
      if ((direction>0 && page===pageCount-1) || (direction<0 && page===0)) {
        notify(direction>0?'next':'previous',visible()); return;
      }
+     const previous=page;
      place(page+(direction>0?1:-1));
+     // Measure the destination before starting visual motion so saved passage
+     // anchors never describe an interpolated position between two pages.
      anchor=visible();notify('position',anchor);
+     if(!document.getElementById('logistics-eink') && !reducedMotion.matches){
+       pageAnimation=pages.animate([{transform:'translateX('+(-previous*pageWidth)+'px)'},
+         {transform:'translateX('+(-page*pageWidth)+'px)'}],{duration:220,easing:'ease-out'});
+     }
    },
-   dispose: () => {disposed=true;textNodes=[];textEnds=[];textStarts=new WeakMap();if(viewport.isConnected){while(pages.firstChild) viewport.before(pages.firstChild);viewport.remove();}document.removeEventListener('touchstart',touchStart);document.removeEventListener('touchmove',touchMove);document.removeEventListener('touchend',touchEnd);document.removeEventListener('wheel',wheel);document.removeEventListener('keydown',key);removeEventListener('resize',resized);document.removeEventListener('selectionchange',rememberSelection);removeEventListener('pointerdown',clearSelectionCache);removeEventListener('keydown',clearSelectionCache);selectedCache=null;}
+   dispose: () => {disposed=true;stopMotion();contrastObserver.disconnect();reducedMotion.removeEventListener('change',motionChanged);textNodes=[];textEnds=[];textStarts=new WeakMap();if(viewport.isConnected){while(pages.firstChild) viewport.before(pages.firstChild);viewport.remove();}document.removeEventListener('touchstart',touchStart);document.removeEventListener('touchmove',touchMove);document.removeEventListener('touchend',touchEnd);document.removeEventListener('wheel',wheel);document.removeEventListener('keydown',key);removeEventListener('resize',resized);document.removeEventListener('selectionchange',rememberSelection);removeEventListener('pointerdown',clearSelectionCache);removeEventListener('keydown',clearSelectionCache);selectedCache=null;}
  };
  addEventListener('resize',resized);
  document.addEventListener('selectionchange',rememberSelection);addEventListener('pointerdown',clearSelectionCache);addEventListener('keydown',clearSelectionCache);

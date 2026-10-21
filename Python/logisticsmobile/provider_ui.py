@@ -103,6 +103,8 @@ class ProviderUI(FilesUI):
             from services.documents.readers import MemorySource
             if isinstance(reader.source, MemorySource):
                 reader.source.data = b''
+        from .page_animation import cancel_page_slide
+        cancel_page_slide(getattr(self, 'crypt_content', None))
         from .ios_content_background import clear
         clear(getattr(self, 'app', self))
         self.crypt_reader = None
@@ -503,6 +505,8 @@ class ProviderUI(FilesUI):
             direction = page_direction(None if previous_index is None else previous_index + getattr(view, '_provider_displayed_half', 0) / 2,
                 index + half / 2,
                 right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
+        elif view.crypt_reader.kind in {'.epub', '.pdf'} and view.crypt_content.children:
+            direction = page_direction(getattr(view, '_provider_displayed_index', None), index)
         begin_page_slide(view.crypt_content, direction, self.preferences.values)
         for child in list(view.crypt_content.children):
             if hasattr(child, 'dispose') and child not in (view.crypt_image, view.crypt_text, prepared_spread):
@@ -547,6 +551,7 @@ class ProviderUI(FilesUI):
                 from .appearance import hierarchy_row_style
                 chapters.row_style, chapters.current = hierarchy_row_style, index
                 chapters.render()
+            view.provider_epub_view.page_motion_enabled = lambda: self.preferences.values.get('android_eink') != 'true'
             tools = view.provider_epub_view.tools
             if tools.button in tools.widget.children:
                 tools.widget.remove(tools.button)

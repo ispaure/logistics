@@ -73,3 +73,8 @@ background beneath them. The fitted document stays inside the unobstructed
 reading area, so page text is not hidden by a toolbar. Fullscreen keeps its
 existing edge-to-edge canvas. Reduce Transparency disables the decorative
 extension; private-reader conceal and suspension release its image.
+
+## Page-turn motion
+
+Page changes use a short slide. **High Contrast / E Ink** disables page-turn
+motion on mobile. System reduced-motion preferences are respected.

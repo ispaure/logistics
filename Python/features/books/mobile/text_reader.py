@@ -12,6 +12,7 @@ from .navigation import ChapterTools
 class TextBookView(toga.Box):
     """Exact passage anchors, nested contents and search without browser storage."""
     def __init__(self, book, index, *, offset=0, font_size=16, prepared=None, on_chapter, on_position):
+        self.page_motion_enabled = lambda: True
         self.book, self.index = book, index
         self.on_chapter, self.on_position = on_chapter, on_position
         self.chapter = prepared[1] if prepared is not None else ChapterText(chapter_html(book, index, links=True))
@@ -52,13 +53,18 @@ class TextBookView(toga.Box):
 
     def turn(self, direction):
         if direction > 0 and self.end < len(self.chapter.text):
-            self.seek(self.units[self.end])
-            return True
-        if direction < 0 and self.offset > 0:
+            offset = self.units[self.end]
+        elif direction < 0 and self.offset > 0:
             start = bisect_left(self.units, self.offset)
-            self.seek(self.units[max(0, start - 1200)])
-            return True
-        return False
+            offset = self.units[max(0, start - 1200)]
+        else:
+            return False
+        from commonUtils.ui.native.transitions import begin_page_slide, finish_page_slide
+        enabled = self.page_motion_enabled()
+        begin_page_slide(self.text, direction, enabled=enabled)
+        self.seek(offset)
+        finish_page_slide(self.text, direction, enabled=enabled)
+        return True
 
     def choose(self, widget, **kwargs):
         if not self.loading and widget.value in self.choices:

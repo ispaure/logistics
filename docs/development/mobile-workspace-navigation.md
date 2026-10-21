@@ -1330,3 +1330,19 @@ Background geometry is remeasured once through the event loop after each render
 pass, coalescing repeated requests. This includes final footer/Home-indicator
 margins when a PDF opens without an intervening rotation. Privacy removal remains
 synchronous; the deferred pass rechecks current route and concealment state.
+
+## Reader page motion
+
+Imported EPUB chapter changes, provider EPUB/PDF pages and comic replacements
+share the host page-motion policy. Rich EPUB in-chapter turns animate the
+paginated WebView content after measuring the destination passage anchor;
+search, position restoration and resize cancel motion before measuring text.
+The native text fallback uses the same short slide around passage replacement.
+Mobile High Contrast / E Ink suppresses all of these paths. The EPUB bridge
+observes contrast and reduced-motion changes to cancel an active Web Animation.
+Native reader close, conceal and suspension cancel retained page layers. iOS
+stores CATransition under its reserved `transition` key, regardless of the key
+supplied when adding it; cancellation and native probes use that actual key.
+The optional native pose audit `--page-turns` exercises forward/backward turns in
+normal/high-contrast mode for imported EPUB/comics and provider EPUB/PDF/comics,
+plus real WKWebView in-chapter motion and suppression.

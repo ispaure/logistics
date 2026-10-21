@@ -133,6 +133,12 @@ class ReaderNavigationTests(unittest.TestCase):
                                             await owner.move_book_page(index)
                                             self.assertEqual(begin.call_args.args[1], expected)
                                             self.assertEqual(finish.call_args.args[1], expected)
+                            if path == epub:
+                                with patch('logisticsmobile.page_animation.begin_page_slide') as begin:
+                                    await owner.move_book_page(1)
+                                    self.assertEqual(begin.call_args.args[1], 1)
+                                    await owner.move_book_page(0)
+                                    self.assertEqual(begin.call_args.args[1], -1)
                             owner.set_reading_mode(False)
                             app.adaptive.render()
                             self.assertTrue(policy.call_args.args[0])
@@ -160,3 +166,18 @@ class ReaderNavigationTests(unittest.TestCase):
             begin_page_slide(content, direction, preferences)
             finish_page_slide(content, direction, preferences)
         self.assertEqual(content.mock_calls, [])
+
+    def test_high_contrast_cancels_inflight_native_page_motion(self):
+        from types import SimpleNamespace
+        for backend in ('toga_iOS.widgets.box', 'toga_android.widgets.box'):
+            impl = type('Backend', (), {'__module__': backend})()
+            impl.native = Mock()
+            content = SimpleNamespace(_impl=impl)
+            begin_page_slide(content, 1, {'android_eink': 'true'})
+            finish_page_slide(content, 1, {'android_eink': 'true'})
+            if backend.startswith('toga_iOS.'):
+                impl.native.layer.removeAnimationForKey.assert_called_once_with('transition')
+                impl.native.layer.addAnimation.assert_not_called()
+            else:
+                impl.native.clearAnimation.assert_called_once_with()
+                impl.native.startAnimation.assert_not_called()

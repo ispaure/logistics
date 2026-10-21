@@ -128,6 +128,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.set_book_busy(False)
 
     def release_book_reader(self):
+        from .page_animation import cancel_page_slide
+        cancel_page_slide(self.book_content)
         self.close_read_aloud()
         self.book_epoch = getattr(self, 'book_epoch', 0) + 1
         self._epub_pending = None
@@ -272,6 +274,15 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         updated = dict(record, position=index)
         if location is not None:
             updated['location'] = location
+        from .page_animation import page_direction, begin_page_slide, finish_page_slide
+        direction = 0
+        if record['kind'] == 'comic' and self.book_content.children:
+            direction = page_direction(record['position'] + self.comic_navigation.half / 2,
+                index + self.comic_navigation.prepared[1] / 2,
+                right_to_left=getattr(reader, 'right_to_left', False))
+        elif record['kind'] == 'epub' and self.book_content.children:
+            direction = page_direction(record['position'], index)
+        begin_page_slide(self.book_content, direction, self.preferences.values)
         if record['kind'] == 'epub':
             self.epub_text, self.epub_offset, content = prepared_epub
             self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
@@ -280,13 +291,6 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             from .font_scaling import bind
             bind(self, self.epub_view, 'epub', web=True)
             view = self.epub_view
-        from .page_animation import page_direction, begin_page_slide, finish_page_slide
-        direction = 0
-        if record['kind'] == 'comic' and self.book_content.children:
-            direction = page_direction(record['position'] + self.comic_navigation.half / 2,
-                index + self.comic_navigation.prepared[1] / 2,
-                right_to_left=getattr(reader, 'right_to_left', False))
-        begin_page_slide(self.book_content, direction, self.preferences.values)
         for child in list(self.book_content.children):
             if child is not view and hasattr(child, 'dispose'):
                 child.dispose()

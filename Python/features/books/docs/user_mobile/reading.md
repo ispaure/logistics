@@ -186,3 +186,10 @@ comic or EPUB reloads at its saved page or passage when you return. Reading mode
 or visible controls are preserved. Closed documents and readers on other screens
 stay closed or inactive. Password-protected documents retain their usual unlock
 requirements; session-only content is revealed only after its session password.
+
+## Page-turn motion
+
+Page changes use a short slide. **High Contrast / E Ink** disables page-turn
+motion on mobile. System reduced-motion preferences are respected.
+EPUB slides apply within a chapter and when changing chapters. Seeking within a
+chapter, resizing the reader and restoring a saved position do not animate.
