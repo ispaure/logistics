@@ -21,9 +21,17 @@ class DuoPoseProbe(ToolbarProbe):
         from rubicon.objc import ObjCClass
         arguments = [str(arg) for arg in ObjCClass('NSProcessInfo').processInfo.arguments]
         self.pose_sweep = '--pose-sweep' in arguments
+        self.page_turns = '--page-turns' in arguments
         super().on_running()
 
     async def record(self, name):
+        from .page_motion_checks import exercise
+        await exercise(self, name)
+        if self.page_turns and name.endswith('-cbz'):
+            owner = self.private_sessions.active
+            if owner.crypt_immersive:
+                owner.toggle_private_reading_mode()
+                await asyncio.sleep(.3)
         expected = panel_state(self)
         first = None
         for orientation in ((None,) if self.pose_sweep else ('portrait', 'landscape-left', 'landscape-right', 'portrait')):

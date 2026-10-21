@@ -54,7 +54,7 @@ def prepare(source, output):
     return app
 
 
-def run(source, output, device, *, pose_sweep=False, observe_folds=False, timeout=900):
+def run(source, output, device, *, pose_sweep=False, observe_folds=False, page_turns=False, timeout=900):
     if output.exists():
         raise ValueError('Choose a fresh evidence output directory.')
     output.mkdir(parents=True)
@@ -74,7 +74,7 @@ def run(source, output, device, *, pose_sweep=False, observe_folds=False, timeou
         installed = True
         cache = Path(sim('get_app_container', device, BUNDLE, 'data')) / 'Library/Caches/toolbar-qa'
         (cache / 'result.json').unlink(missing_ok=True)
-        arguments = [flag for flag, enabled in (('--pose-sweep', pose_sweep), ('--observe-folds', observe_folds)) if enabled]
+        arguments = [flag for flag, enabled in (('--pose-sweep', pose_sweep), ('--observe-folds', observe_folds), ('--page-turns', page_turns)) if enabled]
         sim('launch', device, BUNDLE, *arguments)
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -113,7 +113,8 @@ if __name__ == '__main__':
     parser.add_argument('--device', required=True)
     parser.add_argument('--pose-sweep', action='store_true')
     parser.add_argument('--observe-folds', action='store_true')
+    parser.add_argument('--page-turns', action='store_true', help='Check native page motion and high-contrast suppression')
     parser.add_argument('--timeout', type=int, default=900)
     arguments = parser.parse_args()
     run(arguments.app, arguments.output, arguments.device, pose_sweep=arguments.pose_sweep,
-        observe_folds=arguments.observe_folds, timeout=arguments.timeout)
+        observe_folds=arguments.observe_folds, page_turns=arguments.page_turns, timeout=arguments.timeout)

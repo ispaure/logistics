@@ -123,6 +123,9 @@ class ToolbarProbe(LogisticsMobile):
             self.report['checks'].append('native-save-target-action')
             self.show_home()
             epub, comic = make_books(root)
+            if getattr(self, 'page_turns', False):
+                from .page_motion_checks import expand_epub
+                expand_epub(epub)
             for path, kind in ((epub, 'epub'), (comic, 'comic')):
                 book = self.reader_manager().catalog.library_store.import_book(LocalDocuments(), path)
                 assert await self.open_book(book['id'])
@@ -144,6 +147,7 @@ class ToolbarProbe(LogisticsMobile):
                 await self.record('provider-' + key.replace('.', '-'))
                 self.show_home()
             writer = PdfWriter(); writer.add_blank_page(width=300, height=400)
+            writer.add_blank_page(width=300, height=400)
             data = io.BytesIO(); writer.write(data)
             (root / 'Page.pdf').write_bytes(data.getvalue())
             (root / 'Image.png').write_bytes(png_page())
@@ -156,9 +160,12 @@ class ToolbarProbe(LogisticsMobile):
                 reader.key = key
                 return reader
             copies = SimpleNamespace(root=root, provider=LocalFiles(root), encrypted=False, offline=True, open=opened)
-            for key in ('Page.pdf', 'Image.png'):
+            extra_readers = (epub.name, comic.name) if getattr(self, 'page_turns', False) else ()
+            for key in ('Page.pdf', 'Image.png') + extra_readers:
                 assert await asyncio.wait_for(self.open_crypt(copies=copies, key=key), 20)
                 await self.record(key.replace('.', '-'))
+                if getattr(self, 'page_turns', False):
+                    self.private_sessions.active.close_crypt()
                 self.show_home()
             self.show_home()
             self.show_library()
