@@ -155,6 +155,22 @@ async def exercise_browser_back(app):
                 app.native_host.destinations.index('files')].popViewControllerAnimated(True)
         else:
             app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
+        if filename.endswith('.md') and get_os() is OS.ANDROID:
+            # Android Back requests a close. Dirty drafts require a decision;
+            # cancelling that decision and selecting Files preserves the draft.
+            for _ in range(100):
+                if app.routes.screens['files'][-1][0] == 'private-close:' + owner.session.id:
+                    break
+                await asyncio.sleep(.05)
+            assert app.routes.screens['files'][-1][0] == 'private-close:' + owner.session.id
+            assert owner.session.id in app.workspace.sessions
+            app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
+            for _ in range(100):
+                if app.routes.screens['files'][-1][0] == 'private:' + owner.session.id:
+                    break
+                await asyncio.sleep(.05)
+            assert app.routes.screens['files'][-1][0] == 'private:' + owner.session.id
+            await app.show_files()
         # didShow arrives after UIKit's transition and layout work. A fixed
         # delay races cold hosted iPads; wait for the retained viewport itself.
         for _ in range(100):
@@ -168,12 +184,16 @@ async def exercise_browser_back(app):
         assert app.file_path == 'Back review'
         trace_viewport('after-return')
         assert abs(scroll.vertical_position - position) < 2, (position, scroll.vertical_position)
-        assert owner.session.id in app.workspace.sessions
+        if filename.endswith('.cbz') and get_os() is OS.ANDROID:
+            assert owner.session.id not in app.workspace.sessions
+        else:
+            assert owner.session.id in app.workspace.sessions
         assert not app._comic_chrome_hidden
         if filename.endswith('.md'):
             assert owner.crypt_text.value == '# Unsaved note after opening from Files'
     assert not hasattr(app, 'book_reader') and not hasattr(app, 'crypt_text')
     return {**transition, 'native_back_to_files': True,
-            'native_tab_to_files': False, 'browser_scroll_preserved': True,
+            'native_tab_to_files': get_os() is OS.ANDROID, 'browser_scroll_preserved': True,
+            'clean_reader_back_closes': get_os() is OS.ANDROID,
             'draft_retained_on_back': True, 'reader_tools_back_preserved': True,
             'controller_state_is_owned': True}
