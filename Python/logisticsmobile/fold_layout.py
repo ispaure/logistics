@@ -40,7 +40,10 @@ def division(owner, widget, *, include_inactive=False):
     """The active fold dividing a container, independent of device orientation."""
     for region in reserved_divisions(widget, include_inactive=include_inactive):
         bounds = widget._impl.native.bounds.size
-        if region.spans(float(bounds.width), float(bounds.height)):
+        width, height = float(bounds.width), float(bounds.height)
+        start, end, extent = ((region.x, region.x + region.width, width) if region.vertical
+                              else (region.y, region.y + region.height, height))
+        if region.spans(width, height) and 0 < start <= end < extent:
             return region
     return None
 
@@ -65,7 +68,16 @@ def install(app):
         host = owner()
         if host is not None:
             host._fold_refresh_pending = False
-            host.resize_workspace()
+            native = host.main_window._impl.native
+            bounds, safe = native.bounds.size, native.safeAreaInsets
+            signature = (getattr(host, '_hinge_status', 0),
+                         float(bounds.width), float(bounds.height),
+                         float(safe.left), float(safe.right), float(safe.top), float(safe.bottom),
+                         reserved_divisions(host.main_window),
+                         reserved_divisions(host.main_window, include_inactive=True))
+            if signature != getattr(host, '_fold_geometry', None):
+                host._fold_geometry = signature
+                host.resize_workspace()
 
     def update(interaction, value):
         host = owner()
@@ -115,3 +127,14 @@ def reading_seam(owner, widget):
     width = float(widget._impl.native.bounds.size.width)
     center = region.x + region.width / 2
     return center / width if 0 < center < width else None
+
+
+def page_region(owner, widget):
+    """A discrete page sits above an active horizontal fold; controls stay below."""
+    region = division(owner, widget)
+    if region is None or region.vertical:
+        return None
+    bounds = widget._impl.native.bounds.size
+    if 0 < region.y < float(bounds.height):
+        return (0, 0, float(bounds.width), region.y)
+    return None

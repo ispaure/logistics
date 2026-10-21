@@ -101,11 +101,17 @@ class ProviderComicController:
         return self.format_services.seam(getattr(view or self, 'crypt_content', self.main_window.content))
 
     def private_comic_mode(self):
+        content = getattr(self, 'crypt_content', self.main_window.content)
+        if self.format_services.page_region(content) is not None:
+            return 'single'
         return self.format_services.mode(
             getattr(self, "crypt_content", self.main_window.content)
         )
 
     def private_comic_viewport(self, view=None):
+        region = self.format_services.page_region((view or self).crypt_content)
+        if region is not None:
+            return region[2:]
         layout = (view or self).crypt_content.layout
         return max(
             1,
@@ -145,14 +151,16 @@ class ProviderComicController:
                     self.private_comic_viewport(),
                     self.private_comic_mode(),
                     self.preferences.values.get('comic_split_wide', 'true'),
-                    (self.private_comic_seam(), self.format_services.seam_gap(self.crypt_content)),
+                    (self.private_comic_seam(), self.format_services.seam_gap(self.crypt_content),
+                     self.format_services.page_region(self.crypt_content)),
                 ),
                 view=lambda: getattr(self, "provider_spread", None),
                 reload=relayout,
                 initial=(getattr(reader.comic_navigation, 'viewport', (1, 1)),
                          self.private_comic_mode(),
                          self.preferences.values.get('comic_split_wide', 'true'),
-                         (self.private_comic_seam(), self.format_services.seam_gap(self.crypt_content))),
+                         (self.private_comic_seam(), self.format_services.seam_gap(self.crypt_content),
+                          self.format_services.page_region(self.crypt_content))),
                 changed=self.format_services.layout_changed(),
                 force=lambda previous, current: previous[-1] != current[-1],
             )

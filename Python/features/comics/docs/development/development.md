@@ -325,7 +325,8 @@ succeeds. Ordinary platforms keep their original spread-start navigation.
 The host's `ReadingPresentation` supplies local seam geometry and reserved gap.
 Inactive interior divisions preserve the physical anchor when flat. The gap is
 blank in the bounded composition bitmap. Wide artwork uses one region rather
-than crossing the active fold. Layout watchers distinguish relayout from explicit
+than crossing the active fold. `page_region` constrains discrete pages above an
+active horizontal fold without relocating continuous articles. Layout watchers distinguish relayout from explicit
 navigation to preserve wide-page halves and bypass zoom deferral only when the
 fold region changes. Imported progress persists the anchor using the existing
 position schema; provider progress remains session-owned.

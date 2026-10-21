@@ -251,6 +251,14 @@ class ChatUI:
             from features.lm.mobile.presentation import navigation_clearance
             margin = navigation_clearance(top, bottom, float(bar.origin.y), float(bar.size.height),
                                           bar_width=float(bar.size.width))
+        # Vertical Duo bars do not reserve the Home-indicator strip through
+        # the content container. Keep the fixed composer within the window's
+        # actual bottom safe area without double-counting horizontal tab bars.
+        window = self.main_window._impl.native
+        viewport = container.native.convertRect(container.native.bounds, toView=window)
+        bottom = float(viewport.origin.y + viewport.size.height - container.bottom_inset)
+        safe_bottom = float(window.bounds.size.height - window.safeAreaInsets.bottom)
+        margin = max(margin, 12 + max(0, bottom - safe_bottom))
         if self.chat_view.style.margin_bottom != margin:
             self.chat_view.style.margin_bottom = margin
 

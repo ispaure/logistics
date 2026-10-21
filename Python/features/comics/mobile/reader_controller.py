@@ -52,9 +52,14 @@ class ComicController:
         return self.format_services.seam(self.book_content)
 
     def comic_layout_mode(self):
+        if self.format_services.page_region(self.book_content) is not None:
+            return 'single'
         return self.format_services.mode(self.book_content)
 
     def comic_viewport(self):
+        region = self.format_services.page_region(self.book_content)
+        if region is not None:
+            return region[2:]
         layout = self.book_content.layout
         return max(
             1,
@@ -154,7 +159,8 @@ class ComicController:
                     self.comic_viewport(),
                     self.comic_layout_mode(),
                     self.preferences.values.get('comic_split_wide', 'true'),
-                    (self.comic_seam(), self.format_services.seam_gap(self.book_content)),
+                    (self.comic_seam(), self.format_services.seam_gap(self.book_content),
+                     self.format_services.page_region(self.book_content)),
                 ),
                 view=lambda: self.book_content.children[0]
                 if self.book_content.children
@@ -234,4 +240,5 @@ class ComicController:
                     seam_gap=self.format_services.seam_gap(self.book_content),
                     anchor_right=seam is not None,
                 )
-        return view, indices
+        from .presentation import place_page
+        return place_page(view, self.format_services.page_region(self.book_content)), indices

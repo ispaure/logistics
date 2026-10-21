@@ -172,7 +172,7 @@ class HubSections(toga.Box):
                 index = self.content.children.index(self.before) if self.before is not None else len(self.content.children)
                 self.content.insert(index, self.trailing)
             self.paired = paired
-        allocation = panes(width, self.layout.content_height or 1, fold=fold)
+        allocation = panes(width, self.layout.content_height or 1, fold=fold, gutter=0)
         vertical = paired and allocation.axis == 'column'
         self.style.direction = COLUMN if vertical else ROW
         self.trailing_scroll.style.margin_left = allocation.gap if paired and not vertical else 0

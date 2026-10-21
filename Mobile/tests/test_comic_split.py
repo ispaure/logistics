@@ -156,10 +156,11 @@ class ComicSplitTests(unittest.TestCase):
                         else:
                             owner = imported
                             nav, jump = owner.comic_navigation, owner.move_book_page
-                        state = dict(seam=None, mode='single')
+                        state = dict(seam=None, mode='single', region=None)
                         owner.format_services = replace(owner.format_services,
                             seam=lambda view: state['seam'], mode=lambda view: state['mode'],
-                            seam_gap=lambda view: 24 if state['seam'] else 0)
+                            seam_gap=lambda view: 24 if state['seam'] else 0,
+                            page_region=lambda view: state['region'])
                         # Explicit outer selection, then only layout changes.
                         await jump(3)
                         self.assertEqual(nav.visible, (3,))
@@ -177,6 +178,18 @@ class ComicSplitTests(unittest.TestCase):
                                 self.assertEqual(nav.visible, (3,))
                             self.assertEqual(owner.crypt_reader if provider else owner.book_reader,
                                              reader if provider else imported.book_reader)
+                        # A horizontal fold constrains the discrete page above
+                        # the division, without changing the logical anchor.
+                        state.update(seam=None, mode='single', region=(0, 0, 400, 160))
+                        await jump(3)
+                        page = owner.provider_spread if provider else owner.book_content.children[0]
+                        self.assertEqual(page.style.height, 160)
+                        self.assertEqual(nav.visible, (3,))
+                        state['region'] = None
+                        await jump(3)
+                        page = owner.provider_spread if provider else owner.book_content.children[0]
+                        self.assertEqual(page.style.flex, 1)
+                        self.assertEqual(nav.page, 3)
                         if provider:
                             app.private_sessions.close(owner.session.id, discard=True)
                 try:

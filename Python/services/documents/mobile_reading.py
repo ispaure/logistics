@@ -19,3 +19,4 @@ class ReadingPresentation:
     themed_chapter: Callable
 
     seam_gap: Callable[[Any], float] = lambda view: 0
+    page_region: Callable[[Any], tuple | None] = lambda view: None

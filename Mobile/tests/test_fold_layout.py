@@ -2,7 +2,7 @@
 from types import SimpleNamespace as NS
 import unittest
 
-from logisticsmobile.fold_layout import seam_fraction, comic_mode
+from logisticsmobile.fold_layout import seam_fraction, comic_mode, page_region
 from features.comics.mobile.composite import spread_geometry
 from features.comics.mobile.navigation import ComicNavigation
 from Mobile.native_tests.tests.logisticsmobile.reader_parity_probe import image_bytes
@@ -22,6 +22,7 @@ class FoldLayoutTests(unittest.TestCase):
             self.assertEqual(comic_mode(host, widget), 'single')
         with patch('logisticsmobile.fold_layout.reserved_divisions', return_value=(Division(0, 320, 900, 40),)):
             self.assertIsNone(seam_fraction(host, widget))
+            self.assertEqual(page_region(host, widget), (0, 0, 900, 320))
         # A fold outside/partly intersecting a pane does not split that pane.
         with patch('logisticsmobile.fold_layout.reserved_divisions', return_value=(Division(460, 200, 40, 100),)):
             self.assertIsNone(seam_fraction(host, widget))

@@ -113,7 +113,7 @@ def notes_host(app):
 
 def reading_presentation(owner):
     from services.documents.mobile_reading import ReadingPresentation
-    from .fold_layout import reading_seam, seam_gap, comic_mode
+    from .fold_layout import reading_seam, seam_gap, page_region, comic_mode
     from .layout_events import layout_waiter, notify_layout
     from .reader_controls import provider_comic_path
     from .palette import themed_chapter
@@ -121,6 +121,7 @@ def reading_presentation(owner):
     app = getattr(owner, 'app', owner)
     return ReadingPresentation(seam=lambda view: reading_seam(owner, view),
         seam_gap=lambda view: seam_gap(owner, view),
+        page_region=lambda view: page_region(owner, view),
         mode=lambda view: comic_mode(owner, view), layout_changed=lambda: layout_waiter(app),
         content_width=lambda destination: app.adaptive.content_width(destination, margin=0),
         private_label=private_label, speech_valid=lambda: speech_session_valid(owner), speech_presentation=app.speech_presentation,

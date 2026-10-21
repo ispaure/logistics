@@ -238,7 +238,7 @@ class AppearanceTests(unittest.TestCase):
         bar = NS(isHidden=lambda: False, bounds=rect(720, 80),
                  convertRect=lambda *a, **kw: rect(720, 80))
         app = NS(native_host=NS(adapter=NS(navigation=[], controller=NS(tabBar=bar))),
-                 routes=NS(body=lambda: NS(children=[view])), main_window=NS(_impl=NS(native=object())))
+                 routes=NS(body=lambda: NS(children=[view])), main_window=NS(_impl=NS(native=NS(bounds=rect(0, 800), safeAreaInsets=NS(bottom=0)))))
         reserve_navigation(app)
         self.assertEqual(view.style.margin_bottom, 96)
         # A Duo rail must release the previous bottom-bar reservation, and a
@@ -259,6 +259,15 @@ class AppearanceTests(unittest.TestCase):
         app.native_host.adapter.tabs_hidden = lambda: False
         reserve_navigation(app)
         self.assertEqual(view.style.margin_bottom, 96)
+        bar.convertRect = lambda *a, **kw: rect(204, 574, 52)
+        app.main_window._impl.native.safeAreaInsets.bottom = 34
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 50)
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 50)
+        view._impl.container.bottom_inset = 34
+        reserve_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 16)
         view._comic_fullscreen = True
         view.style.margin = 0
         reserve_navigation(app)
@@ -277,10 +286,18 @@ class AppearanceTests(unittest.TestCase):
                  convertRect=lambda *a, **kw: rect(720, 80))
         adapter = NS(navigation=[], controller=NS(tabBar=tab), tabs_hidden=lambda: False)
         app = NS(native_host=NS(adapter=adapter), chat_view=view,
-                 main_window=NS(_impl=NS(native=object())))
+                 main_window=NS(_impl=NS(native=NS(bounds=rect(0, 800), safeAreaInsets=NS(bottom=0)))))
         ChatUI.reserve_chat_navigation(app)
         self.assertGreater(view.style.margin_bottom, 12)
         adapter.tabs_hidden = lambda: True
+        ChatUI.reserve_chat_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 12)
+        app.main_window._impl.native.safeAreaInsets.bottom = 34
+        ChatUI.reserve_chat_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 46)
+        ChatUI.reserve_chat_navigation(app)
+        self.assertEqual(view.style.margin_bottom, 46)
+        view._impl.container.bottom_inset = 34
         ChatUI.reserve_chat_navigation(app)
         self.assertEqual(view.style.margin_bottom, 12)
 

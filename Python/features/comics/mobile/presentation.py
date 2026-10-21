@@ -62,6 +62,17 @@ class SpreadView(toga.Box):
         self.canvas.dispose()
 
 
+
+def place_page(view, region):
+    """Constrain a discrete page above a horizontal fold; retain its owner."""
+    if region is None:
+        del view.style.height
+        view.style.flex = 1
+    else:
+        view.style.height, view.style.flex = max(1, region[3]), 0
+    return view
+
+
 async def watch_layout(*, alive, available, viewport, view, reload, changed, initial=None, force=lambda previous, current: False):
     """Refresh a fitted spread after a viewport change; hosts own task lifetime."""
     previous = viewport() if initial is None else initial

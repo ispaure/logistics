@@ -519,6 +519,10 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.navigation.render()
             self.assertGreater(frame.main.style.width, frame.folder_master.style.width)
             self.assertIs(app.file_browser, browser)
+            with patch.object(self.navigation, 'content_width', return_value=600):
+                self.navigation.render()
+                self.assertTrue(self.navigation.wide)
+                self.assertGreater(frame.main.style.width, frame.folder_master.style.width)
             app.preferences.values['android_eink'] = 'false'
             with patch('logisticsmobile.fold_layout.has_fold', return_value=True):
                 self.navigation.last_layout = None

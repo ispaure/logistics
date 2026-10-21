@@ -190,6 +190,14 @@ def reserve_navigation(app):
         extra = navigation_clearance(float(viewport.origin.y + container.top_inset),
             float(viewport.origin.y + viewport.size.height - container.bottom_inset),
             float(bounds.origin.y), float(bounds.size.height), bar_width=float(bounds.size.width)) - 12
+    # A vertical bar can leave the root container's bottom inset at zero
+    # while the window still reserves a Home-indicator strip. Foreground rows
+    # must honor that strip independently of the destination bar's axis.
+    window = app.main_window._impl.native
+    viewport = container.native.convertRect(container.native.bounds, toView=window)
+    bottom = float(viewport.origin.y + viewport.size.height - container.bottom_inset)
+    safe_bottom = float(window.bounds.size.height - window.safeAreaInsets.bottom)
+    extra = max(extra, max(0, bottom - safe_bottom))
     margin = view._navigation_margin + extra
     if view.style.margin_bottom != margin:
         view.style.margin_bottom = margin

@@ -354,7 +354,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             fold = division(self.app, frame.row) if frame is not None else None
             self.wide = self.wide or fold is not None
             if frame is not None and frame.destination == 'files':
-                self.wide = self.content_width('files', margin=0) >= 640 or fold is not None
+                minimum = 516 if self.app.preferences.values.get('android_eink') == 'true' else 640
+                self.wide = self.content_width('files', margin=0) >= minimum or fold is not None
             layout = (id(frame), self.wide, self.layout_width, self.pinned,
                       tuple(self.menu_open.items()), frame.row.layout.content_width if frame else 0,
                       fold, frame.row.layout.content_height if frame else 0,

@@ -139,6 +139,23 @@ class FormToolbarTests(TestCase):
         self.assertIn(erase, page.content.children)
         self.assertFalse(hasattr(erase, '_toolbar_prominent'))
 
+    def test_declared_form_wraps_and_unwraps_when_safe_width_changes(self):
+        import toga
+        from logisticsmobile.ios_toolbar import fit_form
+        label = toga.Label('Exclusions apply only to Push; excluded destination files are kept.')
+        save = toga.Button('Save settings')
+        page = toga.Box(children=[label, save])
+        with patch.object(type(page._impl), '__module__', 'toga_iOS.widgets.box'):
+            prepare_form(page, primary='Save settings')
+        app = NS(adaptive=NS(content_width=Mock(return_value=350)))
+        fit_form(app, page, 'files')
+        self.assertIn('\n', label.text)
+        app.adaptive.content_width.return_value = 1200
+        fit_form(app, page, 'files')
+        self.assertEqual(label.text, label._settings_source_text)
+        self.assertNotIn('\n', label.text)
+        self.assertIs(page.children[0], label)
+
     def test_android_keeps_form_content_unchanged(self):
         import toga
         button = toga.Button('Save settings')

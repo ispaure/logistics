@@ -244,9 +244,10 @@ class HubDocumentTests(unittest.TestCase):
         for build, destination in ((app.build_home, 'home'), (app.build_documents_hub, 'documents')):
             with self.subTest(destination=destination), patch.object(app.adaptive, 'content_width', return_value=620):
                 hub = build()
-                with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.46) as seam:
+                from logisticsmobile.fold_layout import Division
+                with patch('logisticsmobile.fold_layout.division', return_value=Division(620 * .46, 0, 0, 700)) as seam:
                     hub.reflow(app, destination)
-                    seam.assert_called_once_with(app, hub, include_open=True)
+                    seam.assert_called_once_with(app, hub)
                     self.assertTrue(hub.paired)
                     self.assertAlmostEqual(hub.leading_scroll.style.width, 620 * .46, delta=1)
                     self.assertAlmostEqual(hub.trailing_scroll.style.width, 620 * .54, delta=1)

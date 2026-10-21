@@ -178,9 +178,18 @@ def sync_screen(app, view, destination):
     for widget in getattr(view, '_ios_toolbar_hidden', ()):
         if widget.parent is not None:
             widget.parent.remove(widget)
+    fit_form(app, view, destination)
     title = getattr(view, '_ios_toolbar_title', None)
     if title is not None:
         controller.navigationItem.title = str(title() if callable(title) else title)
+
+
+
+def fit_form(app, view, destination):
+    """Refit declared forms to today's safe width, retaining source label text."""
+    if getattr(view, '_ios_fitted_form', False):
+        from .settings_ui import fit_section
+        fit_section(view, app.adaptive.content_width(destination, margin=0))
 
 
 def prepare_form(view, *, primary=None, cancel=None, back=None):
@@ -191,6 +200,7 @@ def prepare_form(view, *, primary=None, cancel=None, back=None):
     """
     if not type(view._impl).__module__.startswith('toga_iOS.'):
         return
+    view._ios_fitted_form = True
     import toga
     def walk(widget):
         yield widget

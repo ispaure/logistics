@@ -555,6 +555,8 @@ class ProviderUI(FilesUI):
             tools.panel.add(toga.Label('Bookmarks stay in this session\nand are cleared on close.'))
             view.crypt_content.add(view.provider_epub_view)
         elif kind == 'spread':
+            from features.comics.mobile.presentation import place_page
+            place_page(prepared_spread, controller.format_services.page_region(view.crypt_content))
             view.provider_spread = prepared_spread
             view.crypt_content.add(prepared_spread)
             view.crypt_reader.comic_navigation.commit(indices)

@@ -195,7 +195,8 @@ on the right. This applies to imported and Local/LocalCrypt/remote comics.
 
 Partially folding leaves the system-reported fold and its interaction margins
 clear between pages. A single page, including wide artwork, fits within the
-right-hand region. Flat interior layouts retain the right-hand anchor and follow
+right-hand region. With a horizontal fold, a single page fits above the fold
+while the page controls remain below it. Flat interior layouts retain the right-hand anchor and follow
 the page-layout preference. A wide page's selected half survives a layout round
 trip back to a narrow viewport. Ordinary zoomed resizing waits until fit size;
 a change of fold region can reflow immediately so the page is not left across

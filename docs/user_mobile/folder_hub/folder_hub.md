@@ -15,9 +15,12 @@ full-screen browser and Back returns to Workspaces. Rotating between these
 layouts keeps the current browser, source and folder. Rotating repeatedly does
 not open a child folder or return to a different panel. iPhone layouts use the
 current window safe areas to keep controls clear of notches, the Dynamic Island
-and the Home indicator. In landscape on an open or partially open
-Duo, the pane boundary follows the physical crease when hinge information is
-available, accounting for the navigation rail and safe areas.
+and the Home indicator. On a flat Duo, landscape browsing gives roughly one
+third of the usable width to Workspaces and two thirds to the file browser.
+Android e-ink layouts also favor the browser, including portrait when both panes
+fit. Partially folding a Duo makes the system-reserved crease determine the pane
+bounds instead; rotating a horizontal crease can stack the panes. The current
+folder and retained views survive these changes.
 
 ## Notes Library
 

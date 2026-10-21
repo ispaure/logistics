@@ -65,6 +65,7 @@ Restore clears axis-specific dimensions and margins before compact layout.
 browsers prefer one third for workspace navigation and two thirds for browsing,
 with a 180-point preferred navigation minimum, 320-point maximum, and a
 320-point browser minimum. Compact widths retain the drawer presentation.
+E-ink file browsing can keep both panes from 516 usable points in portrait.
 Active fold bounds override this ratio. Other paired documents retain their
 balanced layout. Home/Documents sections and Settings also consume active
 reserved regions. Geometry and retained-owner contracts are covered by
@@ -1285,3 +1286,14 @@ for source hashes, layouts and limits. Inner-display fold poses, older native
 runtimes, accessibility settings and live remote providers were not exercised.
 Primary-menu items clear their native target/action so a single tap opens the
 menu; context-menu items retain their original primary action.
+
+## Native safe areas during rotation
+
+The window's bottom safe area and the destination bar's axis are independent.
+`appearance.reserve_navigation` reserves any Home-indicator overlap remaining
+after the native content container's insets, including when the destination bar
+is vertical. Fullscreen readers retain their full-bleed canvas; Chat owns its
+composer clearance and applies the same window-bound check. Declared iOS forms
+refit their retained labels to current safe content width through
+`ios_toolbar.fit_form`, so wide explanatory text cannot keep a landscape minimum
+after returning to portrait.
