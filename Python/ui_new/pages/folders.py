@@ -18,6 +18,8 @@ from ui_new.pages.workspace_panes import WorkspacePanes, WORKSPACE_PANES_LOCKED
 from ui_new.pages.workspace_tree import WorkspaceTree
 from ui_new.settings.workspaces import workspace_visibility
 from ui_new.actions import execute_action
+from services.workflow_host import StateAttribute
+from .folder_controller import FolderController
 
 
 LOCAL_SOURCE_NAME = 'Local'
@@ -25,9 +27,15 @@ LOCAL_SOURCE_NAME = 'Local'
 
 class FoldersPage(pyside.QWidget):
     browse_requested = pyside.Signal(object)
+    _refresh_generation = StateAttribute('controller', 'refresh_generation')
+    _refresh_pending = StateAttribute('controller', 'refresh_pending')
+    _detail_generation = StateAttribute('controller', 'detail_generation')
+    _detail_pending = StateAttribute('controller', 'detail_pending')
+
     def __init__(self, parent=None, *, panes_locked=WORKSPACE_PANES_LOCKED):
         super().__init__(parent)
 
+        self.controller = FolderController()
         self.panes_locked = panes_locked
         self._browser_view = None
         self._actions_unlock_view = None
@@ -153,14 +161,13 @@ class FoldersPage(pyside.QWidget):
         self._start_discovery()
 
     def _start_discovery(self):
-        generation = self._refresh_generation
         # Resolve declarations on the GUI thread; only provider I/O runs in the worker.
         remotes = tuple(registry.get_remote_folder_sources())
         locals_ = tuple(registry.get_local_folder_sources())
         self._folder_features = sorted(registry.get_folder_features(),
             key=lambda registered: (registered.contribution.order, registered.contribution.name.casefold()))
-        self.discovery.start(lambda report, cancelled: (generation, discover_folder_sources(
-            remote_providers=remotes, local_providers=locals_, cancelled=cancelled)), message='Loading folder sources…')
+        self.discovery.start(self.controller.discovery_work(remotes, locals_, discover_folder_sources),
+                             message='Loading folder sources…')
 
     def _discovered(self, result, error):
         if self._closing:
@@ -657,29 +664,13 @@ class FoldersPage(pyside.QWidget):
 
     def _start_details(self):
         entry, self._detail_pending = self._detail_pending, None
-        generation = self._detail_generation
         features = tuple(self._folder_features)
         from features.rclone import session
         config = (entry.local.connection.context if getattr(entry.local, 'private', False) else
                   entry.remote_context if entry.remote_source == 'rclone' else None)
         self._detail_credentials_revoked = (session.revocation_check(Path(config))
             if config is not None and Path(config).suffix == '.session' else lambda: False)
-        def work(report, cancelled):
-            from commonUtils.runtime.operations import check_cancelled
-            found = []
-            for registered in features:
-                check_cancelled(cancelled)
-                contribution = registered.contribution
-                # Private folder paths identify ciphertext, not a LocalFolder.
-                # Only backend-aware tools may inspect or operate on them.
-                if getattr(entry.local, 'private', False) and not contribution.supports_private_folders:
-                    continue
-                if contribution.is_available(entry):
-                    actions = None if contribution.create_widget else contribution.get_actions(entry)
-                    found.append((contribution, actions))
-            check_cancelled(cancelled)
-            return generation, entry, found
-        self.details.start(work, show_progress=False)
+        self.details.start(self.controller.detail_work(entry, features), show_progress=False)
 
     def _details_ready(self, result, error):
         if self._closing:

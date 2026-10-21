@@ -69,3 +69,14 @@ contracts. Clearing the selection clears both tabs.
 `workspace_panes.py` reserves initial horizontal proportions of 200:850 for the
 left column and Files. Dividers remain resizable. The folder-list panel below the source/credential dropdown contains an
 icon-only refresh button at its upper right, with a tooltip and accessible name.
+
+## Desktop Folder Hub requests
+
+`ui_new/pages/folder_controller.py` owns source/detail request generations,
+pending refresh state and worker preparation without Qt. `FoldersPage` composes
+it and retains native widgets, credential-revocation checks, stale-result rejection
+and cooperative close. Compatibility state attributes delegate to that controller.
+Provider declarations are still resolved on the GUI thread; only provider I/O and
+tool availability checks run in workers. Private folders never reach tools that
+have not declared backend-aware support. Folder controller and source UI tests
+cover the boundary.
