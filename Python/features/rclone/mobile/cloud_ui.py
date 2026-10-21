@@ -2,8 +2,7 @@
 from commonUtils.ui.native.password_input import PasswordInput
 from features.rclone.mobile.storage_location import collection_path
 import asyncio
-from contextlib import asynccontextmanager, contextmanager
-from io import BytesIO
+from contextlib import asynccontextmanager
 from pathlib import Path
 import toga
 from toga.style import Pack
@@ -13,6 +12,7 @@ from features.rclone.localcrypt.mobile.ui import LocalCryptUI
 
 
 from features.rclone.mobile.messages import import_hint
+from .credentials_ui import CredentialWorkflow, SelectedCredentialZIP
 
 
 async def explain_remote_busy(app):
@@ -23,19 +23,6 @@ async def explain_remote_busy(app):
     await app.main_window.dialog(toga.InfoDialog('Transfer in progress' if transferring else 'Connection busy', message))
 
 
-class SelectedCredentialZIP:
-    """Consume picker access immediately; retain only bounded ZIP bytes in memory."""
-    def __init__(self, access, reference):
-        with access.open(reference) as (name, source):
-            self.data = source.read(PACKAGE_LIMIT + 1)
-        if len(self.data) > PACKAGE_LIMIT:
-            raise ValueError('Credential ZIPs are limited to 1 MiB.')
-        self.name = download_name(name)
-
-    @contextmanager
-    def open(self, reference=None):
-        with BytesIO(self.data) as stream:
-            yield self.name, stream
 
 
 class CloudUI(LocalCryptUI):
@@ -290,53 +277,8 @@ class CloudUI(LocalCryptUI):
         self.show_view(self.cloud_import_view, destination='settings', route='import-credentials', title='Import credential ZIP')
 
     def refresh_retained_credentials(self):
-        if not getattr(self, '_cloud_connections_opened', False):
-            return
-        for child in list(self.cloud_retained_box.children):
-            self.cloud_retained_box.remove(child)
-        try:
-            cache = self.retained_packages()
-            rows = sorted(getattr(cache, 'items', {}).items(), key=lambda row: row[1]['zip'].casefold())
-            rows = [(key, item) for key, item in rows if self.legacy_name_visible(item['zip'], prefix='legacy')]
-        except (OSError, ValueError):
-            self.cloud_retained_box.add(toga.Label('Retained ZIPs are unavailable. Unlock the device and try again.'))
-            return
-        self.cloud_retained_buttons = {}
-        records = {item['package_name']: item for item in getattr(self.cloud_client, 'package_records', ())
-                   if item['package_name'] not in ('Network shares', 'Session network shares')
-                   and self.legacy_name_visible(item['package_name'], prefix='legacy')}
-        if not records and self.cloud_client is not None and self.loaded_remote_names():
-            name = getattr(self.cloud_client, 'package_name', '')
-            if name and name not in ('Network shares', 'Session network shares'):
-                records[name] = dict(remotes=self.loaded_remote_names(), saved=False)
-        ui = self.rclone_ui
-        for name, record in records.items():
-            def browse(widget=None, **kwargs):
-                self.show_locations()
-            names = self.visible_remote_names(record['remotes'])
-            row = ui.settings_group([
-                toga.Label(import_hint(name), style=Pack(font_weight='bold', margin_top=8)),
-                ui.settings_note(f'{len(names)} remotes · ' + ('saved on this device' if record.get('saved') else 'session only')),
-                toga.Button('Browse remote files', on_press=browse, enabled=not self.cloud_busy, style=Pack(height=48))])
-            self.cloud_retained_box.add(row)
-        for key, item in rows:
-            if item['zip'] in records:
-                continue
-            def unlock(widget=None, selected=key, **kwargs):
-                if not self.cloud_busy:
-                    self.show_retained_unlock(selected, destination='settings', resume=self.show_locations)
-            button = toga.Button('Unlock ' + item['zip'], on_press=unlock,
-                                 enabled=not self.cloud_busy, style=Pack(height=44))
-            self.cloud_retained_buttons[key] = button
-            self.cloud_retained_box.add(ui.settings_group([
-                toga.Label(import_hint(item['zip']), style=Pack(font_weight='bold', margin_top=8)),
-                ui.settings_note('Locked · retained on this device'), button]))
-        if not rows and not records:
-            self.cloud_retained_box.add(ui.settings_note('No credential packages yet. Import a ZIP to get started.'))
-        if hasattr(self, 'cloud_connections_status'):
-            self.cloud_connections_status.text = self.cloud_status.value
-        if hasattr(self.cloud_connections_view, 'reflow'):
-            self.cloud_connections_view.reflow()
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.refresh_retained_credentials()
 
     def loaded_remote_names(self):
         client = getattr(self, 'cloud_client', None)
@@ -466,308 +408,68 @@ class CloudUI(LocalCryptUI):
         self.cloud_remote_help.text = import_hint(message)
 
     async def _load_crypt_remote_names(self):
-        # Alternate client adapters may not expose crypt support.
-        kinds = getattr(self.cloud_client, 'crypt_remotes', lambda: ())
-        records = getattr(self.cloud_client, 'package_records', ())
-        if records and all('crypt_identities' in record for record in records):
-            self.cloud_crypt_remotes = {remote for record in records for remote in record['crypt_identities']}
-        else:
-            self.cloud_crypt_remotes = set(await asyncio.to_thread(kinds))
-        try:
-            cache = self.retained_packages()
-            update = getattr(cache, 'update_crypt_remotes', None)
-            if update is not None:
-                records = {item['package_name']: item for item in getattr(self.cloud_client, 'package_records', ())}
-                for key, item in tuple(cache.items.items()):
-                    record = records.get(item['zip'])
-                    if record is not None and record.get('document_cache_id') != key:
-                        continue
-                    if record is not None or item['zip'] == getattr(self.cloud_client, 'package_name', ''):
-                        await asyncio.to_thread(update, key, self.cloud_crypt_remotes,
-                            aliases=record.get('aliases', {}) if record else {})
-        except (OSError, ValueError) as error:
-            self.folder_hub_error = 'Could not save folder type metadata: ' + str(error)[:200]
-        try:
-            await self.refresh_hub_crypt_locations()
-        except (OSError, ValueError) as error:
-            self.folder_hub_error = str(error)[:300]
-        self.refresh_cloud_remote_help()
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return await workflow._load_crypt_remote_names()
 
     def retained_packages(self):
-        if getattr(getattr(self, 'cloud_client', None), 'vault', None) is None:
-            return None
-        if not hasattr(self, 'credential_packages'):
-            from features.rclone.mobile.credential_packages import CredentialPackages
-            from features.rclone.mobile.credential_vault import ProtectedVault
-            self.credential_packages = CredentialPackages(ProtectedVault.for_app(self.app, packages=True), self.cloud_client, document_cache_root=self.app.credential_document_lists.root)
-        return self.credential_packages
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.retained_packages()
 
     def remember_credential_association(self, name, remotes, *, session_only):
-        import json
-        previous = json.loads(self.preferences.values['remote_packages'])
-        packages = [item for item in previous if item['zip'] != name and not item['session_only']]
-        association = dict(zip=name, remotes=list(remotes), session_only=session_only)
-        sessions = [item for item in getattr(self, 'session_credential_packages', ()) if item['zip'] != name]
-        self.session_credential_packages = [*sessions, association] if session_only else sessions
-        if session_only:
-            return
-        packages.append(association)
-        if packages[-32:] != previous:
-            self.preferences.save(remote_packages=json.dumps(packages[-32:]))
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.remember_credential_association(name, remotes, session_only=session_only)
 
     def visible_remote_names(self, names):
-        exclusions = self.rclone_ui.exclusions
-        from services.folders.policy import visible_name
-        original = {alias: name for item in getattr(self.cloud_client, 'package_records', ())
-                    for name, alias in item.get('aliases', {}).items()}
-        rules = exclusions()
-        return sorted((name for name in names if visible_name(original.get(name, name), rules, remote=True)), key=str.casefold)
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.visible_remote_names(names)
 
     def package_remote_names(self, label, fallback):
-        method = getattr(self.cloud_client, 'package_remotes', None)
-        return method(label, fallback) if method else fallback
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.package_remote_names(label, fallback)
 
     def remember_loaded_packages(self, label, names, *, session_only):
-        visible_remotes = self.rclone_ui.visible_remotes
-        records = getattr(self.cloud_client, 'package_records', ())
-        if records:
-            for item in records:
-                self.remember_credential_association(item['package_name'], self.visible_remote_names(item['remotes']), session_only=not item['saved'])
-        else:
-            self.remember_credential_association(label, self.visible_remote_names(names), session_only=session_only)
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.remember_loaded_packages(label, names, session_only=session_only)
 
     def loaded_package_label(self):
-        records = getattr(self.cloud_client, 'package_records', ())
-        if not records:
-            return 'Credential package: ' + (getattr(self.cloud_client, 'package_name', '') or 'none')
-        return 'Loaded:\n' + '\n'.join(item['package_name'] + (' (saved)' if item['saved'] else ' (session only)') for item in records)
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.loaded_package_label()
 
     def credential_groups(self, choices=None):
-        import json
-        from pathlib import Path
-        groups = {'All': None}
-        associations = {item['zip']: item for item in json.loads(self.preferences.values['remote_packages'])
-                        + self.retained_credential_associations() + getattr(self, 'session_credential_packages', [])}
-        loaded = set()
-        for item in getattr(getattr(self, 'cloud_client', None), 'package_records', ()):
-            loaded.add(item['package_name'])
-            associations[item['package_name']] = dict(zip=item['package_name'], remotes=item['remotes'])
-        available = {copy['remote'] for entry in (self.folder_choices() if choices is None else choices).values()
-                     for copy in entry.get('copies', ()) if copy.get('remote')}
-        if choices is None:
-            # Loaded packages are authoritative while folder discovery is still
-            # pending. An explicit choices snapshot still scopes its own rows.
-            available.update(self.loaded_remote_names())
-        for item in associations.values():
-            if item['zip'] in ('Network shares', 'Session network shares'):
-                continue
-            if not self.legacy_name_visible(Path(item['zip']).name, prefix='legacy'):
-                continue
-            remotes = set(item['remotes']) & available
-            if not remotes and item['zip'] not in loaded:
-                continue
-            name = Path(item['zip']).name
-            base = name[:-4] if name.lower().endswith('.zip') else name
-            title = base
-            number = 2
-            while title in groups:
-                title = f'{base} ({number})'
-                number += 1
-            groups[title] = remotes
-        return groups
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.credential_groups(choices)
 
     def home_unlock_candidates(self):
-        """Inspect retained metadata/files only; never restore or decode credentials."""
-        try:
-            cache = self.retained_packages()
-            loaded = {item['package_name'] for item in
-                      getattr(getattr(self, 'cloud_client', None), 'package_records', ())}
-            return sorted(((key, item) for key, item in getattr(cache, 'items', {}).items()
-                           if item['zip'] not in loaded
-                           and self.legacy_name_visible(item['zip'], prefix='legacy')
-                           and cache.path(key).is_file()), key=lambda row: row[1]['zip'].casefold())
-        except (OSError, ValueError):
-            return []
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.home_unlock_candidates()
 
     def show_home_unlock(self, widget=None, **kwargs):
-        if not self.app.checkpoint():
-            return
-        self.show_cloud(present=False)
-        choices = self.home_unlock_candidates()
-        if choices:
-            self.show_retained_unlock(choices[0][0], destination='home',
-                                      resume=self.app.show_home, choices=choices)
-        else:
-            self.app.show_home()
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.show_home_unlock(widget, **kwargs)
 
     def retained_credential_associations(self):
-        try:
-            cache = self.retained_packages()
-            return [dict(zip=item['zip'], remotes=list(item['remotes']), session_only=True,
-                         crypt_remotes=list(item.get('crypt_remotes', ())))
-                    for item in getattr(cache, 'items', {}).values()] if cache is not None else []
-        except (OSError, ValueError):
-            return []
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.retained_credential_associations()
 
     async def require_remote_credentials_async(self, remote, *, identity=None, resume=None):
-        origin = self.navigation_generation
-        restore = getattr(self, 'cloud_restore_task', None)
-        if restore is not None:
-            await asyncio.shield(restore)
-            if not self.active_host or self.navigation_generation != origin:
-                return False
-        if identity is not None and hasattr(self.cloud_client, 'resolve_remote'):
-            remote = self.cloud_client.resolve_remote(remote, identity)
-        if remote in self.loaded_remote_names() and identity is None:
-            return True
-        client, generation = self.cloud_client, getattr(self.cloud_client, 'generation', None)
-        try:
-            current = await asyncio.to_thread(client.connection_identity, remote)
-        except (OSError, ValueError, AttributeError):
-            current = None
-        if (not self.active_host or self.navigation_generation != origin or client is not self.cloud_client
-                or generation != getattr(client, 'generation', None)):
-            return False
-        if current is not None and (identity is None or current == identity):
-            return True
-        return self.require_remote_credentials(remote, identity=identity, resume=resume, checked=True)
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return await workflow.require_remote_credentials_async(remote, identity=identity, resume=resume)
 
     def require_remote_credentials(self, remote, *, identity=None, resume=None, checked=False):
-        """Return immediately when loaded; otherwise present the matching ZIP unlock."""
-        if identity is not None and hasattr(self.cloud_client, 'resolve_remote'):
-            remote = self.cloud_client.resolve_remote(remote, identity)
-        loaded = self.loaded_remote_names()
-        if remote in loaded and identity is None:
-            return True
-        if not checked:
-            try:
-                current = self.cloud_client.connection_identity(remote)
-                if identity is None or current == identity:
-                    return True
-            except (OSError, ValueError, AttributeError):
-                pass
-        try:
-            cache = self.retained_packages()
-            matches = [(key, item) for key, item in cache.matching(remote, identity)
-                       if self.legacy_name_visible(item['zip'], prefix='legacy')] if cache else []
-        except (OSError, ValueError) as error:
-            self.cloud_status.value = str(error)
-            matches = []
-        if len(matches) == 1:
-            self.show_retained_unlock(matches[0][0], remote, identity=identity, resume=resume)
-        elif matches:
-            box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-            box.add(toga.Label('Choose credential ZIP'))
-            for key, item in matches:
-                def choose(widget=None, selected=key, **kwargs):
-                    self.show_retained_unlock(selected, remote, identity=identity, resume=resume)
-                box.add(toga.Button(item['zip'], on_press=choose, style=Pack(height=44)))
-            self.show_view(box, destination='files', route='choose-credential', title='Unlock connection')
-        else:
-            self.show_cloud_connections()
-            self.cloud_import_message.text = import_hint('Load the credential ZIP for ' + remote + '. Retained password-protected ZIPs need their ZIP password to unlock again.')
-        return False
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.require_remote_credentials(remote, identity=identity, resume=resume, checked=checked)
 
     def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files', choices=None):
-        cache = self.retained_packages()
-        password = self.credential_unlock_password = PasswordInput(placeholder='ZIP password', style=Pack(height=44))
-        status = self.credential_unlock_status = toga.Label('')
-        selector = None
-        if choices:
-            labels = {item['zip']: candidate for candidate, item in choices}
-            selector = toga.Selection(items=list(labels), style=Pack(height=44))
-            selector.on_change = lambda widget, **kw: setattr(password, 'value', '')
-        async def unlock(widget=None, **kwargs):
-            selected = labels[selector.value] if selector is not None else key
-            if self.cloud_busy or getattr(self, 'transfer_busy', False):
-                return
-            secret = password.value
-            password.value = ''
-            self.set_cloud_busy(True)
-            ready = False
-            try:
-                if not self.clear_private_reader():
-                    raise ValueError('Save or discard private edits before unlocking another credential.')
-                self.clear_private_catalog()
-                names = await asyncio.to_thread(self.cloud_client.import_package, cache, selected, secret, remember=False)
-                await self._load_crypt_remote_names()
-                self.set_loaded_remote_names(self.visible_remote_names(names))
-                checked_remote = self.cloud_client.resolve_remote(remote, identity) if remote is not None and identity is not None and hasattr(self.cloud_client, 'resolve_remote') else remote
-                if checked_remote is not None and (checked_remote not in names or (identity is not None
-                        and await asyncio.to_thread(self.cloud_client.connection_identity, checked_remote) != identity)):
-                    raise ValueError('This ZIP does not match the folder connection.')
-                self.remember_loaded_packages(cache.items[selected]['zip'], names, session_only=True)
-                self.cloud_package.text = self.loaded_package_label()
-                self.app.credential_document_lists.refresh()
-                self.cloud_status.value = 'Credential ZIP unlocked for this app session. Its open and recent file lists are restored.'
-                ready = True
-            except (OSError, ValueError) as error:
-                status.text = import_hint('Unlock failed: ' + str(error)[:160])
-            finally:
-                secret = None
-                self.set_cloud_busy(False)
-            if ready:
-                self.routes.back()
-                if resume is not None:
-                    import inspect
-                    result = resume()
-                    if inspect.isawaitable(result):
-                        await result
-        visible_remotes = self.rclone_ui.visible_remotes
-        password.on_confirm = unlock
-        self.credential_unlock_button = toga.Button('Unlock', on_press=unlock, style=Pack(height=44))
-        box = toga.Box(children=[toga.Label('Choose credential' if choices else import_hint('Unlock ' + cache.items[key]['zip']), style=Pack(font_size=18)),
-            *([selector] if selector is not None else []),
-            toga.Label(import_hint('Its ZIP is retained on this device. The password is needed for this session and is never saved.')),
-            password, self.credential_unlock_button, status,
-            toga.Button('Cancel', on_press=lambda widget, **kw: self.routes.back(), style=Pack(height=44))],
-            style=Pack(direction=COLUMN, margin=16))
-        self.show_view(box, destination=destination, route='unlock-credential', title='Unlock credential')
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow.show_retained_unlock(key, remote, identity=identity, resume=resume, destination=destination, choices=choices)
 
     async def restore_cloud(self, widget=None, *, initial=False, **kwargs):
-        if (self.cloud_busy and not initial) or self.cloud_client is None:
-            return
-        if not initial and not self.clear_private_reader():
-            return
-        if not initial:
-            self.set_cloud_busy(True)
-        self._cloud_restore_error = ''
-        try:
-            # Initial restore has no old credential state to retire. Home and
-            # ordinary local browsers may already be in use while it runs.
-            if not initial:
-                self.clear_private_catalog()
-            names = await asyncio.to_thread(self.cloud_client.restore)
-            if not self.active_host:
-                return
-            await self._load_crypt_remote_names()
-            visible_remotes = self.rclone_ui.visible_remotes
-            self.set_loaded_remote_names(self.visible_remote_names(names))
-            if names and self.cloud_client.package_name:
-                self.remember_loaded_packages(self.cloud_client.package_name, names, session_only=False)
-            self._cloud_restored = True
-            self._publish_restored_connections(names)
-        except Exception:
-            self._cloud_restore_error = 'Saved credentials are unavailable. Unlock the device and reload, or forget saved credentials to import again.'
-            if hasattr(self, 'cloud_status'):
-                self.cloud_status.value = self._cloud_restore_error
-        finally:
-            self.set_cloud_busy(False)
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return await workflow.restore_cloud(widget, initial=initial, **kwargs)
 
     def _publish_restored_connections(self, names):
-        if not hasattr(self, 'cloud_view'):
-            return
-        self.cloud_entries.items = []
-        self.cloud_rows = {}
-        self.cloud_open_remote = None
-        self.cloud_location.value = self.cloud_path = ''
-        self.cloud_package.text = self.loaded_package_label()
-        if self.cloud_pending_zip is None and names:
-            saved = [item['package_name'] for item in getattr(self.cloud_client, 'package_records', ()) if item['saved']]
-            self.cloud_selected_zip.text = import_hint('Saved packages: ' + ', '.join(saved) if saved else 'Loaded ZIP: ' + (self.cloud_client.package_name or 'saved package'))
-            self.cloud_import_message.text = import_hint('Loaded remotes are ready. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.\nChoose another ZIP to add another credential package.')
-        self.cloud_status.value = (f'{len(names)} total remote(s) available. Saved packages reloaded; active session-only packages were kept.'
-                                   if names else 'No saved credential package. Import a ZIP to get started.')
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return workflow._publish_restored_connections(names)
 
     async def probe_cloud(self, widget=None, **kwargs):
         if self.cloud_busy or self.cloud_client is None:
@@ -782,85 +484,12 @@ class CloudUI(LocalCryptUI):
             self.set_cloud_busy(False)
 
     async def choose_cloud_package(self, widget=None, **kwargs):
-        pick_document = self.rclone_ui.pick_document
-        if self.cloud_busy or self.cloud_client is None:
-            return
-        self.set_cloud_busy(True)
-        try:
-            selected = await pick_document(self)
-            if selected is None:
-                self.cloud_import_message.text = import_hint('ZIP selection cancelled. Your loaded remotes are unchanged.')
-                return
-            package = await asyncio.to_thread(SelectedCredentialZIP, *selected)
-            self.cloud_pending_zip = package
-            self.cloud_selected_zip.text = import_hint('Selected ZIP: ' + package.name)
-            self.cloud_import_message.text = import_hint('Enter the ZIP password, then tap Load remotes (or Return).\nLeave it blank for an unencrypted ZIP.')
-        except Exception as error:
-            self.cloud_import_message.text = import_hint('Could not select ZIP: ' + str(error)[:150])
-        finally:
-            self.set_cloud_busy(False)
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return await workflow.choose_cloud_package(widget, **kwargs)
 
     async def import_cloud_package(self, widget=None, **kwargs):
-        if self.cloud_busy or self.cloud_client is None:
-            return
-        # Retain the direct-call API for native validation clients; the visible
-        # Load remotes button is enabled only after Choose ZIP succeeds.
-        if self.cloud_pending_zip is None:
-            if widget is not None:
-                self.cloud_import_message.text = import_hint('Tap Choose credential ZIP first, then enter its password and tap Load remotes.')
-                return
-            await self.choose_cloud_package()
-            if self.cloud_pending_zip is None:
-                return
-        password = self.cloud_password.value
-        self.cloud_password.value = ''
-        selected = self.cloud_pending_zip
-        self.set_cloud_busy(True)
-        self.cloud_import_message.text = 'Loading remotes…'
-        try:
-            if not self.clear_private_reader():
-                self.cloud_import_message.text = import_hint('Save or discard your private edits before loading another package.')
-                return
-            self.clear_private_catalog()
-            names = await asyncio.to_thread(self.cloud_client.import_package, selected, None, password, remember=self.cloud_remember.value)
-            await self._load_crypt_remote_names()
-            visible_remotes = self.rclone_ui.visible_remotes
-            self.remember_loaded_packages(selected.name, names, session_only=not self.cloud_remember.value)
-            cache_error = ''
-            if not self.cloud_remember.value:
-                try:
-                    cache = self.retained_packages()
-                    if cache is not None:
-                        identities = {remote: self.cloud_client.connection_identity(remote) for remote in self.visible_remote_names(self.package_remote_names(selected.name, names))}
-                        aliases = next((item.get('aliases', {}) for item in getattr(self.cloud_client, 'package_records', ()) if item['package_name'] == selected.name), {})
-                        aliases = {name: alias for name, alias in aliases.items() if alias in identities}
-                        metadata = {'aliases': aliases} if aliases else {}
-                        crypt = set(self.cloud_crypt_remotes) & set(identities)
-                        if crypt:
-                            metadata['crypt_remotes'] = sorted(crypt)
-                        await asyncio.to_thread(cache.remember, selected, identities, **metadata)
-                except (OSError, ValueError) as error:
-                    cache_error = ' ZIP not retained; select it again next time. ' + str(error)[:120]
-            self.set_loaded_remote_names(self.visible_remote_names(names))
-            self.cloud_package.text = self.loaded_package_label()
-            self.cloud_location.value = self.cloud_path = ''
-            self.cloud_open_remote = None
-            self.cloud_rows = {}
-            self.cloud_entries.items = []
-            self.cloud_pending_zip = None
-            self.cloud_selected_zip.text = import_hint('Loaded ZIP: ' + selected.name)
-            self.cloud_import_message.text = import_hint(f'{len(names)} total remote(s) available. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.' + cache_error)
-            self.app.credential_document_lists.refresh()
-            self.cloud_status.value = f'{selected.name} loaded ({"saved" if self.cloud_remember.value else "session only"}). {len(names)} total remote(s) available. Open Workspaces to browse. No connection has been made yet.'
-        except CredentialBusyError as error:
-            self.cloud_status.value = str(error)
-            self.cloud_import_message.text = import_hint(str(error))
-        except Exception as error:
-            self.cloud_status.value = 'Import failed: ' + str(error)[:300]
-            self.cloud_import_message.text = import_hint('Could not load ZIP. Check the password and tap Load remotes again.\n' + str(error)[:150])
-        finally:
-            password = None
-            self.set_cloud_busy(False)
+        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
+        return await workflow.import_cloud_package(widget, **kwargs)
 
     async def browse_cloud(self, widget=None, *, preserve_path=False, **kwargs):
         with self.remote_browser.population_paused():
