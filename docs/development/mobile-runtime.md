@@ -1007,3 +1007,12 @@ voice preferences, media privacy gates and document routing remain here. Native
 payload allowlists include all moved modules and explicitly stage new shared
 modules in dirty local development payloads. See the
 [ownership audit and implementation status](ownership-audit.md).
+
+## Application shutdown and disposable resources
+
+`application_lifecycle.py` owns application exit vetoes, checkpoint-before-disposal
+ordering and memory-pressure resource release. `LogisticsMobile` delegates its
+existing callbacks to this module, so startup cancellation, active transfers,
+private documents and native callback signatures keep their existing behavior.
+`reader_lifecycle.py` still owns individual document exit/Back behavior. Host tests
+include startup progress, reset, private sessions, LocalCrypt and speech media.
