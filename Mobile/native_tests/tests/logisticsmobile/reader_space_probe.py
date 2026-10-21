@@ -64,16 +64,10 @@ class ReaderSpaceProbe(LogisticsMobile):
             result['zero_outer_margin_and_single_footer_row'] = True
             ios = type(self._impl).__module__.startswith('toga_iOS.')
             if ios:
-                label = self._reader_title_label
-                size = label.intrinsicContentSize
-                size = size() if callable(size) else size
-                result['title'] = {'text': str(label.text), 'width': float(label.bounds.size.width),
-                                   'required_width': float(size.width)}
-                assert str(label.text) == path.name
-                if view.layout.width >= 700:
-                    assert float(label.bounds.size.width) > 320
-                    assert float(label.bounds.size.width) >= float(size.width)
-                    result['full_title_fits_wide_pane'] = True
+                nav = self._reader_toolbar_controller.navigationItem
+                result['title'] = {'text': str(nav.title), 'system_allocation': nav.titleView is None}
+                assert str(nav.title) == path.name
+                assert nav.titleView is None
             from .fixtures import capture_window
             await capture_window(self, Path(self.paths.cache) / 'reader-space.png')
             result['success'] = True

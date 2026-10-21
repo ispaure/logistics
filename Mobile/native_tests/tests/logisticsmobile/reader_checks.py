@@ -115,7 +115,8 @@ async def exercise_reader(app, passed):
     # an extra Toga header row. Verify that actual bar after leaving fullscreen.
     if get_os() is OS.IOS:
         controller = app._reader_toolbar_controller
-        assert len(controller.navigationItem.rightBarButtonItems) > 0
+        from .fixtures import ios_toolbar_items
+        assert ios_toolbar_items(controller) or controller.navigationItem.additionalOverflowItems is not None
         assert owner.reader_header not in owner.library_view.children
     else:
         bar = app._impl.native.getSupportActionBar()

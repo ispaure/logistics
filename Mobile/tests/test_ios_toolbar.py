@@ -51,11 +51,27 @@ class ToolbarTests(TestCase):
         self.assertIsNone(item.customView)
         self.assertEqual(item.title, 'Search files')
         self.assertIs(item.menu, button._impl.native.menu)
+        self.assertIsNone(item.target)
+        self.assertIsNone(item.action)
         button._impl.set_enabled(False)
         self.assertFalse(item.enabled)
         self.assertIs(bar_item(button), item)
         button._impl.native.menu = NS(children=['refreshed-menu'])
         self.assertIs(bar_item(button).menu, button._impl.native.menu)
+
+    def test_context_menu_keeps_primary_action_and_removed_menu_restores_target(self):
+        button = Button('more', 'Document actions')
+        button._impl.native.menu = NS(children=['menu'])
+        button._impl.native.showsMenuAsPrimaryAction = False
+        item = bar_item(button)
+        self.assertIs(item.target, button._impl.native)
+        button._impl.native.showsMenuAsPrimaryAction = True
+        bar_item(button)
+        self.assertIsNone(item.target)
+        button._impl.native.menu = None
+        bar_item(button)
+        self.assertIs(item.target, button._impl.native)
+        self.assertEqual(item.action, 'onPress:')
 
     def test_close_precedes_tools_and_save_is_pinned_separately(self):
         close, save, find, more = [Button(icon, icon) for icon in ('close', 'save', 'find', 'more')]

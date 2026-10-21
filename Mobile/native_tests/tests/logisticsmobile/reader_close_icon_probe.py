@@ -51,7 +51,7 @@ class ReaderCloseIconProbe(LogisticsMobile):
             assert self.native_host.adapter.tabs_hidden()
             nav = self.native_host.adapter.navigation[self.native_host.destinations.index(self.native_host.state.destination)]
             assert nav.topViewController.navigationItem.hidesBackButton
-            assert nav.topViewController.navigationItem.leftBarButtonItems[0] == button._native_reader_close_item
+            assert nav.topViewController.navigationItem.leadingItemGroups[0].barButtonItems[0] == button._native_reader_close_item
             assert button._native_reader_close_item.accessibilityLabel == 'Close document'
             assert button._impl.native.accessibilityLabel == 'Close document'
             assert button._impl.native.imageForState(0) is not None

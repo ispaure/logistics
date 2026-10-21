@@ -1260,3 +1260,15 @@ bar-item arrays when grouped navigation placements are unavailable. Host regress
 `test_ios_toolbar`, `test_ios_bar_controls`, folder, navigation and reader tests
 cover state and ownership; actual native axis, overflow and safe-area geometry
 also require simulator/device validation.
+
+
+The October 21 isolated QA run passed 27 screen states on each of Duo, iPhone
+and iPad (81 total), with actual native Search/Save target dispatch. Separate
+XCTest taps verified the normal toolbar menu on iPhone/iPad and the system
+Duo overflow menu. The probe is `Mobile/native_tests/tests/logisticsmobile/ios_toolbar_probe.py`;
+the UI test source is `Mobile/native_tests/ios/ToolbarMenuUITests.swift`.
+See the [native toolbar evidence](mobile-evidence/2026-10-21-ios-adaptive-toolbars.json)
+for source hashes, layouts and limits. Inner-display fold poses, older native
+runtimes, accessibility settings and live remote providers were not exercised.
+Primary-menu items clear their native target/action so a single tap opens the
+menu; context-menu items retain their original primary action.

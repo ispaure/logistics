@@ -47,7 +47,7 @@ class ReaderExitProbe(LogisticsMobile):
                 assert self.native_host.adapter.tabs_hidden()
                 controller = self.native_host.adapter.navigation[self.native_host.destinations.index('files')].topViewController
                 assert controller.navigationItem.hidesBackButton
-                assert controller.navigationItem.leftBarButtonItems[0] == button._native_reader_close_item
+                assert controller.navigationItem.leadingItemGroups[0].barButtonItems[0] == button._native_reader_close_item
                 assert button._native_reader_close_item.accessibilityLabel == 'Close document'
                 assert button._impl.native.accessibilityLabel == 'Close document'
                 button._impl.native.sendActionsForControlEvents(1 << 6)

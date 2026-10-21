@@ -47,6 +47,11 @@ def bar_item(button, *, prominent=False, symbol=None):
         item.image = (ObjCClass('UIImage').systemImageNamed(symbol) if symbol
                       else native.imageForState(0))
     item.menu = native.menu
+    # A target/action would make UIKit reserve the menu for a long press. Match
+    # the original UIButton's primary-menu interaction on ordinary iPhones too.
+    primary_menu = native.menu is not None and bool(native.showsMenuAsPrimaryAction)
+    item.target = None if primary_menu else native
+    item.action = None if primary_menu else SEL('onPress:')
     item.enabled = button.enabled
     item.style = 2 if prominent else 0
     if item.respondsToSelector(SEL('setSharesBackground:')):

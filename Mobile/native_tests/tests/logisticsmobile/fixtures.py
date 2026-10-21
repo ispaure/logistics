@@ -75,3 +75,13 @@ async def capture_window(app, path):
         stream.flush()
         os.fsync(stream.fileno())
     return path
+
+
+def ios_toolbar_items(controller, *, leading=False):
+    """Read public native groups, including separately pinned completion items."""
+    nav = controller.navigationItem
+    groups = nav.leadingItemGroups if leading else nav.trailingItemGroups
+    items = [item for group in groups for item in group.barButtonItems]
+    if not leading and nav.pinnedTrailingGroup is not None:
+        items.extend(nav.pinnedTrailingGroup.barButtonItems)
+    return items

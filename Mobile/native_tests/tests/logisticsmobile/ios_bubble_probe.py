@@ -13,39 +13,19 @@ class BubbleProbe(ReaderCloseIconProbe):
         await self.inspect(stage)
 
     async def inspect(self, stage):
-        from rubicon.objc import ObjCClass
-        from logisticsmobile.appearance import paint_surface
+        from .fixtures import ios_toolbar_items
         await asyncio.sleep(.5)
-        view = self.body
-        # The reader can be inside the workspace container.
-        def reader(widget):
-            if hasattr(widget, '_native_reader_buttons'):
-                return widget
-            return next((found for child in widget.children if (found := reader(child)) is not None), None)
-        view = reader(view)
-        assert view is not None
-        buttons = [view._reader_close_button, *view._native_reader_buttons()]
-        window = self.main_window._impl.native
-        frames = []
-        for button in buttons:
-            button.refresh()
-            paint_surface(button._impl, 8)
-        window.layoutIfNeeded()
-        await asyncio.sleep(.2)
-        for button in buttons:
-            native = button._impl.native
-            assert native.configuration is None
-            assert native.backgroundColor.isEqual(ObjCClass('UIColor').clearColor)
-            assert float(native.layer.borderWidth) == 0
-            rect = native.convertRect(native.bounds, toView=window)
-            x, y, w, h = map(float, (rect.origin.x, rect.origin.y, rect.size.width, rect.size.height))
-            # UIKit fits custom content to the bar's 36-point visual height.
-            assert w >= 44 and h >= 32, (stage, button.accessible_name, w, h)
-            assert x >= 0 and x + w <= float(window.bounds.size.width) + 1, (stage, x, w)
-            frames.append((button.accessible_name, x, y, w, h))
-        ordered = sorted(frames, key=lambda frame: frame[1])
-        assert all(a[1] + a[3] <= b[1] + 1 for a, b in zip(ordered, ordered[1:])), frames
-        self.bubble_checks.append(dict(stage=stage, frames=frames))
+        controller = self._reader_toolbar_controller
+        nav = controller.navigationItem
+        leading = ios_toolbar_items(controller, leading=True)
+        actions = ios_toolbar_items(controller)
+        assert leading and str(leading[0].accessibilityLabel) == 'Close document'
+        assert all(item.customView is None and item.accessibilityLabel
+                   for item in (*leading, *actions))
+        assert actions or nav.additionalOverflowItems is not None
+        self.bubble_checks.append(dict(stage=stage,
+            leading=[str(item.title or item.accessibilityLabel) for item in leading], actions=[str(item.title) for item in actions],
+            groups=len(nav.trailingItemGroups), overflow=nav.additionalOverflowItems is not None))
         await capture_window(self, Path(self.paths.cache) / (stage + '.png'))
 
     async def check(self):
@@ -69,7 +49,7 @@ class BubbleProbe(ReaderCloseIconProbe):
             for mode, style in (('light', 1), ('dark', 2)):
                 self.main_window._impl.native.overrideUserInterfaceStyle = style
                 await self.inspect('epub-' + mode)
-                assert len(self._reader_toolbar_groups) == 2
+                assert self._reader_toolbar_controller.navigationItem.trailingItemGroups
                 assert owner.reader_actions_button._impl.native.menu is not None
                 assert owner.reader_actions_button._impl.native.showsMenuAsPrimaryAction
                 # Fullscreen rebuilds both items and their native menu anchors.

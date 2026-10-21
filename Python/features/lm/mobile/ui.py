@@ -108,7 +108,7 @@ class ChatUI:
             self.chat_conversation_list = self.presentation.summary_list(kind='Conversation',
                 icon_kind='chat', on_select=self._select_conversation_row, style=Pack(flex=1))
             self.chat_conversation_buttons = []  # Compatibility; rows are recycled natively.
-            self.chat_drawer_settings = self.presentation.icon_button('preferences', 'Chat settings', on_press=self.show_chat_configuration)
+            self.chat_drawer_settings = self.presentation.icon_button('preferences' if self.routes.apple else 'more', 'Chat settings', on_press=self.show_chat_configuration)
             self.chat_sidebar_title = toga.Label('Conversations',
                 style=Pack(font_size=22, font_weight='bold', margin_bottom=20))
             self.chat_sidebar_content = sidebar = toga.Box(children=[self.chat_sidebar_title,

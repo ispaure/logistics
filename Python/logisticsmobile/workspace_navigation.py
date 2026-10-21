@@ -59,6 +59,7 @@ def mount_native_menu(app, menu, destination):
             ObjCClass('UIImage').systemImageNamed('line.3.horizontal'), style=0,
             target=menu._impl.native, action=SEL('onPress:'))
         menu._native_workspace_item.accessibilityLabel = getattr(menu, '_workspace_menu_label', 'Browse files')
+        menu._native_workspace_item.title = menu._native_workspace_item.accessibilityLabel
     item = controller.navigationItem
     item.leftItemsSupplementBackButton = True
     item.leftBarButtonItem = menu._native_workspace_item
@@ -473,10 +474,12 @@ class WorkspaceFrame:
                 self.native_pair = ObjCClass('UIBarButtonItem').alloc().initWithTitle(
                     'Split', style=0, target=self.pair._impl.native, action=SEL('onPress:'))
             self.native_pair.enabled = self.pair.enabled
+            self.native_pair.accessibilityLabel = 'Open beside another document'
             if not hasattr(self.view(), '_native_reader_buttons'):
                 item.rightBarButtonItem = self.native_pair if self.pair.enabled else None
         self.native_menu.accessibilityLabel = (
             'Close file browser' if self.navigation.menu_open[self.destination] else 'Browse files')
+        self.native_menu.title = self.native_menu.accessibilityLabel
 
     def begin_transition(self):
         if not type(self.row._impl).__module__.startswith('toga_iOS.'):

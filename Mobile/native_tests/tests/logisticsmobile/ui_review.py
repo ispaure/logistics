@@ -50,17 +50,13 @@ async def exercise_ui_review(app):
         print('LOGISTICS_UI_REVIEW=begin:' + name, flush=True)
         await asyncio.sleep(.4)
         if get_os() is OS.IOS:
-            for group in getattr(app, '_reader_toolbar_groups', ()):
-                window = group.window
-                window = window() if callable(window) else window
-                children = group.subviews
-                children = children() if callable(children) else children
-                if window is not None and len(children):
-                    group.layoutIfNeeded()
-                    frames = [(float(button.frame.origin.x), float(button.frame.size.width))
-                              for button in children]
-                    assert all(width >= 40 and abs(x - 44 * index) < 1
-                               for index, (x, width) in enumerate(frames)), (name, frames)
+            controller = getattr(app, '_reader_toolbar_controller', None)
+            if controller is not None:
+                from .fixtures import ios_toolbar_items
+                items = ios_toolbar_items(controller)
+                assert all(item.customView is None and item.title and item.accessibilityLabel
+                           for item in items), name
+                if items or controller.navigationItem.additionalOverflowItems is not None:
                     toolbar_checks.append(name)
         path = app.storage_root / ('ui-review-' + name + '.png')
         from .fixtures import capture_window
@@ -99,7 +95,8 @@ async def exercise_ui_review(app):
         assert app.native_host.adapter.tabs_hidden(), 'Reader revealed destination tabs'
         controller = app._reader_toolbar_controller
         assert not controller.navigationController.isNavigationBarHidden(), 'Reader title bar remained hidden'
-        assert len(controller.navigationItem.rightBarButtonItems) > 0
+        from .fixtures import ios_toolbar_items
+        assert ios_toolbar_items(controller) or controller.navigationItem.additionalOverflowItems is not None
     assert canvas_height() < full_height, 'Comic mode did not reclaim reading space'
     await wait_for_reader(owner)
     current_canvas().toggle_controls()
