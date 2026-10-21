@@ -86,6 +86,7 @@ async def exercise_ui_review(app):
     full_height = canvas_height()
     if get_os() is OS.IOS:
         assert app.native_host.adapter.controller.isTabBarHidden(), f'Fullscreen lost: {app._comic_chrome_hidden}, detail={app.adaptive.in_detail}, owner={app.readers.active.reader_immersive}'
+    await wait_for_reader(owner)
     current_canvas().toggle_controls()
     assert not owner.reader_immersive, 'Comic controls did not open'
     deadline = asyncio.get_running_loop().time() + 15
@@ -95,8 +96,12 @@ async def exercise_ui_review(app):
     await wait_for_reader(owner)
     await capture('comic-controls')
     if get_os() is OS.IOS:
-        assert not app.native_host.adapter.controller.isTabBarHidden()
+        assert app.native_host.adapter.tabs_hidden(), 'Reader revealed destination tabs'
+        controller = app._reader_toolbar_controller
+        assert not controller.navigationController.isNavigationBarHidden(), 'Reader title bar remained hidden'
+        assert len(controller.navigationItem.rightBarButtonItems) > 0
     assert canvas_height() < full_height, 'Comic mode did not reclaim reading space'
+    await wait_for_reader(owner)
     current_canvas().toggle_controls()
     app.show_home()
     assert not app._comic_chrome_hidden, 'Navigation stayed hidden outside the reader'
