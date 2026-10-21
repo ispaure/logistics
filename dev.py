@@ -24,6 +24,7 @@ def main(argv=None):
     owned_tests = commands.add_parser('test-owner', help='Run the test groups declared for a source owner')
     owned_tests.add_argument('owner')
     owned_tests.add_argument('--dry-run', action='store_true')
+    commands.add_parser('toolchain', help='Check dependency pin consistency across host and app manifests')
     commands.add_parser('architecture', help='Check reviewed import boundaries without loading features')
     commands.add_parser('doctor', help='Inspect contributor environments without changing them')
     tests = commands.add_parser('test', help='Run desktop or mobile host tests in isolated processes')
@@ -42,6 +43,9 @@ def main(argv=None):
                 print(f"{name}: {entry['guide']}")
             return 0
         return test_owner(ROOT, args.owner, sys.executable, dry_run=args.dry_run)
+    if args.command == 'toolchain':
+        from Scripts.toolchain import check
+        return check(ROOT)
     if args.command == 'architecture':
         from Scripts.architecture import check
         return check(ROOT)

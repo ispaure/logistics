@@ -280,3 +280,9 @@ particular generated directory; the corresponding setup/build recreates it.
 Keep credentials, `.env` files and signing keys local. Never put real secret values
 in examples or fixtures. Release packaging also excludes conventional private
 files and generated mobile output, even if accidentally tracked.
+
+Run `python3 dev.py toolchain` after dependency updates. It compares mobile host
+inputs and their lock, native/host Toga versions, shared desktop/mobile dependency
+pins and CI Ruff pins against the existing application manifests. CI runs it too.
+Python's application manifest and the native Briefcase manifest remain canonical;
+the checker adds no second version registry.
