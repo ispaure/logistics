@@ -21,6 +21,7 @@ class ExternalComicDisplay:
         self._diagnostic_state = None
         self.ios = {}
         self.ios_registration = None
+        self.ios_status = None
         self.android = None
         self.android_refresh = None
 
@@ -91,6 +92,7 @@ class ExternalComicDisplay:
 
     def refresh(self):
         if not self.ios and self.android is None:
+            self.update_ios_status(False)
             self.diagnose_ios()
             return
         canvas = self.allowed_canvas()
@@ -98,7 +100,50 @@ class ExternalComicDisplay:
             picture.image = canvas._impl.picture.image if canvas is not None else None
         if self.android is not None:
             self.android.setImage(canvas._impl.native.getDrawable() if canvas is not None else None)
+        self.update_ios_status(canvas is not None and bool(self.ios))
         self.diagnose_ios()
+
+    def clear_ios_status(self):
+        if self.ios_status is not None:
+            self.ios_status[1].removeFromSuperview()
+            self.ios_status = None
+
+    def update_ios_status(self, casting):
+        """A phone-only, noninteractive badge survives immersive reader chrome."""
+        app = self.source() if self.source is not None else None
+        if not casting or app is None:
+            self.clear_ios_status()
+            return
+        if not type(app._impl).__module__.startswith('toga_iOS.'):
+            return
+        from rubicon.objc import ObjCClass
+        from .screen_privacy import native_value
+        window = app.main_window._impl.native
+        if self.ios_status is not None and self.ios_status[0] != window:
+            self.clear_ios_status()
+        if self.ios_status is None:
+            label = ObjCClass('UILabel').alloc().init()
+            label.setText('Casting to TV')
+            label.setFont(ObjCClass('UIFont').boldSystemFontOfSize(13))
+            label.setTextAlignment(1)
+            label.setTextColor(native_value(ObjCClass('UIColor'), 'whiteColor'))
+            label.setBackgroundColor(native_value(ObjCClass('UIColor'), 'blackColor').colorWithAlphaComponent(.82))
+            label.layer.setCornerRadius(14)
+            label.setClipsToBounds(True)
+            label.setUserInteractionEnabled(False)
+            label.setAccessibilityLabel('Casting comic to TV')
+            label.setTranslatesAutoresizingMaskIntoConstraints(False)
+            window.addSubview(label)
+            safe = window.safeAreaLayoutGuide
+            for constraint in (
+                label.trailingAnchor.constraintEqualToAnchor(safe.trailingAnchor, constant=-12),
+                label.bottomAnchor.constraintEqualToAnchor(safe.bottomAnchor, constant=-8),
+                label.widthAnchor.constraintEqualToConstant(126),
+                label.heightAnchor.constraintEqualToConstant(28),
+            ):
+                constraint.setActive(True)
+            self.ios_status = window, label
+        window.bringSubviewToFront(self.ios_status[1])
 
     def diagnose_ios(self):
         if os.environ.get('LOGISTICS_DISPLAY_DIAGNOSTICS') != '1':
@@ -118,6 +163,9 @@ class ExternalComicDisplay:
                 screens=[dict(width=float(screen.bounds.size.width), height=float(screen.bounds.size.height),
                               mirrored=screen.mirroredScreen is not None) for screen in screens],
                 output_windows=len(self.ios), registration=self.ios_registration is not None,
+                casting_indicator=self.ios_status is not None,
+                comic_layout=app.preferences.values['comic_layout'],
+                split_wide=app.preferences.values['comic_split_wide'],
                 outputs=[dict(
                     window_bounds=[float(window.bounds.size.width), float(window.bounds.size.height)],
                     screen_bounds=[float(window.screen.bounds.size.width), float(window.screen.bounds.size.height)],
@@ -179,6 +227,7 @@ class ExternalComicDisplay:
             window, picture = target
             picture.image = None
             window.setHidden(True)
+        self.refresh()
 
     def install_android(self, app):
         if self.android is None:
@@ -192,6 +241,7 @@ class ExternalComicDisplay:
                 app._impl.native, self.android_refresh)
 
     def dispose(self):
+        self.clear_ios_status()
         self.unregister_ios()
         for window, picture in self.ios.values():
             picture.image = None

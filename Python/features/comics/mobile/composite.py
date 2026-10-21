@@ -34,8 +34,8 @@ def spread_geometry(sizes, viewport=None, *, seam=None, single_right=False, seam
             fit_height = (viewport_width - SPREAD_GAP) / sum(w / h for w, h in sizes)
             if viewport_height is not None and viewport_height > 1:
                 fit_height = min(fit_height, viewport_height)
-            # Keep small pages at least fit resolution so rounding a bitmap
-            # pixel cannot turn the desktop-sized gutter into a wide stripe.
+            # Keep small pages at least fit resolution before applying the
+            # combined bitmap allocation limit.
             height = max(height, ceil(fit_height))
             source_gap = SPREAD_GAP * height / max(1, fit_height)
     widths = [height * w / h for w, h in sizes]
@@ -43,7 +43,7 @@ def spread_geometry(sizes, viewport=None, *, seam=None, single_right=False, seam
     scale = min(1, MAX_SIDE / total, MAX_SIDE / height, sqrt(MAX_PIXELS / (total * height)))
     # Round down to keep the combined bitmap within its allocation budget.
     height = max(1, int(height * scale))
-    gap = max(1, round(source_gap * scale)) if len(sizes) == 2 else 0
+    gap = max(0, round(source_gap * scale)) if len(sizes) == 2 else 0
     widths = [max(1, int(height * w / h)) for w, h in sizes]
     while (sum(widths) + gap > MAX_SIDE or (sum(widths) + gap) * height > MAX_PIXELS):
         height -= 1

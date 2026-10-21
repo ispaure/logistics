@@ -96,8 +96,15 @@ class ComicController:
             finally:
                 self.set_book_busy(False)
         if target is not None:
+            self.format_services.clear_comic_boundary()
             self.comic_navigation.requested_half = (1 if direction < 0 else 0) if target != index else (1 - self.comic_navigation.half)
             await self.move_book_page(target)
+        elif self.format_services.comic_boundary is not None:
+            header = getattr(self.app, 'comic_header', None)
+            available = bool(header is not None and header.available[0 if direction < 0 else 1])
+            await self.format_services.comic_boundary(direction,
+                right_to_left=self.book_reader.right_to_left, available=available,
+                adjacent=self.adjacent_book_comic)
 
     async def adjacent_book_comic(self, direction):
         if (
@@ -158,7 +165,7 @@ class ComicController:
                 viewport=lambda: (
                     self.comic_viewport(),
                     self.comic_layout_mode(),
-                    self.preferences.values.get('comic_split_wide', 'true'),
+                    self.preferences.values.get('comic_split_wide', 'false'),
                     (self.comic_seam(), self.format_services.seam_gap(self.book_content),
                      self.format_services.page_region(self.book_content)),
                 ),
@@ -195,7 +202,7 @@ class ComicController:
             viewport=self.comic_viewport(),
             mode=self.comic_layout_mode(),
             anchor_right=self.comic_seam() is not None,
-            split_wide=self.preferences.values.get('comic_split_wide', 'true') == 'true',
+            split_wide=self.preferences.values.get('comic_split_wide', 'false') == 'true',
         )
         if (
             epoch != self.book_epoch

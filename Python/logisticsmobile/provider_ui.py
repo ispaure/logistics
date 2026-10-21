@@ -859,7 +859,7 @@ class ProviderUI(FilesUI):
         return 'spread', reader.comic_navigation.load(index, viewport=viewport,
             mode=getattr(self, '_provider_comic_mode', self.preferences.values['comic_layout']),
             anchor_right=getattr(self, '_provider_comic_seam', None) is not None,
-            split_wide=self.preferences.values.get('comic_split_wide', 'true') == 'true')
+            split_wide=self.preferences.values.get('comic_split_wide', 'false') == 'true')
 
     async def move_provider_comic(self, *args, **kwargs):
         return await self.provider_comic_controller().move_provider_comic(*args, **kwargs)

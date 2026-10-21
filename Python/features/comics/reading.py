@@ -3,7 +3,7 @@
 from pathlib import Path
 from .pages import natural_key
 
-SPREAD_GAP = 8
+SPREAD_GAP = 0
 
 
 def comic_siblings(path):
@@ -21,7 +21,7 @@ def visible_pages(start, sizes, viewport, mode='auto', double_pages=()):
     if start in double_pages or start + 1 in double_pages:
         return (start,)
     ratios = [width / height for width, height in (first, second)]
-    if any(ratio >= 1 for ratio in ratios):
+    if any(ratio > 1 for ratio in ratios):
         return (start,)
     width, height = viewport
     if mode == 'double' or width >= sum(ratios) * max(1, height) + SPREAD_GAP:

@@ -18,6 +18,19 @@ from features.comics.ui.reader import ComicReaderWindow, read_previous
 
 
 class SpreadTests(QtTestCase):
+    def test_desktop_pages_touch_at_the_center(self):
+        from features.comics.ui.reader_pages import PageCanvas
+        canvas = PageCanvas()
+        canvas.resize(400, 200)
+        left, right = qt.QPixmap(100, 200), qt.QPixmap(100, 200)
+        left.fill(qt.QColor('red'))
+        right.fill(qt.QColor('blue'))
+        canvas.set_pages(((0, left), (1, right)), False)
+        pixels = canvas.grab().toImage()
+        self.assertEqual(pixels.pixelColor(199, 100), qt.QColor('red'))
+        self.assertEqual(pixels.pixelColor(200, 100), qt.QColor('blue'))
+        canvas.close()
+
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.temp = TemporaryDirectory()

@@ -100,7 +100,8 @@ class UXWorkflowTests(unittest.TestCase):
             resources = SimpleNamespace(getDisplayMetrics=lambda: SimpleNamespace(density=2))
             native = SimpleNamespace(getResources=lambda: resources, getSupportActionBar=lambda: None)
             with patch.object(type(app._impl), '__module__', 'toga_android.app'), \
-                    patch.object(app._impl, 'native', native, create=True):
+                    patch.object(app._impl, 'native', native, create=True), \
+                    patch('logisticsmobile.external_display.sync'):
                 app.adaptive.render()
                 self.assertEqual(app.routes.body().style.width, 540)
                 # Repeated layouts must not shrink from a child content minimum.

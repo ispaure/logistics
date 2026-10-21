@@ -27,7 +27,7 @@ class ReaderParityUITests(unittest.TestCase):
             with self.subTest(right_to_left=rtl), TemporaryDirectory() as directory:
                 root = Path(directory)
                 app = self.host(root)
-                self.assertEqual(app.preferences.values['comic_layout'], 'auto')
+                self.assertEqual(app.preferences.values['comic_layout'], 'double')
                 source = root / 'order.cbz'
                 with ZipFile(source, 'w') as archive:
                     for index, color in enumerate(('red', 'blue', 'green', 'yellow')):
@@ -393,7 +393,7 @@ class CompositeRenderingTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.assertEqual(sample_size(source, (1, 1)), expected)
 
-    def test_native_composite_preserves_manga_order_gutter_and_alpha(self):
+    def test_native_composite_preserves_manga_order_without_a_gutter(self):
         from features.comics.mobile.composite import compose_spread
         from Mobile.native_tests.tests.logisticsmobile.reader_parity_probe import (
             image_bytes,
@@ -404,7 +404,7 @@ class CompositeRenderingTests(unittest.TestCase):
         for rtl in (False, True):
             image = compose_spread([red, blue], right_to_left=rtl)
             pixels = image._impl.native.raw
-            self.assertEqual(pixels.size, (208, 200))
+            self.assertEqual(pixels.size, (200, 200))
             self.assertEqual(
                 pixels.getpixel((20, 20)), (0, 0, 255, 255) if rtl else (255, 0, 0, 255)
             )
@@ -412,7 +412,8 @@ class CompositeRenderingTests(unittest.TestCase):
                 pixels.getpixel((180, 20)),
                 (255, 0, 0, 255) if rtl else (0, 0, 255, 255),
             )
-            self.assertEqual(pixels.getpixel((104, 20)), (0, 0, 0, 0))
+            self.assertEqual(pixels.getpixel((99, 20)), (0, 0, 255, 255) if rtl else (255, 0, 0, 255))
+            self.assertEqual(pixels.getpixel((100, 20)), (255, 0, 0, 255) if rtl else (0, 0, 255, 255))
 
     def test_composite_uses_one_zoom_owner_and_retires_pixels_and_callbacks(self):
         import toga

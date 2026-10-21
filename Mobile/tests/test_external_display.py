@@ -130,6 +130,33 @@ class ExternalDisplayTests(unittest.TestCase):
         output.disconnect_ios(scene)
         window.setHidden.assert_called_with(True)
 
+    def test_casting_badge_survives_fullscreen_and_clears_with_output(self):
+        self.host._impl = type('Backend', (), {'__module__': 'toga_iOS.app'})()
+        self.host._comic_chrome_hidden = self.host._reader_chrome_hidden = True
+        phone = Mock()
+        self.host.main_window = NS(_impl=NS(native=phone))
+        classes = {name: Mock() for name in ('UILabel', 'UIFont', 'UIColor')}
+        classes['UILabel'].alloc.return_value.init.side_effect = Mock
+        with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=classes.__getitem__)}), \
+                patch.object(self.output, 'register_ios'):
+            sync(self.host, select=True)
+            first = self.output.ios_status[1]
+            first.setText.assert_called_once_with('Casting to TV')
+            first.setUserInteractionEnabled.assert_called_once_with(False)
+            phone.addSubview.assert_called_once_with(first)
+            self.output.refresh()
+            self.assertIs(self.output.ios_status[1], first)
+            self.privacy.gates = lambda: (object(),)
+            self.output.refresh()
+            first.removeFromSuperview.assert_called_once()
+            self.assertIsNone(self.output.ios_status)
+            self.privacy.gates = lambda: ()
+            self.output.refresh()
+            second = self.output.ios_status[1]
+            self.output.disconnect_ios(NS(session=NS(persistentIdentifier='tv')))
+            second.removeFromSuperview.assert_called_once()
+            self.assertIsNone(self.output.ios_status)
+
     def test_android_reconnect_rechecks_current_privacy_instead_of_cached_pixels(self):
         android = Mock()
         factory = Mock(return_value=android)

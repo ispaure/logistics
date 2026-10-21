@@ -133,7 +133,8 @@ class SettingsNavigationTests(unittest.TestCase):
         for backend in ('toga_android.app', 'toga_iOS.app'):
             # Native toolbar mounting has separate platform fixtures; this checks categories.
             with self.subTest(backend=backend), patch.object(type(self.app._impl), '__module__', backend), \
-                    patch('logisticsmobile.android_reader_chrome.sync'):
+                    patch('logisticsmobile.android_reader_chrome.sync'), \
+                    patch('logisticsmobile.external_display.sync'):
                 self.app.show_settings(rebuild=True)
                 nav = self.app.settings_navigation
                 self.assertIn('Appearance', nav.sections)

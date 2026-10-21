@@ -18,8 +18,12 @@ reader. It works on single pages and spreads, including Local/LocalCrypt comics.
 
 Comic pages use native pinch zoom and panning on iOS and Android. Fit page resets
 zoom; swipe left for the next page and right for the previous page at fit size.
-Manga reverses those directions. Swipes stop at the first/last page without an
-error. Page changes slide horizontally in the reading direction, including manga
+Manga reverses those directions. At the beginning, a backward boundary swipe
+briefly shows the reading direction and offers the previous volume when available.
+At the end, a forward boundary swipe offers the next volume. Repeat the boundary
+swipe within 2.5 seconds to open the offered volume; otherwise the hint clears.
+Folder-backed volumes come from the current folder, in natural filename order.
+No adjacent file means the current comic stays open. Page changes slide horizontally in the reading direction, including manga
 and spreads, with controls visible or hidden. Reduced motion on iOS, disabled
 Android animations and E Ink mode suppress the slide. While zoomed, dragging
 pans the page and does not change pages. On iOS, reader swipes take priority

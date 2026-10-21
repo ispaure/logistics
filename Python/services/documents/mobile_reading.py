@@ -20,3 +20,5 @@ class ReadingPresentation:
 
     seam_gap: Callable[[Any], float] = lambda view: 0
     page_region: Callable[[Any], tuple | None] = lambda view: None
+    comic_boundary: Callable | None = None
+    clear_comic_boundary: Callable = lambda: None

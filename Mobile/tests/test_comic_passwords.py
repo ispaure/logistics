@@ -30,6 +30,8 @@ class ComicPasswordUITests(unittest.TestCase):
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
+            # This test checks unlocked page movement, independently of paired defaults.
+            app.preferences.save(comic_layout='single')
             try:
                 source = root / 'protected.cbz'
                 source.write_bytes(base64.b64decode(fixture['aes']))

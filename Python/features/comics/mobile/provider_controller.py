@@ -1,7 +1,6 @@
 """Feature-owned reader workflow state and explicit host dependencies."""
 
 import asyncio
-from pathlib import Path
 import toga
 from services.workflow_host import HostAttribute
 
@@ -94,8 +93,15 @@ class ProviderComicController:
             finally:
                 self.set_cloud_busy(False)
         if target is not None:
+            self.format_services.clear_comic_boundary()
             nav.requested_half = (1 if direction < 0 else 0) if target != index else (1 - nav.half)
             await self.move_private_page(target)
+        elif self.format_services.comic_boundary is not None:
+            header = getattr(self.app, 'comic_header', None)
+            available = bool(header is not None and header.available[0 if direction < 0 else 1])
+            await self.format_services.comic_boundary(direction,
+                right_to_left=getattr(reader, 'right_to_left', False), available=available,
+                adjacent=self.adjacent_provider_comic)
 
     def private_comic_seam(self, view=None):
         return self.format_services.seam(getattr(view or self, 'crypt_content', self.main_window.content))
@@ -150,7 +156,7 @@ class ProviderComicController:
                 viewport=lambda: (
                     self.private_comic_viewport(),
                     self.private_comic_mode(),
-                    self.preferences.values.get('comic_split_wide', 'true'),
+                    self.preferences.values.get('comic_split_wide', 'false'),
                     (self.private_comic_seam(), self.format_services.seam_gap(self.crypt_content),
                      self.format_services.page_region(self.crypt_content)),
                 ),
@@ -158,7 +164,7 @@ class ProviderComicController:
                 reload=relayout,
                 initial=(getattr(reader.comic_navigation, 'viewport', (1, 1)),
                          self.private_comic_mode(),
-                         self.preferences.values.get('comic_split_wide', 'true'),
+                         self.preferences.values.get('comic_split_wide', 'false'),
                          (self.private_comic_seam(), self.format_services.seam_gap(self.crypt_content),
                           self.format_services.page_region(self.crypt_content))),
                 changed=self.format_services.layout_changed(),
@@ -185,14 +191,9 @@ class ProviderComicController:
             or not self.workspace.accepts(token)
         ):
             return
-        from features.comics.mobile.navigation import adjacent_comic
+        from features.comics.mobile.navigation import adjacent_comic, folder_comics
 
-        comics = [
-            (row["path"], row["name"])
-            for row in rows
-            if not row["directory"]
-            and Path(row["name"]).suffix.lower() in {".cbz", ".zip"}
-        ]
+        comics = folder_comics(rows, key)
         header.sync(
             adjacent_comic(comics, key, -1) is not None,
             adjacent_comic(comics, key, 1) is not None,
@@ -213,7 +214,7 @@ class ProviderComicController:
                 "Open a folder-backed comic to navigate neighboring files."
             )
             return
-        from features.comics.mobile.navigation import adjacent_comic
+        from features.comics.mobile.navigation import adjacent_comic, folder_comics
 
         key = self.crypt_reader.key
         token = self.workspace.token(self.session.id)
@@ -231,12 +232,7 @@ class ProviderComicController:
         ):
             return
         target = adjacent_comic(
-            [
-                (row["path"], row["name"])
-                for row in rows
-                if not row["directory"]
-                and Path(row["name"]).suffix.lower() in {".cbz", ".zip"}
-            ],
+            folder_comics(rows, key),
             key,
             direction,
         )

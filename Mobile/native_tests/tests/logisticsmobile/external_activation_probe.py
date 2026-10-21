@@ -30,18 +30,28 @@ class TVProbe(LogisticsMobile):
             from commonUtils.runtime.document_access import LocalDocuments
             from features.rclone.mobile.cloud import CloudClient
             from features.rclone.mobile.session_privacy import ResumePassword
-            from logisticsmobile.external_display import sync
-            self.preferences.save(comic_layout='single', comic_split_wide='false')
-            def png(color):
+            from logisticsmobile.external_display import sync, comic_canvas
+            assert self.preferences.values['comic_layout'] == 'double'
+            assert self.preferences.values['comic_split_wide'] == 'false'
+            def png(color, width=320, height=480):
                 def chunk(kind, data):
                     return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
-                return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 320, 480, 8, 6, 0, 0, 0))
-                        + chunk(b'IDAT', zlib.compress((b'\0' + color * 320) * 480)) + chunk(b'IEND', b''))
+                return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 6, 0, 0, 0))
+                        + chunk(b'IDAT', zlib.compress((b'\0' + color * width) * height)) + chunk(b'IEND', b''))
             comic = self.private_root / 'TV.cbz'
             with ZipFile(comic, 'w') as archive:
                 archive.writestr('1.png', png(b'\xff\x00\x00\xff'))
                 archive.writestr('2.png', png(b'\x00\x00\xff\xff'))
-            record = self.reader_manager().catalog.library_store.import_book(LocalDocuments(), comic)
+                archive.writestr('3.png', png(b'\x00\xff\x00\xff', 640, 320))
+                archive.writestr('4.png', png(b'\xff\x00\xff\xff'))
+                archive.writestr('5.png', png(b'\x00\xff\xff\xff', 480, 480))
+            store = self.reader_manager().catalog.library_store
+            records = []
+            for name in ('Volume 01.cbz', 'Volume 02.cbz', 'Volume 03.cbz'):
+                source = self.private_root / name
+                source.write_bytes(comic.read_bytes())
+                records.append(store.import_book(LocalDocuments(), source))
+            record = records[1]
             await self.open_book(record['id'])
             owner = self.reader_manager().active
             output = self.scene_manager.external_comics
@@ -70,15 +80,64 @@ class TVProbe(LogisticsMobile):
             assert picture.image is not None, 'No first comic image'
             assert picture.contentMode == 1
             assert float(picture.bounds.size.width) > 0
-            assert picture.image == owner.book_content.children[0]._impl.picture.image
+            assert picture.image == comic_canvas(owner.book_content)._impl.picture.image
+            assert owner.comic_navigation.visible == (0, 1)
+            assert self._comic_chrome_hidden
+            assert output.ios_status is not None
+            badge = output.ios_status[1]
+            from logisticsmobile.screen_privacy import native_value
+            result['badge_native'] = dict(hidden=bool(badge.isHidden()),
+                superview=str(native_value(badge, 'superview')), window=str(native_value(badge, 'window')),
+                expected_window=str(self.main_window._impl.native))
+            assert native_value(badge, 'superview') == self.main_window._impl.native and not badge.isHidden()
+            assert not badge.isUserInteractionEnabled()
+            assert str(native_value(badge, 'text')) == 'Casting to TV'
+            assert float(badge.frame.size.height) == 28
+            result['badge_bounds'] = [float(badge.frame.origin.x), float(badge.frame.origin.y), float(badge.frame.size.width), float(badge.frame.size.height)]
+            from .fixtures import capture_window
+            await capture_window(self, Path(self.paths.cache) / 'casting-phone.png')
+            result['cases'].append('casting_badge_visible_in_fullscreen')
+            assert float(picture.image.size.width) == 640, 'Artificial gutter between pages'
+            await owner.move_comic(-1)
+            feedback = self._comic_boundary_feedback
+            assert '← Swipe to read' in feedback.message
+            assert feedback.native is not None and not feedback.native.isHidden()
+            await asyncio.sleep(.1)
+            await capture_window(self, Path(self.paths.cache) / 'comic-boundary-phone.png')
+            await asyncio.sleep(2.6)
+            assert not feedback.message and feedback.native is None
+            await owner.move_comic(-1)
+            assert self.readers.active is owner, 'First boundary swipe opened a volume'
+            await owner.move_comic(-1)
+            assert self.readers.active.book_record['id'] == records[0]['id']
+            await self.readers.active.next_comic_file()
+            owner = self.readers.active
+            assert owner.book_record['id'] == record['id']
+            result['cases'].append('native_direction_hint_expires_and_repeat_opens_previous_volume')
             first = picture.image
             result['cases'].append('native_aspect_fit_image')
-            await owner.move_book_page(1)
+            await owner.move_comic(1)
+            assert owner.comic_navigation.visible == (2,)
+            assert not owner.comic_navigation.split
+            assert float(picture.image.size.width) > float(picture.image.size.height)
+            await owner.move_comic(1)
+            assert owner.comic_navigation.visible == (3, 4)
+            result['cases'].append('default_two_pages_and_whole_wide_page')
             assert picture.image is not None and picture.image != first
             result['cases'].append('native_page_turn_publication')
+            await owner.move_comic(1)
+            assert self.readers.active is owner
+            assert 'End of comic' in self._comic_boundary_feedback.message
+            assert 'Swipe to read' not in self._comic_boundary_feedback.message
+            await owner.move_comic(1)
+            assert self.readers.active.book_record['id'] == records[2]['id']
+            await self.readers.active.previous_comic_file()
+            owner = self.readers.active
+            result['cases'].append('native_end_hint_repeat_opens_next_volume')
             CloudClient._session_privacy = ResumePassword('synthetic-only')
             self.screen_privacy.refresh()
             assert picture.image is None, 'Session credentials left external pixels visible'
+            assert output.ios_status is None
             result['cases'].append('session_credentials_blank_local_comic')
             CloudClient._session_privacy = None
             self.screen_privacy.refresh()
@@ -96,6 +155,7 @@ class TVProbe(LogisticsMobile):
             assert picture.image is not None
             output.disconnect_ios(window.windowScene)
             assert picture.image is None and not output.ios
+            assert output.ios_status is None
             result['cases'].append('disconnect_releases_image')
             self.main_window._impl.native.makeKeyAndVisible()
             result['success'] = True

@@ -21,6 +21,94 @@ def labels(widget):
 
 
 class ReaderFormatTests(unittest.TestCase):
+    def test_boundary_swipes_hint_then_open_neighbor_for_comics_and_manga(self):
+        from types import SimpleNamespace
+        from zipfile import ZipFile
+        for rtl in (False, True):
+            with self.subTest(rtl=rtl), TemporaryDirectory() as directory:
+                root = Path(directory)
+                LogisticsMobile.storage_root = root
+                app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                fixtures = root / 'fixtures'
+                fixtures.mkdir()
+                _, source = make_books(fixtures)
+                with ZipFile(source, 'a') as archive:
+                    archive.writestr('ComicInfo.xml', '<ComicInfo><Manga>' +
+                        ('YesAndRightToLeft' if rtl else 'No') + '</Manga></ComicInfo>')
+                async def exercise():
+                    store = app.reader_manager().catalog.library_store
+                    records = []
+                    for name in ('01.cbz', '02.cbz', '03.cbz'):
+                        path = fixtures / name
+                        path.write_bytes(source.read_bytes())
+                        records.append(store.import_book(LocalDocuments(), path))
+                    async def swipe(owner, provider, direction):
+                        # The provider's opening/layout workers must finish before
+                        # sending a gesture; busy readers deliberately ignore it.
+                        import asyncio
+                        await asyncio.sleep(.02)
+                        if provider and owner.cloud_busy:
+                            await owner.operation_idle.wait()
+                        physical = -direction if rtl else direction
+                        (owner.swipe_crypt_page if provider else owner.swipe_book_page)(physical)
+                        await owner._comic_swipe_task
+                    for provider in (False, True):
+                        if provider:
+                            rows = [dict(path='Comics/' + name, name=name, directory=False)
+                                    for name in ('01.cbz', '02.cbz', '03.cbz')]
+                            rows.append(dict(path='Other/99.cbz', name='99.cbz', directory=False))
+                            files = SimpleNamespace(root=root / 'provider', private=False, list=lambda folder='': rows)
+                            def open_copy(key, **kwargs):
+                                reader = PrivateReader(key, source.read_bytes())
+                                reader.key = key
+                                return reader
+                            copies = SimpleNamespace(root=files.root, provider=files, open=open_copy, encrypted=False)
+                            app.show_cloud(present=False)
+                            await app.open_crypt(copies=copies, key='Comics/02.cbz')
+                            manager = app.private_sessions
+                            def identity(owner):
+                                return owner.crypt_reader.key
+                            expected = ['Comics/' + name for name in ('01.cbz', '02.cbz', '03.cbz')]
+                        else:
+                            await app.open_book(records[1]['id'])
+                            manager = app.readers
+                            def identity(owner):
+                                return owner.book_record['id']
+                            expected = [record['id'] for record in records]
+                        middle = manager.active
+                        await swipe(middle, provider, -1)
+                        self.assertIs(manager.active, middle)
+                        self.assertIn(('→' if rtl else '←') + ' Swipe to read', app._comic_boundary_feedback.message)
+                        await swipe(middle, provider, -1)
+                        self.assertEqual(identity(manager.active), expected[0])
+                        if provider:
+                            await manager.active.next_provider_comic_file()
+                        else:
+                            await manager.active.next_comic_file()
+                        middle = manager.active
+                        self.assertEqual(identity(middle), expected[1])
+                        await swipe(middle, provider, 1)
+                        self.assertIn('End of comic', app._comic_boundary_feedback.message,
+                            (provider, getattr(middle, 'comic_navigation', None).__dict__ if not provider
+                             else middle.crypt_reader.comic_navigation.__dict__))
+                        self.assertNotIn('Swipe to read', app._comic_boundary_feedback.message)
+                        self.assertEqual(identity(manager.active), expected[1])
+                        await swipe(middle, provider, 1)
+                        self.assertEqual(identity(manager.active), expected[2])
+                        last = manager.active
+                        await swipe(last, provider, 1)
+                        await swipe(last, provider, 1)
+                        self.assertIs(manager.active, last)
+                        self.assertIn('No next volume', app._comic_boundary_feedback.message)
+                try:
+                    app.loop.run_until_complete(exercise())
+                finally:
+                    from logisticsmobile.comic_feedback import clear
+                    clear(app)
+                    app.main_window.close()
+                    app.loop.close()
+                    LogisticsMobile.storage_root = None
+
     def test_imported_and_provider_comic_controls_preserve_epub_preferences(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

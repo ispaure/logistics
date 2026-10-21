@@ -142,6 +142,8 @@ class ScreenPrivacy:
         return bool(self.gates())
 
     def conceal(self):
+        from .comic_feedback import clear as clear_comic_feedback
+        clear_comic_feedback(self.app)
         self.inactive = True
         from .page_animation import cancel_visible_slides
         cancel_visible_slides(self.app)
@@ -253,6 +255,8 @@ class ScreenPrivacy:
         """Replace the entire navigation root; routes may update safely behind it."""
         locked = any(gate.locked for gate in gates)
         if locked:
+            from .comic_feedback import clear as clear_comic_feedback
+            clear_comic_feedback(self.app)
             from features.books.mobile.media_controls import enforce_privacy
             enforce_privacy(self.app)
             self.lock_gates = gates

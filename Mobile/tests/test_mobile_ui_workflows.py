@@ -139,6 +139,7 @@ class MobileWorkflowTests(unittest.TestCase):
         from threading import Event
         from test_mirror_jobs import MirrorClient
         app = self.app
+        app.preferences.save(comic_layout='single')
         started, release = Event(), Event()
         class Client(MirrorClient):
             def crypt_remotes(self): return []
@@ -171,7 +172,8 @@ class MobileWorkflowTests(unittest.TestCase):
                 app.mirror_store().create(client, 'Remote', 'folder', cancelled=cancel, progress=progress), 'create'))
             try:
                 for _ in range(100):
-                    if started.is_set(): break
+                    if started.is_set():
+                        break
                     await asyncio.sleep(.01)
                 self.assertTrue(started.is_set())
                 cancel = app.transfer_controller()._transfer_cancel
@@ -233,7 +235,6 @@ class MobileWorkflowTests(unittest.TestCase):
         app.loop.run_until_complete(exercise())
 
     def test_hierarchical_rows_work_without_folder_captions_or_selection_ticks(self):
-        import toga
         from unittest.mock import AsyncMock
         from commonUtils.runtime.browsing import BrowseTree, BrowseEntry
         from logisticsmobile.browser_ui import FileBrowser

@@ -65,10 +65,10 @@ class ComicNavigation:
         neighbor = start - 1 if anchor_right and not self.right_to_left else start + 1
         if (mode != 'single' and 0 <= neighbor < self.count
                 and start not in self.double_pages and neighbor not in self.double_pages
-                and self.sizes[start][0] < self.sizes[start][1]):
+                and self.sizes[start][0] <= self.sizes[start][1]):
             data[neighbor] = self.read_page(neighbor)[0]
             self.sizes[neighbor] = image_dimensions(data[neighbor])
-            if self.sizes[neighbor][0] < self.sizes[neighbor][1]:
+            if self.sizes[neighbor][0] <= self.sizes[neighbor][1]:
                 first = min(start, neighbor)
         indices = visible_pages(first, {i: self.sizes[i] for i in data}, viewport, mode, self.double_pages)
         if first == start and anchor_right and not self.right_to_left:
@@ -128,3 +128,12 @@ def adjacent_comic(entries, current, direction):
         return None
     target = index + (1 if direction > 0 else -1)
     return ordered[target][0] if 0 <= target < len(ordered) else None
+
+
+def folder_comics(rows, current):
+    """Scope neighboring volumes to the current provider folder."""
+    from pathlib import PurePosixPath
+    folder = current.rpartition('/')[0]
+    return [(row['path'], row['name']) for row in rows
+            if not row['directory'] and row['path'].rpartition('/')[0] == folder
+            and PurePosixPath(row['name']).suffix.lower() in {'.cbz', '.zip'}]

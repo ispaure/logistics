@@ -54,6 +54,7 @@ class ReaderSessionTests(unittest.TestCase):
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            app.preferences.save(comic_layout='single')
             try:
                 app.show_library()
                 fixtures = root / 'fixtures'

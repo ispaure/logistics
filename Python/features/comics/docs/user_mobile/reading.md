@@ -42,9 +42,10 @@ image formats fail explicitly instead of silently disappearing from the comic.
 Choose **Appearance → Comic page layout** in an imported reader, or **Appearance…**
 in a provider reader, for Single, Automatic or Two pages. Portrait page
 pairs respect manga visual order; landscape and ComicInfo DoublePage pages remain
-single. Automatic is the mobile default: a reading area wider than tall shows two
-portrait pages; a taller or square area shows one. Existing explicit Single or Two
-pages choices remain available. ComicInfo `Manga=YesAndRightToLeft` places the
+single. Two pages is the mobile default, including on a portrait phone: adjacent
+portrait or square pages appear together; a page wider than tall appears whole
+on its own. A final unpaired page also appears alone. Explicit Single or Automatic
+choices remain available; Automatic follows the reading area orientation. ComicInfo `Manga=YesAndRightToLeft` places the
 earlier page on the right; left-to-right comics place it on the left.
 Comic appearance shows page layout and the portrait wide-page switch. EPUB font, spacing, text width, margins
 and theme controls do not appear in comics, and applying comic layout leaves
@@ -61,9 +62,10 @@ visibility. Neither file switching nor All documents appears in the overflow men
 import, `remote:path` for a remote preview, or the logical LocalCrypt location
 for a folder-backed encrypted file. Imported copies show their current stored
 path; their original import location is not reconstructed.
-**Appearance → Split wide pages in portrait** is enabled by default, including
-when an older preferences file has no value for this setting. In a taller-than-wide
-reading area, a landscape source image is displayed as two overlapping views.
+**Appearance → Split wide pages in portrait** is off by default, including
+when an older preferences file has no value for this setting. Wide pages stay
+whole on the phone and TV. If enabled explicitly, a landscape source image in a
+taller-than-wide reading area is displayed as two overlapping views.
 Next/swipe moves from the first half to the second, then to the next source page;
 Previous reverses this order and enters a preceding wide page at its second half.
 Left-to-right comics start on the left; right-to-left manga starts on the right.
@@ -75,6 +77,17 @@ the displayed half, with swipes turning only at fit size. Landscape and square
 reading areas show the complete wide image. Turn the switch off to view complete
 wide pages in portrait as well. The setting is separate from Single/Automatic/Two
 pages and applies to imported, Local, LocalCrypt and remote comics.
+
+Paired pages touch with no added gutter on phones, iPad landscape, TV output and
+an unfolded Duo. An active reserved hinge region remains clear while folding.
+At the beginning, a swipe before the first page briefly shows an arrow for the
+reading direction (reversed for manga). If a previous volume is available, the
+hint also offers it: repeat the boundary swipe within 2.5 seconds to open it.
+At the end, the first forward boundary swipe offers the next volume; repeat
+within 2.5 seconds to open it. Without an adjacent volume the hint says so and
+keeps the current comic open. Folder-backed readers choose naturally ordered
+CBZ/ZIP files in the current folder; imports use the imported library's order.
+Hints appear on the internal screen only and clear on navigation or privacy cover.
 
 Previous/Next and swipes advance past the displayed spread, or through each half
 of a split wide page. Imported and provider
@@ -103,7 +116,7 @@ when reading controls are visible and is cleared on page changes or leaving the
 reader. It works on single pages and spreads, including Local/LocalCrypt comics.
 
 Two-page spreads use one continuous zoom/pan surface. Pinch to zoom both pages
-together, then drag across the gutter to inspect either page. Page proportions and
+together, then drag across the join to inspect either page. Page proportions and
 manga order are preserved. **Fit comic page** returns the whole spread to fit size.
 Swipes turn pages only at fit size; while zoomed, dragging pans the spread.
 Rotating while zoomed retains the current spread until you fit it. A failed page
@@ -225,7 +238,11 @@ system-bar behavior. Ordinary and private comics share this presentation.
 
 Connect AirPlay Screen Mirroring on iPhone or iPad, then open a comic. The TV
 shows the current page or spread fitted against black, without reader controls.
-Turn pages on the phone or tablet; TV output follows. The phone may remain in
+Turn pages on the phone or tablet; TV output follows the same two-page spread
+or complete wide page, with no added gap between paired pages. A small **Casting to TV** badge stays visible on the
+internal screen even in fullscreen reading, above the home indicator. It clears
+when you leave the comic, disconnect the display, or privacy protection blocks
+output. The phone may remain in
 portrait while the TV uses its own landscape display dimensions. Leaving the comic or
 backgrounding the app clears the dedicated external picture. After updating from
 a version that only mirrored the app, stop Screen Mirroring and reconnect once

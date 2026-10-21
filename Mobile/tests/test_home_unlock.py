@@ -18,6 +18,10 @@ class HomeUnlockTests(unittest.TestCase):
         LogisticsMobile.storage_root = root
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        # Backend names below select Home policy; this dummy host has no UIKit.
+        self.external = patch('logisticsmobile.external_display.sync')
+        self.external.start()
+        self.addCleanup(self.external.stop)
         self.addCleanup(self.app.loop.close)
         self.addCleanup(self.app.main_window.close)
         self.app.show_cloud(present=False)

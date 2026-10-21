@@ -79,7 +79,7 @@ must be retained when modifying the parser.
 
 ## Portrait wide pages on mobile
 
-`comic_split_wide` is a separate boolean mobile preference, defaulting to `true`
+`comic_split_wide` is a separate boolean mobile preference, defaulting to `false`
 for new and existing preference files without that key. The shared comic appearance
 form exposes it alongside page layout. It does not change EPUB preferences.
 `mobile/navigation.py` stages `(source index, half, split)` until native rendering
@@ -234,8 +234,8 @@ journal described in the parity guide.
 
 Native two-page spreads now compose an owned bitmap in `mobile/composite.py` and
 use one native ImageCanvas in `mobile/presentation.py`. Geometry preserves page
-proportions at a common height, manga visual order and a shared gutter. Fitted
-gutter spacing follows the desktop's eight-point gap across source resolutions. Combined
+proportions at a common height and manga visual order, with no artificial gutter
+between the pages. Desktop and mobile use the same zero-gap policy. Combined
 output is capped at 16 million pixels and 8192 pixels per side before native
 allocation. UIKit rendering explicitly uses scale 1 so Retina density does not
 multiply that budget. Android and iOS compose directly in RAM; no temporary page
@@ -383,3 +383,29 @@ visible host controller; the output owner retains/unregisters it when controller
 change or the owner is disposed. Host tests cover the scene manifest and accessory
 lifetime. A second window in an application scene proves rendering only and does
 not prove that AirPlay will create an external scene.
+
+The casting owner adds a noninteractive phone-only status badge above the native
+window safe-area bottom. It survives immersive chrome and is removed on privacy
+blanking, route exit, host changes, disconnect and disposal. Android presentation
+output owns an equivalent decor overlay; its badge appears only with a published
+image on a showing presentation. Neither badge becomes part of the TV image.
+Mobile preferences default to two pages and no portrait wide-page splitting;
+explicit saved layout/splitting choices remain available. Pair eligibility includes
+square pages, with landscape and ComicInfo DoublePage pages kept single.
+
+`SPREAD_GAP` is zero for desktop painting and bounded native composition. The
+mobile compositor permits a zero-pixel gap instead of rounding it up to one;
+flat fold layouts also join at the seam, while an active reserved hinge region
+retains its physical clearance. Pixel tests cover the desktop center seam and
+both mobile reading directions.
+
+`ReadingPresentation.comic_boundary` injects window-local feedback into imported
+and provider comic controllers. A blocked turn shows a 2.5-second, noninteractive
+arrow/text hint on the internal window (Android uses a short native toast).
+A repeat from the same reader in the same direction before expiry invokes the
+existing adjacent-volume workflow only when a neighbor is available. A valid
+page turn, route exit or privacy cover clears the hint and repeat state. Provider
+neighbor candidates explicitly match the current key's parent folder. Host tests
+exercise both gesture directions for comics and manga, missing neighbors, expiry,
+reader changes and folder isolation; the native UIKit probe exercises hint expiry
+and actual previous/next volume opening.

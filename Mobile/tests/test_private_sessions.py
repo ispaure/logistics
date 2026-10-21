@@ -59,6 +59,7 @@ class PrivateSessionTests(unittest.TestCase):
             self.assertEqual(present.call_args.kwargs['title'], 'Reading appearance')
 
     def test_fullscreen_comic_reloads_released_page_only_after_unlock(self):
+        self.app.preferences.save(comic_layout='single')
         import asyncio
         import base64
         import io

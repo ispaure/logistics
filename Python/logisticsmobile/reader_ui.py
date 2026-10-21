@@ -128,6 +128,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.set_book_busy(False)
 
     def release_book_reader(self):
+        self.format_services.clear_comic_boundary()
         from .page_animation import cancel_page_slide
         cancel_page_slide(self.book_content)
         self.close_read_aloud()

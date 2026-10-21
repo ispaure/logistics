@@ -18,6 +18,7 @@
     "browser_ui.py",
     "chat_fixture.py",
     "chapter_drawer.py",
+    "comic_feedback.py",
     "comic_layout_check.py",
     "comic_source.py",
     "control_icons.py",

@@ -110,7 +110,8 @@ class MobileUITests(unittest.TestCase):
             app.refresh_library()
             app.loop.run_until_complete(app.open_book(record['id']))
             self.assertEqual(app.reader_manager().active.book_reader.pages, ['page2.png', 'page10.png'])
-            self.assertIsNotNone(app.reader_manager().active.book_content.children[0].image)
+            from logisticsmobile.external_display import comic_canvas
+            self.assertIsNotNone(comic_canvas(app.reader_manager().active.book_content).image)
             with fixture_server() as (url, started, release, requests):
                 app.show_chat()
                 app.chat_url.value = url

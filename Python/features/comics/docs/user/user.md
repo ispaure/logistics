@@ -41,7 +41,8 @@ return it; switching sidebar destinations retains the open views.
 - Use Previous/Next File for neighboring CBZs. Reading direction follows comic
   metadata; the page-layout button or **View → Page layout** lets you choose
   Automatic, Single page or Two pages. Menu page turns follow the same spread
-  boundaries as the buttons and keyboard.
+  boundaries as the buttons and keyboard. Paired pages touch without an added
+  center gutter.
 - Right-click comics or folders and choose **Books & Comics → Edit metadata…**. Multiple
   selections edit only fields you explicitly change. Apply saves without closing;
   OK saves and closes. Cancel discards unapplied edits.

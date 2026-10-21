@@ -124,7 +124,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         from logisticsmobile.preferences import Preferences
         app = self.app
         backend = type(app._impl)
-        with patch.object(backend, '__module__', 'toga_iOS.app'):
+        with patch.object(backend, '__module__', 'toga_iOS.app'), patch('logisticsmobile.external_display.sync'):
             self.assertFalse(app.folder_path_visible('Books/Legacy-old'))
             self.assertFalse(app.folder_path_visible('Legacy-old/book.cbz', directory=False))
             self.assertTrue(app.folder_path_visible('Books/Legacy-file.cbz', directory=False))
@@ -197,6 +197,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         cache = SimpleNamespace(matching=lambda remote, identity: [
             ('old', dict(zip='LegacyArchive.zip')), ('current', dict(zip='Personal.zip'))])
         with patch.object(type(app._impl), '__module__', 'toga_iOS.app'), \
+                patch('logisticsmobile.external_display.sync'), \
                 patch.object(app, 'cloud_client', SimpleNamespace(
                     connection_identity=Mock(side_effect=ValueError('Locked')))), \
                 patch.object(app, 'retained_packages', return_value=cache), \

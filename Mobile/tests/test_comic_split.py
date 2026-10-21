@@ -13,12 +13,59 @@ from services.documents.readers import PrivateReader
 
 
 class ComicSplitTests(unittest.TestCase):
+    def test_default_portrait_spreads_wide_page_and_odd_tail_for_both_readers(self):
+        for rtl in (False, True):
+            with self.subTest(rtl=rtl), TemporaryDirectory() as directory:
+                root = Path(directory)
+                LogisticsMobile.storage_root = root
+                app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                source = root / 'mixed.cbz'
+                with ZipFile(source, 'w') as archive:
+                    for index in range(6):
+                        encoded = BytesIO()
+                        Image.new('RGB', (300, 160) if index == 2 else ((240, 240) if index == 4 else (120, 240)), 'red').save(encoded, format='PNG')
+                        archive.writestr(f'{index}.png', encoded.getvalue())
+                    archive.writestr('ComicInfo.xml', '<ComicInfo><Manga>' +
+                                     ('YesAndRightToLeft' if rtl else 'No') + '</Manga></ComicInfo>')
+                record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), source)
+                async def exercise():
+                    with patch('features.comics.mobile.reader_controller.ComicController.comic_viewport', return_value=(400, 800)), \
+                            patch('features.comics.mobile.provider_controller.ProviderComicController.private_comic_viewport', return_value=(400, 800)):
+                        await app.open_book(record['id'])
+                        imported = app.readers.active
+                        for provider in (False, True):
+                            if provider:
+                                app.show_cloud()
+                                reader = PrivateReader('mixed.cbz', source.read_bytes())
+                                with patch.object(app.crypt_copies, 'open', return_value=reader):
+                                    await app.open_crypt(copies=app.crypt_copies, key='e' * 32)
+                                owner = app.private_sessions.active
+                                nav, move = reader.comic_navigation, owner.move_provider_comic
+                            else:
+                                owner = imported
+                                nav, move = owner.comic_navigation, owner.move_comic
+                            self.assertEqual(nav.visible, (0, 1))
+                            for direction, expected in ((1, (2,)), (1, (3, 4)), (1, (5,)),
+                                                        (-1, (3, 4)), (-1, (2,)), (-1, (0, 1))):
+                                await move(direction)
+                                self.assertEqual(nav.visible, expected)
+                                self.assertFalse(nav.split)
+                            if provider:
+                                app.private_sessions.close(owner.session.id, discard=True)
+                try:
+                    app.loop.run_until_complete(exercise())
+                finally:
+                    app.main_window.close()
+                    app.loop.close()
+                    LogisticsMobile.storage_root = None
+
     def test_halves_follow_direction_overlap_resume_and_keep_failed_view(self):
         for rtl in (False, True):
             with self.subTest(rtl=rtl), TemporaryDirectory() as directory:
                 root = Path(directory)
                 LogisticsMobile.storage_root = root
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                app.preferences.save(comic_split_wide='true')
                 source = root / 'wide.cbz'
                 # Distinct outer halves and a shared centre stripe prove actual crops.
                 image = Image.new('RGB', (1000, 600), 'red')
@@ -255,7 +302,7 @@ class ComicSplitTests(unittest.TestCase):
             (Path(directory) / 'preferences.ini').write_text('[Mobile]\ncomic_layout=single\n')
             prefs = Preferences(Path(directory))
             self.assertEqual(prefs.values['comic_layout'], 'single')
-            self.assertEqual(prefs.values['comic_split_wide'], 'true')
+            self.assertEqual(prefs.values['comic_split_wide'], 'false')
             form = ReaderAppearance(prefs.values, lambda widget: None, kind='comic')
             form.split_wide.value = False
             prefs.save(**form.settings())

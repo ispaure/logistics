@@ -63,6 +63,8 @@ def reader_buttons(app, view):
 
 def sync_comic_chrome(app, view, *, destination=None):
     """Host decides when to hide chrome; shared adapters own native restoration."""
+    from .comic_feedback import sync as sync_feedback
+    sync_feedback(app, view)
     def immersive(widget):
         return (getattr(widget, '_reader_fullscreen', False)
                 or getattr(widget, '_comic_fullscreen', False)
