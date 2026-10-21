@@ -77,6 +77,8 @@ SHARED_REQUIRED_MODULES += ('runtime/progress.py', 'runtime/streams/progress.py'
 
 SHARED_REQUIRED_MODULES += ('ui/native/text_size.py',)
 
+SHARED_REQUIRED_MODULES += ('ui/native/transitions.py', 'ui/native/sliders.py')
+
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):
     """Check staged application/feature/service imports before a native build."""

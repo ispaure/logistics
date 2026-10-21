@@ -177,3 +177,6 @@ and the Text Editor-specific provider choice.
 
 Native text-size gestures and in-place WebView reflow live in commonUtils.
 Logistics retains format keys, settings fanout, private-surface validity and errors.
+
+Page transition and slider painting mechanics live in commonUtils. Logistics
+retains E Ink animation policy, reader value reversal, palette and theme refresh.
