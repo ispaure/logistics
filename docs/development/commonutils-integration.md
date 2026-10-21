@@ -193,3 +193,7 @@ and E Ink tint policy. Shared browser and navigation controls reuse the renderer
 Settings and connection pages use commonUtils measured text, grouped row,
 accessory and retained disclosure primitives. Logistics owns category composition,
 preference validation, connection switches, appearance roles and page reflow.
+
+Reader chrome uses commonUtils retained native bar mounting and centered titles.
+Logistics keeps reader action grouping, window ownership, privacy/fullscreen policy,
+status selection, navigation routing and safe-area integration.

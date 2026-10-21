@@ -3,7 +3,6 @@ import weakref
 
 _hosts = weakref.WeakValueDictionary()
 _installed = False
-_title_view_type = None
 
 
 def bar_control(button):
@@ -15,27 +14,14 @@ def bar_control(button):
 
 
 def bar_group(buttons, *, size=44):
-    """Constrain custom controls so Toga refresh cannot collapse their frames."""
-    from rubicon.objc import ObjCClass, CGRect
-    group = ObjCClass('UIStackView').alloc().initWithFrame(CGRect((0, 0), (size * len(buttons), size)))
-    group.axis, group.distribution, group.alignment, group.spacing = 0, 1, 0, 0
-    group.widthAnchor.constraintEqualToConstant(size * len(buttons)).active = True
-    group.heightAnchor.constraintEqualToConstant(size).active = True
-    item = ObjCClass('UIBarButtonItem').alloc().initWithCustomView(group)
+    from commonUtils.ui.native.bars import apple_bar_group
+    item, group = apple_bar_group(buttons, native_control=bar_control, size=size)
     for button in buttons:
-        native = bar_control(button)
-        native.translatesAutoresizingMaskIntoConstraints = False
-        group.addArrangedSubview(native)
         button._native_reader_item = item
     return item, group
 
 
-def bar_separator():
-    """A fixed space splits UIKit's shared glass, including on iOS 26+."""
-    from rubicon.objc import ObjCClass
-    item = ObjCClass('UIBarButtonItem').alloc().initWithBarButtonSystemItem(6, target=None, action=None)
-    item.width = 8
-    return item
+from commonUtils.ui.native.bars import apple_bar_separator as bar_separator
 
 
 def action_groups(buttons):
@@ -51,61 +37,9 @@ def action_groups(buttons):
 
 
 def reader_title(text, width, actions):
-    """Keep the visible title centered even with asymmetric UIKit bar groups."""
-    global _title_view_type
-    from rubicon.objc import ObjCClass, objc_method, objc_property, send_super, CGRect
-    if _title_view_type is None:
-        class LogisticsReaderTitle(ObjCClass('UIView')):
-            readerActions = objc_property(object)
-            readerWidth = objc_property(object)
-
-            @objc_method
-            def didMoveToWindow(self) -> None:
-                send_super(__class__, self, 'didMoveToWindow')
-                self.setNeedsLayout()
-
-            @objc_method
-            def layoutSubviews(self) -> None:
-                send_super(__class__, self, 'layoutSubviews')
-                label, window = self.viewWithTag(7311), self.window
-                window = window() if callable(window) else window
-                if label is None or window is None:
-                    return
-                center = float(window.bounds.size.width) / 2
-                available = float(self.bounds.size.width)
-                group = self.readerActions
-                group_window = group.window if group is not None else None
-                group_window = group_window() if callable(group_window) else group_window
-                if group_window is not None:
-                    rect = group.convertRect(group.bounds, toView=window)
-                    # On iPad UIKit can put tab/action groups in the row above
-                    # the title. Only a group sharing the title row limits it.
-                    own = self.convertRect(self.bounds, toView=window)
-                    if abs(float(rect.origin.y - own.origin.y)) < 44:
-                        available = min(available, max(44, 2 * (float(rect.origin.x) - center - 24)))
-                if self.readerWidth is None:
-                    label.translatesAutoresizingMaskIntoConstraints = False
-                    width_constraint = label.widthAnchor.constraintEqualToConstant(available)
-                    self.readerWidth = width_constraint
-                    label.centerXAnchor.constraintEqualToAnchor(window.centerXAnchor).active = True
-                    label.centerYAnchor.constraintEqualToAnchor(self.centerYAnchor).active = True
-                    label.heightAnchor.constraintEqualToAnchor(self.heightAnchor).active = True
-                    width_constraint.active = True
-                else:
-                    self.readerWidth.constant = available
-        _title_view_type = LogisticsReaderTitle
-    view = _title_view_type.alloc().initWithFrame(CGRect((0, 0), (width, 32)))
-    view.readerActions = actions
-    view.readerWidth = None
-    label = ObjCClass('UILabel').alloc().initWithFrame(view.bounds)
-    label.tag = 7311
-    label.text = label.accessibilityLabel = text
-    label.font = ObjCClass('UIFont').systemFontOfSize(17, weight=.6)
-    label.textAlignment, label.lineBreakMode = 1, 5
+    from commonUtils.ui.native.bars import apple_bar_title
     from .appearance import apple_color
-    label.textColor = apple_color('text')
-    view.addSubview(label)
-    return view, label
+    return apple_bar_title(text, width, actions, color=apple_color('text'))
 
 
 def fullscreen(window, *, images=False):

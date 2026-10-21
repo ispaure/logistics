@@ -85,6 +85,8 @@ SHARED_REQUIRED_MODULES += ('commonUtils/ui/native/icons.py',)
 
 SHARED_REQUIRED_MODULES += ('commonUtils/ui/native/forms.py',)
 
+SHARED_REQUIRED_MODULES += ('commonUtils/ui/native/bars.py',)
+
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):
     """Check staged application/feature/service imports before a native build."""

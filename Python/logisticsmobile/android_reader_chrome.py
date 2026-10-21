@@ -48,8 +48,6 @@ def sync(app, view, destination):
         return
 
     from android.view import Gravity, View
-    from android.widget import FrameLayout, LinearLayout, TextView
-    from android.text import TextUtils
     from android.graphics import Color
     from java import jclass
     from .workspace_navigation import detach
@@ -77,40 +75,12 @@ def sync(app, view, destination):
     state = (id(view), tuple(id(button) for button in [*leading, *buttons]))
     if getattr(adapter, '_reader_action_bar_state', None) != state:
         release_buttons(adapter)
-        root = FrameLayout(app._impl.native)
-        density = root.getResources().getDisplayMetrics().density
-        size = round(48 * density)
-        label = TextView(app._impl.native)
-        label.setSingleLine(True)
-        label.setEllipsize(TextUtils.TruncateAt.MIDDLE)
-        label.setGravity(Gravity.CENTER)
-        label.setTextSize(17)
-        status = TextView(app._impl.native)
-        status.setSingleLine(True)
-        status.setEllipsize(TextUtils.TruncateAt.MIDDLE)
-        status.setGravity(Gravity.CENTER)
-        status.setTextSize(12)
-        titles = LinearLayout(app._impl.native)
-        titles.setOrientation(1)
-        titles.setGravity(Gravity.CENTER)
-        titles.addView(label, LinearLayout.LayoutParams(-1, -2))
-        titles.addView(status, LinearLayout.LayoutParams(-1, -2))
-        params = FrameLayout.LayoutParams(-1, -1)
-        params.leftMargin = params.rightMargin = max(len(leading), len(buttons)) * size
-        root.addView(titles, params)
-        for group, gravity in ((leading, Gravity.START), (buttons, Gravity.END)):
-            native_group = LinearLayout(app._impl.native)
-            native_group.setGravity(Gravity.CENTER_VERTICAL)
-            root.addView(native_group, FrameLayout.LayoutParams(-2, -1, gravity))
-            for button in group:
-                detach(button)
-                button.app, button.window = app, app.main_window
-                native = button._impl.native
-                parent = native.getParent()
-                if parent is not None:
-                    parent.removeView(native)
-                native.setVisibility(View.VISIBLE)
-                native_group.addView(native, LinearLayout.LayoutParams(size, -1))
+        from commonUtils.ui.native.bars import android_bar
+        def native_control(button):
+            detach(button)
+            button.app, button.window = app, app.main_window
+            return button._impl.native
+        root, label, status = android_bar(app._impl.native, leading, buttons, native_control=native_control)
         bar.setCustomView(root, jclass('androidx.appcompat.app.ActionBar$LayoutParams')(-1, -1))
         bar.setDisplayOptions(16)  # DISPLAY_SHOW_CUSTOM; title/actions live in one row.
         adapter._reader_action_bar_title = label
