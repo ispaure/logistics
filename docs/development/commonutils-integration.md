@@ -164,3 +164,6 @@ These extractions preserve the Qt/Toga split and existing user workflows. Mobile
 staging explicitly requires the new shared modules and removes their former
 Logistics implementations. The host still owns scene/workspace composition,
 private-content policy and cloud transfer approval. File-object copying is unchanged.
+
+Native draw acknowledgement now lives in commonUtils. Logistics keeps loading
+panel composition and route/privacy revalidation after the wait.

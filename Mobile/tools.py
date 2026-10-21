@@ -69,6 +69,8 @@ SHARED_REQUIRED_MODULES += ('runtime/speech.py', 'formats/image_headers.py',
                             'ui/native/speech.py', 'ui/native/private_webview.py',
                             'ui/native/android/io/github/ispaure/commonutils/SpeechListener.java')
 
+SHARED_REQUIRED_MODULES += ('ui/native/draw_ready.py', 'ui/native/android/io/github/ispaure/commonutils/DrawReady.java')
+
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):
     """Check staged application/feature/service imports before a native build."""

@@ -222,7 +222,7 @@ class PrivateSessions:
 
     async def restore_text_position(self, owner, position):
         from .reader_lifecycle import restore_scroll, restore_loaded_scroll, restore_drawn_scroll
-        from .draw_ready import wait_for_draw
+        from commonUtils.ui.native.draw_ready import wait_for_draw
         await wait_for_draw(owner.crypt_view)
         if not self.available(owner.session.id):
             return

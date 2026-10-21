@@ -155,7 +155,7 @@ async def opening_ready(app):
         await asyncio.sleep(0)
         return True
     if not state['ready']:
-        from .draw_ready import wait_for_draw
+        from commonUtils.ui.native.draw_ready import wait_for_draw
         state['draw_acknowledged'] = await wait_for_draw(state['panel'])
         state['ready'] = True
     adaptive = app.adaptive

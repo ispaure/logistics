@@ -35,7 +35,7 @@ def restore_scroll(widget, position):
 async def restore_drawn_scroll(widget, position, valid):
     """Font/viewport reflow must finish before restoring native scroll offsets."""
     import asyncio
-    from .draw_ready import wait_for_draw
+    from commonUtils.ui.native.draw_ready import wait_for_draw
     binding = getattr(widget, '_font_binding', None)
     pending = getattr(binding, 'task', None)
     if pending is not None and not pending.done():
