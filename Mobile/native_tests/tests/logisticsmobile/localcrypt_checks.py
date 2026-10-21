@@ -321,11 +321,12 @@ async def exercise_localcrypt(app, passed):
     provider = CryptFiles(app.private_root / 'LocalCryptFolders', app.cloud_client, remote)
     provider.mkdir('fixture-seed')
     await app.show_files()
-    local = app.private_root / 'LocalFiles'
+    from features.rclone.mobile.storage_location import collection_path
+    local = collection_path(app.private_root)
     (local / 'source').mkdir()
     (local / 'source/empty').mkdir()
     (local / 'source/note.md').write_bytes(b'# Native folder transfer')
-    await app.browse_files()
+    assert await app.browser_file_location(('Local files', '')), app.file_status.value
     def select(path):
         matches = [label for label, row in app.file_rows.items() if row['path'] == path]
         assert matches, f'{path}: {app.file_status.value}; entries={list(app.file_rows)}'
