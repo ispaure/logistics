@@ -47,6 +47,12 @@ async def exercise_localcrypt(app, passed):
         assert app.crypt_password.value == ''
         # Allow native layout/image decoding to complete on its own event loop.
         await asyncio.sleep(.1)
+        # Native layout can trigger a real page reload after open returns.
+        # Metadata and close actions are disabled until that operation ends.
+        deadline = asyncio.get_running_loop().time() + 60
+        while app.cloud_busy:
+            assert asyncio.get_running_loop().time() < deadline, ('Private reader reload did not settle', name)
+            await asyncio.sleep(.05)
         return (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None)
 
     # A fresh iOS picker must select a newly inserted private location before
