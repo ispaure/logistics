@@ -92,7 +92,8 @@ environment are required as for iOS. The first Android build may download large
 SDK/NDK dependencies. This is a local debug build, not Play Store distribution.
 Before compiling, the helper reads the targets' installed version codes and
 reserves a code above those builds and the saved Firebase/local build counters.
-A Gradle override applies it without rewriting tracked version settings. Firebase
+A Gradle override applies it and refreshes the version name from the current
+manifest without rewriting tracked version settings. Firebase
 also considers local deployment reservations when assigning its next build.
 Before installation, APK certificate checks preserve the installed signing identity.
 If the installed app uses the saved beta key, the helper signs a deployment copy
