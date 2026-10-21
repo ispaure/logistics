@@ -45,13 +45,14 @@ class AndroidDeployTests(unittest.TestCase):
                     patch.object(deploy, 'deployment_version', return_value=42), \
                     patch.object(deploy, 'compatible_apk', side_effect=lambda a, e, s, p: p), \
                     patch.object(deploy, 'tools_environment', return_value=({}, Path('/sdk/adb'))), \
-                    patch.object(deploy, 'run', side_effect=run):
+                    patch.object(deploy, 'run', side_effect=run) as execute:
                 deploy.deploy()
             refresh.assert_called_once()
             install = next(command for command in calls if 'install' in command)
             self.assertEqual(install[3:5], ['install', '-r'])
             self.assertFalse(any('uninstall' in command for command in calls))
             self.assertIn(deploy.BUNDLE + '/org.beeware.android.MainActivity', calls[-1])
+            self.assertGreaterEqual(execute.call_args.kwargs['timeout'], 60)
             self.assertIn(['android'], [command[-1:] for command in calls])
             build = next(command for command in calls if ':app:assembleDebug' in command)
             self.assertEqual(build[build.index('-p') + 1], str(project))

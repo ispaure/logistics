@@ -24,9 +24,9 @@ BUNDLE = 'io.github.ispaure.logisticsmobile'
 PROJECT = output_root(ROOT) / 'build/logisticsmobile/android/gradle'
 
 
-def run(command, env, *, log=None):
+def run(command, env, *, log=None, timeout=20):
     if log is None:
-        return subprocess.run(command, cwd=output_root(ROOT), env=env, check=True, capture_output=True, text=True, timeout=20).stdout
+        return subprocess.run(command, cwd=output_root(ROOT), env=env, check=True, capture_output=True, text=True, timeout=timeout).stdout
     log.parent.mkdir(parents=True, exist_ok=True)
     print('Running ' + str(command[0]) + '; log: ' + str(log), flush=True)
     with log.open('w') as output:
@@ -257,7 +257,7 @@ def install_apk(adb, env, serial, apk):
     # In-place update only. Signature/version failures never trigger uninstall.
     run([*prefix, 'install', '-r', str(apk)], env, log=output_root(ROOT) / 'logs/android-install.log')
     run([*prefix, 'shell', 'am', 'force-stop', BUNDLE], env)
-    result = run([*prefix, 'shell', 'am', 'start', '-W', '-n', BUNDLE + '/org.beeware.android.MainActivity'], env)
+    result = run([*prefix, 'shell', 'am', 'start', '-W', '-n', BUNDLE + '/org.beeware.android.MainActivity'], env, timeout=90)
     if 'Error' in result or 'Exception' in result:
         raise ValueError('Android could not launch the installed app: ' + result)
     print('Installed and launched Logistics on ' + serial + '. Existing app data was retained.')
@@ -270,7 +270,7 @@ def main():
     args = parser.parse_args()
     try:
         deploy(args.device, build_only=args.build_only)
-    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         raise SystemExit(1)
 

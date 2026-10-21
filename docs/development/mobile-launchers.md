@@ -99,6 +99,8 @@ Before installation, APK certificate checks preserve the installed signing ident
 If the installed app uses the saved beta key, the helper signs a deployment copy
 with that key and verifies the certificate again. Missing or unknown keys stop
 before installation; the helper never replaces keys or uninstalls the app.
+The first launch may take up to 90 seconds on slower devices; a startup timeout
+is reported without undoing a successful installation.
 
 Optional Terminal usage: `Mobile/deploy_android.command --device SERIAL` or
 `Mobile/deploy_android.command --build-only`. Build/install logs are under
