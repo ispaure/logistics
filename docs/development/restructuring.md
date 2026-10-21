@@ -293,3 +293,27 @@ deployment workspaces and virtual environments. They remain local and were not
 deleted during this pass. No physical-device install or Boox test-app cleanup was
 needed because this pass did not install test apps. Native interaction acceptance
 remains separate from host regression results.
+
+### Host verification for the October 21 pass
+
+- Complete desktop application regressions: 168 isolated files, 1,560 tests,
+  no failing files, using the existing desktop environment with fixture sockets
+  and OS watcher access.
+- Complete mobile host regressions: 148 isolated files, 1,069 tests, no failing
+  files, using a fresh temporary Python 3.12.2 environment installed from the
+  hash-locked mobile host requirements. This exposed and corrected custom
+  interpreter symlink resolution before the passing run.
+- Complete Go bridge suite: `go test ./...` passed, including shared protocol
+  fixtures and operation-scope regressions.
+- Release/tooling suite: 20 tests passed with the native-Windows-only test skipped
+  on macOS. Workflow YAML parsed, documentation contracts also passed with Python
+  site packages disabled, and correctness lint/import/toolchain/hygiene checks
+  passed.
+- Final optional-argument annotations were followed by passing chat and
+  documentation checks. No native application build, simulator interaction or
+  physical-device acceptance is claimed by these host results.
+
+All changes were committed locally in reviewable steps. No push or deployment was
+performed. Existing environments, generated build directories and the separate
+commonUtils checkout were preserved; the temporary lock-verification environment
+was disposable.
