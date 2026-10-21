@@ -73,6 +73,8 @@ SHARED_REQUIRED_MODULES += ('ui/native/draw_ready.py', 'ui/native/android/io/git
 
 SHARED_REQUIRED_MODULES += ('ui/native/keyboard.py',)
 
+SHARED_REQUIRED_MODULES += ('runtime/progress.py', 'runtime/streams/progress.py')
+
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):
     """Check staged application/feature/service imports before a native build."""
