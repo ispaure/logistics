@@ -18,6 +18,10 @@ class MarkdownPreview(Protocol):
                  image_source: Any = None) -> str: ...
 
 
+class Stylesheet(Protocol):
+    def __call__(self, mode: str = 'system') -> str: ...
+
+
 class FontBinding(Protocol):
     def __call__(self, widget: Any, kind: str, *, web: bool = False,
                  formatted: Any = None) -> Any: ...
@@ -35,7 +39,7 @@ class MobilePresentation:
     menu_button: Callable
     export_document: Callable
     markdown_preview: MarkdownPreview
-    css_variables: Callable[[str], str]
+    css_variables: Stylesheet
     summary_list: Callable
     font_size: Callable[[str], int]
     bind_font: FontBinding

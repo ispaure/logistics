@@ -274,7 +274,8 @@ saved-data migration is introduced.
 
 The ABI remains `LogisticsCloud(action_utf8, request_json_utf8)` followed by exactly
 one `LogisticsCloudFree(pointer)` for each non-null response. Requests are objects;
-replies have boolean `ok`, `result` on success or `error` on failure. Credential
+replies have boolean `ok`, optional `result` and optional `error`/`error_code`
+fields. Cancellation acknowledgements need no result; probe errors can omit text. Credential
 publication may also return `credential_state`. `credentials_busy` refuses
 publication immediately; `archive_password` requests an inner archive password.
 Python checks the existing 2 MiB request limit (24 MiB for image thumbnails).
