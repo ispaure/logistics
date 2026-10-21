@@ -92,8 +92,12 @@ def assert_visible_controls(app):
     safe, size = window.safeAreaInsets, window.bounds.size
     checked = (toga.Button, toga.Selection, toga.TextInput, toga.MultilineTextInput)
     count = 0
+    seen = set()
     def visit(widget):
         nonlocal count
+        if id(widget) in seen:
+            return
+        seen.add(id(widget))
         native = widget._impl.native
         owner = native.window
         owner = owner() if callable(owner) else owner
@@ -109,6 +113,10 @@ def assert_visible_controls(app):
                 assert rect.origin.x + rect.size.width <= size.width - safe.right + 1, details
                 assert rect.origin.y >= safe.top - 1, details
                 assert rect.origin.y + rect.size.height <= size.height - safe.bottom + 1, details
+        # Folder actions are retained Toga buttons mounted into UIKit's bar.
+        # They no longer have a parent in the Toga content tree.
+        for control in getattr(widget, 'title_actions', ()):
+            visit(control)
         # Scrollable form content is deliberately allowed beyond its viewport.
         if not isinstance(widget, toga.ScrollContainer):
             for child in widget.children:

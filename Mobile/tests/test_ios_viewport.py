@@ -76,6 +76,10 @@ class FixedControlAuditTests(unittest.TestCase):
                 patch.object(body._impl, 'native', SimpleNamespace(window=lambda: window), create=True), \
                 patch.object(button._impl, 'native', native, create=True):
             self.assertEqual(rotation_checks.assert_visible_controls(app), 1)
+            body.title_actions = (button,)
+            self.assertEqual(rotation_checks.assert_visible_controls(app), 1)
+            body.remove(button)
+            self.assertEqual(rotation_checks.assert_visible_controls(app), 1)
             rect.origin.x = 0
             with self.assertRaises(AssertionError):
                 rotation_checks.assert_visible_controls(app)
