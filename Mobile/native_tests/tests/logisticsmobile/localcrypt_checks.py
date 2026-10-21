@@ -350,8 +350,7 @@ async def exercise_localcrypt(app, passed):
     app.file_target.value = 'destination/moved'
     await app.move_file()
     assert 'failed' not in app.file_status.value.lower(), app.file_status.value
-    app.file_location.value = 'destination/moved'
-    await app.browse_files()
+    assert await app.browser_file_location((crypt_label, 'destination/moved')), app.file_status.value
     select('destination/moved/note.md')
     await app.read_managed_file()
     assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None).text == '# Native folder transfer'
@@ -404,8 +403,7 @@ async def exercise_localcrypt(app, passed):
     assert 'private handoff native sentinel' not in app.store.path(source.id, '.json').read_text()
     app.close_crypt()
     app.show_view(app.files_view)
-    app.file_location.value = ''
-    await app.browse_files()
+    assert await app.browser_file_location((crypt_label, '')), app.file_status.value
     select('destination')
     app.file_destination.value = 'Local files'
     app.file_target.value = 'exported'
