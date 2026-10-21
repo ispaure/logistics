@@ -236,7 +236,8 @@ Desktop widgets and controllers live in feature-owned `ui/`. Registration stays 
 ## Mobile Markdown image resolution
 
 Folder-backed reader stores expose their rooted `provider` and the reader's
-relative `key`. The mobile host builds a per-render image source from this pair
+relative `key`. The mobile host uses `commonUtils.ui.native.markdown_images.folder_image_source`
+to build a per-render image source from this pair
 for both preview and formatted editing. Path normalization permits parent paths
 within the provider root, rejects external/absolute paths and delegates all I/O
 to the provider. Images are validated before embedding; cached entries recheck
@@ -246,8 +247,14 @@ range/decryption stream without creating plaintext files.
 The formatted editor renders images inside protected inline spans while retaining
 Markdown syntax for serialization. Wiki embeds retain their exact block source.
 Missing images fall back to alt text. Tests in `Mobile/tests/test_markdown_images.py`
-and `test_markdown_editor.py` cover rooted paths, WebP/PNG/JPEG, encrypted-provider
-reads, revoked access and source preservation.
+and `test_markdown_editor.py` cover rooted paths, GIF/WebP/PNG/JPEG, encrypted-provider
+reads, revoked access and source preservation. GIFs retain their complete encoded
+bytes for native WebView animation. Shared image markup interprets Obsidian width
+and height hints and caps image width at its containing page. Size hints stay in
+the image's protected Markdown reference during surrounding paragraph edits.
+`Mobile/native_tests/tests/logisticsmobile/markdown_gif_probe.py` exercises real
+iOS/Android WebViews using synthetic provider files, save/reopen and source
+serialization; a native screenshot driver must verify visible frame changes.
 
 ## Notes Library ownership
 

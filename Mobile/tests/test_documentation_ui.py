@@ -289,3 +289,28 @@ class DocumentationTests(unittest.TestCase):
         self.assertIs(self.app.body, origin)
         self.assertFalse(any(session.title == 'sample.py' for session in self.app.workspace.sessions.values()))
         self.assertFalse(self.app._document_tabs_hidden)
+
+
+class DocumentationImageTests(unittest.TestCase):
+    def test_native_wiki_renders_sized_gif_and_keeps_custom_renderer_compatible(self):
+        from commonUtils.tests.test_gif_headers import GIF
+        from commonUtils.ui.native.markdown_images import local_image_source
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'docs.md').write_text('# GIF\n\n![[colors #1.GIF|70]]\n')
+            (root / 'colors #1.GIF').write_bytes(GIF)
+            captured = []
+            def render(text, size, **kwargs):
+                html = markdown_preview(text, size, **kwargs)
+                captured.append(html)
+                return html
+            owner = MarkdownWikiView(root, render=render, image_source_factory=local_image_source)
+            self.assertIn('data:image/gif;base64,', captured[-1])
+            self.assertIn('width="70"', captured[-1])
+            # Existing custom callbacks need not adopt the new image-source keyword.
+            legacy = MarkdownWikiView(root, render=lambda text, size, *, local_links: '<p>Legacy renderer</p>')
+            self.assertEqual(legacy.path, owner.path)
+            default = MarkdownWikiView(root)
+            with patch.object(default.web, 'set_content') as load:
+                self.assertTrue(default.open_page(default.path))
+            self.assertIn('data:image/gif;base64,', load.call_args.args[1])

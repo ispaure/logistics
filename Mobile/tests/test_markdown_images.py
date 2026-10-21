@@ -24,7 +24,7 @@ class MarkdownImageTests(unittest.TestCase):
             root = Path(directory)
             (root / 'notes').mkdir()
             (root / 'assets').mkdir()
-            for extension, kind, mime in [('webp', 'WEBP', 'webp'), ('png', 'PNG', 'png'), ('jpg', 'JPEG', 'jpeg')]:
+            for extension, kind, mime in [('webp', 'WEBP', 'webp'), ('png', 'PNG', 'png'), ('jpg', 'JPEG', 'jpeg'), ('gif', 'GIF', 'gif')]:
                 data = self.image(kind)
                 (root / 'assets' / ('photo.' + extension)).write_bytes(data)
                 text = f'![Picture](../assets/photo.{extension})\n\n![[../assets/photo.{extension}]]'
@@ -52,8 +52,13 @@ class MarkdownImageTests(unittest.TestCase):
             self.assertNotIn('<img', markdown_preview('![Linked](link.webp)', image_source=load))
 
     def test_localcrypt_reads_decrypted_bytes_only_through_provider(self):
+        for kind, extension, mime in [('WEBP', 'webp', 'webp'), ('GIF', 'gif', 'gif')]:
+            with self.subTest(kind=kind):
+                self.check_localcrypt_image(kind, extension, mime)
+
+    def check_localcrypt_image(self, kind, extension, mime):
         from features.rclone.localcrypt.mobile.resources import CryptFiles
-        data = self.image('WEBP')
+        data = self.image(kind)
         calls = []
         class Client:
             generation = 1
@@ -69,17 +74,17 @@ class MarkdownImageTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             provider = CryptFiles(directory, Client(), 'Secret')
             (provider.root / 'enc-notes').mkdir()
-            ciphertext = provider.root / 'enc-notes' / 'enc-photo.webp'
+            ciphertext = provider.root / 'enc-notes' / ('enc-photo.' + extension)
             ciphertext.write_bytes(b'ciphertext-only')
             copies = SimpleNamespace(provider=provider)
             reader = SimpleNamespace(key='notes/read.md')
-            html = markdown_preview('![Secret](photo.webp)', image_source=reader_image_source(copies, reader))
-            self.assertIn('<img src="data:image/webp;base64,', html)
+            html = markdown_preview(f'![Secret](photo.{extension})', image_source=reader_image_source(copies, reader))
+            self.assertIn(f'<img src="data:image/{mime};base64,', html)
             self.assertIn('crypt_raw_read', calls)
             self.assertEqual(ciphertext.read_bytes(), b'ciphertext-only')
             self.assertEqual([p for p in Path(directory).rglob('*') if p.is_file()], [ciphertext])
             provider.client.request = lambda *a, **kw: (_ for _ in ()).throw(ValueError('Locked'))
-            self.assertNotIn('<img', markdown_preview('![Secret](photo.webp)',
+            self.assertNotIn('<img', markdown_preview(f'![Secret](photo.{extension})',
                 image_source=reader_image_source(copies, reader)))
 
     def test_formatted_images_preserve_markdown_source(self):
@@ -92,3 +97,24 @@ class MarkdownImageTests(unittest.TestCase):
         html = editor_html(text, 'logistics-editor://test/', image_source=load)
         self.assertIn('img-src data:', html)
         self.assertIn('data:image/webp;base64,', html)
+
+    def test_animated_gif_bytes_survive_mobile_preview_and_formatted_source(self):
+        data = BytesIO()
+        Image.new('RGB', (16, 12), 'red').save(data, 'GIF', save_all=True,
+            append_images=[Image.new('RGB', (16, 12), 'blue')], duration=100, loop=0)
+        raw = data.getvalue()
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'two colors #1.GIF').write_bytes(raw)
+            provider = LocalFiles(root)
+            factory = lambda: folder_image_source(provider, 'read.md')
+            text = 'Before ![Animation](two%20colors%20%231.GIF) after.\r\n'
+            html = markdown_preview(text, image_source=factory())
+            self.assertIn('data:image/gif;base64,' + base64.b64encode(raw).decode(), html)
+            blocks = editor_blocks(text, image_source=factory())
+            self.assertEqual(''.join(block['source'] for block in blocks), text)
+            self.assertIn('contenteditable="false"', blocks[0]['html'])
+            self.assertIn('data-markdown="![Animation](two%20colors%20%231.GIF)"', blocks[0]['html'])
+            self.assertIn('data:image/gif;base64,' + base64.b64encode(raw).decode(),
+                editor_html(text, 'logistics-editor://gif/', image_source=factory()))
+            self.assertEqual((root / 'two colors #1.GIF').read_bytes(), raw)

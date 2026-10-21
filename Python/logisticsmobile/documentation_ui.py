@@ -1,6 +1,7 @@
 """Settings entry for the shared native Markdown wiki and bundled Logistics guides."""
 from pathlib import Path
 from commonUtils.ui.native.markdown import MarkdownWikiView
+from commonUtils.ui.native.markdown_images import local_image_source
 from .preview import markdown_preview
 from .markdown_speech import MarkdownSpeech
 from .browser_ui import entry_icon, middle_filename
@@ -13,6 +14,7 @@ class DocumentationReader(MarkdownWikiView):
     def __init__(self, app, *args, **kwargs):
         self.host_app = app
         self.speech = None
+        kwargs.setdefault('image_source_factory', local_image_source)
         super().__init__(*args, **kwargs)
         from .font_scaling import bind
         bind(app, self.web, 'markdown', web=True)

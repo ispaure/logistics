@@ -98,11 +98,17 @@ the text and selection unchanged. The URL field appears only in this prompt.
 
 ## Images in folder-backed Markdown
 
-Markdown opened from Local or LocalCrypt displays static WebP, PNG and JPEG
-images in preview and formatted editing. Use a path relative to the Markdown
+Markdown opened from Local or LocalCrypt displays animated GIFs and static
+WebP, PNG and JPEG images in preview and formatted editing. Use a path relative to the Markdown
 file, for example `![Photo](images/photo.webp)` or `![[images/photo.webp]]`.
 Parent-folder paths work within the same storage root. Bare filenames refer to
 the Markdown file's folder; there is no vault-wide filename search.
+
+Images fit within the page width on phones and tablets. To request a smaller
+width in pixels, use `![[images/demo.gif|200]]` or
+`![Demo|200](images/demo.gif)`. `|400x200` sets both dimensions; oversized requests
+shrink proportionally to fit the page. Formatted editing and saving preserve the
+size hint. Source mode displays the editable reference.
 
 LocalCrypt images are decrypted into memory for display; no decrypted image file
 or separate import is created. Missing, locked, unsupported or oversized images
