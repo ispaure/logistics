@@ -97,6 +97,11 @@ async def exercise_reader(app, passed):
     def current_view():
         displayed = owner.book_content.children[0]
         return displayed.canvases[0] if hasattr(displayed, 'canvases') else displayed
+    async def toggle_controls():
+        await wait_for_reader(owner)
+        previous = owner.reader_immersive
+        current_view().toggle_controls()
+        assert owner.reader_immersive is not previous, 'Reader controls did not toggle'
     current_view().set_zoom(2)
     await asyncio.sleep(.2)
     assert 1.9 <= current_view().zoom_scale <= 2.1, current_view().zoom_scale
@@ -104,7 +109,7 @@ async def exercise_reader(app, passed):
     assert current_view().zoom_scale == 1
     assert owner.reader_immersive and owner.library_view._comic_fullscreen
     assert owner.reader_header not in owner.library_view.children
-    current_view().toggle_controls()
+    await toggle_controls()
     assert not owner.reader_immersive
     # Native document controls now live in the platform title bar rather than
     # an extra Toga header row. Verify that actual bar after leaving fullscreen.
@@ -120,7 +125,7 @@ async def exercise_reader(app, passed):
         assert bar.isShowing(), ('Reader title bar did not restore',
             app.native_host.state.destination, app.native_host.adapter.keyboard_chrome)
         assert app.native_host.adapter._reader_action_bar_buttons
-    current_view().toggle_controls()
+    await toggle_controls()
     assert owner.reader_immersive
     await assert_comic_centered(current_view, fullscreen=True)
     def viewport_height():
@@ -128,15 +133,6 @@ async def exercise_reader(app, passed):
     full_height = viewport_height()
     # Reuse the existing reader, leave through another destination, and repeat
     # control/fullscreen transitions. This catches retained native scroll offsets.
-    async def toggle_controls():
-        deadline = asyncio.get_running_loop().time() + 15
-        while owner.book_busy:
-            assert asyncio.get_running_loop().time() < deadline, 'Reader reload did not finish'
-            await asyncio.sleep(.05)
-        previous = owner.reader_immersive
-        current_view().toggle_controls()
-        assert owner.reader_immersive is not previous, 'Reader controls did not toggle'
-
     for _ in range(3):
         app.show_settings()
         await asyncio.sleep(.1)
