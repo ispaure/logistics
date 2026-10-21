@@ -265,32 +265,6 @@ class RecycledBrowserTests(unittest.TestCase):
         browser.stop()
         self.assertFalse(browser._decoded_thumbnails)
 
-    def test_ios_thumbnail_changes_update_one_cell_and_reject_retired_rows(self):
-        import ast
-        import sys
-        from unittest.mock import Mock
-        path = Path(__file__).parents[2] / 'Python/logisticsmobile/recycled_file_list_ios.py'
-        source = ast.parse(path.read_text())
-        owner = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == 'IOSFileList')
-        method = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == 'source_change')
-        namespace = {}
-        exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), namespace)
-        image = object()
-        row = SimpleNamespace(index=0, icon=SimpleNamespace(_impl=SimpleNamespace(native=image)))
-        cell = SimpleNamespace(imageView=SimpleNamespace(image=None), setNeedsLayout=Mock())
-        native = Mock()
-        native.cellForRowAtIndexPath.return_value = cell
-        host = SimpleNamespace(interface=SimpleNamespace(data=[row]), native=native)
-        libs = SimpleNamespace(NSIndexPath=SimpleNamespace(indexPathForRow=lambda *args, **kwargs: 0))
-        with patch.dict(sys.modules, {'toga_iOS.libs': libs}):
-            namespace['source_change'](host, item=row)
-            self.assertIs(cell.imageView.image, image)
-            native.reloadData.assert_not_called()
-            native.reset_mock()
-            host.interface.data = [object()]
-            namespace['source_change'](host, item=row)
-            native.cellForRowAtIndexPath.assert_not_called()
-
     def test_file_activation_skips_metadata_and_rechecks_navigation_after_callback(self):
         browser = self.browser
         browser.details = lambda *args: self.fail('Opening must not fetch metadata')

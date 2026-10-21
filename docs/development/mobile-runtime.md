@@ -548,7 +548,7 @@ rebinds its text, image, disclosure, accessibility and palette from the current
 source, including when the resume-password screen restores a retained window
 root without another `cellForRowAtIndexPath` request. This preserves the browser
 snapshot, sorting and selection instead of refetching the directory on unlock.
-`test_recycled_file_list_ios.py` covers detached-cell redisplay and late retirement;
+The commonUtils `test_native_recycled_list_ios.py` covers detached-cell redisplay and late retirement;
 `test_screen_privacy.py` checks repeated password restoration of the same listing.
 Tiles retain their existing shared renderer and separate scroll container.
 

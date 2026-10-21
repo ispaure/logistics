@@ -68,6 +68,14 @@ explicitly. Feature archive and browser code likewise imports the shared owners.
 The mobile browser is Python. Logistics' `logisticsmobile.browser_ui.FileBrowser`
 customizes the optional Toga browser in commonUtils; Toga supplies UIKit controls
 on iOS and Android controls on Android. Desktop continues to use the Qt browser.
+
+The mobile host subclasses `ui.native_browser.recycled.RecycledBrowser`.
+commonUtils owns recycled iOS/Android rows, the Java list adapter, bounded tile
+presentation, thumbnail retention and stale-row protection. Logistics injects its
+artwork, palette and row metrics through presentation/list factories, and retains
+storage headers, visibility checks and workflow menus. The small local
+`recycled_file_list` adapter also supplies book-folder and conversation lists.
+Shared APIs are documented in commonUtils' native browser and native UI guides.
 The shared hierarchy and resource operations do not require either UI toolkit.
 Logistics owns the storage selector, mirror associations, credentials, private
 document sessions, action approval and routing into readers/editors.
