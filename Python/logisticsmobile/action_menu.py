@@ -1,7 +1,65 @@
 """Native Apple button menus and Android anchored popup commands."""
 import inspect
 import weakref
-from commonUtils.ui.native.menus import NativeMenu
+from commonUtils.ui.native.menus import NativeMenu as SharedNativeMenu
+
+
+def android_menu_context(context):
+    """Resolve presentation at opening time, including live E Ink changes."""
+    if context is None:
+        return None
+    from android.view import ContextThemeWrapper
+    from .palette import eink_enabled
+    name = 'LogisticsMenuContrast' if eink_enabled() else 'LogisticsMenu'
+    resource = context.getResources().getIdentifier(name, 'style', context.getPackageName())
+    return ContextThemeWrapper(context, resource)
+
+
+class NativeMenu(SharedNativeMenu):
+    """Keep platform menu behavior with Logistics' Android popup surfaces."""
+    def __init__(self, button, actions, *, context, **kwargs):
+        if type(button._impl).__module__.startswith('toga_android.'):
+            original_context = context
+            context = lambda: android_menu_context(original_context())
+        super().__init__(button, actions, context=context, **kwargs)
+
+
+def ios_menu_actions(actions, invoke, blocks):
+    """Retain Objective-C callbacks for the lifetime of their native menu."""
+    from rubicon.objc import ObjCClass, Block, objc_id
+    children = []
+    for title, callback in actions:
+        def selected(action, target=callback):
+            invoke(target)
+        block = Block(selected, None, objc_id)
+        blocks.append(block)
+        action = ObjCClass('UIAction').actionWithTitle(title, image=None, identifier=None, handler=block)
+        if title.startswith('Delete'):
+            action.attributes = 2
+        children.append(action)
+    return children
+
+
+class WorkspaceMenu(NativeMenu):
+    """Resolve workspace commands when opening, including current busy guards."""
+    def __init__(self, button, load_actions, **kwargs):
+        self.load_actions = load_actions
+        super().__init__(button, (), **kwargs)
+        if type(button._impl).__module__.startswith('toga_iOS.'):
+            from rubicon.objc import ObjCClass, Block, ObjCBlock, objc_id, ns_from_py
+            def provide(completion):
+                self.blocks[:] = [provider]
+                actions = () if self.disposed else self.load_actions()
+                ObjCBlock(completion, None, objc_id)(ns_from_py(ios_menu_actions(actions, self.invoke, self.blocks)))
+            provider = Block(provide, None, objc_id)
+            self.blocks.append(provider)
+            deferred = ObjCClass('UIDeferredMenuElement').elementWithUncachedProvider(provider)
+            button._impl.native.menu = ObjCClass('UIMenu').menuWithTitle('', children=[deferred])
+
+    def show(self, widget=None, **kwargs):
+        if not self.disposed:
+            self.actions = tuple(self.load_actions())
+        return super().show(widget, **kwargs)
 
 
 class BrowserActions:
@@ -44,29 +102,12 @@ class BrowserActions:
                 context=lambda: browser._app._impl.native, fallback=lambda: None)
             self.native.show()
         elif backend.startswith('toga_iOS.'):
-            from rubicon.objc import ObjCClass, Block, objc_id
-            sheet = ObjCClass('UIAlertController').alertControllerWithTitle(None, message=None, preferredStyle=0)
-            for title, callback in self.actions:
-                def selected(action, target=callback):
-                    self.invoke(target)
-                block = Block(selected, None, objc_id)
-                self.blocks.append(block)
-                sheet.addAction(ObjCClass('UIAlertAction').actionWithTitle(title, style=0, handler=block))
-            sheet.addAction(ObjCClass('UIAlertAction').actionWithTitle('Cancel', style=1, handler=None))
-            anchor = native
-            path = native.indexPathForSelectedRow
-            if path is not None:
-                cell = native.cellForRowAtIndexPath(path)
-                if cell is not None and cell.accessoryView is not None:
-                    anchor = cell.accessoryView
-            popover = sheet.popoverPresentationController
-            if popover is not None:
-                popover.sourceView, popover.sourceRect = anchor, anchor.bounds
-            presenter = browser._app.main_window._impl.native.rootViewController
-            while presenter.presentedViewController is not None:
-                presenter = presenter.presentedViewController
-            self.native = sheet
-            presenter.presentViewController(sheet, animated=True, completion=None)
+            # List accessory buttons own a deferred UIMenu. They request these
+            # actions after the exact row has passed selection/credential guards.
+            return
+
+    def ios_actions(self):
+        return ios_menu_actions(self.actions, self.invoke, self.blocks)
 
     def dispose(self):
         if self.disposed:
@@ -130,6 +171,9 @@ class DocumentNativeMenu(NativeMenu):
             from rubicon.objc import ObjCClass
             native = button._impl.native
             children = list(native.menu.children)
+            for (title, _), action in zip(actions, children):
+                if title == 'Delete document…':
+                    action.attributes = 2  # UIMenuElementAttributesDestructive
             sections, offset = [], 0
             for group in command_groups(actions):
                 sections.append(ObjCClass('UIMenu').menuWithTitle('', image=None,
@@ -158,7 +202,17 @@ class DocumentNativeMenu(NativeMenu):
         index = 0
         for group_id, group in enumerate(command_groups(self.actions)):
             for title, callback in group:
-                native.add(group_id, index, index, title)
+                if title == 'Delete document…':
+                    from android.text import SpannableString
+                    from android.text.style import ForegroundColorSpan
+                    from android.graphics import Color
+                    from .palette import eink_enabled
+                    label = SpannableString(title)
+                    color = Color.rgb(0, 0, 0) if eink_enabled() else Color.rgb(190, 30, 45)
+                    label.setSpan(ForegroundColorSpan(color), 0, len(title), 33)
+                else:
+                    label = title
+                native.add(group_id, index, index, label)
                 index += 1
         from android.os import Build
         if Build.VERSION.SDK_INT >= 28:
@@ -207,8 +261,8 @@ class ActionMenu:
                 actions.append(('Open beside another document', app.adaptive.show_pair_picker))
             if not any(title == 'All documents' for title, _ in actions):
                 actions.append(('All documents', app.show_documents_hub))
-            if session is not None and not any(title == 'Close document' for title, _ in actions):
-                actions.append(('Close document', lambda: app.request_close_session(session.id)))
+            redundant = {'New document', 'Open from Files…', 'Import…', 'Close document'}
+            actions = [item for item in actions if item[0] not in redundant]
             actions.sort(key=lambda item: _COMMAND_ORDER.get(item[0], (2, 0)))
         if self.menu is not None and [item[0] for item in actions] == [item[0] for item in self.actions]:
             return
@@ -221,7 +275,11 @@ class ActionMenu:
 
     def native_context(self):
         owner = self.owner()
-        return owner.app._impl.native if owner is not None else None
+        if owner is None:
+            return None
+        host = owner.app
+        app = getattr(host, 'app', host)
+        return app._impl.native
 
     def dispose(self):
         self.disposed = True
@@ -263,7 +321,7 @@ class FeatureCommands(ActionMenu):
 
     def invoke(self, callback):
         app = self.feature_owner.app
-        if not app.active_host or getattr(app, 'cloud_busy', False):
+        if not app.active_host:
             return
         session = getattr(app, 'session', None)
         if session is not None and session.id not in app.workspace.sessions:

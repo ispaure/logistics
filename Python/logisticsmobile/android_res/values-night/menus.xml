@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="logistics_menu_surface">#2d3035</color>
+    <color name="logistics_menu_text">#eef1f7</color>
+</resources>

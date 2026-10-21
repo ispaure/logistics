@@ -96,8 +96,7 @@ class ChatUI:
             self.chat_menu_button = self.presentation.menu_button(self.toggle_chat_conversations, 'Conversations')
             self.chat_header_new = self.presentation.icon_button('compose', 'New conversation', on_press=self.new_chat)
             self.chat_actions_button = self.presentation.icon_button('more', 'Conversation actions')
-            from commonUtils.ui.native.menus import NativeMenu
-            self.chat_actions = NativeMenu(self.chat_actions_button, [
+            self.chat_actions = self.presentation.NativeMenu(self.chat_actions_button, [
                 ('New conversation', self.new_chat), ('Export conversation…', self.export_chat),
                 ('Server & model settings', self.show_chat_configuration)], invoke=self.invoke_chat_action,
                 context=lambda: self._impl.native, fallback=self.show_chat_actions)

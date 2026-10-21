@@ -15,6 +15,14 @@ from features.rclone.localcrypt.mobile.ui import LocalCryptUI
 from features.rclone.mobile.messages import import_hint
 
 
+async def explain_remote_busy(app):
+    transferring = getattr(app, 'transfer_busy', False)
+    message = ('Cloud previews are unavailable while a transfer is running. Wait for the transfer to finish, or open a Local copy.'
+               if transferring else 'The connection is busy. Wait for the current request to finish, then open the file again.')
+    app.cloud_status.value = message
+    await app.main_window.dialog(toga.InfoDialog('Transfer in progress' if transferring else 'Connection busy', message))
+
+
 class SelectedCredentialZIP:
     """Consume picker access immediately; retain only bounded ZIP bytes in memory."""
     def __init__(self, access, reference):
@@ -230,8 +238,6 @@ class CloudUI(LocalCryptUI):
             self.show_view(self.cloud_advanced_view, destination='files', route='remote-actions', title='Remote actions')
 
     def show_remote_item_actions(self, row=None, *, password_required=False, **kwargs):
-        if self.cloud_busy and not password_required:
-            return
         row = row if isinstance(row, dict) else self.cloud_rows.get(self.cloud_entries.value)
         if not row:
             return
@@ -1051,7 +1057,7 @@ class CloudUI(LocalCryptUI):
 
     async def open_remote_document(self, row=None, **kwargs):
         if self.cloud_busy:
-            self.cloud_status.value = 'The connection is busy. Wait for it to finish, then open the file again.'
+            await explain_remote_busy(self)
             return False
         row = row if isinstance(row, dict) else self.cloud_rows.get(self.cloud_entries.value)
         if not row or row['directory']:

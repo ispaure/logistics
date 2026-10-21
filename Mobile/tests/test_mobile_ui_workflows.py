@@ -45,7 +45,8 @@ class MobileWorkflowTests(unittest.TestCase):
             if filename.endswith('.md'):
                 self.assertIsNot(app.body, panel)  # Unsaved changes need a decision.
                 self.assertIn(owner.session.id, app.workspace.sessions)
-                self.assertTrue(app.routes.back())  # Keep editing.
+                app.main_window._impl.dialog_responses.setdefault('QuestionDialog', []).append('cancel')
+                app.loop.run_until_complete(next(iter(app._document_close_tasks.values())))
                 self.assertEqual(owner.crypt_text.value, '# Unsaved browser draft')
                 app.loop.run_until_complete(app.show_files())
             else:

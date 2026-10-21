@@ -12,24 +12,9 @@ DESTINATION_ITEMS = (
     ('settings', 'Settings', 'gearshape', 'ic_menu_preferences'),
 )
 
-# Application destinations use explicit artwork rather than OEM menu icons.
-# The 24-point outlines follow the desktop destination artwork.
-ANDROID_DESTINATION_PATHS = {
-    'documents': (
-        ((6, 3), (21, 3), (21, 21), (6, 21), (6, 3)),
-        ((3, 6), (3, 21), (17, 21)),
-        ((10, 8), (17, 8)), ((10, 12), (17, 12)), ((10, 16), (17, 16)),
-    ),
-    'chat': (
-        ((5, 4), (19, 4), (22, 7), (22, 15), (19, 18),
-         (10, 18), (5, 22), (5, 18), (2, 15), (2, 7), (5, 4)),
-    ),
-    'settings': (
-        ((3, 5), (6, 5)), ((10, 5), (21, 5)),
-        ((3, 12), (14, 12)), ((18, 12), (21, 12)),
-        ((3, 19), (8, 19)), ((12, 19), (21, 19)),
-    ),
-}
+# Generated directly from ui_new.sidebar.DestinationIcon; both platforms tint
+# the same transparent artwork. Regenerate with Mobile/generate_navigation_icons.py.
+DESTINATION_ICON_NAMES = {key: 'nav_' + key for key in DESTINATIONS}
 
 
 def eink_selection_indicator(bar, enabled, original=None):
@@ -57,37 +42,24 @@ def install_destination_icons(host):
     if host.adapter is not None and hasattr(host.adapter, 'navigation'):
         install_apple_destination_icons(host)
         return
-    install_folder_hub_icon(host)
     adapter = host.adapter
     if adapter is None or not hasattr(adapter, 'bottom'):
         return
     install_android_navigation_appearance(host)
-    from android.graphics import Path, Paint
-    from android.graphics.drawable import ShapeDrawable
-    from android.graphics.drawable.shapes import PathShape
-    for destination, lines in ANDROID_DESTINATION_PATHS.items():
-        path = Path()
-        for line in lines:
-            path.moveTo(*line[0])
-            for point in line[1:]:
-                path.lineTo(*point)
-        circles = {'chat': ((7, 11, .8), (12, 11, .8), (17, 11, .8)),
-                   'settings': ((8, 5, 2), (16, 12, 2), (10, 19, 2))}
-        for x, y, radius in circles.get(destination, ()):
-            path.addCircle(x, y, radius, Path.Direction.CW)
-        drawable = ShapeDrawable(PathShape(path, 24, 24))
-        paint = drawable.getPaint()
-        paint.setStyle(Paint.Style.STROKE)
-        paint.setStrokeWidth(1.6)
-        paint.setStrokeCap(Paint.Cap.ROUND)
-        paint.setStrokeJoin(Paint.Join.ROUND)
-        paint.setAntiAlias(True)
-        drawable.setIntrinsicWidth(24)
-        drawable.setIntrinsicHeight(24)
+    from .hub_icons import ICONS
+    from android.util import Base64
+    from android.graphics import BitmapFactory
+    from android.graphics.drawable import BitmapDrawable
+    resources = adapter.impl.native.getResources()
+    for destination, name in DESTINATION_ICON_NAMES.items():
+        data = Base64.decode(ICONS[name], Base64.DEFAULT)
+        bitmap = BitmapFactory.decodeByteArray(data, 0, len(data))
+        # Bundled 3x artwork has a logical size of 24 dp at every density.
+        bitmap.setDensity(480)
+        drawable = BitmapDrawable(resources, bitmap)
         index = host.destinations.index(destination)
         for bar in (adapter.bottom, adapter.rail):
             if bar is not None:
-                # Independent instances let Material own each bar's tint state.
                 bar.getMenu().getItem(index).setIcon(drawable.getConstantState().newDrawable().mutate())
 
 
@@ -161,27 +133,6 @@ class NavigationState(DestinationState):
         super().__init__(DESTINATIONS, destination=destination)
 
 
-def install_folder_hub_icon(host):
-    """Use the desktop hub glyph on both native navigation presentations."""
-    from .hub_icons import ICONS
-    adapter = host.adapter
-    if adapter is None:
-        return
-    index = host.destinations.index('files')
-    if hasattr(adapter, 'navigation'):
-        install_apple_destination_icons(host)
-    elif hasattr(adapter, 'bottom'):
-        from android.util import Base64
-        from android.graphics import BitmapFactory
-        from android.graphics.drawable import BitmapDrawable
-        data = Base64.decode(ICONS['folder_hub'], Base64.DEFAULT)
-        bitmap = BitmapFactory.decodeByteArray(data, 0, len(data))
-        drawable = BitmapDrawable(adapter.impl.native.getResources(), bitmap)
-        for bar in (adapter.bottom, adapter.rail):
-            if bar is not None:
-                bar.getMenu().getItem(index).setIcon(drawable)
-
-
 def install_apple_destination_icons(host):
     """Retain real Toga icons so rebuilt tab items cannot restore its star.
 
@@ -197,18 +148,16 @@ def install_apple_destination_icons(host):
     from toga_iOS.images import nsdata_to_bytes
     from .hub_icons import ICONS
 
-    cache = Path(host.window.app.paths.cache) / 'navigation-icons-v1'
+    cache = Path(host.window.app.paths.cache) / 'navigation-icons-v2'
     cache.mkdir(parents=True, exist_ok=True)
     renderer = UIGraphicsImageRenderer.alloc().initWithSize(CGSize(24, 24))
     scale = int(renderer.format.scale)
-    for key, symbol, item in zip(host.destinations, host.symbols, host.root.content):
-        if key == 'files':
-            data = ObjCClass('NSData').alloc().initWithBase64EncodedString(ICONS['folder_hub'], options=0)
-            image = ObjCClass('UIImage').imageWithData(data)
-        else:
-            image = ObjCClass('UIImage').systemImageNamed(symbol)
+    for key, item in zip(host.destinations, host.root.content):
+        data = ObjCClass('NSData').alloc().initWithBase64EncodedString(
+            ICONS[DESTINATION_ICON_NAMES[key]], options=0)
+        image = ObjCClass('UIImage').imageWithData(data)
         if image is None:
-            raise ValueError('Missing navigation symbol: ' + symbol)
+            raise ValueError('Missing navigation artwork: ' + key)
 
         def draw(context):
             ratio = min(24 / float(image.size.width), 24 / float(image.size.height))

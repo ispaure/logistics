@@ -27,7 +27,8 @@ class FileRowActionTests(unittest.TestCase):
     def setUp(self):
         modules = {
             'rubicon.objc': NS(objc_method=lambda method: method, ObjCInstance=object,
-                ObjCBlock=Mock(), objc_property=lambda *args, **kw: None,
+                ObjCBlock=Mock(), Block=Mock(), objc_id=object, ns_from_py=lambda value: value,
+                objc_property=lambda *args, **kw: None,
                 ObjCClass=lambda name: Button if name == 'UIButton' else NS(systemFontOfSize=lambda size: size),
                 SEL=lambda value: value, CGRect=lambda *args: args),
             'toga_iOS.widgets.detailedlist': NS(DetailedList=object, TogaTableViewController=object),

@@ -101,11 +101,57 @@ class ReaderLifecycle:
         if not hasattr(view, '_reader_close_button'):
             from .control_icons import icon_button
             button = icon_button('close', 'Close document',
-                on_press=lambda widget=None, **kw: self.request_reader_close(key))
+                on_press=lambda widget=None, **kw: self.reader_exit(view, key))
             view._reader_close_button = button
             toolbar = getattr(view, '_native_reader_toolbar', None)
             if toolbar is not None:
                 toolbar.insert(0, button)
+
+    def reader_tool_back(self, view):
+        """Return the innermost tool's dismiss action, without closing its owner."""
+        from .routes import contains
+        for owner in self.text_views.values():
+            if contains(view, owner.search.box):
+                return owner.toggle_search
+        readers = getattr(self, 'readers', None)
+        for owner in getattr(readers, 'controllers', {}).values():
+            sidebar = getattr(owner, 'chapter_sidebar', None)
+            if (contains(view, getattr(owner, 'library_view', None)) and sidebar is not None
+                    and not sidebar.expanded and sidebar.sidebar_open):
+                return sidebar.show_detail
+        private = getattr(self, 'private_sessions', None)
+        for owner in getattr(private, 'controllers', {}).values():
+            epub = getattr(owner, 'provider_epub_view', None)
+            if epub is not None:
+                if contains(view, getattr(epub, 'find_box', None)):
+                    return epub.close_find
+                sidebar = getattr(epub, 'sidebar', None)
+                if (contains(view, epub) and sidebar is not None
+                        and not sidebar.expanded and sidebar.sidebar_open):
+                    return sidebar.show_detail
+            for tools in (getattr(owner, 'pdf_tools', None),
+                          getattr(epub, 'tools', None) if getattr(epub, 'sidebar', None) is None else None):
+                if tools is not None and contains(view, tools.panel):
+                    return tools.close
+        return None
+
+    def refresh_reader_exit(self, view):
+        button = getattr(view, '_reader_close_button', None)
+        if button is not None:
+            from .control_icons import apply_icon
+            tool = self.reader_tool_back(view)
+            icon, label = ('back', 'Back to document') if tool else ('close', 'Close document')
+            if button.control_icon != icon:
+                apply_icon(button, icon, label)
+
+    def reader_exit(self, view, key):
+        tool = self.reader_tool_back(view)
+        if tool is not None:
+            tool()
+            self.refresh_reader_exit(view)
+            self.adaptive.render()
+            return True
+        return self.request_reader_close(key)
 
     def visible_reader(self):
         def keys(view):
@@ -165,23 +211,37 @@ class ReaderLifecycle:
                    for name, field in getattr(owner, 'book_metadata_fields', {}).items())
 
     def request_book_close(self, owner):
-        import toga
-        from toga.style import Pack
-        from toga.style.pack import COLUMN
-        key = owner.session.id
-        status = toga.Label('')
-        async def save(widget=None, **kwargs):
+        async def save():
             await owner.save_book_metadata()
-            if self.book_edits_dirty(owner):
-                status.text = owner.book_metadata_status.text
-            else:
-                self.close_session(key)
-        box = toga.Box(children=[toga.Label('Save metadata changes before closing?'),
-            toga.Button('Save and close', on_press=save),
-            toga.Button('Discard and close', on_press=lambda widget, **kw: self.close_session(key, choice='discard')),
-            toga.Button('Keep editing', on_press=lambda widget, **kw: self.keep_reader_editing(key)), status],
-            style=Pack(direction=COLUMN, margin=16, flex=1))
-        self.show_view(box, route='close:' + key, title='Close document')
+            if not self.book_edits_dirty(owner):
+                self.close_session(owner.session.id)
+        return self.document_close_dialog(owner.session.id, owner.session.title,
+            save, lambda: self.close_session(owner.session.id, choice='discard'))
+
+    def document_close_dialog(self, key, title, save, discard):
+        import inspect
+        from .document_dialogs import DocumentDialog
+        pending = self.__dict__.setdefault('_document_close_tasks', {})
+        if key in pending:
+            return True
+        async def decide():
+            try:
+                choice = await self.main_window.dialog(DocumentDialog(
+                    'Save changes to ' + title + '?',
+                    'Your unsaved changes will be lost if you quit without saving.'))
+                if not self.active_host or key not in self.workspace.sessions:
+                    return
+                if choice in ('save', 'discard'):
+                    result = (save if choice == 'save' else discard)()
+                    if inspect.isawaitable(result):
+                        await result
+                # Cancel and failed saves keep the exact screen and edits.
+                if key in self.workspace.sessions:
+                    self.__dict__.setdefault('_reader_closing', set()).discard(key)
+            finally:
+                pending.pop(key, None)
+        pending[key] = self.loop.create_task(decide())
+        return True
 
     def reader_closed(self, key):
         returns = self.__dict__.setdefault('_reader_returns', {})

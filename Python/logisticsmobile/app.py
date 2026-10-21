@@ -216,7 +216,7 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
             references=self.recent_documents, max_recent=MAX_RECENT, reopen=reopen_reference)
         if models is None and self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
             self.clear_restored_documents()
-        restored_reader = self.workspace.sessions.get(self.workspace.active)
+        restored_document = self.workspace.sessions.get(self.workspace.active)
         self.pending_reader_restore = None
         if hasattr(self, 'scene_manager'):
             self.scene_manager.owners.attach(self.window_id, self)
@@ -255,7 +255,7 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
                     self._pending_managed_restore = active.resource
                 else:
                     self.open_document(active.resource)
-        elif self.labels:
+        elif self.labels and (restored_document is None or restored_document.provider == 'managed-text'):
             key = self.preferences.values['last_document']
             active = self.workspace.sessions.get(self.workspace.active)
             if active is not None and active.provider == 'managed-text':
@@ -296,13 +296,17 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         from commonUtils.ui.native.memory import MemoryPressure
         self.memory_pressure = MemoryPressure(self, on_pressure=self.release_disposable_resources,
                                               on_configuration=self.native_configuration_changed)
-        if restored_reader is not None and restored_reader.provider == 'library':
-            if self.preferences.values['restore_last_document'] == 'true':
-                self.pending_reader_restore = restored_reader.id
-                self.workspace.active = restored_reader.id
-            elif self.workspace.active == restored_reader.id:
-                self.workspace.active = None
-            self.save_workspace()
+        if self.preferences.values['restore_last_document'] == 'true':
+            if restored_document is not None and not restored_document.transient:
+                if restored_document.provider == 'library':
+                    self.workspace.active = restored_document.id
+                    self.show_documents_hub()
+                    self.startup_document_task = self.loop.create_task(self.resume_library_session(restored_document))
+                elif restored_document.provider == 'managed-text':
+                    self.show_documents(resume=True, destination='documents')
+        elif restored_document is not None and restored_document.provider == 'library':
+            self.workspace.active = None
+        self.save_workspace()
 
         # Explicit local developer launch only; ordinary launches do no capture.
         import os
@@ -563,20 +567,9 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         owner = self.text_views.get(key)
         if owner is None or not owner.document.modified:
             return self.close_session(key)
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16, flex=1))
-        from features.rclone.mobile.messages import import_hint
-        box.add(toga.Label(import_hint('Close ' + owner.document.name), style=Pack(font_size=18)))
-        box.add(toga.Label('Choose what to do with\nyour unsaved changes.', style=Pack(margin_bottom=12)))
-        def choose(choice):
-            def action(widget=None, **kwargs):
-                self.close_session(key, choice=choice)
-            return action
-        box.add(toga.Button('Save and close', on_press=choose('save'), style=Pack(height=48)))
-        box.add(toga.Button('Discard and close', on_press=choose('discard'), style=Pack(height=48)))
-        box.add(toga.Button('Keep editing', on_press=lambda widget, **kw: self.cancel_close_session(key), style=Pack(height=48)))
-        self.close_notice = toga.Label('', style=Pack(margin_top=8))
-        box.add(self.close_notice)
-        return self.show_view(box, checkpoint=False, route='close:' + key, title='Close document')
+        return self.document_close_dialog(key, owner.document.name,
+            lambda: self.close_session(key, choice='save'),
+            lambda: self.close_session(key, choice='discard'))
 
     def cancel_close_session(self, key):
         self.__dict__.setdefault('_reader_closing', set()).discard(key)
@@ -597,8 +590,9 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
                        'Its saved content and recovery copy will be permanently removed from this device.')
             if owner.document.modified:
                 warning += ' Your unsaved changes will be lost.'
-            if not await self.main_window.dialog(toga.ConfirmDialog(
-                    'Delete ' + owner.document.name + '?', warning)):
+            from .document_dialogs import DocumentDialog
+            if await self.main_window.dialog(DocumentDialog(
+                    'Delete ' + owner.document.name + '?', warning, delete=True)) != 'delete':
                 return False
             if not self.active_host or self.text_views.get(key) is not owner or key not in self.workspace.sessions:
                 return False
@@ -1031,6 +1025,9 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
     def clear_restored_documents(self):
         """Prune only proven clean sessions; preserve unreadable recovery records."""
         for session in list(self.workspace.sessions.values()):
+            if (self.preferences.values['restore_last_document'] == 'true'
+                    and session.id == self.workspace.active):
+                continue
             if session.provider == 'managed-text':
                 try:
                     document = self.store.open(session.resource)
@@ -1382,29 +1379,17 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
             return owner.discard_crypt()
 
     def request_provider_close(self, owner):
-        import textwrap
-        box = toga.Box(style=Pack(direction=COLUMN, margin=16, flex=1))
-        box.add(toga.Label(textwrap.fill('Close ' + owner.session.title, 30), style=Pack(font_size=18)))
-        box.add(toga.Label('Private edits stay in memory.\nSave or discard before closing.'))
-        status = toga.Label('')
-        async def save(widget=None, **kwargs):
+        async def save():
             if owner.session.id not in self.workspace.sessions or self.cloud_busy:
                 return
             if owner.crypt_metadata_fields:
                 await owner.save_crypt_metadata()
             else:
                 await owner.save_crypt()
-            if owner.private_dirty():
-                status.text = getattr(owner, 'crypt_metadata_status', owner.crypt_title).text
-                return
-            self.close_session(owner.session.id)
-        box.add(toga.Button('Save and close', on_press=save, style=Pack(height=48)))
-        box.add(toga.Button('Discard and close', on_press=owner.discard_crypt, style=Pack(height=48)))
-        def keep_editing(widget=None, **kwargs):
-            self.keep_reader_editing(owner.session.id)
-        box.add(toga.Button('Keep editing', on_press=keep_editing, style=Pack(height=48)))
-        box.add(status)
-        self.show_view(box, route='private-close:' + owner.session.id, title='Close private document')
+            if not owner.private_dirty():
+                self.close_session(owner.session.id)
+        return self.document_close_dialog(owner.session.id, owner.session.title,
+            save, lambda: self.close_session(owner.session.id, choice='discard'))
 
 
 def main():

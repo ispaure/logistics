@@ -19,7 +19,9 @@ sections with the disclosure button, or tap a chapter title to read it. There is
 no search field in this list. On wide panes the list stays beside the book; on
 phones choosing a chapter returns to the page. Bookmarks remain below the list. Choosing an imported chapter or
 bookmark returns directly to reading. The footer
-shows the current chapter and percentage through its text. Page margins come
+shows the current chapter and percentage through its text in a compact badge.
+Its slim slider jumps between chapters when released; the arrows still turn
+pages. Page margins come
 from **Appearance…**, without an extra frame narrowing the text. Chapter headings,
 paragraphs and quotations use consistent spacing within the page.
 
@@ -108,8 +110,9 @@ and available. Comics do not show EPUB chapter or read-aloud controls.
 **Appearance…** now includes installed local font families, every whole font size
 from 12–32, line spacing from 100–220%, maximum reading width from 480–1400 pixels
 (or 0 for automatic), margins, and System/Light/Dark/Sepia/Slate themes.
-System, Light and Dark use the app's matching surface and text colours across the
-whole reading area, including page margins. Sepia and Slate retain their book colours.
+System, Light and Dark use the app's matching window background and text colours
+across the whole reading area, including page margins, so text blends into the
+surrounding view. Sepia and Slate retain their book colours.
 On a narrow screen, reading width stays
 inside the available pane. These settings are global mobile preferences, do not
 rewrite books, and retain the current logical text anchor when layout changes.

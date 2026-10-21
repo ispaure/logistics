@@ -7,6 +7,58 @@ from .action_menu import FeatureCommands
 from .reader_controls import ReadingFrame, PageFooter, ComicHeader, comic_actions, comic_pages
 
 
+def refresh_transfer_chrome(app):
+    """Update live toolbar labels; rebuild native groups only on appearance/removal."""
+    def update(view):
+        if hasattr(view, '_native_reader_buttons'):
+            transfer_control(app, view)
+        for child in view.children:
+            update(child)
+    if not hasattr(app, 'routes'):
+        return
+    update(app.routes.body())
+    visible = getattr(app, 'transfer_busy', False) or getattr(app, 'transfer_notification', False)
+    if visible != getattr(app, '_transfer_chrome_visible', False):
+        app._transfer_chrome_visible = visible
+        app.adaptive.render()
+
+
+def transfer_control(app, view):
+    """A window-owned transfer shortcut, outside the document's reading area."""
+    visible = (getattr(app, 'transfer_busy', False) or getattr(app, 'transfer_notification', False))
+    visible = visible and not (getattr(view, '_reader_fullscreen', False)
+                              or getattr(view, '_comic_fullscreen', False))
+    if not visible:
+        return None
+    button = getattr(view, '_reader_transfer_button', None)
+    if button is None:
+        button = view._reader_transfer_button = toga.Button('', on_press=app.show_transfers,
+            style=Pack(width=44, height=44, font_size=12))
+    busy = getattr(app, 'transfer_busy', False)
+    percentage = getattr(app, 'transfer_percentage', None)
+    if busy:
+        text = f'{percentage:.0f}%' if percentage is not None else '⇅'
+        label = (f'Transfer: {percentage:.0f}% of known work. Open details' if percentage is not None
+                 else 'Transfer in progress. Open details')
+    else:
+        complete = getattr(app, 'transfer_complete', False)
+        text = '✓' if complete else '!'
+        label = 'Transfer finished. Open details' if complete else 'Transfer stopped. Open details'
+    if button.text != text:
+        button.text = text
+    from .appearance import accessible_name
+    accessible_name(button, label)
+    return button
+
+
+def reader_buttons(app, view):
+    buttons = list(view._native_reader_buttons())
+    transfer = transfer_control(app, view)
+    if transfer is not None:
+        buttons.insert(0, transfer)
+    return buttons
+
+
 def sync_comic_chrome(app, view, *, destination=None):
     """Host decides when to hide chrome; shared adapters own native restoration."""
     def immersive(widget):
@@ -126,7 +178,8 @@ class ReaderChrome:
                 self.reader_speech_button,
                 self.reader_actions_button], style=Pack(direction=ROW))
         self.chapter_selector.style.flex = 1
-        self.page_footer = PageFooter(self.previous_page, self.next_page, self.move_book_page)
+        self.page_footer = PageFooter(self.previous_page, self.next_page, self.move_book_page,
+                                      status=self.book_status if comic else None, unit='page' if comic else 'chapter')
         self.reader_footer = self.page_footer.widget
         if not comic:
             self.book_status.style.update(flex=1, width=1, height=48, margin_top=0)
@@ -148,8 +201,7 @@ class ReaderChrome:
             self.chapter_collapsed = set()
             content = self.chapter_sidebar.view
         self.reading_frame = ReadingFrame(content,
-            [self.reader_header, self.reader_footer, self.book_status] if comic else [self.reader_header, self.reader_footer],
-            margin=16 if comic else 0, restore=self.reader_restore)
+            [self.reader_header, self.reader_footer], margin=0, restore=self.reader_restore)
         self.library_view = self.reading_frame.widget
         self.library_view._native_reader_title = lambda: self.session.title
         self.library_view._native_reader_toolbar = self.reader_header

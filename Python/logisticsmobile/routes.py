@@ -95,6 +95,11 @@ class MobileRoutes(Routes):
         if screens and screens[-1][0].startswith(('private-close:', 'close:')):
             self.app.keep_reader_editing(screens[-1][0].split(':')[1])
             return True
+        tool = self.app.reader_tool_back(self.body())
+        if tool is not None:
+            tool()
+            self.app.adaptive.render()
+            return True
         key = self.app.visible_reader()
         if key is not None:
             self.app.request_reader_close(key)
@@ -218,7 +223,7 @@ class MobileRoutes(Routes):
         for owner in app.text_views.values():
             search = owner.search
             if contains(body, search.box):
-                return self.invoke_back(search.toggle)
+                return self.invoke_back(owner.toggle_search)
 
         for name in ('documentation', 'vault_browser'):
             owner = getattr(app, name, None)

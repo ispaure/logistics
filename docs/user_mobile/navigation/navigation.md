@@ -37,7 +37,7 @@ have their own return step. Leaving a transfer comparison cancels that review;
 leaving an active transfer's details lets the transfer continue. Returning from
 a main document with **× (Close document)** closes its session and returns to
 the previous screen. Editors use the same Close control: unsaved changes offer
-**Save and close**, **Discard and close**, or **Keep editing**. Failed saves
+**Save**, **Quit without saving**, or **Cancel**. Failed saves
 retain the edits. Secondary document panels keep their usual Back step.
 
 Each bottom tab or rail destination retains its own place. Back follows the

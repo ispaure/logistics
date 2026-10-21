@@ -29,7 +29,10 @@ and reported density; there is no BOOX model multiplier or physical-DPI detectio
 use 48-unit rows on both platforms (the Java adapter mirrors the constants).
 Android scroll-position calculations must use the same row height as binding.
 The Android adapter adds a 1dp native list divider using the palette border color,
-inset 48dp at the text start and 8dp at the action end (mirrored for RTL).
+inset 8dp at both ends of the row bounds, including beneath the icons. iOS uses
+12pt insets for its app-owned lines without changing UIKit's content insets.
+iOS row images retain their renderer scale after PNG decoding, keeping their
+28pt image slot aligned with Android's 28dp icons on Retina displays.
 Its high-contrast group outline encloses the populated portion of short lists
 or the viewport for long lists, painted after children so selected fills cannot
 cover it. Folder icons and accessibility descriptions identify folders without
@@ -76,11 +79,30 @@ those services. Secondary scene hosts share the application's command registry
 alongside its other application infrastructure, while retaining independent
 document and navigation state.
 
-`navigation.py` installs application-owned Android destination artwork on both
-the bottom bar and side rail: Home, the existing Workspaces glyph, stacked
-Documents, Chat bubbles and a Settings gear. These avoid manufacturer-dependent
-stock menu artwork (in particular, Android's Send arrow is not the Chat icon).
-Material navigation owns selection/theme tinting; iOS keeps its native symbols.
+`navigation.py` installs the desktop destination artwork on Android bottom bars
+and rails and iOS tabs: Home, Workspaces, stacked Documents, the Chat bubble and
+Settings sliders. `Mobile/generate_navigation_icons.py` renders the canonical
+`ui_new.sidebar.DestinationIcon` drawings into bundled transparent 3x PNGs in
+`hub_icons.py`; run it with the desktop interpreter, or use `--check` to verify
+the generated assets. Mobile has no Qt runtime dependency. Material and UIKit
+own selection/theme tinting; iOS retains the artwork in each Toga OptionItem so
+native tab reconstruction preserves it.
+
+Android folder headers use symmetric action gutters around a 17sp title and
+12.75sp storage description. Inline image spans keep the 12dp storage/lock
+indicators centered with the description and preserve middle ellipsis at narrow
+widths. Buttons retain 48dp targets and their existing Android backgrounds.
+`action_menu.NativeMenu` wraps the shared menu with an Android theme resolved
+when it opens; document menus retain their native groups. Workspace row menus
+resolve their commands at opening time and reuse the guarded folder actions
+without navigating to the fallback page. On iOS, file-row accessory buttons use
+uncached deferred `UIMenu` elements; row selection resolves commands asynchronously
+and retired cells return no actions. Menu callbacks retain the browser epoch and
+selection guards. Chat receives the same
+menu factory through `MobilePresentation.NativeMenu`. `android_res` supplies
+8dp popup corners and a white, black-outlined E Ink variant. The resources are
+copied from the host's resource tree into generated Android projects by
+`cloud_build.configure_android_sources`, alongside the Books native resources.
 
 Markdown readers expose `_workspace_toolbar` so the workspace drawer shares
 their existing control row instead of adding a second header. UIKit still mounts
@@ -286,7 +308,14 @@ are outside this workflow. Chat, Cloud, Transfers, Workspaces, Home/Documents, L
 
 Main reader/editor surfaces expose `_reader_session_id` and
 `_reader_close_button`. The native bars mount this Close control in place of
-Back; secondary tools, metadata and appearance routes keep Back. Android's
+Back; secondary tools, metadata and appearance routes keep Back. Inline tools
+switch that same leading control to Back through `reader_tool_back` and restore
+Close when dismissed. `document_dialogs.py` supplies window-modal UIKit alerts
+and Android AlertDialogs: Save/discard/cancel for dirty sessions and metadata,
+and destructive Delete/cancel for stored-document deletion. No close-decision
+route is pushed. The iOS destructive role and Android red command text also
+mark Delete in document menus. Shared document menus filter redundant
+New/Open/Import/Close commands. Android's
 system Back dismisses overlays/search/chapters first, then requests the same
 close, including in fullscreen. UIKit's interactive pop is disabled on main
 document surfaces so it cannot bypass unsaved-edit handling. Closing uses each
@@ -304,6 +333,18 @@ Managed text sessions retain their view state in a bounded host-memory cache
 for close/reopen. Tests live in `test_reader_lifecycle.py`, `test_android_back.py`,
 `test_android_reader_chrome.py` and `test_reader_navigation.py`; the disposable
 `reader_exit_probe.py` validates native control activation and draft guards.
+`PageFooter` uses one 48-point control row for comics, EPUBs and PDFs: small
+chevrons retain 48-point targets, the native track is 4 points with a 16-point
+thumb, and a centered capsule badge sizes to its progress text. Comic/PDF release
+commits a page; EPUB release commits a chapter, while its badge retains the
+current chapter percentage. Status/error labels remain available to native
+header diagnostics. `reader_progress.py` owns native styling and appearance refresh.
+The [progress-footer native check](mobile-evidence/2026-10-20-reader-progress.json)
+verifies all three formats on iPhone, iPad and BOOX, including scrubbing.
+Imported and provider comic canvases, PDFs and images use zero
+outer frame margin. UIKit reader titles use the pane width between controls
+without a fixed 320-point cap. The [reader-space native check](mobile-evidence/2026-10-20-reader-space.json)
+verifies the single-row footer on iPhone, iPad and BOOX, plus full-title fit on iPad.
 `reader_close_icon_probe.py` additionally checks native X artwork/labels, closing
 comics, and cancel/save/discard/conflict behavior for edited documents. The
 [October 20 focused results](mobile-evidence/2026-10-20-close-icon.json) cover
@@ -406,6 +447,10 @@ phase. Its bar counts completed phases; it does not estimate time, bytes or remo
 requests. Status labels contain no document paths, filenames or credential names.
 Native title bars are hidden while loading and restored before installing the
 normal navigation host. The same window is reused for the ready workspace.
+When last-document restoration is enabled, restart cleanup preserves the active
+ordinary session while closing other clean sessions. Startup opens the active
+text view or awaits its EPUB/comic reader before revealing the workspace;
+session-only resources remain excluded. With restoration disabled, startup shows Home.
 Home readiness does not depend on cloud storage. After the workspace is revealed,
 `restore_cloud_in_background` starts the shared `start_cloud_restore` task,
 preparing connection state and restoring device-saved credentials without
@@ -477,6 +522,10 @@ containers. Toga 0.5.7's Android `DetailedList` instead creates every row inside
 `UITableView` backend and reusable cells, with browser disclosure indicators,
 middle filename truncation and full accessibility names. Native selection owns
 highlighting. Android palette updates include monochrome selected-row contrast.
+Both adapters draw dividers only between dataset items. iOS disables UIKit's
+default separators and toggles an inset line when binding each reusable cell,
+keeping filename insets unchanged for last and single-row lists. Android draws
+lines by dataset position, including when the final item enters the viewport.
 
 Local, remote, workspace drawer and Open/Save picker lists keep a bounded viewport;
 none wraps the native list in an outer scroll container. The picker form has its
@@ -881,6 +930,27 @@ The app-only UserDefaults reset is declared with CA92.1 in
 verified in exported apps. Platform API references:
 [Android clearApplicationUserData](https://developer.android.com/reference/android/app/ActivityManager#clearApplicationUserData())
 and [Apple Keychain deletion](https://developer.apple.com/documentation/security/secitemdelete(_:)).
+
+## Transfer details and reader actions
+
+Document transfer shortcuts share the native reader action groups on iPhone and
+Android. `reader_chrome.reader_buttons` adds a compact percentage/details button;
+the transfer controller omits inline banners from views declaring native reader
+controls. Its `MobileHostUI.refresh_transfer_chrome` hook updates visible labels
+without rebuilding native groups for each progress snapshot. Visibility changes
+reflow the action groups, and fullscreen follows the reader chrome. Successful
+completion dismisses after five seconds with an epoch guard so a later transfer
+cannot be dismissed by an earlier completion callback. Stopped transfers persist.
+
+Transfer details and their settings use the current destination's route stack,
+so redraws do not create a cross-tab return edge. Their Back action pops the route
+without cancelling transfer work. Remote opening entry points (browser, retained
+sessions and Recent references) surface connection-busy decisions with a native
+dialog. Feature menus resolve the native activity through the reader controller's
+host and dispatch presentation commands during transfers; operation-specific
+guards still own mutations and credential requests. Regression coverage is in
+`Mobile/tests/test_transfer_feedback.py`; the physical Android acceptance probe is
+`Mobile/native_tests/tests/logisticsmobile/transfer_feedback_probe.py`.
 
 ## Unified iOS local browsing
 

@@ -120,7 +120,7 @@ class PrivateSessionTests(unittest.TestCase):
             self.assertTrue(owner.page_suspended)
             self.assertFalse(owner.crypt_immersive)
             self.assertIn('Cannot read page', owner.crypt_title.text)
-            self.assertIn(owner.crypt_title, owner.reading_frame.widget.children)
+            self.assertIs(owner.crypt_view._native_reader_status, owner.crypt_title)
             await owner.read_crypt_page()
             self.assertFalse(owner.page_suspended)
             self.assertTrue(owner.crypt_content.children)

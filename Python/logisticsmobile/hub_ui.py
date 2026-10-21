@@ -36,24 +36,15 @@ def session_identities(session, history):
     return identities
 
 
-def status_badges(details, *, currently_open=False):
-    """Text-labelled status remains readable without relying on colour."""
-    box = toga.Box(style=Pack(direction=COLUMN, margin_left=8, margin_right=8))
-    if currently_open:
-        box.add(toga.Label('Currently open',
-                           style=Pack(font_size=13, font_weight='bold', margin_bottom=4)))
-    row, length = None, 0
-    for detail in details:
-        # Bound each line so phone-sized cards do not grow to fit long statuses.
-        if row is None or length + len(detail) + 2 > 30:
-            row = toga.Box(style=Pack(direction=ROW, margin_bottom=4))
-            box.add(row)
-            length = 0
-        badge = toga.Box(children=[toga.Label(detail, style=Pack(font_size=12, margin=4))],
-                         style=Pack(direction=COLUMN, margin_right=4))
-        row.add(badge)
-        length += len(detail) + 2
-    return box
+def status_badges(details, *, currently_open=False, icon_count=0):
+    """One quiet summary, retaining warnings and the platform's default font."""
+    short_names = {'Unsaved changes': 'Unsaved', 'Recovered draft': 'Recovered'}
+    statuses = ['Open'] if currently_open else []
+    statuses.extend(short_names.get(detail, detail) for detail in details)
+    return surface(toga.Label(' · '.join(statuses),
+        style=Pack(font_size=12, margin=(0, 12, 8, 12 + 28 * icon_count + (4 if icon_count else 0)))),
+        radius=0, background='transparent', foreground='muted',
+        outlined=False, eink_outlined=False)
 
 
 def document_group(rows):
@@ -287,7 +278,8 @@ class HubUI:
             style=Pack(direction=ROW, align_items=CENTER)))
         currently_open = session.id in self.workspace.sessions
         if currently_open or details:
-            row.add(status_badges(details, currently_open=currently_open))
+            row.add(status_badges(details, currently_open=currently_open,
+                                  icon_count=len(getattr(name, 'leading_icons', ()))))
         return row
 
     def build_home(self):
@@ -502,7 +494,7 @@ class HubUI:
             box.add(toga.Box(children=[button],
                              style=Pack(direction=ROW)))
         if details:
-            box.add(status_badges(details))
+            box.add(status_badges(details, icon_count=len(getattr(button, 'leading_icons', ()))))
         return box
 
     def new_hub_document(self, widget=None, **kwargs):

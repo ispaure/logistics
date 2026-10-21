@@ -95,6 +95,9 @@ def load_startup_models(root, workspace_root):
             continue
     if preferences.values['clear_unmodified_documents_on_restart'] == 'true':
         for session in list(workspace.sessions.values()):
+            if (preferences.values['restore_last_document'] == 'true'
+                    and session.id == workspace.active):
+                continue
             if session.provider == 'managed-text':
                 info = display.get(session.resource)
                 if info is None or info['modified'] or info['conflict']:
@@ -115,6 +118,9 @@ async def finish_startup(app):
             prepare = getattr(app, '_prepare_startup_phase', None)
             if prepare is not None:
                 await prepare(index)
+        restore = getattr(app, 'startup_document_task', None)
+        if restore is not None:
+            await restore
         app.startup_screen.progress.value = len(STEPS)
         app._startup_layout_ready = True
         app.resize_workspace()

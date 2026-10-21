@@ -47,6 +47,9 @@ class ReaderCohesionTests(unittest.TestCase):
                 self.assertTrue(any('chapters' in label for label in labels))
                 self.assertNotIn(owner.previous_page, buttons)
             else:
+                self.assertEqual(view.style.margin, (0, 0, 0, 0))
+                self.assertIs(owner.page_footer.badge.parent, owner.reader_footer)
+                self.assertNotIn(owner.book_status, view.children)
                 self.assertFalse(any('chapter' in label or 'read aloud' in label for label in labels))
                 self.assertTrue(any('comic pages' in label for label in labels))
                 self.assertNotIn('speaker', [button.control_icon for button in buttons])

@@ -178,7 +178,7 @@ including independent text edits and metadata forms. Opening the same resource
 returns to its existing item. Browsing folders or switching destinations keeps
 these edits in memory. Ordinary imported documents remain independently open.
 
-Private Close offers **Save and close**, **Discard and close**, and **Keep editing**.
+Private Close offers **Save**, **Quit without saving**, and **Cancel**.
 Failed saves retain the item and its edits. Credential reload, replacement and
 forget check all unsaved provider items before clearing any of them. Save or
 explicitly discard private work before a file mutation or credential change.

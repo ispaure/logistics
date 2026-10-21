@@ -1,6 +1,7 @@
 """A folder list and focused, source-owned folder actions."""
 from features.rclone.mobile.storage_location import collection_path
 import asyncio
+import inspect
 from types import SimpleNamespace
 from contextlib import nullcontext
 import toga
@@ -356,6 +357,12 @@ class FolderHubUI:
                         self.choose_folder(selected)
                     record.menu = icon_button('more', 'Workspace actions for ' + name, on_press=options)
                     compact_icon(record.menu, width=TOUCH_TARGET, size=18)
+                    from .action_menu import WorkspaceMenu
+                    record.commands = WorkspaceMenu(record.menu,
+                        lambda selected=name: self.workspace_menu_actions(selected),
+                        invoke=self.invoke_workspace_action,
+                        context=lambda: self.app._impl.native,
+                        fallback=lambda selected=name: self.choose_folder(selected))
                     row.add(record.indicator, record.button, record.menu)
                     folder_row(row)
                 else:
@@ -454,6 +461,9 @@ class FolderHubUI:
             tab.extras['legend'] = legend
         content.append(tab.extras['legend'])
         sync(tab.content, content)
+        for path, old in tab.nodes.items():
+            if nodes.get(path) is not old and getattr(old, 'commands', None) is not None:
+                old.commands.dispose()
         tab.nodes, tab.panels, tab.browse = nodes, panels, browse
         tab.buttons, tab.tree_buttons = buttons, tree_buttons
 
@@ -493,6 +503,62 @@ class FolderHubUI:
         self.folder_credential_name = self.selected_folder_credential()
         self.folder_collapsed.clear()
         self.update_folder_list(self.folder_choices())
+
+    def invoke_workspace_action(self, callback):
+        if not self.app.active_host:
+            return
+        result = callback()
+        if inspect.isawaitable(result):
+            self.app.loop.create_task(result)
+
+    def workspace_menu_actions(self, name):
+        entry = self.folder_picker_choices.get(name)
+        if entry is None:
+            return []
+        # Reuse the same command callbacks and enabled-state policy as the
+        # fallback page. Building this content does not navigate or start I/O.
+        page = self.show_picker_folder(entry, present=False)
+        snapshot = dict(entry)
+        controls = self.folder_action_controls
+        status = self.folder_picker_status
+        actions = []
+        for button, _ in self.folder_action_controls:
+            if not button.enabled or button.text == 'Open Notes Library':
+                continue
+            async def invoke(control=button):
+                if self.folder_picker_choices.get(name) != snapshot:
+                    return
+                self.folder_picker_selected = dict(snapshot)
+                self.folder_action_controls = controls
+                self.folder_picker_status = status
+                self.refresh_folder_actions(refresh_choices=False)
+                if control.enabled:
+                    origin = self.navigation_generation
+                    result = control.on_press()
+                    if inspect.isawaitable(result):
+                        await result
+                    if self.navigation_generation == origin and status.text:
+                        self.show_view(page, destination='files', route='folder-options', title=snapshot['name'])
+            actions.append((button.text, invoke))
+        if self.cloud_busy:
+            actions.append(('Cancel current request', self.cancel_mirror_transfer
+                if getattr(self, 'transfer_busy', False) else self.cancel_cloud))
+        async def notes():
+            if self.folder_picker_choices.get(name) != snapshot:
+                return
+            from .notes_actions import offer_notes
+            box = page.children[0].content
+            button = toga.Button('Open Notes Library')
+            await offer_notes(self.app, snapshot, box, button, status)
+            if button in box.children and button.on_press is not None:
+                await button.on_press()
+            else:
+                if not status.text:
+                    status.text = 'No Notes Library found in this folder.'
+                self.show_view(page, destination='files', route='folder-options', title=snapshot['name'])
+        if not self.cloud_busy or entry['source'] == 'Local':
+            actions.append(('Open Notes Library', notes))
+        return actions
 
     def choose_folder(self, name):
         entry = self.folder_picker_choices.get(name)

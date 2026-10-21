@@ -169,7 +169,7 @@ def button_icons(button, icons):
     return button
 
 
-def apply_icon(button, name, label, *, preserve_layout=False):
+def apply_icon(button, name, label, *, preserve_layout=False, size=None):
     """Preserve callbacks, enabled state and native menus on an existing button."""
     symbol, fallback, lines = ICONS[name]
     if not preserve_layout:
@@ -225,7 +225,7 @@ def apply_icon(button, name, label, *, preserve_layout=False):
                         withAttributes=ns_from_py({'NSFont': font,
                             'NSColor': ObjCClass('UIColor').blackColor, 'NSParagraphStyle': paragraph}))
             image = renderer.imageWithActions(Block(draw, None, objc_id)).imageWithRenderingMode(2)
-        config = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(22, weight=5)
+        config = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(size or 22, weight=4 if size else 5)
         button._impl.native.setImage(image, forState=0)
         if not preserve_layout:
             button._impl.native.setPreferredSymbolConfiguration(config, forImageInState=0)
@@ -260,7 +260,8 @@ def apply_icon(button, name, label, *, preserve_layout=False):
         paint.setAntiAlias(True)
         native = button._impl.native
         density = native.getResources().getDisplayMetrics().density
-        size, padding = round(24 * density), round(12 * density)
+        icon_size = size or 24
+        size, padding = round(icon_size * density), round((48 - icon_size) / 2 * density)
         if preserve_layout and hasattr(button._impl, '_control_drawable'):
             size = button._impl._control_drawable.getBounds().width()
         drawable.setBounds(0, 0, size, size)

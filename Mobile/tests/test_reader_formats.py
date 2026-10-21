@@ -198,7 +198,9 @@ class ReaderFormatTests(unittest.TestCase):
                 self.assertEqual(last_private.crypt_reader.key, '03.cbz')
                 self.assertFalse(last_private.crypt_immersive)
                 self.assertFalse(last_private.comic_header.following.enabled)
-                self.assertIn(last_private.crypt_title, last_private.reading_frame.controls)
+                self.assertIn(last_private.comic_header.widget, last_private.reading_frame.controls)
+                self.assertIn(last_private.page_footer.widget, last_private.reading_frame.controls)
+                self.assertIs(last_private.page_footer.status, last_private.crypt_title)
                 for key in list(app.private_sessions.controllers):
                     self.assertTrue(app.private_sessions.close(key, discard=True))
                 await app.readers.catalog.metadata_task

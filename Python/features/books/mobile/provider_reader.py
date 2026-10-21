@@ -58,6 +58,9 @@ class RichBookView(toga.Box):
     def close_find(self, widget=None, **kwargs):
         if self.find_box in self.children:
             self.remove(self.find_box)
+            callback = getattr(self, 'on_tools_changed', None)
+            if callback is not None:
+                callback()
 
     def open_chapter(self, entry):
         if not self.disposed:

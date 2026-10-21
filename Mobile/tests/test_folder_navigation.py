@@ -22,6 +22,7 @@ class FolderStackTests(TestCase):
         self.host = NativeNavigationHost(DESTINATION_ITEMS)
         self.app = SimpleNamespace(loop=self.loop, native_host=self.host, active_host=True,
             select_destination=Mock(return_value=True), visible_reader=Mock(return_value=None),
+            reader_tool_back=Mock(return_value=None),
             adaptive=SimpleNamespace(render=Mock()))
         self.routes = self.app.routes = MobileRoutes(self.app, self.host, guard=lambda: True, changed=Mock())
         self.navigation = [Navigation() for _ in self.host.destinations]
@@ -238,7 +239,8 @@ class ShowInFolderTests(TestCase):
         host = NativeNavigationHost(DESTINATION_ITEMS)
         owner = SimpleNamespace(loop=app.loop, native_host=host, active_host=True,
             folder_path_visible=app.folder_path_visible, adaptive=SimpleNamespace(wide=False),
-            select_destination=Mock(return_value=True), visible_reader=Mock(return_value=None))
+            select_destination=Mock(return_value=True), visible_reader=Mock(return_value=None),
+            reader_tool_back=Mock(return_value=None))
         routes = owner.routes = MobileRoutes(owner, host, guard=lambda: True, changed=Mock())
         navigation = [Navigation() for _ in host.destinations]
         def push(destination, panel, title):

@@ -329,13 +329,13 @@ class AppearanceTests(unittest.TestCase):
             self.assertGreaterEqual(contrast_ratio(argb(palette['accent']), argb(palette['surface'])), 4.5)
 
     def test_preview_and_chat_follow_the_same_system_palette(self):
-        for html, background in ((markdown_preview('# Notes'), 'surface'), (transcript_document(theme_css=css_variables()), 'chat_background')):
+        for html, background in ((markdown_preview('# Notes'), 'window'), (transcript_document(theme_css=css_variables()), 'chat_background')):
             self.assertIn('@media(prefers-color-scheme:dark)', html)
             for palette in (LIGHT, DARK):
                 for role, color in palette.items():
                     self.assertIn(f'--{role}:{color}', html)
             self.assertIn(f'background:var(--{background})', html)
-        self.assertIn('html,body{background:var(--surface);color:var(--text)}', markdown_preview('# Notes'))
+        self.assertIn('html,html body{background:var(--window);color:var(--text)}', markdown_preview('# Notes'))
 
     def test_chat_canvas_tracks_system_light_and_dark_themes(self):
         html = transcript_document(theme_css=css_variables())
@@ -354,7 +354,7 @@ class AppearanceTests(unittest.TestCase):
             self.assertIn('body{margin:24px}', html)
             self.assertIn('<body>Book</body>', html)
             self.assertIn('--surface:' + palette['surface'], html)
-            self.assertIn('html,body{background:var(--surface);color:var(--text)}', html)
+            self.assertIn('html,body{background:var(--window);color:var(--text)}', html)
             if mode != 'system':
                 self.assertNotIn('@media', html)
         for mode in ('sepia', 'slate'):

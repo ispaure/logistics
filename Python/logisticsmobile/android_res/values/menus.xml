@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="logistics_menu_surface">#fafbfc</color>
+    <color name="logistics_menu_text">#202838</color>
+    <style name="LogisticsMenu" parent="">
+        <item name="android:popupMenuStyle">@style/LogisticsMenuPopup</item>
+        <item name="android:textColorPrimary">@color/logistics_menu_text</item>
+        <item name="android:textColorSecondary">@color/logistics_menu_text</item>
+    </style>
+    <style name="LogisticsMenuPopup" parent="@android:style/Widget.Material.PopupMenu">
+        <item name="android:popupBackground">@drawable/logistics_menu</item>
+    </style>
+    <style name="LogisticsMenuContrast" parent="LogisticsMenu">
+        <item name="android:popupMenuStyle">@style/LogisticsMenuPopupContrast</item>
+        <item name="android:textColorPrimary">#000000</item>
+        <item name="android:textColorSecondary">#000000</item>
+    </style>
+    <style name="LogisticsMenuPopupContrast" parent="LogisticsMenuPopup">
+        <item name="android:popupBackground">@drawable/logistics_menu_contrast</item>
+        <item name="android:popupElevation">0dp</item>
+    </style>
+</resources>

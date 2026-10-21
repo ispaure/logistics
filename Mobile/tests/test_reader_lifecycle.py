@@ -33,12 +33,10 @@ class ReaderLifecycleTests(TestCase):
     def run_async(self, operation):
         return self.app.loop.run_until_complete(operation)
 
-    def button(self, label):
-        def walk(view):
-            yield view
-            for child in view.children:
-                yield from walk(child)
-        return next(view for view in walk(self.app.body) if getattr(view, 'text', None) == label)
+    def answer_close(self, choice):
+        tasks = list(self.app._document_close_tasks.values())
+        self.app.main_window._impl.dialog_responses.setdefault('QuestionDialog', []).append(choice)
+        return tasks[0]
 
     def assert_closed(self, owner):
         self.assertNotIn(owner.session.id, self.app.workspace.sessions)
@@ -75,25 +73,25 @@ class ReaderLifecycleTests(TestCase):
         owner.crypt_text.value = 'Changed'
         owner.crypt_view._reader_close_button.on_press()
         self.assertIn(owner.session.id, self.app.workspace.sessions)
-        self.button('Keep editing').on_press()
+        self.run_async(self.answer_close('cancel'))
         self.assertEqual(owner.crypt_text.value, 'Changed')
         self.assertEqual(self.app.visible_reader(), owner.session.id)
         self.app.routes.system_back()
-        self.app.routes.system_back()  # Back from the close prompt keeps editing.
+        self.run_async(self.answer_close('cancel'))
         self.assertEqual(owner.crypt_text.value, 'Changed')
         self.app.routes.system_back()
-        self.button('Discard and close').on_press()
+        self.run_async(self.answer_close('discard'))
         self.assert_closed(owner)
         self.assertEqual(path.read_text(), 'Original')
         self.run_async(self.app.open_crypt(copies=self.copies, key=path.name))
         owner = self.app.private_sessions.active
         owner.crypt_text.value = 'Saved change'
         owner.crypt_view._reader_close_button.on_press()
-        self.run_async(self.button('Save and close').on_press())
+        self.run_async(self.answer_close('save'))
         self.assert_closed(owner)
         self.assertEqual(path.read_text(), 'Saved change')
 
-    def test_failed_save_keeps_prompt_and_draft(self):
+    def test_failed_save_keeps_reader_and_draft(self):
         path = self.root / 'conflict.txt'
         path.write_text('Original')
         self.run_async(self.app.open_crypt(copies=self.copies, key=path.name))
@@ -101,11 +99,13 @@ class ReaderLifecycleTests(TestCase):
         owner.crypt_text.value = 'Unsaved'
         path.write_text('External change')
         owner.crypt_view._reader_close_button.on_press()
-        self.run_async(self.button('Save and close').on_press())
+        self.run_async(self.answer_close('save'))
         self.assertIn(owner.session.id, self.app.workspace.sessions)
         self.assertEqual(owner.crypt_text.value, 'Unsaved')
         self.assertIsNot(self.app.body, self.origin)
-        self.button('Keep editing').on_press()
+        self.assertIn('Save failed', owner.crypt_title.text)
+        self.app.request_reader_close(owner.session.id)
+        self.run_async(self.answer_close('cancel'))
         self.assertEqual(owner.crypt_text.value, 'Unsaved')
 
     def test_resuming_in_another_tab_updates_back_origin(self):
@@ -151,14 +151,14 @@ class ReaderLifecycleTests(TestCase):
                 view = self.app.body.children[0]
                 self.assert_close_control(view)
                 self.assertTrue(self.app.routes.back())
-                self.assertEqual(self.app.routes.screens['files'][-1][0], 'close:' + owner.session.id)
-                self.assertTrue(self.app.routes.back())
+                self.assertFalse(any(route.startswith('close:') for route, *_ in self.app.routes.screens['files']))
+                self.run_async(self.answer_close('cancel'))
                 self.assertIs(self.app.body.children[0], view)
                 self.assertEqual(owner.session.view['markdown_mode'], mode)
                 self.assertEqual(owner.editor.value, '# Retained draft')
                 self.assertTrue(self.app._document_tabs_hidden)
                 self.app.request_reader_close(owner.session.id)
-                self.button('Discard and close').on_press()
+                self.run_async(self.answer_close('discard'))
 
     def test_imported_epub_close_flushes_latest_position_and_reopening_resumes(self):
         from Mobile.native_tests.tests.logisticsmobile.compact_reading_probe import epub_bytes
@@ -212,10 +212,10 @@ class ReaderLifecycleTests(TestCase):
         self.assert_close_control(owner.document_view)
         owner.document_view._reader_close_button.on_press()
         self.assertIn(owner.session.id, self.app.workspace.sessions)
-        self.button('Keep editing').on_press()
+        self.run_async(self.answer_close('cancel'))
         self.assertEqual(self.app.visible_reader(), owner.session.id)
         self.app.routes.system_back()
-        self.button('Save and close').on_press()
+        self.run_async(self.answer_close('save'))
         self.assert_closed(owner)
 
     def test_text_scroll_survives_close_without_retaining_content_in_position_cache(self):
@@ -247,6 +247,24 @@ class ReaderLifecycleTests(TestCase):
         self.assertTrue(resumed.crypt_preview_search.ready)
         restore.assert_any_call(resumed.crypt_preview, (0, 345))
 
+    def test_metadata_back_returns_to_document_and_reopening_keeps_draft(self):
+        from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
+        _, comic = make_books(self.root)
+        self.run_async(self.app.open_download(path=comic))
+        owner = self.app.readers.active
+        owner.show_book_metadata()
+        owner.book_metadata_fields['Title'].value = 'Keep this metadata draft'
+        self.assertTrue(self.app.routes.back())
+        self.assertIs(self.app.body.children[0], owner.library_view)
+        self.assertIn(owner.session.id, self.app.workspace.sessions)
+        self.assertFalse(getattr(self.app, '_document_close_tasks', {}))
+        owner.show_book_metadata()
+        self.assertEqual(owner.book_metadata_fields['Title'].value, 'Keep this metadata draft')
+        self.assertTrue(self.app.routes.system_back())
+        self.assertIs(self.app.body.children[0], owner.library_view)
+        self.app.request_reader_close(owner.session.id)
+        self.run_async(self.answer_close('discard'))
+
     def test_imported_metadata_draft_prompts_before_close(self):
         from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
         _, comic = make_books(self.root)
@@ -259,11 +277,11 @@ class ReaderLifecycleTests(TestCase):
             owner.show_library()
             owner.library_view._reader_close_button.on_press()
             self.assertIn(owner.session.id, self.app.workspace.sessions)
-            self.button('Keep editing').on_press()
+            await self.answer_close('cancel')
             self.assertEqual(owner.book_metadata_fields['Title'].value, 'Unsaved title')
             owner.show_library()
             owner.library_view._reader_close_button.on_press()
-            self.button('Discard and close').on_press()
+            await self.answer_close('discard')
             self.assert_closed(owner)
         self.run_async(exercise())
 

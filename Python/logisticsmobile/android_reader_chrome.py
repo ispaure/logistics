@@ -70,7 +70,8 @@ def sync(app, view, destination):
         leading.append(adapter._reader_back)
     if menu is not None:
         leading.append(menu)
-    buttons = list(controls())
+    from .reader_chrome import reader_buttons
+    buttons = reader_buttons(app, view)
     title = getattr(view, '_native_reader_title', '')
     title = str(title() if callable(title) else title).replace('\n', ' ')
     state = (id(view), tuple(id(button) for button in [*leading, *buttons]))

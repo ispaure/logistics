@@ -488,8 +488,8 @@ def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet='')
             'section[contenteditable=false]{opacity:.8}section[data-source-only]::after{content:"Edit this block in Source";display:block;font-size:.8em;color:GrayText}pre{white-space:pre-wrap}blockquote{border-left:3px solid GrayText;padding-left:1em}'
             'table{border-collapse:collapse;max-width:100%;display:block;overflow-x:auto}td,th{border:1px solid GrayText;padding:4px}#notice{color:MarkText;background:Mark}'
             + stylesheet +
-            'html,body{background:var(--surface,Canvas);color:var(--text,CanvasText)}'
-            'nav{background:var(--surface,Canvas)}'
+            'html,body{background:var(--window,Canvas);color:var(--text,CanvasText)}'
+            'nav{background:var(--window,Canvas)}'
             '#document{border-radius:8px;padding:12px;box-sizing:border-box}'
             '#document p,#document li{text-align:var(--logistics-text-align,start)}'
             '@media(max-height:180px){#document{padding:0}}'

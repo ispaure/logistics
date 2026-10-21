@@ -37,6 +37,14 @@ class ReaderBuildTests(unittest.TestCase):
             self.assertEqual(first.count('payload/commonUtils/ui/native/android'), 1)
             self.assertEqual(first.count('payload/features/books/mobile/android'), 1)
             self.assertEqual(first.count('payload/logisticsmobile/android'), 1)
+            menu = root / 'app/src/main/res/drawable/logistics_menu.xml'
+            contrast = root / 'app/src/main/res/drawable/logistics_menu_contrast.xml'
+            namespace = '{http://schemas.android.com/apk/res/android}'
+            self.assertEqual(ET.parse(menu).getroot().find('corners').get(namespace + 'radius'), '8dp')
+            outline = ET.parse(contrast).getroot().find('stroke')
+            self.assertEqual(outline.get(namespace + 'width'), '1dp')
+            self.assertEqual(outline.get(namespace + 'color'), '#000000')
+            self.assertTrue((root / 'app/src/main/res/values-night/menus.xml').is_file())
             for name in ('back15', 'forward15'):
                 icon = root / ('app/src/main/res/drawable/speech_' + name + '.xml')
                 self.assertEqual(ET.parse(icon).getroot().tag, 'vector')

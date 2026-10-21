@@ -12,7 +12,7 @@ def thumbnail_image(image):
     """UITableView uses image point size to reserve label space."""
     if not type(image._impl).__module__.startswith('toga_iOS.'):
         return image
-    from rubicon.objc import Block, objc_id, CGRect
+    from rubicon.objc import Block, objc_id, CGRect, ObjCClass
     from toga_iOS.libs import UIGraphicsImageRenderer, CGSize
     from toga_iOS.images import nsdata_to_bytes
     native = image._impl.native
@@ -21,7 +21,12 @@ def thumbnail_image(image):
         ratio = min(28 / float(native.size.width), 28 / float(native.size.height))
         width, height = float(native.size.width) * ratio, float(native.size.height) * ratio
         native.drawInRect(CGRect(((28 - width) / 2, (28 - height) / 2), (width, height)))
-    return toga.Image(src=nsdata_to_bytes(renderer.PNGDataWithActions(Block(draw, None, objc_id))))
+    result = toga.Image(src=nsdata_to_bytes(renderer.PNGDataWithActions(Block(draw, None, objc_id))))
+    # PNG data does not retain UIImage's point scale. Restore the renderer's
+    # scale so Retina pixels do not become a 56/84-point table image slot.
+    result._impl.native = ObjCClass('UIImage').imageWithCGImage(result._impl.native.CGImage,
+        scale=renderer.format.scale, orientation=0)
+    return result
 
 
 @lru_cache(maxsize=2)

@@ -212,7 +212,7 @@ class EpubUXTests(unittest.TestCase):
                 self.assertEqual(owner.reading_frame.margin, 0)
                 owner.epub_event(owner.book_reader, owner.book_epoch, 0, 'position', 7)
                 await owner._epub_location_task
-                self.assertIn('Chapter 1/2', owner.page_footer.spacer.text)
+                self.assertIn('Chapter 1 of 2', owner.page_footer.spacer.accessible_name)
                 await owner.toggle_bookmark()
                 with patch.object(owner, 'show_library', wraps=owner.show_library) as show:
                     menu = owner.library_view._workspace_menu_button
@@ -229,7 +229,7 @@ class EpubUXTests(unittest.TestCase):
                     await until(lambda: show.called and not owner.book_busy and owner.book_record['position'] == 0)
                     self.assertEqual(owner.book_record['position'], 0)
                     self.assertEqual(owner.epub_offset, 7)
-                    self.assertIn('Chapter 1/2', owner.page_footer.spacer.text)
+                    self.assertIn('Chapter 1 of 2', owner.page_footer.spacer.accessible_name)
                 app.readers.close(owner.session.id)
 
             app.loop.run_until_complete(exercise())

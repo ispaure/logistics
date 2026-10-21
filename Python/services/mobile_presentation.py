@@ -9,6 +9,7 @@ class MobilePresentation:
     apply_icon: Callable
     action_button: Callable
     ActionMenu: Callable
+    NativeMenu: Callable
     surface: Callable
     apple_color: Callable
     menu_button: Callable

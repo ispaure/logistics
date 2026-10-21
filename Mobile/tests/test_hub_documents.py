@@ -570,20 +570,23 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIs(session, owner.session)
         self.assertTrue({'Unsaved changes', 'Draft'} <= set(summary[2]))
         row = app.recent_row(session, summary)
-        self.assertTrue({'Currently open', 'Unsaved changes', 'Draft'} <= set(labels(row)))
+        self.assertEqual(labels(row), ['Open · Unsaved · Draft'])
+        status = row.children[-1]
+        self.assertEqual(status.style.font_size, 12)
+        self.assertEqual(status._impl._surface_roles[:2], ('transparent', 'muted'))
         app.loop.run_until_complete(app.recent_opener(session)())
         self.assertIs(app.editor_view, owner)
         self.assertEqual(owner.document.text, '# Keep these edits')
         app.close_session(session.id, choice='keep')
         closed, summary = next(item for item in app.recent_items() if item[0].resource == owner.document.id)
         self.assertTrue({'Unsaved changes', 'Recovered draft'} <= set(summary[2]))
-        self.assertNotIn('Currently open', labels(app.recent_row(closed, summary)))
+        self.assertEqual(labels(app.recent_row(closed, summary)), ['Unsaved · Recovered'])
         app.loop.run_until_complete(app.recent_opener(closed)())
         self.assertEqual(app.current.text, '# Keep these edits')
         app.save_document()
         saved, summary = next(item for item in app.recent_items() if item[0].resource == app.current.id)
         self.assertEqual(summary[2], [])
-        self.assertIn('Currently open', labels(app.recent_row(saved, summary)))
+        self.assertEqual(labels(app.recent_row(saved, summary)), ['Open'])
 
     def test_recent_keeps_last_use_order_across_open_and_closed_documents(self):
         app = self.app
@@ -700,6 +703,7 @@ class HubDocumentTests(unittest.TestCase):
         app.current.snapshot.path.write_bytes(b'Changed elsewhere')
         app.workspace.open('managed-text', 'f' * 32, 'text')
         app.workspace.open('library', 'e' * 32, 'epub')
+        app.preferences.save(restore_last_document='false')
         app.save_workspace()
         restored = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
         try:

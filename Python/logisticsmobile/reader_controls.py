@@ -116,24 +116,36 @@ def page_buttons(previous, next_page):
 
 
 class PageFooter:
-    """Comic scrubbing commits on release; logical page commands stay unchanged."""
-    def __init__(self, previous, following, move, *, compact=False):
+    """Shared page/chapter scrubbing; publish movement only on release."""
+    def __init__(self, previous, following, move, *, compact=False, status=None, unit='page'):
         self.previous, self.following, self.move = previous, following, move
         self.compact = compact
+        self.status = status
+        self.unit = unit
         self.count, self.rtl = 0, False
         self.slider = toga.Slider(min=0, max=1, value=0, on_release=self.release,
                                   style=Pack(flex=1, height=48))
-        accessible_name(self.slider, 'Comic page')
-        self.spacer = toga.Label('', style=Pack(flex=1, text_align='center', font_size=12, margin_top=14))
-        self.widget = toga.Box(style=Pack(direction=ROW))
+        accessible_name(self.slider, 'Chapter position' if unit == 'chapter' else 'Page position')
+        self.spacer = toga.Label('', style=Pack(width=92, text_align='center', font_size=10))
+        self.badge = toga.Box(children=[self.spacer], style=Pack(direction=COLUMN, width=104, height=28,
+            align_items='center', justify_content='center', margin_left=6, margin_right=2))
+        from .appearance import surface
+        surface(self.spacer, background='transparent', foreground='text')
+        surface(self.badge, radius=14, background='alternate')
+        self.widget = toga.Box(style=Pack(direction=ROW, align_items='center', margin_left=4, margin_right=4))
+        from .reader_progress import style_slider
+        style_slider(self.slider)
         self.sync(comic=False, count=0, index=0)
 
     def sync(self, *, comic, count, index, right_to_left=False):
         self.count, self.index, self.rtl = count, index, comic and right_to_left
-        apply_icon(self.previous, 'forward' if self.rtl else 'back', 'Previous page')
-        apply_icon(self.following, 'back' if self.rtl else 'forward', 'Next page')
+        from .appearance import surface
+        for button, icon, label in ((self.previous, 'forward' if self.rtl else 'back', 'Previous page'),
+                                    (self.following, 'back' if self.rtl else 'forward', 'Next page')):
+            apply_icon(button, icon, label, size=18)
+            surface(button, radius=24, background='transparent', foreground='text')
         children = [self.following if self.rtl else self.previous,
-                    self.slider if comic else self.spacer,
+                    self.slider, self.badge,
                     self.previous if self.rtl else self.following]
         if self.compact:
             children = ([] if hasattr(self.previous, '_native_reader_item') else
@@ -144,12 +156,22 @@ class PageFooter:
             self.widget.add(*children)
         self.slider.max = max(1, count - 1)
         self.slider.value = count - 1 - index if self.rtl else index
-        self.slider.enabled = comic and count > 1
-        self.spacer.text = f'{index + 1} / {count}' if count else ''
+        self.slider.enabled = count > 1
+        progress = f'{index + 1}/{count}' if count else '—'
+        if comic and self.status is not None and self.status.text.startswith('Page '):
+            progress = self.status.text[5:].split(' · Right-to-left')[0]
+        self.set_progress_text(progress, f'{self.unit.title()} {progress}')
+
+    def set_progress_text(self, text, label):
+        self.spacer.text = text
+        self.badge.style.width = max(52, min(120, 20 + 7 * len(text)))
+        self.spacer.style.width = self.badge.style.width - 12
+        accessible_name(self.spacer, label)
 
     def chapter_progress(self, index, count, offset, length):
         percent = round(100 * min(max(0, offset), length) / length) if length else 0
-        self.spacer.text = f'Chapter {index + 1}/{count} · {percent}%'
+        self.set_progress_text(f'{index + 1}/{count} · {percent}%',
+                               f'Chapter {index + 1} of {count}, {percent}% through chapter')
 
     async def release(self, widget, **kwargs):
         if not self.slider.enabled:

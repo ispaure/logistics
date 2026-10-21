@@ -78,7 +78,8 @@ pages and applies to imported, Local, LocalCrypt and remote comics.
 
 Previous/Next and swipes advance past the displayed spread, or through each half
 of a split wide page. Imported and provider
-readers show a page slider between the arrows when reading controls are visible;
+readers share small chevrons, a slim slider with a round thumb, and a compact
+page-count badge in one footer row when reading controls are visible;
 drag and release it to jump directly to a page. Manga places Next on the left and
 Previous on the right, with slider progress running from right to left.
 Automatic layouts reevaluate when the viewport changes. Single and Two-page
@@ -196,6 +197,11 @@ comics and Local/LocalCrypt/remote comics. Zooming retains the current view unti
 returning to fit size, when posture changes can reflow it.
 
 ### iOS edge-to-edge reading
+
+With controls visible, comics use a canvas without an added outer margin. Page
+arrows, the slider and page count share one bottom row. On iPad, the title uses
+the available navigation-bar width and only shortens when the filename does not
+fit between the controls. Pages keep their original proportions when fitted.
 
 Fullscreen comics hide the system status indicators as well as app navigation.
 The image canvas uses the full window, including the former status-indicator strip.

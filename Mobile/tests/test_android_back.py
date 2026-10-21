@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import toga
 from logisticsmobile.app import LogisticsMobile
@@ -322,11 +322,10 @@ class AndroidBackTests(unittest.TestCase):
             else:
                 owner = app.private_sessions.active
                 owner.crypt_text.value = '# Retained dirty draft'
-                self.assertTrue(self.routes.system_back())
-                self.settle()
-                self.assertEqual(self.routes.screens['files'][-1][0], 'private-close:' + owner.session.id)
-                self.assertTrue(self.routes.system_back())
-                self.settle()
+                with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as dialog:
+                    self.assertTrue(self.routes.system_back())
+                    self.settle()
+                dialog.assert_awaited_once()
                 self.assertEqual(self.routes.screens['files'][-1][0], 'private:' + owner.session.id)
                 app.loop.run_until_complete(app.show_files())
                 self.assertIn(owner.session.id, app.workspace.sessions)

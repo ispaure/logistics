@@ -20,8 +20,9 @@ Background memory cleanup preserves the active Markdown reading or editing
 surface when returning from sleep. Reading and formatted editing use the
 platform's default font, including the device-selected sans-serif font on Android;
 code retains a monospace font.
-Markdown preview and formatted editing use the app's surface colours throughout
-the reading area, following light and dark mode.
+Markdown preview and formatted editing use the app's window background throughout
+the reading area, including text margins, following light and dark mode. The text
+blends into the surrounding view without a separate rectangular panel.
 Pinch Markdown to change its font size and reflow the text within the view.
 Markdown, EPUB and plain text retain separate font-size settings.
 On iOS, text and Markdown editors share the readers' native title bar. The
@@ -41,10 +42,14 @@ Open the **three-dot Document actions** menu in the editor or Markdown preview
 and choose **Delete document…** to remove an app-stored document, including an
 unsaved Untitled document. Confirm the warning to close it and permanently remove
 its saved content, recovery copy and Recent entry. **Cancel** keeps it open.
-**Close document** keeps the stored document; discarding changes only reverts edits.
+The document's **×** keeps the stored document. Unsaved changes open a native
+popup with **Save**, **Quit without saving**, and **Cancel**. Find and Replace
+changes **×** to a back arrow that dismisses search and keeps the document open.
+The three-dot menu omits New, Open from Files, Import and Close. Delete uses red
+destructive styling and a native **Delete / Cancel** confirmation.
 Close other app windows before deleting. Files opened directly from a folder
 continue to use that folder's file-management actions.
-Choose **New document** from Home or Document actions to enter a name
+Choose **New document** from Home to enter a name
 and select the file type before creating it. Markdown offers an optional title
 that becomes the first heading; the filename remains independently editable.
 For a new Markdown document, tap anywhere in the blank writing area below the

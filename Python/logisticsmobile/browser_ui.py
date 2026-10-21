@@ -129,7 +129,43 @@ class FolderLocationHeader(toga.Box):
         self.refresh_status()
         super().__init__(children=[parent_button, self.caption, *actions],
                          style=Pack(direction=ROW, align_items=CENTER, margin_top=0))
+        if type(self._impl).__module__.startswith('toga_android.'):
+            self.use_android_title()
         self.update('')
+
+    def use_android_title(self):
+        """Match the compact centered iOS identity without changing touch targets."""
+        self._android_title = True
+        self.folder_name.style.font_size = 17
+        self.status.style.font_size = 17 * .75
+        self.folder_name.style.text_align = self.status.style.text_align = CENTER
+        self.folder_name.style.margin_right = 0
+        self.storage_icons.style.height = 15
+        self.balance_android_title()
+
+    def balance_android_title(self):
+        if self.caption not in self.children:
+            return
+        if not hasattr(self, '_title_gutters'):
+            self._title_gutters = [toga.Box(style=Pack(width=0)), toga.Box(style=Pack(width=0))]
+            super().insert(1, self._title_gutters[0])
+            super().add(self._title_gutters[1])
+        trailing = sum(child.style.width or 48 for child in self.children
+                       if child not in (self.parent_button, self.caption, *self._title_gutters))
+        leading = self.parent_button.style.width or 48
+        self.caption.style.margin_left = self.caption.style.margin_right = 0
+        self._title_gutters[0].style.width = max(0, trailing - leading)
+        self._title_gutters[1].style.width = max(0, leading - trailing)
+
+    def add(self, *children):
+        super().add(*children)
+        if getattr(self, '_android_title', False):
+            self.balance_android_title()
+
+    def remove(self, *children):
+        super().remove(*children)
+        if getattr(self, '_android_title', False):
+            self.balance_android_title()
 
     def use_native_title(self):
         """Let UIKit own the title/actions; reserve content space only for search."""
@@ -194,7 +230,8 @@ class FolderLocationHeader(toga.Box):
             self.storage_identity.remove(child)
         self.storage_identity.add(self.storage_icons)
         for name, label in kinds:
-            indicator = template_icon(toga.ImageView(icon(name), style=Pack(width=18, height=18, margin_right=4)))
+            size = 12 if type(self._impl).__module__.startswith('toga_android.') else 18
+            indicator = template_icon(toga.ImageView(icon(name), style=Pack(width=size, height=size, margin_right=4)))
             indicator.control_icon = name
             accessible_name(indicator, label)
             surface(indicator, radius=0, background='transparent',
@@ -211,10 +248,32 @@ class FolderLocationHeader(toga.Box):
             font_size=self.folder_name.style.font_size * .75, margin=0)))
         surface(self.storage_identity.children[-1], radius=0, background='transparent', foreground='muted',
                 outlined=False, eink_outlined=False)
-        if getattr(self, 'native_actions', None) is not None:
+        if type(self._impl).__module__.startswith('toga_android.'):
+            self.center_android_identity(identity)
+        elif getattr(self, 'native_actions', None) is not None:
             self.center_storage_identity()
         self._storage_kinds = kinds
         self._identity_key = identity_key
+
+    def center_android_identity(self, identity):
+        """Center icons with their caption as one ellipsizing native text run."""
+        from android.text import SpannableString
+        from android.text.style import ImageSpan
+        label = self.storage_identity.children[-1]
+        label.style.margin = 0
+        label.style.text_align = CENTER
+        # Inline spans keep the complete icon/text group centered. Separate
+        # flexible labels either strand icons at the edge or hide long text.
+        text = SpannableString('\ufffc ' * len(self.storage_icons.children) + identity)
+        for index, image in enumerate(self.storage_icons.children):
+            drawable = image._impl.native.getDrawable()
+            size = round(image._impl.scale_in(12))
+            drawable.setBounds(0, 0, size, size)
+            text.setSpan(ImageSpan(drawable, 1), index * 2, index * 2 + 1, 33)
+        self.storage_identity.remove(self.storage_icons)
+        label._impl.native.setText(text)
+        label._impl.native.setContentDescription(', '.join(
+            image.accessible_name for image in self.storage_icons.children) + '. ' + identity)
 
     def update_provider(self, path, provider, *, name=None):
         provider = getattr(provider, 'provider', provider)
@@ -297,6 +356,7 @@ class FileBrowser(NativeBrowser):
             primary_action='Select' if contextual_selection else None,
             on_primary_action=self._list_context if contextual_selection else None, on_visible=self._row_visible,
             style=Pack(flex=1))
+        self.native_list.menu_provider = self._native_row_menu
         self.empty_label = toga.Label('', style=Pack(margin=12))
         self._tile_scroll = toga.ScrollContainer(horizontal=False, content=self.items,
                                                 style=Pack(flex=1))
@@ -512,6 +572,15 @@ class FileBrowser(NativeBrowser):
     def _list_context(self, widget, row, **kwargs):
         if not self._rendering and row.epoch == self.epoch:
             self._spawn(self._select_row(row))
+
+    async def _native_row_menu(self, row):
+        self.dismiss_item_menu()
+        await self._select_row(row)
+        menu = getattr(self, '_item_menu', None)
+        if (menu is not None and menu.epoch == row.epoch
+                and menu.selected == row.entry.identity and self._entry_current(row.entry)):
+            return menu.ios_actions()
+        return []
 
     async def _select_row(self, row):
         if (not self.closed and not self.navigation_busy and row.epoch == self.epoch

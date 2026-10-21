@@ -52,6 +52,8 @@ def configure_android_sources(project):
     import shutil
     resources = ROOT.parent / 'Python/features/books/mobile/android_res'
     shutil.copytree(resources, Path(project) / 'app/src/main/res', dirs_exist_ok=True)
+    shutil.copytree(ROOT.parent / 'Python/logisticsmobile/android_res',
+                    Path(project) / 'app/src/main/res', dirs_exist_ok=True)
     # Firebase builds invoke Gradle directly, so Briefcase's build-time metadata
     # hook has not run in a fresh checkout (and may retain test mode in an old one).
     metadata = Path(project) / 'app/src/main/res/values/briefcase.xml'

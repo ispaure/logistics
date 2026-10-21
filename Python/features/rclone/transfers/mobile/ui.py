@@ -68,6 +68,12 @@ class MirrorUI(TransferReviewUI):
             if parent is None or bar is None:
                 continue
             live.append((parent_ref, bar_ref))
+            if hasattr(parent, '_native_reader_buttons'):
+                # Native title bars own reader status; keep document content clear.
+                if bar in parent.children:
+                    bar.progress.stop()
+                    parent.remove(bar)
+                continue
             # Immersive comics use the full reading area. Transfer work and
             # its notification state continue; show the banner with controls.
             if visible and bar.visible_when() and not (getattr(parent, '_comic_fullscreen', False)
@@ -95,6 +101,9 @@ class MirrorUI(TransferReviewUI):
                 bar.progress.stop()
                 parent.remove(bar)
         self.transfer_banners = live
+        refresh_chrome = getattr(self.rclone_ui, 'refresh_transfer_chrome', None)
+        if refresh_chrome is not None:
+            refresh_chrome()
 
     def existing_crypt_locations(self, *, roots=None):
         result = {}
@@ -164,17 +173,19 @@ class MirrorUI(TransferReviewUI):
             source, destination = endpoints
             box.add(toga.Label(import_hint(f'From: {source}\nTo: {destination}'),
                                style=Pack(font_size=12, margin_bottom=8)))
+        box.add(toga.Button('Back', on_press=lambda widget, **kwargs: self.routes.back(), style=Pack(height=48)))
         self.transfer_progress = toga.ProgressBar(max=100, value=100 if getattr(self, 'transfer_complete', False) else 0, style=Pack(height=12))
-        self.transfer_notice = toga.Label(import_hint(store.error or getattr(self, 'transfer_message', 'Writing and ordinary reading can continue during a transfer.')))
+        self.transfer_notice = toga.Label(import_hint((store.error or getattr(self, 'transfer_message', 'No transfer is running.')).replace(' · ', '\n')))
         box.add(self.transfer_progress)
         box.add(self.transfer_notice)
+        box.add(toga.Label(import_hint('You can leave this screen while the transfer continues. Local documents remain available. Cloud previews must wait until the transfer finishes.\n\nThe total can grow as more files are found. Progress reaches 100% after verification.'), style=Pack(font_size=12, margin_top=12)))
         if not getattr(self, 'transfer_busy', False):
             box.add(toga.Button('Transfer settings…', on_press=self.show_transfer_options, style=Pack(height=44)))
         if getattr(self, 'transfer_busy', False):
             box.add(toga.Button('Cancel transfer', on_press=self.cancel_mirror_transfer, style=Pack(height=44)))
         self.transfer_view = toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
         if present:
-            self.show_view(self.transfer_view, destination='files', route='transfers', title='Transfer details')
+            self.show_view(self.transfer_view, route='transfers', title='Transfer details')
         if getattr(self, 'transfer_busy', False):
             percentage = getattr(self, 'transfer_percentage', None)
             if percentage is None:
@@ -356,13 +367,22 @@ class MirrorUI(TransferReviewUI):
                 self.cloud_transfer_progress.stop()
                 self.cloud_transfer_progress.max = 100
                 self.cloud_transfer_progress.value = 100 if result is not None else 0
-                self.transfer_notice.text = import_hint(self.transfer_message)
+                self.transfer_notice.text = import_hint(self.transfer_message.replace(' · ', '\n'))
                 self.transfer_progress.stop()
                 self.transfer_progress.max = 100
                 self.transfer_progress.value = 100 if result is not None else 0
                 self.refresh_transfer_status()
-                if (self.native_host.state.destination == 'files' and self.routes.screens['files']
-                      and self.routes.screens['files'][-1][0] == 'transfers'):
+                if self.transfer_complete:
+                    completed_epoch = self.transfer_epoch
+
+                    def clear_completion():
+                        if (self.active_host and not self.transfer_busy
+                                and self.transfer_epoch == completed_epoch):
+                            self.dismiss_transfer_status()
+
+                    self.loop.call_later(5, clear_completion)
+                screens = self.routes.screens[self.native_host.state.destination]
+                if screens and screens[-1][0] == 'transfers':
                     # A transfer completion updates its own status. It does not
                     # take Documents away while a reader/editor is active.
                     self.show_transfers()
@@ -379,18 +399,22 @@ class MirrorUI(TransferReviewUI):
         # separately, so keep live progress below 100%.
         numerator, denominator = (done, total) if total > 0 else (files, total_files)
         self.transfer_percentage = min(99, max(0, 100 * numerator / denominator)) if denominator > 0 else None
-        self.transfer_message = f'{phase} · {files:,} file(s) completed'
+        phase = {'Discovering / checking files': 'Finding and comparing files…',
+                 'Checking / finishing sync': 'Finishing and checking the destination…',
+                 'Sync complete; verifying local copy': 'Verifying the local copy…',
+                 'Transferring': 'Copying files…'}.get(phase, phase)
+        self.transfer_message = f'{phase} · Files copied: {files:,}'
         if total_files > 0:
-            self.transfer_message += f' / {total_files:,} known'
+            self.transfer_message += f' of {total_files:,} found so far'
         if self.transfer_percentage is not None:
             self.transfer_message += f' · {self.transfer_percentage:.0f}% of known work'
         if values.get('attempt', 0) > 1 or values.get('retrying'):
             state = 'Retrying' if values.get('retrying') else 'Attempt'
             self.transfer_message += f' · {state} {values["attempt"]}/{values["max_attempts"]}'
         if values.get('active', 0):
-            self.transfer_message += f' · {values["active"]:,} transferring'
+            self.transfer_message += f' · Copying now: {values["active"]:,} files'
         if values.get('listed', 0) or values.get('checks', 0):
-            self.transfer_message += f' · {values.get("listed", 0):,} discovered · {values.get("checks", 0):,} checked'
+            self.transfer_message += f' · Files found: {values.get("listed", 0):,} · Files compared: {values.get("checks", 0):,}'
         if total > 0:
             self.transfer_message += f' · {done / 1_000_000:,.2f} / {total / 1_000_000:,.2f} MB (known so far)'
         elif done > 0:
@@ -404,7 +428,7 @@ class MirrorUI(TransferReviewUI):
             # changed percentage or a switch from discovery to a known total.
             return
         self._mirror_progress_widgets = widgets
-        self.transfer_notice.text = import_hint(self.transfer_message)
+        self.transfer_notice.text = import_hint(self.transfer_message.replace(' · ', '\n'))
         self.cloud_status.value = self.transfer_message
         origin = getattr(self, 'cloud_transfer_progress', None)
         for bar in (self.transfer_progress, origin):
@@ -431,7 +455,7 @@ class MirrorUI(TransferReviewUI):
                 self._transfer_cancel.set()
             if self.cloud_client is not None:
                 self.cloud_client.cancel()
-            self.transfer_message = 'Cancelling sync; completed destination changes remain.'
+            self.transfer_message = 'Stopping transfer… Files already copied, replaced or deleted will stay changed.'
             self.transfer_notice.text = import_hint(self.transfer_message)
 
 

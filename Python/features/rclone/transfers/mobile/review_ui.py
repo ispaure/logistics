@@ -97,7 +97,7 @@ class TransferReviewUI:
                 toga.Label('Push exclusions (one pattern per line)'), excludes, status,
                 toga.Button('Save settings', on_press=save, style=Pack(height=44)),
                 toga.Button('Cancel', on_press=self.show_transfers, style=Pack(height=44)))
-        self.show_view(box, destination='files', route='transfer-settings', title='Transfer settings')
+        self.show_view(box, route='transfer-settings', title='Transfer settings')
 
     def begin_transfer_review(self, key=None, *, push=False, remote=None, folder='', storage=None, local_folder=None, specific=False):
         if self.cloud_busy or getattr(self, 'transfer_busy', False) or getattr(self, '_review_starting', False):

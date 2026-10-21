@@ -6,8 +6,6 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
-import android.graphics.drawable.ColorDrawable;
-import android.graphics.drawable.InsetDrawable;
 import android.text.TextUtils;
 import android.util.SparseArray;
 import android.view.Gravity;
@@ -44,6 +42,7 @@ public final class FileListView extends ListView {
     private String rowKind = "File";
     private int textColor, mutedColor, surfaceColor, selectedTextColor, selectedColor, accentColor;
     private final Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint rowDivider = new Paint();
     private boolean outlined;
     private final Path groupClip = new Path();
     private final RectF groupBounds = new RectF();
@@ -57,6 +56,8 @@ public final class FileListView extends ListView {
         setChoiceMode(CHOICE_MODE_SINGLE);
         setHeaderDividersEnabled(false);
         setFooterDividersEnabled(false);
+        setDivider(null);
+        setDividerHeight(dp(1));
         setRecyclerListener(view -> scrub(view));
         setOnItemClickListener((parent, view, position, id) -> {
             selectRow(position);
@@ -86,20 +87,7 @@ public final class FileListView extends ListView {
         accentColor = accent;
         // Empty space below a short group belongs to the surrounding page.
         setBackgroundColor(android.graphics.Color.TRANSPARENT);
-        // Match the text column's first letter and end beyond the action target.
-        boolean rtl = getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
-        setDivider(new InsetDrawable(new ColorDrawable(border), dp(rtl ? 8 : 48), 0,
-                dp(rtl ? 48 : 8), 0) {
-            @Override public void draw(Canvas canvas) {
-                int last = getChildCount() - 1;
-                // ListView can draw a divider after its final item. The group
-                // outline supplies that edge, so keep dividers between rows only.
-                if (last >= 0 && getLastVisiblePosition() == titles.length - 1
-                        && getBounds().top >= getChildAt(last).getBottom()) return;
-                super.draw(canvas);
-            }
-        });
-        setDividerHeight(dp(1));
+        rowDivider.setColor(border);
         outlined = highContrast;
         outline.setColor(border);
         outline.setStrokeWidth(dp(1));
@@ -130,7 +118,18 @@ public final class FileListView extends ListView {
 
     @Override protected void dispatchDraw(Canvas canvas) {
         int saved = canvas.save();
-        if (clipGroup(canvas)) super.dispatchDraw(canvas);
+        if (clipGroup(canvas)) {
+            super.dispatchDraw(canvas);
+            for (int i = 0; i < getChildCount(); i++) {
+                // Dataset position, not viewport position: never underline the
+                // last item, including short, single-row and scrolled lists.
+                if (getFirstVisiblePosition() + i >= titles.length - 1) break;
+                int bottom = getChildAt(i).getBottom();
+                canvas.drawRect(getListPaddingLeft() + dp(8), bottom,
+                        getWidth() - getListPaddingRight() - dp(8),
+                        bottom + getDividerHeight(), rowDivider);
+            }
+        }
         canvas.restoreToCount(saved);
         if (outlined && getChildCount() > 0) {
             // Enclose short lists at their last row; long lists frame the viewport.

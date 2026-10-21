@@ -17,8 +17,7 @@ open-document slot is released.
 Android Back does the same from the main document screen, including fullscreen;
 open search, chapter lists and other secondary panels close first. Contents and
 appearance pages keep their usual Back step to the document. Unsaved text or
-metadata changes offer **Save and close**, **Discard and close**, or **Keep
-editing**; failed saves keep the edits open.
+metadata changes offer **Save**, **Quit without saving**, or **Cancel**; failed saves keep the edits open.
 Keeping the document open preserves whether you were previewing or editing it.
 
 Imported books retain saved reading progress. Folder/provider documents retain
@@ -42,11 +41,16 @@ navigation and a format-specific Actions menu. EPUB offers contents, bookmarks,
 text appearance, chapter search and read-aloud; comics offer page navigation,
 page layout, fit and neighboring-comic actions where supported. EPUB pages turn using Previous/Next or horizontal swipes, with no vertical
 scrolling. Its hamburger opens a nested chapter sidebar without a search field.
-EPUB keeps Previous/Next and chapter progress in a compact footer. Speech and
+Readers share a compact footer with small chevrons, a slim track, a round thumb
+and a progress badge. Drag and release to jump between comic/PDF pages or EPUB
+chapters. EPUB's badge also shows the percentage through the current chapter.
+The controls retain 48-point touch areas. Speech and
 Actions stay above the content. On iOS and Android, readers and editors share the native
 title bar: Close and the relevant browser are on the left, a centered document
-title is in the middle, and supported actions are on the right. Long names
-shorten in the middle. Android replaces its inline document/workspace headers
+title is in the middle, and supported actions are on the right. Titles use the
+available width; names shorten in the middle only when they do not fit. Comics,
+images and PDF canvases have no added outer margin. Comic page arrows, the slider
+and page count share a single bottom row. Android replaces its inline document/workspace headers
 with this single bar; leaving the document hides it again. Appearance and
 fullscreen are in Actions.
 
@@ -128,3 +132,8 @@ Open local, remote or LocalCrypt PDFs directly in a read-only session. Enter a
 page number and tap Go, or swipe up/down to turn pages. See the
 [mobile PDF guide](../../../Python/features/pdf/docs/user_mobile/user_mobile.md)
 for limits and private-session behavior.
+
+Opening an inline search or reader tool changes the document's **×** to a back
+arrow. Tap it to dismiss that tool; the document stays open. Metadata, appearance
+and other secondary screens use Back to return to the document. Unsaved-close
+choices appear in a native popup over the current screen.

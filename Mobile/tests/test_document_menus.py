@@ -19,7 +19,7 @@ class NativeDocumentMenuTests(TestCase):
     def test_apple_sections_keep_command_handlers_and_use_inline_group_separators(self):
         calls = []
         actions = [(title, lambda title=title: calls.append(title))
-                   for title in ('Read aloud…', 'Appearance…', 'All documents', 'Close document')]
+                   for title in ('Read aloud…', 'Appearance…', 'All documents', 'Delete document…')]
         native = SimpleNamespace()
         impl = type('AppleButton', (), {'__module__': 'toga_iOS.widgets.button'})()
         impl.native = native
@@ -36,7 +36,8 @@ class NativeDocumentMenuTests(TestCase):
         self.assertEqual([action.title for section in sections for action in section.children],
                          [title for title, _ in actions])
         sections[-1].children[0].handler(None)
-        self.assertEqual(calls, ['Close document'])
+        self.assertEqual(calls, ['Delete document…'])
+        self.assertEqual(sections[-1].children[0].attributes, 2)
         menu.dispose()
         self.assertIsNone(native.menu)
 
@@ -54,7 +55,8 @@ class NativeDocumentMenuTests(TestCase):
             'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
         }
         modules['android.widget'].PopupMenu.OnMenuItemClickListener = object
-        with patch.dict('sys.modules', modules):
+        with patch.dict('sys.modules', modules), \
+                patch('logisticsmobile.action_menu.android_menu_context', side_effect=lambda context: context):
             menu = DocumentNativeMenu(SimpleNamespace(_impl=impl), actions,
                 invoke=lambda callback: callback(), context=lambda: object(), fallback=Mock())
             menu.show()
@@ -88,6 +90,8 @@ class DocumentMenuTests(TestCase):
         app = self.app
         app.create_chosen_document('md')
         menu = app.editor_view.actions
+        for label in ('New document', 'Open from Files…', 'Import…', 'Close document'):
+            self.assertNotIn(label, self.labels(menu))
         for width, visible in ((390, False), (1024, True), (390, False)):
             with patch.object(app.adaptive, 'width', return_value=width):
                 app.adaptive.render()
@@ -122,7 +126,7 @@ class DocumentMenuTests(TestCase):
                 labels = self.labels(menu)
                 self.assertIn('Show in folder', labels, path.name)
                 self.assertLess(labels.index('Show in folder'), labels.index('All documents'))
-                self.assertLess(labels.index('All documents'), labels.index('Close document'))
+                self.assertNotIn('Close document', labels)
                 self.assertTrue(await show_in_folder(app, session))
                 self.assertEqual(app.folder_source, 'Local')
                 self.assertEqual(app.file_path, 'Projects')
@@ -176,8 +180,7 @@ class DocumentMenuTests(TestCase):
         box = app.body.children[0].content
         import toga
         self.assertGreater(sum(isinstance(child, toga.Divider) for child in box.children), 0)
-        close = next(child for child in box.children if getattr(child, 'text', '') == 'Close document')
-        session = app.editor_view.session.id
-        close.on_press()
-        self.assertNotIn(session, app.workspace.sessions)
+        rename = next(child for child in box.children if getattr(child, 'text', '') == 'Rename document…')
+        rename.on_press()
+        self.assertEqual(app.routes.screens[app.native_host.state.destination][-1][0], 'document-name')
         self.run_async(asyncio.sleep(0))

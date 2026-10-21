@@ -66,6 +66,7 @@ def mount_native_menu(app, menu, destination):
 
 def sync_reader_toolbar(app, view, destination=None):
     """Share UIKit's title bar rather than spending a second row on reading."""
+    app.refresh_reader_exit(view)
     if not app.routes.apple:
         if type(app._impl).__module__.startswith('toga_android.'):
             from .android_reader_chrome import sync
@@ -100,7 +101,8 @@ def sync_reader_toolbar(app, view, destination=None):
     detach(toolbar)
     for control in getattr(view, '_native_reader_hidden', ()):
         detach(control)
-    buttons = [] if getattr(view, '_reader_fullscreen', False) else list(controls())
+    from .reader_chrome import reader_buttons
+    buttons = [] if getattr(view, '_reader_fullscreen', False) else reader_buttons(app, view)
     state = (controller.ptr.value, tuple(id(button) for button in buttons))
     if getattr(app, '_reader_toolbar_state', None) != state:
         for button in buttons:
@@ -129,8 +131,8 @@ def sync_reader_toolbar(app, view, destination=None):
     title = getattr(view, '_native_reader_title', None)
     text = str(title() if callable(title) else title or controller.navigationItem.title or '').replace('\n', ' ')
     leading = 104 if getattr(view, '_workspace_menu_button', None) is not None or hasattr(view, '_workspace_frame') else 52
-    width = max(44, min(320, app.adaptive.content_width(destination, margin=0)
-                        - 2 * max(leading, 44 * len(buttons) + 8 * max(0, len(action_groups(buttons)) - 1)) - 24))
+    width = max(44, app.adaptive.content_width(destination, margin=0)
+                - 2 * max(leading, 44 * len(buttons) + 8 * max(0, len(action_groups(buttons)) - 1)) - 24)
     title_state = (controller.ptr.value, text, width, state)
     if getattr(app, '_reader_title_state', None) != title_state:
         from .ios_reader_chrome import reader_title
@@ -145,7 +147,7 @@ def sync_reader_toolbar(app, view, destination=None):
         close.app, close.window = app, app.main_window
         if not hasattr(close, '_native_reader_close_item'):
             close._native_reader_close_item, close._native_reader_close_group = bar_group([close])
-            close._native_reader_close_item.accessibilityLabel = close.accessible_name
+        close._native_reader_close_item.accessibilityLabel = close.accessible_name
         bar_control(close)
         frame = getattr(view, '_workspace_frame', None)
         menu = frame.menu if frame is not None else getattr(view, '_workspace_menu_button', None)
@@ -388,6 +390,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                     frame.finish_transition(transition)
                 self.last_layout = layout
             android = type(self.app._impl).__module__.startswith('toga_android.')
+            if view is not None:
+                self.app.refresh_reader_exit(view)
             if frame is not None:
                 frame.sync_native_header()
             elif view is not None and self.app.routes.apple:

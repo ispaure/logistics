@@ -519,11 +519,15 @@ class ProviderUI(FilesUI):
                 offset = content[1].anchors.get(target, 0) if isinstance(target, str) else target
             from .palette import themed_chapter
             content = (themed_chapter(content[0], self.preferences.values['reading_theme']), content[1])
+            def position_changed(value):
+                locations[book.spine[index]] = value
+                if hasattr(view, 'page_footer'):
+                    view.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
             view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
                 font_size=int(self.preferences.values['epub_font_size']),
                 margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
                 on_chapter=controller.open_provider_epub_chapter,
-                on_position=lambda value: locations.update({book.spine[index]: value}))
+                on_position=position_changed)
             from .font_scaling import bind
             epub_surface = getattr(view.provider_epub_view, 'webview', None)
             if epub_surface is not None:
@@ -594,6 +598,9 @@ class ProviderUI(FilesUI):
             self.watch_provider_epub_width()
             self.page_footer.sync(comic=reader.kind in {'.cbz', '.zip'}, count=len(reader.labels),
                                   index=index, right_to_left=getattr(reader, 'right_to_left', False))
+            if reader.book is not None:
+                panel = self.provider_epub_view
+                self.page_footer.chapter_progress(index, len(reader.labels), panel.offset, panel.chapter.length)
             self.previous_page.enabled = reader.book is not None or (reader.comic_navigation.can_previous(index) if hasattr(reader, 'comic_navigation') else index > 0)
             self.next_page.enabled = reader.book is not None or (reader.comic_navigation.next(index) is not None if hasattr(reader, 'comic_navigation') else index + 1 < len(reader.labels))
         except Exception as error:
@@ -819,26 +826,35 @@ class ProviderUI(FilesUI):
             else:
                 header = controls[0]
             view.previous_page, view.next_page = page_buttons(self.previous_private_page, self.next_private_page)
-            view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page)
+            view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page,
+                                          status=view.crypt_title if comic else None,
+                                          unit='chapter' if view.crypt_reader.book is not None else 'page')
             view.page_footer.sync(comic=view.crypt_reader.kind in {'.cbz', '.zip'},
                                   count=len(view.crypt_reader.labels), index=0,
                                   right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
+            if view.crypt_reader.book is not None:
+                panel = view.provider_epub_view
+                view.page_footer.chapter_progress(0, len(view.crypt_reader.labels), panel.offset, panel.chapter.length)
             footer = view.page_footer.widget
             if view.crypt_reader.book is not None:
                 view.crypt_title.style.update(flex=1, width=1, height=48, margin=0)
             view.reader_restore = (toga.Button('Show reading controls', on_press=self.toggle_private_reading_mode,
                                              style=Pack(height=48)) if view.crypt_reader.book is not None or view.crypt_reader.kind == '.pdf' else None)
             image = getattr(view.crypt_reader, 'image_document', False)
-            reader_controls = ([header, footer, view.crypt_title] if comic else
-                               [header] if image else [header, footer])
+            reader_controls = [header] if image else [header, footer]
             if view.crypt_reader.kind == '.pdf':
                 reader_controls.insert(1, view.pdf_tools.widget)
                 from .control_icons import apply_icon
-                view.pdf_tools.on_state_change = lambda: apply_icon(view.pdf_tools.button, 'find',
-                    'Hide pages and search' if view.pdf_tools.panel in view.pdf_tools.widget.children else 'Pages and search')
+                def tools_changed():
+                    apply_icon(view.pdf_tools.button, 'find',
+                        'Hide pages and search' if view.pdf_tools.panel in view.pdf_tools.widget.children else 'Pages and search')
+                    if hasattr(view, 'crypt_view'):
+                        self.app.refresh_reader_exit(view.crypt_view)
+                        self.app.adaptive.render()
+                view.pdf_tools.on_state_change = tools_changed
                 view.pdf_tools.refresh_control()
             view.reading_frame = ReadingFrame(view.crypt_content, reader_controls,
-                margin=0 if view.crypt_reader.book is not None else 16, restore=view.reader_restore,
+                margin=0, restore=view.reader_restore,
                 top_controls=2 if view.crypt_reader.kind == '.pdf' else 1)
             view.crypt_view = view.reading_frame.widget
             view.crypt_view._native_reader_toolbar = header
@@ -978,7 +994,9 @@ class ProviderUI(FilesUI):
 
 
     def show_provider_epub_find(self, *args, **kwargs):
-        return self.provider_book_controller().show_provider_epub_find(*args, **kwargs)
+        result = self.provider_book_controller().show_provider_epub_find(*args, **kwargs)
+        self.app.adaptive.render()
+        return result
 
     def toggle_provider_epub_tools(self, *args, **kwargs):
         return self.provider_book_controller().toggle_provider_epub_tools(*args, **kwargs)

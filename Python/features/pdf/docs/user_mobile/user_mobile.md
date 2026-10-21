@@ -11,11 +11,12 @@ ends of the document.
 
 On iOS the filename is centered in the native title bar. The magnifying-glass
 button opens **Pages and search**; **•••** holds the remaining PDF actions.
-Previous/Next and the page count stay in a compact footer. Fullscreen hides the
+Previous/Next, a slim page slider and a compact page-count badge share one
+footer row. Drag and release the round thumb to jump to a page. Fullscreen hides the
 title and controls. The PDF reader does not show EPUB chapter or speech actions.
 
 PDFs are read-only, limited to 32 MiB and 10,000 pages. Pages are fitted to the
-reading pane and rasterized on demand. The **Back arrow** closes the reader
+reading pane and rasterized on demand. **× (Close document)** closes the reader
 and returns to its originating folder or screen; Android Back does the same
 after dismissing open search/tools. Reopening resumes the page during the app
 session. Remembered provider positions clear when private readers are locked

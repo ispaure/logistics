@@ -32,6 +32,37 @@ async def prepare_android_back(app):
     raise AssertionError('IME did not settle before native screen Back')
 
 
+async def cancel_dirty_reader_back(app, owner):
+    """Exercise Back on the actual window-modal draft decision."""
+    from unittest.mock import patch
+    from logisticsmobile.document_dialogs import DocumentDialog
+    shown = []
+    original = DocumentDialog._show
+    def capture(dialog, window):
+        shown.append(dialog)
+        return original(dialog, window)
+    with patch.object(DocumentDialog, '_show', capture):
+        app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
+        for _ in range(100):
+            if shown and getattr(shown[0], 'native', None) is not None and shown[0].native.isShowing():
+                break
+            await asyncio.sleep(.05)
+        assert shown and shown[0].native.isShowing(), 'Dirty-reader Back did not present its native decision'
+        assert owner.session.id in app.workspace.sessions
+        # The dialog owns Back while modal; dispatching directly to the
+        # activity would bypass the window a user is actually interacting with.
+        native = shown[0].native
+        native.onBackPressed()
+        for _ in range(100):
+            if owner.session.id not in app._document_close_tasks:
+                break
+            await asyncio.sleep(.05)
+        assert not native.isShowing()
+        assert owner.session.id not in app._document_close_tasks
+        assert app.routes.screens['files'][-1][0] == 'private:' + owner.session.id
+        assert owner.session.id in app.workspace.sessions
+
+
 async def exercise_folder_pop_preview(app, *, scroll_position=120):
     """The parent must already contain rows while its refresh is blocked."""
     if get_os() is not OS.IOS:
@@ -190,24 +221,13 @@ async def exercise_browser_back(app):
         if get_os() is OS.IOS:
             app.native_host.adapter.navigation[
                 app.native_host.destinations.index('files')].popViewControllerAnimated(True)
+        elif filename.endswith('.md'):
+            await cancel_dirty_reader_back(app, owner)
         else:
             app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
         if filename.endswith('.md') and get_os() is OS.ANDROID:
             # Android Back requests a close. Dirty drafts require a decision;
             # cancelling that decision and selecting Files preserves the draft.
-            for _ in range(100):
-                if app.routes.screens['files'][-1][0] == 'private-close:' + owner.session.id:
-                    break
-                await asyncio.sleep(.05)
-            assert app.routes.screens['files'][-1][0] == 'private-close:' + owner.session.id
-            assert owner.session.id in app.workspace.sessions
-            await prepare_android_back(app)
-            app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
-            for _ in range(100):
-                if app.routes.screens['files'][-1][0] == 'private:' + owner.session.id:
-                    break
-                await asyncio.sleep(.05)
-            assert app.routes.screens['files'][-1][0] == 'private:' + owner.session.id
             await app.show_files()
         # didShow arrives after UIKit's transition and layout work. A fixed
         # delay races cold hosted iPads; wait for the retained viewport itself.

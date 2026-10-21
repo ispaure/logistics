@@ -30,7 +30,7 @@ def assert_preview_only_ui(test, owner):
         test.assertNotIn(forbidden, text)
     actions = {label for label, _ in owner.crypt_actions_menu.actions}
     if owner.crypt_reader.editable:
-        expected = {'Close document', 'All documents', 'Show in folder'}
+        expected = {'All documents', 'Show in folder'}
         if owner.crypt_reader.kind in {'.md', '.markdown'}:
             reading = getattr(owner, '_text_menu_state', (False, False))[1]
             expected.add('View source text' if reading else 'View Markdown')
@@ -40,7 +40,7 @@ def assert_preview_only_ui(test, owner):
             expected.add('Open beside another document')
         test.assertEqual(actions, expected)
     elif getattr(owner.crypt_reader, 'image_document', False):
-        test.assertEqual(actions, {'Fit image', 'Close document', 'All documents', 'Show in folder'})
+        test.assertEqual(actions, {'Fit image', 'All documents', 'Show in folder'})
 
 
 class RemoteClient:

@@ -21,7 +21,7 @@ class DocumentDeletionTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
-    def delete(self, owner, answer=True):
+    def delete(self, owner, answer='delete'):
         with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value=answer)) as dialog:
             result = self.app.loop.run_until_complete(self.app.request_delete_document(owner.session.id))
         return result, dialog
@@ -30,11 +30,9 @@ class DocumentDeletionTests(unittest.TestCase):
         app = self.app
         app.editor.value = 'Unsaved content'
         owner = app.editor_view
-        import toga
-        with patch('logisticsmobile.app.toga.ConfirmDialog', wraps=toga.ConfirmDialog) as dialog:
-            result, _ = self.delete(owner, False)
+        result, dialog = self.delete(owner, 'cancel')
         self.assertFalse(result)
-        self.assertIn('unsaved changes will be lost', dialog.call_args.args[1])
+        self.assertIn('unsaved changes will be lost', dialog.call_args.args[0].message)
         self.assertIn(owner.session.id, app.workspace.sessions)
         self.assertEqual(app.store.open(owner.document.id).text, 'Unsaved content')
         self.assertIn(owner.document.id, [item['resource'] for item in app.recent_documents.items])
@@ -104,7 +102,7 @@ class DocumentDeletionTests(unittest.TestCase):
         hosts = dict(app.scene_manager.owners.hosts)
         async def open_window(dialog):
             app.scene_manager.owners.hosts['another-window'] = object()
-            return True
+            return 'delete'
         try:
             with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=open_window)):
                 self.assertFalse(app.loop.run_until_complete(app.request_delete_document(owner.session.id)))
@@ -120,7 +118,7 @@ class DocumentDeletionTests(unittest.TestCase):
         owner = app.editor_view
         async def close_while_confirming(dialog):
             app.close_session(owner.session.id)
-            return True
+            return 'delete'
         with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=close_while_confirming)):
             self.assertFalse(app.loop.run_until_complete(app.request_delete_document(owner.session.id)))
         self.assertTrue(app.store.path(owner.document.id, '.json').exists())

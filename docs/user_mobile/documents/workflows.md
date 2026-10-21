@@ -13,7 +13,7 @@ beside a folder opens its Browse Local/LocalCrypt/Remote, Pull, Push and managem
 actions. The main Browse action is prominent; Delete local folder is separated
 and uses destructive styling. Pull/Push direction is shown for mapped copies.
 Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
-the entire device filesystem. Choose **New document** from Home or Document actions. Enter a document
+the entire device filesystem. Choose **New document** from Home. Enter a document
 name and select **Plain text (.txt)** or **Markdown (.md)**, then tap
 **Create document**. The selected extension is added when needed. Markdown also
 offers an optional title, inserted as the first heading. **Cancel** creates nothing.
@@ -71,20 +71,30 @@ To remove an app-stored text or Markdown document completely, open its three-dot
 in Markdown preview. Confirm the warning to remove its saved content, recovery
 copy and Recent entry, including any unsaved changes. Cancel keeps the document.
 Other app windows must be closed first.
-For an ordinary unsaved document, choose **Save and close**, **Keep draft and
-close**, **Discard changes and close**, or **Cancel**. Retained drafts remain on disk and recent entries can reopen them. Discard resets recovery to the current saved file without
-overwriting changes made outside the editor or recreating a deleted file. A
-failed save or conflict keeps the document open; use **Save a copy** to preserve
-both versions. Session-only drafts offer Save, Discard, and Cancel without durable
-draft retention. **Close saved documents on restart** is enabled
-by default in Settings. On restart, saved text and reader sessions leave All open;
+Closing an edited document opens a native popup with **Save**, **Quit without
+saving**, and **Cancel**. Save writes the changes and closes the document;
+Cancel keeps the exact screen and edits. Quit without saving discards edits
+without deleting the saved file. Discard resets recovery to the current saved
+file without overwriting external changes or recreating a deleted file.
+A failed save or conflict keeps the document open; use **Save a copy** to preserve
+both versions. The same choices apply to private documents and metadata edits.
+The document's three-dot menu omits New, Open from Files, Import and Close;
+use Home to create/open files and the document's **×** to close it.
+**Delete document…** is red and opens a native destructive confirmation with
+**Delete** and **Cancel**.
+**Close saved documents on restart** is enabled
+by default in Settings. On restart, saved text and reader sessions leave All open,
+except the last active document when **Restore last document** is enabled;
 stored files and reading progress remain available. Unsaved text,
 conflicts and unreadable recovery entries stay in the open list. Turn this setting
 off to retain all ordinary open items at the next launch. There is a maximum of
-32 open items. An empty workspace stays empty until you create or open a file. Their active selection resumes when **Restore last
-document** is enabled; turning it off also prevents automatic EPUB/comic reopening.
+32 open items. An empty workspace stays empty until you create or open a file.
+**Restore last document** opens and displays the last active ordinary text document,
+EPUB or comic at startup, with its saved reading position. Turning it off starts
+on Home and prevents automatic EPUB/comic reopening.
 You can still explicitly reopen those readers from Open with their saved
-progress. Private resource restoration remains excluded. Native cursor/selection and scroll offsets are recorded for text views.
+progress. Session-only documents, including documents loaded using session-only
+credentials, are excluded from automatic restoration. Native cursor/selection and scroll offsets are recorded for text views.
 Opening an item from the open/stored list also resumes its Edit or Preview mode.
 Back to the editor selects Edit for that document.
 If a restored item is unavailable, **Try again** retries it and **Remove from

@@ -484,6 +484,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
     def show_book_metadata(self, widget=None, **kwargs):
         if self.book_busy or self.book_reader is None:
             return
+        if getattr(self, 'book_metadata_fields', None) and hasattr(self, 'book_metadata_view'):
+            self.show_view(self.book_metadata_view, reader_route='metadata', title='Edit metadata')
+            return
         if self.book_record['kind'] == 'epub':
             from features.books.mobile.metadata import values
             self.book_metadata_initial, self.book_metadata_original = values(self.book_reader)

@@ -19,6 +19,11 @@ including Documents and configured library shortcuts. Empty-folder changes
 participate in the mobile review and its final recheck.
 Progress displays the latest reported totals, without queuing older updates
 ahead of browsing when native rendering is busy.
+Transfer details include **Back** and stay in the tab from which they were opened;
+leaving the screen keeps the transfer running. Progress counters appear on separate
+lines with labels for copying, discovery and comparison. Cloud previews requiring
+the connection show a dialog while transfers are running, including when opened
+from Recent or an open document. Local reader menus remain available.
 Mobile does not offer mounts. See the [mobile transfer guide](../../../../../docs/user_mobile/folder_hub/folder_hub.md#workspaces-and-local--localcrypt-sync)
 for connection scopes, encrypted storage, cancellation and credential persistence.
 

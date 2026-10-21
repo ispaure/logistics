@@ -78,10 +78,12 @@ reveal search; close it with **×** to clear the filter and hide the field.
 Search and **…** share the title row at the upper right. On iOS they sit in the
 native navigation bar; Android keeps them beside the folder name and subtitle.
 They remain available after returning up the folder stack.
-An entry's three dots show commands in place: an anchored popup on Android and
-a native action sheet/popover on iOS. Selecting Rename or Move opens its form;
+An entry's three dots show commands in place: a native dropdown anchored to the dots on both Android and iOS. Selecting Rename or Move opens its form;
 opening the menu itself keeps you in the listing. Changing folders, refreshing
 the listing or locking the browser dismisses old row commands.
+The three dots beside a folder in the main Workspaces list also open an anchored
+menu, with Browse, Pull, Push and Delete commands as applicable. Transfer review
+and deletion confirmation still open after choosing a command.
 The listing starts directly below this header. iOS adds
 an input row only while search is open, keeping the folder actions in the top bar.
 Local file search includes files and folders in every subfolder beneath the
@@ -204,9 +206,9 @@ parent heading (or folder icon) and meet the vertical centre of each immediate
 child row; the trunk ends at the last child. Child
 labels and folder icons start to the right of their parent label; there are no
 collapse controls. Only folder rows with folder
-icons and an actions menu open a folder. Its action page reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
+icons and an actions menu open a folder. Its anchored actions menu reflects the copies available. **Browse Local** opens readable files on this device, **Browse LocalCrypt** opens
 the encrypted device copy, and **Browse Remote** opens the online folder. Only
-available copies receive a browse button; each copy is offered once. Existing
+available copies receive a browse command; each copy is offered once. Existing
 mapped Local and LocalCrypt folders retain **Browse Remote** even while their
 credentials are locked; opening it prompts for the matching credentials and
 returns to the mapped online subfolder. Remote
@@ -263,6 +265,14 @@ messages, wrapped to fit the phone screen. It does not list remotes or offer fol
 also opens these details; the remote browser reflects the same progress. If a
 remote folder matches several local mappings, Pull opens a focused destination
 chooser for those matches.
+
+**Back** and Android's system Back return to the screen where you opened the
+details without stopping the transfer. Progress separates files copied, files
+found, files compared and megabytes copied onto separate lines. Totals can grow
+as more files are found; 100% means the transfer has finished verification.
+Local document menus remain available during transfers. Opening a cloud preview
+that needs the connection shows a **Transfer in progress** explanation; wait for
+completion or open a Local copy.
 
 On Workspaces itself, the transfer banner appears only on **rclone**, while a
 transfer is running or an interrupted/failed transfer needs attention. Successful

@@ -30,6 +30,26 @@ class ControlIconTests(unittest.TestCase):
         self.assertEqual(find.accessible_name, 'Find and replace')
         self.assertEqual(owner.save_button.control_icon, 'save')
 
+    def test_search_back_dismisses_only_search_and_restores_document_close(self):
+        self.app.new_document(extension='txt')
+        self.app.show_documents(edit=True)
+        owner = self.app.editor_view
+        owner.editor.value = 'Keep the draft'
+        button = owner.document_view._reader_close_button
+        owner.toggle_search()
+        self.assertEqual(button.control_icon, 'back')
+        self.assertEqual(button.accessible_name, 'Back to document')
+        button.on_press()
+        self.assertNotIn(owner.search.box, owner.document_view.children)
+        self.assertIn(owner.session.id, self.app.workspace.sessions)
+        self.assertEqual(owner.editor.value, 'Keep the draft')
+        self.assertEqual(button.control_icon, 'close')
+        self.assertFalse(getattr(self.app, '_document_close_tasks', {}))
+        owner.toggle_search()
+        self.assertTrue(self.app.routes.back())
+        self.assertNotIn(owner.search.box, owner.document_view.children)
+        self.assertIn(owner.session.id, self.app.workspace.sessions)
+
     def test_restyling_browser_back_preserves_disabled_state_and_history_handler(self):
         self.app.show_cloud(present=False)
         self.app.loop.run_until_complete(self.app.show_files())

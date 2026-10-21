@@ -1,7 +1,9 @@
 """Two editor owners survive switches, cold launch and close independently."""
+import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import AsyncMock, patch
 from logisticsmobile.app import LogisticsMobile
 
 
@@ -42,10 +44,12 @@ class WorkspaceUITests(unittest.TestCase):
             app.session_opener(a.session.id)()
             self.assertIs(app.editor_view, a)
             self.assertIs(app.body.children[0], app.preview_box)
-            app.routes.back()
-            # Back prompts for this owner's draft; Back again keeps editing.
-            self.assertEqual(app.routes.screens['home'][-1][0], 'close:' + a.session.id)
-            self.assertTrue(app.routes.back())
+            # The window-modal decision keeps the owner's preview mounted.
+            with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as dialog:
+                app.routes.back()
+                app.loop.run_until_complete(asyncio.gather(*app._document_close_tasks.values()))
+            dialog.assert_awaited_once()
+            self.assertFalse(app._document_close_tasks)
             self.assertIs(app.body.children[0], a.preview_box)
             self.assertEqual(a.session.view['markdown_mode'], 'preview')
             self.assertIn(a.session.id, app.workspace.sessions)

@@ -26,3 +26,4 @@ class MobileHostUI:
     settings_disclosure: Callable = None
     record_folder: Callable = lambda *args, **kwargs: None
     opening_status: Callable = lambda *args, **kwargs: nullcontext()
+    refresh_transfer_chrome: Callable = lambda: None

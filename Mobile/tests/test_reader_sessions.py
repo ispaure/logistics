@@ -217,13 +217,12 @@ class ReaderSessionTests(unittest.TestCase):
                     if not loop.is_closed():
                         loop.close()
 
-    def test_cold_workspace_keeps_reader_selection_until_documents_are_opened(self):
+    def test_cold_workspace_opens_last_epub_with_default_restart_settings(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             LogisticsMobile.storage_root = root
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            app.preferences.save(clear_unmodified_documents_on_restart='false')
             app.show_library()
             fixtures = root / 'fixtures'
             fixtures.mkdir()
@@ -236,8 +235,8 @@ class ReaderSessionTests(unittest.TestCase):
             app.checkpoint()
             restored = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
             self.assertEqual(restored.workspace.active, selected)
-            self.assertEqual(restored.pending_reader_restore, selected)
-            restored.native_host.root.current_tab = 2
+            self.assertEqual(restored.native_host.state.destination, 'documents')
+            self.assertIsNone(restored.pending_reader_restore)
             import asyncio
             async def wait_reader():
                 for _ in range(100):
@@ -245,6 +244,7 @@ class ReaderSessionTests(unittest.TestCase):
                     if getattr(owner, 'book_reader', None) is not None and not owner.book_busy:
                         break
                     await asyncio.sleep(.01)
+            restored.loop.run_until_complete(restored.startup_document_task)
             restored.loop.run_until_complete(wait_reader())
             self.assertIsNotNone(restored.readers.active.book_reader)
             self.assertEqual(restored.readers.active.book_record['position'], 1)

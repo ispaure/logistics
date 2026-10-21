@@ -22,7 +22,8 @@ class NativeReaderReturnTests(unittest.TestCase):
     def setUp(self):
         self.host = NativeNavigationHost(DESTINATION_ITEMS)
         self.app = SimpleNamespace(select_destination=Mock(return_value=True),
-            loop=Mock(), adaptive=SimpleNamespace(render=Mock()), visible_reader=Mock(return_value=None))
+            loop=Mock(), adaptive=SimpleNamespace(render=Mock()), visible_reader=Mock(return_value=None),
+            reader_tool_back=Mock(return_value=None))
         self.guard = Mock(return_value=True)
         self.routes = MobileRoutes(self.app, self.host, guard=self.guard, changed=Mock())
         self.navigation = [Navigation() for _ in self.host.destinations]

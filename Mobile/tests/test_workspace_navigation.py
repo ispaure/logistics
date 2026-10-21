@@ -70,7 +70,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         files.navigationItem.title = 'Workspaces'
         files.navigationItem.titleView = 'stale comic title'
         files.navigationItem.rightBarButtonItems = ['stale reader actions']
-        app = NS(routes=NS(apple=True), native_host=NS(
+        app = NS(refresh_reader_exit=Mock(), routes=NS(apple=True), native_host=NS(
             state=NS(destination='documents'), destinations=('documents', 'files'),
             adapter=NS(navigation=[NS(topViewController=reader), NS(topViewController=files)])),
             _reader_toolbar_controllers={101, 102}, _reader_toolbar_controller=reader,

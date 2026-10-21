@@ -641,9 +641,10 @@ def settings_sections(app):
             style=Pack(height=48))
         box.add(switch_row(app, 'Restore last document', app.restore_choice,
             'Resume the last active document when the app starts, including ordinary EPUB and comic readers. '
-            'Private documents are never restored.'))
+            'Session-only documents, including those loaded using session-only credentials, are never restored.'))
         box.add(switch_row(app, 'Close saved documents on restart', app.clear_documents_choice,
             'Closes documents with no pending changes in Open documents when the app restarts. '
+            'The last active document is kept when Restore last document is on. '
             'Stored documents, reading progress and unsaved drafts are kept.'))
         box.add(toga.Label('Preferences save automatically on this device.', style=Pack(font_size=12)))
         box.add(toga.Button('Reload preferences', on_press=app.reload_preferences, style=Pack(height=48)))

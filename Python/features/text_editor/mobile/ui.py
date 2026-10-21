@@ -94,6 +94,7 @@ class TextEditorView:
         box.add(self.status)
         box.add(self.conflict_actions)
         self.search = EditorSearch(self.editor, self.document_view)
+        self.search.box.children[0].children[1].on_press = self.toggle_search
         previous, next_match = self.search.box.children[1].children
         previous.style.flex = next_match.style.flex = 0
         apply_icon(previous, 'back', 'Previous match')
@@ -104,6 +105,8 @@ class TextEditorView:
         if self.session is not None and self.session.kind == 'markdown':
             self.edit_mode.value = 'Source'
         self.search.toggle()
+        self.app.refresh_reader_exit(self.document_view)
+        self.app.adaptive.render()
 
     def rename_document(self, widget=None, **kwargs):
         name = toga.TextInput(value=self.document.name, style=Pack(height=48))

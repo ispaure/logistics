@@ -15,19 +15,21 @@ def _bind_actions(interface, cell, row):
         cell.accessoryView = None
         return
     global _row_action_type
-    from rubicon.objc import ObjCClass, objc_property, SEL, CGRect
+    from rubicon.objc import ObjCClass, objc_property, SEL, CGRect, Block, objc_id, ns_from_py
     import weakref
     if _row_action_type is None:
         class FileRowAction(ObjCClass('UIButton')):
             owner = objc_property(object)
             row = objc_property(object)
+            menu_provider_block = objc_property(object)
 
             @objc_method
             def selectRow_(self, sender) -> None:
                 owner, row = self.owner(), self.row
                 if (owner is not None and owner.enabled and row is not None
                         and row.index < len(owner.data) and owner.data[row.index] is row):
-                    owner.on_primary_action(row=row)
+                    if getattr(owner, 'menu_provider', None) is None:
+                        owner.on_primary_action(row=row)
         _row_action_type = FileRowAction
     button = cell.accessoryView
     if button is None:
@@ -37,6 +39,32 @@ def _bind_actions(interface, cell, row):
         button.addTarget(button, action=SEL('selectRow:'), forControlEvents=1 << 6)
         cell.accessoryView = button
     button.owner, button.row = weakref.ref(interface), row
+    if getattr(interface, 'menu_provider', None) is not None:
+        # Resolve on every opening: reusable cells must never cache another
+        # row's commands or a previous credential generation.
+        def provide(completion):
+            completion = ObjCInstance(completion).copy()
+            complete = ObjCBlock(completion, None, objc_id)
+            owner = button.owner()
+            current = button.row
+            async def load():
+                if (owner is None or not owner.enabled or current is None or button.row is not current
+                        or current.index >= len(owner.data) or owner.data[current.index] is not current):
+                    complete(ns_from_py([]))
+                    return
+                try:
+                    children = await owner.menu_provider(current)
+                    complete(ns_from_py(children if button.row is current else []))
+                except Exception:
+                    complete(ns_from_py([]))
+                    raise
+            import toga
+            toga.App.app.loop.create_task(load())
+        button.menu_provider_block = Block(provide, None, objc_id)
+        deferred = ObjCClass('UIDeferredMenuElement').elementWithUncachedProvider(button.menu_provider_block)
+        button.menu = ObjCClass('UIMenu').menuWithTitle('', children=[deferred])
+        button.showsMenuAsPrimaryAction = True
+
     button.accessibilityLabel = interface._primary_action + ' ' + row.title
     button.setTitleColor(apple_color('accent'), forState=0)
     button.enabled = interface.enabled
@@ -47,7 +75,28 @@ def _clear_actions(cell):
     button = getattr(cell, 'accessoryView', None)
     if button is not None:
         button.row = None
+        button.menu = None
+        button.showsMenuAsPrimaryAction = False
+        button.menu_provider_block = None
         button.accessibilityLabel = ''
+
+
+def _bind_separator(cell, *, last):
+    """Own the between-row line without changing UIKit's text layout insets."""
+    from rubicon.objc import CGRect
+    content = cell.contentView
+    line = content.viewWithTag(7421)
+    if line is None:
+        line = UIView.alloc().init()
+        line.tag = 7421
+        line.setUserInteractionEnabled(False)
+        # Flexible width and top margin keep the line at the row's bottom.
+        line.autoresizingMask = 2 | 8
+        content.addSubview(line)
+    line.frame = CGRect((12, max(0, float(content.bounds.size.height) - 1)),
+                        (max(0, float(content.bounds.size.width) - 24), 1))
+    line.backgroundColor = apple_color('border')
+    line.setHidden(last)
 
 
 def _bind_file_cell(interface, cell, index):
@@ -68,6 +117,7 @@ def _bind_file_cell(interface, cell, index):
     # UIKit also uses the separator's leading inset to lay out cell content.
     # Keep it bounded for every row, including the last and single-row groups.
     cell.separatorInset = UIEdgeInsets(0, 56, 0, 12)
+    _bind_separator(cell, last=index == len(interface.data) - 1)
     cell.textLabel.textColor = apple_color('text')
     cell.detailTextLabel.textColor = apple_color('muted')
     _bind_actions(interface, cell, row)
@@ -165,7 +215,8 @@ class IOSFileList(DetailedList):
         self.native.keyboardDismissMode = 1
         from rubicon.objc import UIEdgeInsets
         self.native.backgroundColor = apple_color('transparent')
-        self.native.separatorColor = apple_color('border')
+        self.native.separatorColor = apple_color('transparent')
+        self.native.separatorStyle = 0  # App-owned lines only between rows.
         self.native.separatorInset = UIEdgeInsets(0, 56, 0, 12)
         self.primary_action_enabled = self.secondary_action_enabled = False
         self.add_constraints()

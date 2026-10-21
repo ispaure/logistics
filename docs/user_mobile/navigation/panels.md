@@ -6,7 +6,8 @@ Android windows at least 600 dp wide use a compact, icon-only destination rail.
 Home, Workspaces, Documents and Chat sit at the top; Settings sits at the bottom.
 The outline icons follow the desktop rail, with 48 dp touch targets and accessible
 destination names. Long-press an icon for its label. Narrower windows show labeled
-bottom navigation. High contrast / E Ink adds a black divider down the full
+bottom navigation. Android and iOS destination icons use the same artwork as
+desktop Logistics. High contrast / E Ink adds a black divider down the full
 content edge of the rail. Resizing preserves the selected destination.
 
 Home offers **Open file…**, **New document**, five recent files and **See all in
@@ -20,8 +21,9 @@ Documents uses separate rounded blocks for populated **All open**, **Recent** an
 documents** lists, with inset dividers between rows. Empty sections and unmatched
 searches show plain informational text outside the blocks. Home also keeps its
 empty Recent message outside the **See all in Documents** action block.
-Status text appears below each
-filename without extra boxes, and close buttons stay inside open-document rows.
+Status appears in one smaller grey line below each filename, such as
+**Open · Unsaved · Recovered**, using the system font. Other warnings remain in
+that summary. Close buttons stay inside open-document rows.
 High contrast adds one black outline per block while preserving the same shape
 and spacing as regular appearance.
 Source icons and filenames have space inside their row boundaries. Android
@@ -84,6 +86,7 @@ preserved. Custom exclusions never authorize local cleanup.
 Folder rows use one line with an icon/name and a navigation chevron. Tap a file to open it directly. File browser rows
 have no **•••** button. Opening a folder does not flash a selection
 checkmark. Sort and List/Tiles remain in the Sort controls.
+Dividers separate file-browser items; the last item has no divider below it.
 
 Push and Pull scan their comparison without changing destination files. Both ask
 for native **OK / Cancel** confirmation before writing. **Proceed without full
@@ -154,6 +157,11 @@ On iOS, hamburger controls open after you release inside the button, allowing a
 scroll that starts on the control to be cancelled by dragging away. Workspace
 menus use the native navigation bar's own touch target.
 
+Android overflow menus have slightly rounded corners. **High contrast / E Ink**
+adds a black outline around their white background. Folder headers center the
+current folder name above a smaller storage description and indicators, with
+48 dp parent-folder, search and action buttons beside it.
+
 ## Panel layout
 
 Home hides its redundant top navigation title while retaining its bottom tab.
@@ -219,6 +227,13 @@ Workspaces shows active transfer progress directly below its navigation title,
 above Credential. Transfers, Refresh and Add share appear on a single row;
 Add share opens the SMB / Mac share connection form. The transfer banner also
 shows completion and opens the existing transfer details screen.
+
+On iPhone and Android, open books, comics and documents show a compact transfer
+control in the top title bar instead of a banner beneath the document title.
+It shows the percentage of known work, or a transfer indicator while totals are
+unknown; tap it to open Transfer details. Fullscreen reading hides it with the
+other controls. Successful completion clears after five seconds; stopped
+transfers remain visible until dismissed from a main-screen banner.
 
 
 On Android, the app-name title bar is hidden so page content starts higher.

@@ -167,6 +167,10 @@ async def opening_ready(app):
 
 
 async def reopen_file(app, source):
+    if source.get('type') == 'remote' and getattr(app, 'cloud_busy', False):
+        from features.rclone.mobile.cloud_ui import explain_remote_busy
+        await explain_remote_busy(app)
+        return False
     with opening_status(app, source):
         if not await opening_ready(app):
             return False

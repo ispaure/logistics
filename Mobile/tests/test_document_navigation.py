@@ -32,13 +32,10 @@ class DocumentNavigationTests(TestCase):
         path.write_bytes(PDF)
         self.paths.append(path)
 
-    def press(self, label):
-        def widgets(view):
-            yield view
-            for child in view.children:
-                yield from widgets(child)
-        button = next(view for view in widgets(self.app.body) if getattr(view, 'text', None) == label)
-        return button.on_press()
+    def answer_close(self, choice):
+        task = next(iter(self.app._document_close_tasks.values()))
+        self.app.main_window._impl.dialog_responses.setdefault('QuestionDialog', []).append(choice)
+        return task
 
     def test_local_browse_and_text_open_do_not_wait_for_initial_cloud_restore(self):
         app = self.app
@@ -149,7 +146,7 @@ class DocumentNavigationTests(TestCase):
                 self.assertTrue(app.routes.back())
                 self.assertIn(owner.session.id, app.workspace.sessions)
                 self.assertEqual(owner.document.text, '# Unsaved mode changes')
-                self.press('Save and close')
+                app.loop.run_until_complete(self.answer_close('save'))
                 self.assertIs(app.body, origin)
                 self.assertEqual(owner.document.text, '# Unsaved mode changes')
 
@@ -167,7 +164,7 @@ class DocumentNavigationTests(TestCase):
         self.assertFalse(app.routes.screens['documents'])
         self.assertTrue(app.routes.back())
         self.assertIn(owner.session.id, app.workspace.sessions)
-        self.press('Save and close')
+        app.loop.run_until_complete(self.answer_close('save'))
         self.assertIs(app.body, origin)
         self.assertEqual(owner.document.text, '# Unsaved changes')
 
@@ -191,7 +188,7 @@ class DocumentNavigationTests(TestCase):
         self.assertTrue(app.routes.back())
         self.assertIsNot(app.body, origin)
         self.assertIn(session, app.workspace.sessions)
-        self.press('Keep editing')
+        app.loop.run_until_complete(self.answer_close('cancel'))
         app.show_documents_hub()
         app.session_opener(session)()
         self.assertEqual(owner.document_view._workspace_frame.destination, 'documents')
@@ -215,7 +212,7 @@ class DocumentNavigationTests(TestCase):
             self.assertEqual(browser.folder, 'Fixtures')
             self.assertEqual(owner.crypt_text.value, 'Provider draft retained')
             self.assertIn(owner.session.id, app.workspace.sessions)
-            self.press('Discard and close')
+            await self.answer_close('discard')
             self.assertIs(app.body, panel)
             self.assertNotIn(owner.session.id, app.workspace.sessions)
             self.assertTrue(app.routes.back())

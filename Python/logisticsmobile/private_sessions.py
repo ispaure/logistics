@@ -71,6 +71,9 @@ class PrivateController(ReaderHost, ProviderUI):
         suffix = ':metadata' if view is getattr(self, 'crypt_metadata_view', None) else ''
         kwargs.update(destination=self.__dict__.get('presentation_destination', 'documents'), route=kwargs.get('route') or 'private:' + self.session.id + suffix,
                       title=kwargs.get('title') or document_title or 'Private document')
+        epub = getattr(self, 'provider_epub_view', None)
+        if epub is not None:
+            epub.on_tools_changed = self.app.adaptive.render
         presented = self.app.show_view(view, **kwargs)
         if origin is not None:
             self._open_presented = bool(presented)
@@ -279,6 +282,9 @@ class PrivateSessions:
         independent = (self.app.cloud_busy and getattr(copies, 'offline', False)
             and local_read_available(self.app, private=not ordinary_local_copies(copies)))
         if self.app.cloud_busy and not independent:
+            if getattr(copies, 'remote_storage', False):
+                from features.rclone.mobile.cloud_ui import explain_remote_busy
+                await explain_remote_busy(self.app)
             return False
         identity = self.identity(copies, key)
         existing = next((owner for owner in self.controllers.values()
@@ -405,6 +411,9 @@ class PrivateSessions:
         from .files_ui import ordinary_local_copies
         local = ordinary_local_copies(getattr(owner, '_crypt_reader_store', None))
         if not self.available(key) or (self.app.cloud_busy and not (local or ((getattr(self.app, 'transfer_busy', False) or getattr(self.app, 'remote_read_busy', False)) and self.offline_owner(owner)))):
+            if self.available(key) and getattr(getattr(owner, '_crypt_reader_store', None), 'remote_storage', False):
+                from features.rclone.mobile.cloud_ui import explain_remote_busy
+                self.app.loop.create_task(explain_remote_busy(self.app))
             return False
         owner.presentation_destination = destination
         self.bind(owner)

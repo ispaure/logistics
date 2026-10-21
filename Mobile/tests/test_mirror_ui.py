@@ -402,7 +402,7 @@ class MirrorUITests(unittest.TestCase):
         # Both small counts round to the same MB text; percentage must advance.
         self.assertIn('0.00 / 0.00 MB', app.transfer_message)
         self.assertEqual(app.refresh_transfer_status.call_count, 2)
-        self.assertEqual(app.cloud_status.value, ' '.join(app.transfer_notice.text.splitlines()))
+        self.assertEqual(app.cloud_status.value.replace(' · ', ' '), ' '.join(app.transfer_notice.text.splitlines()))
         self.assertIn('\n', app.transfer_notice.text)
         app.transfer_progress = replacement = SimpleNamespace(max=100, value=0)
         MirrorUI.publish_mirror_progress(app, 1, dict(values, done=50))
@@ -510,7 +510,7 @@ class MirrorUITests(unittest.TestCase):
                     self.assertTrue(app.transfer_busy)
                     app.show_documents(destination='documents')
                     owner = app.editor_view
-                    self.assertIn(owner.document_view.transfer_banner, owner.document_view.children)
+                    self.assertNotIn(owner.document_view.transfer_banner, owner.document_view.children)
                     app.editor.value = 'Draft during pull'
                     self.assertTrue(app.checkpoint())
                     release.set()
@@ -522,7 +522,7 @@ class MirrorUITests(unittest.TestCase):
                     job = next(iter(app.mirror_store().jobs.values()))
                     self.assertEqual((app.mirror_store().target(job) / 'note.txt').read_bytes(), b'first')
                     self.assertEqual(client.data['folder/note.txt'], b'first')
-                    self.assertIn(owner.document_view.transfer_banner, owner.document_view.children)
+                    self.assertNotIn(owner.document_view.transfer_banner, owner.document_view.children)
                     app.dismiss_transfer_status()
                     self.assertNotIn(owner.document_view.transfer_banner, owner.document_view.children)
                     self.assertEqual(app.editor.value, 'Draft during pull')

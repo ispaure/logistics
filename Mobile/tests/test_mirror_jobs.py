@@ -537,7 +537,7 @@ class MirrorProgressDisplayTests(unittest.TestCase):
             MirrorUI.publish_mirror_progress(app, 1, discovering)
         bar.start.assert_not_called()
         origin.start.assert_not_called()
-        self.assertIn('24 discovered', app.transfer_message)
+        self.assertIn('Files found: 24', app.transfer_message)
         live = dict(phase='Transferring', files=2, total_files=4, done=12_500_000, total=25_000_000, active=1)
         for _ in range(3):
             MirrorUI.publish_mirror_progress(app, 1, live)
@@ -545,8 +545,8 @@ class MirrorProgressDisplayTests(unittest.TestCase):
         origin.stop.assert_called_once()
         self.assertEqual(bar.value, 50)
         self.assertIn('50% of known work', app.transfer_message)
-        self.assertIn('2 file(s) completed / 4 known', app.transfer_message)
-        self.assertIn('1 transferring', app.transfer_message)
+        self.assertIn('Files copied: 2 of 4 found so far', app.transfer_message)
+        self.assertIn('Copying now: 1 files', app.transfer_message)
         self.assertIn('12.50 / 25.00 MB (known so far)', app.transfer_message)
         MirrorUI.publish_mirror_progress(app, 1, dict(live, done=6_250_000))
         self.assertEqual(bar.value, 25)  # Byte progress takes precedence over files.
