@@ -11,7 +11,7 @@ from features.pdf.mobile.copies import PDFCopies
 from features.text_editor.resources import LocalTextCopies
 from features.rclone.mobile.session_privacy import ResumePassword
 from logisticsmobile.app import LogisticsMobile
-from .fixtures import make_books, capture_window
+from .fixtures import make_books, capture_window, png_page
 
 BUNDLE = 'io.github.ispaure.logisticsreaderresumeqa'
 PASSWORD = 'synthetic-resume-password'
@@ -96,6 +96,11 @@ class ReaderResumeProbe(LogisticsMobile):
                 reveal()
                 self.wake_count += 1
             privacy.conceal, privacy.reveal = paused, resumed
+            # The old sampler overflowed Android's int for a one-pixel target.
+            from features.comics.mobile.composite import compose_spread
+            tiny = compose_spread([png_page()])
+            assert tiny._impl.native.getWidth() == tiny._impl.native.getHeight() == 1
+            self.result['one_pixel_native_decode'] = True
             fixtures = self.private_root / 'Fixtures'
             fixtures.mkdir()
             epub, comic = make_books(fixtures)

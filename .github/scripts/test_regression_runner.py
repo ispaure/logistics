@@ -58,3 +58,34 @@ class NestedRegressionRunnerTests(unittest.TestCase):
                                     capture_output=True, text=True, timeout=15)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('No tests discovered', result.stderr)
+
+    def test_isolated_file_does_not_rediscover_same_named_child_package(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            child = root / 'child'
+            child.mkdir()
+            (child / '__init__.py').write_text('')
+            for folder in (root, child):
+                (folder / 'test_duplicate.py').write_text(
+                    'import unittest\nclass Test(unittest.TestCase):\n'
+                    '    def test_value(self): self.assertTrue(True)\n')
+            result = subprocess.run([sys.executable, str(RUNNER), temporary, '--isolate-modules'],
+                                    capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stderr.count('Ran 1 test in'), 2, result.stderr)
+            self.assertNotIn('Ran 2 tests', result.stderr)
+
+    def test_nested_package_retains_relative_fixture_imports(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            child = root / 'child'
+            child.mkdir()
+            (child / '__init__.py').write_text('')
+            (child / 'helper.py').write_text('VALUE = 42\n')
+            (child / 'test_relative.py').write_text(
+                'import unittest\nfrom .helper import VALUE\nclass Test(unittest.TestCase):\n'
+                '    def test_value(self): self.assertEqual(VALUE, 42)\n')
+            result = subprocess.run([sys.executable, str(RUNNER), temporary, '--isolate-modules'],
+                                    capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Ran 1 test in', result.stderr)

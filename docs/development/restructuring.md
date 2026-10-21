@@ -317,3 +317,57 @@ All changes were committed locally in reviewable steps. No push or deployment wa
 performed. Existing environments, generated build directories and the separate
 commonUtils checkout were preserved; the temporary lock-verification environment
 was disposable.
+
+
+## Review of the 28 most recent changes — October 21, 2026
+
+The review covers the 28 commits ending with the reader sleep fix, in chronological
+order. Three were already published; 25 were local. Each change was checked against
+its diff, current owner and relevant regressions. The rows identify subjects rather
+than hashes because the requested eight-hour timestamp correction changes local
+commit IDs. Published commits and the commonUtils revision are preserved.
+
+| # | Change | Review result |
+| --- | --- | --- |
+| 1 | Mobile reader controls, navigation and document decisions | Fixed cancellation leaving a document's close guard set. Regressions cover retry safety; menu, Back, progress and startup checks retained. |
+| 2 | Automatic Android folder-action widths | Numeric-width fallback remains valid for fresh drawers and added/removed actions. |
+| 3 | Await native modal decisions and reader readiness | Checks await their decision tasks and retained-reader operations; these scenarios deliberately mock dialog decisions rather than claim native button interaction. |
+| 4 | Generated/private-file exclusions | Reviewed Git and source-release filters; signing material, runtime output and environments remain excluded. |
+| 5 | Mobile and documentation CI coverage | Reviewed dependency/source triggers and workflow scope; documentation remains independently checkable. |
+| 6 | Contributor setup and environment diagnostics | Fixed doctor aborting on an unlaunchable or timed-out interpreter; it now reports both environments and continues diagnostics. |
+| 7 | Nested isolated test discovery | Fixed unittest recursively rediscovering same-named child-package tests within a supposedly isolated process. Child runs now load exactly one file while retaining package-relative fixture imports. |
+| 8 | Import architecture checks | Reviewed relative and lazy literal references, portable rules and external-link exclusion; boundary regressions pass. |
+| 9 | Source-owner/test map | Added missing comic rendering, reader recovery, privacy and document-dialog groups to focused owner selection. |
+| 10 | Desktop LM attachment controller | Fixed the 64 KiB check omitting inserted separators; UTF-8 boundary tests verify rejection leaves the draft untouched. |
+| 11 | Toolchain drift check | Compared native/host manifests, lock inputs and shared desktop/CI versions; no drift. |
+| 12 | Owned SMB form/workflow | Reviewed lazy controls, compatibility descriptors, secret consumption and busy-state cleanup; connection regressions retained. |
+| 13 | Application shutdown/resource ownership | Extraction matches original method ASTs; active-host, veto, speech and disposal ordering preserved. |
+| 14 | Provider reader chrome assembly | Extraction differs only by the required local private-label import; reader/PDF/editor contracts retained. |
+| 15 | Workspace selection policy | Reviewed pinned-document swapping, unavailable-session retirement and toolkit-free candidate selection. |
+| 16 | Feature dependency graph | Reviewed ordering, missing/circular dependencies, duplicate identities and registry delegation. |
+| 17 | Desktop Folder Hub controller | Reviewed generation snapshots, cancellation checks and private-folder contribution filtering. |
+| 18 | Shared Python/Go bridge contract | Python envelope validation still frees native responses on errors; action fixtures and the full Go suite pass. |
+| 19 | Presentation/connection service ports | Compared callback argument shapes with injected implementations and feature consumers; optional arguments preserved. |
+| 20 | Compatibility inventory | Canonical module targets remain present, including shared-library forwarding; no automatic compatibility removal. |
+| 21 | Indexed source hygiene | Reports only paths/categories and scans indexed blobs; ignored outputs and recognizable secret patterns are checked. |
+| 22 | Offline-copy download workflow | Structural comparison found no behavior change in the four extracted workflow methods; import/export regressions retained. |
+| 23 | Credential selection/unlock/restore workflow | Structural comparison found no behavior change in the 19 extracted workflow methods; bounded ZIP access and ownership remain intact. |
+| 24 | Contributor documentation/migration boundaries | Reviewed current commands, worked contribution, documentation ownership and explicitly deferred migrations. |
+| 25 | Custom interpreter identity | Symlink spelling is preserved so selected virtual environments retain their installed packages. |
+| 26 | Optional presentation arguments/bridge docs | Reviewed annotations against real icon/preview callbacks and envelope decoding. |
+| 27 | Host and bridge verification record | Fresh review runs distinguish host tests, tooling and native evidence instead of treating old reports as new certification. |
+| 28 | Sleep/wake reader recovery | Visible-owner, route, lock and stale-token guards reviewed. Fixed the previously recorded Android sampler overflow for one-pixel draw targets; native probe now exercises that case explicitly. |
+
+Each behavioral correction first failed a targeted regression, then passed after
+the fix. The complete mobile rerun and desktop suite, focused LM/doctor/dialog/
+rendering tests, release/runner tests, Go bridge suite, lint, architecture,
+dependency and documentation checks verify this follow-up. The emulator's
+[review acceptance summary](mobile-evidence/2026-10-21-reader-review-android.json)
+records exact tested source hashes and seven sleep/trim/wake cases plus one-pixel
+native decoding. No physical Boox or iOS interaction is claimed by this review.
+
+Native output remains in ignored `Mobile/logs/reader-resume/review`; the disposable
+QA package is removed after evidence capture. This follow-up does not change
+commonUtils. Commit timestamp rewriting is limited to commits absent from refreshed
+remote references; it changes author/committer times and IDs, preserving file trees,
+messages, identities, time-zone offsets and parent order. No push is performed.

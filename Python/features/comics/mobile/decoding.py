@@ -5,7 +5,10 @@ from math import ceil
 def sample_size(source, target):
     """Largest power of two that keeps both decoded dimensions at draw resolution."""
     factor = 1
-    while all(ceil(value / (factor * 2)) >= needed for value, needed in zip(source, target)):
+    # Ceil never drops below one before floating-point underflow. A 1px
+    # target must stop at a source-sized factor, not overflow the native int.
+    while (factor * 2 <= max(source)
+           and all(ceil(value / (factor * 2)) >= needed for value, needed in zip(source, target))):
         factor *= 2
     return factor
 

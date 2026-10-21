@@ -27,12 +27,12 @@ def doctor(root, interpreter):
         code = ('import importlib.util,json,sys; print(json.dumps(dict('
                 'python=sys.version.split()[0], missing=[p for p in '
                 + repr(packages) + ' if importlib.util.find_spec(p) is None])))')
-        result = subprocess.run([str(python), '-c', code], cwd=root,
-                                capture_output=True, text=True, timeout=30,
-                                env={k: v for k, v in os.environ.items() if k != 'PYTHONPATH'})
         try:
+            result = subprocess.run([str(python), '-c', code], cwd=root,
+                                    capture_output=True, text=True, timeout=30,
+                                    env={k: v for k, v in os.environ.items() if k != 'PYTHONPATH'})
             info = json.loads(result.stdout) if result.returncode == 0 else None
-        except ValueError:
+        except (OSError, subprocess.TimeoutExpired, ValueError):
             info = None
         ready = info is not None and not info['missing']
         print(f'{"OK" if ready else "MISSING"} {name}: {info if info else "interpreter check failed"}')

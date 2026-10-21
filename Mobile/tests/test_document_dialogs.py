@@ -57,3 +57,19 @@ class DocumentDialogTests(TestCase):
                 self.assertEqual(await result, choice)
         for choice in ('save', 'discard', 'cancel'):
             asyncio.run(exercise(choice))
+
+
+class DocumentCloseLifetimeTests(TestCase):
+    def test_cancelled_dialog_releases_close_guard_so_document_can_retry(self):
+        from logisticsmobile.reader_lifecycle import ReaderLifecycle
+        from unittest.mock import AsyncMock
+        async def exercise():
+            app = NS(active_host=True, workspace=NS(sessions={'doc': object()}),
+                     main_window=NS(dialog=AsyncMock(side_effect=asyncio.CancelledError)),
+                     loop=asyncio.get_running_loop(), _reader_closing={'doc'})
+            ReaderLifecycle.document_close_dialog(app, 'doc', 'Draft', Mock(), Mock())
+            with self.assertRaises(asyncio.CancelledError):
+                await app._document_close_tasks['doc']
+            self.assertFalse(app._document_close_tasks)
+            self.assertNotIn('doc', app._reader_closing)
+        asyncio.run(exercise())

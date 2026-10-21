@@ -73,7 +73,8 @@
         ],
         "mobile": [
           "test_comic_split.py",
-          "test_reader_formats.py"
+          "test_reader_formats.py",
+          "test_reader_parity.py"
         ]
       },
       "mobile_manifest": "Python/features/comics/mobile_sources.json"
@@ -351,7 +352,10 @@
         "mobile": [
           "test_packaged_startup.py",
           "test_reader_lifecycle.py",
-          "test_workspace_navigation.py"
+          "test_workspace_navigation.py",
+          "test_document_dialogs.py",
+          "test_reader_sessions.py",
+          "test_screen_privacy.py"
         ],
         "desktop": [
           "test_workspace_policy.py"

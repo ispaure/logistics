@@ -235,10 +235,10 @@ class ReaderLifecycle:
                     result = (save if choice == 'save' else discard)()
                     if inspect.isawaitable(result):
                         await result
-                # Cancel and failed saves keep the exact screen and edits.
+            finally:
+                # Cancellation or a failed dialog/save must also allow retrying.
                 if key in self.workspace.sessions:
                     self.__dict__.setdefault('_reader_closing', set()).discard(key)
-            finally:
                 pending.pop(key, None)
         pending[key] = self.loop.create_task(decide())
         return True

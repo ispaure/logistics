@@ -34,9 +34,10 @@ class AttachmentController:
     def append_attachment(self, text):
         page = self.page
         draft = page.composer.toPlainText()
-        if len((draft + text).encode('utf-8')) > 65536:
+        combined = draft + ('\n\n' if draft else '') + text
+        if len(combined.encode('utf-8')) > 65536:
             raise ValueError('Attached context and draft are limited to 64 KiB. Attach a smaller selection or let the model read relevant lines.')
-        page.composer.setPlainText(draft + ('\n\n' if draft else '') + text)
+        page.composer.setPlainText(combined)
         page.composer.moveCursor(qt.QTextCursor.MoveOperation.End)
 
     def attach_files(self):

@@ -20,7 +20,7 @@ def run_isolated(directory, pattern, interval):
     for path in modules:
         print(f'Running isolated test file: {path.relative_to(directory)}', flush=True)
         command = [sys.executable, str(Path(__file__).resolve()), str(path.parent),
-                   '--pattern', path.name, '--traceback-after', str(interval)]
+                   '--pattern', path.name, '--single-file', '--traceback-after', str(interval)]
         try:
             code = subprocess.run(command, timeout=300).returncode
         except subprocess.TimeoutExpired:
@@ -48,6 +48,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
     parser.add_argument('--pattern', default='test*.py', help='unittest discovery filename pattern')
+    parser.add_argument('--single-file', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--isolate-modules', action='store_true',
                         help='Run each matching test file in a fresh process, including nested directories')
     parser.add_argument('--traceback-after', type=float, default=60,
@@ -88,7 +89,19 @@ def main():
         directory_cache.database = Path(cache_directory.name) / 'index.sqlite3'
         directory_cache._legacy_database = None
     try:
-        suite = unittest.defaultTestLoader.discover(str(args.directory), pattern=args.pattern)
+        if args.single_file:
+            # Discovery recurses into packages, so it can run another same-named
+            # nested module in this process before its own isolated invocation.
+            module = Path(args.pattern).stem
+            package_root = args.directory.resolve()
+            while (package_root / '__init__.py').is_file():
+                module = package_root.name + '.' + module
+                package_root = package_root.parent
+            # Preserve a nested test package's relative fixture imports.
+            sys.path.insert(0, str(package_root))
+            suite = unittest.defaultTestLoader.loadTestsFromName(module)
+        else:
+            suite = unittest.defaultTestLoader.discover(str(args.directory), pattern=args.pattern)
         if suite.countTestCases() == 0:
             print('No tests discovered.', file=sys.stderr)
             return 1

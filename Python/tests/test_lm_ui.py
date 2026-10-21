@@ -224,6 +224,16 @@ class LMUITests(QtTestCase):
         self.assertNotIn('tools', self.server.requests[-1])
         self.assertEqual(self.page.data['messages'][-1]['status'], 'failed')
 
+    def test_attachment_limit_counts_separator_and_utf8_bytes_before_publication(self):
+        self.page.composer.setPlainText('x' * 65532)
+        self.page.append_attachment('é')
+        self.assertEqual(len(self.page.composer.toPlainText().encode('utf-8')), 65536)
+        draft = 'x' * 65533
+        self.page.composer.setPlainText(draft)
+        with self.assertRaisesRegex(ValueError, '64 KiB'):
+            self.page.append_attachment('é')
+        self.assertEqual(self.page.composer.toPlainText(), draft)
+
     def test_code_attachments_and_project_choice_survive_reopen(self):
         self.configure_code()
         self.page.attach_selection()

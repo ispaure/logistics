@@ -387,6 +387,12 @@ class CompositeRenderingTests(unittest.TestCase):
         self.assertEqual(sample_size((8000, 12000), (1500, 3000)), 4)
         self.assertEqual(sample_size((80, 120), (100, 150)), 1)
 
+    def test_single_pixel_target_keeps_android_sampling_factor_bounded(self):
+        from features.comics.mobile.decoding import sample_size
+        for source, expected in (((1, 1), 1), ((32, 48), 32), ((1, 8192), 8192)):
+            with self.subTest(source=source):
+                self.assertEqual(sample_size(source, (1, 1)), expected)
+
     def test_native_composite_preserves_manga_order_gutter_and_alpha(self):
         from features.comics.mobile.composite import compose_spread
         from Mobile.native_tests.tests.logisticsmobile.reader_parity_probe import (

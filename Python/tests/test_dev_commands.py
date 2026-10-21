@@ -98,3 +98,23 @@ class SetupCommandTests(unittest.TestCase):
             command = run.call_args.args[0]
             self.assertEqual(command[1:3], ['pip', 'install'])
             self.assertIn('--require-hashes', command)
+
+
+class DoctorCommandTests(unittest.TestCase):
+    def test_broken_interpreters_report_failure_without_aborting_other_checks(self):
+        import io
+        import subprocess
+        from contextlib import redirect_stdout
+        from Scripts import development
+        for error in (OSError('not executable'), subprocess.TimeoutExpired('python', 30)):
+            with self.subTest(error=type(error).__name__), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                python = root / 'python'
+                python.touch()
+                output = io.StringIO()
+                with patch.object(development, 'find_uv', return_value='/tools/uv'), \
+                        patch.object(development.subprocess, 'run', side_effect=error), redirect_stdout(output):
+                    self.assertEqual(development.doctor(root, lambda _: python), 1)
+                self.assertIn('MISSING desktop', output.getvalue())
+                self.assertIn('MISSING mobile', output.getvalue())
+                self.assertIn('native tool: git', output.getvalue())
