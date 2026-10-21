@@ -58,4 +58,30 @@ class DeveloperCommandTests(unittest.TestCase):
             self.assertEqual(dev.main(['lint']), 0)
             command = run.call_args.args[0]
             self.assertEqual(command[1:5], ['-m', 'ruff', 'check', '--config'])
-            self.assertEqual(command[-4:], ['dev.py', 'Python', 'Mobile', '.github/scripts'])
+            self.assertEqual(command[-5:], ['dev.py', 'Python', 'Mobile', 'Scripts', '.github/scripts'])
+
+
+class SetupCommandTests(unittest.TestCase):
+    def test_setup_dry_run_never_installs(self):
+        from Scripts import development
+        with patch.object(development, 'find_uv', return_value='/tools/uv'), patch.object(development.subprocess, 'run') as run:
+            for suite in ('desktop', 'mobile'):
+                self.assertEqual(dev.main(['setup', suite, '--dry-run']), 0)
+            run.assert_not_called()
+
+    def test_mobile_setup_stops_when_environment_creation_fails(self):
+        from Scripts import development
+        with tempfile.TemporaryDirectory() as directory, patch.object(development, 'find_uv', return_value='/tools/uv'), patch.object(development.subprocess, 'run') as run:
+            run.return_value.returncode = 4
+            root = Path(directory)
+            self.assertEqual(development.setup(root, 'mobile', lambda _: root / 'missing/python'), 4)
+            self.assertEqual(run.call_count, 1)
+
+    def test_mobile_install_requires_hashes_and_preserves_other_packages(self):
+        from Scripts import development
+        with patch.object(development, 'find_uv', return_value='/tools/uv'), patch.object(development.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            self.assertEqual(development.setup(ROOT, 'mobile', lambda _: Path(__file__)), 0)
+            command = run.call_args.args[0]
+            self.assertEqual(command[1:3], ['pip', 'install'])
+            self.assertIn('--require-hashes', command)

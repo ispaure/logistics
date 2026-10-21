@@ -17,6 +17,10 @@ def environment_python(mobile=False):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
+    setup_parser = commands.add_parser('setup', help='Install a declared desktop or mobile host environment')
+    setup_parser.add_argument('suite', choices=('desktop', 'mobile'))
+    setup_parser.add_argument('--dry-run', action='store_true')
+    commands.add_parser('doctor', help='Inspect contributor environments without changing them')
     tests = commands.add_parser('test', help='Run desktop or mobile host tests in isolated processes')
     tests.add_argument('suite', choices=('desktop', 'mobile'))
     tests.add_argument('pattern', nargs='?', default='test*.py',
@@ -26,6 +30,12 @@ def main(argv=None):
         command.add_argument('--python', type=Path, help='Use a specific environment Python executable')
         command.add_argument('--dry-run', action='store_true', help='Show the command without running it')
     args = parser.parse_args(argv)
+    if args.command == 'setup':
+        from Scripts.development import setup
+        return setup(ROOT, args.suite, environment_python, dry_run=args.dry_run)
+    if args.command == 'doctor':
+        from Scripts.development import doctor
+        return doctor(ROOT, environment_python)
     mobile = args.command == 'test' and args.suite == 'mobile'
     interpreter = args.python.expanduser().resolve() if args.python else environment_python(mobile)
     environment = os.environ.copy()
@@ -45,7 +55,7 @@ def main(argv=None):
                    str(suite), '--pattern', args.pattern, '--isolate-modules']
     else:
         command = [str(interpreter), '-m', 'ruff', 'check', '--config',
-                   'Python/pyproject.toml', 'dev.py', 'Python', 'Mobile', '.github/scripts']
+                   'Python/pyproject.toml', 'dev.py', 'Python', 'Mobile', 'Scripts', '.github/scripts']
     print(f'Working directory: {ROOT}', flush=True)
     for name in ('PYTHONPATH', 'QT_QPA_PLATFORM', 'TOGA_BACKEND'):
         if name in environment:

@@ -1,0 +1,6 @@
+# Host tests only; never copied into a native payload.
+toga-dummy==0.5.7
+markdown-it-py==4.2.0
+pygments==2.19.2
+pypdf==6.21.0
+-r requirements-testflight.txt

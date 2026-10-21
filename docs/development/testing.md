@@ -32,13 +32,24 @@ environment before synchronizing the environment used by a running application.
 
 ## Run everyday checks
 
+Run `python3 dev.py doctor` for read-only interpreter, package, submodule and
+optional native-tool diagnostics. It does not read credential files or change an
+environment. A nonzero status means a contributor prerequisite is missing.
+
 The root [dev.py](../../dev.py) selects the suite's environment, sets import paths
 and headless backends, and delegates to the existing runners. It works from any
-working directory when invoked by its path. It does not install dependencies or
-build/deploy an app. From the repository root, use `python3` on macOS/Linux or
+working directory when invoked by its path. The `setup` command installs declared host dependencies; test, lint and doctor
+do not build or deploy an app. From the repository root, use `python3` on macOS/Linux or
 `py` on Windows; this bootstrap Python only needs the standard library.
 
-Install the pinned desktop environment and developer tools with uv. These commands
+For repeatable setup, run `python3 dev.py setup desktop` or
+`python3 dev.py setup mobile` (use `py` on Windows). Both accept `--dry-run`.
+The desktop setup uses the existing uv lock and root `.venv`. Mobile setup creates
+`Mobile/.venv` if absent and installs the hash-locked host test requirements
+additively, preserving any native build tools already present. It needs no native
+SDK. Setup needs uv and network access for uncached packages.
+
+The equivalent desktop command installs the pinned environment and developer tools with uv. These commands
 explicitly target the root `.venv`, so activation is unnecessary. The desktop
 launcher installs uv if needed.
 
@@ -66,15 +77,14 @@ Replace `python3` with `py` on Windows. Quote wildcard patterns so the shell doe
 not expand them. Omit the filename/pattern to run the whole selected suite.
 No matching files is an error. Each test file runs in a fresh process; failing
 files or timeouts fail the command. The helper returns the check's exit status.
-Lint covers `dev.py`, `Python`, `Mobile` and `.github/scripts`, matching CI's scope.
+Lint covers `dev.py`, `Python`, `Mobile`, `Scripts` and `.github/scripts`, matching CI's scope.
 
 For **mobile host tests**, use a separate environment, without installing a
 native SDK or Briefcase just to run dummy-backend checks:
 
 ```sh
 # macOS / Linux; use py -3.12 and Mobile/.venv/Scripts/python.exe on Windows
-python3.12 -m venv Mobile/.venv
-Mobile/.venv/bin/python -m pip install toga-dummy==0.5.7 markdown-it-py==4.2.0 pygments==2.19.2 pypdf==6.21.0 -r Mobile/requirements-testflight.txt
+python3 dev.py setup mobile
 python3 dev.py test mobile test_editor_picker.py
 ```
 
@@ -241,3 +251,22 @@ Without that provisioning, local runs may skip crypt tests if rclone is absent.
 Release provisioning uses the locked certifi CA bundle if `SSL_CERT_FILE` is not
 already configured, including on macOS framework Python; TLS verification remains
 enabled.
+
+## Updating mobile host dependencies
+
+Edit `Mobile/requirements-host.in`, then regenerate its hash lock with
+`uv pip compile Mobile/requirements-host.in --python-version 3.12 --universal
+--generate-hashes --output-file Mobile/requirements-host.txt`. Commit both files.
+Native app requirements remain in `Mobile/pyproject.toml`; authentication tools
+remain host-only. Do not copy a host virtual environment into a mobile payload.
+
+## Local disk usage and private files
+
+Virtual environments, `Mobile/build/`, `Mobile/payload/`, `Mobile/logs/`,
+`Mobile/.tools/` and `Mobile/.deploy-workspaces/` are ignored generated output.
+They can be much larger than the tracked source. Git exclusions do not reclaim
+local space. Stop builds and apps, and save wanted reports before removing a
+particular generated directory; the corresponding setup/build recreates it.
+Keep credentials, `.env` files and signing keys local. Never put real secret values
+in examples or fixtures. Release packaging also excludes conventional private
+files and generated mobile output, even if accidentally tracked.
