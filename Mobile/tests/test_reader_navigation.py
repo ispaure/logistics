@@ -181,3 +181,24 @@ class ReaderNavigationTests(unittest.TestCase):
             else:
                 impl.native.clearAnimation.assert_called_once_with()
                 impl.native.startAnimation.assert_not_called()
+
+    def test_cancelling_ios_snapshot_releases_pixels_and_removes_its_wrapper(self):
+        from types import SimpleNamespace as NS
+        from logisticsmobile.page_animation import cancel_page_slide
+        impl = type('Backend', (), {'__module__': 'toga_iOS.widgets.box'})()
+        impl.native = NS(clipsToBounds=True, layer=Mock())
+        snapshot = Mock()
+        wrapper = Mock()
+        state = impl._ios_page_slide = NS(snapshot=snapshot, wrapper=wrapper, blocks=(object(),))
+        content = NS(_impl=impl)
+        cancel_page_slide(content)
+        self.assertIsNone(impl._ios_page_slide)
+        self.assertIsNone(state.snapshot)
+        self.assertEqual(state.blocks, ())
+        self.assertIsNone(state.wrapper)
+        self.assertIsNone(snapshot.image)
+        wrapper.removeFromSuperview.assert_called_once_with()
+        snapshot.layer.removeAllAnimations.assert_called_once_with()
+        snapshot.removeFromSuperview.assert_called_once_with()
+        cancel_page_slide(content)
+        snapshot.removeFromSuperview.assert_called_once_with()

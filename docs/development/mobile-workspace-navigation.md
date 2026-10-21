@@ -1340,9 +1340,12 @@ search, position restoration and resize cancel motion before measuring text.
 The native text fallback uses the same short slide around passage replacement.
 Mobile High Contrast / E Ink suppresses all of these paths. The EPUB bridge
 observes contrast and reduced-motion changes to cancel an active Web Animation.
-Native reader close, conceal and suspension cancel retained page layers. iOS
-stores CATransition under its reserved `transition` key, regardless of the key
-supplied when adding it; cancellation and native probes use that actual key.
+Native reader close, conceal and suspension cancel retained page snapshots.
+iOS slides an explicit, noninteractive outgoing snapshot over the live replacement
+inside clipped reading bounds. A CATransition on a container's empty layer can
+exist without visibly moving its image/text subviews. Completion and cancellation
+remove the snapshot wrapper and release its pixels. The bitmap is cropped from
+Toga's real flat native container, with an explicit background fill for margins.
 The optional native pose audit `--page-turns` exercises forward/backward turns in
 normal/high-contrast mode for imported EPUB/comics and provider EPUB/PDF/comics,
 plus real WKWebView in-chapter motion and suppression.
@@ -1351,5 +1354,5 @@ The follow-up page-motion audit checks old image ownership at capture time,
 not just the existence of a Core Animation object. Reused comic spreads publish
 a prepared replacement only after the host starts the transition. Rich EPUBs
 receive an explicit host motion flag both at load and on preference refresh;
-HTML contrast markers alone are insufficient on iOS. A same-page/layout refresh
-cancels a pending native slide rather than starting a new one.
+HTML contrast markers alone are insufficient on iOS. A same-page repaint
+keeps an active slide; a changed reading rectangle cancels it.

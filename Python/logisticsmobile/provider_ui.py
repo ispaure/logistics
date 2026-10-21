@@ -556,6 +556,10 @@ class ProviderUI(FilesUI):
                 chapters.row_style, chapters.current = hierarchy_row_style, index
                 chapters.render()
             view.provider_epub_view.page_motion_enabled = lambda: self.preferences.values.get('android_eink') != 'true'
+            if epub_surface is None:
+                view.provider_epub_view.page_motion = (
+                    lambda surface, delta: begin_page_slide(surface, delta, self.preferences.values),
+                    lambda surface, delta: finish_page_slide(surface, delta, self.preferences.values))
             tools = view.provider_epub_view.tools
             if tools.button in tools.widget.children:
                 tools.widget.remove(tools.button)

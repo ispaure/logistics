@@ -13,6 +13,7 @@ class TextBookView(toga.Box):
     """Exact passage anchors, nested contents and search without browser storage."""
     def __init__(self, book, index, *, offset=0, font_size=16, prepared=None, on_chapter, on_position, motion_enabled=True):
         self.page_motion_enabled = lambda: bool(motion_enabled)
+        self.page_motion = None
         self.book, self.index = book, index
         self.on_chapter, self.on_position = on_chapter, on_position
         self.chapter = prepared[1] if prepared is not None else ChapterText(chapter_html(book, index, links=True))
@@ -61,9 +62,15 @@ class TextBookView(toga.Box):
             return False
         from commonUtils.ui.native.transitions import begin_page_slide, finish_page_slide
         enabled = self.page_motion_enabled()
-        begin_page_slide(self.text, direction, enabled=enabled)
+        if self.page_motion is None:
+            begin_page_slide(self.text, direction, enabled=enabled)
+        else:
+            self.page_motion[0](self.text, direction)
         self.seek(offset)
-        finish_page_slide(self.text, direction, enabled=enabled)
+        if self.page_motion is None:
+            finish_page_slide(self.text, direction, enabled=enabled)
+        else:
+            self.page_motion[1](self.text, direction)
         return True
 
     def choose(self, widget, **kwargs):
@@ -81,6 +88,7 @@ class TextBookView(toga.Box):
             self.tools.close()
 
     def dispose(self):
+        self.page_motion = None
         self.text.value = self.query.value = self.status.text = ''
         self.toc.items = []
         self.link_selector.items = []
