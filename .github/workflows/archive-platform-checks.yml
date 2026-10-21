@@ -38,6 +38,7 @@ jobs:
       - run: ruff check --config Python/pyproject.toml dev.py Python Mobile Scripts .github/scripts
       - run: python dev.py architecture
       - run: python dev.py toolchain
+      - run: python dev.py hygiene
       - name: Install the browser used by mobile DOM regressions
         run: |
           npm install --prefix "$RUNNER_TEMP/mobile-dom" --no-save --ignore-scripts playwright@1.62.1

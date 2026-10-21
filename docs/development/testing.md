@@ -286,3 +286,11 @@ inputs and their lock, native/host Toga versions, shared desktop/mobile dependen
 pins and CI Ruff pins against the existing application manifests. CI runs it too.
 Python's application manifest and the native Briefcase manifest remain canonical;
 the checker adds no second version registry.
+
+Before committing, run `python3 dev.py hygiene` to check indexed paths against
+ignore rules and inspect indexed text blobs for recognizable private keys and
+GitHub/AWS token shapes. It prints only paths and categories, never matching
+values. Stage specific reviewed paths first: the check reads the Git index, so it
+does not certify unstaged/untracked content or arbitrary provider token formats.
+Review every staged diff; never stage a virtual environment, native build output,
+credentials or a local feature link.
