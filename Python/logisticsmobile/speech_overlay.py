@@ -7,7 +7,7 @@ def apple_dismissal_class():
     global _apple_dismissal
     if _apple_dismissal is None:
         from rubicon.objc import ObjCClass, ObjCProtocol, objc_method
-        from .keyboard import native_value
+        from commonUtils.ui.native.keyboard import native_value
 
         class LogisticsSpeechDismissal(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureRecognizerDelegate'),)):
             @objc_method
