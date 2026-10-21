@@ -98,7 +98,10 @@ def normal_launcher(info):
 
 def configured_ios_info():
     with (ROOT / 'pyproject.toml').open('rb') as stream:
-        return tomllib.load(stream)['tool']['briefcase']['app']['logisticsmobile']['iOS'].get('info', {})
+        config = tomllib.load(stream)['tool']['briefcase']
+    app = config['app']['logisticsmobile']
+    return dict(app['iOS'].get('info', {}),
+                CFBundleShortVersionString=config['version'], CFBundleVersion=str(app['build']))
 
 
 def prepare_project(team):

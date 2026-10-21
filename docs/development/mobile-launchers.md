@@ -322,7 +322,7 @@ See Apple's [device pairing guide](https://help.apple.com/xcode/mac/current/en.l
 Each `deploy` stages current local sources (including uncommitted mobile
 changes), refreshes the Briefcase project and native licenses, rebuilds the
 rclone bridge, restores the normal Logistics launcher, builds a signed arm64
-iPhone app, verifies its signature/profile, installs it in place, and launches
+iPhone app, refreshes and verifies its version/build metadata and signature/profile, installs it in place, and launches
 it. `build` performs the same preparation and signed build without installing.
 This is local development, not release evidence or TestFlight automation.
 

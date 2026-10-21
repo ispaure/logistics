@@ -38,11 +38,14 @@ class DeviceDeploymentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             config = root / 'pyproject.toml'
-            config.write_text('[tool.briefcase.app.logisticsmobile.iOS.info]\n'
+            config.write_text('[tool.briefcase]\nversion="0.1.9"\n'
+                              '[tool.briefcase.app.logisticsmobile]\nbuild="202610242"\n'
+                              '[tool.briefcase.app.logisticsmobile.iOS.info]\n'
                               'CFBundleDisplayName = "Logisticks"\nCFBundleName = "Logisticks"\n'
                               'UIFileSharingEnabled = true\nLSSupportsOpeningDocumentsInPlace = true\n')
             pbx, info = root / 'project.pbxproj', root / 'Info.plist'
-            info.write_bytes(plistlib.dumps({'CFBundleIdentifier': BUNDLE, 'MainModule': 'tests.logisticsmobile'}))
+            info.write_bytes(plistlib.dumps({'CFBundleIdentifier': BUNDLE, 'MainModule': 'tests.logisticsmobile',
+                                            'CFBundleShortVersionString': '0.1.8', 'CFBundleVersion': '202610239'}))
             with (patch.object(device_tools, 'ROOT', root), patch.object(device_tools, 'PBX', pbx),
                   patch.object(device_tools, 'INFO', info),
                   patch('subprocess.check_output', return_value=json.dumps(self.project()).encode())):
@@ -54,8 +57,23 @@ class DeviceDeploymentTests(unittest.TestCase):
                 self.assertIs(result['UIFileSharingEnabled'], True)
                 self.assertIs(result['LSSupportsOpeningDocumentsInPlace'], True)
                 self.assertEqual(result['MainModule'], 'logisticsmobile')
+                self.assertEqual(result['CFBundleShortVersionString'], '0.1.9')
+                self.assertEqual(result['CFBundleVersion'], '202610242')
                 device_tools.prepare_project('ABCDEFGHIJ')
                 self.assertEqual(plistlib.loads(info.read_bytes()), result)
+
+    def test_stale_built_versions_are_rejected_before_device_installation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory)
+            (app / 'Info.plist').write_bytes(plistlib.dumps({
+                'CFBundleIdentifier': BUNDLE, 'MainModule': 'logisticsmobile',
+                'CFBundleShortVersionString': '0.1.8', 'CFBundleVersion': '202610239'}))
+            with (patch.object(device_tools, 'configured_ios_info', return_value={
+                    'CFBundleShortVersionString': '0.1.9', 'CFBundleVersion': '202610242'}),
+                  patch('subprocess.check_output') as signing):
+                with self.assertRaisesRegex(RuntimeError, 'configured iOS plist settings'):
+                    device_tools.validate_app(app, 'ABCDEFGHIJ', 'phone')
+                signing.assert_not_called()
 
     def test_batch_deploy_uses_saved_targets_and_continues_after_failure(self):
         config = {'device_id': 'phone', 'device_ids': ['phone', 'tablet', 'phone']}
