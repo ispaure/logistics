@@ -27,4 +27,4 @@ class LayoutEventTests(unittest.TestCase):
             return app
         app = asyncio.run(exercise())
         gc.collect()
-        self.assertEqual(len(app._reader_layout_events), 0)
+        self.assertEqual(len(app._reader_layout_signal._listeners), 0)

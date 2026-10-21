@@ -1,25 +1,18 @@
 """Coalesced reader layout wakeups; no timer and no retained reader owners."""
-import asyncio
-from weakref import WeakSet
+from commonUtils.runtime.signals import CoalescedSignal
 
 
 def layout_waiter(app):
-    event = asyncio.Event()
-    event.set()  # Apply initial post-mount geometry.
-    listeners = getattr(app, '_reader_layout_events', None)
-    if listeners is None:
-        app._reader_layout_events = listeners = WeakSet()
-    listeners.add(event)
-
-    async def changed():
-        await event.wait()
-        event.clear()
-    return changed
+    signal = getattr(app, '_reader_layout_signal', None)
+    if signal is None:
+        app._reader_layout_signal = signal = CoalescedSignal()
+    return signal.waiter()
 
 
 def notify_layout(app):
-    for event in tuple(getattr(app, '_reader_layout_events', ())):
-        event.set()
+    signal = getattr(app, '_reader_layout_signal', None)
+    if signal is not None:
+        signal.notify()
 
 
 def native_resize_changed(app, widget):

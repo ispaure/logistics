@@ -197,3 +197,6 @@ preference validation, connection switches, appearance roles and page reflow.
 Reader chrome uses commonUtils retained native bar mounting and centered titles.
 Logistics keeps reader action grouping, window ownership, privacy/fullscreen policy,
 status selection, navigation routing and safe-area integration.
+
+Reader layout wakeups use the commonUtils loop-local coalesced signal. Logistics
+retains native geometry filtering, app ownership and reader-task cancellation.
