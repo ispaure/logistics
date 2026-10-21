@@ -161,6 +161,7 @@ def build():
                     '  p.pluginManager.withPlugin("com.android.application") {\n'
                     '    p.androidComponents.finalizeDsl { dsl ->\n'
                     f'      dsl.defaultConfig.versionCode = {number}\n'
+                    f'      dsl.defaultConfig.versionName = {json.dumps(config["version"])}\n'
                     '    }\n  }\n}\n')
     with (output / 'build.log').open('w') as log:
         subprocess.run([str(android.PROJECT / 'gradlew'), '--no-daemon', '-I', str(init),
@@ -180,7 +181,9 @@ def build():
                     '--out', str(apk), str(aligned)], env=key_env, check=True)
     subprocess.run([str(tools / 'apksigner'), 'verify', '--verbose', str(apk)], env=env, check=True)
     metadata = subprocess.check_output([str(tools / 'aapt'), 'dump', 'badging', str(apk)], env=env, text=True)
-    if f"name='{android.BUNDLE}'" not in metadata.splitlines()[0] or f"versionCode='{number}'" not in metadata.splitlines()[0]:
+    package = metadata.splitlines()[0]
+    if (f"name='{android.BUNDLE}'" not in package or f"versionCode='{number}'" not in package
+            or f"versionName='{config['version']}'" not in package):
         raise ValueError('Built APK identity/version verification failed.')
     notes = output / 'release-notes.txt'
     notes.write_text(f'Logistics Android beta {config["version"]}, build {number}.\n'
