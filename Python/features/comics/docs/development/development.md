@@ -313,3 +313,22 @@ navigation and layout-task state for imports. `mobile/provider_controller.py`
 owns equivalent provider presentation state. Layout and privacy services are
 injected explicitly. The host retains workspace identities, provider operations,
 metadata publication, revocation and shutdown.
+
+## Duo reading continuity
+
+`ComicNavigation.page` is the selected logical anchor. `visible` is the composed
+spread and can start before that anchor. With `anchor_right=True`, LTR spreads
+use the preceding page on the left; RTL spreads use the following page on the
+left. Rendering commits anchor and visible indices only after native preparation
+succeeds. Ordinary platforms keep their original spread-start navigation.
+
+The host's `ReadingPresentation` supplies local seam geometry and reserved gap.
+Inactive interior divisions preserve the physical anchor when flat. The gap is
+blank in the bounded composition bitmap. Wide artwork uses one region rather
+than crossing the active fold. Layout watchers distinguish relayout from explicit
+navigation to preserve wide-page halves and bypass zoom deferral only when the
+fold region changes. Imported progress persists the anchor using the existing
+position schema; provider progress remains session-owned.
+
+`Mobile/tests/test_comic_split.py` exercises imported/provider round trips in both
+reading directions, wide-half retention, and transparent fold margins.

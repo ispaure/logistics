@@ -98,7 +98,7 @@ class ProviderComicController:
             await self.move_private_page(target)
 
     def private_comic_seam(self, view=None):
-        return self.format_services.seam((view or self).crypt_content)
+        return self.format_services.seam(getattr(view or self, 'crypt_content', self.main_window.content))
 
     def private_comic_mode(self):
         return self.format_services.mode(
@@ -126,6 +126,13 @@ class ProviderComicController:
             return
         from features.comics.mobile.presentation import watch_layout
 
+        async def relayout():
+            reader.comic_navigation.layout_reload = True
+            try:
+                await self.read_crypt_page()
+            finally:
+                reader.comic_navigation.layout_reload = False
+
         self._provider_layout_task = self.loop.create_task(
             watch_layout(
                 alive=lambda: self.crypt_reader is reader
@@ -138,15 +145,16 @@ class ProviderComicController:
                     self.private_comic_viewport(),
                     self.private_comic_mode(),
                     self.preferences.values.get('comic_split_wide', 'true'),
-                    self.private_comic_seam(),
+                    (self.private_comic_seam(), self.format_services.seam_gap(self.crypt_content)),
                 ),
                 view=lambda: getattr(self, "provider_spread", None),
-                reload=self.read_crypt_page,
+                reload=relayout,
                 initial=(getattr(reader.comic_navigation, 'viewport', (1, 1)),
                          self.private_comic_mode(),
                          self.preferences.values.get('comic_split_wide', 'true'),
-                         self.private_comic_seam()),
+                         (self.private_comic_seam(), self.format_services.seam_gap(self.crypt_content))),
                 changed=self.format_services.layout_changed(),
+                force=lambda previous, current: previous[-1] != current[-1],
             )
         )
 

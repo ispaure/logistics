@@ -226,6 +226,7 @@ class ProviderUI(FilesUI):
                 reader = await asyncio.to_thread(copies.open, key,
                     password=password, cancelled=self._crypt_cancel.is_set, **opening_options(copies))
                 self._provider_comic_mode = self.private_comic_mode()
+                self._provider_comic_seam = self.private_comic_seam()
                 self._provider_viewport = (max(1, self.main_window.size.width), max(1, self.main_window.size.height))
                 kind, content = await asyncio.to_thread(self.provider_page_content, reader, 0)
             else:
@@ -421,6 +422,7 @@ class ProviderUI(FilesUI):
             self.crypt_page.items = self.crypt_reader.labels
             self.crypt_page.value = self.crypt_reader.labels[index]
             self._provider_comic_mode = self.private_comic_mode()
+            self._provider_comic_seam = self.private_comic_seam()
             kind, content = await asyncio.to_thread(self.provider_page_content, self.crypt_reader, index)
             self._show_crypt_content(kind, content)
             self.refresh_private_bookmarks()
@@ -475,14 +477,18 @@ class ProviderUI(FilesUI):
                 prepared_spread = previous.replace(data,
                     right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
                     viewport=controller.private_comic_viewport(view), seam=controller.private_comic_seam(view),
-                    crop=view.crypt_reader.comic_navigation.crop)
+                    crop=view.crypt_reader.comic_navigation.crop,
+                    seam_gap=controller.format_services.seam_gap(view.crypt_content),
+                    anchor_right=controller.private_comic_seam(view) is not None)
             else:
                 prepared_spread = SpreadView(data, canvas=ImageCanvas,
                     on_page=controller.swipe_crypt_page, on_toggle=controller.toggle_private_reading_mode,
                     right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
                     viewport=controller.private_comic_viewport(view),
                     seam=controller.private_comic_seam(view),
-                    crop=view.crypt_reader.comic_navigation.crop)
+                    crop=view.crypt_reader.comic_navigation.crop,
+                    seam_gap=controller.format_services.seam_gap(view.crypt_content),
+                    anchor_right=controller.private_comic_seam(view) is not None)
             from .magnifier import bind
             bind(controller, prepared_spread)
         from .page_animation import page_direction, begin_page_slide, finish_page_slide
@@ -582,6 +588,7 @@ class ProviderUI(FilesUI):
             index = self.crypt_reader.labels.index(self.crypt_page.value)
             self._provider_viewport = self.private_comic_viewport()
             self._provider_comic_mode = self.private_comic_mode()
+            self._provider_comic_seam = self.private_comic_seam()
             reader = self.crypt_reader
             token = self.workspace.token(self.session.id)
             kind, content = await asyncio.to_thread(self.provider_page_content, reader, index)
@@ -825,6 +832,7 @@ class ProviderUI(FilesUI):
         viewport = getattr(self, '_provider_viewport', (1, 1))
         return 'spread', reader.comic_navigation.load(index, viewport=viewport,
             mode=getattr(self, '_provider_comic_mode', self.preferences.values['comic_layout']),
+            anchor_right=getattr(self, '_provider_comic_seam', None) is not None,
             split_wide=self.preferences.values.get('comic_split_wide', 'true') == 'true')
 
     async def move_provider_comic(self, *args, **kwargs):

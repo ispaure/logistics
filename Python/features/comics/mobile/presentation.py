@@ -16,10 +16,10 @@ def page_view(data, *, canvas, on_page, on_toggle, width=None):
 
 class SpreadView(toga.Box):
     """A complete spread on one native canvas, including its shared gutter."""
-    def __init__(self, data, *, canvas, on_page, on_toggle, right_to_left=False, width=None, viewport=None, seam=None, crop=None):
+    def __init__(self, data, *, canvas, on_page, on_toggle, right_to_left=False, width=None, viewport=None, seam=None, crop=None, seam_gap=0, anchor_right=False):
         from .composite import compose_spread
         self._on_page = on_page
-        image = compose_spread(data, right_to_left=right_to_left, viewport=viewport or ((width, None) if width else None), seam=seam, crop=crop)
+        image = compose_spread(data, right_to_left=right_to_left, viewport=viewport or ((width, None) if width else None), seam=seam, crop=crop, seam_gap=seam_gap, anchor_right=anchor_right)
         self.canvas = canvas(image=image, on_page=self.turn, on_toggle=on_toggle,
             description=('Wide comic page half. Swipe at fit size to continue; pinch to zoom.' if crop is not None else
                          'Comic spread. Pinch to zoom both pages; drag across the spread. Swipe at fit size to turn.'),
@@ -28,10 +28,10 @@ class SpreadView(toga.Box):
         self.canvases = [self.canvas]
         super().__init__(children=[self.canvas], style=Pack(flex=1, width=width if width is not None else NONE))
 
-    def replace(self, data, *, right_to_left=False, viewport=None, seam=None, crop=None):
+    def replace(self, data, *, right_to_left=False, viewport=None, seam=None, crop=None, seam_gap=0, anchor_right=False):
         """Publish only a fully prepared bitmap; reuse gesture/native ownership."""
         from .composite import compose_spread
-        image = compose_spread(data, right_to_left=right_to_left, viewport=viewport, seam=seam, crop=crop)
+        image = compose_spread(data, right_to_left=right_to_left, viewport=viewport, seam=seam, crop=crop, seam_gap=seam_gap, anchor_right=anchor_right)
         self.canvas.description = ('Wide comic page half. Swipe at fit size to continue; pinch to zoom.' if crop is not None else
                                    'Comic spread. Pinch to zoom both pages; drag across the spread. Swipe at fit size to turn.')
         self.canvas.image = image
@@ -62,7 +62,7 @@ class SpreadView(toga.Box):
         self.canvas.dispose()
 
 
-async def watch_layout(*, alive, available, viewport, view, reload, changed, initial=None):
+async def watch_layout(*, alive, available, viewport, view, reload, changed, initial=None, force=lambda previous, current: False):
     """Refresh a fitted spread after a viewport change; hosts own task lifetime."""
     previous = viewport() if initial is None else initial
     first = True
@@ -76,7 +76,7 @@ async def watch_layout(*, alive, available, viewport, view, reload, changed, ini
         if current != previous and available():
             spread = view()
             canvases = getattr(spread, 'canvases', [spread])
-            if any(getattr(canvas, 'zoom_scale', 1) > 1.05 for canvas in canvases):
+            if not force(previous, current) and any(getattr(canvas, 'zoom_scale', 1) > 1.05 for canvas in canvases):
                 continue
             previous = current
             await reload()

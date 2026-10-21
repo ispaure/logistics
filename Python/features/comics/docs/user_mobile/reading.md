@@ -187,14 +187,19 @@ Encrypted standalone imports still require a native archive writer. Private remo
 trees must first have a managed LocalCrypt copy; this action does not recursively
 rewrite a live remote tree. Unapplied forms are memory-only.
 
-On iPhone Duo with a partially open vertical fold, comics use a page on each
-side of the physical center seam. Portrait pages retain their proportions and
-meet at the seam even when their shapes differ; manga keeps its right-to-left
-order. A final unpaired portrait page stays on its reading side. A landscape
-image remains a single page spanning the available display. Fully opening the
-device restores the selected page-layout preference. This applies to imported
-comics and Local/LocalCrypt/remote comics. Zooming retains the current view until
-returning to fit size, when posture changes can reflow it.
+On iPhone Duo, opening a comic keeps its current page as the right-hand page
+when a vertical interior division is available. Closing returns to that same
+anchor page. Advancing inside updates the anchor; a layout change alone never
+advances it. Manga retains its reading order while keeping the anchor physically
+on the right. This applies to imported and Local/LocalCrypt/remote comics.
+
+Partially folding leaves the system-reported fold and its interaction margins
+clear between pages. A single page, including wide artwork, fits within the
+right-hand region. Flat interior layouts retain the right-hand anchor and follow
+the page-layout preference. A wide page's selected half survives a layout round
+trip back to a narrow viewport. Ordinary zoomed resizing waits until fit size;
+a change of fold region can reflow immediately so the page is not left across
+the fold.
 
 ### iOS edge-to-edge reading
 
@@ -205,9 +210,8 @@ fit between the controls. Pages keep their original proportions when fitted.
 
 Fullscreen comics hide the system status indicators as well as app navigation.
 The image canvas uses the full window, including the former status-indicator strip.
-On a partially folded Duo, the page join stays at the physical crease; equal-shaped
-pages have equal available space without shrinking the left page to match a reserved
-right-hand strip. Source aspect ratios and built-in page borders remain unchanged.
+On a partially folded Duo, pages fit on either side of the system-reserved fold.
+Their available space accounts for asymmetric safe areas and the fold margins. Source aspect ratios and built-in page borders remain unchanged.
 Tap the page to restore controls and normal safe areas. Android retains its immersive
 system-bar behavior. Ordinary and private comics share this presentation.
 

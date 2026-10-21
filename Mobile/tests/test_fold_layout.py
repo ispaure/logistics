@@ -70,7 +70,7 @@ class FoldLayoutTests(unittest.TestCase):
             self.assertEqual(pixels.getpixel((center, pixels.height // 2)),
                              (255, 0, 0, 255) if rtl else (0, 0, 255, 255))
 
-    def test_landscape_image_spans_instead_of_becoming_half_a_spread(self):
+    def test_wide_image_remains_one_page_and_fits_inside_a_fold_region(self):
         pages = [image_bytes(b'\xff\x00\x00\xff', w, h)
                  for w, h in ((100, 200), (300, 200), (100, 200), (100, 200))]
         nav = ComicNavigation(lambda i: (pages[i], 'image'), len(pages))
@@ -78,8 +78,8 @@ class FoldLayoutTests(unittest.TestCase):
         self.assertEqual(nav.load(1, viewport=(1000, 700), mode='double')[0], (1,))
         self.assertEqual(nav.load(2, viewport=(1000, 700), mode='double')[0], (2, 3))
         size, rects = spread_geometry([(300, 200)], viewport=(1000, 700), seam=.5)
-        self.assertEqual(size, (300, 200))
-        self.assertEqual(rects, [(0, 0, 300, 200)])
+        self.assertEqual(size, (1000, 700))
+        self.assertLessEqual(rects[0][0] + rects[0][2], 500)
 
 
 if __name__ == '__main__':

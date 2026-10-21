@@ -17,3 +17,5 @@ class ReadingPresentation:
     comic_path: Callable
     notify_layout: Callable[[], None]
     themed_chapter: Callable
+
+    seam_gap: Callable[[Any], float] = lambda view: 0

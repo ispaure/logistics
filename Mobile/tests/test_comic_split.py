@@ -125,6 +125,88 @@ class ComicSplitTests(unittest.TestCase):
                     app.loop.close()
                     LogisticsMobile.storage_root = None
 
+    def test_duo_round_trip_keeps_right_page_in_imported_and_provider_readers(self):
+        from dataclasses import replace
+        for rtl in (False, True):
+            with self.subTest(rtl=rtl), TemporaryDirectory() as directory:
+                root = Path(directory)
+                LogisticsMobile.storage_root = root
+                app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                source = root / 'continuity.cbz'
+                encoded = BytesIO()
+                Image.new('RGB', (100, 200), 'red').save(encoded, format='PNG')
+                with ZipFile(source, 'w') as archive:
+                    for index in range(6):
+                        archive.writestr(f'{index}.png', encoded.getvalue())
+                    archive.writestr('ComicInfo.xml', '<ComicInfo><Manga>' +
+                                     ('YesAndRightToLeft' if rtl else 'No') + '</Manga></ComicInfo>')
+                record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), source)
+
+                async def exercise():
+                    await app.open_book(record['id'])
+                    imported = app.readers.active
+                    for provider in (False, True):
+                        if provider:
+                            app.show_cloud()
+                            reader = PrivateReader('continuity.cbz', source.read_bytes())
+                            with patch.object(app.crypt_copies, 'open', return_value=reader):
+                                await app.open_crypt(copies=app.crypt_copies, key='d' * 32)
+                            owner = app.private_sessions.active
+                            nav, jump = reader.comic_navigation, owner.move_private_page
+                        else:
+                            owner = imported
+                            nav, jump = owner.comic_navigation, owner.move_book_page
+                        state = dict(seam=None, mode='single')
+                        owner.format_services = replace(owner.format_services,
+                            seam=lambda view: state['seam'], mode=lambda view: state['mode'],
+                            seam_gap=lambda view: 24 if state['seam'] else 0)
+                        # Explicit outer selection, then only layout changes.
+                        await jump(3)
+                        self.assertEqual(nav.visible, (3,))
+                        for seam in (.48, .5, None, .5, None):
+                            state.update(seam=seam, mode='double' if seam else 'single')
+                            nav.layout_reload = True
+                            await jump(3)
+                            nav.layout_reload = False
+                            self.assertEqual(nav.page, 3)
+                            if seam:
+                                self.assertEqual(nav.visible, (3, 4) if rtl else (2, 3))
+                                self.assertEqual(nav.visible[0] if rtl else nav.visible[-1], 3)
+                                self.assertTrue(nav.right_anchored)
+                            else:
+                                self.assertEqual(nav.visible, (3,))
+                            self.assertEqual(owner.crypt_reader if provider else owner.book_reader,
+                                             reader if provider else imported.book_reader)
+                        if provider:
+                            app.private_sessions.close(owner.session.id, discard=True)
+                try:
+                    app.loop.run_until_complete(exercise())
+                finally:
+                    app.main_window.close()
+                    app.loop.close()
+                    LogisticsMobile.storage_root = None
+
+    def test_duo_wide_half_survives_relayout_and_fold_margin_is_blank(self):
+        from features.comics.mobile.navigation import ComicNavigation
+        from features.comics.mobile.composite import compose_spread
+        from Mobile.native_tests.tests.logisticsmobile.reader_parity_probe import image_bytes
+        page = image_bytes(b'\xff\x00\x00\xff', 300, 200)
+        nav = ComicNavigation(lambda i: (page, 'image'), 1)
+        nav.requested_half = 1
+        indices, _ = nav.load(0, viewport=(400, 800))
+        nav.commit(indices)
+        nav.layout_reload = True
+        for viewport in ((1000, 700), (400, 800)):
+            indices, _ = nav.load(0, viewport=viewport)
+            nav.commit(indices)
+        self.assertEqual(nav.half, 1)
+        portrait = image_bytes(b'\xff\x00\x00\xff', 100, 200)
+        image = compose_spread([portrait, portrait], viewport=(800, 600), seam=.5, seam_gap=30)
+        pixels = image._impl.native.raw
+        self.assertEqual(pixels.getpixel((800, 600))[3], 0)
+        self.assertEqual(pixels.getpixel((760, 600)), (255, 0, 0, 255))
+        self.assertEqual(pixels.getpixel((840, 600)), (255, 0, 0, 255))
+
     def test_split_eligibility_and_one_page_boundaries(self):
         from features.comics.mobile.navigation import ComicNavigation
         encoded = BytesIO()

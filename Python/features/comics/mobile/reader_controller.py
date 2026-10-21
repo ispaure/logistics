@@ -136,6 +136,13 @@ class ComicController:
             return
         from features.comics.mobile.presentation import watch_layout
 
+        async def relayout():
+            self.comic_navigation.layout_reload = True
+            try:
+                await self.move_book_page(self.book_record['position'])
+            finally:
+                self.comic_navigation.layout_reload = False
+
         self._comic_layout_task = self.loop.create_task(
             watch_layout(
                 alive=lambda: self.book_reader is reader
@@ -147,13 +154,14 @@ class ComicController:
                     self.comic_viewport(),
                     self.comic_layout_mode(),
                     self.preferences.values.get('comic_split_wide', 'true'),
-                    self.comic_seam(),
+                    (self.comic_seam(), self.format_services.seam_gap(self.book_content)),
                 ),
                 view=lambda: self.book_content.children[0]
                 if self.book_content.children
                 else None,
-                reload=lambda: self.move_book_page(self.book_record["position"]),
+                reload=relayout,
                 changed=self.format_services.layout_changed(),
+                force=lambda previous, current: previous[-1] != current[-1],
             )
         )
 
@@ -180,6 +188,7 @@ class ComicController:
             index,
             viewport=self.comic_viewport(),
             mode=self.comic_layout_mode(),
+            anchor_right=self.comic_seam() is not None,
             split_wide=self.preferences.values.get('comic_split_wide', 'true') == 'true',
         )
         if (
@@ -191,11 +200,7 @@ class ComicController:
         from commonUtils.ui.native.image_canvas import ImageCanvas
 
         seam = self.format_services.seam(self.book_content)
-        from features.images.validation import image_dimensions
-
-        page_width, page_height = image_dimensions(data[0])
-        portrait = page_width < page_height
-        if len(data) == 1 and self.comic_navigation.crop is None and (seam is None or not portrait):
+        if len(data) == 1 and self.comic_navigation.crop is None and seam is None:
             view = page_view(
                 data[0],
                 canvas=ImageCanvas,
@@ -213,6 +218,8 @@ class ComicController:
                     viewport=self.comic_viewport(),
                     seam=seam,
                     crop=self.comic_navigation.crop,
+                    seam_gap=self.format_services.seam_gap(self.book_content),
+                    anchor_right=seam is not None,
                 )
             else:
                 view = SpreadView(
@@ -224,5 +231,7 @@ class ComicController:
                     viewport=self.comic_viewport(),
                     seam=seam,
                     crop=self.comic_navigation.crop,
+                    seam_gap=self.format_services.seam_gap(self.book_content),
+                    anchor_right=seam is not None,
                 )
         return view, indices
