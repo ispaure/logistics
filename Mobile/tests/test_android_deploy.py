@@ -33,7 +33,8 @@ class AndroidDeployTests(unittest.TestCase):
             root = Path(directory)
             project = root / 'project'
             apk = project / 'app/build/outputs/apk/debug/app-debug.apk'
-            apk.parent.mkdir(parents=True); apk.touch()
+            apk.parent.mkdir(parents=True)
+            apk.touch()
             (root / 'pyproject.toml').write_text('[tool.briefcase]\nbundle="io.github.ispaure"\nversion="0.1.9"\n')
             calls = []
             def run(command, env, **kwargs):

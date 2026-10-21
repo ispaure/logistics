@@ -68,7 +68,14 @@ jobs:
           sudo apt-get install -y build-essential pkg-config libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev libffi-dev liblzma-dev
       - name: Select the Android command-line tools used by the native app gate
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'cmdline-tools;19.0'
+          for attempt in 1 2 3; do
+            if "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'cmdline-tools;19.0'; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            echo "Android command-line tools download failed; retrying ($attempt/3)."
+            sleep 10
+          done
           test -x "$ANDROID_HOME/cmdline-tools/19.0/bin/sdkmanager"
           mv "$ANDROID_HOME/cmdline-tools/latest" "$RUNNER_TEMP/android-command-line-tools-original"
           ln -s 19.0 "$ANDROID_HOME/cmdline-tools/latest"
