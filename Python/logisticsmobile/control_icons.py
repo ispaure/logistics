@@ -1,9 +1,7 @@
 """Named, compact controls using UIKit symbols and Android vector drawables."""
-import weakref
-from functools import lru_cache
+from commonUtils.ui.native.icons import IconRenderer, IconSpec
 import toga
 from toga.style import Pack
-from .appearance import accessible_name
 
 # Paths use a shared 24-point grid. Keep the fallback readable on desktop/test hosts.
 ICONS = {
@@ -64,7 +62,6 @@ ICONS.update(
     info=('info.circle', 'ⓘ', (_settings_circle, ((12, 10), (12, 18)), ((12, 6), (12, 7)))),
 )
 
-_android_controls = weakref.WeakSet()
 
 # One folder silhouette with an integrated lock; use the same geometry on both
 # platforms rather than depending on an OS-specific locked-folder symbol.
@@ -90,222 +87,22 @@ def tint_android(impl):
     impl._control_tint_drawable, impl._control_tint_key = impl._control_drawable, key
 
 
-def refresh_icons():
-    for impl in list(_android_controls):
-        tint_android(impl)
+def _spec(name, artwork):
+    symbol, fallback, lines = artwork
+    skip = name in {'skip_back', 'skip_forward'}
+    circles = ((10, 10, 6),) if name == 'find' else tuple((3, y, .6) for y in (6, 12, 18)) if name == 'contents' else tuple((x, 12, 1) for x in (5, 12, 19)) if name == 'more' else tuple((12, y, 1) for y in (5, 12, 19)) if name == 'overflow' else ()
+    return IconSpec(symbol, fallback, lines, circles=circles,
+        arcs=((3, 3, 21, 21, -50, -280),) if skip else (),
+        fills=FOLDER_FILLS.get(name, ()),
+        stroke_width=FOLDER_STROKE_WIDTH if name in FOLDER_PATHS else 1.7 if skip else 1.8,
+        filled=name in {'stop', 'play'}, text='15' if skip else None,
+        apple_vector=name in {'group', 'obsidian'} or skip or name in FOLDER_PATHS)
 
 
-@lru_cache(maxsize=64)
-def _apple_button_image(names, scale):
-    """Reuse immutable template pixels; each button keeps its own tint/state."""
-    from rubicon.objc import ObjCClass, Block, objc_id
-    from toga_iOS.libs import UIGraphicsImageRenderer, CGSize, CGRect
-    width = 28 * len(names) - 4
-    image_format = ObjCClass('UIGraphicsImageRendererFormat').defaultFormat()
-    image_format.scale = scale
-    renderer = UIGraphicsImageRenderer.alloc().initWithSize(CGSize(width + 8, 24), format=image_format)
-    configuration = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(22, weight=5)
-    images = [ObjCClass('UIImage').systemImageNamed(ICONS[name][0]).imageWithConfiguration(configuration)
-              for name in names]
-    def draw(context):
-        for index, image in enumerate(images):
-            ratio = min(24 / float(image.size.width), 24 / float(image.size.height))
-            w, h = float(image.size.width) * ratio, float(image.size.height) * ratio
-            image.drawInRect(CGRect((28 * index + (24 - w) / 2, (24 - h) / 2), (w, h)))
-    return renderer.imageWithActions(Block(draw, None, objc_id)).imageWithRenderingMode(2)
-
-
-def button_icons(button, icons):
-    """Keep leading glyphs inside the same native hit target as the title."""
-    button.leading_icons = tuple(icons)
-    if not icons:
-        return button
-    # Shared by recent/open/saved documents, settings and library rows. Reserve
-    # outline clearance on both platforms, independent of the current fill.
-    button._impl._content_inset = 12
-    backend = type(button._impl).__module__
-    width = 28 * len(icons) - 4
-    labels = ' · '.join(label for _, label in icons)
-    if backend.startswith('toga_iOS.'):
-        from rubicon.objc import ObjCClass
-        image = _apple_button_image(tuple(name for name, _ in icons), float(ObjCClass('UIScreen').mainScreen.scale))
-        native = button._impl.native
-        native.setImage(image, forState=0)
-        from rubicon.objc import UIEdgeInsets
-        native.contentEdgeInsets = UIEdgeInsets(0, button._impl._content_inset, 0,
-            getattr(button._impl, '_content_trailing_inset', button._impl._content_inset))
-        native.accessibilityHint = ' · '.join(filter(None, (getattr(button, 'description', ''), labels)))
-    elif backend.startswith('toga_android.'):
-        from android.graphics import Path, Paint
-        from android.graphics.drawable import ShapeDrawable
-        from android.graphics.drawable.shapes import PathShape
-        path = Path()
-        for index, (name, _) in enumerate(icons):
-            for line in ICONS[name][2]:
-                path.moveTo(line[0][0] + 28 * index, line[0][1])
-                for x, y in line[1:]:
-                    path.lineTo(x + 28 * index, y)
-        drawable = ShapeDrawable(PathShape(path, width, 24))
-        paint = drawable.getPaint()
-        paint.setStyle(Paint.Style.STROKE)
-        paint.setStrokeWidth(1.8)
-        paint.setStrokeCap(Paint.Cap.ROUND)
-        paint.setStrokeJoin(Paint.Join.ROUND)
-        paint.setAntiAlias(True)
-        native = button._impl.native
-        density = native.getResources().getDisplayMetrics().density
-        inset = button._impl.scale_in(button._impl._content_inset)
-        native.setPaddingRelative(inset, native.getPaddingTop(), inset, native.getPaddingBottom())
-        drawable.setBounds(0, 0, round(width * density), round(24 * density))
-        native.setCompoundDrawablesRelative(drawable, None, None, None)
-        native.setCompoundDrawablePadding(round(8 * density))
-        native.setContentDescription(' · '.join(filter(None,
-            (button.text.partition('\n')[0], getattr(button, 'description', ''), labels))))
-        button._impl._control_drawable = drawable
-        _android_controls.add(button._impl)
-        tint_android(button._impl)
-    return button
-
-
-def apply_icon(button, name, label, *, preserve_layout=False, size=None):
-    """Preserve callbacks, enabled state and native menus on an existing button."""
-    symbol, fallback, lines = ICONS[name]
-    if not preserve_layout:
-        button.text = fallback
-        button.style.width = button.style.height = 48
-    elif not type(button._impl).__module__.startswith(('toga_iOS.', 'toga_android.')):
-        button.text = fallback
-    button.control_icon = name
-    accessible_name(button, label)
-    backend = type(button._impl).__module__
-    if backend.startswith('toga_iOS.'):
-        from rubicon.objc import ObjCClass
-        if not preserve_layout:
-            button.text = ''
-        image = ObjCClass('UIImage').systemImageNamed(symbol)
-        if name in {'group', 'obsidian', 'skip_back', 'skip_forward', 'folder', 'folder_locked', 'folder_unlocked'}:
-            from math import radians
-            from rubicon.objc import Block, objc_id
-            from toga_iOS.libs import UIGraphicsImageRenderer, CGSize, CGPoint, CGRect
-            renderer = UIGraphicsImageRenderer.alloc().initWithSize(CGSize(24, 24))
-            def draw(context):
-                ObjCClass('UIColor').blackColor.setStroke()
-                path = ObjCClass('UIBezierPath').bezierPath()
-                skip = name.startswith('skip_')
-                path.lineWidth = FOLDER_STROKE_WIDTH if name in FOLDER_PATHS else 1.7 if skip else 1.8
-                path.lineCapStyle = 1
-                path.lineJoinStyle = 1
-                if skip:
-                    path.addArcWithCenter(CGPoint(12, 12), radius=9,
-                        startAngle=radians(-50), endAngle=radians(-330), clockwise=False)
-                for line in lines:
-                    path.moveToPoint(CGPoint(*line[0]))
-                    for point in line[1:]:
-                        path.addLineToPoint(CGPoint(*point))
-                path.stroke()
-                if name in FOLDER_FILLS:
-                    fill = ObjCClass('UIBezierPath').bezierPath()
-                    fill.usesEvenOddFillRule = True
-                    for contour in FOLDER_FILLS[name]:
-                        fill.moveToPoint(CGPoint(*contour[0]))
-                        for point in contour[1:]:
-                            fill.addLineToPoint(CGPoint(*point))
-                        fill.closePath()
-                    ObjCClass('UIColor').blackColor.setFill()
-                    fill.fill()
-                if skip:
-                    from rubicon.objc import ns_from_py
-                    paragraph = ObjCClass('NSMutableParagraphStyle').alloc().init()
-                    paragraph.alignment = 1
-                    font = ObjCClass('UIFont').systemFontOfSize(10)
-                    text = ObjCClass('NSString').stringWithString('15')
-                    text.drawInRect(CGRect((3, (25 - float(font.lineHeight)) / 2), (18, float(font.lineHeight))),
-                        withAttributes=ns_from_py({'NSFont': font,
-                            'NSColor': ObjCClass('UIColor').blackColor, 'NSParagraphStyle': paragraph}))
-            image = renderer.imageWithActions(Block(draw, None, objc_id)).imageWithRenderingMode(2)
-        config = ObjCClass('UIImageSymbolConfiguration').configurationWithPointSize(size or 22, weight=4 if size else 5)
-        button._impl.native.setImage(image, forState=0)
-        if not preserve_layout:
-            button._impl.native.setPreferredSymbolConfiguration(config, forImageInState=0)
-    elif backend.startswith('toga_android.'):
-        from android.graphics import Path, Paint
-        from android.graphics.drawable import ShapeDrawable
-        from android.graphics.drawable.shapes import PathShape
-        path = Path()
-        for line in lines:
-            path.moveTo(*line[0])
-            for point in line[1:]:
-                path.lineTo(*point)
-        if name == 'find':
-            path.addCircle(10, 10, 6, Path.Direction.CW)
-        elif name == 'contents':
-            for y in (6, 12, 18):
-                path.addCircle(3, y, .6, Path.Direction.CW)
-        elif name in {'skip_back', 'skip_forward'}:
-            path.addArc(3, 3, 21, 21, -50, -280)
-        elif name == 'more':
-            for x in (5, 12, 19):
-                path.addCircle(x, 12, 1, Path.Direction.CW)
-        elif name == 'overflow':
-            for y in (5, 12, 19):
-                path.addCircle(12, y, 1, Path.Direction.CW)
-        drawable = ShapeDrawable(PathShape(path, 24, 24))
-        paint = drawable.getPaint()
-        paint.setStyle(Paint.Style.FILL if name in {'stop', 'play'} else Paint.Style.STROKE)
-        paint.setStrokeWidth(FOLDER_STROKE_WIDTH if name in FOLDER_PATHS else 1.8)
-        paint.setStrokeCap(Paint.Cap.ROUND)
-        paint.setStrokeJoin(Paint.Join.ROUND)
-        paint.setAntiAlias(True)
-        native = button._impl.native
-        density = native.getResources().getDisplayMetrics().density
-        icon_size = size or 24
-        size, padding = round(icon_size * density), round((48 - icon_size) / 2 * density)
-        if preserve_layout and hasattr(button._impl, '_control_drawable'):
-            size = button._impl._control_drawable.getBounds().width()
-        drawable.setBounds(0, 0, size, size)
-        if not preserve_layout:
-            button.text = ''
-        if not preserve_layout:
-            native.setMinimumWidth(0)
-            native.setMinimumHeight(0)
-            native.setPadding(padding, padding, padding, padding)
-        if name in {'skip_back', 'skip_forward'}:
-            from android.graphics import Bitmap, Canvas
-            from android.graphics.drawable import BitmapDrawable
-            bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            canvas = Canvas(bitmap)
-            canvas.scale(size / 24, size / 24)
-            paint.setStrokeWidth(1.7)
-            canvas.drawPath(path, paint)
-            paint.setStyle(Paint.Style.FILL)
-            paint.setTextSize(10)
-            paint.setTextAlign(Paint.Align.CENTER)
-            canvas.drawText('15', 12, 12.5 - (paint.ascent() + paint.descent()) / 2, paint)
-            drawable = BitmapDrawable(native.getResources(), bitmap)
-            drawable.setBounds(0, 0, size, size)
-        if name in FOLDER_FILLS:
-            from android.graphics import Bitmap, Canvas
-            from android.graphics.drawable import BitmapDrawable
-            bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            canvas = Canvas(bitmap)
-            canvas.scale(size / 24, size / 24)
-            canvas.drawPath(path, paint)
-            fill = Path()
-            fill.setFillType(Path.FillType.EVEN_ODD)
-            for contour in FOLDER_FILLS[name]:
-                fill.moveTo(*contour[0])
-                for point in contour[1:]:
-                    fill.lineTo(*point)
-                fill.close()
-            paint.setStyle(Paint.Style.FILL)
-            canvas.drawPath(fill, paint)
-            drawable = BitmapDrawable(native.getResources(), bitmap)
-            drawable.setBounds(0, 0, size, size)
-        native.setCompoundDrawablesRelative(drawable, None, None, None)
-        button._impl._control_drawable = drawable
-        _android_controls.add(button._impl)
-        tint_android(button._impl)
-    return button
+_renderer = IconRenderer({name: _spec(name, value) for name, value in ICONS.items()}, tint_android=tint_android)
+refresh_icons = _renderer.refresh
+button_icons = _renderer.leading
+apply_icon = _renderer.apply
 
 
 def icon_button(name, label, *, on_press=None, enabled=True):

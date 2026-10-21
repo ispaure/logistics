@@ -185,3 +185,7 @@ Native surface painting, batching, drawable caches, dynamic Apple color provider
 accessibility names and contrast calculations now use commonUtils. Logistics keeps
 its Slate roles, E Ink decisions, bar placement, icon tinting, refresh registries
 and application-wide backend hooks.
+
+Mobile control icons use the commonUtils native renderer. Logistics retains
+its named artwork, folder artwork inputs, accessibility text, palette selection
+and E Ink tint policy. Shared browser and navigation controls reuse the renderer.
