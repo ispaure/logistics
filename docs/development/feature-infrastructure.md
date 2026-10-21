@@ -50,3 +50,13 @@ to an injected host service when its workflow is refactored. Mobile features use
 host services instead of importing the mobile application. Presentation integration
 edges among Books/Comics/rclone and IDE/Git/LM do not imply that domain modules may
 import one another's UI. Avoid broad repository-wide controller or utility folders.
+
+## Dependency graph implementation
+
+`Python/features/feature_graph.py` owns dependency availability and initialization
+ordering as toolkit-independent functions. Registry wrappers inject identity and
+dependency accessors, preserving its public APIs, cached declarations and test
+patch points. Preferences/migrations, activation and contribution aggregation
+remain registry responsibilities; graph traversal does not read settings, discover
+features or run registration hooks. Existing registry regressions cover cycles,
+missing dependencies, duplicate identities and startup ordering.

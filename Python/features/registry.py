@@ -316,29 +316,10 @@ def _get_feature_map() -> dict[str, ModuleType]:
     return feature_map
 
 
-def _is_feature_available(
-    feature_name: str,
-    feature_map: dict[str, ModuleType],
-    resolving: tuple[str, ...] = ()
-) -> bool:
-    """Resolve hard dependencies recursively for one feature."""
-
-    feature = feature_map.get(feature_name)
-
-    if feature is None or getattr(feature, 'FEATURE_LOAD_ERROR', None):
-        return False
-
-    if feature_name in resolving:
-        dependency_chain = ' -> '.join((*resolving, feature_name))
-        raise RuntimeError(f'Circular Logistics feature dependency: {dependency_chain}')
-
-    next_resolving = (*resolving, feature_name)
-
-    for dependency_name in get_feature_dependencies(feature):
-        if not _is_feature_available(dependency_name, feature_map, next_resolving):
-            return False
-
-    return True
+def _is_feature_available(feature_name: str, feature_map: dict[str, ModuleType],
+                          resolving: tuple[str, ...] = ()) -> bool:
+    from .feature_graph import available
+    return available(feature_name, feature_map, get_feature_dependencies, resolving)
 
 
 def is_feature_available(feature_name: str) -> bool:
@@ -390,34 +371,8 @@ def _log_unavailable_features() -> None:
 # FEATURE INITIALIZATION
 
 def _get_initialization_order(features: list[ModuleType]) -> list[ModuleType]:
-    """Visit hard dependencies first, preserving discovery order where possible."""
-
-    feature_map = {_get_feature_name(feature): feature for feature in features}
-    if len(feature_map) != len(features):
-        raise ValueError('Duplicate Logistics feature names in initialization list.')
-
-    ordered = []
-    initialized_names = set()
-
-    def visit(feature_name: str, chain: tuple[str, ...] = ()) -> None:
-        if feature_name in initialized_names:
-            return
-        if feature_name in chain:
-            dependency_chain = ' -> '.join((*chain, feature_name))
-            raise RuntimeError(f'Circular Logistics feature dependency: {dependency_chain}')
-        if feature_name not in feature_map:
-            dependency_chain = ' -> '.join((*chain, feature_name))
-            raise RuntimeError(f'Missing Logistics feature dependency: {dependency_chain}')
-
-        feature = feature_map[feature_name]
-        for dependency_name in get_feature_dependencies(feature):
-            visit(dependency_name, (*chain, feature_name))
-        initialized_names.add(feature_name)
-        ordered.append(feature)
-
-    for feature in features:
-        visit(_get_feature_name(feature))
-    return ordered
+    from .feature_graph import initialization_order
+    return initialization_order(features, _get_feature_name, get_feature_dependencies)
 
 
 def initialize_features() -> list[ModuleType]:
