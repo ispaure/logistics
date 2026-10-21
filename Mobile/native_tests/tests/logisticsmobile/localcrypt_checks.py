@@ -38,11 +38,19 @@ async def exercise_localcrypt(app, passed):
     assert len(app.crypt_labels) == len(fixture['copies']), app.cloud_status.value
 
     async def close_copy():
+        from unittest.mock import AsyncMock, patch
         owner = app.provider_sessions().active
-        app.close_crypt()
-        pending = getattr(owner, '_exit_task', None)
-        if pending is not None:
-            await asyncio.wait_for(asyncio.shield(pending), 60)
+        # These cases test private-session lifetime, not native dialog taps.
+        # Complete Cancel explicitly instead of leaving a modal over later cases.
+        with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as decision:
+            app.close_crypt()
+            pending = getattr(owner, '_exit_task', None)
+            if pending is not None:
+                await asyncio.wait_for(asyncio.shield(pending), 60)
+            pending = getattr(app, '_document_close_tasks', {}).get(owner.session.id)
+            if pending is not None:
+                await asyncio.wait_for(asyncio.shield(pending), 60)
+                decision.assert_awaited_once()
         # UIKit restores retained folder rows after a reader pop. Finish that
         # navigation before starting another listing on the same browser.
         pending = app.routes.folders.task
@@ -174,7 +182,11 @@ async def exercise_localcrypt(app, passed):
     await asyncio.sleep(.1)
     assert first.crypt_text.value == 'First native memory-only draft'
     assert second.crypt_text.value == 'Second native memory-only draft'
-    app.request_close_session(first.session.id)
+    from unittest.mock import AsyncMock, patch
+    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as decision:
+        app.request_close_session(first.session.id)
+        await app._document_close_tasks[first.session.id]
+        decision.assert_awaited_once()
     assert not app.close_session(first.session.id, choice='cancel')
     first.resume_crypt()
     await app.clear_cloud()
@@ -191,7 +203,6 @@ async def exercise_localcrypt(app, passed):
     # A real ciphertext open can complete after the user starts writing again.
     # Keep the loaded provider session available without changing that selection.
     from threading import Event
-    from unittest.mock import patch
     started, release = Event(), Event()
     original_open = app.crypt_copies.open
     def delayed_open(*args, **kwargs):
@@ -207,11 +218,13 @@ async def exercise_localcrypt(app, passed):
     with patch.object(app.crypt_copies, 'open', side_effect=delayed_open):
         task = asyncio.create_task(app.open_crypt(copies=app.crypt_copies, key=key))
         try:
-            for _ in range(200):
-                if started.is_set():
+            deadline = asyncio.get_running_loop().time() + 30
+            while asyncio.get_running_loop().time() < deadline:
+                if started.is_set() or task.done():
                     break
                 await asyncio.sleep(.01)
-            assert started.is_set()
+            assert started.is_set(), ('Private-opening worker did not start',
+                task.result() if task.done() else 'pending', app.cloud_busy, app.cloud_status.value)
             app.show_documents(destination='documents')
             app.editor.value = 'Native ordinary draft during private opening'
             body = app.body
@@ -259,6 +272,11 @@ async def exercise_localcrypt(app, passed):
         await close_copy()
         assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None) is reader and app.private_dirty()
         app.edit_crypt_metadata()
+        # Re-presenting the retained metadata screen can schedule a native
+        # reader reload. The real Save button is disabled until that work ends.
+        await asyncio.sleep(.1)
+        owner = app.provider_sessions().active
+        await asyncio.wait_for(owner.operation_idle.wait(), 60)
         print('LOGISTICS_NATIVE_METADATA=' + name + ':save', flush=True)
         await app.save_crypt_metadata()
         assert app.provider_sessions().active.crypt_metadata_status.text == 'Metadata saved encrypted locally.', app.provider_sessions().active.crypt_metadata_status.text
