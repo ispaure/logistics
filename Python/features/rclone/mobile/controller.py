@@ -1,6 +1,16 @@
 """Owned workflow state and explicit application services."""
-from services.workflow_host import HostAttribute
+from dataclasses import dataclass
+from typing import Any
+from services.workflow_host import HostAttribute, StateAttribute
+from .smb_connection import SMBConnection, SMBFormState
 from features.rclone.mobile.cloud_ui import CloudUI
+
+
+@dataclass
+class CloudState:
+    busy: bool = False
+    client: Any = None
+    remote_read_busy: bool = False
 
 
 class CloudController(CloudUI):
@@ -11,9 +21,28 @@ class CloudController(CloudUI):
 
     def __init__(self, app):
         self.app = app
-        self.cloud_busy = False
-        self.cloud_client = None
-        self.remote_read_busy = False
+        self.state = CloudState()
+        self.smb_form = SMBFormState()
+        self.smb_connection = SMBConnection(self, self.smb_form)
+
+    cloud_busy = StateAttribute('state', 'busy')
+    cloud_client = StateAttribute('state', 'client')
+    remote_read_busy = StateAttribute('state', 'remote_read_busy')
+    smb_account = StateAttribute('smb_form', 'smb_account')
+    smb_advanced_toggle = StateAttribute('smb_form', 'smb_advanced_toggle')
+    smb_connect = StateAttribute('smb_form', 'smb_connect')
+    smb_domain = StateAttribute('smb_form', 'smb_domain')
+    smb_guest = StateAttribute('smb_form', 'smb_guest')
+    smb_help_toggle = StateAttribute('smb_form', 'smb_help_toggle')
+    smb_host = StateAttribute('smb_form', 'smb_host')
+    smb_name = StateAttribute('smb_form', 'smb_name')
+    smb_password = StateAttribute('smb_form', 'smb_password')
+    smb_port = StateAttribute('smb_form', 'smb_port')
+    smb_remember = StateAttribute('smb_form', 'smb_remember')
+    smb_signin = StateAttribute('smb_form', 'smb_signin')
+    smb_status = StateAttribute('smb_form', 'smb_status')
+    smb_user = StateAttribute('smb_form', 'smb_user')
+    smb_view = StateAttribute('smb_form', 'smb_view')
 
     _crypt_cancel = HostAttribute('_crypt_cancel')
     _folder_opening = HostAttribute('_folder_opening')

@@ -253,3 +253,13 @@ without importing the application package. The application supplies browser/menu
 ## Mobile source manifest
 
 `../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.
+
+## Mobile connection ownership
+
+`mobile/controller.py` owns `CloudState` (client and busy flags) and an explicit
+`SMBFormState`. `mobile/smb_connection.py` owns SMB form construction, guest/account
+presentation and asynchronous connection submission through `ConnectionHost`.
+The form consumes and clears its password before dispatch. State stays on the
+cloud controller; app-level field and method accessors remain compatible.
+`test_connection_settings.py`, `test_smb_ui.py` and `test_workflow_ownership.py`
+cover this boundary. Update the owner mobile manifest with source moves.

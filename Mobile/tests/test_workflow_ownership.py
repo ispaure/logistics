@@ -29,6 +29,14 @@ class WorkflowOwnershipTests(unittest.TestCase):
         owner = app.cloud_controller()
         self.assertIs(app.cloud_controller(), owner)
         self.assertIsNone(owner.cloud_client)
+        self.assertIs(owner.state.client, app.cloud_client)
+        app.cloud_busy = True
+        self.assertTrue(owner.state.busy)
+        app.cloud_busy = False
+        app.show_smb_connection()
+        self.assertIs(app.smb_password, owner.smb_form.smb_password)
+        self.assertNotIn('smb_password', app.__dict__)
+        self.assertNotIn('smb_password', owner.__dict__)
         self.assertNotIn('cloud_client', app.__dict__)
         self.assertNotIsInstance(app, (ChatUI, CloudUI))
         with self.assertRaises(AttributeError):

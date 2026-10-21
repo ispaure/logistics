@@ -20,6 +20,7 @@
     "mobile/previews.py",
     "mobile/remote_readers.py",
     "mobile/session_privacy.py",
+    "mobile/smb_connection.py",
     "mobile/storage_location.py",
     "remote_policy.py",
     "transfers/__init__.py",

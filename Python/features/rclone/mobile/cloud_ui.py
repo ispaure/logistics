@@ -385,88 +385,13 @@ class CloudUI(LocalCryptUI):
             self.set_cloud_busy(False)
 
     def show_smb_connection(self, widget=None, **kwargs):
-        self.show_cloud(present=False)
-        if self.cloud_busy:
-            return
-        if not hasattr(self, 'smb_view'):
-            self.smb_name = toga.TextInput(placeholder='Connection name (e.g. Home Mac)', style=Pack(height=44))
-            self.smb_host = toga.TextInput(placeholder='Server IP or hostname (e.g. 192.168.1.10)', style=Pack(height=44))
-            self.smb_user = toga.TextInput(placeholder='Your server account', style=Pack(height=44))
-            self.smb_password = PasswordInput(placeholder='Share password', style=Pack(height=44))
-            self.smb_domain = toga.TextInput(value='WORKGROUP', style=Pack(height=44))
-            self.smb_port = toga.TextInput(value='445', style=Pack(height=44))
-            self.smb_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
-            ui = self.rclone_ui
-            self.smb_status = ui.settings_note('')
-            self.smb_guest = toga.Switch('Connect as guest', value=False, on_change=self.change_smb_guest, style=Pack(height=44))
-            self.smb_account = toga.Box(children=[ui.settings_field('Username', self.smb_user),
-                ui.settings_field('Password', self.smb_password)], style=Pack(direction=COLUMN))
-            self.smb_signin = ui.settings_group([self.smb_guest, self.smb_account])
-            advanced, self.smb_advanced_toggle = ui.settings_disclosure('Advanced options', [
-                ui.settings_group([ui.settings_field('Domain', self.smb_domain), ui.settings_field('Port', self.smb_port)])])
-            help_box, self.smb_help_toggle = ui.settings_disclosure('Need help connecting?', [
-                ui.settings_note('Use the same network or VPN. On a Mac, enable File Sharing, turn on SMB, and allow your account. Use a hostname or IP without smb:// or a share path.')])
-            self.smb_connect = toga.Button('Connect & browse shares', on_press=self.connect_smb, style=Pack(height=48))
-            self.smb_view = ui.settings_page('SMB shares', 'Connect to a Mac, PC, or NAS on your network.', [
-                ui.settings_heading('NEW CONNECTION'),
-                ui.settings_group([ui.settings_field('Connection name', self.smb_name), ui.settings_field('Server address', self.smb_host)]),
-                ui.settings_note('Use a hostname or IP address. Choose a share after connecting.'),
-                ui.settings_heading('SIGN IN'), self.smb_signin, advanced,
-                ui.settings_group([self.smb_remember]), ui.settings_note('Turn off to connect for this session only.'),
-                self.smb_connect, help_box, self.smb_status])
-        self.smb_connect.enabled = self.cloud_client is not None
-        self.show_view(self.smb_view, destination='settings', route='smb-connection', title='SMB shares')
+        return self.smb_connection.show_smb_connection(widget, **kwargs)
 
     def change_smb_guest(self, widget=None, **kwargs):
-        self.smb_password.value = ''
-        if self.smb_guest.value:
-            if self.smb_account.parent is not None:
-                self.smb_signin.remove(self.smb_account)
-        elif self.smb_account.parent is None:
-            self.smb_signin.add(self.smb_account)
-        if hasattr(self, 'smb_view'):
-            self.smb_view.reflow()
+        return self.smb_connection.change_smb_guest(widget, **kwargs)
 
     async def connect_smb(self, widget=None, **kwargs):
-        if self.cloud_busy or self.cloud_client is None:
-            return
-        name, host, user, domain, port = (control.value.strip() for control in
-            (self.smb_name, self.smb_host, self.smb_user, self.smb_domain, self.smb_port))
-        password = self.smb_password.value
-        self.smb_password.value = ''
-        if self.smb_guest.value:
-            user, password = 'guest', ''
-        if not name or not host or not user:
-            self.smb_status.text = 'Enter a connection name, server address, and username, or choose guest access.'
-            return
-        remember = self.smb_remember.value
-        self.set_cloud_busy(True)
-        self.smb_connect.enabled = False
-        self.smb_status.text = 'Adding connection…'
-        try:
-            names = await asyncio.to_thread(self.cloud_client.add_smb, name, host, user, password,
-                                           domain, port or '445', remember=remember)
-            if not self.active_host:
-                return
-            visible_remotes = self.rclone_ui.visible_remotes
-            self.set_loaded_remote_names(self.visible_remote_names(names))
-            await self._load_crypt_remote_names()
-            self.cloud_remote.value = name
-            self.cloud_location.value = self.cloud_path = ''
-            self.cloud_open_remote = None
-            self.cloud_rows = {}
-            self.cloud_entries.items = []
-            self.remember_loaded_packages(self.cloud_client.package_name, names, session_only=not remember)
-            self.cloud_package.text = self.loaded_package_label()
-            self.smb_status.text = 'Connection added. Browse a share and choose Pull… for an offline folder.'
-        except Exception as error:
-            self.smb_status.text = import_hint('Could not add connection: ' + str(error)[:180])
-            return
-        finally:
-            self.set_cloud_busy(False)
-            self.smb_connect.enabled = True
-        self.show_cloud()
-        await self.browse_cloud()
+        return await self.smb_connection.connect_smb(widget, **kwargs)
 
     def selected_cloud_remote(self):
         try:
