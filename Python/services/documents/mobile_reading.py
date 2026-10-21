@@ -1,19 +1,19 @@
 """Presentation and lifecycle services injected into feature reader workflows."""
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 
 @dataclass(frozen=True)
 class ReadingPresentation:
-    seam: Callable
-    mode: Callable
+    seam: Callable[[Any], float | None]
+    mode: Callable[[Any], str]
     layout_changed: Callable
-    content_width: Callable
-    private_label: Callable
-    speech_valid: Callable
+    content_width: Callable[[str], int]
+    private_label: Callable[[Any], str]
+    speech_valid: Callable[[], bool]
     speech_presentation: object
-    highlight_allowed: Callable
+    highlight_allowed: Callable[[], bool]
     comic_path: Callable
-    notify_layout: Callable
+    notify_layout: Callable[[], None]
     themed_chapter: Callable

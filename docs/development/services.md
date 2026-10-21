@@ -18,3 +18,13 @@ Application policies and orchestration live here. Reusable mechanisms and their 
 Portable document preparation must import without Qt, Toga or the mobile application. Feature-specific format rules stay with Books/Comics; encrypted storage and bounded Markdown resource loading stay with rclone. Hosts retain window/navigation, publication and recovery policy.
 
 Start with `test_document_preparation.py`, `test_feature_boundaries.py`, `test_editor_resource_picker.py`, `test_folder_safety.py` and `test_folder_sources_ui.py` in `Python/tests/`, plus mobile picker/workspace/packaging checks. Tests retain their current flat discovery layout.
+
+## Typed mobile presentation ports
+
+`services/mobile_presentation.py` declares toolkit-independent callable protocols
+for icon construction, icon application, Markdown previews and font binding.
+`services/documents/mobile_reading.py` gives reader dimensions and validity checks
+explicit signatures. Native widget values stay opaque (`Any`); these contracts do
+not import Qt/Toga. Feature-specific connection dependencies are declared by
+`ConnectionHost` beside the SMB workflow. Broader factories retain their existing
+call shapes until their own workflows are extracted.
