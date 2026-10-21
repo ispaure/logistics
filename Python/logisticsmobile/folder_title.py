@@ -1,16 +1,47 @@
 """Folder identity and actions share UIKit's safe navigation bar."""
 
 
+def action_group_type():
+    global _action_group_type
+    if '_action_group_type' not in globals():
+        from rubicon.objc import ObjCClass, UIEdgeInsets, objc_method, objc_property, send_super
+
+        class LogisticsFolderActions(ObjCClass('UIStackView')):
+            actionWidth = objc_property(object)
+            actionBaseWidth = objc_property(object)
+
+            @objc_method
+            def layoutSubviews(self) -> None:
+                send_super(__class__, self, 'layoutSubviews')
+                window = self.window
+                window = window() if callable(window) else window
+                if window is None or self.actionWidth is None:
+                    return
+                rect = self.convertRect(self.bounds, toView=window)
+                edge = float(window.bounds.size.width) - float(window.safeAreaInsets.right)
+                inset = max(0, float(rect.origin.x + rect.size.width) - edge)
+                if abs(float(self.layoutMargins.right) - inset) > .5:
+                    self.layoutMargins = UIEdgeInsets(0, 0, 0, inset)
+                    self.actionWidth.constant = float(self.actionBaseWidth) + inset
+
+        _action_group_type = LogisticsFolderActions
+    return _action_group_type
+
+
 def mount_actions(header, controller):
     """Keep the existing buttons and their native menus in the trailing bar."""
-    from rubicon.objc import ObjCClass, CGRect
+    from rubicon.objc import ObjCClass, CGRect, UIEdgeInsets
     from .ios_reader_chrome import bar_control
     buttons = header.title_actions
     # Use one group so iPad does not collapse separate custom items into More.
-    group = ObjCClass('UIStackView').alloc().initWithFrame(CGRect((0, 0), (48 * len(buttons), 48)))
+    group = action_group_type().alloc().initWithFrame(CGRect((0, 0), (48 * len(buttons), 48)))
     group.translatesAutoresizingMaskIntoConstraints = False
     group.axis, group.distribution, group.alignment, group.spacing = 0, 1, 0, 0
-    group.widthAnchor.constraintEqualToConstant(48 * len(buttons)).active = True
+    group.layoutMargins = UIEdgeInsets(0, 0, 0, 0)
+    group.layoutMarginsRelativeArrangement = True
+    group.actionBaseWidth = 48 * len(buttons)
+    group.actionWidth = group.widthAnchor.constraintEqualToConstant(48 * len(buttons))
+    group.actionWidth.active = True
     group.heightAnchor.constraintEqualToConstant(48).active = True
     item = ObjCClass('UIBarButtonItem').alloc().initWithCustomView(group)
     for button in buttons:
