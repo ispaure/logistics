@@ -464,18 +464,23 @@ async def exercise_localcrypt(app, passed):
     assert not browser.icons
     await browser.activate_entry(entry)
     assert app.private_sessions.active.crypt_reader.name == 'large-browser.cbz'
+    await app.show_files()
+    assert app.file_browser is browser
     browser.show_list()
     assert browser.mode == 'List'
     browser.sort.value = 'Name Z–A'
     assert browser.entries[0].container
     browser.search_button.on_press()
-    assert browser.search_panel in browser.widget.children
+    assert browser.search_open
+    header = browser.location_bar
+    assert browser.search_panel.parent is getattr(header, 'native_actions', header)
     browser.search.value = 'nested-search'
     while browser.tasks:
         await asyncio.gather(*tuple(browser.tasks))
     assert [item.label for item in browser.entries] == ['navigation/nested-search.md']
     await browser.activate_entry(browser.entries[0])
     assert app.selected_file()[1] == 'navigation/nested-search.md'
+    await app.show_files()
     browser.search.value = 'LARGE-BROWSER'
     while browser.tasks:
         await asyncio.gather(*tuple(browser.tasks))
@@ -493,7 +498,8 @@ async def exercise_localcrypt(app, passed):
     browser.close_search_button.on_press()
     while browser.tasks:
         await asyncio.gather(*tuple(browser.tasks))
-    assert browser.search.value == '' and browser.search_panel not in browser.widget.children
+    assert browser.search.value == '' and not browser.search_open
+    assert browser.search_panel.parent is None
     folder = next(item for item in browser.entries if item.label == 'navigation')
     await browser.activate_entry(folder)
     assert app.file_path == 'navigation' and browser.back_button.enabled
