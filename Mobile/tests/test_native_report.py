@@ -16,6 +16,30 @@ spec.loader.exec_module(ui_tools)
 
 
 class NativeReportTests(unittest.TestCase):
+    def test_simulator_selection_keeps_duo_separate_from_renamed_iphone(self):
+        def device(kind, name, state='Shutdown'):
+            return dict(isAvailable=True, name=name, state=state, udid=name,
+                        deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.' + kind)
+        data = {'devices': {'com.apple.CoreSimulator.SimRuntime.iOS-27-1': [
+            device('iPhone-Duo', 'iPhone Duo', 'Booted'),
+            device('iPhone-18-Pro', 'Review phone'), device('iPad-Pro', 'Review tablet')]}}
+        self.assertEqual(ui_tools.select_ios_device(data), 'Review phone')
+        self.assertEqual(ui_tools.select_ios_device(data, duo=True), 'iPhone Duo')
+        self.assertEqual(ui_tools.select_ios_device(data, ipad=True), 'Review tablet')
+        data['devices']['com.apple.CoreSimulator.SimRuntime.iOS-27-1'].pop(0)
+        with self.assertRaisesRegex(RuntimeError, 'Duo'):
+            ui_tools.select_ios_device(data, duo=True)
+
+    def test_duo_gate_rejects_missing_poses_or_incomplete_rotation(self):
+        samples = [dict(panel=panel, orientation=orientation, pose=dict(duo_capable=True))
+                   for panel in ('workspaces', 'folder', 'comic', 'documentation')
+                   for orientation in ('portrait', 'landscape-left', 'landscape-right')]
+        report = dict(ui_review=dict(rotation_samples=samples))
+        ui_tools.verify_duo_rotation(report)
+        for broken in (samples[:-1], [dict(row, pose=dict(duo_capable=False)) for row in samples], []):
+            with self.assertRaises(ValueError):
+                ui_tools.verify_duo_rotation(dict(ui_review=dict(rotation_samples=broken)))
+
     def test_repeated_running_callback_keeps_one_exercise_per_app(self):
         coroutine, task = object(), Mock()
         exercise = Mock(return_value=coroutine)

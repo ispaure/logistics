@@ -16,7 +16,39 @@ def panel_state(app):
     panel = ('settings-category', settings.selected) if category else tuple(id(child) for child in body.children)
     source = getattr(app, 'folder_source', None) if destination == 'files' else None
     return (destination, route_state, panel, source, getattr(app, 'file_path', None),
+            content_state(app),
             tuple(row[0] for row in app.adaptive.detail_routes), app.adaptive.in_detail)
+
+
+
+def content_state(app):
+    """Layout changes must retain logical content, not just the top route."""
+    from hashlib import sha256
+    reader = getattr(getattr(app, 'readers', None), 'active', None)
+    record = getattr(reader, 'book_record', None) or {}
+    private = getattr(getattr(app, 'private_sessions', None), 'active', None)
+    comic = getattr(getattr(private, 'crypt_reader', None), 'comic_navigation', None)
+    editor = getattr(app, 'editor_view', None)
+    text = getattr(getattr(editor, 'editor', None), 'value', '') or ''
+    return (record.get('id'), record.get('position'), getattr(comic, 'page', None),
+            sha256(text.encode()).hexdigest())
+
+
+def pose_snapshot(app):
+    if sys.platform != 'ios':
+        return dict(duo_capable=False)
+    from dataclasses import asdict
+    from logisticsmobile.fold_layout import reserved_divisions
+    regions = reserved_divisions(app.main_window)
+    all_regions = reserved_divisions(app.main_window, include_inactive=True)
+    status = getattr(app, '_hinge_status', 0)
+    native = app.main_window._impl.native
+    return dict(duo_capable=bool(status or all_regions), hinge_status=status,
+                division_regions=[asdict(region) for region in regions],
+                horizontal_size_class=int(native.traitCollection.horizontalSizeClass),
+                vertical_size_class=int(native.traitCollection.verticalSizeClass),
+                interface_orientation=int(native.windowScene.interfaceOrientation),
+                width=float(native.bounds.size.width), height=float(native.bounds.size.height))
 
 
 
@@ -31,7 +63,12 @@ async def rotate(app, orientation):
         app._impl.native.setRequestedOrientation({'portrait': 1, 'landscape-left': 0, 'landscape-right': 8}[orientation])
     for _ in range(60):
         await asyncio.sleep(.1)
-        if (app.main_window.size.width > app.main_window.size.height) == landscape:
+        if sys.platform == 'ios':
+            # Interface orientation is only an acknowledgement of this request,
+            # never an input to production layout or an aspect-ratio assumption.
+            if int(app.main_window._impl.native.windowScene.interfaceOrientation) == {'portrait': 1, 'landscape-left': 3, 'landscape-right': 4}[orientation]:
+                break
+        elif (app.main_window.size.width > app.main_window.size.height) == landscape:
             break
     else:
         raise AssertionError('Native rotation did not complete: ' + orientation)
@@ -74,12 +111,14 @@ def safe_geometry(app):
     assert window_rect.origin.x >= safe.left - 1, result
     assert window_rect.origin.x + window_rect.size.width <= window.bounds.size.width - safe.right + 1, result
     assert window_rect.origin.y >= safe.top - 1, result
-    assert window_rect.origin.y + window_rect.size.height <= window.bounds.size.height - safe.bottom + 1, result
+    # A root background/scroll surface may extend beneath the Home indicator
+    # and keyboard. Fixed foreground controls have their own stricter audit.
+    assert window_rect.origin.y + window_rect.size.height <= window.bounds.size.height + 1, result
     assert result['view_width'] > 0 and result['view_height'] > 0, result
     assert rect.origin.x >= insets.left - 1, result
     assert rect.origin.x + rect.size.width <= size.width - insets.right + 1, result
     assert rect.origin.y >= insets.top - 1, result
-    assert rect.origin.y + rect.size.height <= size.height - insets.bottom + 1, result
+    assert rect.origin.y + rect.size.height <= size.height + 1, result
     return result
 
 
@@ -139,7 +178,8 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
                 await rotate(app, orientation)
                 actual = panel_state(app)
                 assert actual == expected, (name, orientation, expected, actual)
-                sample = dict(panel=name, cycle=cycle, orientation=orientation, **safe_geometry(app))
+                sample = dict(panel=name, cycle=cycle, orientation=orientation,
+                              pose=pose_snapshot(app), **safe_geometry(app))
                 sample['fixed_controls'] = assert_visible_controls(app)
                 if sys.platform == 'ios' and name in ('folder', 'nested-folder', 'home-file-picker'):
                     assert sample['fixed_controls'] >= 1, ('No mounted controls audited', name)

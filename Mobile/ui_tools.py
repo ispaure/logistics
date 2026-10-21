@@ -86,7 +86,7 @@ def simulator_report(device, started_ns, *, diagnostics=None):
     return json.loads(raw)
 
 
-def run(target, device, *, local=False, require_independent_windows=False):
+def run(target, device, *, local=False, require_independent_windows=False, require_duo=False):
     command = ['briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
     if target == 'android':
@@ -147,16 +147,44 @@ def run(target, device, *, local=False, require_independent_windows=False):
         report = verify(path, target, output, local_manifest=manifest)
     if require_independent_windows and report.get('independent_windows_tested') is not True:
         raise ValueError('This run did not verify independent system windows.')
+    if require_duo:
+        verify_duo_rotation(report)
     return report
 
 
-def ios_device(*, ipad=False):
-    data = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '--json']))
+
+def verify_duo_rotation(report):
+    """Require native Duo observations and both rotation directions per panel."""
+    review = report.get('ui_review') or {}
+    samples = review.get('rotation_samples', [])
+    required = {'portrait', 'landscape-left', 'landscape-right'}
+    panels = {row.get('panel') for row in samples}
+    if (not {'workspaces', 'folder', 'comic', 'documentation'} <= panels
+            or not all(row.get('pose', {}).get('duo_capable') for row in samples)
+            or any(not required <= {row.get('orientation') for row in samples if row.get('panel') == panel}
+                   for panel in panels)):
+        raise ValueError('This run did not verify the native iPhone Duo rotation matrix.')
+
+
+def select_ios_device(data, *, ipad=False, duo=False):
+    """Select a distinct hardware family, including renamed simulator instances."""
+    def matches(device):
+        identity = device.get('deviceTypeIdentifier', '') or device['name']
+        if duo:
+            return 'iPhone-Duo' in identity or 'iPhone Duo' in identity
+        if ipad:
+            return 'iPad' in identity
+        return 'iPhone' in identity and 'Duo' not in identity
     devices = [d for runtime, items in data['devices'].items() if '.iOS-' in runtime
-               for d in items if d.get('isAvailable') and d['name'].startswith('iPad' if ipad else 'iPhone')]
+               for d in items if d.get('isAvailable') and matches(d)]
     if not devices:
-        raise RuntimeError('No available requested iOS Simulator device.')
+        raise RuntimeError('No available ' + ('iPhone Duo (iOS 27.1+)' if duo else 'iPad' if ipad else 'ordinary iPhone') + ' Simulator device.')
     return sorted(devices, key=lambda d: d['state'] != 'Booted')[0]['udid']
+
+
+def ios_device(*, ipad=False, duo=False):
+    data = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '--json']))
+    return select_ios_device(data, ipad=ipad, duo=duo)
 
 
 def ios_diagnostics():
@@ -191,19 +219,22 @@ def ios_diagnostics():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('run', 'ios-device', 'ios-ipad', 'ios-diagnostics'))
+    parser.add_argument('command', choices=('run', 'ios-device', 'ios-ipad', 'ios-duo', 'ios-diagnostics'))
     parser.add_argument('target', choices=('android', 'ios'), nargs='?')
     parser.add_argument('--device')
     parser.add_argument('--local', action='store_true', help='Verify this exact local payload; not release evidence')
     parser.add_argument('--require-independent-windows', action='store_true')
+    parser.add_argument('--require-duo', action='store_true')
     args = parser.parse_args()
     if args.command == 'ios-device':
         print(ios_device())
     elif args.command == 'ios-ipad':
         print(ios_device(ipad=True))
+    elif args.command == 'ios-duo':
+        print(ios_device(duo=True))
     elif args.command == 'ios-diagnostics':
         ios_diagnostics()
     else:
         if not args.target or not args.device:
             parser.error('run requires a target and --device')
-        run(args.target, args.device, local=args.local, require_independent_windows=args.require_independent_windows)
+        run(args.target, args.device, local=args.local, require_independent_windows=args.require_independent_windows, require_duo=args.require_duo)

@@ -339,3 +339,58 @@ uninstalls or clears app data. Multiple ready devices require a selection or
 `--device SERIAL`. Use `--build-only` to stop after creating the APK. See
 [the launcher instructions](mobile-launchers.md#double-click-android-deployment)
 for prerequisites and log locations.
+
+## Duo rotation and fold verification
+
+The iOS CI job keeps separate ordinary iPhone, iPad and Duo runs while reusing
+the simulator build. `ui_tools.py ios-device` excludes Duo, `ios-ipad` selects
+an iPad and `ios-duo` selects Duo using its simulator device-type identifier,
+including renamed devices. The Duo run requires observed hinge capability and
+portrait plus both landscape directions for every tested panel. It preserves
+its report separately as `logs/duo-native-ui.json`. Missing Duo/runtime support
+fails the lane rather than silently substituting an ordinary phone. CI was not
+remotely dispatched as part of the local implementation.
+
+Rotation evidence records actual scene dimensions, size classes, hinge status
+and reserved divisions, alongside retained routes and logical reader/draft
+state. It does not infer interface orientation from aspect ratio. Root surfaces
+may draw beneath the Home indicator or keyboard; fixed foreground controls are
+audited separately against the window safe area.
+
+For a synthetic local audit without replacing the normal app, use an existing
+Logistics Simulator build (selected with Xcode 27.1):
+
+```sh
+python Mobile/duo_pose_tools.py --app '/absolute/path/Logistics Mobile.app' \
+  --device DUO_UDID --output Mobile/logs/duo-outer-review
+```
+
+This prepares the curated source snapshot in a temporary directory, installs
+`io.github.ispaure.logisticsduofoldqa`, runs toolbar/rotation checks, collects
+screenshots and reports, and uninstalls that QA bundle even after a failed run.
+It preserves the normal app and its data. Each output directory must be new.
+
+For interior validation, first choose the real pose in Device Hub and add
+`--pose-sweep`; the audit walks the panels at the observed geometry without
+trying to command an unsupported inner interface orientation. Repeat for flat
+and partially folded interior displays in tall and wide configurations. The
+public simulator CLI and installed XCTest headers expose no fold-position
+setter, so these pose changes remain an explicit local Device Hub check.
+Apple recommends reserved-region/arrangement APIs for layout rather than hinge
+angles; see [adaptive layouts](https://developer.apple.com/videos/play/tech-talks/111463/)
+and [preparing and testing Duo](https://developer.apple.com/videos/play/tech-talks/111461/).
+
+Add `--observe-folds --timeout 1800` to keep a retained comic open after the sweep.
+Open, close, partially fold and rotate in Device Hub. The monitor checks the
+same logical page and route, records actual geometry, and verifies that an
+interior right-hand page matches the outer anchor. Its
+`comic_fold_round_trip_tested` flag requires all six observed tall/wide exterior,
+flat-interior and folded-interior states. `all_fold_poses_tested` remains false:
+that comic-only monitor cannot establish every panel's complete pose matrix.
+A green exterior CI run does not replace the interior sweeps or this continuity
+check. Save the reports with source hashes before claiming native fold coverage.
+
+Boox/browser proportion contracts have host coverage. Physical Boox validation
+requires a connected device; after testing, remove temporary QA/probe packages
+and verify the main `io.github.ispaure.logisticsmobile` package and its data are
+preserved.

@@ -33,7 +33,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.target == 'android' && '[{"target":"android","os":"ubuntu-24.04"}]' || inputs.target == 'ios' && '[{"target":"ios","os":"xcode-27"}]' || '[{"target":"android","os":"ubuntu-24.04"},{"target":"ios","os":"xcode-27"}]') }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.target == 'ios' && 75 || 60 }}
+    timeout-minutes: ${{ matrix.target == 'ios' && 110 || 60 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -94,7 +94,7 @@ jobs:
         run: |
           sudo chmod a+rw /dev/kvm
           python ui_tools.py run android --device '{"avd":"LogisticsValidation","device_type":"pixel","skin":null,"system_image":"system-images;android-35;google_apis;x86_64"}'
-      - name: Exercise iPhone and iPad panels, rotation and safe areas
+      - name: Exercise iPhone, iPad and Duo panels, rotation and safe areas
         if: matrix.target == 'ios'
         working-directory: Mobile
         env:
@@ -107,6 +107,10 @@ jobs:
           device=$(python ui_tools.py ios-ipad)
           python ui_tools.py run ios --device "$device" --require-independent-windows
           cp logs/ios-native-ui.json logs/ipad-native-ui.json
+          xcrun simctl shutdown "$device"
+          device=$(python ui_tools.py ios-duo)
+          python ui_tools.py run ios --device "$device" --require-duo
+          cp logs/ios-native-ui.json logs/duo-native-ui.json
       - name: Capture iOS startup and crash diagnostics
         if: failure() && matrix.target == 'ios'
         working-directory: Mobile
