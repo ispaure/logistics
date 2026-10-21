@@ -263,3 +263,26 @@ The form consumes and clears its password before dispatch. State stays on the
 cloud controller; app-level field and method accessors remain compatible.
 `test_connection_settings.py`, `test_smb_ui.py` and `test_workflow_ownership.py`
 cover this boundary. Update the owner mobile manifest with source moves.
+
+## Python–Go bridge contract
+
+`mobile/bridge_protocol.py` owns supported Python action names and validates the
+response envelope. `Mobile/rclone_bridge/protocol_contract.json` is a public,
+synthetic contract fixture consumed by Python and Go tests. It is not a native
+payload or credential store. The contract is version one; no new wire version or
+saved-data migration is introduced.
+
+The ABI remains `LogisticsCloud(action_utf8, request_json_utf8)` followed by exactly
+one `LogisticsCloudFree(pointer)` for each non-null response. Requests are objects;
+replies have boolean `ok`, `result` on success or `error` on failure. Credential
+publication may also return `credential_state`. `credentials_busy` refuses
+publication immediately; `archive_password` requests an inner archive password.
+Python checks the existing 2 MiB request limit (24 MiB for image thumbnails).
+The Go mirror-review path separately permits larger review plans; Python's current
+request bound remains unchanged.
+
+Cancellation and progress retain the operation scopes in `operation_scope.go`;
+credential replacement is serialized across scenes and invalidates their caches.
+Contract fixtures cover action-name parity and safe cancellation/status/error
+responses. Operation-scope and credential-loading tests cover the stateful cases.
+Never capture real request payloads or credential responses as fixtures.

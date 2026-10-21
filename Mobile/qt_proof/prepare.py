@@ -24,7 +24,8 @@ def stage(destination):
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, target)
     for relative in ('features/__init__.py', 'features/rclone/__init__.py',
-                     'features/rclone/mobile/__init__.py', 'features/rclone/mobile/cloud.py'):
+                     'features/rclone/mobile/__init__.py', 'features/rclone/mobile/cloud.py',
+                     'features/rclone/mobile/bridge_protocol.py'):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / 'Python' / relative, target)

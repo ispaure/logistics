@@ -9,6 +9,7 @@
     "localcrypt/mobile/resources.py",
     "localcrypt/mobile/ui.py",
     "mobile/__init__.py",
+    "mobile/bridge_protocol.py",
     "mobile/cloud.py",
     "mobile/cloud_ui.py",
     "mobile/controller.py",
