@@ -7,7 +7,7 @@ license = "MIT"
 author = "Marc-Andre Voyer"
 
 [tool.briefcase.app.logisticsmobile]
-build = "202610244"
+build = "202610246"
 formal_name = "Logistics Mobile"
 description = "Native document workspaces, readers, LM chat and managed rclone copies"
 
@@ -44,6 +44,8 @@ CFBundleDisplayName = "Logisticks"
 CFBundleName = "Logisticks"
 UIFileSharingEnabled = true
 LSSupportsOpeningDocumentsInPlace = true
+NSCameraUsageDescription = "Capture photos immediately and take bursts from Home."
+NSPhotoLibraryAddUsageDescription = "Save your burst camera photos directly to your Photos library."
 NSLocalNetworkUsageDescription = "Connect to SMB file shares and the LM server you configure on your local network."
 
 UIBackgroundModes = ["audio"]

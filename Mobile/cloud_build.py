@@ -141,6 +141,8 @@ def ios(project=None):
     configure(project)
     from privacy_build import configure as configure_privacy
     configure_privacy(project)
+    from camera_build import configure as configure_camera
+    configure_camera(project)
     support = project / 'Support'
     support.mkdir(parents=True, exist_ok=True)
     arch = {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64'}[platform.machine()]
@@ -164,7 +166,8 @@ def ios(project=None):
             settings[f'OTHER_LDFLAGS[sdk={sdk}*]'] = ['$(inherited)',
                 f'-Wl,-force_load,$(SRCROOT)/Support/liblogisticscloud-{variant}.a',
                 '-Wl,-u,_LogisticsCloud', '-Wl,-u,_LogisticsCloudFree', '-Wl,-export_dynamic',
-                '-framework', 'CoreFoundation', '-framework', 'Security', '-lresolv']
+                '-framework', 'CoreFoundation', '-framework', 'Security',
+                '-framework', 'AVFoundation', '-framework', 'Photos', '-lresolv']
     if found != 2:
         raise ValueError('Unexpected Briefcase iOS build configuration; refusing to silently omit the bridge.')
     pbx.write_bytes(plistlib.dumps(data, sort_keys=False))

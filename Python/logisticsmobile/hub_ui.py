@@ -336,7 +336,14 @@ class HubUI:
         if self.workspace.error:
             box.add(toga.Label(self.workspace.error, style=Pack(font_size=13, margin_top=12)))
         self.register_transfer_status(box)
-        self.home_sections = HubSections(box, recent_box)
+        from features.images.mobile.burst_camera import available, present
+        camera_heading = None
+        if available(self.app):
+            camera_heading = heading('Camera')
+            box.add(camera_heading)
+            box.add(toga.Button('Burst camera', on_press=lambda widget: present(self.app),
+                                style=Pack(height=48)))
+        self.home_sections = HubSections(box, recent_box, before=camera_heading)
         self.reflow_home()
         return self.home_sections
 

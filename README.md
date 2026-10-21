@@ -112,7 +112,7 @@ with the [mobile build and release handbook](docs/development/mobile-handbook.md
 | [Books](Python/features/books/docs/user/user.md) and [Comics](Python/features/comics/docs/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
 | [PDF Reader](Python/features/pdf/docs/user/user.md) | Read and search local, remote and LocalCrypt PDFs on desktop and mobile, jump to page numbers, and swipe vertically |
 | [Archives](Python/features/archives/docs/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
-| [Images](Python/features/images/docs/user/user.md) | Compress images and work with photo metadata |
+| [Images](Python/features/images/docs/user/user.md) | Compress images, work with photo metadata, and [capture bursts on iPhone](Python/features/images/docs/user_mobile/user_mobile.md) |
 | [rclone](Python/features/rclone/docs/user/user.md) | Browse remotes in read-only tabs, open supported files in memory, and use managed Pull/Push for local or encrypted folders |
 | [FUSE](Python/features/fuse/docs/user/user.md) | Open supported remote storage as a mounted folder |
 | [Calibre](Python/features/calibre/docs/user/user.md) | Open book libraries and export books |

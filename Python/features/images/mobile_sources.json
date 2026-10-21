@@ -2,6 +2,9 @@
   "schema": 1,
   "modules": [
     "__init__.py",
-    "validation.py"
+    "validation.py",
+    "mobile/__init__.py",
+    "mobile/burst_camera.py",
+    "mobile/ios/BurstCamera.m"
   ]
 }

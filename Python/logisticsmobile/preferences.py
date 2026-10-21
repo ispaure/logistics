@@ -8,11 +8,13 @@ from commonUtils.persistence import atomic_write_bytes
 
 from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_SIZES, validate as validate_reading
 
+from features.images.mobile.burst_camera import DEFAULTS as CAMERA_DEFAULTS, validate_preferences as validate_camera
+
 DEFAULTS = {'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16', 'markdown_font_size': '16', 'text_font_size': '16', 'epub_font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'document_card_overview': 'false', 'show_legacy': 'false',
             'markdown_justify': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false',
-            'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'comic_split_wide': 'true', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS}
+            'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'comic_split_wide': 'true', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS, **CAMERA_DEFAULTS}
 
 
 class Preferences:
@@ -85,6 +87,7 @@ class Preferences:
         if values['reading_margin'] not in {'8', '16', '24', '32'} or values['reading_theme'] not in {'system', 'light', 'dark', 'sepia', 'slate'}:
             raise ValueError('Invalid reader appearance preference.')
         validate_reading(values)
+        validate_camera(values)
         if values['magnifier_zoom'] not in {str(value) for value in range(150, 251, 20)}:
             raise ValueError('Choose magnifier zoom from 150–250%, in 20% steps.')
         if values['comic_split_wide'] not in {'true', 'false'}:

@@ -312,7 +312,7 @@ class SettingsNavigation(toga.Box):
         menu = toga.Box(style=Pack(direction=COLUMN, margin=16))
         menu.add(surface(toga.Label('Settings', style=Pack(font_size=28, font_weight='bold', margin_bottom=24)),
                          radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False))
-        icons = {'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
+        icons = {'Camera': 'preferences', 'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
                  'Markdown': 'edit', 'Text': 'edit', 'EPUB': 'books', 'Books & Comics': 'books', 'LM Chat': 'chat',
                  'Workspaces': 'folder', 'Reset': 'preferences', 'Help': 'help', 'About': 'info'}
         rows = []
@@ -558,6 +558,12 @@ def settings_sections(app):
             justify.on_change = app.save_preferences
         return box
 
+    def camera():
+        from features.images.mobile.burst_camera import settings_controls
+        box = category('Camera')
+        settings_controls(app, box)
+        return box
+
     def books():
         box = category('Books & Comics')
         from .magnifier import setting
@@ -611,6 +617,9 @@ def settings_sections(app):
         return box
 
     sections = {'App': application, 'Appearance': appearance}
+    from features.images.mobile.burst_camera import available
+    if available(app):
+        sections['Camera'] = camera
     sections['Read aloud'] = speech
     sections['Markdown'] = lambda: text_size('Markdown', 'markdown_font_size')
     sections['Text'] = lambda: text_size('Text', 'text_font_size')

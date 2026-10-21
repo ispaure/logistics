@@ -28,7 +28,7 @@ def load_source_modules(repo):
         for name in data['modules']:
             if (not isinstance(name, str) or not name or '\\' in name or ':' in name
                     or PurePosixPath(name).is_absolute() or '..' in PurePosixPath(name).parts
-                    or PurePosixPath(name).as_posix() != name or PurePosixPath(name).suffix not in {'.py', '.java'}):
+                    or PurePosixPath(name).as_posix() != name or PurePosixPath(name).suffix not in {'.py', '.java', '.m'}):
                 raise ValueError('Invalid mobile source path in ' + owner)
             if name in selected:
                 raise ValueError('Duplicate mobile source path in ' + owner)
@@ -211,7 +211,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
              (repo / 'Mobile/native_navigation', 'native-navigation/'))
     for root, prefix in roots:
         for path in sorted(root.rglob('*')):
-            if path.is_file() and path.suffix in {'.py', '.go', '.java', '.json', '.ini', '.mod', '.sum'} and path.name != 'source.json':
+            if path.is_file() and path.suffix in {'.py', '.go', '.java', '.m', '.json', '.ini', '.mod', '.sum'} and path.name != 'source.json':
                 digest.update((prefix + path.relative_to(root).as_posix()).encode() + b'\0')
                 digest.update(path.read_bytes())
     manifest['source_sha256'] = digest.hexdigest()
