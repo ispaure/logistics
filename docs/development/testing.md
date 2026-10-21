@@ -113,6 +113,15 @@ Qt. These checks do not certify native appearance or interactions. See the
 
 ### Find the tests for your change
 
+Use `python3 dev.py owners` to list developer guides, then
+`python3 dev.py test-owner books --dry-run` to inspect an owner's test selection.
+Remove `--dry-run` to run it across the appropriate desktop/mobile environments.
+`Scripts/ownership.json` owns these source, guide, manifest and test associations;
+update it when moving an owner or renaming tests. Small integrations with no
+specialist suite use registry checks as their starting group; that is not proof
+of external application behavior. Review responsibility follows the source owner;
+the map does not invent individual maintainer assignments.
+
 | Owner | Start with |
 | --- | --- |
 | Feature infrastructure | `Python/tests/test_feature_registry.py`, `test_feature_preferences.py`, `test_settings_page.py` |

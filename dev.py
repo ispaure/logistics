@@ -20,6 +20,10 @@ def main(argv=None):
     setup_parser = commands.add_parser('setup', help='Install a declared desktop or mobile host environment')
     setup_parser.add_argument('suite', choices=('desktop', 'mobile'))
     setup_parser.add_argument('--dry-run', action='store_true')
+    commands.add_parser('owners', help='List source owners and their developer guides')
+    owned_tests = commands.add_parser('test-owner', help='Run the test groups declared for a source owner')
+    owned_tests.add_argument('owner')
+    owned_tests.add_argument('--dry-run', action='store_true')
     commands.add_parser('architecture', help='Check reviewed import boundaries without loading features')
     commands.add_parser('doctor', help='Inspect contributor environments without changing them')
     tests = commands.add_parser('test', help='Run desktop or mobile host tests in isolated processes')
@@ -31,6 +35,13 @@ def main(argv=None):
         command.add_argument('--python', type=Path, help='Use a specific environment Python executable')
         command.add_argument('--dry-run', action='store_true', help='Show the command without running it')
     args = parser.parse_args(argv)
+    if args.command in ('owners', 'test-owner'):
+        from Scripts.ownership import owners, test_owner
+        if args.command == 'owners':
+            for name, entry in sorted(owners(ROOT).items()):
+                print(f"{name}: {entry['guide']}")
+            return 0
+        return test_owner(ROOT, args.owner, sys.executable, dry_run=args.dry_run)
     if args.command == 'architecture':
         from Scripts.architecture import check
         return check(ROOT)

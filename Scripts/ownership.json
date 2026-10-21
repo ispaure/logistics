@@ -1,0 +1,396 @@
+{
+  "schema": 1,
+  "owners": {
+    "archives": {
+      "sources": [
+        "Python/features/archives"
+      ],
+      "guide": "Python/features/archives/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_feature_registry.py"
+        ]
+      }
+    },
+    "aviation_tools": {
+      "sources": [
+        "Python/features/aviation_tools"
+      ],
+      "guide": "Python/features/aviation_tools/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_aviation_tools*.py"
+        ]
+      }
+    },
+    "blender": {
+      "sources": [
+        "Python/features/blender"
+      ],
+      "guide": "Python/features/blender/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_blender*.py"
+        ]
+      }
+    },
+    "books": {
+      "sources": [
+        "Python/features/books"
+      ],
+      "guide": "Python/features/books/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_books*.py"
+        ],
+        "mobile": [
+          "test_epub_navigation.py",
+          "test_reader_formats.py"
+        ]
+      },
+      "mobile_manifest": "Python/features/books/mobile_sources.json"
+    },
+    "calibre": {
+      "sources": [
+        "Python/features/calibre"
+      ],
+      "guide": "Python/features/calibre/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_calibre*.py"
+        ]
+      }
+    },
+    "comics": {
+      "sources": [
+        "Python/features/comics"
+      ],
+      "guide": "Python/features/comics/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_comic*.py",
+          "test_encrypted_comics.py"
+        ],
+        "mobile": [
+          "test_comic_split.py",
+          "test_reader_formats.py"
+        ]
+      },
+      "mobile_manifest": "Python/features/comics/mobile_sources.json"
+    },
+    "dropbox": {
+      "sources": [
+        "Python/features/dropbox"
+      ],
+      "guide": "Python/features/dropbox/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_dropbox*.py"
+        ]
+      }
+    },
+    "file_tools": {
+      "sources": [
+        "Python/features/file_tools"
+      ],
+      "guide": "Python/features/file_tools/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_file_tools*.py"
+        ]
+      }
+    },
+    "flight_sim": {
+      "sources": [
+        "Python/features/flight_sim"
+      ],
+      "guide": "Python/features/flight_sim/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_flight_sim*.py"
+        ]
+      }
+    },
+    "fuse": {
+      "sources": [
+        "Python/features/fuse"
+      ],
+      "guide": "Python/features/fuse/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_fuse*.py"
+        ]
+      }
+    },
+    "git": {
+      "sources": [
+        "Python/features/git"
+      ],
+      "guide": "Python/features/git/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_git*.py"
+        ]
+      }
+    },
+    "ide": {
+      "sources": [
+        "Python/features/ide"
+      ],
+      "guide": "Python/features/ide/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_ide*.py"
+        ]
+      }
+    },
+    "images": {
+      "sources": [
+        "Python/features/images"
+      ],
+      "guide": "Python/features/images/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_feature_registry.py"
+        ]
+      },
+      "mobile_manifest": "Python/features/images/mobile_sources.json"
+    },
+    "links": {
+      "sources": [
+        "Python/features/links"
+      ],
+      "guide": "Python/features/links/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_feature_registry.py"
+        ]
+      }
+    },
+    "lm": {
+      "sources": [
+        "Python/features/lm"
+      ],
+      "guide": "Python/features/lm/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_lm*.py"
+        ],
+        "mobile": [
+          "test_chat_ui.py"
+        ]
+      },
+      "mobile_manifest": "Python/features/lm/mobile_sources.json"
+    },
+    "media": {
+      "sources": [
+        "Python/features/media"
+      ],
+      "guide": "Python/features/media/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_feature_registry.py"
+        ]
+      }
+    },
+    "minecraft": {
+      "sources": [
+        "Python/features/minecraft"
+      ],
+      "guide": "Python/features/minecraft/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_minecraft*.py"
+        ]
+      }
+    },
+    "obsidian": {
+      "sources": [
+        "Python/features/obsidian"
+      ],
+      "guide": "Python/features/obsidian/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_obsidian*.py"
+        ]
+      }
+    },
+    "pdf": {
+      "sources": [
+        "Python/features/pdf"
+      ],
+      "guide": "Python/features/pdf/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_pdf*.py"
+        ]
+      },
+      "mobile_manifest": "Python/features/pdf/mobile_sources.json"
+    },
+    "perforce": {
+      "sources": [
+        "Python/features/perforce"
+      ],
+      "guide": "Python/features/perforce/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_perforce*.py"
+        ]
+      }
+    },
+    "plex": {
+      "sources": [
+        "Python/features/plex"
+      ],
+      "guide": "Python/features/plex/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_plex*.py"
+        ]
+      }
+    },
+    "rclone": {
+      "sources": [
+        "Python/features/rclone"
+      ],
+      "guide": "Python/features/rclone/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_rclone*.py"
+        ],
+        "mobile": [
+          "test_cloud_restore.py",
+          "test_localcrypt_ui.py"
+        ]
+      },
+      "mobile_manifest": "Python/features/rclone/mobile_sources.json"
+    },
+    "smart_home": {
+      "sources": [
+        "Python/features/smart_home"
+      ],
+      "guide": "Python/features/smart_home/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_smart_home*.py"
+        ]
+      }
+    },
+    "system_tools": {
+      "sources": [
+        "Python/features/system_tools"
+      ],
+      "guide": "Python/features/system_tools/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_system_tools*.py"
+        ]
+      }
+    },
+    "text_editor": {
+      "sources": [
+        "Python/features/text_editor"
+      ],
+      "guide": "Python/features/text_editor/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_text_editor*.py"
+        ],
+        "mobile": [
+          "test_editor_picker.py",
+          "test_notes_library.py"
+        ]
+      },
+      "mobile_manifest": "Python/features/text_editor/mobile_sources.json"
+    },
+    "youtube_downloader": {
+      "sources": [
+        "Python/features/youtube_downloader"
+      ],
+      "guide": "Python/features/youtube_downloader/docs/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_youtube_downloader*.py"
+        ]
+      }
+    },
+    "feature-infrastructure": {
+      "sources": [
+        "Python/features/registry.py",
+        "Python/features/settings.py"
+      ],
+      "guide": "docs/development/feature-infrastructure.md",
+      "tests": {
+        "desktop": [
+          "test_feature_registry.py",
+          "test_architecture_contracts.py"
+        ]
+      }
+    },
+    "desktop-shell": {
+      "sources": [
+        "Python/ui_new"
+      ],
+      "guide": "docs/development/ui-architecture.md",
+      "tests": {
+        "desktop": [
+          "test_main_window.py",
+          "test_document_workspace.py"
+        ]
+      }
+    },
+    "mobile-host": {
+      "sources": [
+        "Python/logisticsmobile"
+      ],
+      "guide": "docs/development/mobile-runtime.md",
+      "tests": {
+        "mobile": [
+          "test_packaged_startup.py",
+          "test_reader_lifecycle.py",
+          "test_workspace_navigation.py"
+        ]
+      }
+    },
+    "mobile-storage": {
+      "sources": [
+        "Python/logisticsmobile/private_sessions.py",
+        "Python/logisticsmobile/library.py"
+      ],
+      "guide": "docs/development/mobile-runtime.md",
+      "tests": {
+        "mobile": [
+          "test_private_sessions.py",
+          "test_storage_ui.py",
+          "test_app_reset.py"
+        ]
+      }
+    },
+    "developer-tools": {
+      "sources": [
+        "dev.py",
+        "Scripts"
+      ],
+      "guide": "docs/development/testing.md",
+      "tests": {
+        "desktop": [
+          "test_dev_commands.py",
+          "test_architecture_contracts.py",
+          "test_documentation_layout.py"
+        ]
+      }
+    },
+    "packaging": {
+      "sources": [
+        "Mobile/tools.py",
+        ".github"
+      ],
+      "guide": "docs/development/mobile-preparation.md",
+      "tests": {
+        "desktop": [
+          "test_mobile_packaging.py"
+        ]
+      }
+    }
+  }
+}
