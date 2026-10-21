@@ -58,9 +58,50 @@ def reduce_transparency():
     return bool(function())
 
 
-def sync(app):
+def preview_edge(app, container):
+    """Only a standalone photo may use the bar strip as real canvas space."""
+    if not hasattr(app, 'routes') or not app.body.children:
+        return 0
+    view = app.body.children[0]
+    if not getattr(view, '_image_preview_surface', False) or view._impl.container is not container:
+        return 0
+    privacy = getattr(app, 'screen_privacy', None)
+    if (getattr(app, '_hinge_status', 0) == 2 or reduce_transparency() or
+            (privacy is not None and (privacy.inactive or
+             getattr(privacy, 'saved_content', None) is not None or
+             getattr(privacy, 'shield', None) is not None))):
+        return 0
+    from .ios_toolbar import vertical_edge
+    index = app.native_host.destinations.index(app.native_host.state.destination)
+    return vertical_edge(app.native_host.adapter.navigation[index].topViewController)
+
+
+def expand_preview(container):
+    if container.content is None:
+        return False
+    app = container.content.interface.app
+    if app is None:
+        return False
+    edge = preview_edge(app, container)
+    changed = False
+    if edge == 1 and container.left_inset:
+        container.left_inset, changed = 0, True
+    elif edge == 2 and container.right_inset:
+        container.right_inset, changed = 0, True
+    return changed
+
+
+def sync(app, *, settled=False):
     if not type(getattr(app, '_impl', None)).__module__.startswith('toga_iOS.'):
         return
+    # Reader/footer safe margins can settle later in the same render pass.
+    # Re-measure once after that pass; never poll or keep an image snapshot.
+    if not settled and getattr(app, 'loop', None) is not None and not getattr(app, '_artwork_sync_pending', False):
+        app._artwork_sync_pending = True
+        def refresh():
+            app._artwork_sync_pending = False
+            sync(app, settled=True)
+        app.loop.call_soon(refresh)
     adapter = app.native_host.adapter
     privacy = getattr(app, 'screen_privacy', None)
     if (adapter is None or not hasattr(adapter, 'navigation') or
@@ -84,6 +125,9 @@ def sync(app):
     root = container.native
     bounds, safe = root.bounds, root.safeAreaInsets
     area = Rect(float(bounds.origin.x), float(bounds.origin.y), float(bounds.size.width), float(bounds.size.height))
+    if preview_edge(app, container) in (1, 2):
+        clear(app)
+        return
     found = None
     for canvas in candidates(view):
         native = canvas._impl.native

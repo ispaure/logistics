@@ -36,7 +36,7 @@ class DuoPoseProbe(ToolbarProbe):
             sample.update(pose=pose_snapshot(self), safe_area=safe_geometry(self),
                           fixed_controls=assert_visible_controls(self))
             from .artwork_checks import snapshot
-            sample['artwork'] = snapshot(self)
+            sample['artwork'] = await snapshot(self)
             self.check_panes(sample)
             if first is None:
                 first = sample
@@ -61,6 +61,7 @@ class DuoPoseProbe(ToolbarProbe):
         if source.exists():
             self.report['source'] = json.loads(source.read_text())
         self.report['observed_poses'] = sorted({pose_key(row['pose']) for row in self.report['screens'] if 'pose' in row})
+        self.report['artwork_accessibility_policy_round_trips'] = sorted(getattr(self, '_artwork_accessibility_checks', set()))
         self.report['all_fold_poses_tested'] = False
         self.report['comic_fold_round_trip_tested'] = False
         (self.output / 'result.json').write_text(json.dumps(self.report, indent=2))

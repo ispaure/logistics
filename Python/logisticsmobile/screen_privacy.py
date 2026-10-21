@@ -37,6 +37,7 @@ class ScreenPrivacy:
                 ('UIApplicationWillResignActiveNotification', self.conceal),
                 ('UIApplicationDidBecomeActiveNotification', self.reveal),
                 ('UIScreenCapturedDidChangeNotification', self.refresh),
+                ('UIAccessibilityReduceTransparencyStatusDidChangeNotification', self.artwork_accessibility_changed),
             ):
                 block = Block(lambda notification, callback=callback: callback(), None, objc_id)
                 self.blocks.append(block)
@@ -49,6 +50,18 @@ class ScreenPrivacy:
         elif self.backend.startswith('toga_android.'):
             self.install_android_lifecycle()
         self.refresh()
+
+    def artwork_accessibility_changed(self):
+        # No size change is required when accessibility changes. Force the
+        # container policy before the ordinary coalesced reader refresh.
+        app = self.app
+        app.resize_workspace()
+        if app.body.children:
+            container = app.body.children[0]._impl.container
+            if container is not None:
+                app.native_host.adapter.layout_content(container)
+        from .ios_content_background import sync
+        sync(app)
 
     def install_android_lifecycle(self):
         from android.app import Application

@@ -169,6 +169,7 @@ def compact_private_view(self, view):
             margin=0, restore=view.reader_restore,
             top_controls=2 if view.crypt_reader.kind == '.pdf' else 1)
         view.crypt_view = view.reading_frame.widget
+        view.crypt_view._image_preview_surface = bool(image)
         view.crypt_view._native_reader_toolbar = header
         view.crypt_view._native_reader_status = view.crypt_title
         if view.crypt_reader.book is not None:

@@ -137,3 +137,15 @@ Opening an inline search or reader tool changes the document's **×** to a back
 arrow. Tap it to dismiss that tool; the document stays open. Metadata, appearance
 and other secondary screens use Back to return to the document. Unsaved-close
 choices appear in a native popup over the current screen.
+
+## Images beneath iOS side controls
+
+When iOS places navigation controls along a side, standalone image previews use
+the wider image canvas behind that strip. Pinch zoom and pan remain available in
+the image area. Buttons stay in the system bar. Partially folded layouts and
+Reduce Transparency keep the image inside the safe viewing area.
+
+PDFs and comics keep their fitted pages clear of the controls; an image-only
+background extends beneath the side bar instead. Text, filenames and forms keep
+their safe margins. Fullscreen image readers retain their existing edge-to-edge
+presentation.

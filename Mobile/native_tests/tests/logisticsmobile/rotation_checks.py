@@ -105,18 +105,21 @@ def safe_geometry(app):
                   top=float(insets.top), bottom=float(insets.bottom),
                   x=float(rect.origin.x), y=float(rect.origin.y),
                   view_width=float(rect.size.width), view_height=float(rect.size.height))
+    from logisticsmobile.ios_content_background import preview_edge
+    edge = preview_edge(app, container)
+    result['image_preview_edge'] = edge
     window = app.main_window._impl.native
     window_rect = native.convertRect(native.bounds, toView=window)
     safe = window.safeAreaInsets
-    assert window_rect.origin.x >= safe.left - 1, result
-    assert window_rect.origin.x + window_rect.size.width <= window.bounds.size.width - safe.right + 1, result
+    assert window_rect.origin.x >= (0 if edge == 1 else safe.left) - 1, result
+    assert window_rect.origin.x + window_rect.size.width <= window.bounds.size.width - (0 if edge == 2 else safe.right) + 1, result
     assert window_rect.origin.y >= safe.top - 1, result
     # A root background/scroll surface may extend beneath the Home indicator
     # and keyboard. Fixed foreground controls have their own stricter audit.
     assert window_rect.origin.y + window_rect.size.height <= window.bounds.size.height + 1, result
     assert result['view_width'] > 0 and result['view_height'] > 0, result
-    assert rect.origin.x >= insets.left - 1, result
-    assert rect.origin.x + rect.size.width <= size.width - insets.right + 1, result
+    assert rect.origin.x >= (0 if edge == 1 else insets.left) - 1, result
+    assert rect.origin.x + rect.size.width <= size.width - (0 if edge == 2 else insets.right) + 1, result
     assert rect.origin.y >= insets.top - 1, result
     assert rect.origin.y + rect.size.height <= size.height + 1, result
     return result

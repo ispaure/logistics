@@ -3,7 +3,7 @@ from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock, patch
 
-from logisticsmobile.ios_content_background import Rect, extension_rect, clear, sync
+from logisticsmobile.ios_content_background import Rect, extension_rect, clear, sync, expand_preview
 
 
 class ContentBackgroundTests(unittest.TestCase):
@@ -51,3 +51,60 @@ class ContentBackgroundTests(unittest.TestCase):
                     sync(app)
                 self.assertIsNone(picture.image)
                 native.removeFromSuperview.assert_called_once()
+
+    def test_photo_expands_only_bar_edge_and_restores_conservative_policy(self):
+        container = NS(left_inset=18, right_inset=84, top_inset=50, bottom_inset=20)
+        view = NS(_image_preview_surface=True, _impl=NS(container=container))
+        app = NS(routes=object(), body=NS(children=[view]), native_host=NS(
+            destinations=['files'], state=NS(destination='files'),
+            adapter=NS(navigation=[NS(topViewController=object())])))
+        container.content = NS(interface=NS(app=app))
+        with patch('logisticsmobile.ios_content_background.reduce_transparency', return_value=False), \
+             patch('logisticsmobile.ios_toolbar.vertical_edge', return_value=2):
+            self.assertTrue(expand_preview(container))
+            self.assertEqual((container.left_inset, container.right_inset,
+                              container.top_inset, container.bottom_inset), (18, 0, 50, 20))
+            self.assertFalse(expand_preview(container))
+            for reason in ('document', 'fold', 'privacy', 'other-container'):
+                container.right_inset = 84  # UIKit restores native insets each layout.
+                view._image_preview_surface = reason != 'document'
+                app._hinge_status = 2 if reason == 'fold' else 0
+                app.screen_privacy = NS(inactive=reason == 'privacy')
+                view._impl.container = object() if reason == 'other-container' else container
+                self.assertFalse(expand_preview(container), reason)
+                self.assertEqual(container.right_inset, 84)
+            view._impl.container = container
+            app.screen_privacy.inactive = False
+            with patch('logisticsmobile.ios_content_background.reduce_transparency', return_value=True):
+                self.assertFalse(expand_preview(container))
+        with patch('logisticsmobile.ios_content_background.reduce_transparency', return_value=False), \
+             patch('logisticsmobile.ios_toolbar.vertical_edge', return_value=1):
+            self.assertTrue(expand_preview(container))
+            self.assertEqual((container.left_inset, container.right_inset), (0, 84))
+
+    def test_accessibility_change_forces_layout_without_a_geometry_change(self):
+        from logisticsmobile.screen_privacy import ScreenPrivacy
+        container = object()
+        adapter = NS(layout_content=Mock())
+        app = NS(body=NS(children=[NS(_impl=NS(container=container))]),
+                 native_host=NS(adapter=adapter), resize_workspace=Mock())
+        privacy = object.__new__(ScreenPrivacy)
+        privacy.app = app
+        with patch('logisticsmobile.ios_content_background.sync') as refresh:
+            privacy.artwork_accessibility_changed()
+        adapter.layout_content.assert_called_once_with(container)
+        refresh.assert_called_once_with(app)
+        app.resize_workspace.assert_called_once_with()
+
+    def test_background_remeasurement_is_coalesced_after_the_render_pass(self):
+        callbacks = []
+        backend = type('Backend', (), {'__module__': 'toga_iOS.app'})
+        app = NS(_impl=backend(), loop=NS(call_soon=callbacks.append),
+                 native_host=NS(adapter=None))
+        sync(app)
+        sync(app)
+        self.assertEqual(len(callbacks), 1)
+        with patch('logisticsmobile.ios_content_background.sync') as refresh:
+            callbacks[0]()
+        refresh.assert_called_once_with(app, settled=True)
+        self.assertFalse(app._artwork_sync_pending)

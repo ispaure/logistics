@@ -74,18 +74,21 @@ def install():
         container._logistics_layout_active = True
         try:
             original_layout(container)
+            if fullscreen(container.native.window, images=True):
+                # Fullscreen image readers retain their existing all-edge policy.
+                changed = any((container.top_inset, container.bottom_inset,
+                               container.left_inset, container.right_inset))
+                container.top_inset = container.bottom_inset = 0
+                container.left_inset = container.right_inset = 0
+            else:
+                from .ios_content_background import expand_preview
+                changed = expand_preview(container)
+            if changed and container.content is not None:
+                container.content.interface.refresh()
+            # Observe effective geometry, not the intermediate safe layout.
             notify_viewport(container)
         finally:
             container._logistics_layout_active = False
-        if fullscreen(container.native.window, images=True):
-            # Only the image presentation extends under system safe areas.
-            # Normal routes get their measured insets back on the next layout.
-            changed = any((container.top_inset, container.bottom_inset,
-                           container.left_inset, container.right_inset))
-            container.top_inset = container.bottom_inset = 0
-            container.left_inset = container.right_inset = 0
-            if changed and container.content is not None:
-                container.content.interface.refresh()
 
     AppleNavigation.layout_content = staticmethod(layout_content)
     _installed = True

@@ -1315,3 +1315,18 @@ conceal/suspension release the native image and detach the extension. Older
 systems without the native extension class keep the ordinary safe layout.
 `test_ios_content_background.py` covers edge geometry and pixel-release order;
 the native pose audit records the actual foreground/background rectangles.
+
+Standalone image previews mark their root `_image_preview_surface`. When the
+current controller has a vertical bar, `AppleNavigation.layout_content` removes
+only that bar edge's inset for this root. The real image scroll/zoom canvas then
+fills the strip; its parent hit-test bounds grow with it. UIKit still owns the
+actions, and top/bottom/opposite-edge insets remain intact. Every layout first
+restores native insets, so switching routes or changing the bar axis restores
+ordinary safe sizing. Partially folded devices and Reduce Transparency keep the
+conservative image viewport. Accessibility setting changes trigger a fresh layout.
+PDF/comic pages never opt into this foreground expansion.
+
+Background geometry is remeasured once through the event loop after each render
+pass, coalescing repeated requests. This includes final footer/Home-indicator
+margins when a PDF opens without an intervening rotation. Privacy removal remains
+synchronous; the deferred pass rechecks current route and concealment state.
