@@ -1,7 +1,6 @@
 """Hinge geometry and comic seam policy, including unequal page shapes."""
 from types import SimpleNamespace as NS
 import unittest
-from unittest.mock import Mock
 
 from logisticsmobile.fold_layout import seam_fraction, comic_mode
 from features.comics.mobile.composite import spread_geometry
@@ -10,29 +9,37 @@ from Mobile.native_tests.tests.logisticsmobile.reader_parity_probe import image_
 
 
 class FoldLayoutTests(unittest.TestCase):
-    def host(self, status=2, orientation=3):
-        window = NS(bounds=NS(size=NS(width=1000)), windowScene=NS(interfaceOrientation=orientation))
-        host = NS(_hinge_status=status, main_window=NS(_impl=NS(native=window)),
-                  preferences=NS(values={'comic_layout': 'single'}))
-        native = Mock()
-        native.convertRect.return_value = NS(origin=NS(x=20), size=NS(width=900))
-        return host, NS(_impl=NS(native=native))
+    def test_reserved_region_replaces_midpoint_and_orientation_assumptions(self):
+        from logisticsmobile.fold_layout import Division
+        from unittest.mock import patch
+        host = NS(preferences=NS(values={'comic_layout': 'single'}))
+        widget = NS(_impl=NS(native=NS(bounds=NS(size=NS(width=900, height=700)))))
+        with patch('logisticsmobile.fold_layout.reserved_divisions', return_value=(Division(460, 0, 40, 700),)):
+            self.assertAlmostEqual(seam_fraction(host, widget), 480 / 900)
+            self.assertEqual(comic_mode(host, widget), 'double')
+        with patch('logisticsmobile.fold_layout.reserved_divisions', return_value=()):
+            self.assertIsNone(seam_fraction(host, widget, include_open=True))
+            self.assertEqual(comic_mode(host, widget), 'single')
+        with patch('logisticsmobile.fold_layout.reserved_divisions', return_value=(Division(0, 320, 900, 40),)):
+            self.assertIsNone(seam_fraction(host, widget))
+        # A fold outside/partly intersecting a pane does not split that pane.
+        with patch('logisticsmobile.fold_layout.reserved_divisions', return_value=(Division(460, 200, 40, 100),)):
+            self.assertIsNone(seam_fraction(host, widget))
 
-    def test_window_center_accounts_for_asymmetric_rail_and_safe_area(self):
-        host, widget = self.host()
-        self.assertAlmostEqual(seam_fraction(host, widget), 480 / 900)
-        self.assertEqual(comic_mode(host, widget), 'double')
-        host._hinge_status = 3
-        self.assertIsNone(seam_fraction(host, widget))
-        self.assertAlmostEqual(seam_fraction(host, widget, include_open=True), 480 / 900)
-        self.assertEqual(comic_mode(host, widget), 'single')
-        host._hinge_status = 0
-        self.assertIsNone(seam_fraction(host, widget))
-        self.assertIsNone(seam_fraction(host, widget, include_open=True))
-        host._hinge_status = 2
-        host.main_window._impl.native.windowScene.interfaceOrientation = 1
-        self.assertIsNone(seam_fraction(host, widget))
-        self.assertIsNone(seam_fraction(host, widget, include_open=True))
+    def test_workspace_ratios_and_reserved_gaps(self):
+        from logisticsmobile.fold_layout import Division
+        from logisticsmobile.pane_layout import panes
+        flat = panes(960, 700, browser_priority=True)
+        self.assertAlmostEqual(flat.leading / (flat.leading + flat.trailing), 1 / 3)
+        self.assertEqual(flat.leading + flat.gap + flat.trailing, 960)
+        book = panes(960, 700, fold=Division(440, 0, 60, 700), browser_priority=True)
+        self.assertEqual((book.axis, book.leading, book.gap, book.trailing), ('row', 440, 60, 460))
+        table = panes(700, 960, fold=Division(0, 440, 700, 60))
+        self.assertEqual((table.axis, table.leading, table.gap, table.trailing), ('column', 440, 60, 460))
+        boox = panes(720, 1000, browser_priority=True)
+        self.assertGreater(boox.trailing, boox.leading)
+        self.assertGreaterEqual(boox.leading, 180)
+        self.assertGreaterEqual(boox.trailing, 320)
 
     def test_unequal_pages_meet_at_seam_without_distortion(self):
         sizes = [(500, 1000), (800, 1000)]

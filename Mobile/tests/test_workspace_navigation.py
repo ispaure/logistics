@@ -495,15 +495,47 @@ class WorkspaceNavigationTests(unittest.TestCase):
             app.show_locations()
             app.loop.run_until_complete(app.show_files(local_root=True))
             frame = app.files_view._workspace_frame
-            with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.54):
+            from logisticsmobile.fold_layout import Division
+            available = self.navigation.content_width('files', margin=24)
+            fold = Division(available * .52, 0, 30, 700)
+            with patch('logisticsmobile.fold_layout.division', return_value=fold):
                 self.navigation.render()
-                available = self.navigation.content_width('files', margin=24)
-                self.assertAlmostEqual(frame.folder_master.style.width + 8, available * .54, delta=1)
-                self.assertAlmostEqual(frame.main.style.width + 8, available * .46, delta=1)
-                self.assertEqual(frame.main.style.margin_left, 16)
+                self.assertAlmostEqual(frame.folder_master.style.width, fold.x, delta=1)
+                self.assertAlmostEqual(frame.main.style.width, available - fold.x - 30, delta=1)
+                self.assertEqual(frame.main.style.margin_left, 30)
             self.navigation.render()
             self.assertAlmostEqual(frame.folder_master.style.width, frame.main.style.width)
         app.loop.run_until_complete(app.file_browser.close())
+
+    def test_browser_priority_on_boox_and_flat_duo_keeps_retained_folder(self):
+        app = self.app
+        with patch.object(self.navigation, 'width', return_value=900):
+            app.show_locations()
+            app.loop.run_until_complete(app.show_files(local_root=True))
+            frame = app.files_view._workspace_frame
+            browser = app.file_browser
+            app.preferences.values['android_eink'] = 'true'
+            self.navigation.last_layout = None
+            self.navigation.render()
+            self.assertGreater(frame.main.style.width, frame.folder_master.style.width)
+            self.assertIs(app.file_browser, browser)
+            app.preferences.values['android_eink'] = 'false'
+            with patch('logisticsmobile.fold_layout.has_fold', return_value=True):
+                self.navigation.last_layout = None
+                self.navigation.render()
+                self.assertGreater(frame.main.style.width, frame.folder_master.style.width)
+            from logisticsmobile.fold_layout import Division
+            with patch('logisticsmobile.fold_layout.division', return_value=Division(0, 300, 900, 36)), \
+                    patch.object(frame.row.layout, 'content_height', 700):
+                self.navigation.render()
+                self.assertEqual(frame.row.style.direction, 'column')
+                self.assertEqual(frame.main.style.margin_top, 36)
+                self.assertEqual(frame.folder_master.style.height, 300)
+            self.navigation.render()
+            self.assertEqual(frame.row.style.direction, 'row')
+            self.assertEqual(frame.main.style.margin_top, 0)
+            self.assertIs(app.file_browser, browser)
+        app.loop.run_until_complete(browser.close())
 
     def test_workspace_uses_allocated_width_after_the_tablet_rail(self):
         app = self.app

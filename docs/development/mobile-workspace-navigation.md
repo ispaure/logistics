@@ -53,10 +53,23 @@ deployment](mobile-evidence/2026-10-20-rounded-file-lists.json).
 
 ## iOS Workspaces folder ancestry
 
-Wide `WorkspaceFrame` layouts reserve a 16-unit gutter between paired panes on
-both platforms. Each pane gives up half the gutter so a fold seam remains centered
-in the gap. Restore clears the detail's leading margin before compact layout;
-UIKit's ancestor preview reproduces the same gutter beside its sidebar snapshot.
+Wide `WorkspaceFrame` layouts use a 16-unit gutter unless an active UIKit
+reserved division supplies the actual fold and its interaction margins.
+`fold_layout` queries regions in each view's coordinates, without assuming a
+window midpoint or using interface orientation to infer the fold axis. Hinge
+notifications coalesce resize work even when the hinge status stays unchanged.
+Horizontal divisions stack panes; vertical divisions separate columns.
+Restore clears axis-specific dimensions and margins before compact layout.
+
+`pane_layout.panes` allocates the usable space. Flat Duo and Android e-ink file
+browsers prefer one third for workspace navigation and two thirds for browsing,
+with a 180-point preferred navigation minimum, 320-point maximum, and a
+320-point browser minimum. Compact widths retain the drawer presentation.
+Active fold bounds override this ratio. Other paired documents retain their
+balanced layout. Home/Documents sections and Settings also consume active
+reserved regions. Geometry and retained-owner contracts are covered by
+`test_fold_layout.py`, `test_workspace_navigation.py` and
+`test_settings_navigation.py`; host tests do not establish native pose behavior.
 
 `folder_navigation.FolderNavigation` adds a native route for each ancestor of a
 successfully listed Workspaces folder. A local workspace shortcut starts its

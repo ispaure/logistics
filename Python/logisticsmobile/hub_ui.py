@@ -150,8 +150,9 @@ class HubSections(toga.Box):
         self.paired = False
 
     def reflow(self, app, destination):
-        from .fold_layout import seam_fraction
-        seam = seam_fraction(app, self, include_open=True)
+        from .fold_layout import division
+        from .pane_layout import panes
+        fold = division(app, self)
         width = app.adaptive.content_width(destination, margin=0)
         if type(self._impl).__module__.startswith('toga_iOS.'):
             measured = float(self._impl.native.bounds.size.width)
@@ -159,7 +160,7 @@ class HubSections(toga.Box):
                 # A retained landscape hub can still report its old width
                 # after its destination returns to a portrait viewport.
                 width = min(width, measured)
-        paired = seam is not None or width >= 700
+        paired = fold is not None or width >= 700
         if paired != self.paired:
             if self.trailing.parent is not None:
                 self.trailing.parent.remove(self.trailing)
@@ -171,8 +172,17 @@ class HubSections(toga.Box):
                 index = self.content.children.index(self.before) if self.before is not None else len(self.content.children)
                 self.content.insert(index, self.trailing)
             self.paired = paired
-        left = round(width * (seam if seam is not None else .5))
-        for scroll, size in ((self.leading_scroll, left), (self.trailing_scroll, round(width) - left)):
+        allocation = panes(width, self.layout.content_height or 1, fold=fold)
+        vertical = paired and allocation.axis == 'column'
+        self.style.direction = COLUMN if vertical else ROW
+        self.trailing_scroll.style.margin_left = allocation.gap if paired and not vertical else 0
+        self.trailing_scroll.style.margin_top = allocation.gap if vertical else 0
+        for scroll, size in ((self.leading_scroll, allocation.leading), (self.trailing_scroll, allocation.trailing)):
+            del scroll.style.height
+            if vertical:
+                del scroll.style.width
+                scroll.style.height, scroll.style.flex = size, 0
+                continue
             if paired:
                 size = max(1, size)
                 if scroll.style.width != size:

@@ -407,12 +407,14 @@ class SettingsNavigation(toga.Box):
             self._reflowing = False
 
     def _reflow(self):
-        from .fold_layout import seam_fraction
+        from .fold_layout import division
+        from .pane_layout import panes
         app = self.owner
         width = app.adaptive.content_width('settings', margin=0)
-        seam = seam_fraction(app, self)
+        fold = division(app, self)
+        seam = ((fold.x / width) if fold is not None and fold.vertical else None)
         was_wide = self.wide
-        self.wide = width >= 640 or seam is not None
+        self.wide = width >= 640 or fold is not None
         screens = app.routes.screens['settings']
         active = app.native_host.state.destination == 'settings'
         category_on_top = bool(screens and screens[-1][0] == 'settings-category')
@@ -420,9 +422,19 @@ class SettingsNavigation(toga.Box):
             self.detail_requested = False
         sidebar_width = (width * seam if seam is not None
                          else min(320, max(240, width * .32)))
-        detail_width = width - sidebar_width if self.wide else width
+        allocation = panes(width, self.layout.content_height or 1, fold=fold, browser_priority=True)
+        stacked = fold is not None and not fold.vertical
+        self.style.direction = COLUMN if stacked else ROW
+        self.detail.style.margin_left = fold.width if fold is not None and fold.vertical else 0
+        self.detail.style.margin_top = fold.height if stacked else 0
+        for pane, extent in ((self.sidebar, allocation.leading), (self.detail, allocation.trailing)):
+            del pane.style.height
+            pane.style.flex = 0 if stacked else (1 if pane is self.detail else 0)
+            if stacked:
+                pane.style.height = extent
+        detail_width = width if stacked else (width - sidebar_width - self.detail.style.margin_left if self.wide else width)
         self.detail_width = detail_width
-        menu_width = sidebar_width if self.wide else width
+        menu_width = sidebar_width if self.wide and not stacked else width
         # The category menu is static. Avoid native text reads, sizing and
         # drawable updates for every row on each tab/resize callback.
         if getattr(self, '_menu_fit_width', None) != menu_width:
@@ -433,7 +445,7 @@ class SettingsNavigation(toga.Box):
         if self.wide:
             self.sidebar.style.flex = 0
             # A partially folded Duo uses the physical seam, including rail/safe areas.
-            self.sidebar.style.width = sidebar_width
+            self.sidebar.style.width = width if stacked else sidebar_width
             if category_on_top and active:
                 self.detach(self.options[self.selected])
                 app.routes.trim('settings', len(screens) - 1)

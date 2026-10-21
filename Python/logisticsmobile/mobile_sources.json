@@ -62,6 +62,7 @@
     "obsidian.py",
     "page_animation.py",
     "palette.py",
+    "pane_layout.py",
     "pickers.py",
     "preferences.py",
     "preview.py",

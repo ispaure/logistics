@@ -1,4 +1,4 @@
-"""Destination-owned drawers and equal-width document panes over native routes.
+"""Destination-owned drawers and adaptive document panes over native routes.
 
 The native tab and Back stacks stay authoritative. A pane moves existing widget
 owners rather than copying editor buffers or mounting a widget twice.
@@ -350,14 +350,15 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             body = self.app.routes.body(destination)
             view = body.children[0] if body.children else None
             frame = getattr(view, '_workspace_frame', None)
-            from .fold_layout import seam_fraction
-            seam = (seam_fraction(self.app, frame.row, include_open=True)
-                    if frame is not None and frame.destination == 'files' else None)
+            from .fold_layout import division
+            fold = division(self.app, frame.row) if frame is not None else None
+            self.wide = self.wide or fold is not None
             if frame is not None and frame.destination == 'files':
-                self.wide = self.content_width('files', margin=0) >= 640 or seam is not None
+                self.wide = self.content_width('files', margin=0) >= 640 or fold is not None
             layout = (id(frame), self.wide, self.layout_width, self.pinned,
                       tuple(self.menu_open.items()), frame.row.layout.content_width if frame else 0,
-                      seam)
+                      fold, frame.row.layout.content_height if frame else 0,
+                      self.app.preferences.values.get('android_eink'))
             if layout != self.last_layout:
                 transition = frame.begin_transition() if frame is not None else None
                 for item in list(self.frames):
@@ -431,6 +432,9 @@ class WorkspaceFrame:
     def restore(self):
         self.compact_open = False
         self.main.style.margin_left = 0
+        self.main.style.margin_top = 0
+        self.row.style.direction = ROW
+        del self.main.style.height
         del self.row.style.width
         if type(self.main._impl).__module__.startswith('toga_iOS.'):
             self.main._impl.native.userInteractionEnabled = True
@@ -439,6 +443,8 @@ class WorkspaceFrame:
         if list(self.row.children) == [self.main]:
             return
         for child in list(self.row.children):
+            child.style.margin_top = 0
+            del child.style.height
             self.row.remove(child)
         detach(self.main)
         self.row.add(self.main)
@@ -574,15 +580,26 @@ class WorkspaceFrame:
             view = self.view()
             margin = view.style.margin_left + view.style.margin_right if destination == 'files' else 24
             available = navigation.content_width(destination, margin=margin)
-            from .fold_layout import seam_fraction
-            seam = seam_fraction(navigation.app, self.row, include_open=True) if destination == 'files' else None
-            half = max(1, available * (seam if seam is not None else .5))
-            # Leave a real gutter between navigation and content on both backends.
-            gap = 16
-            left.style.width, left.style.flex = max(1, half - gap / 2), 0
+            from .fold_layout import division, has_fold
+            from .pane_layout import panes
+            fold = division(navigation.app, self.row)
+            priority = (destination == 'files' or opened) and (
+                has_fold(navigation.app, self.row) or
+                navigation.app.preferences.values.get('android_eink') == 'true')
+            allocation = panes(available, self.row.layout.content_height or 1,
+                               fold=fold, browser_priority=priority)
             right = self.folder_placeholder if left is self.main else self.main
-            right.style.margin_left = gap
-            right.style.width, right.style.flex = max(1, available - half - gap / 2), 0
+            self.row.style.direction = ROW if allocation.axis == 'row' else COLUMN
+            for pane, extent in ((left, allocation.leading), (right, allocation.trailing)):
+                pane.style.flex = 0
+                if allocation.axis == 'row':
+                    del pane.style.height
+                    pane.style.width = extent
+                else:
+                    del pane.style.width
+                    pane.style.height = extent
+            right.style.margin_left = allocation.gap if allocation.axis == 'row' else 0
+            right.style.margin_top = allocation.gap if allocation.axis == 'column' else 0
             if left is self.main:
                 self.row.add(right)
                 return

@@ -6,6 +6,7 @@ from unittest.mock import patch
 import toga
 from logisticsmobile.app import LogisticsMobile
 from logisticsmobile.preferences import Preferences
+from logisticsmobile.fold_layout import Division
 
 
 class SettingsNavigationTests(unittest.TestCase):
@@ -119,7 +120,7 @@ class SettingsNavigationTests(unittest.TestCase):
     def test_duo_landscape_seam_splits_the_panes_and_unfolded_width_keeps_them(self):
         nav = self.nav
         self.width.return_value = 600
-        with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.46):
+        with patch('logisticsmobile.fold_layout.division', return_value=Division(276, 0, 0, 700)):
             nav.reflow()
             self.assertTrue(nav.wide)
             self.assertAlmostEqual(nav.sidebar.style.width, (nav.layout.content_width or 600) * .46)
@@ -148,7 +149,7 @@ class SettingsNavigationTests(unittest.TestCase):
     def test_narrow_crease_pane_wraps_all_categories_and_widening_restores_text(self):
         app, nav = self.app, self.nav
         self.width.return_value = 600
-        with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.55):
+        with patch('logisticsmobile.fold_layout.division', return_value=Division(330, 0, 0, 700)):
             nav.reflow()
             nav.choose('App')
             self.assertEqual(nav.sidebar.style.width, 330)
@@ -179,7 +180,7 @@ class SettingsNavigationTests(unittest.TestCase):
 
     def test_changed_status_is_rewrapped_from_the_new_message(self):
         self.width.return_value = 600
-        with patch('logisticsmobile.fold_layout.seam_fraction', return_value=.55):
+        with patch('logisticsmobile.fold_layout.division', return_value=Division(330, 0, 0, 700)):
             self.nav.reflow()
             self.nav.choose('App')
         self.app.settings_status.text = 'Preferences saved on this device.'
