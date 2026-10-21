@@ -124,8 +124,9 @@ class ToolbarProbe(LogisticsMobile):
             self.show_home()
             epub, comic = make_books(root)
             if getattr(self, 'page_turns', False):
-                from .page_motion_checks import expand_epub
+                from .page_motion_checks import expand_epub, expand_comic
                 expand_epub(epub)
+                expand_comic(comic)
             for path, kind in ((epub, 'epub'), (comic, 'comic')):
                 book = self.reader_manager().catalog.library_store.import_book(LocalDocuments(), path)
                 assert await self.open_book(book['id'])
