@@ -76,3 +76,16 @@ class DocumentChromeTests(TestCase):
         self.app.adaptive.detail_routes = [('editor', None, None)]
         sync_document_tabs(self.app, self.view)
         self.bar.setVisibility.assert_called_with(8)
+
+    def test_apple_documents_list_ignores_retained_invisible_detail(self):
+        self.app.native_host.state.destination = 'documents'
+        self.app.routes.screens['documents'] = []
+        self.app.adaptive.split = Mock()
+        self.app.adaptive.in_detail = False
+        self.app.adaptive.detail_routes = [('reader:book', None, None)]
+        sync_document_tabs(self.app, self.view)
+        self.assertFalse(self.app._document_tabs_hidden)
+        # Returning to that detail must still hide destinations.
+        self.app.adaptive.in_detail = True
+        sync_document_tabs(self.app, self.view)
+        self.assertTrue(self.app._document_tabs_hidden)

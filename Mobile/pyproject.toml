@@ -7,7 +7,7 @@ license = "MIT"
 author = "Marc-Andre Voyer"
 
 [tool.briefcase.app.logisticsmobile]
-build = "202610241"
+build = "202610242"
 formal_name = "Logistics Mobile"
 description = "Native document workspaces, readers, LM chat and managed rclone copies"
 
@@ -19,7 +19,7 @@ requires = ["markdown-it-py==4.2.0", "pygments==2.19.2", "pypdf==6.21.0"]
 requires = ["toga-cocoa==0.5.7"]
 
 [tool.briefcase.app.logisticsmobile.android]
-version_code = 202610260
+version_code = 202610265
 requires = ["toga-android==0.5.7"]
 build_gradle_dependencies = [
     "com.google.android.material:material:1.12.0",

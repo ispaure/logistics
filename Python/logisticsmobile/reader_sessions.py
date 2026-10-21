@@ -37,6 +37,11 @@ class ReaderController(ReaderHost, ReaderUI):
             return await self.manager.open(key, password=password)
         if self.book_reader is not None and password is None:
             self.show_library()
+            if self.book_record['kind'] == 'epub':
+                # An existing decoder does not imply a live WebView document.
+                # Explicit reopen must reload the chapter after a blank/failed
+                # native load, flushing pending position writes first.
+                await self.move_book_page(self.book_record['position'])
             return True
         token = self.app.workspace.token(self.session.id)
         await super().open_book(key, password=password)

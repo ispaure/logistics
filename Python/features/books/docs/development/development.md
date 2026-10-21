@@ -240,6 +240,14 @@ nonpersistent provider WebViews. `mobile/navigation.py` owns nested chapter rows
 the hosts mount them through the shared adaptive sidebar. Search remains an
 explicit action outside the chapter list.
 
+The mobile host's `ReaderController.open_book` reloads the current chapter on
+explicitly reopening an already loaded imported EPUB. A retained archive decoder
+does not establish that the native WebView still has its document. Reopen waits
+for pending position writes through `move_book_page`, replaces the chapter bridge
+and restores the saved passage without creating another session or import.
+`Mobile/tests/test_reader_sessions.py` covers this recovery path. Switching
+destinations alone does not trigger a chapter reload.
+
 `mobile/speech.py` keeps bounded utterances and a private in-memory word-offset
 index. A skip retires the old generation and publishes a clear range before
 stopping the old native utterance; synchronous/late callbacks cannot repaint it.

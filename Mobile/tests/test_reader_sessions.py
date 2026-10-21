@@ -9,6 +9,44 @@ from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class ReaderSessionTests(unittest.TestCase):
+    def test_reopening_loaded_epub_reloads_content_and_preserves_passage(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            LogisticsMobile.storage_root = root
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            try:
+                fixtures = root / 'fixtures'
+                fixtures.mkdir()
+                epub, _ = make_books(fixtures)
+                record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), epub)
+
+                async def exercise():
+                    self.assertTrue(await app.open_book(record['id']))
+                    owner = app.readers.active
+                    reader = owner.book_reader
+                    offset = min(5, owner.epub_text.length)
+                    owner.epub_event(reader, owner.book_epoch, 0, 'position', offset)
+                    owner.request_position_flush()
+                    await owner._epub_location_task
+                    old_bridge = owner.epub_view._chapter_bridge
+                    app.show_documents_hub()
+                    with patch.object(owner.epub_view, 'set_content', wraps=owner.epub_view.set_content) as reload:
+                        self.assertTrue(await app.open_book(record['id']))
+                    reload.assert_called_once()
+                    self.assertIs(owner.book_reader, reader)
+                    self.assertTrue(old_bridge.closed)
+                    self.assertIsNot(owner.epub_view._chapter_bridge, old_bridge)
+                    self.assertEqual(owner.epub_offset, offset)
+                    self.assertEqual(len(app.workspace.sessions), 1)
+                    await app.readers.catalog.metadata_task
+                    await app.readers.catalog.library_scan_task
+
+                app.loop.run_until_complete(exercise())
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
     def test_comic_page_focus_swipes_boundaries_and_manga_direction(self):
         import asyncio
         with TemporaryDirectory() as directory:

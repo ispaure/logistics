@@ -300,6 +300,17 @@ first. This is targeted verification, not a completed full mobile/native suite.
 
 ## Document hub and recent sessions
 
+Destination-tab visibility ignores retained iOS secondary routes while
+`AdaptiveWorkspace.in_detail` is false. UIKit keeps these routes when Back or
+**All documents** returns to the list, including in the collapsed iPhone split
+controller; their presence alone must not hide the list's destination tabs.
+Visible reader details and their secondary controls still hide destination tabs.
+`test_document_chrome.py` covers list return and resuming the retained detail.
+The [native reopening evidence](mobile-evidence/2026-10-20-reader-reopen.json)
+records iPhone/iPad list-tab restoration, recovery from a deliberately blank EPUB
+WebView at its saved passage, and file-browser open/close. It does not establish
+what caused an intermittent blank reader on a physical device.
+
 `HubUI.recent_items` merges the bounded recent history with visible workspace
 sessions. Provider `history_source` and credential `cache_source` references map
 back to live owners by source identity, so an open file appears once and its

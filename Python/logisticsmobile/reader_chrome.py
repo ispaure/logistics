@@ -46,6 +46,11 @@ def sync_document_tabs(app, view, *, fullscreen=False, destination=None):
     destination = destination or app.native_host.state.destination
     screens = app.routes.screens[destination]
     details = app.adaptive.detail_routes if destination == 'documents' else ()
+    if (getattr(app.adaptive, 'split', None) is not None
+            and not app.adaptive.in_detail):
+        # UIKit retains the secondary reader when Back/All documents shows
+        # the list, including on a collapsed iPhone split controller.
+        details = ()
 
     def document(widget):
         return (hasattr(widget, '_reader_session_id')
