@@ -1,6 +1,7 @@
 """Developer commands preserve suite isolation, environment selection and failures."""
 import importlib.util
 import os
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -30,6 +31,18 @@ class DeveloperCommandTests(unittest.TestCase):
                 if suite == 'mobile':
                     self.assertEqual(environment['TOGA_BACKEND'], 'toga_dummy')
                 self.assertEqual(run.call_args.kwargs['cwd'], ROOT)
+
+    def test_custom_environment_keeps_its_python_symlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            interpreter = Path(directory) / 'environment-python'
+            try:
+                interpreter.symlink_to(sys.executable)
+            except OSError as error:
+                self.skipTest(f'Creating interpreter symlinks is unavailable: {error}')
+            with patch.object(dev.subprocess, 'run') as run:
+                run.return_value.returncode = 0
+                self.assertEqual(dev.main(['test', 'mobile', '--python', str(interpreter)]), 0)
+                self.assertEqual(run.call_args.args[0][0], str(interpreter.absolute()))
 
     def test_bad_selection_fails_before_starting_a_process(self):
         with patch.object(dev.subprocess, 'run') as run:

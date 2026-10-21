@@ -66,7 +66,8 @@ def main(argv=None):
         from Scripts.development import doctor
         return doctor(ROOT, environment_python)
     mobile = args.command == 'test' and args.suite == 'mobile'
-    interpreter = args.python.expanduser().resolve() if args.python else environment_python(mobile)
+    # Resolving the interpreter symlink escapes a virtual environment.
+    interpreter = Path(os.path.abspath(args.python.expanduser())) if args.python else environment_python(mobile)
     environment = os.environ.copy()
     # Include the repository for tests importing Mobile tooling. Do not inherit
     # unrelated PYTHONPATH entries that can shadow this checkout's packages.
