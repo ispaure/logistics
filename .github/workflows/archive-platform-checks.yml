@@ -36,6 +36,7 @@ jobs:
       - run: python -m pip install ruff==0.14.0
       - run: python -m pip install --require-hashes -r Mobile/requirements-host.txt
       - run: ruff check --config Python/pyproject.toml dev.py Python Mobile Scripts .github/scripts
+      - run: python dev.py architecture
       - name: Install the browser used by mobile DOM regressions
         run: |
           npm install --prefix "$RUNNER_TEMP/mobile-dom" --no-save --ignore-scripts playwright@1.62.1

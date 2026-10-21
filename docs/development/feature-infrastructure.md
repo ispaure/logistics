@@ -34,3 +34,19 @@ runner requires flat test directories; group ownership in documentation before
 changing discovery or CI.
 
 Desktop editor baseline discovery, markers and hunk review live in `Python/services/editors/ui/`; Text Editor and IDE consume that neutral host integration.
+
+## Enforced import boundaries
+
+Run `python3 dev.py architecture` to inspect absolute/relative imports and literal
+lazy module/factory references without importing a feature. The reviewed baseline
+is `Scripts/architecture.json`. It records existing desktop host adapters and
+cross-feature relationships; new edges require an ownership review and an explicit
+policy change. Dynamic expressions are not statically resolved. Toolkit-free
+module rules complement the runtime portability tests, not replace them.
+
+The current desktop adapters use shell dialogs, notifications, settings and
+browser/location hosting. Keep those host integration points narrow; move a caller
+to an injected host service when its workflow is refactored. Mobile features use
+host services instead of importing the mobile application. Presentation integration
+edges among Books/Comics/rclone and IDE/Git/LM do not imply that domain modules may
+import one another's UI. Avoid broad repository-wide controller or utility folders.
