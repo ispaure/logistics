@@ -237,7 +237,8 @@ def deploy(device=None, *, build_only=False, devices=None):
     init.write_text('gradle.beforeProject { p ->\n'
         '  p.pluginManager.withPlugin("com.android.application") {\n'
         '    p.androidComponents.finalizeDsl { dsl ->\n'
-        f'      dsl.defaultConfig.versionCode = {number}\n' + '    }\n  }\n}\n')
+        f'      dsl.defaultConfig.versionCode = {number}\n'
+        f'      dsl.defaultConfig.versionName = {json.dumps(config["version"])}\n' + '    }\n  }\n}\n')
     run([str(PROJECT / 'gradlew'), '--no-daemon', '-p', str(PROJECT), '-I', str(init), ':app:assembleDebug'], env,
         log=output_root(ROOT) / 'logs/android-build.log')
     apk = PROJECT / 'app/build/outputs/apk/debug/app-debug.apk'

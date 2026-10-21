@@ -34,7 +34,7 @@ class AndroidDeployTests(unittest.TestCase):
             project = root / 'project'
             apk = project / 'app/build/outputs/apk/debug/app-debug.apk'
             apk.parent.mkdir(parents=True); apk.touch()
-            (root / 'pyproject.toml').write_text('[tool.briefcase]\nbundle="io.github.ispaure"\n')
+            (root / 'pyproject.toml').write_text('[tool.briefcase]\nbundle="io.github.ispaure"\nversion="0.1.9"\n')
             calls = []
             def run(command, env, **kwargs):
                 calls.append(command)
@@ -54,6 +54,9 @@ class AndroidDeployTests(unittest.TestCase):
             self.assertIn(['android'], [command[-1:] for command in calls])
             build = next(command for command in calls if ':app:assembleDebug' in command)
             self.assertEqual(build[build.index('-p') + 1], str(project))
+            version = Path(build[build.index('-I') + 1]).read_text()
+            self.assertIn('versionCode = 42', version)
+            self.assertIn('versionName = "0.1.9"', version)
 
     def test_build_number_exceeds_installed_beta_and_previous_local_builds(self):
         import json
