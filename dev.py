@@ -47,7 +47,7 @@ def main(argv=None):
         if not args.pattern.endswith('.py') or any(c in args.pattern for c in '/\\'):
             parser.error('Use a test filename or quoted filename glob, not a path.')
         suite = ROOT / ('Mobile/tests' if mobile else 'Python/tests')
-        if not any(path.is_file() for path in suite.glob(args.pattern)):
+        if not any(path.is_file() for path in suite.rglob(args.pattern)):
             parser.error(f'No test files match {args.pattern!r} in {suite.relative_to(ROOT)}.')
         if mobile:
             environment['TOGA_BACKEND'] = 'toga_dummy'

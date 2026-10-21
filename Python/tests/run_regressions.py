@@ -13,20 +13,20 @@ import unittest
 def run_isolated(directory, pattern, interval):
     """Give independent GUI test files their own QApplication and native state."""
     modules = sorted(directory.rglob(pattern))
-    if not modules or any(path.parent != directory for path in modules):
-        print('Module isolation requires a nonempty, flat test directory.', file=sys.stderr)
+    if not modules:
+        print('Module isolation requires at least one matching test file.', file=sys.stderr)
         return 1
     failed = []
     for path in modules:
-        print(f'Running isolated test file: {path.name}', flush=True)
-        command = [sys.executable, str(Path(__file__).resolve()), str(directory),
+        print(f'Running isolated test file: {path.relative_to(directory)}', flush=True)
+        command = [sys.executable, str(Path(__file__).resolve()), str(path.parent),
                    '--pattern', path.name, '--traceback-after', str(interval)]
         try:
             code = subprocess.run(command, timeout=300).returncode
         except subprocess.TimeoutExpired:
             code = 124
         if code:
-            failed.append(path.name)
+            failed.append(str(path.relative_to(directory)))
             print(f'{path.name}: FAIL ({code})', file=sys.stderr, flush=True)
     print(f'Isolated test files: {len(modules)}; failures: {len(failed)}', flush=True)
     if failed:
@@ -49,7 +49,7 @@ def main():
     parser.add_argument('directory', type=Path)
     parser.add_argument('--pattern', default='test*.py', help='unittest discovery filename pattern')
     parser.add_argument('--isolate-modules', action='store_true',
-                        help='Run each test file in a fresh process; requires a flat test directory')
+                        help='Run each matching test file in a fresh process, including nested directories')
     parser.add_argument('--traceback-after', type=float, default=60,
                         help='Seconds between safe progress reports; crash tracebacks remain enabled')
     args = parser.parse_args()
@@ -89,6 +89,9 @@ def main():
         directory_cache._legacy_database = None
     try:
         suite = unittest.defaultTestLoader.discover(str(args.directory), pattern=args.pattern)
+        if suite.countTestCases() == 0:
+            print('No tests discovered.', file=sys.stderr)
+            return 1
         result = unittest.TextTestRunner(verbosity=2, resultclass=ProgressResult).run(suite)
         return int(not result.wasSuccessful())
     finally:

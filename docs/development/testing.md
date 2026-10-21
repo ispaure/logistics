@@ -126,8 +126,9 @@ Qt. These checks do not certify native appearance or interactions. See the
 
 The [mobile owner map](mobile-runtime.md) explains controller
 and packaging boundaries. For focused runs, use `dev.py test desktop <filename>` or
-`dev.py test mobile <filename>`. Preserve the flat test layout: its isolated
-mode requires a nonempty flat directory. The runner puts the selected suite first
+`dev.py test mobile <filename>`. Existing test paths remain valid. Isolated mode also supports nested directories,
+running each file from its own parent in a separate process. Duplicate filenames
+in different directories cannot shadow each other. Empty test modules fail. The runner puts the selected suite first
 on the import path so mobile and desktop files with the same test-module name
 cannot shadow each other. Use the separate mobile environment
 and [host validation commands](mobile-launchers.md#host-validation) for Toga

@@ -32,3 +32,29 @@ class RegressionRunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn('Regression progress', result.stderr)
         self.assertIn('FAILED (failures=1)', result.stderr)
+
+
+class NestedRegressionRunnerTests(unittest.TestCase):
+    def test_same_named_nested_modules_run_independently_and_keep_failures(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, fails in [('first', False), ('second', True)]:
+                folder = root / name
+                folder.mkdir()
+                (folder / 'test_duplicate.py').write_text(
+                    'import unittest\nclass Test(unittest.TestCase):\n'
+                    f'    def test_value(self): self.assertFalse({fails!r})\n')
+            result = subprocess.run([sys.executable, str(RUNNER), str(root), '--isolate-modules'],
+                                    capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn('first/test_duplicate.py', result.stdout.replace('\\', '/'))
+            self.assertIn('second/test_duplicate.py', result.stdout.replace('\\', '/'))
+            self.assertIn('failures: 1', result.stdout)
+
+    def test_empty_test_module_is_an_error(self):
+        with TemporaryDirectory() as temporary:
+            (Path(temporary) / 'test_empty.py').write_text('')
+            result = subprocess.run([sys.executable, str(RUNNER), temporary, '--isolate-modules'],
+                                    capture_output=True, text=True, timeout=15)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('No tests discovered', result.stderr)
