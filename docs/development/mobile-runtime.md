@@ -1016,3 +1016,12 @@ existing callbacks to this module, so startup cancellation, active transfers,
 private documents and native callback signatures keep their existing behavior.
 `reader_lifecycle.py` still owns individual document exit/Back behavior. Host tests
 include startup progress, reset, private sessions, LocalCrypt and speech media.
+
+## Provider presentation assembly
+
+`provider_presentation.py` builds the provider reader chrome only after the session
+owner opens a document. `provider_ui.py` retains session commands, credential
+identity checks and publication; Books, Comics and Markdown controllers retain
+format navigation. The `compact_private_view` host callback remains compatible.
+Private-session, provider-Markdown and reader-chrome tests cover the assembly.
+Native visual behavior still requires the relevant native acceptance scenarios.

@@ -68,6 +68,7 @@
     "preferences.py",
     "preview.py",
     "private_sessions.py",
+    "provider_presentation.py",
     "provider_ui.py",
     "reader_chrome.py",
     "reader_controls.py",
