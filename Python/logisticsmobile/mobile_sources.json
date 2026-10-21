@@ -44,6 +44,7 @@
     "hub_ui.py",
     "ios_reader_chrome.py",
     "ios_storage.py",
+    "ios_toolbar.py",
     "keyboard.py",
     "layout_events.py",
     "library.py",

@@ -8,6 +8,16 @@ their row presentation, while chat Send/Stop keeps its distinct composer control
 Settings uses unboxed category and action rows, with gray descriptions separating
 explanatory text from commands and native preference controls.
 
+## iOS toolbars and iPhone Duo
+
+On iOS, related screen actions share the system's glass background. Navigation
+and completion actions stay distinct: Close or Back comes first, followed by a
+primary action such as Save and then the remaining tools. On iPhone Duo, UIKit
+moves eligible actions to the side on the outer display and inner landscape;
+inner portrait uses horizontal bars. More actions join the system overflow menu
+when a vertical bar is preferred. Search fields, file-row menus, reading progress,
+playback and message composition remain with the content they affect.
+
 ## Opening documents
 
 Opening text, Markdown, PDF, EPUB or comic documents keeps the current tab selected

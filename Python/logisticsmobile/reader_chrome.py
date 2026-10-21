@@ -34,6 +34,8 @@ def transfer_control(app, view):
     if button is None:
         button = view._reader_transfer_button = toga.Button('', on_press=app.show_transfers,
             style=Pack(width=44, height=44, font_size=12))
+    button._toolbar_group = 'transfer-status'
+    button._toolbar_priority = True
     busy = getattr(app, 'transfer_busy', False)
     percentage = getattr(app, 'transfer_percentage', None)
     if busy:

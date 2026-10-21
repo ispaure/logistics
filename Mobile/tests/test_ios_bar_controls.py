@@ -8,10 +8,10 @@ from logisticsmobile.ios_reader_chrome import action_groups
 
 
 class AppleBarControlTests(TestCase):
-    def test_only_related_comic_navigation_shares_glass(self):
+    def test_semantic_navigation_and_document_tools_share_separate_glass(self):
         buttons = [NS(control_icon=name) for name in ('previous_comic', 'next_comic', 'speaker', 'more')]
-        self.assertEqual(action_groups(buttons), [buttons[:2], [buttons[2]], [buttons[3]]])
-        self.assertEqual(action_groups(buttons[1:]), [[button] for button in buttons[1:]])
+        self.assertEqual(action_groups(buttons), [buttons[:2], buttons[2:]])
+        self.assertEqual(action_groups(buttons[1:]), [[buttons[1]], buttons[2:]])
         self.assertEqual(action_groups([]), [])
 
     def test_mount_and_trait_repaint_remove_inner_fill_without_losing_menu(self):

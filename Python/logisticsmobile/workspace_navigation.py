@@ -73,7 +73,7 @@ def sync_reader_toolbar(app, view, destination=None):
             from .android_reader_chrome import sync
             sync(app, view, destination or app.native_host.state.destination)
         return
-    from .ios_reader_chrome import bar_control, bar_group, bar_separator, action_groups
+    from .ios_toolbar import mount_actions, mount_leading, vertical_edge
     adapter = app.native_host.adapter
     destination = destination or app.native_host.state.destination
     controller = adapter.navigation[app.native_host.destinations.index(destination)].topViewController
@@ -87,6 +87,9 @@ def sync_reader_toolbar(app, view, destination=None):
         # different tab was the most recent reader toolbar to be rendered.
         if key in owned:
             controller.navigationItem.rightBarButtonItems = None
+            controller.navigationItem.trailingItemGroups = []
+            controller.navigationItem.pinnedTrailingGroup = None
+            controller.navigationItem.additionalOverflowItems = None
             controller.navigationItem.prompt = None
             controller.navigationItem.titleView = None
             owned.discard(key)
@@ -104,22 +107,12 @@ def sync_reader_toolbar(app, view, destination=None):
         detach(control)
     from .reader_chrome import reader_buttons
     buttons = [] if getattr(view, '_reader_fullscreen', False) else reader_buttons(app, view)
-    state = (controller.ptr.value, tuple(id(button) for button in buttons))
-    if getattr(app, '_reader_toolbar_state', None) != state:
-        for button in buttons:
-            detach(button)
-            button.app, button.window = app, app.main_window
-        mounted = [bar_group(group) for group in action_groups(buttons)]
-        items = []
-        # UIKit orders trailing items from the outside edge inward.
-        for item, group in reversed(mounted):
-            if items:
-                items.append(bar_separator())
-            items.append(item)
-        controller.navigationItem.rightBarButtonItems = items
-        app._reader_toolbar_groups = [group for _, group in mounted]
-        app._reader_toolbar_group = mounted[0][1] if mounted else None
-        app._reader_toolbar_state = state
+    state = (controller.ptr.value, tuple(id(button) for button in buttons), vertical_edge(controller))
+    for button in buttons:
+        detach(button)
+        button.app, button.window = app, app.main_window
+    mount_actions(controller, view, buttons)
+    app._reader_toolbar_state = state
     status = getattr(view, '_native_reader_status', None)
     text = status.text if status is not None else ''
     prompt = text if text.lower().startswith(('save failed', 'cannot ', 'unsaved changes:',
@@ -131,33 +124,24 @@ def sync_reader_toolbar(app, view, destination=None):
     app._reader_toolbar_controller = controller
     title = getattr(view, '_native_reader_title', None)
     text = str(title() if callable(title) else title or controller.navigationItem.title or '').replace('\n', ' ')
-    leading = 104 if getattr(view, '_workspace_menu_button', None) is not None or hasattr(view, '_workspace_frame') else 52
-    width = max(44, app.adaptive.content_width(destination, margin=0)
-                - 2 * max(leading, 44 * len(buttons) + 8 * max(0, len(action_groups(buttons)) - 1)) - 24)
-    title_state = (controller.ptr.value, text, width, state)
-    if getattr(app, '_reader_title_state', None) != title_state:
-        from .ios_reader_chrome import reader_title
-        title_view, label = reader_title(text, width, app._reader_toolbar_group)
-        controller.navigationItem.titleView = title_view
-        app._reader_title_label = label
-        app._reader_title_state = title_state
+    # UIKit sizes the title inside the actual container, including vertical bars
+    # and split panes; don't reserve horizontal gutters for now-vertical actions.
+    controller.navigationItem.titleView = None
+    controller.navigationItem.title = text
     app._reader_title_controller = controller
     close = getattr(view, '_reader_close_button', None)
     if close is not None:
         detach(close)
         close.app, close.window = app, app.main_window
-        if not hasattr(close, '_native_reader_close_item'):
-            close._native_reader_close_item, close._native_reader_close_group = bar_group([close])
-        close._native_reader_close_item.accessibilityLabel = close.accessible_name
-        bar_control(close)
         frame = getattr(view, '_workspace_frame', None)
         menu = frame.menu if frame is not None else getattr(view, '_workspace_menu_button', None)
-        items = [close._native_reader_close_item]
+        leading = [close]
         if menu is not None:
-            items.extend([bar_separator(), mount_native_menu(app, menu, destination)])
-        controller.navigationItem.leftItemsSupplementBackButton = False
-        controller.navigationItem.hidesBackButton = True
-        controller.navigationItem.leftBarButtonItems = items
+            detach(menu)
+            menu.app, menu.window = app, app.main_window
+            leading.append(menu)
+        mount_leading(controller, leading, replaces_back=True)
+        close._native_reader_close_item = close._ios_action_item
 
 
 class WorkspaceNavigation(AdaptiveWorkspace):
@@ -399,6 +383,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 # Fullscreen restoration can restore the old ActionBar visibility.
                 # The incoming route owns the final document-bar state.
                 sync_reader_toolbar(self.app, view, destination or self.app.native_host.state.destination)
+                from .ios_toolbar import sync_screen
+                sync_screen(self.app, view, destination or self.app.native_host.state.destination)
             if hasattr(self.app, 'render_chat_workspace'):
                 self.app.render_chat_workspace()
             from .appearance import reserve_navigation

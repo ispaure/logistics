@@ -24,16 +24,7 @@ def bar_group(buttons, *, size=44):
 from commonUtils.ui.native.bars import apple_bar_separator as bar_separator
 
 
-def action_groups(buttons):
-    """Only adjacent previous/next comic actions form one semantic group."""
-    groups = []
-    for button in buttons:
-        if (groups and getattr(groups[-1][-1], 'control_icon', None) == 'previous_comic'
-                and getattr(button, 'control_icon', None) == 'next_comic'):
-            groups[-1].append(button)
-        else:
-            groups.append([button])
-    return groups
+from .ios_toolbar import action_groups
 
 
 def reader_title(text, width, actions):

@@ -1168,7 +1168,7 @@ Native iOS folder pages place the folder title and centered storage icon/subtitl
 inside the navigation bar's title view. Disk/cloud icons describe the storage;
 encrypted folders also show their locked/unlocked icon. The subtitle uses native
 bar containment instead of negative content margins. Search and contextual actions
-occupy the content toolbar below the safe-area boundary.
+are individual native bar items; the expanded search field remains in content.
 The recycled table and its ordinary cells use the window palette, so the list
 blends into the surrounding page in both light and dark appearance. Selected
 files retain a rounded highlight in the hover palette.
@@ -1223,3 +1223,39 @@ adapter composes `WorkspaceSelection`; its `pinned` property remains compatible.
 Widget mounting, fold measurements and native toolbars remain in
 `workspace_navigation.py`. Pure policy tests complement the existing workspace
 navigation and reader-lifetime regressions.
+
+
+## Adaptive iOS toolbar actions
+
+`logisticsmobile.ios_toolbar` maps retained Logistics buttons to ordinary
+`UIBarButtonItem` instances and semantic `UIBarButtonItemGroup` groups in the
+owning navigation controller. It forwards actions to the retained button target,
+copies current native menus, and keeps bar-item enabled state synchronized with
+Toga. It does not mount fixed horizontal custom views or add manual glass gaps.
+Folder actions and reader tools therefore participate in UIKit's horizontal and
+vertical layouts; related comic navigation and document tools use distinct groups.
+Close occupies the leading navigation group with native Back suppressed. Save
+uses a prominent pinned trailing group. Reader titles use UIKit's normal title
+allocation instead of reserving horizontal space for actions that may be vertical.
+Transfer status keeps its meaningful text and its own group and higher priority.
+
+Duo-specific overflow selection reads the owning controller's
+`traitCollection.verticalBarEdge`, guarded for older systems. A preferred vertical
+edge moves the existing More menu's live children into `additionalOverflowItems`.
+The uncached provider retains the original menu dispatch, privacy and busy guards.
+Horizontal contexts retain the native More button. Native viewport wakeups refresh
+folder and reader bars after allocation/inset changes. No model-name, screen-size
+or hinge-status check decides toolbar placement. UIKit chooses the physical edge,
+container eligibility, item axis and overflow geometry.
+
+Screen owners may declare `_ios_toolbar_buttons`, optional leading actions,
+a title and obsolete header widgets to remove. These declarations are consumed
+only by the iOS host. `prepare_form` accepts explicit primary/cancel/back labels
+for selected forms; it does not promote arbitrary body or destructive actions.
+Source-specific workspace actions, row menus, search fields, reading progress,
+playback controls and keyboard accessories stay associated with their content.
+
+The SDK selector requires iOS 27.1+ for Duo bar support. Host regressions in
+`test_ios_toolbar`, `test_ios_bar_controls`, folder, navigation and reader tests
+cover state and ownership; actual native axis, overflow and safe-area geometry
+also require simulator/device validation.
