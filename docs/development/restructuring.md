@@ -1,5 +1,10 @@
 # Architecture restructuring assessment
 
+Status: historical October 16 assessment with subsequent implementation records.
+The [developer index](development.md) and owning guides describe current contracts.
+See [the October 21 implementation record](restructuring.md#october-21-developer-maintainability-pass)
+for the incremental developer-tooling and controller changes.
+
 [Developer index](development.md) · [Current code map](code-map.md)
 
 This page is a historical assessment and migration record, not the onboarding
@@ -251,3 +256,40 @@ they are local acceptance evidence, not clean release certification. Validation
 used an isolated Briefcase project so concurrent application/documentation edits
 and existing generated builds were preserved. The separate CPython 3.14 testbed
 workflow was not run by this native Toga app acceptance pass.
+
+## October 21 developer maintainability pass
+
+This pass began from a clean working tree and was implemented in separate local
+commits, each with relevant checks before the next change. It preserves feature
+IDs, persisted data, public compatibility imports, the reserved Misc destination,
+the external feature boundary and the commonUtils submodule revision.
+
+| Area | Implemented boundary | Verification |
+| --- | --- | --- |
+| Source/private files | Generated native output, caches, signing material and conventional secret filenames excluded from Git/release packages; indexed hygiene reports paths/categories only | Release packaging regressions, ignore probes and hygiene checks |
+| CI | Mobile-only PR coverage, feature/service dependency build triggers and lightweight documentation checks | Trigger-path probes and documentation contracts |
+| Developer setup | Read-only doctor, separate desktop/mobile setup, hashed mobile host lock and dependency drift checks | Developer command tests, lock resolution and environment diagnostics |
+| Ownership | 32 source owner/test/guide maps and 15 compatibility import records | Ownership and canonical-target checks |
+| Architecture | Reviewed host adapter/feature edges, relative imports, literal lazy references and selected portable-module rules | Architecture regressions and runtime portability checks |
+| Test discovery | Nested files retain process isolation and duplicate-name safety; empty discovery fails | Runner regressions and existing command checks |
+| Desktop LM | Project attachments composed through an explicit host interface | Complete LM UI regressions |
+| Mobile cloud | Separate SMB form, offline-copy and credential workflows with owned state and compatible callbacks | Connection, package, restore, import, background-refresh and ownership regressions |
+| Mobile host | Shutdown/resource lifetime, provider chrome assembly and toolkit-independent workspace selection have separate owners | Startup, reset, private-session, speech, reader and navigation regressions |
+| Desktop host | Folder request state and workers separate from Qt rendering | Cancellation/private-path tests and Folder Hub UI regressions |
+| Registry | Pure dependency availability/ordering separate from preferences and activation | Registry/preferences regressions |
+| Native bridge | Shared action/envelope contract fixture, malformed-response disposal and safe Go examples | Python contract/credential tests and complete Go bridge suite |
+| Onboarding | A worked contribution and direct commands in current developer navigation | Documentation link/hierarchy checks |
+
+These are incremental boundaries, not a claim that every large coordinator was
+fully redesigned. The registry still owns activation/preferences/contributions;
+provider session and cloud browsing coordination remain host-owned. Broad native
+widget factories remain opaque, and static import analysis cannot resolve computed
+imports. Moving remaining state or adapters should follow a concrete workflow and
+its behavior tests. Package names and existing flat test paths remain stable;
+nested discovery makes later test moves possible without requiring them now.
+
+The local checkout's largest directories were generated mobile builds, logs,
+deployment workspaces and virtual environments. They remain local and were not
+deleted during this pass. No physical-device install or Boox test-app cleanup was
+needed because this pass did not install test apps. Native interaction acceptance
+remains separate from host regression results.

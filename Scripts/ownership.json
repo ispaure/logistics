@@ -260,7 +260,8 @@
         ],
         "mobile": [
           "test_cloud_restore.py",
-          "test_localcrypt_ui.py"
+          "test_localcrypt_ui.py",
+          "test_bridge_protocol.py"
         ]
       },
       "mobile_manifest": "Python/features/rclone/mobile_sources.json"
@@ -335,7 +336,9 @@
       "tests": {
         "desktop": [
           "test_main_window.py",
-          "test_document_workspace.py"
+          "test_document_workspace.py",
+          "test_folder_controller.py",
+          "test_folder_sources_ui.py"
         ]
       }
     },
@@ -349,6 +352,9 @@
           "test_packaged_startup.py",
           "test_reader_lifecycle.py",
           "test_workspace_navigation.py"
+        ],
+        "desktop": [
+          "test_workspace_policy.py"
         ]
       }
     },
@@ -376,7 +382,8 @@
         "desktop": [
           "test_dev_commands.py",
           "test_architecture_contracts.py",
-          "test_documentation_layout.py"
+          "test_documentation_layout.py",
+          "test_source_hygiene.py"
         ]
       }
     },

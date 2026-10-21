@@ -2,10 +2,14 @@
 
 Start with [setup and your first change](testing.md). It covers running the app,
 choosing a code owner, running focused checks and updating the right guide.
+The [worked LM attachment contribution](testing.md#worked-contribution-desktop-lm-attachments)
+traces a complete change through registration, implementation and tests.
 The commands below run from the repository root; use `py` instead of `python3`
 on Windows.
 
 ```sh
+python3 dev.py doctor
+python3 dev.py owners
 python3 dev.py --help
 python3 dev.py test desktop test_feature_registry.py
 python3 dev.py lint
@@ -75,9 +79,9 @@ validate a new change.
 
 These pages retain proposals and migration history. Use the current code map and
 owner guides above for today's layout. Check each page's implementation status
-before treating an old finding as remaining work. Larger source moves, controller
-redesigns, shell renaming and test-layout changes are deferred from the onboarding
-and tooling pass.
+before treating an old finding as remaining work. The October 21 incremental pass below adds controller boundaries and nested test
+discovery. Shell renaming and wholesale test-directory moves remain deferred;
+current contracts are in the owner maps above.
 
 - [Restructuring assessment and migration record](restructuring.md)
 - [October 20 ownership audit and cleanup record](ownership-audit.md)

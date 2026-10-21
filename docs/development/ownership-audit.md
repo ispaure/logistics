@@ -1,5 +1,10 @@
 # Feature ownership and cleanup audit
 
+Status: historical October 20 assessment with subsequent implementation records.
+The [developer index](development.md) and owning guides describe current contracts.
+See [the October 21 implementation record](restructuring.md#october-21-developer-maintainability-pass)
+for the incremental developer-tooling and controller changes.
+
 [Developer index](development.md) · [Earlier restructuring](restructuring.md) ·
 [Shared ownership](commonutils-integration.md)
 

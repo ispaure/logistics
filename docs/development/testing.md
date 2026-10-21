@@ -294,3 +294,30 @@ values. Stage specific reviewed paths first: the check reads the Git index, so i
 does not certify unstaged/untracked content or arbitrary provider token formats.
 Review every staged diff; never stage a virtual environment, native build output,
 credentials or a local feature link.
+
+## Worked contribution: desktop LM attachments
+
+The attachment extraction is a complete example of the current ownership flow:
+
+1. `Python/features/lm/__init__.py` registers the `lm.chat` page through
+   `create_page`; it lazily imports `ui.page.LMPage`.
+2. `ui/page.py` composes `AttachmentController` from `ui/attachments.py`.
+   Menu callbacks keep their old page methods, which delegate to that owner.
+3. The controller obtains registered project/buffer context through
+   `AttachmentHost`. Portable `project_tools.py` owns file containment and IDE
+   exclusions; the controller owns picking and publishing bounded composer text.
+   Conversation records and checkpoints remain with `ConversationSession`.
+4. `test_lm_ui.py` covers selection/file attachments, excluded paths, project
+   choice across reopening and draft preservation. Run
+   `python3 dev.py test desktop test_lm_ui.py`; its synthetic endpoint needs
+   permission to bind localhost. Also run `python3 dev.py architecture` and lint.
+5. This extraction is desktop-only, so it adds no mobile payload entry. A new
+   mobile source instead needs its owner's `mobile_sources.json` and
+   `test_mobile_packaging.py`, including any separately curated proof payload.
+6. Update the LM developer guide for implementation and its user guide only when
+   user-visible behavior changes. Review explicit paths, stage them, run hygiene,
+   then commit. Do not stage runtime output or unrelated work.
+
+Follow that sequence for a first change: identify a registration/callback, keep
+policy with its owner, exercise behavior tests, check packaging and update the
+owning guide. Use `dev.py compatibility` when an older path forwards to new code.

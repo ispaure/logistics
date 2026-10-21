@@ -135,6 +135,10 @@ Additional emulator tools are available on request through ispaure’s **ally-to
 
 ## Learn more
 
+For contributors, start with [developer setup](docs/development/testing.md).
+`python3 dev.py doctor` checks the local environment; `dev.py setup desktop` and
+`dev.py setup mobile` prepare separate host environments. Use `py` on Windows.
+
 Start at the [documentation wiki](docs/docs.md) for the user, mobile user and
 development hierarchies. Feature manuals live in each owner’s `docs/` folder.
 
