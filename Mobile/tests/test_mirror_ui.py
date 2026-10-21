@@ -252,6 +252,11 @@ class MirrorUITests(unittest.TestCase):
             async def exercise():
                 with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)) as dialog:
                     app.start_mirror_pull(job['id'])
+                    # Exercise cancellation of an in-flight comparison, rather
+                    # than racing Proceed against its worker's first dispatch.
+                    async with asyncio.timeout(5):
+                        while not started.is_set():
+                            await asyncio.sleep(.01)
                     self.assertTrue(await drive_review(app, early=True))
                     self.assertEqual(dialog.await_count, 1)
                 self.assertTrue(retired.is_set())
