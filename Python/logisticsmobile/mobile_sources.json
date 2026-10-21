@@ -42,6 +42,7 @@
     "hub_controller.py",
     "hub_icons.py",
     "hub_ui.py",
+    "ios_content_background.py",
     "ios_reader_chrome.py",
     "ios_storage.py",
     "ios_toolbar.py",

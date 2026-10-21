@@ -99,6 +99,8 @@ def sync(app):
         return
     window = app.main_window._impl.native
     _hosts[window.ptr.value] = app
+    from .ios_content_background import sync as sync_background
+    sync_background(app)
     state = (app._reader_chrome_hidden, app._comic_chrome_hidden)
     if getattr(app, '_ios_reader_chrome_state', None) == state:
         return

@@ -103,6 +103,8 @@ class ProviderUI(FilesUI):
             from services.documents.readers import MemorySource
             if isinstance(reader.source, MemorySource):
                 reader.source.data = b''
+        from .ios_content_background import clear
+        clear(getattr(self, 'app', self))
         self.crypt_reader = None
         for field in self.crypt_metadata_fields.values():
             field.value = ''

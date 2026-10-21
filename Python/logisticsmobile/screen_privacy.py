@@ -130,6 +130,8 @@ class ScreenPrivacy:
 
     def conceal(self):
         self.inactive = True
+        from .ios_content_background import clear
+        clear(self.app)
         from .browser_ui import sync_browser_population
         sync_browser_population(self.app)
         from features.books.mobile.media_controls import enforce_privacy
@@ -157,6 +159,8 @@ class ScreenPrivacy:
         self.inactive = False
         self.refresh()
         self.resume_reader()
+        from .ios_content_background import sync
+        sync(self.app)
         from .browser_ui import sync_browser_population
         sync_browser_population(self.app)
 
@@ -198,6 +202,8 @@ class ScreenPrivacy:
             # window can still be inactive while the app is starting up.
             hidden = bool(gates) and (self.inactive or scene_inactive or captured)
             if hidden:
+                from .ios_content_background import clear
+                clear(self.app)
                 window.endEditing(True)
                 if self.shield is None:
                     self.shield = ObjCClass('UIView').alloc().initWithFrame(window.bounds)

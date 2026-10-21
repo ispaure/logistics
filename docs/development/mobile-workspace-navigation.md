@@ -1297,3 +1297,21 @@ composer clearance and applies the same window-bound check. Declared iOS forms
 refit their retained labels to current safe content width through
 `ios_toolbar.fit_form`, so wide explanatory text cannot keep a landscape minimum
 after returning to portrait.
+
+## Artwork beneath vertical iOS bars
+
+`ios_content_background` creates an image-only `UIBackgroundExtensionView`
+sibling behind the active reading frame when UIKit supplies a vertical bar.
+It reuses the current canvas's native image and keeps the real page, footer,
+labels and actions in their original safe layout. Only the reading canvas next
+to the outer bar edge can supply the extension; companion panes cannot bleed
+across another pane or a fold. Its vertical bounds match the canvas, excluding
+the reader's header and footer. Continuous text and form widgets are never
+captured into the decorative surface.
+
+The extension has no interactions or accessibility elements. Fullscreen,
+horizontal bars, Reduce Transparency, route changes and private-reader
+conceal/suspension release the native image and detach the extension. Older
+systems without the native extension class keep the ordinary safe layout.
+`test_ios_content_background.py` covers edge geometry and pixel-release order;
+the native pose audit records the actual foreground/background rectangles.

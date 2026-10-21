@@ -35,6 +35,8 @@ class DuoPoseProbe(ToolbarProbe):
             sample = await super().record(name + '-' + (orientation or 'observed-pose'))
             sample.update(pose=pose_snapshot(self), safe_area=safe_geometry(self),
                           fixed_controls=assert_visible_controls(self))
+            from .artwork_checks import snapshot
+            sample['artwork'] = snapshot(self)
             self.check_panes(sample)
             if first is None:
                 first = sample

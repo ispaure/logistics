@@ -238,6 +238,8 @@ class PrivateSessions:
             await restore_drawn_scroll(preview, position['preview_scroll'], valid)
 
     def suspend(self, *, except_owner=None, keep_active_markdown=False):
+        from .ios_content_background import clear
+        clear(self.app)
         for owner in self.controllers.values():
             if owner is except_owner:
                 continue

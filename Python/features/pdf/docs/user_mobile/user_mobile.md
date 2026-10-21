@@ -65,3 +65,11 @@ text index. Search text and results clear when the reader closes or its private
 session is revoked. Scanned pages require an existing searchable text layer;
 OCR is not included. Results are capped at 1,000 (shown with a `+` when there are
 more); documents with more than 8 MiB of extracted text report a search limit.
+
+## Background beside side controls
+
+When iOS uses vertical side controls, the current page can supply a decorative
+background beneath them. The fitted document stays inside the unobstructed
+reading area, so page text is not hidden by a toolbar. Fullscreen keeps its
+existing edge-to-edge canvas. Reduce Transparency disables the decorative
+extension; private-reader conceal and suspension release its image.

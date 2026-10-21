@@ -209,6 +209,11 @@ arrows, the slider and page count share one bottom row. On iPad, the title uses
 the available navigation-bar width and only shortens when the filename does not
 fit between the controls. Pages keep their original proportions when fitted.
 
+When iOS places controls along the side, a decorative extension of the current
+page artwork can fill the space behind them. The fitted page and its controls
+remain unobstructed. The extension is disabled with Reduce Transparency and
+removed when the private reader is concealed or suspended.
+
 Fullscreen comics hide the system status indicators as well as app navigation.
 The image canvas uses the full window, including the former status-indicator strip.
 On a partially folded Duo, pages fit on either side of the system-reserved fold.
