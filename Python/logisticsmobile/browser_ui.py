@@ -306,11 +306,6 @@ class LogisticsBrowserPresentation(BrowserPresentation):
         from .recycled_file_list import file_list_icon
         return file_list_icon(folder)
 
-    def bind_keyboard(self, browser):
-        from .keyboard import bind_browser
-        bind_browser(browser)
-
-
 class FileBrowser(RecycledBrowser):
     def __init__(self, *, folder_visible=None, **kwargs):
         from .recycled_file_list import RecycledFileList

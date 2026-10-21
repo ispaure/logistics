@@ -43,6 +43,9 @@ def exit_app(self, app, **kwargs):
         picker = getattr(self, '_editor_picker', None)
         if picker is not None:
             picker.clear()
+        dismissal = getattr(self, '_keyboard_dismissal', None)
+        if dismissal is not None:
+            dismissal.dispose()
         self.memory_pressure.dispose()
         self.screen_privacy.dispose()
         self.seasonal_snow.dispose()

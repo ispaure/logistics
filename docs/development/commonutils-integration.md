@@ -167,3 +167,6 @@ private-content policy and cloud transfer approval. File-object copying is uncha
 
 Native draw acknowledgement now lives in commonUtils. Logistics keeps loading
 panel composition and route/privacy revalidation after the wait.
+
+Keyboard dismissal gestures and Android search-focus handling now use shared
+native utilities. Logistics retains IME editor compression and window ownership.
