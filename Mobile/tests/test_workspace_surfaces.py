@@ -18,7 +18,7 @@ class WorkspaceSurfacesTests(TestCase):
         bridge = NS(ObjCClass=lambda name: NS(mainScreen=NS(scale=2)),
                     UIEdgeInsets=lambda *values: values)
         with patch.dict('sys.modules', {'rubicon.objc': bridge}), patch(
-                'logisticsmobile.control_icons._apple_button_image', return_value=object()), patch.object(
+                'commonUtils.ui.native.icons.apple_symbols', return_value=object()), patch.object(
                 appearance, 'apple_color', return_value=MagicMock()):
             button_icons(button, [('storage_local', 'Local')])
             self.assertEqual(impl.native.contentEdgeInsets, (0, 12, 0, 32))

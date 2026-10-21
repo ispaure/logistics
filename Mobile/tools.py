@@ -81,13 +81,13 @@ SHARED_REQUIRED_MODULES += ('ui/native/transitions.py', 'ui/native/sliders.py')
 
 SHARED_REQUIRED_MODULES += ('ui/native/appearance.py', 'ui/appearance/colors.py')
 
-SHARED_REQUIRED_MODULES += ('commonUtils/ui/native/icons.py',)
+SHARED_REQUIRED_MODULES += ('ui/native/icons.py',)
 
-SHARED_REQUIRED_MODULES += ('commonUtils/ui/native/forms.py',)
+SHARED_REQUIRED_MODULES += ('ui/native/forms.py',)
 
-SHARED_REQUIRED_MODULES += ('commonUtils/ui/native/bars.py',)
+SHARED_REQUIRED_MODULES += ('ui/native/bars.py',)
 
-SHARED_REQUIRED_MODULES += ('commonUtils/runtime/signals.py',)
+SHARED_REQUIRED_MODULES += ('runtime/signals.py',)
 
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):
