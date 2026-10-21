@@ -192,14 +192,14 @@ class ReaderChrome:
         self.reader_immersive = False
         content = self.book_content
         if not comic:
-            from commonUtils.ui.native.adaptive import AdaptiveSidebar
+            from .chapter_drawer import ChapterDrawer
             self.chapter_rows = toga.Box(style=Pack(direction=COLUMN))
             tree = toga.Box(children=[toga.Label('Chapters', style=Pack(font_size=20)),
                 self.chapter_rows, self.bookmark_button, self.bookmark_selector],
                 style=Pack(direction=COLUMN, margin=8))
             from features.books.mobile.navigation import chapter_sidebar
             sidebar = chapter_sidebar(tree)
-            self.chapter_sidebar = AdaptiveSidebar(sidebar, self.book_content, label='Browse book chapters')
+            self.chapter_sidebar = ChapterDrawer(sidebar, self.book_content, app=self.app)
             self.chapter_collapsed = set()
             content = self.chapter_sidebar.view
         self.reading_frame = ReadingFrame(content,

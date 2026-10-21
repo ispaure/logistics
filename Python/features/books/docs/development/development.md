@@ -334,3 +334,38 @@ readers. Theme/contrast refresh sends the current preference to every retained
 bridge before backend-specific styling. A false policy cancels a running Web
 Animation and suppresses subsequent turns, independently of Android's HTML
 contrast marker. The bridge still honors the WebView's reduced-motion query.
+
+## Mobile chapter presentation
+
+The Logistics host injects `ChapterDrawer` into imported and rich provider EPUB
+readers. Its native overlay retains the detail widget in place and never reserves
+a sidebar column. Outside taps, chapter selection, Back, route changes and reader
+retirement dismiss the drawer. The native overlay follows window resizing.
+High Contrast / E Ink suppresses its opening slide and cancels active drawer
+motion when the preference changes; dismissal is immediate. Native validation
+of the chapter drawer on iOS and Android is still pending.
+
+## Mobile EPUB spreads
+
+`mobile/presentation.py` paginates the inert chapter into one or two CSS columns.
+Wide landscape viewports (width >= 700 and height >= 480 logical pixels) use two
+columns, as does an active vertical fold. The column stride includes the gutter;
+turns and seeks snap to a whole spread, including an odd final page. Saved UTF-16
+anchors retain their meaning across rotation, typography and fold changes.
+Maximum reading width caps each text column, and the smaller physical half caps
+both columns equally. Surplus width becomes an outer margin rather than stretching
+one page or moving the gutter away from the crease.
+
+The host binds `ChapterBridge.geometry_provider` for imported and rich provider
+readers. `fold_layout.epub_geometry` queries the WebView's own reserved region and
+normalizes the crease center and width to that view. Hinge updates call
+`sync_epub_geometry` even without a viewport-size change; geometry changes reflow
+without animation. UIKit reserved-region support supplies the existing platform
+geometry. Platforms without that support use the viewport midpoint. The plain-text
+fallback remains single-page.
+
+`test_epub_dom.py` / `epub_index_dom.cjs` verify actual browser columns, crease
+clearance, full-spread turns, right-page seeks, final-spread navigation, UTF-16
+selection, motion suppression and anchor retention. `test_fold_layout.py` checks
+view-local geometry delivery to imported and private bridges. Physical iOS/Android
+posture and rendering validation remains pending.

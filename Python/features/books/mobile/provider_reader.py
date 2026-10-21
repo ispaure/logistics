@@ -11,7 +11,7 @@ from .navigation import ChapterList, chapter_sidebar
 
 
 class RichBookView(toga.Box):
-    def __init__(self, book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, prepared=None, on_chapter, on_position, motion_enabled=True):
+    def __init__(self, book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, prepared=None, on_chapter, on_position, motion_enabled=True, sidebar_factory=None):
         self.book, self.index, self.offset = book, index, offset
         self.on_chapter, self.on_position = on_chapter, on_position
         self.disposed, self.loading = False, True
@@ -35,7 +35,7 @@ class RichBookView(toga.Box):
         tree = toga.Box(children=[toga.Label('Chapters', style=Pack(font_size=20)),
             self.chapters.rows], style=Pack(direction=COLUMN, margin=8))
         sidebar = chapter_sidebar(tree)
-        self.sidebar = AdaptiveSidebar(sidebar, self.webview, label='Browse book chapters')
+        self.sidebar = (sidebar_factory or AdaptiveSidebar)(sidebar, self.webview, label='Browse book chapters')
         # Keep the host's existing hamburger contract, with no search field in
         # the chapter hierarchy. Find remains an explicit action.
         self.tools = self.sidebar
@@ -126,6 +126,7 @@ class RichBookView(toga.Box):
             return
         self.close_read_aloud()
         self.close_find()
+        self.sidebar.show_detail()
         self.disposed = True
         self.webview._chapter_bridge.dispose()
         if self.webview in self.children:
@@ -170,9 +171,9 @@ class RichBookView(toga.Box):
             del self.speech_panel
 
 
-def provider_view(book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, prepared=None, on_chapter, on_position, motion_enabled=True):
+def provider_view(book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, prepared=None, on_chapter, on_position, motion_enabled=True, sidebar_factory=None):
     if private_webview_supported():
         return RichBookView(book, index, offset=offset, font_size=font_size, margin=margin, theme=theme, typography=typography, prepared=prepared,
-            on_chapter=on_chapter, on_position=on_position, motion_enabled=motion_enabled)
+            on_chapter=on_chapter, on_position=on_position, motion_enabled=motion_enabled, sidebar_factory=sidebar_factory)
     return TextBookView(book, index, offset=offset, font_size=font_size, prepared=prepared,
         on_chapter=on_chapter, on_position=on_position, motion_enabled=motion_enabled)

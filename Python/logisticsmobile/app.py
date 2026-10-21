@@ -369,6 +369,11 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         from .markdown_speech import stop_markdown_speech
         stop_markdown_speech(self)
         self.body = body
+        from .routes import contains
+        for overlay in tuple(getattr(self, '_speech_overlays', ())):
+            owner = getattr(overlay, 'chapter_owner', None)
+            if owner is not None and not contains(body, owner):
+                overlay.panel.hide()
         from .browser_ui import sync_browser_population
         sync_browser_population(self, body)
         if self.native_host.state.destination == 'settings' and hasattr(self, 'settings_navigation'):
@@ -407,6 +412,8 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         for overlay in tuple(getattr(self, '_speech_overlays', ())):
             overlay.reposition()
         self.adaptive.render()
+        from .fold_layout import sync_epub_geometry
+        sync_epub_geometry(self)
         if self.native_host.state.destination == 'settings' and hasattr(self, 'settings_navigation'):
             self.settings_navigation.reflow()
         for name in ('collection_storage_page', 'reset_page'):

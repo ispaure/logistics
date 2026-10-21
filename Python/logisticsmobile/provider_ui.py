@@ -538,15 +538,19 @@ class ProviderUI(FilesUI):
                 locations[book.spine[index]] = value
                 if hasattr(view, 'page_footer'):
                     view.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
+            from .chapter_drawer import ChapterDrawer
             view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
                 font_size=int(self.preferences.values['epub_font_size']),
                 margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
                 on_chapter=controller.open_provider_epub_chapter,
                 on_position=position_changed,
-                motion_enabled=self.preferences.values.get('android_eink') != 'true')
+                motion_enabled=self.preferences.values.get('android_eink') != 'true',
+                sidebar_factory=lambda *args, **kwargs: ChapterDrawer(*args, app=self, **kwargs))
             from .font_scaling import bind
             epub_surface = getattr(view.provider_epub_view, 'webview', None)
             if epub_surface is not None:
+                from .fold_layout import bind_epub_geometry
+                bind_epub_geometry(epub_surface)
                 bind(self, epub_surface, 'epub', web=True)
             else:
                 bind(self, view.provider_epub_view.text, 'epub')

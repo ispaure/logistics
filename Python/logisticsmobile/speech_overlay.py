@@ -1,4 +1,4 @@
-"""Native floating speech surface, independent of the document's layout tree."""
+"""Native floating speech and chapter surfaces outside the document layout tree."""
 
 _apple_dismissal = None
 
@@ -37,7 +37,8 @@ def apple_dismissal_class():
 
 
 class SpeechOverlay:
-    def __init__(self, panel, owner, app, *, anchor=None):
+    def __init__(self, panel, owner, app, *, anchor=None, leading=False):
+        self.leading = leading
         self.anchor = anchor
         self.panel = panel
         self.reposition = lambda: None
@@ -67,7 +68,7 @@ class SpeechOverlay:
         native.layer.cornerRadius = 16
         native.layer.shadowOpacity = .25
         native.layer.shadowRadius = 8
-        native.accessibilityLabel = 'Read aloud controls'
+        native.accessibilityLabel = 'Chapters' if self.leading else 'Read aloud controls'
 
         self.last_size = None
 
@@ -75,8 +76,10 @@ class SpeechOverlay:
             bounds = window.bounds.size
             insets = window.safeAreaInsets
             width = min(320, bounds.width - insets.left - insets.right - 24)
-            height = self.panel.overlay_height
-            frame = CGRect((bounds.width - insets.right - width - 12, insets.top + 52), (width, height))
+            height = (max(1, bounds.height - insets.top - insets.bottom - 76)
+                      if self.leading else self.panel.overlay_height)
+            x = insets.left + 12 if self.leading else bounds.width - insets.right - width - 12
+            frame = CGRect((x, insets.top + 52), (width, height))
             if native.frame != frame:
                 native.frame = frame
             size = (width, height)
@@ -111,8 +114,11 @@ class SpeechOverlay:
         root = FrameLayout(context)
         self.container = Container()
         self.container.init_container(root)
-        width = min(self.container.scale_in(320), context.getResources().getDisplayMetrics().widthPixels - self.container.scale_in(24))
-        height = self.container.scale_in(self.panel.overlay_height)
+        width = min(self.container.scale_in(320),
+                    (owner._impl.native.getRootView().getWidth() if self.leading else
+                     context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(24))
+        height = (max(1, owner._impl.native.getRootView().getHeight() - self.container.scale_in(120))
+                  if self.leading else self.container.scale_in(self.panel.overlay_height))
         self.container.set_content(self.panel._impl)
         self.container.resize_content(width, height)
         self.popup = PopupWindow(root, width, height, True)
@@ -131,15 +137,20 @@ class SpeechOverlay:
 
         self.dismissal = Dismissal()
         self.popup.setOnDismissListener(self.dismissal)
-        self.popup.showAtLocation(owner._impl.native, Gravity.TOP | Gravity.END,
+        if self.leading:
+            self.popup.setAnimationStyle(0)  # Host owns drawer motion and E Ink policy.
+        self.popup.showAtLocation(owner._impl.native, Gravity.TOP | (Gravity.LEFT if self.leading else Gravity.END),
                                   self.container.scale_in(12), self.container.scale_in(96))
         self.panel.refresh()
 
         def reposition():
             if self.container is None:
                 return
-            width = min(self.container.scale_in(320), context.getResources().getDisplayMetrics().widthPixels - self.container.scale_in(24))
-            height = self.container.scale_in(self.panel.overlay_height)
+            width = min(self.container.scale_in(320),
+                    (owner._impl.native.getRootView().getWidth() if self.leading else
+                     context.getResources().getDisplayMetrics().widthPixels) - self.container.scale_in(24))
+            height = (max(1, owner._impl.native.getRootView().getHeight() - self.container.scale_in(120))
+                      if self.leading else self.container.scale_in(self.panel.overlay_height))
             self.container.resize_content(width, height)
             self.popup.update(width, height)
         self.reposition = reposition

@@ -138,3 +138,30 @@ def page_region(owner, widget):
     if 0 < region.y < float(bounds.height):
         return (0, 0, float(bounds.width), region.y)
     return None
+
+
+def epub_geometry(widget):
+    """Normalized active crease in the reading WebView's local coordinates."""
+    region = division(None, widget)
+    if region is None or not region.vertical:
+        return None
+    width = float(widget._impl.native.bounds.size.width)
+    return dict(seam=(region.x + region.width / 2) / width, gap=region.width / width)
+
+
+def bind_epub_geometry(widget):
+    bridge = widget._chapter_bridge
+    bridge.geometry_provider = lambda: epub_geometry(widget)
+    bridge.refresh_geometry(force=True)
+
+
+def sync_epub_geometry(app):
+    """Hinge callbacks also reflow retained EPUBs without a viewport resize."""
+    for name in ('readers', 'private_sessions'):
+        manager = getattr(app, name, None)
+        for owner in getattr(manager, 'controllers', {}).values():
+            panel = getattr(owner, 'provider_epub_view', None)
+            widget = getattr(owner, 'epub_view', None) or getattr(panel, 'webview', None)
+            bridge = getattr(widget, '_chapter_bridge', None)
+            if bridge is not None:
+                bridge.refresh_geometry()

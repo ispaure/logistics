@@ -85,3 +85,44 @@ class FoldLayoutTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class EpubFoldGeometryTests(unittest.TestCase):
+    def test_epub_crease_is_normalized_in_its_own_view(self):
+        from unittest.mock import patch
+        from logisticsmobile.fold_layout import Division, epub_geometry
+        widget = NS(_impl=NS(native=NS(bounds=NS(size=NS(width=1000, height=700)))))
+        with patch('logisticsmobile.fold_layout.reserved_divisions', return_value=(Division(530, 0, 40, 700),)):
+            self.assertEqual(epub_geometry(widget), {'seam': .55, 'gap': .04})
+        with patch('logisticsmobile.fold_layout.reserved_divisions', return_value=(Division(0, 320, 1000, 40),)):
+            self.assertIsNone(epub_geometry(widget))
+        with patch('logisticsmobile.fold_layout.reserved_divisions', return_value=()):
+            self.assertIsNone(epub_geometry(widget))
+
+    def test_crease_changes_reach_imported_and_private_bridges_without_resize(self):
+        from unittest.mock import Mock, patch
+        from logisticsmobile.fold_layout import bind_epub_geometry, sync_epub_geometry
+        from features.books.mobile.presentation import ChapterBridge
+        views = [Mock(), Mock()]
+        for view in views:
+            view._chapter_bridge = ChapterBridge(view, root='https://logistics.invalid/test/')
+        with patch('logisticsmobile.fold_layout.epub_geometry', return_value=None) as geometry:
+            for view in views:
+                bind_epub_geometry(view)
+                view._chapter_bridge.loaded(view)
+                view.evaluate_javascript.reset_mock()
+            app = NS(readers=NS(controllers={'a': NS(epub_view=views[0])}),
+                     private_sessions=NS(controllers={'b': NS(provider_epub_view=NS(webview=views[1]))}))
+            geometry.return_value = {'seam': .55, 'gap': .04}
+            sync_epub_geometry(app)
+            for view in views:
+                view.evaluate_javascript.assert_called_once_with(
+                    'window.reader && window.reader.setGeometry({"seam": 0.55, "gap": 0.04})')
+                view.evaluate_javascript.reset_mock()
+            sync_epub_geometry(app)
+            for view in views:
+                view.evaluate_javascript.assert_not_called()
+            geometry.return_value = None
+            sync_epub_geometry(app)
+            for view in views:
+                view.evaluate_javascript.assert_called_once_with('window.reader && window.reader.setGeometry(null)')

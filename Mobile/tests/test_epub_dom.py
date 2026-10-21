@@ -7,6 +7,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 from unittest import TestCase, skipUnless
 from features.books.mobile.presentation import SCRIPT
+from features.books.mobile.typography import css
 
 NODE = os.environ.get('LOGISTICS_NODE') or shutil.which('node')
 
@@ -15,7 +16,7 @@ NODE = os.environ.get('LOGISTICS_NODE') or shutil.which('node')
 class EpubDOMTests(TestCase):
     def test_one_walk_for_repeated_unicode_selections_and_disposal(self):
         root = 'https://logistics.invalid/synthetic/'
-        html = '<html><head><meta name="logistics-reader-root" content="' + root + '"></head><body>'
+        html = '<html><head><style>' + css(16, 16, 'light') + '</style><meta name="logistics-reader-root" content="' + root + '"></head><body>'
         html += '<p>First 😀 <strong>passage</strong> ends.</p>' * 2000 + '</body></html>'
         script = SCRIPT.replace('OPTIONS', json.dumps(dict(root=root, offset=0)))
         script = script.replace('window.location.href =', 'window.syntheticNotification =')

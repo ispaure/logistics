@@ -159,6 +159,9 @@ def sync_preferences(app):
         manager = getattr(app, name, None)
         for owner in getattr(manager, 'controllers', {}).values():
             panel = getattr(owner, 'provider_epub_view', None)
+            drawer = getattr(owner, 'chapter_sidebar', None) or getattr(panel, 'sidebar', None)
+            if not enabled and hasattr(drawer, 'cancel_motion'):
+                drawer.cancel_motion()
             view = getattr(owner, 'epub_view', None) or getattr(panel, 'webview', None)
             bridge = getattr(view, '_chapter_bridge', None)
             if bridge is not None:

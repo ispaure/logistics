@@ -131,6 +131,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         from .page_animation import cancel_page_slide
         cancel_page_slide(self.book_content)
         self.close_read_aloud()
+        sidebar = getattr(self, 'chapter_sidebar', None)
+        if sidebar is not None:
+            sidebar.show_detail()
         self.book_epoch = getattr(self, 'book_epoch', 0) + 1
         self._epub_pending = None
         for name in ('_comic_layout_task', '_epub_width_task'):
@@ -254,6 +257,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
 
     async def display_book_page(self, index):
         self.close_read_aloud()
+        sidebar = getattr(self, 'chapter_sidebar', None)
+        if sidebar is not None:
+            sidebar.show_detail()
         if self.book_reader is None:
             return
         reader, record = self.book_reader, self.book_record
@@ -291,6 +297,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 on_event=lambda action, value: self.epub_event(reader, epoch, index, action, value),
                 on_link=lambda href: self.epub_link(reader, epoch, index, href),
                 motion_enabled=self.preferences.values.get('android_eink') != 'true')
+            from .fold_layout import bind_epub_geometry
+            bind_epub_geometry(self.epub_view)
             from .font_scaling import bind
             bind(self, self.epub_view, 'epub', web=True)
             view = self.epub_view

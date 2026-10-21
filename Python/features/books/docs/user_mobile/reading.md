@@ -12,12 +12,22 @@ for imports, limits and current validation status.
 Imported EPUBs support nested contents, archive-local chapter/section links and
 **Find in chapter…** in the reader menu. Search ignores case and wraps within the
 current chapter. Previous/Next and horizontal swipes turn discrete pages and continue into adjacent
-chapters at the ends. EPUB text does not scroll vertically. External links and book scripts remain blocked.
+chapters at the ends. EPUB text does not scroll vertically. A wide landscape reading area (at least 700 logical pixels wide and 480 high)
+shows two equal-width pages. Narrow panes and portrait layouts show one page.
+A reported active vertical crease also enables a spread: both text columns use
+the width available on the smaller side, with their central gutter aligned to
+the crease and its reserved region kept clear. Extra space remains as a blank
+outer margin in the book's background color. Flat screens use the reading area's
+midpoint. Previous/Next and swipes advance one spread; an odd last page leaves
+the other half empty. The maximum reading width applies to each page, and
+rotation or a crease change retains the current passage. Crease positioning
+requires the platform to report a reserved fold region; otherwise the spread
+uses the midpoint. Physical fold-posture validation is still pending. External links and book scripts remain blocked.
 
-Open the top-left hamburger for a nested **Chapters** sidebar. Expand or collapse
+Open the top-left hamburger for a nested **Chapters** overlay. Expand or collapse
 sections with the disclosure button, or tap a chapter title to read it. There is
-no search field in this list. On wide panes the list stays beside the book; on
-phones choosing a chapter returns to the page. Bookmarks remain below the list. Choosing an imported chapter or
+no search field in this list. On iPhone, iPad and Android the list floats over the page without changing its
+width or reflowing the text. Tap outside, press Back, or choose a chapter to close it. Bookmarks remain below the list. Choosing an imported chapter or
 bookmark returns directly to reading. The footer
 shows the current chapter and percentage through its text in a compact badge.
 Its slim slider jumps between chapters when released; the arrows still turn
@@ -190,6 +200,7 @@ requirements; session-only content is revealed only after its session password.
 ## Page-turn motion
 
 Page changes use a short slide. **High Contrast / E Ink** disables page-turn
-motion on mobile. System reduced-motion preferences are respected.
+motion and the chapter-overlay opening slide on mobile. The chapter overlay
+closes immediately. System reduced-motion preferences are respected.
 EPUB slides apply within a chapter and when changing chapters. Seeking within a
 chapter, resizing the reader and restoring a saved position do not animate.
