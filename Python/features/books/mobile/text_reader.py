@@ -11,8 +11,8 @@ from .navigation import ChapterTools
 
 class TextBookView(toga.Box):
     """Exact passage anchors, nested contents and search without browser storage."""
-    def __init__(self, book, index, *, offset=0, font_size=16, prepared=None, on_chapter, on_position):
-        self.page_motion_enabled = lambda: True
+    def __init__(self, book, index, *, offset=0, font_size=16, prepared=None, on_chapter, on_position, motion_enabled=True):
+        self.page_motion_enabled = lambda: bool(motion_enabled)
         self.book, self.index = book, index
         self.on_chapter, self.on_position = on_chapter, on_position
         self.chapter = prepared[1] if prepared is not None else ChapterText(chapter_html(book, index, links=True))

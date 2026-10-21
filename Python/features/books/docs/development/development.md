@@ -324,3 +324,13 @@ the header and mounts ordinary UIKit bar items, including Duo vertical bars.
 Empty-state entry points and library-row actions remain in content. The reader
 uses the host's separate native reader action contract. Android retains its
 catalogue header.
+
+## Mobile EPUB motion policy
+
+The host supplies `motion_enabled` when creating either imported or private
+chapter views, including the native text fallback. Rich EPUB bridges include the
+flag in their initial script options and expose `set_motion_enabled` for retained
+readers. Theme/contrast refresh sends the current preference to every retained
+bridge before backend-specific styling. A false policy cancels a running Web
+Animation and suppresses subsequent turns, independently of Android's HTML
+contrast marker. The bridge still honors the WebView's reduced-motion query.

@@ -11,7 +11,7 @@ from .navigation import ChapterList, chapter_sidebar
 
 
 class RichBookView(toga.Box):
-    def __init__(self, book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, prepared=None, on_chapter, on_position):
+    def __init__(self, book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, prepared=None, on_chapter, on_position, motion_enabled=True):
         self.book, self.index, self.offset = book, index, offset
         self.on_chapter, self.on_position = on_chapter, on_position
         self.disposed, self.loading = False, True
@@ -29,7 +29,7 @@ class RichBookView(toga.Box):
         self.query = toga.TextInput(placeholder='Find in chapter…', on_confirm=self.find, style=Pack(height=44, flex=1))
         self.status = toga.Label('Private reader · position and\nbookmarks stay in this session')
         self.webview = chapter_view(content, PrivateWebView(style=Pack(flex=1)), offset=self.offset,
-            on_event=self.event, on_link=self.link)
+            on_event=self.event, on_link=self.link, motion_enabled=motion_enabled)
         from commonUtils.ui.native.adaptive import AdaptiveSidebar
         self.chapters = ChapterList(self.choices.values(), self.open_chapter)
         tree = toga.Box(children=[toga.Label('Chapters', style=Pack(font_size=20)),
@@ -170,9 +170,9 @@ class RichBookView(toga.Box):
             del self.speech_panel
 
 
-def provider_view(book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, prepared=None, on_chapter, on_position):
+def provider_view(book, index, *, offset=0, font_size=16, margin=16, theme='system', typography=None, prepared=None, on_chapter, on_position, motion_enabled=True):
     if private_webview_supported():
         return RichBookView(book, index, offset=offset, font_size=font_size, margin=margin, theme=theme, typography=typography, prepared=prepared,
-            on_chapter=on_chapter, on_position=on_position)
+            on_chapter=on_chapter, on_position=on_position, motion_enabled=motion_enabled)
     return TextBookView(book, index, offset=offset, font_size=font_size, prepared=prepared,
-        on_chapter=on_chapter, on_position=on_position)
+        on_chapter=on_chapter, on_position=on_position, motion_enabled=motion_enabled)

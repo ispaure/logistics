@@ -496,6 +496,8 @@ def install_appearance(app):
 
 def refresh_appearance(app):
     """Recolour live chrome without replacing editors or transfer owners."""
+    from .page_animation import sync_preferences
+    sync_preferences(app)
     from .reader_progress import refresh_progress
     refresh_progress()
     snow = getattr(app, 'seasonal_snow', None)

@@ -469,7 +469,7 @@ class ProviderUI(FilesUI):
     def _show_crypt_content(self, kind, content, *, view=None, owner=None):
         controller = owner or self
         view = self if view is None else view
-        prepared_spread = None
+        prepared_spread = publish_spread = None
         if view.crypt_reader.book is None and kind == 'spread':
             from features.comics.mobile.presentation import SpreadView
             from commonUtils.ui.native.image_canvas import ImageCanvas
@@ -478,7 +478,8 @@ class ProviderUI(FilesUI):
             # allocation or decoder failures must preserve the previous spread.
             previous = getattr(view, 'provider_spread', None)
             if isinstance(previous, SpreadView) and previous in view.crypt_content.children:
-                prepared_spread = previous.replace(data,
+                prepared_spread = previous
+                publish_spread = previous.prepare_replacement(data,
                     right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
                     viewport=controller.private_comic_viewport(view), seam=controller.private_comic_seam(view),
                     crop=view.crypt_reader.comic_navigation.crop,
@@ -508,6 +509,8 @@ class ProviderUI(FilesUI):
         elif view.crypt_reader.kind in {'.epub', '.pdf'} and view.crypt_content.children:
             direction = page_direction(getattr(view, '_provider_displayed_index', None), index)
         begin_page_slide(view.crypt_content, direction, self.preferences.values)
+        if publish_spread is not None:
+            publish_spread()
         for child in list(view.crypt_content.children):
             if hasattr(child, 'dispose') and child not in (view.crypt_image, view.crypt_text, prepared_spread):
                 child.dispose()
@@ -539,7 +542,8 @@ class ProviderUI(FilesUI):
                 font_size=int(self.preferences.values['epub_font_size']),
                 margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
                 on_chapter=controller.open_provider_epub_chapter,
-                on_position=position_changed)
+                on_position=position_changed,
+                motion_enabled=self.preferences.values.get('android_eink') != 'true')
             from .font_scaling import bind
             epub_surface = getattr(view.provider_epub_view, 'webview', None)
             if epub_surface is not None:

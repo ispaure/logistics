@@ -65,11 +65,16 @@ class ComicSplitTests(unittest.TestCase):
                             self.assertEqual(first.getpixel((539 if rtl else 0, 0)), outer)
                             self.assertEqual(first.getpixel((0 if rtl else 539, 0)), (0, 128, 0, 255))
                             # Use the actual gesture scheduling path, including manga inversion.
-                            if provider:
-                                owner.swipe_crypt_page(-1 if rtl else 1)
-                            else:
-                                owner.swipe_book_page(-1 if rtl else 1)
-                            await owner._comic_swipe_task
+                            def capture_outgoing(content, direction, preferences):
+                                self.assertIs(pixels(owner, provider), first,
+                                              'The new crop was published before the outgoing page was captured')
+                            with patch('logisticsmobile.page_animation.begin_page_slide', side_effect=capture_outgoing) as capture:
+                                if provider:
+                                    owner.swipe_crypt_page(-1 if rtl else 1)
+                                else:
+                                    owner.swipe_book_page(-1 if rtl else 1)
+                                await owner._comic_swipe_task
+                                capture.assert_called_once()
                             self.assertEqual((nav.page, nav.half), (0, 1))
                             self.assertTrue(owner.previous_page.enabled)
                             self.assertIsNot(pixels(owner, provider), first)

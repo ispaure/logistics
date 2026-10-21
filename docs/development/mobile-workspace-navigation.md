@@ -1346,3 +1346,10 @@ supplied when adding it; cancellation and native probes use that actual key.
 The optional native pose audit `--page-turns` exercises forward/backward turns in
 normal/high-contrast mode for imported EPUB/comics and provider EPUB/PDF/comics,
 plus real WKWebView in-chapter motion and suppression.
+
+The follow-up page-motion audit checks old image ownership at capture time,
+not just the existence of a Core Animation object. Reused comic spreads publish
+a prepared replacement only after the host starts the transition. Rich EPUBs
+receive an explicit host motion flag both at load and on preference refresh;
+HTML contrast markers alone are insufficient on iOS. A same-page/layout refresh
+cancels a pending native slide rather than starting a new one.

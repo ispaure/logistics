@@ -333,3 +333,15 @@ position schema; provider progress remains session-owned.
 
 `Mobile/tests/test_comic_split.py` exercises imported/provider round trips in both
 reading directions, wide-half retention, and transparent fold margins.
+
+## Mobile page-transition publication
+
+Reused `SpreadView` canvases separate preparation from publication.
+`prepare_replacement` composes and validates the destination image without
+changing the displayed bitmap and returns a publish callback. The imported
+controller returns `(view, indices, publish)`; the host starts its page slide
+while the old pixels are still attached, then publishes and mounts the prepared
+page. Provider comics use the same preparation/publication boundary. This also
+covers turns between halves of one wide page and retains native gesture owners.
+Decode/composition failures keep the previously displayed pixels and navigation.
+Tests capture the outgoing image during actual swipe scheduling, including manga.

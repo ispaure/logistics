@@ -24,10 +24,28 @@ def cancel_visible_slides(app):
 
 def begin_page_slide(content, direction, preferences):
     enabled = preferences.get('android_eink') != 'true'
-    if not enabled:
+    if not enabled or not direction:
         cancel_page_slide(content)
     return begin_slide(content, direction, enabled=enabled)
 
 
 def finish_page_slide(content, direction, preferences):
     return finish_slide(content, direction, enabled=preferences.get('android_eink') != 'true')
+
+
+def sync_preferences(app):
+    """Push the host policy into retained rich EPUBs on either mobile backend."""
+    preferences = getattr(app, 'preferences', None)
+    if preferences is None:
+        return
+    enabled = preferences.values.get('android_eink') != 'true'
+    for name in ('readers', 'private_sessions'):
+        manager = getattr(app, name, None)
+        for owner in getattr(manager, 'controllers', {}).values():
+            panel = getattr(owner, 'provider_epub_view', None)
+            view = getattr(owner, 'epub_view', None) or getattr(panel, 'webview', None)
+            bridge = getattr(view, '_chapter_bridge', None)
+            if bridge is not None:
+                bridge.set_motion_enabled(enabled)
+    if not enabled:
+        cancel_visible_slides(app)

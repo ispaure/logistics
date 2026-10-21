@@ -28,14 +28,21 @@ class SpreadView(toga.Box):
         self.canvases = [self.canvas]
         super().__init__(children=[self.canvas], style=Pack(flex=1, width=width if width is not None else NONE))
 
-    def replace(self, data, *, right_to_left=False, viewport=None, seam=None, crop=None, seam_gap=0, anchor_right=False):
-        """Publish only a fully prepared bitmap; reuse gesture/native ownership."""
+    def prepare_replacement(self, data, *, right_to_left=False, viewport=None, seam=None, crop=None, seam_gap=0, anchor_right=False):
+        """Decode completely without changing the displayed pixels yet."""
         from .composite import compose_spread
-        image = compose_spread(data, right_to_left=right_to_left, viewport=viewport, seam=seam, crop=crop, seam_gap=seam_gap, anchor_right=anchor_right)
-        self.canvas.description = ('Wide comic page half. Swipe at fit size to continue; pinch to zoom.' if crop is not None else
-                                   'Comic spread. Pinch to zoom both pages; drag across the spread. Swipe at fit size to turn.')
-        self.canvas.image = image
-        self.canvas.fit_page()
+        image = compose_spread(data, right_to_left=right_to_left, viewport=viewport, seam=seam,
+                               crop=crop, seam_gap=seam_gap, anchor_right=anchor_right)
+        description = ('Wide comic page half. Swipe at fit size to continue; pinch to zoom.' if crop is not None else
+                       'Comic spread. Pinch to zoom both pages; drag across the spread. Swipe at fit size to turn.')
+        def publish():
+            self.canvas.description = description
+            self.canvas.image = image
+            self.canvas.fit_page()
+        return publish
+
+    def replace(self, data, **options):
+        self.prepare_replacement(data, **options)()
         return self
 
     @property

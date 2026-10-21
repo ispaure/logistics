@@ -16,6 +16,26 @@ from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class EpubUXTests(unittest.TestCase):
+    def test_host_high_contrast_controls_imported_and_private_epub_bridges(self):
+        from types import SimpleNamespace as NS
+        from features.books.mobile.presentation import ChapterBridge
+        from logisticsmobile.page_animation import sync_preferences
+        imported_view, private_view = Mock(), Mock()
+        imported = ChapterBridge(imported_view, root='https://logistics.invalid/a/', motion_enabled=False)
+        private = ChapterBridge(private_view, root='https://logistics.invalid/b/')
+        imported.loaded(imported_view)
+        self.assertIn('"motion": false', imported_view.evaluate_javascript.call_args.args[0])
+        private.ready = True
+        app = NS(preferences=NS(values={'android_eink': 'true'}),
+                 readers=NS(controllers={'one': NS(epub_view=NS(_chapter_bridge=imported))}),
+                 private_sessions=NS(controllers={'two': NS(provider_epub_view=NS(webview=NS(_chapter_bridge=private)))}))
+        sync_preferences(app)
+        private_view.evaluate_javascript.assert_called_with('window.reader && window.reader.setMotion(false)')
+        app.preferences.values['android_eink'] = 'false'
+        sync_preferences(app)
+        imported_view.evaluate_javascript.assert_called_with('window.reader && window.reader.setMotion(true)')
+        private_view.evaluate_javascript.assert_called_with('window.reader && window.reader.setMotion(true)')
+
     def test_private_ios_retirement_clears_live_dom_before_blank_load(self):
         from types import SimpleNamespace
         from features.books.mobile.private_view import PrivateWebView

@@ -269,7 +269,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             prepared = await self.comic_controller().prepare_page(reader, record, index, epoch)
             if prepared is None:
                 return
-            view, indices = prepared
+            view, indices, publish = prepared
         location = dict(path=reader.spine[index], offset=prepared_epub[1]) if record['kind'] == 'epub' else None
         updated = dict(record, position=index)
         if location is not None:
@@ -283,11 +283,14 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         elif record['kind'] == 'epub' and self.book_content.children:
             direction = page_direction(record['position'], index)
         begin_page_slide(self.book_content, direction, self.preferences.values)
+        if record['kind'] == 'comic':
+            publish()
         if record['kind'] == 'epub':
             self.epub_text, self.epub_offset, content = prepared_epub
             self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
                 on_event=lambda action, value: self.epub_event(reader, epoch, index, action, value),
-                on_link=lambda href: self.epub_link(reader, epoch, index, href))
+                on_link=lambda href: self.epub_link(reader, epoch, index, href),
+                motion_enabled=self.preferences.values.get('android_eink') != 'true')
             from .font_scaling import bind
             bind(self, self.epub_view, 'epub', web=True)
             view = self.epub_view

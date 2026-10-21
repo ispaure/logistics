@@ -20,10 +20,11 @@ SCRIPT = r'''
  document.documentElement.style.overflow='hidden';
  Object.assign(document.body.style,{overflow:'hidden',height:'100vh',boxSizing:'border-box'});
  Object.assign(pages.style,{columnFill:'auto',columnGap:'0px',position:'relative'});
+ let motionEnabled=options.motion!==false;
  let page=0, pageWidth=1, pageCount=1, touch=null, disposed=false, pageAnimation=null;
  const stopMotion=()=>{if(pageAnimation){pageAnimation.cancel();pageAnimation=null;}};
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
- const motionChanged=()=>{if(reducedMotion.matches || document.getElementById('logistics-eink'))stopMotion();};
+ const motionChanged=()=>{if(!motionEnabled || reducedMotion.matches || document.getElementById('logistics-eink'))stopMotion();};
  reducedMotion.addEventListener('change',motionChanged);
  const contrastObserver=new MutationObserver(motionChanged);
  contrastObserver.observe(document.head,{childList:true,subtree:true});
@@ -146,6 +147,7 @@ SCRIPT = r'''
        CSS.highlights.set('logistics-speech',new Highlight(r));
      } else {speechRange=r;getSelection().addRange(r);}
    },
+   setMotion: value => {motionEnabled=!!value;motionChanged();},
    pagination: () => ({index:page,count:pageCount,width:pageWidth,anchor}),
    seek,
    turn: direction => {
@@ -158,7 +160,7 @@ SCRIPT = r'''
      // Measure the destination before starting visual motion so saved passage
      // anchors never describe an interpolated position between two pages.
      anchor=visible();notify('position',anchor);
-     if(!document.getElementById('logistics-eink') && !reducedMotion.matches){
+     if(motionEnabled && !document.getElementById('logistics-eink') && !reducedMotion.matches){
        pageAnimation=pages.animate([{transform:'translateX('+(-previous*pageWidth)+'px)'},
          {transform:'translateX('+(-page*pageWidth)+'px)'}],{duration:220,easing:'ease-out'});
      }
@@ -178,8 +180,9 @@ SCRIPT = r'''
 
 
 class ChapterBridge:
-    def __init__(self, view, *, root, offset=0, on_event=None, on_link=None):
+    def __init__(self, view, *, root, offset=0, on_event=None, on_link=None, motion_enabled=True):
         self.view, self.root, self.offset = view, root, offset
+        self.motion_enabled = bool(motion_enabled)
         self.on_event, self.on_link = on_event, on_link
         self.ready = False
         self.closed = False
@@ -189,8 +192,16 @@ class ChapterBridge:
         if self.closed:
             return
         self.ready = True
-        options = json.dumps(dict(root=self.root, offset=self.offset))
+        options = json.dumps(dict(root=self.root, offset=self.offset, motion=self.motion_enabled))
         self.view.evaluate_javascript(SCRIPT.replace('OPTIONS', options, 1))
+
+    def set_motion_enabled(self, enabled):
+        enabled = bool(enabled)
+        if self.motion_enabled != enabled:
+            self.motion_enabled = enabled
+            if self.ready and not self.closed:
+                self.view.evaluate_javascript('window.reader && window.reader.setMotion(' +
+                                              json.dumps(enabled) + ')')
 
     def navigation(self, widget, url, **kwargs):
         if self.closed:
@@ -239,7 +250,7 @@ class ChapterBridge:
         self.view.evaluate_javascript('window.reader && window.reader.dispose()')
 
 
-def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None):
+def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None, motion_enabled=True):
     if view is None:
         view = toga.WebView(style=Pack(flex=1))
     view.page_swipes_at_edges = True
@@ -258,7 +269,7 @@ def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None):
     if previous:
         previous.dispose()
     root = 'https://logistics.invalid/' + uuid4().hex + '/'
-    bridge = ChapterBridge(view, root=root, offset=offset, on_event=on_event, on_link=on_link)
+    bridge = ChapterBridge(view, root=root, offset=offset, on_event=on_event, on_link=on_link, motion_enabled=motion_enabled)
     view._chapter_bridge = bridge
     view.on_navigation_starting = bridge.navigation
     view.on_webview_load = bridge.loaded

@@ -205,6 +205,7 @@ class ComicController:
             return
         from commonUtils.ui.native.image_canvas import ImageCanvas
 
+        publish = None
         seam = self.format_services.seam(self.book_content)
         if len(data) == 1 and self.comic_navigation.crop is None and seam is None:
             view = page_view(
@@ -218,7 +219,8 @@ class ComicController:
                 self.book_content.children[0] if self.book_content.children else None
             )
             if isinstance(previous, SpreadView):
-                view = previous.replace(
+                view = previous
+                publish = previous.prepare_replacement(
                     data,
                     right_to_left=reader.right_to_left,
                     viewport=self.comic_viewport(),
@@ -241,4 +243,8 @@ class ComicController:
                     anchor_right=seam is not None,
                 )
         from .presentation import place_page
-        return place_page(view, self.format_services.page_region(self.book_content)), indices
+        def apply():
+            if publish is not None:
+                publish()
+            place_page(view, self.format_services.page_region(self.book_content))
+        return view, indices, apply

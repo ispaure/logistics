@@ -25,3 +25,8 @@ Android animations and E Ink mode suppress the slide. While zoomed, dragging
 pans the page and does not change pages. On iOS, reader swipes take priority
 over the navigation swipe back; use Back or the destination tabs to leave. Private comic pages
 use the same presentation while their content and position remain session-only.
+
+Page slides are enabled by default. **High contrast / E Ink** and system motion
+settings can suppress them. Single pages, two-page spreads and turns between the
+two halves of a wide page follow the same policy. Changing layout or restoring a
+position does not start a page-turn animation.
