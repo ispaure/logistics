@@ -3,7 +3,7 @@ name: Logistics mobile document runtimes
 on:
   push:
     branches: [alpha]
-    paths: ['Python/logisticsmobile/**', 'Python/tests/test_mobile_*.py', 'Mobile/**', '.github/workflows/mobile-runtime.yml']
+    paths: ['Python/logisticsmobile/**', 'Python/features/**', 'Python/services/**', 'Python/commonUtils', 'Python/commonUtils/**', 'Python/tests/test_mobile_*.py', 'Mobile/**', '.github/workflows/mobile-runtime.yml']
   workflow_dispatch:
     inputs:
       target:

@@ -5,6 +5,7 @@ on:
     paths:
       - 'dev.py'
       - 'Python/**'
+      - 'Mobile/**'
       - '.github/**'
       - 'LaunchLogistics_*'
       - 'launch_config.ini'

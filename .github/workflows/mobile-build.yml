@@ -3,7 +3,7 @@ name: Native mobile prototype builds
 on:
   push:
     branches: [alpha]
-    paths: ['Python/logisticsmobile/**', 'Mobile/**', '.github/workflows/mobile-build.yml']
+    paths: ['Python/logisticsmobile/**', 'Python/features/**', 'Python/services/**', 'Python/commonUtils', 'Python/commonUtils/**', 'Mobile/**', '.github/workflows/mobile-build.yml']
   workflow_dispatch:
     inputs:
       target:
