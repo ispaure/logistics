@@ -45,6 +45,23 @@ class AndroidFolderTitleTests(TestCase):
     setUp = ObsidianTests.setUp
     tearDown = ObsidianTests.tearDown
 
+    def test_fresh_reader_drawer_accepts_automatic_button_widths(self):
+        parent = toga.Button('Parent folder', style=toga.style.Pack(height=48))
+        search = icon_button('find', 'Search')
+        header = FolderLocationHeader(toga.Label(''), parent, actions=[search])
+        # Android selects its title layout before update() applies the icon's
+        # fixed width. Recreate that constructor-time state on the dummy backend.
+        del parent.style.width
+        self.assertEqual(parent.style.width, 'none')
+        header.use_android_title()
+        self.assertEqual([gutter.style.width for gutter in header._title_gutters], [0, 0])
+        extra = toga.Button('Actions')
+        del extra.style.width
+        header.add(extra)
+        self.assertEqual([gutter.style.width for gutter in header._title_gutters], [48, 0])
+        header.remove(extra)
+        self.assertEqual([gutter.style.width for gutter in header._title_gutters], [0, 0])
+
     def test_title_center_survives_overflow_added_and_removed(self):
         parent = icon_button('up', 'Parent folder')
         search = icon_button('find', 'Search')

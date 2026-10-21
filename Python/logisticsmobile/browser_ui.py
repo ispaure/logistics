@@ -150,9 +150,14 @@ class FolderLocationHeader(toga.Box):
             self._title_gutters = [toga.Box(style=Pack(width=0)), toga.Box(style=Pack(width=0))]
             super().insert(1, self._title_gutters[0])
             super().add(self._title_gutters[1])
-        trailing = sum(child.style.width or 48 for child in self.children
+        def action_width(child):
+            width = child.style.width
+            # Drawer buttons can use Pack's 'none' width. Use the standard
+            # touch target when there is no explicit numeric action width.
+            return width if isinstance(width, (int, float)) and width > 0 else 48
+        trailing = sum(action_width(child) for child in self.children
                        if child not in (self.parent_button, self.caption, *self._title_gutters))
-        leading = self.parent_button.style.width or 48
+        leading = action_width(self.parent_button)
         self.caption.style.margin_left = self.caption.style.margin_right = 0
         self._title_gutters[0].style.width = max(0, trailing - leading)
         self._title_gutters[1].style.width = max(0, leading - trailing)
