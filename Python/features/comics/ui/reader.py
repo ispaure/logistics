@@ -260,11 +260,15 @@ class ComicReaderWindow(qt.QMainWindow):
             self.statusBar().clearMessage()
             self.canvas.setToolTip('')
             self.canvas.message = ''
+            from services.documents.ui.page_transition import page_slide
+            slide = page_slide(self.canvas)
+            slide.begin((index - self.shown_page) * (-1 if self.pages.right_to_left else 1))
             self.shown_page = index
             self._has_position = True
             self.save_timer.start()
             self.images = images
             self._update_spread()
+            slide.finish()
             self.page_cache.update(images, self.shown_page, self.displayed_pages[-1])
             self.keys.page_shown()
 

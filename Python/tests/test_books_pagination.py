@@ -43,6 +43,24 @@ class BookPaginationTests(QtTestCase):
         QTest.qWait(30)
         return page
 
+    def test_page_slide_preserves_pagination_and_releases_after_completion(self):
+        from services.documents.ui.page_transition import page_slide
+        page = self.page()
+        page.turn_page(1)
+        slide = page_slide(page.reading_area)
+        self.assertEqual(page.text.page_index, 1)
+        self.assertFalse(slide.image.isNull())
+        self.assertEqual(slide.direction, 1)
+        page.turn_page(-1)
+        self.assertEqual(page.text.page_index, 0)
+        self.assertEqual(slide.direction, -1)
+        QTest.qWait(260)
+        self.assertTrue(slide.image.isNull())
+        page.go_chapter(1)
+        QTest.qWait(20)
+        self.assertEqual(slide.direction, 1)
+        self.assertFalse(slide.image.isNull())
+
     def test_arrows_turn_whole_pages_and_cross_chapters_in_both_directions(self):
         page = self.page()
         self.assertGreater(page.text.page_count, 3)

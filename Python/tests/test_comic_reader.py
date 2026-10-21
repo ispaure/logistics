@@ -75,6 +75,20 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
         self.app.processEvents()
         self.assertFalse(reader.busy)
 
+    def test_page_slide_follows_manga_direction(self):
+        from services.documents.ui.page_transition import page_slide
+        reader = self.native_reader('YesAndRightToLeft')
+        reader.set_mode('single')
+        reader.go(1)
+        self.wait_reader(reader)
+        slide = page_slide(reader.canvas)
+        self.assertEqual(reader.shown_page, 1)
+        self.assertEqual(slide.direction, -1)
+        self.assertFalse(slide.image.isNull())
+        reader.go(0)
+        self.wait_reader(reader)
+        self.assertEqual(slide.direction, 1)
+
     def test_wheel_notches_turn_once_even_for_small_or_large_deltas(self):
         from commonUtils.ui import pyside as qt
         reader = self.native_reader()

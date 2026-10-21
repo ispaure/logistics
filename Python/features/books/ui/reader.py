@@ -315,7 +315,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         previous = self._current
         self._current = index
         try:
-            self._render(fragment=fragment)
+            self._render(fragment=fragment, turn=index - previous)
         except (OSError, BookError) as error:
             self._current = previous
             self.status.setText(str(error))
@@ -333,13 +333,20 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.text.resize_settle.stop()
         target = self.text.page_index + direction * self.spread.step
         if 0 <= target < self.text.page_count:
+            from services.documents.ui.page_transition import page_slide
+            slide = page_slide(self.reading_area)
+            slide.begin(direction)
+            # QWidget.grab can make QTextEdit temporarily adopt an unpaged
+            # backing layout. Restore pagination before committing the turn.
+            self.text.repaginate()
             self.text.show_page(target)
+            slide.finish()
         elif direction > 0 and self._current + 1 < len(self.book.spine):
             self.go_chapter(self._current + 1)
         elif direction < 0 and self._current > 0:
             self._current -= 1
             try:
-                self._render(position=1)
+                self._render(position=1, turn=-1)
             except (OSError, BookError) as error:
                 self._current += 1
                 self.status.setText(str(error))
@@ -370,7 +377,7 @@ class BooksPage(Bookmarks, qt.QWidget):
                     selections += [entry for entry in source.extraSelections() if entry.format.property(tag)]
                 widget.setExtraSelections(selections)
 
-    def _render(self, *, position=0, fragment='', location=None):
+    def _render(self, *, position=0, fragment='', location=None, turn=0):
         if not self.book:
             return
         path = self.book.spine[self._current]
@@ -382,6 +389,9 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.reading_area.setStyleSheet(f'background-color: {background};')
         self.text.setMaximumWidth(self.reading_width.value())
         html = chapter_html(self.book, path, foreground=foreground, spacing=self.spacing.value())
+        from services.documents.ui.page_transition import page_slide
+        slide = page_slide(self.reading_area)
+        slide.begin(turn)
         self._loading = True
         self.text._resize_anchor = location if isinstance(location, int) else 0
         self._render_revision += 1
@@ -422,6 +432,8 @@ class BooksPage(Bookmarks, qt.QWidget):
             self.text._resize_anchor = None
             self.text.resize_settle.stop()
             self._position_changed()
+            if turn:
+                slide.finish()
         qt.QTimer.singleShot(0, self, restore)
 
     def _appearance_changed(self, *args):

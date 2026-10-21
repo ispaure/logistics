@@ -33,6 +33,23 @@ def pdf_bytes(texts=None):
 
 
 class PDFReaderTests(QtTestCase):
+    def test_desktop_page_turn_animates_only_the_pdf_viewport(self):
+        from features.pdf.ui.reader import PDFWindow
+        from services.documents.ui.page_transition import page_slide
+        window = PDFWindow('fixture.pdf', pdf_bytes())
+        window.show()
+        self.addCleanup(window.close)
+        slide = page_slide(window.view.viewport())
+        window.go(1)
+        self.assertEqual(window.index, 1)
+        self.assertEqual(slide.direction, 1)
+        self.assertTrue(slide.vertical)
+        self.assertFalse(slide.image.isNull())
+        window.go(1)
+        self.assertTrue(slide.image.isNull())
+        window.go(0)
+        self.assertEqual(slide.direction, -1)
+
     def test_real_pages_from_memory_and_close(self):
         document = PDFDocument(pdf_bytes())
         self.assertEqual(document.count, 3)

@@ -86,8 +86,12 @@ class PDFWindow(qt.QMainWindow):
     def go(self, index):
         if not 0 <= index < self.document.pageCount():
             return
+        from services.documents.ui.page_transition import page_slide
+        slide = page_slide(self.view.viewport())
+        slide.begin(index - getattr(self, 'index', index), vertical=True)
         self.view.pageNavigator().jump(index, QPoint(0, 0))
         self.sync_page(index)
+        slide.finish()
 
     def sync_page(self, index):
         self.index = index

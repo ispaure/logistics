@@ -202,3 +202,8 @@ for supported reading and storage workflows.
 ## Native mobile reading
 
 See [Books mobile workflows](../user_mobile/reading.md#native-mobile-reading).
+
+## Page-turn motion
+
+Page turns use a short slide within the reading area. The toolbar stays still.
+This includes pages within a chapter and turns into the previous or next chapter.

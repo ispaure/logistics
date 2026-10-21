@@ -213,3 +213,8 @@ current format limits and shared navigation controls.
 
 See [Comics mobile workflows](../user_mobile/reading.md#native-mobile-library).
 
+
+## Page-turn motion
+
+Page turns use a short slide within the reading area. The toolbar stays still.
+Manga reading direction reverses the slide. Layout changes do not animate a turn.

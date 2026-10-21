@@ -28,3 +28,14 @@ explicit signatures. Native widget values stay opaque (`Any`); these contracts d
 not import Qt/Toga. Feature-specific connection dependencies are declared by
 `ConnectionHost` beside the SMB workflow. Broader factories retain their existing
 call shapes until their own workflows are extracted.
+
+## Desktop document page transitions
+
+`services.documents.ui.page_transition` owns the Logistics readers' short,
+content-only outgoing-page overlay. EPUB, PDF and comic owners capture the last
+successful display immediately before replacing it. The live destination paints
+behind the overlay; PDF rendering can finish asynchronously without capturing an
+empty destination frame. The overlay passes input through, cancels on rapid
+turns/resize/hide/close, and releases its pixmap on completion. Initial loads,
+failed loads and unchanged pages do not start a slide. EPUB restores QTextEdit's
+paginated layout after grabbing the outgoing spread and before committing a turn.

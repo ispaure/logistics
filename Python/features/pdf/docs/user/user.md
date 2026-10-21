@@ -32,3 +32,7 @@ more); documents with more than 8 MiB of extracted text report a search limit.
 Use **Find in PDF** or the standard Find shortcut to reveal search. The search
 panel starts collapsed. Page arrows, the numeric page selector and the full-screen
 button stay in the compact reader toolbar; F11 toggles full screen.
+
+## Page-turn motion
+
+Page turns use a short slide within the reading area. The toolbar stays still.
