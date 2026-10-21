@@ -87,6 +87,8 @@ def sync_comic_chrome(app, view, *, destination=None):
         return (getattr(widget, 'page_swipes_at_edges', False) or hasattr(widget, '_reader_session_id')
                 or any(page_swipes(child) for child in widget.children))
     app.native_host.chrome.set_page_swipes(page_swipes(view), navigation=navigation)
+    from .external_display import sync as sync_external
+    sync_external(app, select=True)
 
 
 def sync_document_tabs(app, view, *, fullscreen=False, destination=None):

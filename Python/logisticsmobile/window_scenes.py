@@ -14,6 +14,8 @@ class SceneManager:
     def __init__(self, app, *, prepare_only=False):
         self.app = app
         self.owners = WindowOwners()
+        from .external_display import ExternalComicDisplay
+        self.external_comics = ExternalComicDisplay(self)
         if not prepare_only:
             self.owners.attach('primary', app)
             self.bind_workspace('primary', app)
@@ -164,15 +166,7 @@ class SceneManager:
             @objc_method
             def scene_willConnectToSession_options_(self, scene, session, options) -> None:
                 if not is_workspace_scene(session.role):
-                    # AirPlay/external displays must never get an independent
-                    # workspace (or a frozen copy of Home) with shared secrets.
-                    self.window = ObjCClass('UIWindow').alloc().initWithWindowScene(scene)
-                    controller = ObjCClass('UIViewController').alloc().init()
-                    from .screen_privacy import native_value
-                    controller.view.backgroundColor = native_value(ObjCClass('UIColor'), 'blackColor')
-                    controller.view.accessibilityLabel = 'Private content hidden'
-                    self.window.rootViewController = controller
-                    self.window.hidden = False
+                    self.window = manager.external_comics.connect_ios(scene)
                     return
                 identifier = sha256(str(session.persistentIdentifier).encode()).hexdigest()[:32]
                 from .workspace import uuid
@@ -229,6 +223,10 @@ class SceneManager:
             def sceneDidDisconnect_(self, scene) -> None:
                 if hasattr(self, 'host'):
                     manager.disconnect(self.host)
+                else:
+                    manager.external_comics.disconnect_ios(scene)
+
+        self.external_scene_delegate = LogisticsSceneDelegate
 
         class LogisticsSceneAppDelegate(PythonAppDelegate):
             @objc_method
@@ -242,7 +240,8 @@ class SceneManager:
             def application_configurationForConnectingSceneSession_options_(self, application, session, options):
                 manager.reconcile_scenes()
                 configuration = ObjCClass('UISceneConfiguration').alloc().initWithName(
-                    'Logistics workspace', sessionRole=session.role)
+                    'Logistics workspace' if is_workspace_scene(session.role) else 'Logistics comic display',
+                    sessionRole=session.role)
                 configuration.delegateClass = LogisticsSceneDelegate
                 return configuration
 

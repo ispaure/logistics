@@ -165,6 +165,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.epub_view.set_content('https://logistics.invalid/closed-' + uuid4().hex + '/', '<p>Reader closed.</p>')
         self.chapter_selector.items = []
         self.bookmark_selector.items = []
+        from .external_display import sync as sync_external
+        sync_external(getattr(self, 'app', self))
 
     def hide_book_unlock(self):
         self.book_pending_key = None

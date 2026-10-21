@@ -274,6 +274,8 @@ class PrivateSessions:
             if hasattr(source, 'cache'):
                 source.cache.clear()
                 source.cache_bytes = 0
+        from .external_display import sync as sync_external
+        sync_external(self.app)
 
     async def open(self, copies, key, *, prepared=None, destination=None, privacy_gate=None, edit=False):
         destination = destination or self.app.native_host.state.destination

@@ -345,3 +345,41 @@ page. Provider comics use the same preparation/publication boundary. This also
 covers turns between halves of one wide page and retains native gesture owners.
 Decode/composition failures keep the previously displayed pixels and navigation.
 Tests capture the outgoing image during actual swipe scheduling, including manga.
+
+## Mobile external displays
+
+`logisticsmobile/external_display.py` owns picture-only output for UIKit external
+scenes and Android `Presentation` displays. Comic presentation marks its canvases
+explicitly; routes select the visible host, and page publication refreshes output.
+The native viewer fits the existing decoded image against black without taking a
+workspace screenshot or writing an export. Android creates a separate Drawable
+around the shared bitmap so TV layout cannot change the phone canvas's bounds.
+
+Privacy refreshes clear output synchronously when any existing screen-privacy
+gate is present, including gates in other windows and retained protected views.
+An unlocked gate still blocks transmission. Inactivity, route changes, suspension
+and display disconnect release output image references. Android system mirroring
+uses the existing fullscreen reader and FLAG_SECURE policy; presentation output
+does not implement the separate Google Cast sender/receiver protocol.
+
+`Mobile/tests/test_external_display.py` covers publication, routing, process privacy
+and disconnect cleanup. Native probes verified the UIKit viewer in a second window
+of the iPad simulator's application scene, and Android 36 `Presentation` on a
+synthetic 1280×720 display. They exercised fitted output, image clearing and
+disconnects; Android also verified fresh source checks on reconnect. A physical iPhone on iOS 26.6.2 with a wireless 3840×2160 receiver subsequently
+reported a dedicated noninteractive scene, no mirrored screens, portrait phone
+geometry, and an allowed comic source. The user confirmed picture-only TV output
+after switching window visibility to the explicit native `setHidden:` selector;
+the live window then reported visible with its decoded comic image assigned.
+Native tests now assert `isHidden()` directly. Physical page-turn synchronization,
+Android casting and OS snapshot timing remain outside these checks.
+
+External-display activation is part of the iOS scene contract, not just image
+painting. `Mobile.scene_build.configure` explicitly declares application, legacy
+external-display and noninteractive external-display configurations using the
+tracked scene delegate. iOS 26 and earlier discover those configurations on
+connection. iOS 27 additionally requires `UISceneAccessory` registration on the
+visible host controller; the output owner retains/unregisters it when controllers
+change or the owner is disposed. Host tests cover the scene manifest and accessory
+lifetime. A second window in an application scene proves rendering only and does
+not prove that AirPlay will create an external scene.

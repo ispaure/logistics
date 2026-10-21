@@ -671,8 +671,10 @@ RAM only; they do not reload credentials or persist passwords.
 
 iOS scene-capture traits and legacy screen-capture notifications still conceal
 the complete window during recording/mirroring. Non-application scene roles get
-a black external-display window without constructing a workspace or loading its
-catalog. This addresses independent external scenes displaying frozen Home.
+a picture-only external-display window without constructing a workspace or loading
+its catalog. It displays ordinary visible comic artwork only when no privacy gate
+exists anywhere in the process. Loading session credentials or retaining protected
+views clears the external image, including after unlock; without a comic it is black.
 It does not disable AirPlay itself or prevent iOS still screenshots. Physical
 AirPlay and OS lifecycle enforcement require device validation; mocked policy
 tests do not establish those platform guarantees.

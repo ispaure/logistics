@@ -139,6 +139,8 @@ class ProviderUI(FilesUI):
             self.crypt_title.text = private_label('Encrypted copy closed')
         if hasattr(self, 'crypt_password'):
             self.crypt_password.value = ''
+        from .external_display import sync as sync_external
+        sync_external(getattr(self, 'app', self))
         return True
 
     def clear_private_catalog(self):
@@ -582,6 +584,7 @@ class ProviderUI(FilesUI):
             view.crypt_title.text = private_label(f'Page {index + 1}/{len(view.crypt_reader.labels)}' +
                 view.crypt_reader.comic_navigation.part_label)
         elif kind == 'image':
+            view.crypt_image._external_comic_page = view.crypt_reader.kind in {'.cbz', '.zip'}
             view.crypt_image.image = toga.Image(src=content)
             view.crypt_content.add(view.crypt_image)
         else:
@@ -596,6 +599,8 @@ class ProviderUI(FilesUI):
         view._provider_displayed_index = view.crypt_reader.labels.index(view.crypt_page.value)
         if view.crypt_reader.kind == '.pdf' and hasattr(view, 'pdf_number'):
             view.pdf_number.value = str(view._provider_displayed_index + 1)
+        from .external_display import sync as sync_external
+        sync_external(getattr(controller, 'app', controller))
 
     async def read_crypt_page(self, widget=None, **kwargs):
         if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.editable:

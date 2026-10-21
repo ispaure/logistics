@@ -246,6 +246,9 @@ class ScreenPrivacy:
         from .browser_ui import sync_browser_population
         sync_browser_population(self.app)
 
+        from .external_display import sync as sync_external
+        sync_external(self.app)
+
     def sync_lock_view(self, gates):
         """Replace the entire navigation root; routes may update safely behind it."""
         locked = any(gate.locked for gate in gates)

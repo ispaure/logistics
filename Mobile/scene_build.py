@@ -11,6 +11,14 @@ def configure(project):
     data = plistlib.loads(path.read_bytes())
     manifest = data.setdefault('UIApplicationSceneManifest', {})
     manifest['UIApplicationSupportsMultipleScenes'] = True
+    configurations = manifest.setdefault('UISceneConfigurations', {})
+    for role, name in (
+        ('UIWindowSceneSessionRoleApplication', 'Logistics workspace'),
+        ('UIWindowSceneSessionRoleExternalDisplayNonInteractive', 'Logistics comic display'),
+        ('UIWindowSceneSessionRoleExternalDisplay', 'Logistics comic display'),
+    ):
+        configurations[role] = [dict(UISceneConfigurationName=name,
+            UISceneClassName='UIWindowScene', UISceneDelegateClassName='LogisticsSceneDelegate')]
     data['UIApplicationSceneManifest'] = manifest
     path.write_bytes(plistlib.dumps(data, sort_keys=False))
     launcher = Path(project) / 'LogisticsMobile' / 'main.m'

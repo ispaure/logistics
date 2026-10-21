@@ -47,6 +47,7 @@ def exit_app(self, app, **kwargs):
         if dismissal is not None:
             dismissal.dispose()
         self.memory_pressure.dispose()
+        self.scene_manager.external_comics.dispose()
         self.screen_privacy.dispose()
         self.seasonal_snow.dispose()
     return saved
@@ -55,6 +56,8 @@ def exit_app(self, app, **kwargs):
 def release_disposable_resources(self):
     if not self.active_host:
         return
+    # Do not retain external bitmap references after the source is trimmed.
+    from .external_display import sync as sync_external
     from .markdown_speech import stop_markdown_speech
     from features.books.mobile.media_controls import current_panel
     playing = current_panel(self)
@@ -84,3 +87,4 @@ def release_disposable_resources(self):
     privacy = getattr(self, 'screen_privacy', None)
     if privacy is not None:
         privacy.resume_reader()
+    sync_external(self)

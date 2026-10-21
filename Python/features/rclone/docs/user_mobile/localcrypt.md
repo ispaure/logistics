@@ -273,8 +273,10 @@ On iOS, windows with loaded session-only credentials or associated private views
 are covered while inactive before app-switcher snapshots. Fresh launches and
 saved credentials alone do not activate the black privacy screen. Loaded private
 session content is also covered during detected recording/mirroring. Stop capture
-to use the session or its lock screen. External displays receive a blank screen,
-never a separate workspace or frozen Home view. iOS does not provide
+to use the session or its lock screen. External comic displays stay blank while
+any session-only credentials or protected views remain loaded, including after
+unlock. Without those privacy gates, an ordinary visible comic can fill the TV;
+external displays never create a separate workspace or frozen Home view. iOS does not provide
 a supported general switch to prevent still screenshots; screenshot detection
 happens after capture. On Android, secure windows block ordinary screenshots and
 nonsecure capture while session-only credentials or associated private views remain loaded. Native device

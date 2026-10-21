@@ -11,6 +11,7 @@ def page_view(data, *, canvas, on_page, on_toggle, width=None):
                   on_toggle=on_toggle, description='Comic page. Pinch to zoom; swipe at fit size to change pages.',
                   style=Pack(flex=1, width=width if width is not None else NONE))
     view.page_swipes_at_edges = True
+    view._external_comic_page = True
     return view
 
 
@@ -25,6 +26,7 @@ class SpreadView(toga.Box):
                          'Comic spread. Pinch to zoom both pages; drag across the spread. Swipe at fit size to turn.'),
             style=Pack(flex=1))
         self.canvas.page_swipes_at_edges = True
+        self.canvas._external_comic_page = True
         self.canvases = [self.canvas]
         super().__init__(children=[self.canvas], style=Pack(flex=1, width=width if width is not None else NONE))
 

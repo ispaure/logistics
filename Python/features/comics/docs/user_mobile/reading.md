@@ -221,6 +221,26 @@ Their available space accounts for asymmetric safe areas and the fold margins. S
 Tap the page to restore controls and normal safe areas. Android retains its immersive
 system-bar behavior. Ordinary and private comics share this presentation.
 
+## Reading on a TV
+
+Connect AirPlay Screen Mirroring on iPhone or iPad, then open a comic. The TV
+shows the current page or spread fitted against black, without reader controls.
+Turn pages on the phone or tablet; TV output follows. The phone may remain in
+portrait while the TV uses its own landscape display dimensions. Leaving the comic or
+backgrounding the app clears the dedicated external picture. After updating from
+a version that only mirrored the app, stop Screen Mirroring and reconnect once
+so iOS can create the dedicated display session.
+
+Android system casting mirrors the fullscreen reader. If Android exposes the
+connected TV as a presentation display, Logistics instead shows a dedicated
+picture-only viewer there. Start casting through Android's system controls;
+Logistics does not provide a Google Cast device picker or receiver integration.
+
+TV output stays black whenever session-only credentials or retained protected
+views create an existing screen-privacy gate, even for a local comic and even
+after unlocking. Saved credentials alone do not enable that protection. Close
+protected views and clear session-only credentials to release it.
+
 ## Returning after sleep
 
 If Android releases reader memory while the device sleeps, the visible imported
