@@ -6,6 +6,32 @@ from zipfile import ZipFile
 from commonUtils.runtime.platform import get_os, OS
 
 
+async def prepare_android_back(app):
+    """Measure screen Back after the IME's separate dismissal has settled."""
+    if get_os() is not OS.ANDROID:
+        return
+    from android.content import Context
+    from java import jclass
+    activity = app._impl.native
+    decor = activity.getWindow().getDecorView()
+    focused = activity.getCurrentFocus()
+    if focused is not None:
+        focused.clearFocus()
+    decor.setFocusableInTouchMode(True)
+    decor.requestFocus()
+    manager = activity.getSystemService(Context.INPUT_METHOD_SERVICE)
+    settled = 0
+    for _ in range(100):
+        manager.hideSoftInputFromWindow(decor.getWindowToken(), 0)
+        await asyncio.sleep(.1)
+        insets = jclass('androidx.core.view.ViewCompat').getRootWindowInsets(decor)
+        visible = bool(insets and insets.isVisible(jclass('androidx.core.view.WindowInsetsCompat$Type').ime()))
+        settled = 0 if visible else settled + 1
+        if settled >= 4:
+            return
+    raise AssertionError('IME did not settle before native screen Back')
+
+
 async def exercise_folder_pop_preview(app, *, scroll_position=120):
     """The parent must already contain rows while its refresh is blocked."""
     if get_os() is not OS.IOS:
@@ -84,6 +110,11 @@ async def exercise_browser_back(app):
     scroll = browser
     for filename in ('Comic.cbz', 'A Notes.md', 'Comic.cbz'):
         def trace_viewport(phase):
+            print('LOGISTICS_BROWSER_BACK=' + json.dumps(dict(
+                phase=phase, filename=filename, position=scroll.vertical_position,
+                routes=app.native_host.state.routes['files'],
+                reader_busy=bool(getattr(app.readers.active, 'book_busy', False)),
+                back_pending=app.routes.back_task is not None)), flush=True)
             if get_os() is OS.IOS:
                 native = browser.native_list._impl.native
                 print('LOGISTICS_BROWSER_VIEWPORT=' + json.dumps(dict(
@@ -134,6 +165,7 @@ async def exercise_browser_back(app):
             reader_panel = app.body
             owner.show_reader_tools()
             await asyncio.sleep(.2)
+            await prepare_android_back(app)
             if get_os() is OS.IOS:
                 navigation = app.native_host.adapter.navigation[app.native_host.destinations.index('files')]
                 navigation.popViewControllerAnimated(True)
@@ -149,6 +181,11 @@ async def exercise_browser_back(app):
         else:
             owner.crypt_text.value = '# Unsaved note after opening from Files'
         await asyncio.sleep(.3)
+        if filename.endswith('.cbz'):
+            # Returning from tools can reload the native page. Back is guarded
+            # while that operation is busy; wait for readiness before tapping.
+            await wait_for_reader(owner)
+        await prepare_android_back(app)
         trace_viewport('before-return')
         if get_os() is OS.IOS:
             app.native_host.adapter.navigation[
@@ -164,6 +201,7 @@ async def exercise_browser_back(app):
                 await asyncio.sleep(.05)
             assert app.routes.screens['files'][-1][0] == 'private-close:' + owner.session.id
             assert owner.session.id in app.workspace.sessions
+            await prepare_android_back(app)
             app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
             for _ in range(100):
                 if app.routes.screens['files'][-1][0] == 'private:' + owner.session.id:

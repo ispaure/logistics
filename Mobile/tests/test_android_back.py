@@ -296,6 +296,43 @@ class AndroidBackTests(unittest.TestCase):
         self.assertIs(app.body, origin)
         self.assertNotIn(reader.session.id, app.workspace.sessions)
 
+    def test_comic_back_around_a_retained_dirty_file_draft(self):
+        from Mobile.native_tests.tests.logisticsmobile.fixtures import make_books
+        app = self.app
+        folder = app.private_root / 'LocalFiles' / 'Back review'
+        folder.mkdir(parents=True)
+        make_books(folder)
+        (folder / 'Notes.md').write_text('# Original note')
+        app.loop.run_until_complete(app.show_files(location=('Local files', folder.name)))
+        origin = app.body
+        browser = app.file_browser
+        for filename in ('Fixture.cbz', 'Notes.md', 'Fixture.cbz'):
+            entry = next(row for row in browser.entries if row.label == filename)
+            app.loop.run_until_complete(browser.activate_entry(entry))
+            if filename.endswith('.cbz'):
+                owner = app.readers.active
+                panel = app.body
+                owner.show_reader_tools()
+                self.assertTrue(self.routes.system_back())
+                self.settle()
+                self.assertIs(app.body, panel)
+                self.assertTrue(self.routes.system_back())
+                self.settle()
+                self.assertNotIn(owner.session.id, app.workspace.sessions)
+            else:
+                owner = app.private_sessions.active
+                owner.crypt_text.value = '# Retained dirty draft'
+                self.assertTrue(self.routes.system_back())
+                self.settle()
+                self.assertEqual(self.routes.screens['files'][-1][0], 'private-close:' + owner.session.id)
+                self.assertTrue(self.routes.system_back())
+                self.settle()
+                self.assertEqual(self.routes.screens['files'][-1][0], 'private:' + owner.session.id)
+                app.loop.run_until_complete(app.show_files())
+                self.assertIn(owner.session.id, app.workspace.sessions)
+                self.assertEqual(owner.crypt_text.value, '# Retained dirty draft')
+            self.assertIs(app.body, origin)
+
     def test_pdf_back_closes_search_then_closes_fullscreen_reader_to_origin(self):
         from Mobile.tests.test_pdf_reader import native_pdf, PDF
         app = self.app
