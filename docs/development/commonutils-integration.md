@@ -174,3 +174,6 @@ native utilities. Logistics retains IME editor compression and window ownership.
 Read measurement and loop-coalesced progress delivery live in commonUtils.
 Logistics retains task-context selection, loading text, active-document guards
 and the Text Editor-specific provider choice.
+
+Native text-size gestures and in-place WebView reflow live in commonUtils.
+Logistics retains format keys, settings fanout, private-surface validity and errors.

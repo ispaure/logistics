@@ -204,7 +204,7 @@ class FontScalingTests(unittest.TestCase):
 
     def test_custom_native_editors_and_private_webviews_resolve_their_backend(self):
         from types import SimpleNamespace
-        from logisticsmobile.font_scaling import native_backend
+        from commonUtils.ui.native.text_size import native_backend
         class AppleBackend:
             pass
         AppleBackend.__module__ = 'toga_iOS.widgets.webview'
