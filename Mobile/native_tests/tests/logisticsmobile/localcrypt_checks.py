@@ -37,6 +37,18 @@ async def exercise_localcrypt(app, passed):
     await app.refresh_crypt()
     assert len(app.crypt_labels) == len(fixture['copies']), app.cloud_status.value
 
+    async def close_copy():
+        owner = app.provider_sessions().active
+        app.close_crypt()
+        pending = getattr(owner, '_exit_task', None)
+        if pending is not None:
+            await asyncio.wait_for(asyncio.shield(pending), 60)
+        # UIKit restores retained folder rows after a reader pop. Finish that
+        # navigation before starting another listing on the same browser.
+        pending = app.routes.folders.task
+        if pending is not None and not pending.done():
+            await asyncio.wait_for(asyncio.shield(pending), 60)
+
     async def open_copy(name, password=''):
         key = fixture['copies'][name]['key']
         app.crypt_selector.value = next(label for label, value in app.crypt_labels.items() if value == key)
@@ -50,7 +62,8 @@ async def exercise_localcrypt(app, passed):
         # Native layout can trigger a real page reload after open returns.
         # Metadata and close actions are disabled until that operation ends.
         deadline = asyncio.get_running_loop().time() + 60
-        while app.cloud_busy:
+        owner = app.provider_sessions().active
+        while owner.cloud_busy:
             assert asyncio.get_running_loop().time() < deadline, ('Private reader reload did not settle', name)
             await asyncio.sleep(.05)
         return (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None)
@@ -70,7 +83,7 @@ async def exercise_localcrypt(app, passed):
         owner = app.private_sessions.active
         assert owner is not None and owner.crypt_reader.name == 'plain.cbz'
         assert canvas(owner).image.width == 24
-        app.close_crypt()
+        await close_copy()
         # Read collection configuration through the same encrypted provider.
         from io import BytesIO
         provider.create_file('remoteConfig.ini', BytesIO(b'[LogisticsZIP]\narchive_password=synthetic-archive-password\n'))
@@ -79,7 +92,7 @@ async def exercise_localcrypt(app, passed):
         assert await drawer.open_file({'path': 'encrypted.cbz'}), 'Configured fixture did not open'
         owner = app.private_sessions.active
         assert owner is not None and canvas(owner).image.width == 24
-        app.close_crypt()
+        await close_copy()
 
         from .obsidian_checks import exercise_obsidian
         await exercise_obsidian(app, provider)
@@ -88,7 +101,7 @@ async def exercise_localcrypt(app, passed):
     for name in ('note.md', 'text.txt'):
         await open_copy(name)
         assert app.provider_sessions().active.crypt_text.value
-        app.close_crypt()
+        await close_copy()
     for name, password in (('plain.cbz', ''), ('encrypted.cbz', 'synthetic-archive-password')):
         await open_copy(name, password)
         assert canvas(app.provider_sessions().active).image.width == 24
@@ -105,7 +118,7 @@ async def exercise_localcrypt(app, passed):
             canvas(owner).toggle_controls()
             await assert_comic_centered(lambda: canvas(owner), fullscreen=True)
             assert not owner.crypt_bookmarks
-        app.close_crypt()
+        await close_copy()
         assert not owner.crypt_bookmarks
     for name, password in (('book.epub', ''), ('protected.epub', 'synthetic-archive-password')):
         await open_copy(name, password)
@@ -119,7 +132,7 @@ async def exercise_localcrypt(app, passed):
         app.save_workspace()
         manifest = (app.private_root / 'workspace.json').read_text()
         assert 'crypt_bookmarks' not in manifest and 'epub_session_bookmarks' not in manifest and owner.session.id not in manifest
-        app.close_crypt()
+        await close_copy()
     passed.append('native_localcrypt_reading')
 
     await open_copy('note.md')
@@ -213,7 +226,7 @@ async def exercise_localcrypt(app, passed):
             assert loaded.crypt_reader.text
             assert app.private_sessions.activate(loaded.session.id)
             assert app.provider_sessions().active.crypt_text.value == loaded.crypt_reader.text
-            app.close_crypt()
+            await close_copy()
         finally:
             release.set()
             await task
@@ -222,16 +235,16 @@ async def exercise_localcrypt(app, passed):
     for name in ('note.md', 'text.txt'):
         reader = await open_copy(name)
         app.provider_sessions().active.crypt_text.value = '# Native LocalCrypt edited sentinel\n'
-        app.close_crypt()
+        await close_copy()
         assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None) is reader and app.private_dirty()
         await app.save_crypt()
         assert 'Saved encrypted' in app.provider_sessions().active.crypt_title.text, app.provider_sessions().active.crypt_title.text
-        app.close_crypt()
+        await close_copy()
         updated = await open_copy(name)
         assert updated.text == '# Native LocalCrypt edited sentinel\n'
         if name == 'text.txt':
             assert updated.data == b'\xef\xbb\xbf# Native LocalCrypt edited sentinel\r\n'
-        app.close_crypt()
+        await close_copy()
     passed.append('native_localcrypt_text_editing')
 
     for name, password in (('plain.cbz', ''), ('encrypted.cbz', 'synthetic-archive-password'),
@@ -243,19 +256,19 @@ async def exercise_localcrypt(app, passed):
         key = 'title' if name.endswith('.epub') else 'Title'
         assert key in app.provider_sessions().active.crypt_metadata_fields
         app.provider_sessions().active.crypt_metadata_fields[key].value = 'Native LocalCrypt metadata sentinel'
-        app.close_crypt()
+        await close_copy()
         assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None) is reader and app.private_dirty()
         app.edit_crypt_metadata()
         print('LOGISTICS_NATIVE_METADATA=' + name + ':save', flush=True)
         await app.save_crypt_metadata()
         assert app.provider_sessions().active.crypt_metadata_status.text == 'Metadata saved encrypted locally.', app.provider_sessions().active.crypt_metadata_status.text
         assert not app.private_dirty()
-        app.close_crypt()
+        await close_copy()
         updated = await open_copy(name, password)
         value = updated.book.values('title')[0] if updated.book else updated.comic.info.get_field('Title')
         assert value == 'Native LocalCrypt metadata sentinel'
         assert updated.page(0) == before_page
-        app.close_crypt()
+        await close_copy()
         if password:
             import toga
             from commonUtils.runtime.platform import get_os, OS
@@ -383,7 +396,7 @@ async def exercise_localcrypt(app, passed):
     assert 'failed' in app.save_as_status.value.lower()
     assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None).key == 'local-copy.md'
     app.cancel_text_destination()
-    app.close_crypt()
+    await close_copy()
     # The unified editor chooser uses the same decoded directory model as files.
     await app.show_editor_open()
     app.save_as_storage.value = crypt_label
@@ -394,7 +407,7 @@ async def exercise_localcrypt(app, passed):
     await app.confirm_editor_file()
     assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None).key == 'destination/moved/note.md', app.cloud_status.value
     assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None).text == '# Edited after native move'
-    app.close_crypt()
+    await close_copy()
     # Ordinary draft -> encrypted editor must scrub recovery and hidden widgets.
     app.new_document()
     app.editor.value = 'private handoff native sentinel'
@@ -407,7 +420,7 @@ async def exercise_localcrypt(app, passed):
     assert app.provider_sessions().active.crypt_view in app.body.children, 'Saved editor must actually be visible'
     assert app.editor.value == source.snapshot.text
     assert 'private handoff native sentinel' not in app.store.path(source.id, '.json').read_text()
-    app.close_crypt()
+    await close_copy()
     assert await app.show_files(location=(crypt_label, '')), app.file_status.value
     select('destination')
     app.file_destination.value = 'Local files'
