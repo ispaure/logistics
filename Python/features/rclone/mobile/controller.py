@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 from services.workflow_host import HostAttribute, StateAttribute
 from .smb_connection import SMBConnection, SMBFormState
+from .downloads import DownloadWorkflow, DownloadState
 from features.rclone.mobile.cloud_ui import CloudUI
 
 
@@ -21,9 +22,18 @@ class CloudController(CloudUI):
 
     def __init__(self, app):
         self.app = app
+        self.download_state = DownloadState()
+        self.download_workflow = DownloadWorkflow(self)
         self.state = CloudState()
         self.smb_form = SMBFormState()
         self.smb_connection = SMBConnection(self, self.smb_form)
+
+    downloads = StateAttribute('download_state', 'downloads')
+    download_labels = StateAttribute('download_state', 'download_labels')
+    download_selector = StateAttribute('download_state', 'download_selector')
+    download_export = StateAttribute('download_state', 'download_export')
+    download_open = StateAttribute('download_state', 'download_open')
+    resource_imports = StateAttribute('download_state', 'resource_imports')
 
     cloud_busy = StateAttribute('state', 'busy')
     cloud_client = StateAttribute('state', 'client')

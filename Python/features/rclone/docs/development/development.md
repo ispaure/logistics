@@ -286,3 +286,12 @@ credential replacement is serialized across scenes and invalidates their caches.
 Contract fixtures cover action-name parity and safe cancellation/status/error
 responses. Operation-scope and credential-loading tests cover the stateful cases.
 Never capture real request payloads or credential responses as fixtures.
+
+## Offline-copy workflow
+
+`mobile/downloads.py` owns offline-copy selection, import routing, export and its
+`DownloadState`. The cloud controller delegates existing callbacks to a composed
+`DownloadWorkflow`; application compatibility fields still resolve to that same
+state. Local copy opening retains navigation-generation checks, independent read
+access during cloud work, provider-folder recording and the existing PDF/EPUB/text
+routing. It does not own credential loading or create a second document store.

@@ -1064,102 +1064,13 @@ class CloudUI(LocalCryptUI):
             self.set_cloud_busy(False)
 
     def refresh_downloads(self, selected=None):
-        self.download_labels = {f'{i + 1}. {path.name}': path for i, path in enumerate(self.downloads.items())}
-        self.download_selector.items = list(self.download_labels)
-        if selected:
-            self.download_selector.value = next(key for key, path in self.download_labels.items() if path == selected)
+        return self.download_workflow.refresh_downloads(selected)
 
     async def open_download(self, widget=None, *, path=None, destination=None, **kwargs):
-        selected = path if path is not None else self.download_labels.get(self.download_selector.value)
-        if selected is None:
-            return False
-        with self.rclone_ui.opening_status(dict(path=str(selected)), destination=destination):
-            await asyncio.sleep(0)
-            return await self._open_download(path=selected, destination=destination)
+        return await self.download_workflow.open_download(widget, path=path, destination=destination, **kwargs)
 
     async def _open_download(self, *, path, destination=None):
-        from commonUtils.runtime.document_access import LocalDocuments
-        destination = destination or self.native_host.state.destination
-        if not hasattr(self, 'cloud_view'):
-            self.show_cloud(present=False)
-        selected = path if path is not None else self.download_labels.get(self.download_selector.value)
-        selected = Path(selected) if selected is not None else None
-        if selected is not None and Path(selected).suffix.lower() == '.pdf':
-            from features.pdf.mobile.copies import PDFCopies
-            from commonUtils.runtime.local_files import LocalFiles
-            selected = Path(selected)
-            return await self.open_crypt(copies=PDFCopies(LocalFiles(selected.parent)), key=selected.name, destination=destination)
-        independent = (self.cloud_busy and path is not None
-                       and selected.resolve().is_relative_to((collection_path(self.private_root)).resolve()))
-        if (self.cloud_busy and not independent) or selected is None:
-            return False
-        if not independent:
-            self.set_cloud_busy(True)
-        try:
-            ResourceImports = self.rclone_ui.ResourceImports
-            collection_root = (None if Path(selected).resolve().is_relative_to(Path(self.private_root).resolve())
-                               else collection_path(self.private_root).resolve())
-            if (not hasattr(self, 'resource_imports')
-                    or self.resource_imports.collection_root != collection_root):
-                self.resource_imports = ResourceImports(self.private_root, collection_root=collection_root)
-            imported = self.resource_imports.find(selected)
-            def remember_folder(provider, resource):
-                if not hasattr(self.app, '_document_folder_sources'):
-                    self.app._document_folder_sources = {}
-                self.app._document_folder_sources[provider, resource] = dict(type='local', path=str(selected))
-            if imported is not None:
-                remember_folder(imported['provider'], imported['resource'])
-                if imported['provider'] == 'library':
-                    return await self.open_book(imported['resource'], destination=destination)
-                elif self.open_document(imported['resource']):
-                    self.show_documents(resume=True, destination=destination)
-                else:
-                    raise ValueError('The imported copy is unavailable; its index and source were preserved.')
-                return True
-            if selected.suffix.lower() in {'.epub', '.cbz', '.zip'}:
-                catalog = self.reader_manager().catalog
-                generation = self.navigation_generation
-                record = await asyncio.to_thread(catalog.library_store.import_book, LocalDocuments(), selected)
-                self.resource_imports.remember(selected, 'library', record['id'])
-                remember_folder('library', record['id'])
-                if not self.active_host or self.navigation_generation != generation:
-                    return False
-                self.refresh_library()
-                return await self.open_book(record['id'], destination=destination)
-            else:
-                generation = self.navigation_generation
-                doc = await asyncio.to_thread(self.store.import_document, LocalDocuments(), selected)
-                self.resource_imports.remember(selected, 'managed-text', doc.id)
-                remember_folder('managed-text', doc.id)
-                self.refresh_documents()
-                if not self.active_host or self.navigation_generation != generation:
-                    return False
-                if not self.open_document(doc.id):
-                    return False
-                self.show_documents(destination=destination)
-                return True
-        except Exception as error:
-            self.cloud_status.value = 'Open failed: ' + str(error)[:300]
-            if independent:
-                self.file_status.value = self.cloud_status.value
-                readers = getattr(self, 'readers', None)
-                if readers is not None and readers.active is not None:
-                    readers.active.book_status.text = self.cloud_status.value
-            return False
-        finally:
-            if not independent:
-                self.set_cloud_busy(False)
+        return await self.download_workflow._open_download(path=path, destination=destination)
 
     async def export_download(self, widget=None, **kwargs):
-        export_file = self.rclone_ui.export_file
-        selected = self.download_labels.get(self.download_selector.value)
-        if self.cloud_busy or selected is None:
-            return
-        self.set_cloud_busy(True)
-        try:
-            done = await export_file(self, selected)
-            self.cloud_status.value = 'Private copy exported.' if done else 'Export cancelled.'
-        except Exception as error:
-            self.cloud_status.value = 'Export failed: ' + str(error)[:300]
-        finally:
-            self.set_cloud_busy(False)
+        return await self.download_workflow.export_download(widget, **kwargs)
