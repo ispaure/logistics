@@ -165,7 +165,9 @@ class HubSections(toga.Box):
         if type(self._impl).__module__.startswith('toga_iOS.'):
             measured = float(self._impl.native.bounds.size.width)
             if measured > 0:
-                width = measured
+                # A retained landscape hub can still report its old width
+                # after its destination returns to a portrait viewport.
+                width = min(width, measured)
         paired = seam is not None or width >= 700
         if paired != self.paired:
             if self.trailing.parent is not None:

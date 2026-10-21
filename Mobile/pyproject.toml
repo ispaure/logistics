@@ -7,7 +7,7 @@ license = "MIT"
 author = "Marc-Andre Voyer"
 
 [tool.briefcase.app.logisticsmobile]
-build = "202610243"
+build = "202610244"
 formal_name = "Logistics Mobile"
 description = "Native document workspaces, readers, LM chat and managed rclone copies"
 

@@ -215,6 +215,29 @@ class HubDocumentTests(unittest.TestCase):
                     self.assertEqual(list(hub.content.children), original)
                     self.assertEqual(len(hub.children), 1)
 
+    def test_retained_native_hub_cannot_keep_a_landscape_minimum_in_portrait(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from toga.style.pack import NONE
+        app = self.app
+        hub = app.build_home()
+        bounds = SimpleNamespace(size=SimpleNamespace(width=750))
+        with patch.object(type(hub._impl), '__module__', 'toga_iOS.widgets.box'), \
+                patch.object(hub._impl, 'native', SimpleNamespace(bounds=bounds), create=True):
+            with patch.object(app.adaptive, 'content_width', return_value=900):
+                hub.reflow(app, 'home')
+                self.assertTrue(hub.paired)
+                self.assertEqual(hub.leading_scroll.style.width, 375)
+            with patch.object(app.adaptive, 'content_width', return_value=402):
+                hub.reflow(app, 'home')
+                self.assertFalse(hub.paired)
+                self.assertEqual(hub.leading_scroll.style.width, NONE)
+                self.assertIs(hub.trailing.parent, hub.content)
+            bounds.size.width = 350
+            with patch.object(app.adaptive, 'content_width', return_value=900):
+                hub.reflow(app, 'home')
+                self.assertFalse(hub.paired)
+
     def test_partial_fold_forces_sections_and_accounts_for_asymmetric_safe_area(self):
         from unittest.mock import patch
         app = self.app
