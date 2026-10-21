@@ -45,3 +45,11 @@ class OwnershipTests(unittest.TestCase):
         from Scripts.ownership import selected_tests
         with self.assertRaisesRegex(ValueError, 'Unknown owner'):
             selected_tests(ROOT, 'not-a-real-owner')
+
+
+class CompatibilityTests(unittest.TestCase):
+    def test_forwarding_modules_and_canonical_targets_remain_available(self):
+        from Scripts.compatibility import inventory
+        rows = list(inventory(ROOT))
+        self.assertTrue(rows)
+        self.assertIn('features.lm.page', {name for name, _, _ in rows})

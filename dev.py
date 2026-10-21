@@ -20,6 +20,7 @@ def main(argv=None):
     setup_parser = commands.add_parser('setup', help='Install a declared desktop or mobile host environment')
     setup_parser.add_argument('suite', choices=('desktop', 'mobile'))
     setup_parser.add_argument('--dry-run', action='store_true')
+    commands.add_parser('compatibility', help='List compatibility imports, canonical owners and current consumers')
     commands.add_parser('owners', help='List source owners and their developer guides')
     owned_tests = commands.add_parser('test-owner', help='Run the test groups declared for a source owner')
     owned_tests.add_argument('owner')
@@ -36,6 +37,11 @@ def main(argv=None):
         command.add_argument('--python', type=Path, help='Use a specific environment Python executable')
         command.add_argument('--dry-run', action='store_true', help='Show the command without running it')
     args = parser.parse_args(argv)
+    if args.command == 'compatibility':
+        from Scripts.compatibility import inventory
+        for name, canonical, consumers in inventory(ROOT):
+            print(f'{name} -> {", ".join(canonical)} ({len(consumers)} production consumers)')
+        return 0
     if args.command in ('owners', 'test-owner'):
         from Scripts.ownership import owners, test_owner
         if args.command == 'owners':

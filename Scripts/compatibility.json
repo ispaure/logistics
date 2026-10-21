@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "removal_policy": "Keep supported import paths until first-party consumers and supported external callers are migrated. No automatic deletion.",
+  "modules": {
+    "features.blender.page": [
+      "features.blender.ui.page"
+    ],
+    "features.blender.library_page": [
+      "features.blender.addons.ui.page"
+    ],
+    "features.books.mobile.metadata": [
+      "features.books.library.metadata"
+    ],
+    "features.books.mobile.speech_native": [
+      "commonUtils.ui.native.speech"
+    ],
+    "features.calibre.folder_widget": [
+      "features.calibre.ui.folder_widget"
+    ],
+    "features.code_font": [
+      "services.editors.ui.fonts"
+    ],
+    "features.comics.mobile.index": [
+      "features.books.library.index"
+    ],
+    "features.comics.mobile.pages": [
+      "features.comics.collection.pages"
+    ],
+    "features.lm.conversation_view": [
+      "features.lm.ui.conversation_view"
+    ],
+    "features.lm.icons": [
+      "features.lm.ui.icons"
+    ],
+    "features.lm.ide_context": [
+      "features.lm.ui.ide_context"
+    ],
+    "features.lm.page": [
+      "features.lm.ui.page",
+      "features.lm.ui.composer",
+      "features.lm.ui.profiles",
+      "features.lm.ui.mode_tabs"
+    ],
+    "features.lm.image_view": [
+      "features.lm.ui.image_view"
+    ],
+    "features.lm.conversation_tree": [
+      "features.lm.ui.conversation_tree"
+    ],
+    "features.minecraft.folder_widget": [
+      "features.minecraft.ui.folder_widget"
+    ]
+  }
+}

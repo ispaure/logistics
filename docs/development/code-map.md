@@ -99,3 +99,13 @@ feature sources are separately owned and may be absent from a normal clone.
 ## Mobile source ownership
 
 Supported features and host/services declare curated payload sources in `mobile_sources.json`. `Mobile/tools.py` validates staged imports and hashes manifests with the payload. Feature manifests never start desktop discovery. Host services are grouped under `services/documents/`, `services/folders/` and `services/editors/`; platform presentation lives under `ui/` or feature `mobile/`.
+
+## Compatibility import inventory
+
+`python3 dev.py compatibility` lists the supported forwarding modules, their
+canonical implementation modules and current production consumer counts.
+`Scripts/compatibility.json` owns the inventory. Counts come from static imports
+and literal factory references; they do not establish whether external consumers
+still rely on an import path. Keep a forwarding path until its callers and supported
+external contract are migrated; there is no automatic removal deadline.
+Do not add feature behavior to a forwarding module.
