@@ -155,7 +155,7 @@ async def exercise_ui_review(app):
     (folder / 'WebP comic.cbz').write_bytes(original)
     (folder / 'Cover.webp').write_bytes(webp)
     def home_browse_button(widget):
-        if isinstance(widget, toga.Button) and widget.text.partition('\n')[0] == 'Workspaces':
+        if isinstance(widget, toga.Button) and widget.text == 'Open file…':
             return widget
         children = list(widget.children)
         if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
@@ -172,8 +172,7 @@ async def exercise_ui_review(app):
         native = action._impl.native
         if get_os() is OS.IOS:
             from rubicon.objc import CGPoint, ObjCClass
-            # Earlier cases populate Recent. On compact iPhones the Folder
-            # Hub action can be below the Home scroll viewport.
+            # Exercise the actual Home file-opening control through UIKit.
             ancestor = native.superview
             while ancestor is not None:
                 if callable(ancestor):
@@ -194,10 +193,19 @@ async def exercise_ui_review(app):
         else:
             assert native.isShown() and native.isEnabled()
             assert native.performClick()
-        for _ in range(80):
-            if app.native_host.state.destination == 'files' and hasattr(app, 'folder_buttons'):
+        for _ in range(200):
+            drawer = app.adaptive.browsers.get('home')
+            if (drawer is not None and getattr(drawer, 'page', None) in app.body.children
+                    and any(entry.label == 'UI Review' for entry in drawer.browser.entries)):
                 break
             await asyncio.sleep(.05)
+        assert app.native_host.state.destination == 'home'
+        assert drawer.page in app.body.children
+        assert drawer.storage.value == 'Local files' and drawer.folder == ''
+        assert drawer.browser.search.value == ''
+        assert app.file_browser.search.value == 'Old filter with no matches'
+        drawer.cancel_browser()
+        app.show_locations()
         assert app.native_host.state.destination == 'files'
         assert await app.refresh_folder_hub()
         assert 'All files' in app.folder_picker_choices
