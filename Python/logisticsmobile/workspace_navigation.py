@@ -15,6 +15,7 @@ from .appearance import list_button
 from .adaptive_workspace import AdaptiveWorkspace
 from .files_ui import local_read_available
 from .navigation import DESTINATION_ITEMS
+from .workspace_policy import WorkspaceSelection, session_view
 
 DESTINATION_LABELS = {key: label for key, label, *_ in DESTINATION_ITEMS}
 
@@ -165,9 +166,17 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         self.frames = weakref.WeakSet()
         self.browsers = {}
         self.menu_open = dict(files=False, documents=False)
-        self.pinned = None
+        self.selection = WorkspaceSelection()
         self.rendering = False
         self.last_layout = None
+
+    @property
+    def pinned(self):
+        return self.selection.pinned
+
+    @pinned.setter
+    def pinned(self, value):
+        self.selection.pinned = value
 
     def install(self):
         # Both Apple and Android use the same measured content split, inside
@@ -297,23 +306,11 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         drawer.schedule_refresh()
 
     def session_view(self, key):
-        if key not in self.app.workspace.sessions:
-            return None
-        owner = self.app.text_views.get(key)
-        if owner is not None:
-            if owner.session.view.get('markdown_mode') == 'preview' and owner.preview_box is not None:
-                return owner.preview_box
-            return owner.document_view
-        private = getattr(self.app, 'private_sessions', None)
-        owner = private.controllers.get(key) if private else None
-        if owner is not None and owner.crypt_reader is not None and owner.crypt_reader.editable:
-            return owner.crypt_view
-        return None
+        return session_view(self.app, key)
 
     def focus_session(self, key):
         current = self.app.workspace.active
-        if self.pinned == key and current != key and self.session_view(current) is not None:
-            self.pinned = current
+        self.selection.focus(key, current, self.session_view)
 
     def show_pair_picker(self, widget=None, **kwargs):
         current = self.app.workspace.active
@@ -321,9 +318,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             return
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         box.add(toga.Label('Open beside this document', style=Pack(font_size=20, margin_bottom=12)))
-        for key, session in self.app.workspace.sessions.items():
-            if key == current or (session.provider != 'managed-text' and self.session_view(key) is None):
-                continue
+        for key in self.selection.candidates(self.app.workspace.sessions, current, self.session_view):
+            session = self.app.workspace.sessions[key]
             title = self.app.session_summary(session)[0]
             def choose(widget=None, selected=key, **kw):
                 self.pinned = current
@@ -368,8 +364,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             self.wide = self.layout_width >= 640
             from .action_menu import refresh_document_menus
             refresh_document_menus(self.app)
-            if self.pinned is not None and self.session_view(self.pinned) is None:
-                self.pinned = None
+            self.selection.retire_unavailable(self.session_view)
             body = self.app.routes.body(destination)
             view = body.children[0] if body.children else None
             frame = getattr(view, '_workspace_frame', None)

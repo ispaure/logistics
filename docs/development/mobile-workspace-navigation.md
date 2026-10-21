@@ -1212,3 +1212,13 @@ Each native app run is bounded at 30 minutes; build-job limits include both iOS
 device runs and their compilation time.
 Physical devices, accessibility text sizes, keyboard presentation and live remote
 provider behavior still require their own targeted verification.
+
+## Selection policy owner
+
+`logisticsmobile/workspace_policy.py` resolves retained editable session views and
+owns pinned-document selection, focus swapping, unavailable-session retirement
+and pair-picker eligibility without importing a native toolkit. The navigation
+adapter composes `WorkspaceSelection`; its `pinned` property remains compatible.
+Widget mounting, fold measurements and native toolbars remain in
+`workspace_navigation.py`. Pure policy tests complement the existing workspace
+navigation and reader-lifetime regressions.

@@ -98,6 +98,7 @@
     "window_owners.py",
     "window_scenes.py",
     "workspace.py",
-    "workspace_navigation.py"
+    "workspace_navigation.py",
+    "workspace_policy.py"
   ]
 }
