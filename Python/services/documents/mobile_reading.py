@@ -22,3 +22,4 @@ class ReadingPresentation:
     page_region: Callable[[Any], tuple | None] = lambda view: None
     comic_boundary: Callable | None = None
     clear_comic_boundary: Callable = lambda: None
+    comic_sharing: Callable[[], bool] = lambda: False

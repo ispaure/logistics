@@ -1,4 +1,4 @@
-"""Native composition proof for default paired layout, optional auto and manga."""
+"""Native composition proof for automatic defaults, explicit paired layout and manga."""
 import asyncio
 import json
 from pathlib import Path
@@ -21,8 +21,8 @@ class ComicSpreadProbe(LogisticsMobile):
         report = {'success': False, 'samples': []}
         try:
             await asyncio.sleep(1)
-            assert self.preferences.values['comic_layout'] == 'double'
-            assert self.preferences.values['comic_split_wide'] == 'false'
+            assert self.preferences.values['comic_layout'] == 'auto'
+            assert self.preferences.values['comic_split_wide'] == 'true'
             for rtl in (False, True):
                 output = self.private_root / ('rtl' if rtl else 'ltr')
                 output.mkdir(exist_ok=True)

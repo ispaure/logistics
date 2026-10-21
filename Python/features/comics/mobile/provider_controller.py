@@ -22,6 +22,7 @@ class ProviderComicController:
     FIELDS = (
         "_provider_viewport",
         "_provider_comic_mode",
+        "_provider_comic_sharing",
         "_provider_layout_task",
         "provider_spread",
     )
@@ -107,6 +108,8 @@ class ProviderComicController:
         return self.format_services.seam(getattr(view or self, 'crypt_content', self.main_window.content))
 
     def private_comic_mode(self):
+        if self.format_services.comic_sharing():
+            return 'double'
         content = getattr(self, 'crypt_content', self.main_window.content)
         if self.format_services.page_region(content) is not None:
             return 'single'
@@ -156,7 +159,8 @@ class ProviderComicController:
                 viewport=lambda: (
                     self.private_comic_viewport(),
                     self.private_comic_mode(),
-                    self.preferences.values.get('comic_split_wide', 'false'),
+                    self.preferences.values.get('comic_split_wide', 'true'),
+                    self.format_services.comic_sharing(),
                     (self.private_comic_seam(), self.format_services.seam_gap(self.crypt_content),
                      self.format_services.page_region(self.crypt_content)),
                 ),
@@ -164,11 +168,12 @@ class ProviderComicController:
                 reload=relayout,
                 initial=(getattr(reader.comic_navigation, 'viewport', (1, 1)),
                          self.private_comic_mode(),
-                         self.preferences.values.get('comic_split_wide', 'false'),
+                         self.preferences.values.get('comic_split_wide', 'true'),
+                         self.format_services.comic_sharing(),
                          (self.private_comic_seam(), self.format_services.seam_gap(self.crypt_content),
                           self.format_services.page_region(self.crypt_content))),
                 changed=self.format_services.layout_changed(),
-                force=lambda previous, current: previous[-1] != current[-1],
+                force=lambda previous, current: previous[-2:] != current[-2:],
             )
         )
 

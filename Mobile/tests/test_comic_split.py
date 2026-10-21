@@ -13,12 +13,13 @@ from services.documents.readers import PrivateReader
 
 
 class ComicSplitTests(unittest.TestCase):
-    def test_default_portrait_spreads_wide_page_and_odd_tail_for_both_readers(self):
+    def test_explicit_two_page_layout_wide_page_and_odd_tail_for_both_readers(self):
         for rtl in (False, True):
             with self.subTest(rtl=rtl), TemporaryDirectory() as directory:
                 root = Path(directory)
                 LogisticsMobile.storage_root = root
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                app.preferences.save(comic_layout='double', comic_split_wide='false')
                 source = root / 'mixed.cbz'
                 with ZipFile(source, 'w') as archive:
                     for index in range(6):
@@ -302,7 +303,7 @@ class ComicSplitTests(unittest.TestCase):
             (Path(directory) / 'preferences.ini').write_text('[Mobile]\ncomic_layout=single\n')
             prefs = Preferences(Path(directory))
             self.assertEqual(prefs.values['comic_layout'], 'single')
-            self.assertEqual(prefs.values['comic_split_wide'], 'false')
+            self.assertEqual(prefs.values['comic_split_wide'], 'true')
             form = ReaderAppearance(prefs.values, lambda widget: None, kind='comic')
             form.split_wide.value = False
             prefs.save(**form.settings())

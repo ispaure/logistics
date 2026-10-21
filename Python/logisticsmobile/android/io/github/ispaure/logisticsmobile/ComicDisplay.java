@@ -43,6 +43,10 @@ public final class ComicDisplay implements DisplayManager.DisplayListener {
         showStatus(picture != null && picture.getDrawable() != null && presentation.isShowing());
     }
 
+    public boolean isShowing() {
+        return presentation != null && presentation.isShowing();
+    }
+
     private int dp(int value) {
         return Math.round(value * activity.getResources().getDisplayMetrics().density);
     }

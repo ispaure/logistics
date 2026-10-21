@@ -24,6 +24,7 @@ class ExternalComicDisplay:
         self.ios_status = None
         self.android = None
         self.android_refresh = None
+        self._sharing_host = None
 
     def select(self, app):
         self.source = weakref.ref(app)
@@ -72,25 +73,46 @@ class ExternalComicDisplay:
             self.ios_registration = None
             controller.unregisterSceneAccessory(registration)
 
-    def allowed_canvas(self):
-        app = self.source() if self.source is not None else None
+    def allowed_host(self, app):
         if app is None or not getattr(app, 'active_host', False):
-            return None
+            return False
         privacy = getattr(app, 'screen_privacy', None)
         if privacy is None or privacy.inactive or privacy.saved_content is not None:
-            return None
+            return False
         # Gates cover the process and retained protected views, even when the
         # displayed comic itself is an ordinary local file. Unlocking a gate
         # does not grant permission to transmit its content to another screen.
         from features.rclone.mobile.cloud import CloudClient
         observers = tuple(CloudClient._credential_observers)
         if privacy.gates() or any(not owner.disposed and owner.gates() for owner in observers):
-            return None
+            return False
         if getattr(privacy, 'shield', None) is not None:
-            return None
-        return comic_canvas(app.body)
+            return False
+        return True
+
+    def sharing(self, app):
+        selected = self.source() if self.source is not None else None
+        connected = bool(self.ios) or (self.android is not None and self.android.isShowing())
+        return bool(app is selected and connected and self.allowed_host(app))
+
+    def sync_sharing_layout(self):
+        app = self.source() if self.source is not None else None
+        current = app if self.sharing(app) else None
+        previous = self._sharing_host() if self._sharing_host is not None else None
+        if current is previous:
+            return
+        self._sharing_host = weakref.ref(current) if current is not None else None
+        from .layout_events import notify_layout
+        for host in (previous, current):
+            if host is not None:
+                notify_layout(host)
+
+    def allowed_canvas(self):
+        app = self.source() if self.source is not None else None
+        return comic_canvas(app.body) if self.allowed_host(app) else None
 
     def refresh(self):
+        self.sync_sharing_layout()
         if not self.ios and self.android is None:
             self.update_ios_status(False)
             self.diagnose_ios()
@@ -252,6 +274,12 @@ class ExternalComicDisplay:
             self.android = None
         self.android_refresh = None
         self.source = None
+        self.sync_sharing_layout()
+
+
+def sharing(app):
+    output = getattr(getattr(app, 'scene_manager', None), 'external_comics', None)
+    return output is not None and output.sharing(app)
 
 
 def sync(app, *, select=False):

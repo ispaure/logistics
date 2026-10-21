@@ -27,7 +27,7 @@ class ReaderParityUITests(unittest.TestCase):
             with self.subTest(right_to_left=rtl), TemporaryDirectory() as directory:
                 root = Path(directory)
                 app = self.host(root)
-                self.assertEqual(app.preferences.values['comic_layout'], 'double')
+                self.assertEqual(app.preferences.values['comic_layout'], 'auto')
                 source = root / 'order.cbz'
                 with ZipFile(source, 'w') as archive:
                     for index, color in enumerate(('red', 'blue', 'green', 'yellow')):

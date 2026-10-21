@@ -79,7 +79,7 @@ must be retained when modifying the parser.
 
 ## Portrait wide pages on mobile
 
-`comic_split_wide` is a separate boolean mobile preference, defaulting to `false`
+`comic_split_wide` is a separate boolean mobile preference, defaulting to `true`
 for new and existing preference files without that key. The shared comic appearance
 form exposes it alongside page layout. It does not change EPUB preferences.
 `mobile/navigation.py` stages `(source index, half, split)` until native rendering
@@ -389,9 +389,16 @@ window safe-area bottom. It survives immersive chrome and is removed on privacy
 blanking, route exit, host changes, disconnect and disposal. Android presentation
 output owns an equivalent decor overlay; its badge appears only with a published
 image on a showing presentation. Neither badge becomes part of the TV image.
-Mobile preferences default to two pages and no portrait wide-page splitting;
-explicit saved layout/splitting choices remain available. Pair eligibility includes
-square pages, with landscape and ComicInfo DoublePage pages kept single.
+Mobile preferences default to Automatic layout with portrait wide-page splitting
+enabled. `ReadingPresentation.comic_sharing` reports whether this host is selected,
+privacy permits publication and an external scene or Android presentation is
+connected. While sharing, controllers temporarily force two pages and whole wide
+pages without writing preferences. Connection changes notify layout watchers,
+including while zoomed; disconnect restores the saved mode and wide-page half.
+Provider workers receive sharing state captured on the UI thread. Pair eligibility
+includes square pages, with landscape and ComicInfo DoublePage pages kept single.
+`Mobile/tests/test_comic_sharing.py` covers imported and provider transitions and
+checks that preference bytes remain unchanged.
 
 `SPREAD_GAP` is zero for desktop painting and bounded native composition. The
 mobile compositor permits a zero-pixel gap instead of rounding it up to one;

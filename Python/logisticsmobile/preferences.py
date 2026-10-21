@@ -14,7 +14,7 @@ DEFAULTS = {'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16',
             'document_card_overview': 'false', 'show_legacy': 'false',
             'markdown_justify': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false',
-            'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'double', 'comic_split_wide': 'false', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS, **CAMERA_DEFAULTS}
+            'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'comic_split_wide': 'true', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS, **CAMERA_DEFAULTS}
 
 
 class Preferences:

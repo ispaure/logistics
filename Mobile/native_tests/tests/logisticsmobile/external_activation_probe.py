@@ -31,8 +31,8 @@ class TVProbe(LogisticsMobile):
             from features.rclone.mobile.cloud import CloudClient
             from features.rclone.mobile.session_privacy import ResumePassword
             from logisticsmobile.external_display import sync, comic_canvas
-            assert self.preferences.values['comic_layout'] == 'double'
-            assert self.preferences.values['comic_split_wide'] == 'false'
+            assert self.preferences.values['comic_layout'] == 'auto'
+            assert self.preferences.values['comic_split_wide'] == 'true'
             def png(color, width=320, height=480):
                 def chunk(kind, data):
                     return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
@@ -122,7 +122,7 @@ class TVProbe(LogisticsMobile):
             assert float(picture.image.size.width) > float(picture.image.size.height)
             await owner.move_comic(1)
             assert owner.comic_navigation.visible == (3, 4)
-            result['cases'].append('default_two_pages_and_whole_wide_page')
+            result['cases'].append('sharing_two_pages_and_whole_wide_page')
             assert picture.image is not None and picture.image != first
             result['cases'].append('native_page_turn_publication')
             await owner.move_comic(1)
@@ -153,10 +153,32 @@ class TVProbe(LogisticsMobile):
             owner.show_library()
             sync(self, select=True)
             assert picture.image is not None
-            output.disconnect_ios(window.windowScene)
-            assert picture.image is None and not output.ios
-            assert output.ios_status is None
-            result['cases'].append('disconnect_releases_image')
+            original_preferences = self.preferences.path.read_bytes() if self.preferences.path.exists() else None
+            phase = Path(self.paths.cache) / 'sharing-layout-phase.txt'
+            async def until(predicate):
+                for _ in range(300):
+                    if predicate() and not owner.book_busy:
+                        return
+                    await asyncio.sleep(.1)
+                raise AssertionError('Sharing layout did not follow the external display state')
+            phase.write_text('disconnect')
+            await until(lambda: not output.ios and owner.comic_navigation.visible == (owner.book_record['position'],))
+            assert picture.image is None and output.ios_status is None
+            await owner.move_book_page(2)
+            assert owner.comic_navigation.split
+            await owner.move_comic(1)
+            assert owner.comic_navigation.half == 1
+            phase.write_text('reconnect')
+            await until(lambda: bool(output.ios) and not owner.comic_navigation.split)
+            assert owner.comic_navigation.visible == (2,)
+            assert output.ios_status is not None
+            phase.write_text('disconnect-again')
+            await until(lambda: not output.ios and owner.comic_navigation.split and owner.comic_navigation.half == 1)
+            assert self.preferences.values['comic_layout'] == 'auto'
+            assert self.preferences.values['comic_split_wide'] == 'true'
+            assert (self.preferences.path.read_bytes() if self.preferences.path.exists() else None) == original_preferences
+            phase.write_text('done')
+            result['cases'].extend(['disconnect_releases_image', 'external_display_reconnect_restores_wide_half_without_saving_preferences'])
             self.main_window._impl.native.makeKeyAndVisible()
             result['success'] = True
         except Exception:

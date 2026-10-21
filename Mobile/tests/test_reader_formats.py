@@ -29,6 +29,7 @@ class ReaderFormatTests(unittest.TestCase):
                 root = Path(directory)
                 LogisticsMobile.storage_root = root
                 app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                app.preferences.save(comic_layout='double', comic_split_wide='false')
                 fixtures = root / 'fixtures'
                 fixtures.mkdir()
                 _, source = make_books(fixtures)

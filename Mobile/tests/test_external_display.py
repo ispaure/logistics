@@ -114,6 +114,37 @@ class ExternalDisplayTests(unittest.TestCase):
         self.window.setHidden.assert_called_with(True)
         self.assertEqual(self.output.ios, {})
 
+    def test_sharing_layout_wakes_only_on_connection_or_permission_changes(self):
+        with patch('logisticsmobile.layout_events.notify_layout') as wake:
+            sync(self.host, select=True)
+            self.assertTrue(self.output.sharing(self.host))
+            wake.assert_called_once_with(self.host)
+            self.output.refresh()
+            self.assertEqual(wake.call_count, 1)
+            self.privacy.inactive = True
+            self.output.refresh()
+            self.assertFalse(self.output.sharing(self.host))
+            self.assertEqual(wake.call_count, 2)
+            self.privacy.inactive = False
+            self.output.refresh()
+            self.assertTrue(self.output.sharing(self.host))
+            self.assertEqual(wake.call_count, 3)
+            self.output.disconnect_ios(NS(session=NS(persistentIdentifier='tv')))
+            self.assertFalse(self.output.sharing(self.host))
+            self.assertEqual(wake.call_count, 4)
+
+    def test_android_layout_override_requires_a_showing_presentation(self):
+        self.output.ios.clear()
+        self.output.android = Mock()
+        self.output.android.isShowing.return_value = False
+        sync(self.host, select=True)
+        self.assertFalse(self.output.sharing(self.host))
+        self.output.android.isShowing.return_value = True
+        self.output.refresh()
+        self.assertTrue(self.output.sharing(self.host))
+        other = Host()
+        self.assertFalse(self.output.sharing(other))
+
     def test_ios_connection_dispatches_native_visibility_selector(self):
         output = ExternalComicDisplay(NS())
         window, controller, picture = Mock(), Mock(), Mock()

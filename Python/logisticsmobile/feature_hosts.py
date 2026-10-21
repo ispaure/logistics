@@ -120,6 +120,7 @@ def reading_presentation(owner):
     from .provider_ui import private_label, speech_session_valid
     app = getattr(owner, 'app', owner)
     from .comic_feedback import boundary, clear
+    from .external_display import sharing
     return ReadingPresentation(seam=lambda view: reading_seam(owner, view),
         seam_gap=lambda view: seam_gap(owner, view),
         page_region=lambda view: page_region(owner, view),
@@ -129,7 +130,8 @@ def reading_presentation(owner):
         highlight_allowed=lambda: not app.screen_privacy.inactive,
         comic_path=provider_comic_path, notify_layout=lambda: notify_layout(app), themed_chapter=themed_chapter,
         comic_boundary=lambda direction, **kwargs: boundary(owner, direction, **kwargs),
-        clear_comic_boundary=lambda: clear(app, owner=owner))
+        clear_comic_boundary=lambda: clear(app, owner=owner),
+        comic_sharing=lambda: sharing(app))
 
 
 def provider_markdown(owner, view, footer):

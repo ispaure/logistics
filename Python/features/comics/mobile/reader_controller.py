@@ -52,6 +52,8 @@ class ComicController:
         return self.format_services.seam(self.book_content)
 
     def comic_layout_mode(self):
+        if self.format_services.comic_sharing():
+            return 'double'
         if self.format_services.page_region(self.book_content) is not None:
             return 'single'
         return self.format_services.mode(self.book_content)
@@ -165,7 +167,8 @@ class ComicController:
                 viewport=lambda: (
                     self.comic_viewport(),
                     self.comic_layout_mode(),
-                    self.preferences.values.get('comic_split_wide', 'false'),
+                    self.preferences.values.get('comic_split_wide', 'true'),
+                    self.format_services.comic_sharing(),
                     (self.comic_seam(), self.format_services.seam_gap(self.book_content),
                      self.format_services.page_region(self.book_content)),
                 ),
@@ -174,7 +177,7 @@ class ComicController:
                 else None,
                 reload=relayout,
                 changed=self.format_services.layout_changed(),
-                force=lambda previous, current: previous[-1] != current[-1],
+                force=lambda previous, current: previous[-2:] != current[-2:],
             )
         )
 
@@ -202,7 +205,8 @@ class ComicController:
             viewport=self.comic_viewport(),
             mode=self.comic_layout_mode(),
             anchor_right=self.comic_seam() is not None,
-            split_wide=self.preferences.values.get('comic_split_wide', 'false') == 'true',
+            split_wide=(self.preferences.values.get('comic_split_wide', 'true') == 'true'
+                        and not self.format_services.comic_sharing()),
         )
         if (
             epoch != self.book_epoch

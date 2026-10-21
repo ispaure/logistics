@@ -42,10 +42,12 @@ image formats fail explicitly instead of silently disappearing from the comic.
 Choose **Appearance → Comic page layout** in an imported reader, or **Appearance…**
 in a provider reader, for Single, Automatic or Two pages. Portrait page
 pairs respect manga visual order; landscape and ComicInfo DoublePage pages remain
-single. Two pages is the mobile default, including on a portrait phone: adjacent
-portrait or square pages appear together; a page wider than tall appears whole
-on its own. A final unpaired page also appears alone. Explicit Single or Automatic
-choices remain available; Automatic follows the reading area orientation. ComicInfo `Manga=YesAndRightToLeft` places the
+single. Automatic is the default and follows the reading area orientation.
+Two pages pairs adjacent portrait or square pages; a final unpaired page appears
+alone. While sharing a comic to an external display, both the phone and TV
+temporarily use two pages, including on a portrait phone, and show a page wider
+than tall whole on its own. Disconnecting restores the saved layout and wide-page
+setting immediately; sharing never saves these overrides. ComicInfo `Manga=YesAndRightToLeft` places the
 earlier page on the right; left-to-right comics place it on the left.
 Comic appearance shows page layout and the portrait wide-page switch. EPUB font, spacing, text width, margins
 and theme controls do not appear in comics, and applying comic layout leaves
@@ -62,10 +64,10 @@ visibility. Neither file switching nor All documents appears in the overflow men
 import, `remote:path` for a remote preview, or the logical LocalCrypt location
 for a folder-backed encrypted file. Imported copies show their current stored
 path; their original import location is not reconstructed.
-**Appearance → Split wide pages in portrait** is off by default, including
-when an older preferences file has no value for this setting. Wide pages stay
-whole on the phone and TV. If enabled explicitly, a landscape source image in a
-taller-than-wide reading area is displayed as two overlapping views.
+**Appearance → Split wide pages in portrait** is on by default, including
+when an older preferences file has no value for this setting. Except while sharing
+to an external display, a landscape source image in a taller-than-wide reading
+area is displayed as two overlapping views when this setting is enabled.
 Next/swipe moves from the first half to the second, then to the next source page;
 Previous reverses this order and enters a preceding wide page at its second half.
 Left-to-right comics start on the left; right-to-left manga starts on the right.
