@@ -183,8 +183,11 @@ class EditorPicker:
         # beside it in the page layout, never around the native list itself.
         form = toga.ScrollContainer(horizontal=False, content=self.save_as_view,
                                     style=Pack(flex=1))
-        self.show_view(toga.Box(children=[self.editor_browser.scroll_container(), form],
-                               style=Pack(direction=COLUMN, flex=1)))
+        panel = toga.Box(children=[self.editor_browser.scroll_container(), form],
+                         style=Pack(direction=COLUMN, flex=1))
+        from .ios_toolbar import prepare_form
+        prepare_form(panel, primary='Open file' if mode == 'open' else 'Save new file', cancel='Cancel')
+        self.show_view(panel)
         await self.refresh_editor_browser()
 
     def browser_editor_selected(self, row):

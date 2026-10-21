@@ -461,6 +461,23 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         self.mark_navigation()
         target = destination or self.native_host.state.destination
         self.bind_reader_exit(view, route, target)
+        if self.routes.apple:
+            from .ios_toolbar import prepare_form
+            form_actions = {
+                'new-document': dict(primary='Create document', cancel='Cancel'),
+                'chat-settings': dict(primary='Save & return to chat', back='Back to conversation'),
+                'transfer-settings': dict(primary='Save settings', cancel='Cancel'),
+                'unlock-credential': dict(primary='Unlock', cancel='Cancel'),
+                'transfers': dict(back='Back'),
+                'saved-files': dict(back='Back to Settings'),
+                'local-push': dict(cancel='Cancel'),
+            }
+            if route in form_actions:
+                prepare_form(view, **form_actions[route])
+            elif route and route.endswith(':metadata'):
+                prepare_form(view, primary='Save metadata', back='Return to reading')
+            elif route and route.endswith((':layout', ':appearance')):
+                prepare_form(view, primary='Apply and return')
         view = self.adaptive.prepare(view, target, route=route, root=root)
         private = getattr(self, 'private_sessions', None)
         if private is not None:

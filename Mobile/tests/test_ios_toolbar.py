@@ -3,7 +3,7 @@ from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from logisticsmobile.ios_toolbar import action_groups, bar_item, mount_actions, mount_leading, vertical_edge
+from logisticsmobile.ios_toolbar import action_groups, bar_item, mount_actions, mount_leading, vertical_edge, prepare_form
 
 
 class Button:
@@ -88,7 +88,45 @@ class ToolbarTests(TestCase):
         self.controller.traitCollection.respondsToSelector.return_value = False
         self.assertEqual(vertical_edge(self.controller), 0)
 
+    def test_ios15_falls_back_to_native_item_arrays(self):
+        self.controller.traitCollection.respondsToSelector.return_value = False
+        self.controller.navigationItem.respondsToSelector.return_value = False
+        close, save, find = [Button(icon, icon) for icon in ('close', 'save', 'find')]
+        mount_leading(self.controller, [close], replaces_back=True)
+        mount_actions(self.controller, self.owner, [save, find])
+        self.assertEqual(self.controller.navigationItem.leftBarButtonItems, [close._ios_action_item])
+        self.assertEqual(self.controller.navigationItem.rightBarButtonItems,
+                         [save._ios_action_item, find._ios_action_item])
+
     def test_status_and_explicit_groups_remain_separate(self):
         status, find, save, close = [Button(icon, icon) for icon in (None, 'find', 'save', 'close')]
         status._toolbar_group = 'transfer-status'
         self.assertEqual(action_groups([status, find, save, close]), [[status], [find], [save], [close]])
+
+
+class FormToolbarTests(TestCase):
+    def test_explicit_form_actions_preserve_callbacks_and_body_actions(self):
+        import toga
+        primary = toga.Button('Create document', on_press=Mock())
+        cancel = toga.Button('Cancel', on_press=Mock())
+        erase = toga.Button('Erase all data', on_press=Mock())
+        page = toga.ScrollContainer(content=toga.Box(children=[primary, erase, cancel]))
+        callback = primary.on_press
+        # Exercise the iOS declaration gate using real widgets; extraction occurs
+        # later, when the owning native controller exists.
+        with patch.object(type(page._impl), '__module__', 'toga_iOS.widgets.scrollcontainer'):
+            prepare_form(page, primary='Create document', cancel='Cancel')
+        self.assertEqual(page._ios_toolbar_buttons, [primary])
+        self.assertEqual(page._ios_toolbar_leading, [cancel])
+        self.assertTrue(page._ios_toolbar_replaces_back)
+        self.assertIs(primary.on_press, callback)
+        self.assertIn(erase, page.content.children)
+        self.assertFalse(hasattr(erase, '_toolbar_prominent'))
+
+    def test_android_keeps_form_content_unchanged(self):
+        import toga
+        button = toga.Button('Save settings')
+        page = toga.Box(children=[button])
+        prepare_form(page, primary='Save settings')
+        self.assertFalse(hasattr(page, '_ios_toolbar_buttons'))
+        self.assertEqual(list(page.children), [button])

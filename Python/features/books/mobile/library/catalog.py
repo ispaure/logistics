@@ -94,6 +94,15 @@ class LibraryCatalog(ImportedComicBatch):
         self.book_import.style.flex = 1
         self.book_import.style.height = 48
         self.book_status.style.font_size = 12
+        header = self.library_view.children[0]
+        refresh = header.children[0]
+        refresh.accessible_name = 'Refresh library'
+        refresh._toolbar_symbol = 'arrow.clockwise'
+        self.book_import.accessible_name = 'Import book or comic'
+        self.book_import._toolbar_symbol = 'square.and.arrow.down'
+        self.library_view._ios_toolbar_buttons = [refresh, self.book_import]
+        self.library_view._ios_toolbar_hidden = [header]
+
 
     def filter_library(self, widget=None, **kwargs):
         if not hasattr(self, "library_rows"):

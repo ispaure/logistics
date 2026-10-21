@@ -84,7 +84,8 @@ def mount_actions(controller, owner, buttons, *, overflow=True):
     menus = [button for button in buttons if getattr(button, 'control_icon', None) in ('more', 'overflow')
              and button._impl.native.menu is not None] if use_overflow else []
     actions = [button for button in buttons if button not in menus]
-    groups, pinned = [], []
+    grouped = bool(nav.respondsToSelector(SEL('setTrailingItemGroups:')))
+    groups, pinned, ordinary = [], [], []
     for group in action_groups(actions):
         items = []
         for button in group:
@@ -92,12 +93,18 @@ def mount_actions(controller, owner, buttons, *, overflow=True):
                        or getattr(button, '_toolbar_prominent', False))
             item = bar_item(button, prominent=primary)
             (pinned if primary else items).append(item)
-        if items:
+            if not primary:
+                ordinary.append(item)
+        if items and grouped:
             groups.append(ObjCClass('UIBarButtonItemGroup').alloc().initWithBarButtonItems(
                 items, representativeItem=None))
-    nav.trailingItemGroups = groups
-    nav.pinnedTrailingGroup = (ObjCClass('UIBarButtonItemGroup').alloc().initWithBarButtonItems(
-        pinned, representativeItem=None) if pinned else None)
+    if grouped:
+        nav.trailingItemGroups = groups
+        nav.pinnedTrailingGroup = (ObjCClass('UIBarButtonItemGroup').alloc().initWithBarButtonItems(
+            pinned, representativeItem=None) if pinned else None)
+    else:
+        # iOS 15 remains supported; its item arrays run from the outside inward.
+        nav.rightBarButtonItems = [*pinned, *reversed(ordinary)]
     # Load live menus at presentation time: document/privacy/busy guards and
     # refreshed menu callbacks remain owned by their original action owners.
     if menus:
@@ -116,12 +123,24 @@ def mount_actions(controller, owner, buttons, *, overflow=True):
 
 
 def mount_leading(controller, buttons, *, replaces_back=False):
-    from rubicon.objc import ObjCClass
+    from rubicon.objc import ObjCClass, SEL
     nav = controller.navigationItem
     nav.leftItemsSupplementBackButton = not replaces_back
     nav.hidesBackButton = replaces_back
-    nav.leadingItemGroups = [ObjCClass('UIBarButtonItemGroup').alloc().initWithBarButtonItems(
-        [bar_item(button)], representativeItem=None) for button in buttons]
+    if nav.respondsToSelector(SEL('setLeadingItemGroups:')):
+        nav.leadingItemGroups = [ObjCClass('UIBarButtonItemGroup').alloc().initWithBarButtonItems(
+            [bar_item(button)], representativeItem=None) for button in buttons]
+    else:
+        nav.leftBarButtonItems = [bar_item(button) for button in buttons]
+
+
+def clear_actions(nav):
+    from rubicon.objc import SEL
+    nav.rightBarButtonItems = None
+    if nav.respondsToSelector(SEL('setTrailingItemGroups:')):
+        nav.trailingItemGroups = []
+        nav.pinnedTrailingGroup = None
+        nav.additionalOverflowItems = None
 
 
 def sync_screen(app, view, destination):

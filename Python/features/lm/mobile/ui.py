@@ -108,7 +108,7 @@ class ChatUI:
             self.chat_conversation_list = self.presentation.summary_list(kind='Conversation',
                 icon_kind='chat', on_select=self._select_conversation_row, style=Pack(flex=1))
             self.chat_conversation_buttons = []  # Compatibility; rows are recycled natively.
-            self.chat_drawer_settings = self.presentation.icon_button('more', 'Chat settings', on_press=self.show_chat_configuration)
+            self.chat_drawer_settings = self.presentation.icon_button('preferences', 'Chat settings', on_press=self.show_chat_configuration)
             self.chat_sidebar_title = toga.Label('Conversations',
                 style=Pack(font_size=22, font_weight='bold', margin_bottom=20))
             self.chat_sidebar_content = sidebar = toga.Box(children=[self.chat_sidebar_title,
@@ -144,6 +144,11 @@ class ChatUI:
             self.chat_view = toga.Box(children=[self.chat_header, self.chat_setup_box, self.chat_workspace],
                 style=Pack(direction=COLUMN, margin=12, flex=1))
             self.presentation.surface(self.chat_view, radius=0, background='chat_background', outlined=False)
+            # The host mounts screen actions in its native iOS navigation bar.
+            # Content/header/composer ownership remains unchanged on Android.
+            self.chat_view._ios_toolbar_buttons = [self.chat_header_new, self.chat_actions_button]
+            self.chat_view._ios_toolbar_leading = [self.chat_menu_button]
+            self.chat_view._ios_toolbar_hidden = [self.chat_header_actions]
             self._chat_needs_initial_selection = True
             self.refresh_chats()
             if error:
@@ -218,18 +223,12 @@ class ChatUI:
         """Place the iPhone drawer in the same native bar as Documents' menu."""
         if not self.routes.apple or self.chat_view not in self.routes.body('chat').children:
             return
-        from rubicon.objc import ObjCClass, SEL
-        if self.chat_menu_button in self.chat_header.children:
-            self.chat_header.remove(self.chat_menu_button)
-        self.chat_menu_button.app, self.chat_menu_button.window = self.app, self.main_window
-        if not hasattr(self, 'chat_native_menu'):
-            self.chat_native_menu = ObjCClass('UIBarButtonItem').alloc().initWithImage(
-                ObjCClass('UIImage').systemImageNamed('line.3.horizontal'), style=0,
-                target=self.chat_menu_button._impl.native, action=SEL('onPress:'))
-        index = self.native_host.destinations.index('chat')
-        controller = self.native_host.adapter.navigation[index].topViewController
-        controller.navigationItem.leftBarButtonItem = self.chat_native_menu
-        self.chat_native_menu.accessibilityLabel = 'Close conversations' if self.chat_drawer_open else 'Conversations'
+        # Native controls are mounted by the application's screen-toolbar pass.
+        # The semantic title and drawer label remain feature-owned.
+        self.chat_menu_button._workspace_menu_label = (
+            'Close conversations' if self.chat_drawer_open else 'Conversations')
+        self.chat_menu_button.accessible_name = self.chat_menu_button._workspace_menu_label
+        self.chat_view._ios_toolbar_leading = [self.chat_menu_button]
 
     def reserve_chat_navigation(self):
         """The floating UIKit tab bar can extend above its reported safe inset."""

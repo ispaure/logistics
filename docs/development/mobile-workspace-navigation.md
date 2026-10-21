@@ -1255,7 +1255,8 @@ for selected forms; it does not promote arbitrary body or destructive actions.
 Source-specific workspace actions, row menus, search fields, reading progress,
 playback controls and keyboard accessories stay associated with their content.
 
-The SDK selector requires iOS 27.1+ for Duo bar support. Host regressions in
+The SDK selector requires iOS 27.1+ for Duo bar support. iOS 15 uses native
+bar-item arrays when grouped navigation placements are unavailable. Host regressions in
 `test_ios_toolbar`, `test_ios_bar_controls`, folder, navigation and reader tests
 cover state and ownership; actual native axis, overflow and safe-area geometry
 also require simulator/device validation.

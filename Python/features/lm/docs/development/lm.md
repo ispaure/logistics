@@ -98,6 +98,16 @@ static classification (no loaded model, unavailable model, context limit). Raw
 server text is never displayed or persisted; unknown errors retain the generic
 message. Authentication error bodies remain ignored.
 
+## Mobile native action placement
+
+Chat declares New Conversation and its action menu as screen-level toolbar
+controls for the iOS host. The conversations drawer occupies the leading native
+navigation group; UIKit owns its horizontal or Duo vertical placement. The
+composer and Send/Stop remain in the message pane. Sidebar settings uses a
+preferences symbol so ellipsis remains reserved for overflow. The feature keeps
+its conversation title/model content and command callbacks; Android retains its
+existing header layout.
+
 ## Mobile server setup
 
 Android and iOS share `mobile/ui.py` and `mobile/transport.py`. Setup labels the

@@ -73,7 +73,7 @@ def sync_reader_toolbar(app, view, destination=None):
             from .android_reader_chrome import sync
             sync(app, view, destination or app.native_host.state.destination)
         return
-    from .ios_toolbar import mount_actions, mount_leading, vertical_edge
+    from .ios_toolbar import mount_actions, mount_leading, vertical_edge, clear_actions
     adapter = app.native_host.adapter
     destination = destination or app.native_host.state.destination
     controller = adapter.navigation[app.native_host.destinations.index(destination)].topViewController
@@ -86,10 +86,7 @@ def sync_reader_toolbar(app, view, destination=None):
         # Tabs retain their controllers. Clear reader-owned chrome even when a
         # different tab was the most recent reader toolbar to be rendered.
         if key in owned:
-            controller.navigationItem.rightBarButtonItems = None
-            controller.navigationItem.trailingItemGroups = []
-            controller.navigationItem.pinnedTrailingGroup = None
-            controller.navigationItem.additionalOverflowItems = None
+            clear_actions(controller.navigationItem)
             controller.navigationItem.prompt = None
             controller.navigationItem.titleView = None
             owned.discard(key)

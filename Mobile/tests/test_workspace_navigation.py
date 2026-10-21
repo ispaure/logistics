@@ -75,7 +75,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             adapter=NS(navigation=[NS(topViewController=reader), NS(topViewController=files)])),
             _reader_toolbar_controllers={101, 102}, _reader_toolbar_controller=reader,
             _reader_title_controller=reader, _reader_toolbar_state='retained reader')
-        with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=Mock(), CGRect=Mock())}):
+        with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=Mock(), CGRect=Mock(), SEL=lambda name: name)}):
             sync_reader_toolbar(app, NS(), 'files')
         self.assertIsNone(files.navigationItem.titleView)
         self.assertIsNone(files.navigationItem.rightBarButtonItems)

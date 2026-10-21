@@ -1,5 +1,10 @@
 # Chat on mobile
 
+On iOS, Conversations, New Conversation and conversation actions use the native
+navigation bar. Eligible controls move to the side on iPhone Duo; extra actions
+join the system overflow menu. Send/Stop stays beside the message field, and the
+conversation sidebar keeps its own settings control.
+
 ## LM chat
 
 Choose **Chat** in the bottom navigation. Open **••• → Server & model settings**, enter your

@@ -314,3 +314,13 @@ schema. `library/metadata.py` supplies bounded per-format metadata loaders.
 with `LibraryHost` callbacks for discovery snapshots, routing and presentation.
 Discovery itself stays in the host. Protected metadata is excluded from indexing.
 The catalogue and reader controllers retain their own tasks and generation guards.
+
+
+## iOS catalogue toolbar
+
+The catalogue declares Refresh and Import as screen-level iOS actions, with
+symbols and accessible titles. The host detaches these retained controls from
+the header and mounts ordinary UIKit bar items, including Duo vertical bars.
+Empty-state entry points and library-row actions remain in content. The reader
+uses the host's separate native reader action contract. Android retains its
+catalogue header.
