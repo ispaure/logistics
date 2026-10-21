@@ -189,3 +189,13 @@ must implement `setStaleLockTime`, `tryLock`, `unlock` and `isLocked` where used
 and `buffers(project)`. Default context still uses the lazy IDE integration;
 injected hosts avoid global IDE widget discovery. Conversation formats and
 session ownership are unchanged.
+
+## Desktop project attachments
+
+`ui/attachments.py` owns project-file/IDE-selection picking, containment checks and
+bounded publication into the composer. `LMPage.attachments` composes it through
+`AttachmentHost`; the page retains compatibility entry points for menus and callers.
+Conversation persistence, transport and screenshot records retain their existing
+owners. File dialogs use the page as native parent. Cancellation publishes nothing;
+project exclusions and the 64 KiB draft limit still apply. `test_lm_ui.py` exercises
+attachment selection, excluded files and persisted project choice.
