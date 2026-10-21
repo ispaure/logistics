@@ -11,7 +11,7 @@ import zipfile
 EXCLUDED_DIRS = {
     '.git', '.github', '__pycache__', '.venv', 'venv', 'env', 'ENV',
     '.pytest_cache', '.mypy_cache', '.ruff_cache', '.idea', '__MACOSX',
-    'build', 'dist', 'htmlcov', 'test-results',
+    'build', 'dist', 'htmlcov', 'test-results', 'node_modules', '.gradle', 'DerivedData',
 }
 REQUIRED = {
     'README.md', 'LICENSE.md', 'docs/docs.md', 'docs/user/user.md', 'docs/user/configuration.md', 'launch_config.ini',
@@ -30,7 +30,16 @@ def included(name):
             and not any(p in EXCLUDED_DIRS or p.endswith('.egg-info') for p in path.parts)
             and path.name not in {'.DS_Store', 'Thumbs.db', 'Desktop.ini', '.coverage', 'release.zip'}
             and not path.name.startswith('._')
-            and path.suffix.lower() not in {'.pyc', '.pyo'}
+            and path.suffix.lower() not in {'.pyc', '.pyo', '.pem', '.key', '.pfx', '.jks',
+                                            '.keystore', '.keychain-db', '.p8', '.p12',
+                                            '.mobileprovision', '.apk', '.aab', '.ipa'}
+            and path.name != 'secrets.json'
+            and not path.name.startswith(('secrets.local.', 'service-account'))
+            and not any(part.endswith(('.xcarchive', '.dSYM')) for part in path.parts)
+            and not (len(path.parts) > 1 and path.parts[0] == 'Mobile'
+                     and path.parts[1] in {'payload', 'logs', '.tools', '.briefcase',
+                                           '.deploy-workspaces', '.android-beta', '.testflight-keys',
+                                           '.device.json', '.testflight-auth.json'})
             and path.parts[0] not in {'Temp', 'temp', 'Software', 'Credentials', 'RemoteCredentials', 'Addons', 'pyCharmProjects'}
             and not any(part == '.env' or part.startswith('.env.') for part in path.parts))
 

@@ -81,3 +81,24 @@ Desktop.ini
 
 # Firebase CLI diagnostic output is local to this checkout.
 /firepit-log.txt
+
+# Native caches and generated packages; source manifests and lockfiles stay tracked.
+.gradle/
+DerivedData/
+node_modules/
+*.apk
+*.aab
+*.ipa
+*.xcarchive/
+*.dSYM/
+
+# Private signing material and conventional local secret files.
+*.pem
+*.key
+*.pfx
+*.jks
+*.keystore
+*.keychain-db
+secrets.json
+secrets.local.*
+service-account*.json

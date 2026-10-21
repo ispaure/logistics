@@ -15,6 +15,21 @@ import publish_release as publishing
 
 
 class PackageTests(unittest.TestCase):
+    def test_private_material_and_generated_mobile_outputs_never_ship(self):
+        excluded = ['nested/signing.key', 'certificate.pem', 'upload.p8', 'release.p12',
+                    'app.jks', 'secrets.json', 'nested/.env.production', 'service-account-prod.json',
+                    'Mobile/payload/source.json', 'Mobile/logs/device.json',
+                    'Mobile/.deploy-workspaces/qa/pyproject.toml', 'Mobile/.device.json',
+                    'Mobile/.testflight-auth.json', 'app.apk', 'app.ipa',
+                    'node_modules/package/index.js', 'DerivedData/project/file',
+                    'app.xcarchive/Info.plist', 'app.dSYM/file']
+        for name in excluded:
+            with self.subTest(name=name):
+                self.assertFalse(packaging.included(name))
+        for name in ['Python/uv.lock', 'Mobile/rclone_bridge/go.sum',
+                     'Mobile/pyproject.toml', 'Mobile/resources/logistics.png']:
+            self.assertTrue(packaging.included(name))
+
     def test_release_identity_is_stamped_and_managed_by_the_install_manifest(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
