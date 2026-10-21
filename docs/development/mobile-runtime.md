@@ -1025,3 +1025,35 @@ identity checks and publication; Books, Comics and Markdown controllers retain
 format navigation. The `compact_private_view` host callback remains compatible.
 Private-session, provider-Markdown and reader-chrome tests cover the assembly.
 Native visual behavior still requires the relevant native acceptance scenarios.
+
+## Sleep, memory trimming and visible library readers
+
+`ScreenPrivacy.resume_reader` checks both provider sessions and imported-library
+readers after wake or successful unlock. A `ReaderController` remembers the
+reading/control mode before releasing its decoder, then schedules one recovery
+task to reopen the saved page/passage in the retained route. Workspace tokens,
+visible-owner identity and privacy checks prevent a queued task from reopening a
+closed/hidden document or bypassing a lock. No archive password is retained for
+this recovery; existing password prompts remain authoritative.
+
+Android can queue a memory-pressure callback until after its Activity resume
+notification. `application_lifecycle.release_disposable_resources` therefore
+requests the same guarded recovery after trimming. While inactive or locked it
+stays deferred; once visible and unlocked a late trim cannot strand an empty page.
+This also uses the existing provider-reader recovery for PDF/comic surfaces.
+
+`test_reader_sessions.py` covers ordinary comic/EPUB restoration, duplicate wake
+signals, a close or navigation racing recovery, and trim arriving after reveal.
+`reader_resume_probe.py` supplies an isolated synthetic native app. With that APK
+installed under `io.github.ispaure.logisticsreaderresumeqa`, run:
+
+```sh
+python3 Mobile/reader_resume_tools.py --adb /path/to/sdk/platform-tools/adb --device emulator-5580 --output Mobile/logs/reader-resume
+```
+
+The driver requires an explicit emulator and never targets a physical Boox or the
+main app. It exercises HOME/background, screen off, an injected native memory
+callback, screen on and Activity resume. The library cases additionally queue a
+trim through the normal memory subscription after wake. Reports distinguish these
+orderings; screenshots and logs stay under ignored `Mobile/logs/`. Keep simulator
+or emulator evidence distinct from physical Boox/E Ink acceptance.

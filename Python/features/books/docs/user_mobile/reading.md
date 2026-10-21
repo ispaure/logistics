@@ -178,3 +178,11 @@ credentials or allow another chapter/file to be read while locked. See
 EPUB page swipes work with reading controls visible or hidden. On iOS,
 horizontal reader swipes take priority over navigation swipe back. Use Back
 or the destination tabs to leave the reader.
+
+## Returning after sleep
+
+If Android releases reader memory while the device sleeps, the visible imported
+comic or EPUB reloads at its saved page or passage when you return. Reading mode
+or visible controls are preserved. Closed documents and readers on other screens
+stay closed or inactive. Password-protected documents retain their usual unlock
+requirements; session-only content is revealed only after its session password.

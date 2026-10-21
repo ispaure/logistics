@@ -76,5 +76,8 @@ def release_disposable_resources(self):
             decoded = getattr(browser, '_decoded_thumbnails', None)
             if decoded is not None:
                 decoded.clear()
-
-
+    # Android can dispatch its queued trim callback after Activity resume.
+    # Recover only the currently visible, unlocked reader; hidden sessions stay trimmed.
+    privacy = getattr(self, 'screen_privacy', None)
+    if privacy is not None:
+        privacy.resume_reader()

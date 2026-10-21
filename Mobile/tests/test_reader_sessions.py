@@ -312,3 +312,137 @@ class ReaderSessionTests(unittest.TestCase):
             finally:
                 app.main_window.close()
                 app.loop.close()
+
+
+class ReaderResumeTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = TemporaryDirectory()
+        self.root = Path(self.directory.name)
+        LogisticsMobile.storage_root = self.root
+        self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        folder = self.root / 'fixtures'
+        folder.mkdir()
+        self.epub, self.comic = make_books(folder)
+
+    def tearDown(self):
+        self.app.main_window.close()
+        self.app.loop.close()
+        LogisticsMobile.storage_root = None
+        self.directory.cleanup()
+
+    def test_visible_library_reader_recovers_after_background_trim_without_changing_route(self):
+        import asyncio
+        app = self.app
+        async def exercise():
+            for source in (self.comic, self.epub):
+                record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), source)
+                self.assertTrue(await app.open_book(record['id']))
+                owner = app.readers.active
+                await owner.move_book_page(1)
+                if record['kind'] == 'epub':
+                    owner.epub_event(owner.book_reader, owner.book_epoch, 1, 'position', 5)
+                    owner.request_position_flush()
+                    await owner._epub_location_task
+                for immersive in (False, True):
+                    owner.set_reading_mode(immersive)
+                    destination = app.native_host.state.destination
+                    routes = tuple(route for route, _, _ in app.routes.screens[destination])
+                    app.screen_privacy.conceal()
+                    app.release_disposable_resources()
+                    self.assertIsNone(owner.book_reader)
+                    app.screen_privacy.reveal()
+                    task = getattr(owner, '_resume_book_task', None)
+                    app.screen_privacy.reveal()
+                    self.assertIs(getattr(owner, '_resume_book_task', None), task)
+                    if task is not None:
+                        await task
+                    else:
+                        await asyncio.sleep(0)
+                    self.assertIsNotNone(owner.book_reader, record['kind'])
+                    self.assertEqual(owner.book_record['position'], 1)
+                    self.assertEqual(owner.reader_immersive, immersive)
+                    self.assertEqual(tuple(route for route, _, _ in app.routes.screens[destination]), routes)
+                    self.assertEqual(app.visible_reader(), owner.session.id)
+                    if record['kind'] == 'epub':
+                        self.assertEqual(owner.epub_offset, 5)
+            for name in ('metadata_task', 'library_scan_task'):
+                task = getattr(app.readers.catalog, name, None)
+                if task is not None:
+                    await task
+        app.loop.run_until_complete(exercise())
+
+    def test_backgrounded_reader_is_not_reopened_on_another_screen_or_after_close(self):
+        import asyncio
+        app = self.app
+        async def exercise():
+            record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), self.comic)
+            self.assertTrue(await app.open_book(record['id']))
+            owner = app.readers.active
+            app.screen_privacy.conceal()
+            app.release_disposable_resources()
+            app.show_home()
+            app.screen_privacy.reveal()
+            await asyncio.sleep(0)
+            self.assertIsNone(owner.book_reader)
+            self.assertIsNone(getattr(owner, '_resume_book_task', None))
+            # Explicitly opening it still works, then a close racing the wake callback stays closed.
+            self.assertTrue(await app.open_book(record['id']))
+            app.screen_privacy.conceal()
+            app.release_disposable_resources()
+            app.screen_privacy.reveal()
+            app.close_session(owner.session.id)
+            task = getattr(owner, '_resume_book_task', None)
+            if task is not None:
+                await task
+            self.assertNotIn(owner.session.id, app.workspace.sessions)
+            self.assertIsNone(owner.book_reader)
+        app.loop.run_until_complete(exercise())
+
+    def test_navigation_during_resume_does_not_publish_into_a_hidden_reader(self):
+        import asyncio
+        from threading import Event
+        app = self.app
+        started, release = Event(), Event()
+        async def exercise():
+            record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), self.comic)
+            self.assertTrue(await app.open_book(record['id']))
+            owner = app.readers.active
+            app.screen_privacy.conceal()
+            app.release_disposable_resources()
+            original = owner.library_store.open
+            def delayed(*args, **kwargs):
+                started.set()
+                if not release.wait(3):
+                    raise TimeoutError('Test did not release library open')
+                return original(*args, **kwargs)
+            with patch.object(owner.library_store, 'open', side_effect=delayed):
+                app.screen_privacy.reveal()
+                self.assertTrue(await asyncio.to_thread(started.wait, 3))
+                app.show_home()
+                release.set()
+                await owner._resume_book_task
+            self.assertIsNone(app.visible_reader())
+            self.assertIsNone(owner.book_reader)
+            self.assertIn(owner.session.id, app.workspace.sessions)
+        try:
+            app.loop.run_until_complete(exercise())
+        finally:
+            release.set()
+
+    def test_trim_callback_queued_after_reveal_also_restores_the_visible_reader(self):
+        app = self.app
+        async def exercise():
+            record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), self.comic)
+            self.assertTrue(await app.open_book(record['id']))
+            owner = app.readers.active
+            owner.set_reading_mode(False)
+            app.screen_privacy.conceal()
+            app.screen_privacy.reveal()  # Activity resume can precede the queued trim callback.
+            app.release_disposable_resources()
+            self.assertIsNone(owner.book_reader)
+            task = getattr(owner, '_resume_book_task', None)
+            self.assertIsNotNone(task, 'Late trim must arrange recovery after the wake event has passed')
+            await task
+            self.assertIsNotNone(owner.book_reader)
+            self.assertFalse(owner.reader_immersive)
+        app.loop.run_until_complete(exercise())

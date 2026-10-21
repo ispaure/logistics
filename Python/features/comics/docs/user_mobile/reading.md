@@ -210,3 +210,11 @@ pages have equal available space without shrinking the left page to match a rese
 right-hand strip. Source aspect ratios and built-in page borders remain unchanged.
 Tap the page to restore controls and normal safe areas. Android retains its immersive
 system-bar behavior. Ordinary and private comics share this presentation.
+
+## Returning after sleep
+
+If Android releases reader memory while the device sleeps, the visible imported
+comic or EPUB reloads at its saved page or passage when you return. Reading mode
+or visible controls are preserved. Closed documents and readers on other screens
+stay closed or inactive. Password-protected documents retain their usual unlock
+requirements; session-only content is revealed only after its session password.

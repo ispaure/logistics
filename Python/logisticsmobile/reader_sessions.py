@@ -48,6 +48,8 @@ class ReaderController(ReaderHost, ReaderUI):
         if not self.app.active_host or not self.app.workspace.accepts(token):
             self.release_book_reader()
             return False
+        if self.book_reader is not None:
+            self._reader_suspended = False
         self.session.transient = bool(getattr(getattr(self.book_reader, 'document', None), 'password', None)
                                       or self.book_pending_key is not None)
         if self.manager.active is not self:
@@ -70,11 +72,51 @@ class ReaderController(ReaderHost, ReaderUI):
         pending = getattr(self, '_epub_location_task', None)
         if self.book_busy or (pending is not None and not pending.done()):
             return False
+        if self.book_reader is not None:
+            self._reader_suspended = True
+            self._suspended_reading_mode = self.reader_immersive
+            self.manager.update_session(self)
         self.release_book_reader()
         self.hide_book_unlock()
         self.book_status.text = 'Reader suspended. Open this item to continue.'
         self.manager.update_session(self)
         return True
+
+
+    def _can_resume_visible_reader(self):
+        session = self.session
+        privacy = self.app.screen_privacy
+        return (self.app.active_host and not privacy.inactive and privacy.saved_content is None
+                and not any(gate.locked for gate in privacy.gates())
+                and session is not None and session.id in self.app.workspace.sessions
+                and self.manager.controllers.get(session.id) is self
+                and self.manager.active is self and self.app.visible_reader() == session.id)
+
+    def resume_suspended_page(self):
+        """Reopen a trimmed library decoder in the retained reader route."""
+        task = getattr(self, '_resume_book_task', None)
+        if (not getattr(self, '_reader_suspended', False) or self.book_busy
+                or self.book_pending_key is not None or not self._can_resume_visible_reader()
+                or (task is not None and not task.done())):
+            return
+        token = self.app.workspace.token(self.session.id)
+        immersive = self._suspended_reading_mode
+        self._resume_book_task = self.app.loop.create_task(
+            self._resume_after_suspend(token, immersive))
+        return self._resume_book_task
+
+    async def _resume_after_suspend(self, token, immersive):
+        # Android can deliver repeated wake callbacks, or close/change routes
+        # between scheduling this task and the first decoder operation.
+        if not self.app.workspace.accepts(token) or not self._can_resume_visible_reader():
+            return
+        opened = await self.open_book(self.session.resource)
+        if not opened:
+            return  # Protected archives keep their existing explicit password prompt.
+        if self._can_resume_visible_reader() and self.app.workspace.accepts(token):
+            self.set_reading_mode(immersive, present=False)
+        else:
+            self.suspend()
 
 
 class Readers:

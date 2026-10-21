@@ -164,10 +164,12 @@ class ScreenPrivacy:
         """Memory pressure can retire the visible page while the lock is up."""
         if self.inactive or self.saved_content is not None or any(gate.locked for gate in self.gates()):
             return
-        private = getattr(self.app, 'private_sessions', None)
-        owner = getattr(private, 'active', None)
-        if owner is not None and self.app.visible_reader() == owner.session.id:
-            owner.resume_suspended_page()
+        for name in ('private_sessions', 'readers'):
+            manager = getattr(self.app, name, None)
+            owner = getattr(manager, 'active', None)
+            session = getattr(owner, 'session', None)
+            if session is not None and self.app.visible_reader() == session.id:
+                owner.resume_suspended_page()
 
     def refresh(self):
         gates = self.gates()
