@@ -33,10 +33,7 @@ for colors in (LIGHT, DARK):
                   settings_separator=colors['border'])
 
 
-def argb(value):
-    value = 0xff000000 | int(value.lstrip('#'), 16)
-    return value - 2**32
-
+from commonUtils.ui.appearance.colors import argb as argb
 
 def css_variables(mode='system'):
     if mode not in ('system', 'light', 'dark'):

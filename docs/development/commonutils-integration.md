@@ -180,3 +180,8 @@ Logistics retains format keys, settings fanout, private-surface validity and err
 
 Page transition and slider painting mechanics live in commonUtils. Logistics
 retains E Ink animation policy, reader value reversal, palette and theme refresh.
+
+Native surface painting, batching, drawable caches, dynamic Apple color providers,
+accessibility names and contrast calculations now use commonUtils. Logistics keeps
+its Slate roles, E Ink decisions, bar placement, icon tinting, refresh registries
+and application-wide backend hooks.

@@ -1108,7 +1108,8 @@ gesture rendering.
 The host reapplies reader chrome and horizontal swipe ownership after adaptive
 layout and after UIKit navigation completion, including pushes. EPUB WebViews
 advertise page swipes alongside comic canvases, independently of fullscreen.
-`page_animation.py` applies short native comic page slides in logical reading
+`page_animation.py` supplies E Ink policy to commonUtils' native transitions
+for short comic page slides in logical reading
 direction (reversed for manga), skipping initial/same-page renders and respecting
 platform animation settings and E Ink mode. Library and provider content swaps
 share this animation policy; private pixels remain in their native view layers.

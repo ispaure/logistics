@@ -1,6 +1,6 @@
 """Palette readability and matching offline document surfaces."""
 import unittest
-from logisticsmobile.appearance import contrast_ratio
+from commonUtils.ui.appearance.colors import contrast_ratio
 from logisticsmobile.palette import LIGHT, DARK, argb, themed_chapter, css_variables
 from logisticsmobile.preview import markdown_preview
 from features.lm.mobile.presentation import transcript_document
@@ -68,7 +68,8 @@ class AppearanceTests(unittest.TestCase):
         import sys
         from types import SimpleNamespace as NS
         from unittest.mock import MagicMock, patch
-        from logisticsmobile.appearance import outline_command, paint_surface, _android_backgrounds
+        from logisticsmobile.appearance import outline_command, paint_surface
+        from commonUtils.ui.native.appearance import clear_surface_caches
         from logisticsmobile.palette import EINK, set_eink_enabled
 
         class Impl:
@@ -96,7 +97,7 @@ class AppearanceTests(unittest.TestCase):
                         (False, True, EINK), (False, False, LIGHT))):
                     set_eink_enabled(eink)
                     drawable.reset_mock()
-                    _android_backgrounds.clear()
+                    clear_surface_caches()
                     impl.native.getResources().getConfiguration().uiMode = 0x20 if dark else 0x10
                     if index == 0:
                         outline_command(impl)
@@ -184,7 +185,7 @@ class AppearanceTests(unittest.TestCase):
         impl.native = NS(layer=NS(), traitCollection=object())
         impl._surface_roles = ('transparent', None, False)
         with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=factory)}), patch.dict(
-                'logisticsmobile.appearance._apple_colors', border=border):
+                'logisticsmobile.appearance._apple_palette.colors', border=border):
             paint_surface(impl, 0)
         factory.assert_called_once_with('UIColor')
         self.assertIs(impl.native.backgroundColor, clear)

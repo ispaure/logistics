@@ -1,88 +1,66 @@
 """Semantic colours for the pinned native backends, without changing document data."""
 import weakref
-import sys
-from collections import OrderedDict
-from contextlib import contextmanager
-from contextvars import ContextVar
-from functools import lru_cache
+from commonUtils.ui.appearance.colors import readable_accent
+from commonUtils.ui.native.appearance import (
+    SurfacePainter, SurfaceStyle, DynamicAppleColors,
+    accessible_name as accessible_name, set_android_background as _set_android_background,
+)
 from toga.colors import BLACK
 from .palette import LIGHT, DARK, argb, android_palette, eink_enabled
 
 _installed = set()
 _widgets = weakref.WeakSet()
 _surfaces = weakref.WeakKeyDictionary()
-_apple_colors = {}
-_color_blocks = []
 _template_icons = weakref.WeakSet()
 _android_boxes = weakref.WeakSet()
 _android_webviews = weakref.WeakSet()
 
 
-_pending_surfaces = ContextVar('pending_native_surfaces', default=None)
-_android_backgrounds = OrderedDict()
+_apple_palette = DynamicAppleColors(lambda dark: DARK if dark else LIGHT)
 
 
-@contextmanager
+def apple_color(role):
+    return _apple_palette.color(role)
+
+
+def _prepare_surface_button(impl):
+    paint_eink_button(impl, outlined=False)
+
+
+def _refresh_surface_icon(impl):
+    if hasattr(impl, '_control_drawable'):
+        from .control_icons import tint_android
+        tint_android(impl)
+
+
+_surface_painter = SurfacePainter(palette=lambda dark: android_palette(dark),
+    apple_color=lambda role: apple_color(role), high_contrast=lambda: eink_enabled(),
+    prepare_button=_prepare_surface_button, after_paint=_refresh_surface_icon)
+
+
 def batch_surfaces():
-    """Paint offscreen controls once, after their final roles/metrics are set."""
-    if _pending_surfaces.get() is not None:
-        yield
-        return
-    pending = weakref.WeakKeyDictionary()
-    token = _pending_surfaces.set(pending)
-    try:
-        yield
-    finally:
-        _pending_surfaces.reset(token)
-        for impl, radius in list(pending.items()):
-            paint_surface(impl, radius)
+    return _surface_painter.batch()
 
 
-@lru_cache(maxsize=4)
-def _android_surface_types(modules):
-    # The module identities also isolate test/runtime module replacements.
-    from android import R
-    from android.content.res import ColorStateList
-    from android.graphics.drawable import GradientDrawable, RippleDrawable
-    return R, ColorStateList, GradientDrawable, RippleDrawable
-
-
-@lru_cache(maxsize=128)
-def _android_color_states(cls, enabled_attribute, disabled, enabled):
-    # ColorStateList is immutable; drawable instances must remain independent.
-    return cls([[-enabled_attribute], []], [disabled, enabled])
-
-
-def _android_surface_resources():
-    return _android_surface_types(tuple(id(sys.modules.get(name)) for name in
-        ('android', 'android.content.res', 'android.graphics.drawable')))
-
-
-def _android_background(types, *, background, radius, stroke, border, hover, button):
-    _, colors, gradient, ripple = types
-    key = (gradient, ripple, colors, background, radius, stroke, border, hover, button)
-    state = _android_backgrounds.get(key)
-    if state is None:
-        drawable = gradient()
-        drawable.setColor(background)
-        drawable.setCornerRadius(radius)
-        if stroke:
-            drawable.setStroke(stroke, border)
-        if button:
-            drawable = ripple(colors.valueOf(hover), drawable, None)
-        constant_state = getattr(drawable, 'getConstantState', None)
-        state = constant_state() if constant_state is not None else None
-        if state is None:
-            return drawable
-        _android_backgrounds[key] = state
-        if len(_android_backgrounds) > 128:
-            _android_backgrounds.popitem(last=False)
-    else:
-        _android_backgrounds.move_to_end(key)
-    # Never share mutable bounds, tint, pressed or animation state across views.
-    # Geometry is already expressed in device pixels; do not rescale it again.
-    return state.newDrawable().mutate()
-
+def paint_surface(impl, radius):
+    background, foreground, outlined = getattr(impl, '_surface_roles', ('surface', None, True))
+    button = hasattr(impl.interface, 'on_press')
+    border = 'control_border' if button and outlined else 'border'
+    glass = False
+    if type(impl).__module__.startswith('toga_iOS.'):
+        bar = getattr(impl, '_native_bar_control', False)
+        glass = getattr(impl, '_native_glass_control', False) and not bar
+        if bar or glass:
+            background, outlined, radius = 'transparent', False, 0
+    inset = getattr(impl, '_content_inset',
+                    8 if background != 'transparent' and not getattr(impl.interface, 'control_icon', None) else 0)
+    style = SurfaceStyle(radius=radius, background=background, foreground=foreground,
+        outlined=outlined, border=border, glass=glass, content_inset=inset,
+        trailing_inset=getattr(impl, '_content_trailing_inset', inset),
+        high_contrast_outlined=getattr(impl, '_surface_eink_outlined', True),
+        high_contrast_selected=getattr(impl, '_surface_eink_selected', False),
+        accessory=getattr(impl, '_settings_accessory', None))
+    _surface_painter.paint(impl, style)
 
 
 def template_icon(widget):
@@ -93,17 +71,6 @@ def template_icon(widget):
         from android import R
         from android.content.res import ColorStateList
         widget._impl.native.setImageTintList(ColorStateList.valueOf(widget._impl.get_theme_color(R.attr.textColorPrimary)))
-    return widget
-
-
-def accessible_name(widget, name):
-    """Name icon-only controls without changing their visible title."""
-    widget.accessible_name = name
-    backend = type(widget._impl).__module__
-    if backend.startswith('toga_iOS.'):
-        widget._impl.native.accessibilityLabel = name
-    elif backend.startswith('toga_android.'):
-        widget._impl.native.setContentDescription(name)
     return widget
 
 
@@ -228,119 +195,6 @@ def reserve_navigation(app):
         view.style.margin_bottom = margin
 
 
-def apple_color(role):
-    """Keep semantic UIColors dynamic; never resolve a colour at construction."""
-    if role == 'transparent':
-        from rubicon.objc import ObjCClass
-        return ObjCClass('UIColor').clearColor
-    if role not in _apple_colors:
-        from rubicon.objc import ObjCClass, ObjCInstance, Block, objc_id
-        colour = ObjCClass('UIColor')
-        def resolve(traits):
-            values = DARK if ObjCInstance(traits).userInterfaceStyle == 2 else LIGHT
-            value = int(values[role][1:], 16)
-            return colour.colorWithRed(((value >> 16) & 255) / 255,
-                green=((value >> 8) & 255) / 255, blue=(value & 255) / 255, alpha=1).ptr.value
-        block = Block(resolve, objc_id, objc_id)
-        _color_blocks.append(block)
-        _apple_colors[role] = colour.colorWithDynamicProvider(block)
-    return _apple_colors[role]
-
-
-def _set_android_background(native, drawable):
-    """A colour/outline repaint must not replace the control's content insets.
-
-    Android drawables can supply their own padding (including an empty Rect),
-    which View.setBackground otherwise copies over the current layout.
-    """
-    padding = (native.getPaddingLeft(), native.getPaddingTop(),
-               native.getPaddingRight(), native.getPaddingBottom())
-    native.setBackground(drawable)
-    native.setPadding(*padding)
-
-
-def paint_surface(impl, radius):
-    pending = _pending_surfaces.get()
-    if pending is not None:
-        pending[impl] = radius
-        return
-    backend = type(impl).__module__
-    background, foreground, outlined = getattr(impl, '_surface_roles', ('surface', None, True))
-    border = 'control_border' if hasattr(impl.interface, 'on_press') and outlined else 'border'
-    if backend.startswith('toga_iOS.'):
-        native = impl.native
-        # Navigation bars supply the glass. Reapply this on trait/style refresh
-        # as well as mounting, so an app surface never appears inside it.
-        bar_control = getattr(impl, '_native_bar_control', False)
-        glass_control = getattr(impl, '_native_glass_control', False) and not bar_control
-        if bar_control or glass_control:
-            background, outlined, radius = 'transparent', False, 0
-        impl._default_background_color = apple_color(background)
-        native.backgroundColor = impl._default_background_color
-        native.layer.cornerRadius = radius
-        native.layer.borderWidth = 1 if outlined else 0
-        native.layer.borderColor = apple_color(border).resolvedColorWithTraitCollection(native.traitCollection).CGColor
-        if hasattr(impl.interface, 'on_press'):
-            from rubicon.objc import UIEdgeInsets
-            inset = getattr(impl, '_content_inset',
-                            8 if background != 'transparent' and not getattr(impl.interface, 'control_icon', None) else 0)
-            native.contentEdgeInsets = UIEdgeInsets(0, inset, 0, getattr(impl, '_content_trailing_inset', inset))
-        if foreground:
-            if hasattr(impl.interface, 'on_press'):
-                native.configuration = None
-                if glass_control:
-                    from rubicon.objc import ObjCClass, SEL
-                    configuration = ObjCClass('UIButtonConfiguration')
-                    config = (configuration.glassButtonConfiguration()
-                              if configuration.respondsToSelector(SEL('glassButtonConfiguration'))
-                              else configuration.grayButtonConfiguration())
-                    config.cornerStyle = 4
-                    native.configuration = config
-                native.tintColor = apple_color(foreground)
-                native.setTitleColor(apple_color(foreground), forState=0)
-                native.setTitleColor(apple_color('muted'), forState=2)
-            elif hasattr(impl.interface, 'image'):
-                native.tintColor = apple_color(foreground)
-            else:
-                native.textColor = apple_color(foreground)
-    elif backend.startswith('toga_android.'):
-        types = _android_surface_resources()
-        R, ColorStateList, _, _ = types
-        resources = impl.native.getResources()
-        colors = android_palette(resources.getConfiguration().uiMode & 0x30 == 0x20)
-        eink = eink_enabled()
-        if eink and getattr(impl, '_surface_eink_selected', False):
-            colors = dict(colors, surface='#000000', alternate='#000000', hover='#000000',
-                          text='#ffffff', muted='#ffffff')
-        button = hasattr(impl.interface, 'on_press')
-        if button and eink:
-            paint_eink_button(impl, outlined=False)
-        has_outline = getattr(impl, '_surface_eink_outlined', True) if eink else outlined
-        drawable = _android_background(types,
-            background=0 if background == 'transparent' else argb(colors.get(background, colors['surface'])),
-            radius=impl.scale_in(radius),
-            stroke=max(1, impl.scale_in(1)) if has_outline else 0,
-            border=argb(colors[border]), hover=argb(colors['hover']), button=button)
-        if foreground:
-            tint = _android_color_states(ColorStateList, R.attr.state_enabled,
-                                        argb(colors['muted']), argb(colors.get(foreground, colors['text'])))
-            accessory = getattr(impl, '_settings_accessory', None)
-            if accessory is not None:
-                accessory.setTintList(tint)
-            if hasattr(impl.interface, 'image'):
-                impl.native.setImageTintList(tint)
-            else:
-                impl.native.setTextColor(tint)
-        if button:
-            impl.native.setBackgroundTintList(None)
-            impl.native.setStateListAnimator(None)
-            impl.native.setElevation(0)
-        _set_android_background(impl.native, drawable)
-        if hasattr(impl, '_control_drawable'):
-            from .control_icons import tint_android
-            tint_android(impl)
-
-
 def surface(widget, *, radius=12, background='surface', foreground=None, outlined=False,
             eink_outlined=True, eink_selected=False):
     widget._impl._surface_roles = (background, foreground, outlined)
@@ -351,27 +205,6 @@ def surface(widget, *, radius=12, background='surface', foreground=None, outline
     _surfaces[widget._impl] = radius
     paint_surface(widget._impl, radius)
     return widget
-
-
-def contrast_ratio(first, second):
-    def luminance(value):
-        channels = [((value >> shift) & 255) / 255 for shift in (16, 8, 0)]
-        channels = [channel / 12.92 if channel <= .04045 else ((channel + .055) / 1.055) ** 2.4 for channel in channels]
-        return sum(a * b for a, b in zip(channels, (.2126, .7152, .0722)))
-    low, high = sorted([luminance(first), luminance(second)])
-    return (high + .05) / (low + .05)
-
-
-def readable_accent(accent, foreground, background):
-    """Keep the theme hue where possible, bringing small selected labels to 4.5:1."""
-    for step in range(17):
-        fraction = step / 16
-        channels = [round(((accent >> shift) & 255) * (1 - fraction)
-                          + ((foreground >> shift) & 255) * fraction) for shift in (16, 8, 0)]
-        candidate = (255 << 24) | (channels[0] << 16) | (channels[1] << 8) | channels[2]
-        if contrast_ratio(candidate, background) >= 4.5:
-            return candidate - 2**32
-    return foreground
 
 
 def select_apple_item(impl, index, item, *, select):
@@ -407,7 +240,7 @@ def install_appearance(app):
     if backend.startswith('toga_iOS.'):
         from .ios_reader_chrome import install
         install()
-        from rubicon.objc import ObjCClass, objc_method, send_super, objc_id
+        from rubicon.objc import objc_method, send_super, objc_id
         import toga_iOS.widgets.box as box_module
         # CALayer stores a resolved CGColor. Refresh card strokes when UIKit
         # changes traits, while dynamic text/background colours update themselves.

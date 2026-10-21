@@ -51,13 +51,13 @@ class SettingsUITests(unittest.TestCase):
         from logisticsmobile import appearance
         app = self.make_app()
         paints = Counter()
-        original = appearance.paint_surface
-        def paint(impl, radius):
-            if appearance._pending_surfaces.get() is None:
+        original = appearance._surface_painter.paint
+        def paint(impl, style):
+            if appearance._surface_painter.pending.get() is None:
                 paints[impl] += 1
-            return original(impl, radius)
+            return original(impl, style)
         with patch.object(app.adaptive, 'content_width', return_value=900), \
-                patch.object(appearance, 'paint_surface', side_effect=paint):
+                patch.object(appearance._surface_painter, 'paint', side_effect=paint):
             app.show_settings(present=False)
         nav = app.settings_navigation
         self.assertEqual(nav.sections.built, {})

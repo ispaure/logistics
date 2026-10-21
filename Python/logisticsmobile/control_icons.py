@@ -74,9 +74,8 @@ ICONS.update((name, ('folder', {'folder_locked': '▱⚿', 'folder_unlocked': '�
 
 
 def tint_android(impl):
-    from .appearance import _android_surface_resources, _android_color_states
+    from commonUtils.ui.native.appearance import android_color_states
     from .palette import argb, android_palette, eink_enabled
-    R, ColorStateList, _, _ = _android_surface_resources()
     dark = impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20
     colors = android_palette(dark)
     if eink_enabled() and getattr(impl, '_surface_eink_selected', False):
@@ -87,8 +86,7 @@ def tint_android(impl):
     if (getattr(impl, '_control_tint_drawable', None) is impl._control_drawable
             and getattr(impl, '_control_tint_key', None) == key):
         return
-    impl._control_drawable.setTintList(_android_color_states(ColorStateList, R.attr.state_enabled,
-                                                           disabled, enabled))
+    impl._control_drawable.setTintList(android_color_states(disabled, enabled))
     impl._control_tint_drawable, impl._control_tint_key = impl._control_drawable, key
 
 

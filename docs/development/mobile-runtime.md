@@ -338,7 +338,8 @@ chevrons retain 48-point targets, the native track is 4 points with a 16-point
 thumb, and a centered capsule badge sizes to its progress text. Comic/PDF release
 commits a page; EPUB release commits a chapter, while its badge retains the
 current chapter percentage. Status/error labels remain available to native
-header diagnostics. `reader_progress.py` owns native styling and appearance refresh.
+header diagnostics. `reader_progress.py` supplies the palette, reading direction and refresh registry;
+commonUtils owns native slider painting.
 The [progress-footer native check](mobile-evidence/2026-10-20-reader-progress.json)
 verifies all three formats on iPhone, iPad and BOOX, including scrubbing.
 Imported and provider comic canvases, PDFs and images use zero

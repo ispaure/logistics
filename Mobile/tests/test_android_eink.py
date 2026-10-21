@@ -7,7 +7,8 @@ from unittest.mock import patch, Mock
 
 from logisticsmobile import palette
 from logisticsmobile.preferences import Preferences
-from logisticsmobile.appearance import configure_android_eink, contrast_ratio
+from logisticsmobile.appearance import configure_android_eink
+from commonUtils.ui.appearance.colors import contrast_ratio
 from logisticsmobile.app import LogisticsMobile
 
 
