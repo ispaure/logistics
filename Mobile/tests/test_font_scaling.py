@@ -25,6 +25,37 @@ class FontScalingTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_retired_editors_and_webviews_ignore_refresh_and_gestures(self):
+        self.app.create_chosen_document('md')
+        owner = self.app.editor_view
+        self.app.show_preview()
+        widgets = (owner.editor, owner.formatted.view, owner.preview)
+        bindings = [widget._font_binding for widget in widgets]
+        owner.dispose()
+        self.assertTrue(all(binding.closed for binding in bindings))
+        before = owner.editor.style.font_size
+        with patch.object(self.app.preferences, 'save') as save:
+            for binding in bindings:
+                binding.gesture('begin')
+                binding.gesture('change', 2)
+                binding.gesture('end')
+            self.app.preferences.values['markdown_font_size'] = '24'
+            refresh(self.app)
+            save.assert_not_called()
+        self.assertEqual(owner.editor.style.font_size, before)
+        self.app.create_chosen_document('md')
+        self.assertFalse(self.app.editor._font_binding.closed)
+        self.assertEqual(self.app.editor.style.font_size, 24)
+
+    def test_closed_widget_does_not_receive_refresh_even_before_binding_disposal(self):
+        self.app.create_chosen_document('txt')
+        editor = self.app.editor
+        editor.dispose()
+        before = editor.style.font_size
+        self.app.preferences.values['text_font_size'] = '24'
+        refresh(self.app)
+        self.assertEqual(editor.style.font_size, before)
+
     def test_legacy_size_migrates_and_categories_remain_independent_after_save(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / 'preferences.ini'

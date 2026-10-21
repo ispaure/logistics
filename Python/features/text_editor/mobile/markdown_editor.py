@@ -571,6 +571,9 @@ class FormattedMarkdownInput:
 
 
 def retire_webview(view):
+    binding = getattr(view, '_font_binding', None)
+    if binding is not None:
+        binding.dispose()
     native = getattr(view._impl, 'native', None)
     if type(view._impl).__module__.startswith('toga_iOS.') and native is not None:
         native.stopLoading()

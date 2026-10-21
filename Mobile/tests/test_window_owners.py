@@ -47,7 +47,14 @@ class WindowOwnerTests(unittest.TestCase):
             child.show_settings()
             self.assertTrue(child.checkpoint())
             key = child.current.id
+            from unittest.mock import Mock
+            keyboard = child._keyboard_dismissal = Mock()
+            primary_keyboard = app._keyboard_dismissal = Mock()
             manager.disconnect(child)
+            keyboard.dispose.assert_called_once()
+            manager.disconnect(child)
+            keyboard.dispose.assert_called_once()
+            primary_keyboard.dispose.assert_not_called()
             restored = manager.make_host('b' * 32)
             self.assertEqual(restored.current.id, key)
             self.assertEqual(restored.editor.value, 'Child draft')

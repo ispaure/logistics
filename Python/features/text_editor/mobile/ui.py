@@ -281,6 +281,9 @@ class TextEditorView:
         speech = getattr(self, "markdown_speech", None)
         if speech is not None:
             speech.close()
+        binding = getattr(self.editor, '_font_binding', None)
+        if binding is not None:
+            binding.dispose()
         self.editor.dispose()
         self.actions.dispose()
         if hasattr(self, 'preview_actions'):

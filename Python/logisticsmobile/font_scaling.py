@@ -39,7 +39,7 @@ def bind(host, widget, kind, *, web=False, formatted=None):
     """The widget retains its listener; the app only keeps weak registrations."""
     app = getattr(host, 'app', host)
     current = getattr(widget, '_font_binding', None)
-    if current is not None:
+    if current is not None and not current.closed:
         current.attach_load()
         return current
     binding = widget._font_binding = FontBinding(app, widget, kind, web=web, formatted=formatted)
@@ -57,7 +57,10 @@ class FontBinding(TextSizeBinding):
         self.kind = kind if callable(kind) else lambda: kind
         owner, target = weakref.ref(app), weakref.ref(widget)
         def alive():
-            return owner() is not None and target() is not None and not getattr(target(), 'private_closed', False)
+            widget = target()
+            return (owner() is not None and widget is not None
+                    and not getattr(widget, 'private_closed', False)
+                    and not getattr(widget, 'closed', False))
         def saved(size):
             current = owner()
             if current is not None:

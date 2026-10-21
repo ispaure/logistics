@@ -290,6 +290,9 @@ class SceneManager:
         host.release_disposable_resources()
         for view in host.text_views.values():
             view.dispose()
+        keyboard = getattr(host, '_keyboard_dismissal', None)
+        if keyboard is not None:
+            keyboard.dispose()
         host.memory_pressure.dispose()
         host.screen_privacy.dispose()
         host.seasonal_snow.dispose()
