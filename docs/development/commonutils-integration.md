@@ -189,3 +189,7 @@ and application-wide backend hooks.
 Mobile control icons use the commonUtils native renderer. Logistics retains
 its named artwork, folder artwork inputs, accessibility text, palette selection
 and E Ink tint policy. Shared browser and navigation controls reuse the renderer.
+
+Settings and connection pages use commonUtils measured text, grouped row,
+accessory and retained disclosure primitives. Logistics owns category composition,
+preference validation, connection switches, appearance roles and page reflow.
