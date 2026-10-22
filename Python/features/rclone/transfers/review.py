@@ -132,7 +132,7 @@ class ReviewSession:
         self.state = 'scanning'
 
     def can_approve(self, *, incomplete=False):
-        return (self.decision is None and self.expected is None and self.valid()
+        return (self.decision is None and self.expected is None and not self.scan.cancelled.is_set() and self.valid()
                 and (incomplete or self.scan.retired.is_set() and self.scan.snapshot().complete))
 
     def approve(self, *, incomplete=False):

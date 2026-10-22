@@ -39,6 +39,16 @@ class ReviewSessionTests(unittest.TestCase):
         release.set()
         self.assertEqual(self.finish(session), 'approved')
 
+    def test_external_scan_cancellation_cannot_be_overridden_before_next_poll(self):
+        for incomplete in (False, True):
+            with self.subTest(incomplete=incomplete):
+                session = ReviewSession(self.request, lambda emit, cancel: 'revision')
+                self.assertEqual(self.finish(session), 'ready')
+                session.scan.stop()
+                self.assertFalse(session.approve(incomplete=incomplete))
+                self.assertFalse(session.approved)
+                self.assertEqual(session.state, 'cancelled')
+
     def test_cancel_and_failed_scan_never_authorize_execution(self):
         def scan(emit, cancel):
             raise ValueError('synthetic failure')
