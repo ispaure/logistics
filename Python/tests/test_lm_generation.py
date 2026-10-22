@@ -24,7 +24,8 @@ class GenerationTests(unittest.TestCase):
         self.session.data['draft'] = 'Question'
         self.session.data['messages'].append(message('user', 'Question'))
         self.client = Mock()
-        self.coordinator = GenerationCoordinator(self.session, self.client)
+        from features.lm.execution.desktop import project_tools
+        self.coordinator = GenerationCoordinator(self.session, self.client, project_tools=project_tools)
         self.inputs = GenerationInputs(dict(id='fixture', base_url='http://localhost:1234/v1'))
 
     def test_transport_and_ui_callback_observe_durable_pending_response(self):

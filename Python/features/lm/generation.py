@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from .domain import build_request
-from .project_tools import ProjectTools, TOOLS
 
 
 @dataclass(frozen=True)
@@ -29,17 +28,20 @@ class GenerationResult:
 
 
 class GenerationCoordinator:
-    def __init__(self, session, client):
+    def __init__(self, session, client, *, project_tools=None):
         self.session, self.client = session, client
+        self.project_tools = project_tools
 
     def prepare(self, inputs: GenerationInputs) -> PreparedGeneration:
         data = self.session.data
-        project, tools = inputs.project, None
+        project, tools, tool_specs = inputs.project, None, None
         if data.get('mode') == 'code':
             if project is None:
                 raise ValueError('Choose a registered IDE project. Register one in IDE, then refresh projects.')
-            tools = ProjectTools(project, inputs.buffers)
-        payload, metadata = build_request(data, tools=TOOLS if tools else None,
+            if self.project_tools is None:
+                raise ValueError('Project tools are unavailable in this host.')
+            tools, tool_specs = self.project_tools(project, inputs.buffers)
+        payload, metadata = build_request(data, tools=tool_specs,
                                          project_name=tools.name if tools else None)
         if tools:
             metadata.update(project_id=project.id, project_name=project.name, project_root=str(project.root))

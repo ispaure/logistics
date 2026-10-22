@@ -18,6 +18,23 @@ class ConversationSessionTests(unittest.TestCase):
         self.addCleanup(self.session.release_lease)
         self.session.create(conversation(defaults()))
 
+    def test_retired_response_cannot_append_to_next_generation(self):
+        self.session.begin_response({})
+        first = self.session.response_token
+        self.session.complete_response('cancelled', '', {}, token=first)
+        self.session.begin_response({})
+        self.assertFalse(self.session.append_delta('late', token=first))
+        self.assertFalse(self.session.complete_response('complete', '', {}, token=first))
+        self.assertTrue(self.session.append_delta('current', token=self.session.response_token))
+        self.assertEqual(self.session.active_message['content'], 'current')
+
+    def test_rollback_preserves_attached_mobile_record_identity(self):
+        record = self.session.data
+        before = self.session.append_user('question')
+        self.session.rollback(before)
+        self.assertIs(self.session.data, record)
+        self.assertEqual(record['messages'], [])
+
     def test_failed_open_retains_current_owner_and_releases_attempted_lease(self):
         original, lease = self.session.data, self.session.lease
         target = conversation(defaults())

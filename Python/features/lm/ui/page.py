@@ -71,7 +71,8 @@ class LMPage(qt.QWidget):
         self.last_conversations = {}
         self.mode_search = {}
         self.session = ConversationSession(self.store)
-        self.generation = GenerationCoordinator(self.session, self.client)
+        from ..execution.desktop import project_tools
+        self.generation = GenerationCoordinator(self.session, self.client, project_tools=project_tools)
         session = self.session
         # Capture only the session, never the widget being destroyed.
         self.destroyed.connect(lambda: session.release_lease())
@@ -738,13 +739,10 @@ class LMPage(qt.QWidget):
         if not self.persist():
             return
         self.collect()
-        snapshot = deepcopy(self.data)
         text = self.composer.toPlainText()
-        self.data['messages'].append(message('user', text, images=deepcopy(self.draft_images)))
-        if self.data['title'] == 'New conversation':
-            self.data['title'] = next((line.strip() for line in text.splitlines() if line.strip()), 'Screenshot')[:80]
+        snapshot = self.session.append_user(text, images=self.draft_images)
         if not self.begin_generation():
-            self.data = snapshot
+            self.session.rollback(snapshot)
             self.render()
 
     def retry(self):

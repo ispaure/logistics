@@ -633,76 +633,72 @@ class ChatUI:
             return
         self.set_chat_busy(True, generating=True)
         self.chat_cancelled = False
-        assistant = None
-        pending = []
-        loop = asyncio.get_running_loop()
+        session = None
+        transport = None
+        response = None
+        before = None
         try:
+            from features.lm.session import ConversationSession
+            from features.lm.generation import GenerationCoordinator, GenerationInputs
+            from features.lm.execution.mobile import MobileGenerationTransport
             profile = self.chat_fields()
             data = self.chat_current
-            before = deepcopy(data)
-            data['settings'], data['model'] = profile['settings'], profile['model']
-            data['messages'].append(message('user', prompt))
+            session = ConversationSession(self.chat_store)
+            session.attach(data)
+            before = session.append_user(prompt, settings=profile['settings'], model=profile['model'],
+                                         title_limit=60, retitle=True)
+            self.chat_client = ChatClient(profile['base_url'], self.chat_key.value)
+            transport = MobileGenerationTransport(self.chat_client, session,
+                current=lambda: self.active_host and self.chat_current is data)
+            coordinator = GenerationCoordinator(session, transport)
             try:
-                payload, metadata = build_request(data)
-                self.chat_client = ChatClient(profile['base_url'], self.chat_key.value)
+                plan = coordinator.prepare(GenerationInputs(profile))
             except Exception:
-                data['messages'].pop()
+                session.rollback(before)
                 raise
-            metadata['base_url'] = profile['base_url']
-            assistant = message('assistant', status='streaming', request=metadata)
-            data['messages'].append(assistant)
-            data['title'] = next(m['content'].splitlines()[0][:60] for m in data['messages'] if m['role'] == 'user')
-            data['draft'] = ''
-            self.chat_loading = True
-            self.chat_prompt.value = ''
-            self.chat_loading = False
-            self.resize_chat_composer()
-            if not self.checkpoint_chat():
-                data.clear()
-                data.update(before)
-                assistant = None
+            def published():
+                self.chat_loading = True
+                self.chat_prompt.value = ''
+                self.chat_loading = False
+                self.resize_chat_composer()
+                self.chat_force_latest = True
+                self.update_chat_transcript()
+            try:
+                result = coordinator.start(plan, self.chat_key.value, clear_draft=True, published=published)
+            except (OSError, ValueError):
+                session.rollback(before)
                 self.chat_loading = True
                 self.chat_prompt.value = data['draft']
                 self.chat_loading = False
                 raise ValueError('The request was not sent because its recovery record could not be saved.')
-            self.chat_force_latest = True
-            self.update_chat_transcript()
-            omitted = metadata['omitted_turns']
+            if not result.started:
+                raise ValueError(result.error)
+            response = session.response_token
+            assistant = session.active_message
+            omitted = plan.metadata['omitted_turns']
             self.set_chat_status(f'Generating… {omitted} older turn(s) omitted from context.' if omitted else 'Generating…')
-            def fragment(text):
-                loop.call_soon_threadsafe(pending.append, text)
-            task = asyncio.create_task(asyncio.to_thread(self.chat_client.stream, payload, fragment))
-            saved_at = time.monotonic()
-            while not task.done() or pending:
-                if pending:
-                    assistant['content'] += ''.join(pending)
-                    pending.clear()
-                    self.update_chat_transcript()
-                    if time.monotonic() - saved_at > .5:
-                        if not self.checkpoint_chat():
-                            self.chat_client.cancel()
-                        saved_at = time.monotonic()
-                await asyncio.sleep(.05)
-            reason = await task
-            assistant['status'] = 'cancelled' if self.chat_cancelled else 'complete'
+            reason = await transport.drain(changed=self.update_chat_transcript, checkpoint=self.checkpoint_chat)
+            session.complete_response('cancelled' if self.chat_cancelled else 'complete', '',
+                                      dict(finish_reason=reason), token=response)
             assistant['finish_reason'] = reason
             self.set_chat_status('Reply stopped; partial text preserved.' if self.chat_cancelled else '')
         except ChatCancelled:
-            if assistant:
-                assistant['status'] = 'cancelled'
+            if session is not None:
+                session.complete_response('cancelled', '', {}, token=response)
             self.set_chat_status('Request cancelled; partial text preserved.')
         except asyncio.CancelledError:
-            if assistant:
-                assistant['status'] = 'interrupted'
+            if session is not None:
+                session.complete_response('interrupted', '', {}, token=response)
             raise
         except Exception as error:
-            if assistant:
-                assistant['status'] = 'failed'
-                assistant['error'] = str(error)[:400]
+            if session is not None:
+                session.complete_response('failed', str(error)[:400], {}, token=response)
             self.set_chat_status('Chat failed: ' + str(error)[:400])
         finally:
             self.chat_loading = False
-            if self.chat_client:
+            if transport is not None:
+                await transport.retire()
+            elif self.chat_client:
                 self.chat_client.cancel()
             self.chat_client = None
             self.checkpoint_chat()

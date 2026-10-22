@@ -3,6 +3,9 @@
   "modules": [
     "__init__.py",
     "domain.py",
+    "execution/__init__.py",
+    "execution/mobile.py",
+    "generation.py",
     "mobile/__init__.py",
     "mobile/controller.py",
     "mobile/presentation.py",
@@ -10,6 +13,7 @@
     "mobile/transport.py",
     "mobile/ui.py",
     "screenshots.py",
+    "session.py",
     "streaming.py"
   ]
 }

@@ -16,6 +16,7 @@ class ConversationSession:
         self.lease = None
         self.dirty = False
         self.active_message = None
+        self.generation = 0
 
     def open(self, key):
         """Acquire/load before replacing the current record; report recovery."""
@@ -46,9 +47,41 @@ class ConversationSession:
 
     def _adopt(self, data, lease):
         self.release_lease()
+        self.generation += 1
         self.data, self.lease = data, lease
         self.dirty = False
         self.active_message = None
+
+    def attach(self, data):
+        """Adopt an already-owned mobile record; the host/store owns its write policy."""
+        self._adopt(data, None)
+
+    def append_user(self, text, *, images=(), settings=None, model=None, title_limit=80, retitle=False):
+        snapshot = deepcopy(self.data)
+        if settings is not None:
+            self.data['settings'] = settings
+        if model is not None:
+            self.data['model'] = model
+        self.data['messages'].append(message('user', text, images=deepcopy(list(images))))
+        if retitle or self.data['title'] == 'New conversation':
+            first = next((entry['content'] for entry in self.data['messages'] if entry['role'] == 'user'), text)
+            self.data['title'] = next((line.strip() for line in first.splitlines() if line.strip()), 'Screenshot')[:title_limit]
+        self.dirty = True
+        return snapshot
+
+    def rollback(self, snapshot):
+        self.data.clear()
+        self.data.update(snapshot)
+        self.active_message = None
+        self.generation += 1
+        self.dirty = True
+
+    @property
+    def response_token(self):
+        return (self.data['id'], self.generation, self.active_message['id']) if self.active_message else None
+
+    def accepts_response(self, token):
+        return token is not None and token == self.response_token
 
     def release_lease(self):
         """Idempotent, including when called after the view has been destroyed."""
@@ -78,22 +111,22 @@ class ConversationSession:
         try:
             self.save()
         except BaseException:
-            self.data = snapshot
-            self.dirty = True
+            self.rollback(snapshot)
             raise
+        self.generation += 1
         self.active_message = entry
         return entry
 
-    def append_delta(self, text):
-        if self.active_message is None:
+    def append_delta(self, text, *, token=None):
+        if self.active_message is None or (token is not None and not self.accepts_response(token)):
             return False
         self.active_message['content'] += text
         self.dirty = True
         return True
 
-    def complete_response(self, status, error, metadata):
+    def complete_response(self, status, error, metadata, *, token=None):
         """Retain partial output and clear active ownership before publication."""
-        if self.active_message is None:
+        if self.active_message is None or (token is not None and not self.accepts_response(token)):
             return False
         entry, self.active_message = self.active_message, None
         entry['status'] = status
