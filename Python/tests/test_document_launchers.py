@@ -26,3 +26,19 @@ class TextLauncherTests(unittest.TestCase):
             editor.assert_called_once_with(service=service)
             show.assert_called_once_with(editor.return_value)
             service.open.assert_not_called()
+
+
+class CatalogOrderingTests(unittest.TestCase):
+    def test_workspace_actions_stay_after_contributed_tools(self):
+        from types import SimpleNamespace as State
+        from desktop.navigation.catalog import LaunchCatalog
+        item = State(page_id='fixture.page', navigation_icon='fixture', name='Fixture', launch_description='Fixture tool')
+        registry = State(get_feature_states=lambda: [],
+            get_pages=lambda: [State(feature_name='fixture', contribution=item)],
+            get_document_launchers=lambda: [])
+        page = object()
+        catalog = LaunchCatalog(core_types={}, registry_provider=registry)
+        snapshot = catalog.snapshot([], {('fixture', 'fixture.page'): page},
+            is_present=lambda candidate: candidate is page, actions=State(count=1))
+        self.assertEqual([entry.key for entry in snapshot.destinations],
+                         ['bulk_rename', 'feature:fixture:fixture.page', 'actions'])

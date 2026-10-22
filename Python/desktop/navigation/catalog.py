@@ -104,9 +104,10 @@ class LaunchCatalog:
         pages.update(bulk_rename=bulk_rename)
         if actions is not None and actions.count:
             pages['actions'] = actions
-        entries = [Destination(key, title, detail, icon, pages.get(key), rail)
+        core = [Destination(key, title, detail, icon, pages.get(key), rail)
                    for key, title, detail, icon, rail in self.CORE
                    if key == 'bulk_rename' or pages.get(key) is not None]
+        entries = [entry for entry in core if entry.key != 'actions']
         states = {state.name: state for state in self.registry.get_feature_states()}
         for registered in self.registry.get_pages():
             item = registered.contribution
@@ -116,4 +117,5 @@ class LaunchCatalog:
                 key = launch_key(registered.feature_name, item.page_id)
                 detail = item.launch_description or getattr(state, 'description', '') or f'Open {item.name}.'
                 entries.append(Destination(key, item.name, detail, item.navigation_icon, page, key))
+        entries.extend(entry for entry in core if entry.key == 'actions')
         return LaunchSnapshot(tuple(entries), document_launchers(self.registry))
