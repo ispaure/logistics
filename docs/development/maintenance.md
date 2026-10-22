@@ -55,8 +55,8 @@ discovery to several roots would require an explicit identity policy and tests.
 
 ## Validation boundaries
 
-Run `python -m unittest discover -s Python/tests -v` with `PYTHONPATH=Python` from
-the repository root using the project's virtual environment. These tests use
+Run `python3 dev.py test desktop` from the repository root for isolated desktop
+regressions, or select a focused filename pattern; use `py` on Windows. These tests use
 temporary files and mocked providers; passing them does not validate real remote
 transfers, library exports, mounts, or desktop integration on every platform.
 Keep shared-utility changes in their own repository and validate dependent

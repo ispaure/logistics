@@ -1162,3 +1162,25 @@ credentials and disposal. `folder_hub.folder_row_presentation` computes labels a
 lock state without widgets; tab reconciliation retains native row identity.
 Appearance installation dispatches to separate iOS/Android installers, retaining
 process-wide installation guards and the existing backend hooks.
+
+### Trace a document or cancellation
+
+- **Reopen a file:** `document_sources.reopen_file` owns the temporary loading
+  panel. `_reopen_file` resolves the current source/credentials before asking the
+  app to open it. Provider documents enter `PrivateSessions.open`, which captures
+  workspace/navigation identity. The session owns bytes and format resources;
+  presentation assembly runs after admission, and a stale completion cannot take
+  over a newer route.
+- **Navigate during a listing:** `FolderListing.begin` cancels the previous read
+  and captures context/credential identity. `capture` retains provider, folder and
+  location. `read` checks `accepts` before and after worker I/O; invalid results are
+  discarded. Hosts still own navigation, control state and provider retirement.
+- **Cancel a transfer:** the transfer controller owns its cancellation event and
+  active review close callback. File/cloud work owns a different event. Global
+  Cancel reaches both owners; cancelling only a transfer must not cancel an
+  independent file operation. Review approval remains a captured session decision.
+- **Replace or close a host:** session transitions preserve/checkpoint state before
+  accepting removal. `HostLifecycle.prepare_replacement` preserves durable state
+  before background model loading; `retire_for_replacement` retires callbacks,
+  invalidates sessions and disposes resources once. A veto leaves the document
+  and controls usable. Shared worker cancellation alone does not prove retirement.

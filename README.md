@@ -69,37 +69,14 @@ credentials and settings. External services need their own accounts/software.
 
 ## What can it do?
 
-An independent [Android/iOS document prototype](docs/development/mobile-launchers.md) is available for
-development builds, with a native hub, private preferences, text editing and single-pane formatted/Source
-Markdown editing (preview by default), EPUB/comic reading, LM text chat, managed rclone Local/LocalCrypt copies and encrypted
-LocalCrypt offline reading, side-by-side saved and session-only credential packages,
-text and comic/EPUB metadata editing, local file/folder
-management with shared list/tile views, thumbnails and file information, and text
-Save As across Local/LocalCrypt storage. Encrypted transfers and archive metadata
-updates and ordinary comic imports stream large files without a fixed whole-file
-size cap. Standalone AES/legacy password-protected CBZ/ZIP comics open with an
-inline password prompt and can be locked after reading. Shared mobile browsing includes folder taps, Back history and search/sort. See its
-guide for format limits and validation status. Native readers include EPUB passage resume/search,
-comic spreads and imported-copy metadata editing, including explicit-field comic batches. Mobile Pull and reviewed Push show
-progress while ordinary documents remain usable. Mobile can save multiple SMB/Mac server
-connections and pull shared folders into device storage. Android can keep Local and
-LocalCrypt together on a selected SD card under `Logistics/Local` and `Logistics/LocalCrypt`.
-On iPhone/iPad, Local uses the Finder/iTunes and Files app sharing root, with automatic
-migration and exclusion from device backups; LocalCrypt remains private.
-Mobile includes a Focus home
-screen, file/conversation drawers and equal-width browser/document
-or two-text-document panes in wide windows. Chat and Settings use full-screen destinations.
-Independent ordinary iPad windows
-have separate workspaces and prevent duplicate writers. Crypt files offer both encrypted
-offline copies and direct remote previews. A Mac can build, install and launch
-the iPhone app over Wi-Fi using the [paired-device workflow](docs/development/mobile-launchers.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
-A [double-click Android launcher](docs/development/mobile-launchers.md#double-click-android-deployment) stages local sources, builds and installs on a connected Android device.
-A [simple deployment window](docs/development/mobile-launchers.md#simple-deployment-window) updates iOS and Android test devices concurrently and offers separate Firebase and TestFlight buttons using existing settings.
-A [Firebase beta launcher](docs/development/mobile-launchers.md#double-click-android-firebase-distribution) builds and signs Android APKs for invited testers; a combined launcher runs device installs and both beta distributions.
-An [opt-in TestFlight workflow](docs/development/mobile-testflight.md) prepares
-archives and uploads with the same app identity after developer enrollment approval.
-For first-time Xcode setup, local builds, TestFlight and Android instructions, start
-with the [mobile build and release handbook](docs/development/mobile-handbook.md).
+The Android/iOS development app supports file browsing, text and Markdown editing,
+EPUB/comic/PDF reading, LM chat, and local or encrypted remote-folder workflows.
+It includes reviewed transfers, metadata editing, search, and adaptive document
+panes. See [mobile usage](docs/user_mobile/user_mobile.md) for supported workflows,
+storage choices, format limits and validation status.
+
+For local builds, paired-device installation, Firebase and TestFlight distribution,
+start with the [mobile build and release handbook](docs/development/mobile-handbook.md).
 
 | Tool | Use it to… |
 | --- | --- |
