@@ -39,6 +39,15 @@ unknown failures report the exit status. Raw provider text, tokens and paths are
 never included in the presented exception. Credential revocation takes precedence
 over command failure when a session is locked during a request.
 
+Mobile listing requests use `mobile.browser_workflow.RemoteBrowserWorkflow` and
+`RemoteBrowserState`. The workflow receives captured connection/location inputs
+and a presentation port for list publication, status, busy controls and route
+recording; it never reads application attributes or widgets. `CloudBrowserPresentation`
+adapts that port to existing controls. Controller/app compatibility fields forward
+to the browser state. Failed requests restore the prior listing only while the
+same live host, client and credential generation remain valid; stale results clear
+the listing. Focused workflow and remote-reader tests cover both paths.
+
 Mobile remote listings deliberately have no thumbnail callback, including tile
 mode: enumerating a folder must not enqueue archive-cover reads on the serial
 native connection. `CloudUI.remote_activity` runs a UI-loop timer and marshals

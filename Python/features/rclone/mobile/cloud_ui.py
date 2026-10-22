@@ -492,72 +492,8 @@ class CloudUI(LocalCryptUI):
         return await workflow.import_cloud_package(widget, **kwargs)
 
     async def browse_cloud(self, widget=None, *, preserve_path=False, **kwargs):
-        with self.remote_browser.population_paused():
-            if self.cloud_busy:
-                return
-            if self.cloud_client is None or not self.selected_cloud_remote():
-                self.cloud_status.value = 'Choose a remote first. Use Manage connections to load your remotes.'
-                return False
-            remote, folder = self.selected_cloud_remote(), self.cloud_location.value.strip('/')
-            if not preserve_path and self.cloud_open_remote and remote != self.cloud_open_remote:
-                folder = ''
-                self.cloud_location.value = ''
-            previous_rows = self.cloud_rows
-            previous_selected = self.cloud_entries.value
-            previous_labels = [item.value for item in self.cloud_entries.items]
-            generation = getattr(self.cloud_client, 'generation', 0)
-            self.cloud_status.value = f'Opening {remote}:{folder}…'
-            self.remote_read_busy = True
-            self.set_cloud_busy(True)
-            self.cloud_rows = {}
-            self.cloud_entries.items = []
-            try:
-                async with self.remote_activity(f'Listing {remote}:{folder or "/"}') as progress:
-                    rows = await asyncio.to_thread(self.cloud_client.entries, remote, folder)
-                    progress(f'Displaying {len(rows)} items from {remote}:{folder or "/"}')
-                    await asyncio.sleep(0)
-                    if getattr(self.cloud_client, 'generation', 0) != generation:
-                        raise ValueError('Credentials changed while browsing. Reopen the remote.')
-                    self.cloud_rows = {f'{index + 1}. {"Folder" if row["directory"] else "File"}: {row["path"]}': row
-                                       for index, row in enumerate(rows)}
-                    self.cloud_entries.items = list(self.cloud_rows)
-                    self.cloud_open_remote, self.cloud_path = remote, folder
-                    from pathlib import Path
-                    from types import SimpleNamespace
-                    from commonUtils.runtime.resource_provider import resource_path
-                    root = Path('/remote') / remote
-                    provider = SimpleNamespace(root=root, remote=remote, relative=lambda path: resource_path(str(Path(path).relative_to(root)) if Path(path).is_absolute() else path))
-                    # Online browsing must never open every archive just to fetch covers.
-                    self.remote_browser.closed = False
-                    self.remote_browser.thumbnail = None
-                    self.remote_browser.set_entries(provider, folder, [dict(row, name=Path(row['path']).name, modified='') for row in rows], location=(remote, folder))
-                    self.remote_browser.location_bar.update(folder, remote=True,
-                        encrypted=remote in self.cloud_crypt_remotes, unlocked=True,
-                        session_only=any(remote in record.get('remotes', ()) and not record.get('saved', False)
-                                         for record in getattr(self.cloud_client, 'package_records', ())),
-                        name=Path(folder).name if folder else remote)
-                self.rclone_ui.record_folder(self.cloud_view, self.remote_browser, 'remote-browser', remote, folder,
-                                             self.browser_cloud_location)
-                self.cloud_status.value = ''
-                return True
-            except Exception as error:
-                self.cloud_status.value = 'Browse failed: ' + str(error)[:300]
-                if self.remote_browser.tree is not None and getattr(self.cloud_client, 'generation', 0) == generation:
-                    self.cloud_remote.value, self.cloud_location.value = self.cloud_open_remote, self.cloud_path
-                    self.cloud_rows = previous_rows
-                    self.cloud_entries.items = previous_labels
-                    if previous_selected in previous_labels:
-                        self.cloud_entries.value = previous_selected
-                else:
-                    self.remote_browser.stop()
-                    self.cloud_rows = {}
-                    self.cloud_entries.items = []
-                    self.cloud_open_remote = None
-                    self.cloud_location.value = self.cloud_path = ''
-                return False
-            finally:
-                self.set_cloud_busy(False)
-                self.remote_read_busy = False
+        return await self.browser_workflow.browse(self.cloud_client, self.selected_cloud_remote(),
+            self.cloud_location.value.strip('/'), preserve_path=preserve_path)
 
     async def parent_cloud(self, widget=None, **kwargs):
         if not self.cloud_path:
@@ -703,3 +639,71 @@ class CloudUI(LocalCryptUI):
 
     async def export_download(self, widget=None, **kwargs):
         return await self.download_workflow.export_download(widget, **kwargs)
+
+
+class CloudBrowserPresentation:
+    """Translate browser effects to existing controls and navigation callbacks."""
+    def __init__(self, cloud):
+        self.cloud = cloud
+
+    def population_paused(self):
+        return self.cloud.remote_browser.population_paused()
+
+    def busy(self):
+        return self.cloud.cloud_busy
+
+    def selection(self):
+        entries = self.cloud.cloud_entries
+        return [item.value for item in entries.items], entries.value
+
+    def location(self, remote, folder):
+        if remote is not None:
+            self.cloud.cloud_remote.value = remote
+        self.cloud.cloud_location.value = folder
+
+    def status(self, message):
+        self.cloud.cloud_status.value = message
+
+    def set_busy(self, value):
+        self.cloud.set_cloud_busy(value)
+
+    def labels(self, labels, selected=None):
+        self.cloud.cloud_entries.items = labels
+        if selected in labels:
+            self.cloud.cloud_entries.value = selected
+
+    def activity(self, stage):
+        return self.cloud.remote_activity(stage)
+
+    def current(self, client, generation):
+        return (self.cloud.active_host and self.cloud.cloud_client is client
+                and getattr(client, 'generation', 0) == generation)
+
+    def has_listing(self):
+        return self.cloud.remote_browser.tree is not None
+
+    def publish(self, rows, remote, folder):
+        from types import SimpleNamespace
+        from commonUtils.runtime.resource_provider import resource_path
+        cloud = self.cloud
+        root = Path('/remote') / remote
+        provider = SimpleNamespace(root=root, remote=remote, relative=lambda path:
+            resource_path(str(Path(path).relative_to(root)) if Path(path).is_absolute() else path))
+        # Online browsing must not open archives to fetch covers.
+        cloud.remote_browser.closed = False
+        cloud.remote_browser.thumbnail = None
+        cloud.remote_browser.set_entries(provider, folder,
+            [dict(row, name=Path(row['path']).name, modified='') for row in rows], location=(remote, folder))
+        cloud.remote_browser.location_bar.update(folder, remote=True,
+            encrypted=remote in cloud.cloud_crypt_remotes, unlocked=True,
+            session_only=any(remote in record.get('remotes', ()) and not record.get('saved', False)
+                             for record in getattr(cloud.cloud_client, 'package_records', ())),
+            name=Path(folder).name if folder else remote)
+
+    def record(self, remote, folder):
+        cloud = self.cloud
+        cloud.rclone_ui.record_folder(cloud.cloud_view, cloud.remote_browser, 'remote-browser',
+                                     remote, folder, cloud.browser_cloud_location)
+
+    def stop(self):
+        self.cloud.remote_browser.stop()

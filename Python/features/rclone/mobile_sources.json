@@ -12,6 +12,7 @@
     "mobile/bridge_protocol.py",
     "mobile/cloud.py",
     "mobile/cloud_ui.py",
+    "mobile/browser_workflow.py",
     "mobile/controller.py",
     "mobile/credential_packages.py",
     "mobile/credential_vault.py",

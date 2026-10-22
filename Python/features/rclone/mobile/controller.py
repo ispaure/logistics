@@ -5,14 +5,14 @@ from services.workflow_host import HostAttribute, StateAttribute
 from .smb_connection import SMBConnection, SMBFormState
 from .downloads import DownloadWorkflow, DownloadState
 from .credentials_ui import CredentialWorkflow, CredentialState
-from features.rclone.mobile.cloud_ui import CloudUI
+from features.rclone.mobile.cloud_ui import CloudUI, CloudBrowserPresentation
+from .browser_workflow import RemoteBrowserState, RemoteBrowserWorkflow
 
 
 @dataclass
 class CloudState:
     busy: bool = False
     client: Any = None
-    remote_read_busy: bool = False
 
 
 class CloudController(CloudUI):
@@ -28,6 +28,8 @@ class CloudController(CloudUI):
         self.download_state = DownloadState()
         self.download_workflow = DownloadWorkflow(self)
         self.state = CloudState()
+        self.browser_state = RemoteBrowserState()
+        self.browser_workflow = RemoteBrowserWorkflow(self.browser_state, CloudBrowserPresentation(self))
         self.smb_form = SMBFormState()
         self.smb_connection = SMBConnection(self, self.smb_form)
 
@@ -44,7 +46,10 @@ class CloudController(CloudUI):
 
     cloud_busy = StateAttribute('state', 'busy')
     cloud_client = StateAttribute('state', 'client')
-    remote_read_busy = StateAttribute('state', 'remote_read_busy')
+    remote_read_busy = StateAttribute('browser_state', 'reading')
+    cloud_path = StateAttribute('browser_state', 'path')
+    cloud_open_remote = StateAttribute('browser_state', 'remote')
+    cloud_rows = StateAttribute('browser_state', 'rows')
     smb_account = StateAttribute('smb_form', 'smb_account')
     smb_advanced_toggle = StateAttribute('smb_form', 'smb_advanced_toggle')
     smb_connect = StateAttribute('smb_form', 'smb_connect')
