@@ -205,7 +205,8 @@ class CredentialWorkflow:
             while title in groups:
                 title = f'{base} ({number})'
                 number += 1
-            groups[title] = remotes
+            from services.folders.catalog import CredentialScope
+            groups[title] = CredentialScope(remotes, item['zip'])
         return groups
 
     def home_unlock_candidates(self):
@@ -238,7 +239,7 @@ class CredentialWorkflow:
         cloud = self.cloud
         try:
             cache = cloud.retained_packages()
-            return [dict(zip=item['zip'], remotes=list(item['remotes']), session_only=True,
+            return [dict(zip=item['zip'], remotes=list(item['remotes']), identities=dict(item['remotes']), session_only=True,
                          crypt_remotes=list(item.get('crypt_remotes', ())))
                     for item in getattr(cache, 'items', {}).values()] if cache is not None else []
         except (OSError, ValueError):

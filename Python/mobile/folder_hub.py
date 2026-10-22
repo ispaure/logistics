@@ -3,6 +3,7 @@ from features.rclone.mobile.storage_location import collection_path
 from pathlib import Path
 from dataclasses import dataclass
 from features.rclone.transfers.mobile.jobs import copy_target
+from services.folders.catalog import FolderCopy, project_catalog, credential_source, source_category as catalog_category
 from services.folders.policy import read_exclusions, visible_name, folder_parts
 
 
@@ -74,15 +75,23 @@ def folder_storage_label(entry):
 
 def credential_choices(choices, remotes):
     """Keep all available copies of a folder owned by this credential."""
+    scope = getattr(remotes, 'source_identity', None)
+    def accepts(copy):
+        source = copy.get('source_identity')
+        return copy.get('remote') in remotes and (scope is None or not source or source == scope)
     return {name: entry for name, entry in choices.items()
-            if entry.get('remote') in remotes or any(copy.get('remote') in remotes
-                                                    for copy in entry.get('copies', ()))}
+            if any(accepts(copy) for copy in [entry, *entry.get('copies', ())])}
 
 
 def source_choices(choices, source, network_remotes=()):
     """Expose downloaded copies locally while retaining their remote actions."""
     network_remotes = set(network_remotes)
     def owner(entry):
+        categories = {copy.get('catalog_category') for copy in [entry, *entry.get('copies', ())]}
+        if 'Home Server' in categories:
+            return 'Network shares'
+        if 'Cloud' in categories:
+            return 'rclone'
         remotes = {copy.get('remote') for copy in [entry, *entry.get('copies', ())]} - {None, ''}
         if remotes & network_remotes:
             return 'Network shares'
@@ -90,7 +99,7 @@ def source_choices(choices, source, network_remotes=()):
     def visible(entry):
         if source == 'Local':
             return any(copy['source'] in ('Local', 'LocalCrypt')
-                       for copy in entry.get('copies') or [entry])
+                       for copy in [entry, *entry.get('copies', ())])
         return owner(entry) == source
     return {name: entry for name, entry in choices.items() if visible(entry)}
 
@@ -114,6 +123,7 @@ class FolderDiscoverySnapshot:
     retained_packages: tuple
     crypt_locations: tuple
     crypt_roots: dict
+    source_packages: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -144,33 +154,71 @@ def discover_folder_choices(snapshot):
     # Rendering and menu opening must never enter the native bridge. A
     # credential load updates this discovery snapshot.
     choices = {'All files': dict(source='Local', kind='local', value='', name='Browse All Files', copies=[], browser_root=True)}
+    packages = [*retained, *snapshot.source_packages]
+    accounts, by_identity = {}, {}
+    loaded_sources = {credential_source(item['package_name']) for item in snapshot.source_packages
+                      if item.get('package_name')}
+    for package in packages:
+        label = package.get('package_name', package.get('zip'))
+        if not label:
+            continue
+        source = credential_source(label)
+        identities = package.get('identities', {})
+        for remote in package['remotes']:
+            identity = identities.get(remote)
+            descriptor = (source, identity, label)
+            known = accounts.setdefault(remote, {})
+            known[source] = descriptor
+            if identity:
+                by_identity[identity] = descriptor
+    for job in jobs.values():
+        remote, identity = job.get('remote'), job.get('identity')
+        if remote and identity:
+            descriptor = by_identity.get(identity, (('connection', identity), identity, ''))
+            accounts.setdefault(remote, {})[descriptor[0]] = descriptor
+            by_identity[identity] = descriptor
+    descriptors = []
     for name, parts, copies in hub_entries(snapshot.private_root, jobs, remotes, crypt.items()):
         for source, (kind, value) in copies:
             title = (name if not jobs[value]['prefix'] else jobs[value]['target']) if kind == 'job' else name
-            if kind == 'remote':
-                value = value, ''
             remote = jobs[value]['remote'] if kind == 'job' else name if kind in ('crypt', 'remote') else None
-            copy = dict(source=source, kind=kind, value=value, name=title, remote=remote)
-            group = choices.setdefault(title, dict(copy, copies=[]))
-            group['copies'].append(copy)
-    for group in choices.values():
-        if group['copies']:
-            primary = min(group['copies'], key=lambda copy: (copy['kind'] != 'job', copy['source'] == 'Remote'))
-            group.update(primary)
-            # Browse the mapped scope, rather than accidentally opening the
-            # remote root for a pulled subfolder. Decode crypt paths on open.
-            if primary['kind'] == 'job':
-                job = jobs[primary['value']]
-                # The mapping already identifies this online folder even
-                # before credentials load. Opening it uses the usual unlock
-                # guard and resolves its mapped scope after authentication.
-                group['copies'] = [copy for copy in group['copies'] if copy['source'] != 'Remote']
-                group['copies'].append(dict(source='Remote', kind='job-remote',
-                                            value=job['id'], name=primary['name'], remote=job['remote']))
-            elif primary['kind'] == 'crypt' and not any(copy['source'] == 'Remote' for copy in group['copies']):
-                group['copies'].append(dict(source='Remote', kind='remote',
-                                            value=(primary['remote'], ''), name=primary['name'],
-                                            remote=primary['remote']))
+            identity = jobs[value].get('identity') if kind == 'job' else None
+            owners = ([by_identity[identity]] if identity in by_identity else
+                      list(accounts.get(remote, {}).values()) if remote else [])
+            if not owners:
+                owners = [(('connection', identity) if identity else (), identity, '')]
+            for account, connection, label in owners:
+                payload = dict(source=source, kind=kind, value=(value, '') if kind == 'remote' else value,
+                               name=title, remote=remote, source_identity=account,
+                               connection_identity=connection, source_label=label,
+                               catalog_category=catalog_category('rclone', label) if remote and label else None if remote else 'Local')
+                copy_id = (kind, str(value), account)
+                descriptors.append(FolderCopy(copy_id, title, account, source,
+                                               available=source != 'Remote' or account in loaded_sources or not account and remote in snapshot.remote_names,
+                                               locked=source == 'Remote' and bool(account) and account not in loaded_sources,
+                                               payload=payload))
+    groups = project_catalog(descriptors)
+    counts = {}
+    for group in groups:
+        counts[group.name] = counts.get(group.name, 0) + 1
+    for group in groups:
+        copies = [dict(copy.payload) for copy in group.copies]
+        primary = min(copies, key=lambda copy: (copy['kind'] != 'job', copy['source'] == 'Remote'))
+        entry = dict(primary, copies=copies, catalog_identity=group.identity,
+                     available=group.available, locked=group.locked)
+        if primary['kind'] == 'job':
+            job = jobs[primary['value']]
+            entry['copies'] = [copy for copy in copies if copy['source'] != 'Remote']
+            entry['copies'].append(dict(primary, source='Remote', kind='job-remote', value=job['id']))
+        elif primary['kind'] == 'crypt' and not any(copy['source'] == 'Remote' for copy in copies):
+            entry['copies'].append(dict(primary, source='Remote', kind='remote', value=(primary['remote'], '')))
+        key = group.name
+        if counts[key] > 1:
+            label = Path(primary['source_label']).stem if primary['source_label'] else primary['source']
+            key += ' (' + label + ')'
+            if key in choices:
+                key += ' ' + str(len(choices))
+        choices[key] = entry
     from .local_sources import shared_files
     shared = shared_files(snapshot.private_root)
     if shared is not None:

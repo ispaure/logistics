@@ -12,10 +12,11 @@
     "documents/zip_passwords.py",
     "folders/__init__.py",
     "folders/appearance.py",
+    "folders/catalog.py",
     "folders/policy.py",
     "identifiers.py",
     "mobile_presentation.py",
-    "workflow_host.py",
-    "seasonal.py"
+    "seasonal.py",
+    "workflow_host.py"
   ]
 }

@@ -723,7 +723,7 @@ class FolderHubUI:
             if remote:
                 async with self.remote_activity('Checking connection for ' + remote):
                     if not await self.require_remote_credentials_async(remote,
-                            identity=job['identity'] if job else None,
+                            identity=job['identity'] if job else entry.get('connection_identity'),
                             resume=lambda: self.open_picker_folder(entry)):
                         return False
         if kind == 'job':

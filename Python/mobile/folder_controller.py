@@ -29,7 +29,8 @@ class FolderController(FolderHubUI):
             remote_names=tuple(self.loaded_remote_names()),
             retained_packages=tuple(deepcopy(self.retained_credential_associations())),
             crypt_locations=tuple(getattr(self, 'hub_crypt_locations', ())),
-            crypt_roots=deepcopy(getattr(self, 'hub_crypt_roots', {})))
+            crypt_roots=deepcopy(getattr(self, 'hub_crypt_roots', {})),
+            source_packages=tuple(deepcopy(getattr(client, 'package_records', ()))))
 
     def publish_discovery(self, result):
         self.hub_crypt_locations = list(result.crypt_locations)

@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from services.folders.entries import get_folder_entries
+from .catalog import FolderCopy, project_catalog, source_category as catalog_category
 
 
 SOURCE_NAMES = ('Local', 'Cloud', 'Home Server')
@@ -9,14 +10,10 @@ SOURCE_NAMES = ('Local', 'Cloud', 'Home Server')
 
 def source_category(source):
     """Use mobile's explicit network-share package convention, not protocol guesses."""
-    if source.feature_name != 'rclone':
-        return 'Cloud'
     context = source.source.context
     item = getattr(context, 'item', None)
-    path = item.package if item else context
-    if path is not None and Path(path).stem.casefold() in {'network shares', 'session network shares'}:
-        return 'Home Server'
-    return 'Cloud'
+    package = item.package if item else context
+    return catalog_category(source.feature_name, package)
 
 
 def remote_entries(source, local_folders):
@@ -27,17 +24,17 @@ def remote_entries(source, local_folders):
 
 def local_entries(sources):
     """Merge by physical copy, preferring entries carrying loaded sync context."""
-    entries = {}
+    copies = []
     for source in sorted(sources.remote_sources, key=lambda source: hasattr(source.source.context, 'item')):
         for entry in remote_entries(source, sources.local_folders):
             if entry.local is not None:
-                entries.setdefault(entry.local.path, entry)
+                copies.append(FolderCopy(entry.local.path, entry.name, payload=entry))
     folders = [*sources.local_folders,
                *(folder for source in sources.local_sources for folder in source.folders),
                *(folder for source in sources.remote_sources for folder in source.local_folders or ())]
-    for entry in get_folder_entries(local_folders=folders):
-        entries.setdefault(entry.local.path, entry)
-    return list(entries.values())
+    copies.extend(FolderCopy(entry.local.path, entry.name, payload=entry)
+                  for entry in get_folder_entries(local_folders=folders))
+    return [group.copies[0].payload for group in project_catalog(copies, grouping='physical')]
 
 
 def local_entry_category(entry, sources):
