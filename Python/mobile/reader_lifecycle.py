@@ -164,46 +164,12 @@ class ReaderLifecycle:
         return self.workspace.active if self.workspace.active in visible else next(iter(visible), None)
 
     def request_reader_close(self, key):
-        self.__dict__.setdefault('_reader_closing', set()).add(key)
-        readers = getattr(self, 'readers', None)
-        owner = readers.controllers.get(key) if readers is not None else None
-        pending = getattr(owner, '_epub_location_task', None)
-        if pending is not None and pending.done():
-            pending = None
-        if pending is not None:
-            owner.request_position_flush()
-        else:
-            private = self.provider_sessions().controllers.get(key)
-            if private is not None and private.operation_busy:
-                owner = private
-                if getattr(owner, '_exit_task', None) is not None:
-                    return True
-                pending = private.operation_idle.wait()
-        if pending is not None:
-            if getattr(owner, '_exit_task', None) is None:
-                async def finish():
-                    try:
-                        await pending
-                        if key in self.workspace.sessions:
-                            self.request_close_session(key)
-                    finally:
-                        owner._exit_task = None
-                owner._exit_task = self.loop.create_task(finish())
-            return True
-        return self.request_close_session(key)
+        from .session_workflows.transitions import transitions_for
+        return transitions_for(self).request_reader_close(key)
 
     def keep_reader_editing(self, key):
-        self.__dict__.setdefault('_reader_closing', set()).discard(key)
-        owner = self.provider_sessions().controllers.get(key)
-        if owner is not None:
-            owner.resume_crypt()
-        else:
-            readers = getattr(self, 'readers', None)
-            book = readers.controllers.get(key) if readers is not None else None
-            if book is not None:
-                book.show_view(book.book_metadata_view, reader_route='metadata', title='Edit metadata')
-            else:
-                self.cancel_close_session(key)
+        from .session_workflows.transitions import transitions_for
+        return transitions_for(self).keep_reader_editing(key)
 
     @staticmethod
     def book_edits_dirty(owner):
@@ -211,74 +177,13 @@ class ReaderLifecycle:
                    for name, field in getattr(owner, 'book_metadata_fields', {}).items())
 
     def request_book_close(self, owner):
-        async def save():
-            await owner.save_book_metadata()
-            if not self.book_edits_dirty(owner):
-                self.close_session(owner.session.id)
-        return self.document_close_dialog(owner.session.id, owner.session.title,
-            save, lambda: self.close_session(owner.session.id, choice='discard'))
+        from .session_workflows.transitions import transitions_for
+        return transitions_for(self).request_book_close(owner)
 
     def document_close_dialog(self, key, title, save, discard):
-        import inspect
-        from .document_dialogs import DocumentDialog
-        pending = self.__dict__.setdefault('_document_close_tasks', {})
-        if key in pending:
-            return True
-        async def decide():
-            try:
-                choice = await self.main_window.dialog(DocumentDialog(
-                    'Save changes to ' + title + '?',
-                    'Your unsaved changes will be lost if you quit without saving.'))
-                if not self.active_host or key not in self.workspace.sessions:
-                    return
-                if choice in ('save', 'discard'):
-                    result = (save if choice == 'save' else discard)()
-                    if inspect.isawaitable(result):
-                        await result
-            finally:
-                # Cancellation or a failed dialog/save must also allow retrying.
-                if key in self.workspace.sessions:
-                    self.__dict__.setdefault('_reader_closing', set()).discard(key)
-                pending.pop(key, None)
-        pending[key] = self.loop.create_task(decide())
-        return True
+        from .session_workflows.transitions import transitions_for
+        return transitions_for(self).document_close_dialog(key, title, save, discard)
 
     def reader_closed(self, key):
-        returns = self.__dict__.setdefault('_reader_returns', {})
-        target = returns.pop(key, None)
-        closing = self.__dict__.setdefault('_reader_closing', set())
-        leaving = key in closing
-        closing.discard(key)
-        if not leaving or target is None:
-            self.show_documents_hub()
-            return
-        destination, route, drawer = target
-        # Retire every presentation of this closed session, including a close
-        # prompt or a retained reader in another destination's stack.
-        for current, screens in self.routes.screens.items():
-            index = next((i for i, (name, panel, _) in enumerate(screens)
-                          if name in ('private:' + key, 'reader:' + key, 'close:' + key,
-                                      'private-close:' + key)
-                          or any(getattr(child, '_reader_session_id', None) == key for child in panel.children)), None)
-            if index is not None:
-                self.routes.trim(current, index)
-        details = self.adaptive.detail_routes
-        index = next((i for i, (_, panel, _) in enumerate(details)
-                      if any(getattr(child, '_reader_session_id', None) == key for child in panel.children)), None)
-        if index is not None:
-            self.adaptive.trim_details(index)
-        screens = self.routes.screens[destination]
-        count = next((i + 1 for i, screen in enumerate(screens) if screen[0] == route), 0)
-        self.routes.trim(destination, count)
-        if destination == 'documents' and self.adaptive.split is not None:
-            self.adaptive.show_list()
-        # This restores an existing route, not a second tap on Documents (which
-        # intentionally collapses its stack to the overview).
-        self.native_host.activate(destination)
-        self.routes.render(destination)
-        self.routes.folders.restore(destination)
-        if drawer:
-            self.adaptive.menu_open[destination] = True
-            self.adaptive.render(preserve_drawer=True)
-        if route is not None:
-            self.loop.call_soon(self.routes.folders.restore_viewport, destination, route)
+        from .session_workflows.transitions import transitions_for
+        return transitions_for(self).reader_closed(key)

@@ -24,14 +24,8 @@ class HostLifecycle:
         if self.replacement_prepared:
             return
         host = self.host
-        store = getattr(host, 'store', None)
-        if store is not None:
-            store.flush_checkpoints()
-        lists = getattr(host, 'credential_document_lists', None)
-        if lists is not None:
-            lists.flush_writes()
-        if hasattr(host, 'chat_current') and not host.checkpoint_chat():
-            raise OSError('Could not preserve the previous conversation.')
+        from .session_workflows.transitions import transitions_for
+        transitions_for(host).preserve_for_replacement()
         pending = getattr(host, 'startup_task', None)
         if pending is not None and not pending.done():
             pending.cancel()
@@ -97,9 +91,8 @@ class HostLifecycle:
             host.cloud_client.cancel()
         if getattr(host, 'chat_client', None):
             host.chat_client.cancel()
-        if hasattr(host, 'chat_current') and not host.checkpoint_chat():
-            return False
-        saved = host.checkpoint()
+        from .session_workflows.transitions import transitions_for
+        saved = transitions_for(host).checkpoint_for_exit()
         if saved:
             if restoring:
                 host.active_host = False

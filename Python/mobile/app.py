@@ -530,29 +530,12 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         return close
 
     def request_close_session(self, key):
-        if self.visible_reader() == key:
-            self.__dict__.setdefault('_reader_closing', set()).add(key)
-        readers = getattr(self, 'readers', None)
-        book = readers.controllers.get(key) if readers is not None else None
-        if book is not None and self.book_edits_dirty(book):
-            return self.request_book_close(book)
-        private = self.provider_sessions().controllers.get(key)
-        if private is not None and private.private_dirty():
-            return self.request_provider_close(private)
-        owner = self.text_views.get(key)
-        if owner is None or not owner.document.modified:
-            return self.close_session(key)
-        return self.document_close_dialog(key, owner.document.name,
-            lambda: self.close_session(key, choice='save'),
-            lambda: self.close_session(key, choice='discard'))
+        from .session_workflows.transitions import transitions_for
+        return transitions_for(self).request_close_session(key)
 
     def cancel_close_session(self, key):
-        self.__dict__.setdefault('_reader_closing', set()).discard(key)
-        owner = self.text_views.get(key)
-        if owner is not None:
-            owner.bind()
-            self.workspace.activate(key)
-            self.show_documents(resume=True)
+        from .session_workflows.transitions import transitions_for
+        return transitions_for(self).cancel_close_session(key)
 
     async def request_delete_document(self, key):
         owner = self.text_views.get(key)
@@ -579,94 +562,8 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
             return False
 
     def close_session(self, key, *, choice='keep'):
-        leaving_reader = key in self.__dict__.get('_reader_closing', ())
-        if key not in self.workspace.sessions:
-            return False
-        if choice == 'cancel':
-            return False
-        if choice not in ('keep', 'save', 'discard', 'delete'):
-            raise ValueError('Unsupported close action.')
-        if choice == 'delete' and (self.workspace.sessions[key].provider != 'managed-text'
-                                   or key not in self.text_views):
-            return False
-        if self.workspace.sessions[key].provider == 'notes-library':
-            owner = getattr(self, 'vault_browser', None)
-            if owner is not None and owner.session is self.workspace.sessions[key]:
-                owner.dispose()
-            else:
-                self.workspace.close(key, guard=lambda session: True)
-            self.reader_closed(key)
-            return True
-        if self.workspace.sessions[key].provider == 'credential-reference':
-            self.credential_document_lists.closed(self.workspace.sessions[key])
-            self.workspace.close(key, guard=lambda session: True)
-            self.save_workspace()
-            self.reader_closed(key)
-            return True
-        if self.workspace.sessions[key].provider == 'provider-session':
-            if not self.provider_sessions().close(key, discard=choice == 'discard'):
-                return False
-            self.reader_closed(key)
-            return True
-        if self.workspace.sessions[key].provider == 'library':
-            return self.reader_manager().close(key)
-        owner = self.text_views.get(key)
-        def guard(session):
-            if owner is None:
-                return True
-            if choice == 'keep' and getattr(owner.document, 'private', False) and owner.document.modified:
-                owner.status.text = 'Save this session-only draft before closing.'
-                return False
-            try:
-                if choice == 'delete':
-                    self.recent_documents.forget(session.provider, session.resource)
-                    from .resource_imports import ResourceImports
-                    imports = getattr(self, 'resource_imports', None) or ResourceImports(self.private_root)
-                    imports.forget(session.provider, session.resource)
-                    self.store.delete(owner.document)
-                elif choice == 'save':
-                    self.store.save(owner.document)
-                elif choice == 'discard':
-                    self.store.discard(owner.document)
-                else:
-                    self.store.checkpoint(owner.document)
-                return True
-            except (OSError, ValueError) as error:
-                owner.status.text = 'Could not close; edits retained: ' + str(error)
-                if hasattr(self, 'close_notice'):
-                    self.close_notice.text = owner.status.text
-                return False
-        was_current = owner is self.editor_view
-        if not self.workspace.close(key, guard=guard):
-            return False
-        self.text_views.pop(key, None)
-        if owner is not None:
-            from .reader_lifecycle import scroll_position
-            owner.capture()
-            positions = self.__dict__.setdefault('_closed_text_positions', {})
-            positions.pop(owner.session.resource, None)
-            positions[owner.session.resource] = (dict(owner.session.view), scroll_position(owner.preview))
-            while len(positions) > 256:
-                del positions[next(iter(positions))]
-            owner.dispose()
-        if was_current:
-            self.current = None
-            remaining = self.workspace.sessions.get(self.workspace.active)
-            if remaining is not None and remaining.provider == 'managed-text':
-                self.open_document(remaining.resource)
-            else:
-                self.editor_view = TextEditorView(self)
-                self.editor_view.bind()
-        self.save_workspace()
-        self.refresh_documents()
-        self.reader_closed(key)
-        if was_current and self.adaptive.split is not None and not leaving_reader:
-            if self.current is not None:
-                self.adaptive.present(self.document_view, route='editor', title=self.current.name if self.current else 'New document')
-                self.adaptive.show_list()
-            else:
-                self.adaptive.clear_details()
-        return True
+        from .session_workflows.transitions import transitions_for
+        return transitions_for(self).close(key, choice=choice).committed
 
     def save_workspace(self, *, capture=True):
         if not self.active_host:
