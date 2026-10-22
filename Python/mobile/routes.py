@@ -91,6 +91,10 @@ class MobileRoutes(Routes):
             self.render(destination)
 
     def back(self):
+        picker = getattr(self.app, '_editor_picker', None)
+        if picker is not None and picker.visible(self.body()):
+            picker.cancel_text_destination()
+            return True
         screens = self.screens[self.host.state.destination]
         if screens and screens[-1][0].startswith(('private-close:', 'close:')):
             self.app.keep_reader_editing(screens[-1][0].split(':')[1])
@@ -146,6 +150,10 @@ class MobileRoutes(Routes):
         origin = self.origins.get((destination, screens[-1][0])) if screens else None
         super().native_popped(navigation)
         popped = len(screens) < count
+        if popped and previous == 'text-destination':
+            picker = getattr(self.app, '_editor_picker', None)
+            if picker is not None:
+                picker.cancel_text_destination(dismissed=True)
         if (len(screens) == count - 1
                 and previous.startswith(('private-close:', 'close:'))):
             # UIKit's own Back button bypasses back(); cancelling a close

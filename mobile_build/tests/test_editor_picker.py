@@ -159,3 +159,37 @@ class EditorPickerTests(unittest.TestCase):
         self.app.loop.run_until_complete(self.app.save_text_destination())
         self.assertFalse((self.app.private_root / 'LocalFiles' / 'locked.md').exists())
         self.assertEqual(self.app.save_as_data, b'Private draft')
+
+    def test_save_as_cancel_restores_managed_origin_even_with_old_provider_active(self):
+        from features.text_editor.resources import LocalTextCopies
+        app = self.app
+        saved = Path(self.directory.name) / 'earlier.txt'
+        saved.write_text('Earlier saved file')
+        app.loop.run_until_complete(app.open_crypt(copies=LocalTextCopies(LocalFiles(saved.parent)), key=saved.name, edit=True))
+        previous = app.provider_sessions().active
+        app.new_document(name='New draft.txt', content='Unfinished current draft')
+        origin, owner = app.current, app.editor_view
+        for close in ('cancel', 'back'):
+            app.loop.run_until_complete(app.show_document_save_as())
+            self.assertIs(app.editor_picker().origin.owner, owner)
+            if close == 'cancel':
+                app.cancel_text_destination()
+            else:
+                app.routes.back()
+            self.assertIs(app.current, origin)
+            self.assertIs(app.editor_view, owner)
+            self.assertEqual(app.current.text, 'Unfinished current draft')
+            self.assertIs(app.provider_sessions().active, previous)
+            self.assertIsNone(app.editor_picker().origin)
+
+    def test_closed_origin_never_reopens_an_unrelated_document(self):
+        app = self.app
+        app.new_document(name='Closed origin.txt', content='retained')
+        key = app.editor_view.session.id
+        app.loop.run_until_complete(app.show_document_save_as())
+        self.assertTrue(app.close_session(key))
+        with patch.object(app, 'show_documents_hub') as hub, patch.object(app, 'resume_crypt') as resume:
+            app.cancel_text_destination(dismissed=True)
+        hub.assert_called_once()
+        resume.assert_not_called()
+        self.assertNotIn(key, app.workspace.sessions)

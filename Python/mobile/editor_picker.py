@@ -16,6 +16,14 @@ from .control_icons import icon_button
 from services.workflow_host import HostService
 
 
+@dataclass(frozen=True)
+class PickerOrigin:
+    token: tuple
+    owner: object
+    destination: str
+    managed: bool
+
+
 @dataclass
 class PickerWork:
     cancel: threading.Event
@@ -57,6 +65,9 @@ class EditorPicker:
         self.editor_linked_roots = {}
         self._work = None
         self._epoch = 0
+        self.origin = None
+        self.panel = None
+        self._restore_when_idle = None
 
     def cancel(self):
         if self._work is not None:
@@ -66,6 +77,7 @@ class EditorPicker:
         """Invalidate late results and forget picker-owned private material."""
         self._epoch += 1
         self.cancel()
+        self.origin = self.panel = self._restore_when_idle = None
         self.save_as_data = self.save_as_source_document = self.save_as_privacy_gate = None
         self.editor_picker_rows = {}
         self.editor_picker_location = None
@@ -105,6 +117,36 @@ class EditorPicker:
         if self._work is work:
             self._work = None
             self.set_cloud_busy(False)
+            restore, self._restore_when_idle = self._restore_when_idle, None
+            if restore is not None and self.active_host and self.app.navigation_generation == restore[0]:
+                self.app.loop.call_soon(lambda: self.cancel_text_destination(dismissed=restore[1]))
+
+    def _capture_origin(self, owner, *, managed):
+        session = getattr(owner, 'session', None)
+        if session is None or session.id not in self.app.workspace.sessions:
+            return None
+        return PickerOrigin(self.app.workspace.token(session.id), owner,
+                            self.app.native_host.state.destination, managed)
+
+    def visible(self, body=None):
+        from .routes import contains
+        return self.panel is not None and contains(body or self.app.body, self.panel)
+
+    def _restore_origin(self, origin):
+        app = self.app
+        if not self.active_host:
+            return False
+        if origin is not None and app.workspace.accepts(origin.token):
+            key = origin.token[0]
+            if origin.managed and app.text_views.get(key) is origin.owner:
+                origin.owner.bind()
+                app.workspace.activate(key)
+                return app.show_documents(resume=True, destination=origin.destination)
+            if not origin.managed and app.provider_sessions().controllers.get(key) is origin.owner:
+                origin.owner.resume_crypt()
+                return True
+        app.show_documents_hub()
+        return False
 
     async def show_crypt_save_as(self, widget=None, *, owner=None, **kwargs):
         owner = owner or self.provider_sessions().active
@@ -112,6 +154,7 @@ class EditorPicker:
             return
         if self.cloud_busy or owner is None or owner.crypt_reader is None or not owner.crypt_reader.editable:
             return
+        self.origin = self._capture_origin(owner, managed=False)
         self.save_as_source_document = None
         await self.show_text_destination(owner.crypt_reader.name, owner.crypt_reader.text_snapshot.encode(owner.crypt_text.value),
                                          privacy_gate=getattr(owner, 'privacy_gate', None))
@@ -120,6 +163,7 @@ class EditorPicker:
         if self.current is None:
             return
         source_document = self.current
+        origin = self._capture_origin(self.app.editor_view, managed=True)
         name, data = source_document.name, source_document.snapshot.encode(source_document.text)
         if not hasattr(self, 'cloud_view'):
             self.show_cloud()
@@ -129,6 +173,9 @@ class EditorPicker:
             return
         if not self.active_host:
             return
+        if self.current is not source_document or origin is None or not self.app.workspace.accepts(origin.token):
+            return
+        self.origin = origin
         self.save_as_source_document = source_document
         await self.show_text_destination(name, data)
 
@@ -156,6 +203,7 @@ class EditorPicker:
         self.editor_picker_mode = mode
         self.save_as_data = data
         if mode == 'open':
+            self.origin = None
             self.save_as_source_document = None
             self.save_as_privacy_gate = None
         self.editor_storage_roots = {'Local files': None, **self.existing_crypt_locations()}
@@ -187,7 +235,8 @@ class EditorPicker:
                          style=Pack(direction=COLUMN, flex=1))
         from .ios_toolbar import prepare_form
         prepare_form(panel, primary='Open file' if mode == 'open' else 'Save new file', cancel='Cancel')
-        self.show_view(panel)
+        self.panel = panel
+        self.show_view(panel, route='text-destination', title='Save As' if mode == 'save' else 'Open file')
         await self.refresh_editor_browser()
 
     def browser_editor_selected(self, row):
@@ -298,14 +347,20 @@ class EditorPicker:
             self._finish_work(work)
         await self.open_crypt(copies=encrypted_copies(provider) if provider.private else LocalTextCopies(provider), key=path, edit=True)
 
-    def cancel_text_destination(self, widget=None, **kwargs):
+    def cancel_text_destination(self, widget=None, *, dismissed=False, **kwargs):
+        visible = dismissed or self.visible()
         if self._work is not None:
             self.cancel()
+            if self.origin is not None:
+                self._restore_when_idle = (self.app.navigation_generation, dismissed)
             self.save_as_status.value = 'Cancelling the operation. Your draft remains available.'
             return
         if not self.cloud_busy:
+            origin = self.origin
             self.clear()
-            self.resume_crypt() if self.provider_sessions().active is not None else self.show_documents()
+            if visible:
+                return self._restore_origin(origin)
+
 
     async def save_text_destination(self, widget=None, **kwargs):
         from commonUtils.runtime.resources.mutations import save_resource_and_reopen
@@ -344,6 +399,7 @@ class EditorPicker:
             if not self.active_host or epoch != self._epoch:
                 return
             if opened:
+                self.origin = self.panel = None
                 self.save_as_data = None
                 self.save_as_privacy_gate = None
                 if source_document is not None and getattr(source_document, 'private', False):
@@ -352,7 +408,7 @@ class EditorPicker:
                 self.save_as_source_document = None
             else:
                 self.save_as_status.value = 'The file was saved, but its editor could not be opened. The Save As draft is retained.'
-                self.show_view(self.save_as_view)
+                self.show_view(self.panel, route='text-destination', title='Save As')
         except MutationIncomplete as error:
             if not self._accepts(work):
                 return
