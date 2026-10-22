@@ -354,7 +354,7 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
             return
         from .keyboard import fit_editors
         fit_editors(self)
-        from .settings_ui import fit_section
+        from .settings.forms import fit_section
         if getattr(self, '_reset_scheduled', False):
             content = self.main_window.content
             fit_section(content.content if isinstance(content, toga.ScrollContainer) else content,
@@ -718,7 +718,8 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), route='actions', title='Document actions')
 
     def show_settings(self, widget=None, *, present=True, rebuild=False, **kwargs):
-        from .settings_ui import SettingsNavigation, settings_sections
+        from .settings.navigation import SettingsNavigation
+        from .settings.categories import settings_sections
         from .appearance import batch_surfaces
         # Native controls receive several default/intermediate styles while
         # building. Paint only their final appearance, before presenting them.

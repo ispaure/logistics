@@ -13,7 +13,7 @@ from mobile import appearance
 from mobile.control_icons import button_icons, icon_button
 from mobile.hub_ui import HubUI
 from mobile.palette import set_eink_enabled
-from mobile.settings_ui import disclosure
+from mobile.settings.forms import disclosure
 from .fixtures import capture_window
 
 

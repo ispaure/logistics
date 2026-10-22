@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from mobile.app import LogisticsMobile
-from mobile.settings_ui import build_information
+from mobile.settings.information import build_information
 
 
 class SettingsUITests(unittest.TestCase):
@@ -22,7 +22,7 @@ class SettingsUITests(unittest.TestCase):
         return app
 
     def test_settings_menu_fits_before_mounting_and_reuses_sizing_until_resize(self):
-        from mobile.settings_ui import fit_section
+        from mobile.settings.forms import fit_section
         app = self.make_app()
         menu_parents = []
         def fit(section, width):
@@ -33,7 +33,7 @@ class SettingsUITests(unittest.TestCase):
                 menu_parents.append(nav.parent)
             return fit_section(section, width)
         with patch.object(app.adaptive, 'content_width', return_value=390) as width, \
-                patch('mobile.settings_ui.fit_section', side_effect=fit):
+                patch('mobile.settings.navigation.fit_section', side_effect=fit):
             app.show_settings()
             nav = app.settings_navigation
             self.assertEqual(menu_parents, [None])
@@ -73,12 +73,12 @@ class SettingsUITests(unittest.TestCase):
         self.assertFalse(hasattr(app, 'restore_choice'))
 
     def test_retained_category_skips_fitting_but_messages_and_resize_still_refit(self):
-        from mobile.settings_ui import fit_section
+        from mobile.settings.forms import fit_section
         app = self.make_app()
         with patch.object(app.adaptive, 'content_width', return_value=390) as width:
             app.show_settings()
             nav = app.settings_navigation
-            with patch('mobile.settings_ui.fit_section', wraps=fit_section) as fit:
+            with patch('mobile.settings.navigation.fit_section', wraps=fit_section) as fit:
                 nav.choose('App')
                 self.assertGreater(fit.call_count, 0)
                 fit.reset_mock()
@@ -96,7 +96,7 @@ class SettingsUITests(unittest.TestCase):
         from mobile.preferences import Preferences
         app = self.make_app()
         with patch.object(app.adaptive, 'content_width', return_value=390), \
-                patch('mobile.settings_ui.build_information', return_value='Fixture build') as about:
+                patch('mobile.settings.categories.build_information', return_value='Fixture build') as about:
             app.show_settings()
             nav = app.settings_navigation
             self.assertEqual(nav.sections.built, {})
@@ -128,7 +128,7 @@ class SettingsUITests(unittest.TestCase):
 
     def test_apple_fitting_reuses_measurement_label_and_skips_unchanged_text(self):
         import toga
-        from mobile.settings_ui import fit_text
+        from mobile.settings.forms import fit_text
         label = toga.Label('A preference label that can wrap')
         label._impl.native = SimpleNamespace(font=SimpleNamespace(lineHeight=22))
         ruler = SimpleNamespace(text='', font=None)
@@ -203,8 +203,8 @@ class SettingsUITests(unittest.TestCase):
             path.write_text(json.dumps(dict(logistics_commit='a' * 40,
                 logistics_committed_at='2026-10-15T12:34:00+00:00', dirty=True,
                 source_sha256='b' * 64)))
-            with patch('mobile.settings_ui.installed_build') as git, \
-                    patch('mobile.settings_ui.sys.platform', 'ios'):
+            with patch('mobile.settings.information.installed_build') as git, \
+                    patch('mobile.settings.information.sys.platform', 'ios'):
                 text = build_information('0.1.5', path)
             git.assert_not_called()
             self.assertIn('0.1.5 · aaaaaaaaaa', text)

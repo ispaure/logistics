@@ -17,7 +17,7 @@ def rclone_host_ui(app):
     from mobile.folder_navigation import record
     from mobile.document_sources import opening_status
     from mobile.reader_chrome import refresh_transfer_chrome
-    from mobile.settings_ui import ConnectionSettingsPage, connection_group, connection_field, connection_note, connection_heading, connection_disclosure
+    from mobile.settings.forms import ConnectionSettingsPage, connection_group, connection_field, connection_note, connection_heading, connection_disclosure
     return MobileHostUI(refresh_transfer_chrome=lambda: refresh_transfer_chrome(app), icon_button=icon_button, NativeBrowser=NativeBrowser, FeatureCommands=lambda button, owner, *args, **kwargs: FeatureCommands(button, app, *args, **kwargs), private_label=private_label, visible_remotes=visible_remotes, exclusions=exclusions, pick_document=lambda owner: pickers.pick_document(app), ResourceImports=ResourceImports, export_file=lambda owner, selected: pickers.export_file(app, selected), accessible_name=accessible_name, local_read_available=lambda owner, **kwargs: local_read_available(app, **kwargs), refresh_folder_source_actions=lambda: source_actions(app), settings=ConnectionPresentation(page=lambda *args: ConnectionSettingsPage(app, *args),
             group=connection_group, field=connection_field, note=connection_note,
             heading=connection_heading, disclosure=connection_disclosure), record_folder=lambda *args, **kwargs: record(app, *args, **kwargs), opening_status=lambda source, **kwargs: opening_status(app, source, **kwargs))

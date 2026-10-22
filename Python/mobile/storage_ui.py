@@ -69,7 +69,7 @@ class StorageUI:
             self.show_view(self.collection_storage_progress_view, destination='settings',
                            route='collection-storage-progress', title='File storage progress')
             return
-        from .settings_ui import SettingsLabel, fit_section
+        from .settings.forms import SettingsLabel, fit_section
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         self.collection_storage_page = box
         box.add(SettingsLabel('Collection storage', style=Pack(font_size=22)))
@@ -138,7 +138,7 @@ class StorageUI:
             self.collection_erase.enabled = False
             # Recovery can repair a damaged private selection. Erase still
             # refuses an unreadable active selection in the storage service.
-        from .settings_ui import fit_text
+        from .settings.forms import fit_text
         fit_text(self.collection_target_status, max(248, self.app.adaptive.content_width('settings') - 32))
 
     def allow_collection_storage(self, widget=None, **kwargs):
@@ -214,7 +214,7 @@ class StorageUI:
                 return
             self.set_cloud_busy(True)
             busy = True
-            from .settings_ui import SettingsLabel, fit_section, fit_text
+            from .settings.forms import SettingsLabel, fit_section, fit_text
             width = max(280, self.app.adaptive.content_width('settings'))
             progress_box = toga.Box(style=Pack(direction=COLUMN, margin=16))
             heading = {'copy': 'Moving Local + LocalCrypt', 'recover': 'Selecting existing collection',

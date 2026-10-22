@@ -3,7 +3,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 
-from .settings_ui import SettingsLabel, fit_section
+from .settings.forms import SettingsLabel, fit_section
 from .app_reset import schedule_reset, reset_android
 
 

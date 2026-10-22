@@ -188,7 +188,7 @@ def sync_screen(app, view, destination):
 def fit_form(app, view, destination):
     """Refit declared forms to today's safe width, retaining source label text."""
     if getattr(view, '_ios_fitted_form', False):
-        from .settings_ui import fit_section
+        from .settings.forms import fit_section
         fit_section(view, app.adaptive.content_width(destination, margin=0))
 
 

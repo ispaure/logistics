@@ -114,7 +114,7 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             self.assertEqual(manifest['logistics_committed_at'],
                 git(repo, 'show', '-s', '--format=%cI', 'HEAD').stdout.decode().strip())
             self.assertTrue((payload / 'services/build_version.py').is_file())
-            self.assertTrue((payload / 'mobile/settings_ui.py').is_file())
+            self.assertTrue((payload / 'mobile/settings/navigation.py').is_file())
             self.assertEqual(manifest['features'], ['text', 'markdown', 'epub', 'comics', 'lm', 'rclone'])
             self.assertTrue((payload / 'mobile/app.py').is_file())
             self.assertTrue((payload / 'logisticsmobile/__main__.py').is_file())

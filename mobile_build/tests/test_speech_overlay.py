@@ -177,7 +177,7 @@ class SpeechOverlayTests(unittest.TestCase):
 
     def test_settings_load_and_persist_voice_then_release_engine(self):
         from mobile.preferences import Preferences
-        from mobile.settings_ui import speech_voice_setting
+        from mobile.settings.speech import speech_voice_setting
         class Voices(Engine):
             voices = {'Offline': None, 'Another voice': None}
         engine = Voices(self.app.loop)
