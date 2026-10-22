@@ -7,7 +7,7 @@ from features.text_editor.mobile.notes_library import VaultBrowser as _VaultBrow
 
 class VaultBrowser(_VaultBrowser):
     def __init__(self, app, provider, root, destination):
-        from .feature_hosts import notes_host
+        from .composition.presentation import notes_host
         super().__init__(notes_host(app), provider, root, destination)
 
 

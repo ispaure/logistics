@@ -151,24 +151,24 @@ class CloudUI(LocalCryptUI):
             self.download_open = toga.Button('Open private copy', on_press=self.open_download, style=Pack(flex=1, height=44))
             self.download_export = toga.Button('Export private copy…', on_press=self.export_download, style=Pack(flex=1, height=44))
             ui = self.rclone_ui
-            self.cloud_connections_status = ui.settings_note(error)
+            self.cloud_connections_status = ui.settings.note(error)
             self.cloud_import_entry = toga.Button('Import credential ZIP…', on_press=self.begin_cloud_import, style=Pack(height=48))
-            troubleshooting, self.cloud_settings_toggle = ui.settings_disclosure('Advanced & troubleshooting', [
-                ui.settings_group([self.cloud_reload, self.cloud_probe, self.cloud_clear])])
-            self.cloud_connections_view = ui.settings_page('rclone connections',
+            troubleshooting, self.cloud_settings_toggle = ui.settings.disclosure('Advanced & troubleshooting', [
+                ui.settings.group([self.cloud_reload, self.cloud_probe, self.cloud_clear])])
+            self.cloud_connections_view = ui.settings.page('rclone connections',
                 'Your cloud storage, ready when you need it.', [
-                    ui.settings_heading('CREDENTIAL PACKAGES'), self.cloud_retained_box,
-                    self.cloud_import_entry, ui.settings_note('Import a package exported from Logistics desktop.'),
-                    ui.settings_heading('SESSION'), ui.settings_group([self.cloud_lock]),
-                    ui.settings_note('Lock to stop access until you unlock again. This also locks SMB connections.'),
+                    ui.settings.heading('CREDENTIAL PACKAGES'), self.cloud_retained_box,
+                    self.cloud_import_entry, ui.settings.note('Import a package exported from Logistics desktop.'),
+                    ui.settings.heading('SESSION'), ui.settings.group([self.cloud_lock]),
+                    ui.settings.note('Lock to stop access until you unlock again. This also locks SMB connections.'),
                     troubleshooting, self.cloud_connections_status])
-            self.cloud_import_view = ui.settings_page('Import credential ZIP',
+            self.cloud_import_view = ui.settings.page('Import credential ZIP',
                 'Choose your Logistics credential package.', [
                     self.cloud_choose, self.cloud_selected_zip,
-                    ui.settings_group([ui.settings_field('ZIP password (if encrypted)', self.cloud_password)]),
+                    ui.settings.group([ui.settings.field('ZIP password (if encrypted)', self.cloud_password)]),
                     self.cloud_import, self.cloud_import_message,
-                    ui.settings_heading('STORAGE'), ui.settings_group([self.cloud_remember]),
-                    ui.settings_note('Off keeps decoded credentials in memory. Password-protected ZIPs are retained encrypted for future unlocking. The ZIP password is never saved.')])
+                    ui.settings.heading('STORAGE'), ui.settings.group([self.cloud_remember]),
+                    ui.settings.note('Off keeps decoded credentials in memory. Password-protected ZIPs are retained encrypted for future unlocking. The ZIP password is never saved.')])
             self.cloud_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
                 toga.Label('Remote files', style=Pack(font_size=22)),
                 toga.Button('Manage connections…', on_press=self.show_cloud_connections, style=Pack(height=44)),

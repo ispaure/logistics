@@ -55,7 +55,7 @@ class _MarkdownState:
 
 
 class ProviderUI(FilesUI):
-    from .host_services import OwnedAttribute
+    from services.workflow_host import OwnedAttribute
 
     crypt_reader = OwnedAttribute('provider_document', 'reader')
     crypt_metadata_fields = OwnedAttribute('provider_document', 'metadata_fields')

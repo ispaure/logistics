@@ -113,7 +113,7 @@ def compact_private_view(self, view):
                           style=Pack(direction=ROW, margin_top=4))
         view.crypt_save.style.flex = 1
         if view.crypt_reader.kind in {'.md', '.markdown'}:
-            from .feature_hosts import provider_markdown
+            from .composition.presentation import provider_markdown
             view._provider_markdown = provider_markdown(self, view, footer)
             view.crypt_preview_button = view._provider_markdown.preview_button
             view.crypt_edit_mode = view._provider_markdown.edit_mode

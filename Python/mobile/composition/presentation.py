@@ -2,7 +2,7 @@
 
 
 def rclone_host_ui(app):
-    from features.rclone.mobile.host import MobileHostUI
+    from features.rclone.mobile.host import MobileHostUI, ConnectionPresentation
     from mobile.control_icons import icon_button
     from mobile.browser_ui import FileBrowser as NativeBrowser
     from mobile.action_menu import FeatureCommands
@@ -18,7 +18,9 @@ def rclone_host_ui(app):
     from mobile.document_sources import opening_status
     from mobile.reader_chrome import refresh_transfer_chrome
     from mobile.settings_ui import ConnectionSettingsPage, connection_group, connection_field, connection_note, connection_heading, connection_disclosure
-    return MobileHostUI(refresh_transfer_chrome=lambda: refresh_transfer_chrome(app), icon_button=icon_button, NativeBrowser=NativeBrowser, FeatureCommands=lambda button, owner, *args, **kwargs: FeatureCommands(button, app, *args, **kwargs), private_label=private_label, visible_remotes=visible_remotes, exclusions=exclusions, pick_document=lambda owner: pickers.pick_document(app), ResourceImports=ResourceImports, export_file=lambda owner, selected: pickers.export_file(app, selected), accessible_name=accessible_name, local_read_available=lambda owner, **kwargs: local_read_available(app, **kwargs), refresh_folder_source_actions=lambda: source_actions(app), settings_page=lambda *args: ConnectionSettingsPage(app, *args), settings_group=connection_group, settings_field=connection_field, settings_note=connection_note, settings_heading=connection_heading, settings_disclosure=connection_disclosure, record_folder=lambda *args, **kwargs: record(app, *args, **kwargs), opening_status=lambda source, **kwargs: opening_status(app, source, **kwargs))
+    return MobileHostUI(refresh_transfer_chrome=lambda: refresh_transfer_chrome(app), icon_button=icon_button, NativeBrowser=NativeBrowser, FeatureCommands=lambda button, owner, *args, **kwargs: FeatureCommands(button, app, *args, **kwargs), private_label=private_label, visible_remotes=visible_remotes, exclusions=exclusions, pick_document=lambda owner: pickers.pick_document(app), ResourceImports=ResourceImports, export_file=lambda owner, selected: pickers.export_file(app, selected), accessible_name=accessible_name, local_read_available=lambda owner, **kwargs: local_read_available(app, **kwargs), refresh_folder_source_actions=lambda: source_actions(app), settings=ConnectionPresentation(page=lambda *args: ConnectionSettingsPage(app, *args),
+            group=connection_group, field=connection_field, note=connection_note,
+            heading=connection_heading, disclosure=connection_disclosure), record_folder=lambda *args, **kwargs: record(app, *args, **kwargs), opening_status=lambda source, **kwargs: opening_status(app, source, **kwargs))
 
 
 def mobile_presentation(app):
@@ -41,8 +43,8 @@ def mobile_presentation(app):
 
 def library_host(app):
     from features.books.mobile.library.catalog import LibraryHost
-    from . import library_ui
-    from .files_ui import local_read_available
+    from .. import library_ui
+    from ..files_ui import local_read_available
     async def open_folder(library):
         provider = library['provider']
         def current():
@@ -70,9 +72,9 @@ def library_host(app):
 def speech_presentation(app):
     from features.books.mobile.speech_host import SpeechPresentation
     from features.books.mobile.media_controls import SpeechPlayback
-    from .control_icons import icon_button, apply_icon
-    from .appearance import surface, accessible_name
-    from .speech_overlay import SpeechOverlay
+    from ..control_icons import icon_button, apply_icon
+    from ..appearance import surface, accessible_name
+    from ..speech_overlay import SpeechOverlay
     return SpeechPresentation(icon_button=icon_button, apply_icon=apply_icon,
         surface=surface, accessible_name=accessible_name,
         overlay=lambda panel, owner, **kwargs: SpeechOverlay(panel, owner, app, **kwargs),
@@ -82,11 +84,11 @@ def speech_presentation(app):
 
 def notes_host(app):
     from features.text_editor.mobile.notes_library import NotesHost
-    from .appearance import list_button
-    from .browser_ui import middle_filename, entry_icon, highlight_entry
-    from .markdown_speech import MarkdownSpeech
-    from .action_menu import FeatureCommands
-    from . import obsidian
+    from ..appearance import list_button
+    from ..browser_ui import middle_filename, entry_icon, highlight_entry
+    from ..markdown_speech import MarkdownSpeech
+    from ..action_menu import FeatureCommands
+    from .. import obsidian
     async def open_editor(provider, path, destination, remote, client):
         from features.text_editor.resources import LocalTextCopies
         from features.rclone.localcrypt.mobile.resources import encrypted_document
@@ -113,14 +115,14 @@ def notes_host(app):
 
 def reading_presentation(owner):
     from services.documents.mobile_reading import ReadingPresentation
-    from .fold_layout import reading_seam, seam_gap, page_region, comic_mode
-    from .layout_events import layout_waiter, notify_layout
-    from .reader_controls import provider_comic_path
-    from .palette import themed_chapter
-    from .provider_ui import private_label, speech_session_valid
+    from ..fold_layout import reading_seam, seam_gap, page_region, comic_mode
+    from ..layout_events import layout_waiter, notify_layout
+    from ..reader_controls import provider_comic_path
+    from ..palette import themed_chapter
+    from ..provider_ui import private_label, speech_session_valid
     app = getattr(owner, 'app', owner)
-    from .comic_feedback import boundary, clear
-    from .external_display import sharing
+    from ..comic_feedback import boundary, clear
+    from ..external_display import sharing
     return ReadingPresentation(seam=lambda view: reading_seam(owner, view),
         seam_gap=lambda view: seam_gap(owner, view),
         page_region=lambda view: page_region(owner, view),
@@ -137,14 +139,14 @@ def reading_presentation(owner):
 def provider_markdown(owner, view, footer):
     """Compose the Markdown workflow without exposing the host to the feature."""
     from features.text_editor.mobile.provider_markdown import ProviderMarkdown, ProviderMarkdownHost
-    from . import preview
-    from .control_icons import icon_button, apply_icon
-    from .font_scaling import bind
-    from .palette import css_variables
-    from .markdown_speech import MarkdownSpeech
-    from .action_menu import FeatureCommands
-    from .provider_ui import private_label, speech_session_valid
-    from .workspace_navigation import sync_reader_toolbar
+    from .. import preview
+    from ..control_icons import icon_button, apply_icon
+    from ..font_scaling import bind
+    from ..palette import css_variables
+    from ..markdown_speech import MarkdownSpeech
+    from ..action_menu import FeatureCommands
+    from ..provider_ui import private_label, speech_session_valid
+    from ..workspace_navigation import sync_reader_toolbar
     app = owner.app
 
     def valid(reader):
@@ -189,7 +191,7 @@ def provider_markdown(owner, view, footer):
 def file_operations(owner):
     """Bind captured controls and existing global busy policy to the file worker."""
     from dataclasses import dataclass
-    from .file_operations import FileOperations, FileOperationsHost
+    from ..file_operations import FileOperations, FileOperationsHost
 
     @dataclass(frozen=True)
     class OperationView:

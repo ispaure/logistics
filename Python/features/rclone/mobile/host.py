@@ -18,12 +18,17 @@ class MobileHostUI:
     accessible_name: Callable
     local_read_available: Callable
     refresh_folder_source_actions: Callable = lambda: None
-    settings_page: Callable = None
-    settings_group: Callable = None
-    settings_field: Callable = None
-    settings_note: Callable = None
-    settings_heading: Callable = None
-    settings_disclosure: Callable = None
+    settings: 'ConnectionPresentation' = None
     record_folder: Callable = lambda *args, **kwargs: None
     opening_status: Callable = lambda *args, **kwargs: nullcontext()
     refresh_transfer_chrome: Callable = lambda: None
+
+
+@dataclass(frozen=True)
+class ConnectionPresentation:
+    page: Callable
+    group: Callable
+    field: Callable
+    note: Callable
+    heading: Callable
+    disclosure: Callable

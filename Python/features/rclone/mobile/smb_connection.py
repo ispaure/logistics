@@ -71,22 +71,22 @@ class SMBConnection:
             form.smb_port = toga.TextInput(value='445', style=Pack(height=44))
             form.smb_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
             ui = cloud.rclone_ui
-            form.smb_status = ui.settings_note('')
+            form.smb_status = ui.settings.note('')
             form.smb_guest = toga.Switch('Connect as guest', value=False, on_change=self.change_smb_guest, style=Pack(height=44))
-            form.smb_account = toga.Box(children=[ui.settings_field('Username', form.smb_user),
-                ui.settings_field('Password', form.smb_password)], style=Pack(direction=COLUMN))
-            form.smb_signin = ui.settings_group([form.smb_guest, form.smb_account])
-            advanced, form.smb_advanced_toggle = ui.settings_disclosure('Advanced options', [
-                ui.settings_group([ui.settings_field('Domain', form.smb_domain), ui.settings_field('Port', form.smb_port)])])
-            help_box, form.smb_help_toggle = ui.settings_disclosure('Need help connecting?', [
-                ui.settings_note('Use the same network or VPN. On a Mac, enable File Sharing, turn on SMB, and allow your account. Use a hostname or IP without smb:// or a share path.')])
+            form.smb_account = toga.Box(children=[ui.settings.field('Username', form.smb_user),
+                ui.settings.field('Password', form.smb_password)], style=Pack(direction=COLUMN))
+            form.smb_signin = ui.settings.group([form.smb_guest, form.smb_account])
+            advanced, form.smb_advanced_toggle = ui.settings.disclosure('Advanced options', [
+                ui.settings.group([ui.settings.field('Domain', form.smb_domain), ui.settings.field('Port', form.smb_port)])])
+            help_box, form.smb_help_toggle = ui.settings.disclosure('Need help connecting?', [
+                ui.settings.note('Use the same network or VPN. On a Mac, enable File Sharing, turn on SMB, and allow your account. Use a hostname or IP without smb:// or a share path.')])
             form.smb_connect = toga.Button('Connect & browse shares', on_press=self.connect_smb, style=Pack(height=48))
-            form.smb_view = ui.settings_page('SMB shares', 'Connect to a Mac, PC, or NAS on your network.', [
-                ui.settings_heading('NEW CONNECTION'),
-                ui.settings_group([ui.settings_field('Connection name', form.smb_name), ui.settings_field('Server address', form.smb_host)]),
-                ui.settings_note('Use a hostname or IP address. Choose a share after connecting.'),
-                ui.settings_heading('SIGN IN'), form.smb_signin, advanced,
-                ui.settings_group([form.smb_remember]), ui.settings_note('Turn off to connect for this session only.'),
+            form.smb_view = ui.settings.page('SMB shares', 'Connect to a Mac, PC, or NAS on your network.', [
+                ui.settings.heading('NEW CONNECTION'),
+                ui.settings.group([ui.settings.field('Connection name', form.smb_name), ui.settings.field('Server address', form.smb_host)]),
+                ui.settings.note('Use a hostname or IP address. Choose a share after connecting.'),
+                ui.settings.heading('SIGN IN'), form.smb_signin, advanced,
+                ui.settings.group([form.smb_remember]), ui.settings.note('Turn off to connect for this session only.'),
                 form.smb_connect, help_box, form.smb_status])
         form.smb_connect.enabled = cloud.cloud_client is not None
         cloud.show_view(form.smb_view, destination='settings', route='smb-connection', title='SMB shares')

@@ -65,9 +65,9 @@ class CredentialWorkflow:
             def browse(widget=None, **kwargs):
                 cloud.show_locations()
             names = cloud.visible_remote_names(record['remotes'])
-            row = ui.settings_group([
+            row = ui.settings.group([
                 toga.Label(import_hint(name), style=Pack(font_weight='bold', margin_top=8)),
-                ui.settings_note(f'{len(names)} remotes · ' + ('saved on this device' if record.get('saved') else 'session only')),
+                ui.settings.note(f'{len(names)} remotes · ' + ('saved on this device' if record.get('saved') else 'session only')),
                 toga.Button('Browse remote files', on_press=browse, enabled=not cloud.cloud_busy, style=Pack(height=48))])
             cloud.cloud_retained_box.add(row)
         for key, item in rows:
@@ -79,11 +79,11 @@ class CredentialWorkflow:
             button = toga.Button('Unlock ' + item['zip'], on_press=unlock,
                                  enabled=not cloud.cloud_busy, style=Pack(height=44))
             cloud.cloud_retained_buttons[key] = button
-            cloud.cloud_retained_box.add(ui.settings_group([
+            cloud.cloud_retained_box.add(ui.settings.group([
                 toga.Label(import_hint(item['zip']), style=Pack(font_weight='bold', margin_top=8)),
-                ui.settings_note('Locked · retained on this device'), button]))
+                ui.settings.note('Locked · retained on this device'), button]))
         if not rows and not records:
-            cloud.cloud_retained_box.add(ui.settings_note('No credential packages yet. Import a ZIP to get started.'))
+            cloud.cloud_retained_box.add(ui.settings.note('No credential packages yet. Import a ZIP to get started.'))
         if hasattr(cloud, 'cloud_connections_status'):
             cloud.cloud_connections_status.text = cloud.cloud_status.value
         if hasattr(cloud.cloud_connections_view, 'reflow'):

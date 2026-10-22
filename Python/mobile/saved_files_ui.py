@@ -3,7 +3,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 from commonUtils.filesystem import format_size
-from .host_services import HostService
+from services.workflow_host import HostService
 
 
 def stored_size(size):

@@ -17,7 +17,8 @@ from .workspace import Workspace, MAX_SESSIONS
 from features.text_editor.mobile.ui import TextEditorView
 from .workspace_navigation import WorkspaceNavigation as AdaptiveWorkspace
 from .hub_ui import text_document_kind
-from .host_services import OwnedAttribute, composed_workflow
+from services.workflow_host import OwnedAttribute
+from .composition.assembly import composed_workflow
 from .provider_ui import ProviderUI
 from .reader_lifecycle import ReaderLifecycle
 
@@ -70,27 +71,27 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
 
     @property
     def format_services(self):
-        from .feature_hosts import reading_presentation
+        from .composition.presentation import reading_presentation
         return reading_presentation(self)
 
     @property
     def speech_presentation(self):
         if not hasattr(self, '_speech_presentation'):
-            from .feature_hosts import speech_presentation
+            from .composition.presentation import speech_presentation
             self._speech_presentation = speech_presentation(self)
         return self._speech_presentation
 
     @property
     def presentation(self):
         if not hasattr(self, '_presentation'):
-            from .feature_hosts import mobile_presentation
+            from .composition.presentation import mobile_presentation
             self._presentation = mobile_presentation(self)
         return self._presentation
 
     @property
     def rclone_ui(self):
         if not hasattr(self, '_rclone_ui'):
-            from .feature_hosts import rclone_host_ui
+            from .composition.presentation import rclone_host_ui
             self._rclone_ui = rclone_host_ui(self)
         return self._rclone_ui
 

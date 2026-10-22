@@ -1,5 +1,5 @@
 """Library-session controllers retain identity while inactive decoders suspend."""
-from .host_services import composed_workflow
+from .composition.assembly import composed_workflow
 from features.books.mobile.reader_controller import EpubController
 from features.comics.mobile.reader_controller import ComicController
 
@@ -12,9 +12,9 @@ from .reader_host import ReaderHost
 class ReaderController(ReaderHost, ReaderUI):
     def __init__(self, manager, session=None):
         self.manager, self.app, self.session = manager, manager.app, session
-        from .feature_hosts import reading_presentation
+        from .composition.presentation import reading_presentation
         self.format_services = reading_presentation(self)
-        from .feature_hosts import library_host
+        from .composition.presentation import library_host
         self.library_host = library_host(self.app)
         self.presentation_destination = self.app.native_host.state.destination
 

@@ -13,7 +13,7 @@ from commonUtils.runtime.operations import MutationIncomplete
 from commonUtils.runtime.resources.selection import ResourceSelection
 from features.rclone.localcrypt.mobile.resources import encrypted_copies
 from .control_icons import icon_button
-from .host_services import HostService
+from services.workflow_host import HostService
 
 
 @dataclass

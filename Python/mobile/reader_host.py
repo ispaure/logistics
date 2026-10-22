@@ -1,7 +1,7 @@
 """Enumerated host services; document attributes remain controller-owned."""
 
 
-from .host_services import HostService
+from services.workflow_host import HostService
 
 
 class ReaderHost:

@@ -7,7 +7,7 @@ import asyncio
 from pathlib import Path
 import toga
 from .control_icons import icon_button
-from .host_services import OwnedAttribute
+from services.workflow_host import OwnedAttribute
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.resources.local import LocalFiles
@@ -39,7 +39,7 @@ class FilesUI:
 
     def file_operations(self):
         if not hasattr(self, '_file_operations'):
-            from .feature_hosts import file_operations
+            from .composition.presentation import file_operations
             self._file_operations = file_operations(self)
         return self._file_operations
 

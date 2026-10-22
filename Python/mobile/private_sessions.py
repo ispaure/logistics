@@ -1,5 +1,5 @@
 """Bounded, memory-only provider sessions; private bytes never enter recovery."""
-from .host_services import composed_workflow
+from .composition.assembly import composed_workflow
 from features.books.mobile.provider_controller import ProviderBookController
 from features.comics.mobile.provider_controller import ProviderComicController
 
@@ -19,7 +19,7 @@ MAX_PRIVATE_BYTES = PRIVATE_BUFFERS
 class PrivateController(ReaderHost, ProviderUI):
     def __init__(self, manager, session):
         self.manager, self.app, self.session = manager, manager.app, session
-        from .feature_hosts import reading_presentation
+        from .composition.presentation import reading_presentation
         self.format_services = reading_presentation(self)
         self.provider_document()
         self._crypt_cancel = None
