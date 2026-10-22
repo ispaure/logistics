@@ -28,13 +28,23 @@ def assert_cold_iphone_tab_labels(app):
     from rubicon.objc import ObjCClass
     if ObjCClass('UIDevice').currentDevice.userInterfaceIdiom != 0:
         return
-    tab = app.native_host.adapter.controller.tabBar
+    controller = app.native_host.adapter.controller
+    tab = controller.tabBar
     tab.layoutIfNeeded()
     expected, seen = set(app.native_host.labels), set()
     content_views = [navigation.view for navigation in app.native_host.adapter.navigation]
     def value(obj, name):
         result = getattr(obj, name)
         return result() if callable(result) else result
+    from mobile.ios_toolbar import vertical_edge
+    if vertical_edge(controller):
+        # The native vertical rail is icon-based. UIKit retains zero-sized
+        # UILabels for its inactive horizontal presentation.
+        actual = [str(value(item, 'title')) for item in (value(tab, 'items') or ())]
+        assert actual == list(app.native_host.labels), ('Missing native tab items', actual)
+        assert value(tab, 'window') is not None and not tab.isHidden(), 'Native tab rail is not mounted'
+        assert min(float(tab.bounds.size.width), float(tab.bounds.size.height)) > 0, 'Native tab rail has no visible bounds'
+        return
     def inspect(view):
         if view in content_views:
             return  # Document/page labels must not satisfy navigation checks.

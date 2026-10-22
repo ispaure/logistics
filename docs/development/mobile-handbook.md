@@ -352,6 +352,9 @@ dedicated iOS 27.1 runtime when Duo support is missing, then creates a dedicated
 Duo simulator if the runner has none. A newer generic runtime is not a substitute
 for the Duo runtime; see [Apple’s Xcode release notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-27_2-release-notes).
 Provisioning failures fail the lane rather than substituting an ordinary phone.
+Cold-start horizontal-phone checks still require full tab-label geometry. For
+UIKit’s vertical icon rail, the audit checks the mounted rail and ordered native
+item titles; retained zero-sized horizontal labels are not the rendered controls.
 
 Rotation evidence records actual scene dimensions, size classes, hinge status
 and reserved divisions, alongside retained routes and logical reader/draft
