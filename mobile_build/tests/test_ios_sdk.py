@@ -8,6 +8,16 @@ class AppleSDKTests(unittest.TestCase):
             choose([('/old', '26.5'), ('/partial', '27.0')])
         self.assertEqual(choose([('/old', '26.5'), ('/duo', '27.1')]), ('/duo', '27.1'))
 
+    def test_release_sdk_does_not_silently_select_newer_beta(self):
+        self.assertEqual(choose([
+            ('/Applications/Xcode_27.2_beta_2.app', '27.2'),
+            ('/Applications/Xcode_27.1_Release_Candidate.app', '27.1'),
+            ('/Applications/Xcode.app', '27.0'),
+        ]), ('/Applications/Xcode_27.1_Release_Candidate.app', '27.1'))
+        with self.assertRaisesRegex(RuntimeError, 'requires that SDK series'):
+            choose([('/Applications/Xcode_27.2_beta_2.app', '27.2')])
+        self.assertEqual(choose([('/explicit', '27.2')], minimum='27.2'), ('/explicit', '27.2'))
+
     def test_sdk_selection_handles_patch_versions_and_invalid_metadata(self):
         self.assertEqual(choose([('/patch', '27.1.1'), ('/duo', '27.1')]), ('/patch', '27.1.1'))
         with self.assertRaises(ValueError):

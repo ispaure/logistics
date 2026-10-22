@@ -1,4 +1,4 @@
-"""Select an installed Apple toolchain with the SDK required for Duo bars."""
+"""Select the pinned Apple SDK series for repeatable Duo release validation."""
 import argparse
 import json
 import os
@@ -15,9 +15,13 @@ def version(value):
 
 
 def choose(candidates, minimum='27.1'):
-    supported = [(version(sdk), path, sdk) for path, sdk in candidates if version(sdk) >= version(minimum)]
+    requested = version(minimum)
+    # Pin the required SDK minor instead of silently opting release validation
+    # into a newer beta installed on the runner image.
+    supported = [(version(sdk), path, sdk) for path, sdk in candidates
+                 if version(sdk)[:2] == requested[:2] and version(sdk) >= requested]
     if not supported:
-        raise RuntimeError(f'Install Xcode with an iOS Simulator SDK >= {minimum}; older SDKs do not opt into Duo bars.')
+        raise RuntimeError(f'Install Xcode with iOS Simulator SDK {requested[0]}.{requested[1]}.x; release validation requires that SDK series.')
     _, path, sdk = max(supported)
     return path, sdk
 
@@ -84,7 +88,8 @@ def prepare_duo(path, sdk):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--minimum-sdk', default='27.1')
+    parser.add_argument('--minimum-sdk', default='27.1',
+                        help='Pin this SDK major/minor series and require at least this patch version.')
     parser.add_argument('--github-env', type=Path)
     parser.add_argument('--path-only', action='store_true')
     parser.add_argument('--prepare-duo', action='store_true')

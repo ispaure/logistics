@@ -11,3 +11,17 @@ def start_native_check(app, exercise):
         task = app.loop.create_task(exercise(app))
         app._native_check_task = task
     return task
+
+
+def enable_native_fault_log(cache):
+    """Keep native fault stacks in a real file; iOS's OS logger has no fileno."""
+    import faulthandler
+    from pathlib import Path
+    Path(cache).mkdir(parents=True, exist_ok=True)
+    stream = (Path(cache) / 'logistics-native-ui-fault.log').open('w')
+    try:
+        faulthandler.enable(stream, all_threads=True)
+    except Exception:
+        stream.close()
+        raise
+    return stream

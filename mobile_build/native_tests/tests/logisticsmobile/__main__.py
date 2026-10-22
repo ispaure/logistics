@@ -111,6 +111,9 @@ async def exercise(app):
 class NativeCheckApp(LogisticsMobile):
     def startup(self):
         print('LOGISTICS_NATIVE_STARTUP', flush=True)
+        if get_os() is OS.IOS:
+            from . import enable_native_fault_log
+            self._native_fault_stream = enable_native_fault_log(self.paths.cache)
         self.navigation_hold = os.environ.get('LOGISTICS_NAVIGATION_HOLD') == '1'
         self.workspace_hold = os.environ.get('LOGISTICS_WORKSPACE_HOLD') == '1'
         self.storage_root = Path(self.paths.cache) / ('workspace-navigation-probe' if self.workspace_hold else 'navigation-foundation-probe' if self.navigation_hold

@@ -71,18 +71,20 @@ def simulator_report(device, started_ns, *, diagnostics=None):
     if result.returncode:
         return None
     path = Path(result.stdout.strip()) / 'Library/Caches/logistics-native-ui-result.json'
+    if diagnostics is not None:
+        diagnostics = Path(diagnostics)
+        diagnostics.mkdir(exist_ok=True)
+        # Fatal native crashes cannot write the final JSON. Capture their stack
+        # before returning, and never leave the previous device's result here.
+        for name in ('cached.json', 'error.txt', 'fault.log'):
+            target = diagnostics / ('ios-native-ui-' + name)
+            target.unlink(missing_ok=True)
+            source = path.with_name('logistics-native-ui-' + name) if name != 'cached.json' else path
+            if source.is_file() and source.stat().st_mtime_ns >= started_ns:
+                shutil.copyfile(source, target)
     if not path.is_file() or path.stat().st_mtime_ns < started_ns:
         return None
     raw = path.read_text()
-    if diagnostics is not None:
-        # Keep rejected results too. A failed iPad run must not leave only the
-        # earlier iPhone's validated report when Apple's log stream drops out.
-        diagnostics = Path(diagnostics)
-        diagnostics.mkdir(exist_ok=True)
-        (diagnostics / 'ios-native-ui-cached.json').write_text(raw)
-        error = path.with_name('logistics-native-ui-error.txt')
-        if error.is_file() and error.stat().st_mtime_ns >= started_ns:
-            shutil.copyfile(error, diagnostics / 'ios-native-ui-error.txt')
     return json.loads(raw)
 
 

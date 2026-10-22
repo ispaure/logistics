@@ -159,6 +159,36 @@ class NativeReportTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_fatal_fault_is_retained_without_a_json_result_or_stale_previous_device(self):
+        import os
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache, logs = root / 'Library/Caches', root / 'logs'
+            cache.mkdir(parents=True)
+            logs.mkdir()
+            fault = cache / 'logistics-native-ui-fault.log'
+            fault.write_text('Fatal Python error: Segmentation fault\nNative callback stack')
+            os.utime(fault, ns=(3_000_000_000, 3_000_000_000))
+            (logs / 'ios-native-ui-cached.json').write_text('previous phone success')
+            (logs / 'ios-native-ui-error.txt').write_text('previous phone error')
+            result = SimpleNamespace(returncode=0, stdout=str(root))
+            with patch.object(ui_tools.subprocess, 'run', return_value=result):
+                self.assertIsNone(ui_tools.simulator_report('duo', 2_000_000_000, diagnostics=logs))
+                self.assertEqual((logs / 'ios-native-ui-fault.log').read_text(), fault.read_text())
+                self.assertFalse((logs / 'ios-native-ui-cached.json').exists())
+                self.assertFalse((logs / 'ios-native-ui-error.txt').exists())
+                os.utime(fault, ns=(1_000_000_000, 1_000_000_000))
+                self.assertIsNone(ui_tools.simulator_report('duo', 2_000_000_000, diagnostics=logs))
+                self.assertFalse((logs / 'ios-native-ui-fault.log').exists())
+
+    def test_native_fault_logger_uses_a_real_file_not_the_os_log_stream(self):
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory, patch('faulthandler.enable') as enable:
+            with ui_tools.contract.enable_native_fault_log(directory) as stream:
+                self.assertGreaterEqual(stream.fileno(), 0)
+                enable.assert_called_once_with(stream, all_threads=True)
+
     def test_rejected_simulator_report_and_traceback_are_retained(self):
         import os
         from unittest.mock import patch

@@ -35,7 +35,8 @@ not included in a source checkout.
    [Python](https://www.python.org/downloads/macos/) and [Go](https://go.dev/dl/).
 2. Install Xcode, open it once, accept its license and let first-launch components
    finish installing. In **Xcode → Settings → Components**, install an iOS simulator
-   runtime. This project's SDK selector currently requires **27.1 or newer**;
+   runtime. Release validation pins the **27.1.x SDK series** (27.1 on the current runner),
+   rather than automatically selecting a newer beta SDK;
    that is a project requirement, not a claim about Apple's upload minimum.
 3. Clone the intended branch with its shared library. Commands below assume
    `~/GIT/logistics`; use your actual location if different:
@@ -341,6 +342,13 @@ uninstalls or clears app data. Multiple ready devices require a selection or
 for prerequisites and log locations.
 
 ## Duo rotation and fold verification
+
+Release SDK selection stays in the 27.1.x series even when the runner also has
+a newer beta. An intentional SDK-series upgrade requires updating the selector's
+requested series and revalidating all three device families. Native test mode
+records Python fault stacks through a real cache-file descriptor; failed-run
+diagnostics retain a fresh fault log even when a native crash prevents the final
+JSON report. Earlier devices' cached reports never stand in for that crash.
 
 The iOS CI job keeps separate ordinary iPhone, iPad and Duo runs while reusing
 the simulator build. `ui_tools.py ios-device` excludes Duo, `ios-ipad` selects
