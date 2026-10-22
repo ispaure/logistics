@@ -143,7 +143,7 @@ iOS 27.1 Duo simulator, with an explicitly injected partial-hinge status (observ
 status was fully open). All text lines and controls fit their detail pane,
 category scroll views reached their bottom, and the split stayed within 0.5
 points of the window crease. Screenshots were reviewed locally under
-`mobile_build/logs/settings-layout/`. The [native geometry report](mobile-evidence/2026-10-18-duo-settings.json)
+`mobile_build/logs/settings-layout/`. The native geometry report (local artifact `test-results/mobile-evidence/2026-10-18-duo-settings.json`)
 records scope and source hashes. Physical hinge transitions and a production app
 deployment were not tested.
 
@@ -165,7 +165,7 @@ Settings occupied all 596 available points in portrait and 384 in landscape;
 Workspaces and Chat retained their normal 12-point margins. Both tested poses
 used rails; bottom-bar transitions are covered by host regression tests. This
 does not establish physical fold-transition behavior. Results are retained in
-`mobile-evidence/2026-10-15-duo-navigation-clearance.json`.
+`test-results/mobile-evidence/2026-10-15-duo-navigation-clearance.json`.
 
 A follow-up on the user's unfolded 951 × 669-point Duo found an installed build
 whose staged sources still contained the old clearance calculation. The local
@@ -173,7 +173,7 @@ payload and generated iOS app copies were refreshed along with the installed
 app. Direct measurements confirmed Documents and Settings each occupy all 587
 available points; Settings scrolled to its maximum offset of 464 points with
 Save preferences, Reload preferences and About visible. These local diagnostic
-measurements are in `mobile-evidence/2026-10-15-duo-unfolded-navigation-clearance.json`;
+measurements are in `test-results/mobile-evidence/2026-10-15-duo-unfolded-navigation-clearance.json`;
 they are not release snapshot certification.
 
 - Local file rows open on tap. Search is always visible; sort/view controls are
@@ -293,10 +293,10 @@ The three native reports identify the same source snapshot:
 The bridge unit suite passed before rebuilding both platforms; host UI checks
 passed 100 tests and the portable document suite passed 39 without skips.
 
-- [iPhone native report](mobile-evidence/2026-10-14-ui-refresh-iphone-native-ui-local.json)
-- [Android native report](mobile-evidence/2026-10-14-ui-refresh-android-native-ui-local.json)
-- [iPad native report](mobile-evidence/2026-10-14-ui-refresh-ipad-native-ui-local.json)
-- [Portable core report](mobile-evidence/2026-10-14-ui-refresh-host-core-local.json)
+- iPhone native report (local artifact `test-results/mobile-evidence/2026-10-14-ui-refresh-iphone-native-ui-local.json`)
+- Android native report (local artifact `test-results/mobile-evidence/2026-10-14-ui-refresh-android-native-ui-local.json`)
+- iPad native report (local artifact `test-results/mobile-evidence/2026-10-14-ui-refresh-ipad-native-ui-local.json`)
+- Portable core report (local artifact `test-results/mobile-evidence/2026-10-14-ui-refresh-host-core-local.json`)
 
 Actual synthetic-workspace screenshots are retained locally under
 `mobile_build/logs/ui-refresh/phone/` and `mobile_build/logs/ui-refresh/ipad/`. They are local
@@ -337,8 +337,8 @@ actual workflows passed on both iPhone and Android at source snapshot
 A further malformed-local-text test confirms a failed open removes its temporary
 session, retains the existing draft and preserves the pull cancellation handle.
 
-- [iPhone local-open report](mobile-evidence/2026-10-14-local-open-iphone-native-ui-local.json)
-- [Android local-open report](mobile-evidence/2026-10-14-local-open-android-native-ui-local.json)
+- iPhone local-open report (local artifact `test-results/mobile-evidence/2026-10-14-local-open-iphone-native-ui-local.json`)
+- Android local-open report (local artifact `test-results/mobile-evidence/2026-10-14-local-open-android-native-ui-local.json`)
 
 The second signed physical-device build matches all 57 current runtime modules.
 Its deployment initially could not reach the iPhone because wireless transport
@@ -374,9 +374,9 @@ mobile_build/logs/ui-refresh/phone/ui-review-comic-{page,controls}.png.
 Final comic refinement evidence uses source snapshot
 `76b77558e89cb6ef7d7c43d60427cb4c65d448a83472be7330e1b87fc3b5fb03`:
 
-- [iPhone comic focus](mobile-evidence/2026-10-14-comic-focus-iphone-native-ui-local.json)
-- [Android comic focus](mobile-evidence/2026-10-14-comic-focus-android-native-ui-local.json)
-- [iPad comic focus](mobile-evidence/2026-10-14-comic-focus-ipad-native-ui-local.json)
+- iPhone comic focus (local artifact `test-results/mobile-evidence/2026-10-14-comic-focus-iphone-native-ui-local.json`)
+- Android comic focus (local artifact `test-results/mobile-evidence/2026-10-14-comic-focus-android-native-ui-local.json`)
+- iPad comic focus (local artifact `test-results/mobile-evidence/2026-10-14-comic-focus-ipad-native-ui-local.json`)
 
 All three passed the 25 native regression cases plus actual workflow review.
 UIKit assertions verify that the tab bar is hidden while page controls are hidden
@@ -409,8 +409,8 @@ Documents and Remote files; iOS verifies the Browse button wins UIWindow hit
 testing before dispatching Toga's registered UIControlEventTouchDown. Android
 uses native performClick. Both pass their 25-case suites and actual workflows.
 
-- [iPhone Home Browse report](mobile-evidence/2026-10-14-home-browse-iphone-native-ui-local.json)
-- [Android Home Browse report](mobile-evidence/2026-10-14-home-browse-android-native-ui-local.json)
+- iPhone Home Browse report (local artifact `test-results/mobile-evidence/2026-10-14-home-browse-iphone-native-ui-local.json`)
+- Android Home Browse report (local artifact `test-results/mobile-evidence/2026-10-14-home-browse-android-native-ui-local.json`)
 
 The report fingerprints differ only in the iOS-only test-event correction;
 the runtime implementation is identical between the two tested snapshots.
@@ -452,8 +452,8 @@ Validation: 104 host checks and 25 native cases on each of iPhone iOS 27.0
 and Android API 35 passed against staged source
 `cdb470681cee22f50c083539dec4c684b5b6fbe19f603b839796e0567bcc5d39`.
 The signed physical iPhone build contains the same 57 runtime modules byte for
-byte. Evidence: [iPhone](mobile-evidence/2026-10-14-folder-picker-iphone-native-ui-local.json)
-and [Android](mobile-evidence/2026-10-14-folder-picker-android-native-ui-local.json).
+byte. Evidence: iPhone (local artifact `test-results/mobile-evidence/2026-10-14-folder-picker-iphone-native-ui-local.json`)
+and Android (local artifact `test-results/mobile-evidence/2026-10-14-folder-picker-android-native-ui-local.json`).
 
 ## Folder switching and iOS/Android parity assessment
 
@@ -503,8 +503,8 @@ Physical gestures and screen-reader behavior still require manual device evidenc
 
 Validation: 108 host checks and all 25 native cases on each platform passed
 against source `7ebcadd1b8a15e926dcd2f8d78a7d17bb3f03b1e536e84774b9677853f321715`.
-Evidence: [iPhone](mobile-evidence/2026-10-14-folder-parity-iphone-native-ui-local.json)
-and [Android](mobile-evidence/2026-10-14-folder-parity-android-native-ui-local.json).
+Evidence: iPhone (local artifact `test-results/mobile-evidence/2026-10-14-folder-parity-iphone-native-ui-local.json`)
+and Android (local artifact `test-results/mobile-evidence/2026-10-14-folder-parity-android-native-ui-local.json`).
 The signed local iPhone build matches all 57 runtime modules byte for byte.
 
 The log audit also caught Android Spinner's transient stale index when its source
@@ -551,8 +551,8 @@ checks cover light/dark editor colour/contrast, selected navigation text contras
 OS theme changes preserving drafts and the Android activity, picker dismissal,
 background local browsing/reading, and encrypted file operations. Final source:
 `9fc2005af0ff39f3999436554d1529f7502f79e9ac3a73fb057e6af7cbe06015`.
-[iPhone report](mobile-evidence/2026-10-14-dark-mode-iphone-native-ui-local.json) and
-[Android report](mobile-evidence/2026-10-14-dark-mode-android-native-ui-local.json).
+iPhone report (local artifact `test-results/mobile-evidence/2026-10-14-dark-mode-iphone-native-ui-local.json`) and
+Android report (local artifact `test-results/mobile-evidence/2026-10-14-dark-mode-android-native-ui-local.json`).
 The signed iPhone app matches all 58 staged runtime modules byte for byte.
 
 The final build was installed and launched on the configured physical iPhone over
@@ -600,8 +600,8 @@ Validation: 118 host tests and 26 native cases on each of iPhone and Android,
 with no native handler/task exceptions. Both native reports and the signed
 physical iPhone app use source stamp
 `dd5ce03b275ced139af4cf1d0eb1257b0394f1988fda8ac1e62c3f80a6e960b1`.
-Evidence: [iPhone](mobile-evidence/2026-10-14-comic-reentry-iphone-native-ui-local.json)
-and [Android](mobile-evidence/2026-10-14-comic-reentry-android-native-ui-local.json).
+Evidence: iPhone (local artifact `test-results/mobile-evidence/2026-10-14-comic-reentry-iphone-native-ui-local.json`)
+and Android (local artifact `test-results/mobile-evidence/2026-10-14-comic-reentry-android-native-ui-local.json`).
 These are local validation results, not a published release.
 
 The matching signed build was installed and launched on the pinned test iPhone
@@ -646,10 +646,10 @@ viewport was 839 points high and the maximum error against the window's usable
 vertical centre was 0.042 points. Screenshots were visually inspected; an iOS
 device screen capture independently confirmed the final visible state.
 
-Evidence: [physical iPhone geometry](mobile-evidence/2026-10-14-comic-screen-physical-iphone.json),
-[iPhone native suite](mobile-evidence/2026-10-14-comic-screen-iphone-native-ui-local.json),
-[Android native suite](mobile-evidence/2026-10-14-comic-screen-android-native-ui-local.json),
-and [iPad native suite](mobile-evidence/2026-10-14-comic-screen-ipad-native-ui-local.json).
+Evidence: physical iPhone geometry (local artifact `test-results/mobile-evidence/2026-10-14-comic-screen-physical-iphone.json`),
+iPhone native suite (local artifact `test-results/mobile-evidence/2026-10-14-comic-screen-iphone-native-ui-local.json`),
+Android native suite (local artifact `test-results/mobile-evidence/2026-10-14-comic-screen-android-native-ui-local.json`),
+and iPad native suite (local artifact `test-results/mobile-evidence/2026-10-14-comic-screen-ipad-native-ui-local.json`).
 The build was installed and launched over localNetwork. Changes remain local;
 no commit, push or release publication was performed.
 
@@ -686,8 +686,8 @@ shared-repository edits were not included in this device build. It was installed
 and launched on the paired iPhone over localNetwork, preserving app identity and
 data. This also includes the generic `Remote:`/`Remote:subfolder` display fix.
 
-Evidence: [iPhone native checks](mobile-evidence/2026-10-14-browser-back-iphone-native-ui-local.json)
-and [Android native checks](mobile-evidence/2026-10-14-browser-back-android-native-ui-local.json).
+Evidence: iPhone native checks (local artifact `test-results/mobile-evidence/2026-10-14-browser-back-iphone-native-ui-local.json`)
+and Android native checks (local artifact `test-results/mobile-evidence/2026-10-14-browser-back-android-native-ui-local.json`).
 Changes remain local; no commit or push was performed.
 
 ## Mobile architecture cleanup
@@ -721,9 +721,9 @@ tests use a separate Toga consumer with Logistics/feature imports blocked;
 packaging tests reject changed native Java during release staging and verify
 that Java changes alter the local source fingerprint.
 
-Evidence: [iPhone](mobile-evidence/2026-10-14-architecture-iphone-native-ui-local.json),
-[Android](mobile-evidence/2026-10-14-architecture-android-native-ui-local.json),
-and [iPad](mobile-evidence/2026-10-14-architecture-ipad-native-ui-local.json).
+Evidence: iPhone (local artifact `test-results/mobile-evidence/2026-10-14-architecture-iphone-native-ui-local.json`),
+Android (local artifact `test-results/mobile-evidence/2026-10-14-architecture-android-native-ui-local.json`),
+and iPad (local artifact `test-results/mobile-evidence/2026-10-14-architecture-ipad-native-ui-local.json`).
 iPad also exercised supported independent windows. Physical Android interaction
 was not tested. The selected shared baseline is revision `615a70d` plus this
 cleanup; concurrent shared desktop/index work was excluded from the frozen build.
@@ -737,7 +737,7 @@ iPhone completed three controls/fullscreen and Settings/reader round trips with
 ten captured states. All seven fullscreen states retained an 839-point viewport;
 maximum vertical centre error was 0.042 points. Initial, repeated and reopened
 screenshots were inspected, and an independent device screen capture confirmed
-the visible result. [Physical geometry](mobile-evidence/2026-10-14-architecture-physical-iphone.json)
+the visible result. Physical geometry (local artifact `test-results/mobile-evidence/2026-10-14-architecture-physical-iphone.json`)
 records the result without user comic screenshots. The app was then relaunched
 in normal mode with the diagnostic opt-in disabled.
 No commit, push, TestFlight upload or release publication was performed.
@@ -1013,10 +1013,10 @@ immediate save, black text on white, draft preservation, live private-WebView
 styling/removal, post-styling private HTML bounds with no disk fallback, enabled
 restart persistence, original dark-palette restoration, and disabled restart
 persistence. The emulator's original system night setting was restored afterward.
-[Report](mobile-evidence/2026-10-15-android-eink-mode.json),
-[Settings screenshot](mobile-evidence/2026-10-15-android-eink-settings.png),
-[editor screenshot](mobile-evidence/2026-10-15-android-eink-editor.png),
-[restored dark appearance](mobile-evidence/2026-10-15-android-eink-restored-dark.png).
+Report (local artifact `test-results/mobile-evidence/2026-10-15-android-eink-mode.json`),
+Settings screenshot (local artifact `test-results/mobile-evidence/2026-10-15-android-eink-settings.png`),
+editor screenshot (local artifact `test-results/mobile-evidence/2026-10-15-android-eink-editor.png`),
+restored dark appearance (local artifact `test-results/mobile-evidence/2026-10-15-android-eink-restored-dark.png`).
 
 ## Control icons and iOS/Android parity review (2026-10-15)
 
@@ -1068,7 +1068,7 @@ Validation for these control changes:
 - Isolated iOS Simulator and Android emulator probes validate all eight native
   images, descriptive accessibility labels and 48-point targets. Light and
   dark/disabled screenshots are retained under
-  `mobile-evidence/2026-10-15-control-icons-*`. The reusable review app is
+  `test-results/mobile-evidence/2026-10-15-control-icons-*`. The reusable review app is
   `mobile_build/native_tests/tests/logisticsmobile/control_icons_probe.py`; run it only
   in a disposable probe bundle, as it replaces its own test workspace view.
   It uses Logistics' actual scene and appearance handling and also captures
@@ -1098,7 +1098,7 @@ crypt backends. Its maximum UI heartbeat gaps were 0.145 s and 0.236 s respectiv
 the timer advanced and another remote’s Workspace actions menu opened before listing completed.
 Bounded remote pages are built offscreen before attachment, avoiding repeated
 layout of the live screen for each row decoration. Evidence:
-`mobile-evidence/2026-10-15-remote-listing-responsiveness-ios-native-ui-local.json`.
+`test-results/mobile-evidence/2026-10-15-remote-listing-responsiveness-ios-native-ui-local.json`.
 
 ## Grouped settings review
 

@@ -50,6 +50,11 @@ class DocumentationLayoutTests(unittest.TestCase):
                         continue
                     with self.subTest(page=page.relative_to(ROOT), url=url):
                         target = page.parent / unquote(parsed.path)
+                        self.assertFalse(target.resolve().is_relative_to(ROOT / 'test-results'),
+                                         'Public docs link to a local test artifact')
+                        self.assertFalse(target.resolve().is_relative_to(
+                            ROOT / 'docs/development/mobile-evidence'),
+                            'Public docs link to the legacy local evidence archive')
                         self.assertTrue(target.exists())
                         if parsed.fragment and target.suffix == '.md':
                             headings = re.findall(r'^#{1,6} (.+)', target.read_text(), re.M)

@@ -105,7 +105,7 @@ test mode. The 45 mobile dummy/tooling tests and 32 portable
 document/workspace/reader/privacy tests pass. Release tooling tests also pass
 (17 cases, one platform-specific skip).
 
-Exact reports are retained as `mobile-evidence/2026-10-14-phase0-*-native-ui-local.json`.
+Exact reports are retained as `test-results/mobile-evidence/2026-10-14-phase0-*-native-ui-local.json`.
 They share staged fingerprint
 `3d1130bfbba3a1e051c93fd36690c22a071300d127dc08b7721b91f773833ca7`.
 These are local development reports: their dirty marker includes preserved,

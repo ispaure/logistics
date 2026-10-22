@@ -18,7 +18,9 @@ class PackageTests(unittest.TestCase):
     def test_gitignore_protects_mobile_outputs_after_the_directory_rename(self):
         root = Path(__file__).resolve().parents[2]
         private = ['Credentials/rclone/private.zip', 'Python/__pycache__/launch.pyc',
-                   '.env.local', 'local-signing.p12', 'profile.prof', 'debug.log']
+                   '.env.local', 'local-signing.p12', 'profile.prof', 'debug.log',
+                   'test-results/mobile-evidence/report.json',
+                   'docs/development/mobile-evidence/screenshot.png']
         for folder in ('Mobile', 'mobile_build'):
             private.extend(folder + '/' + name for name in (
                 'payload/mobile/app.py', 'build/generated.py', 'logs/deploy.log',
@@ -42,12 +44,34 @@ class PackageTests(unittest.TestCase):
                     'mobile_build/.testflight-auth.json', 'app.apk', 'app.ipa',
                     'node_modules/package/index.js', 'DerivedData/project/file',
                     'app.xcarchive/Info.plist', 'app.dSYM/file']
+        excluded.extend(['docs/development/mobile-evidence/report.json',
+                         'docs/development/mobile-evidence/nested/screenshot.png',
+                         'Python/commonUtils/docs/developer/mobile-evidence/report.json',
+                         'test-results/mobile-evidence/report.json'])
         for name in excluded:
             with self.subTest(name=name):
                 self.assertFalse(packaging.included(name))
         for name in ['Python/uv.lock', 'mobile_build/rclone_bridge/go.sum',
                      'mobile_build/pyproject.toml', 'mobile_build/resources/logistics.png']:
             self.assertTrue(packaging.included(name))
+
+    def test_release_omits_explicitly_supplied_local_evidence_and_preserves_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            names = ['docs/development/validation-artifacts.md',
+                     'docs/development/mobile-evidence/nested/screenshot.png',
+                     'Python/commonUtils/docs/developer/mobile-evidence/report.json',
+                     'test-results/mobile-evidence/report.json']
+            for name in names:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'local artifact fixture')
+            packaging.package(root, root / 'release.zip', names, required=set())
+            with zipfile.ZipFile(root / 'release.zip') as archive:
+                self.assertIn('Logistics/' + names[0], archive.namelist())
+                self.assertFalse(any('mobile-evidence/' in name for name in archive.namelist()))
+            for name in names:
+                self.assertEqual((root / name).read_bytes(), b'local artifact fixture')
 
     def test_release_identity_is_stamped_and_managed_by_the_install_manifest(self):
         with tempfile.TemporaryDirectory() as directory:

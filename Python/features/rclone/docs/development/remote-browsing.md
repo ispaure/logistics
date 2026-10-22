@@ -205,15 +205,15 @@ unused record writers. Go tests and race tests passed, as did rebuilt host-bridg
 remote-reader and existing LocalCrypt text/metadata/large-archive compatibility
 checks. Ruff and whitespace checks passed.
 
-The [validation manifest](../../../../../docs/development/mobile-evidence/2026-10-15-remote-preview-only-validation.json)
+The validation manifest (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-validation.json`)
 records source fingerprints and scope. Per-target reports:
-[Android](../../../../../docs/development/mobile-evidence/2026-10-15-remote-preview-only-android.json),
-[iPhone](../../../../../docs/development/mobile-evidence/2026-10-15-remote-preview-only-iphone.json),
-[iPad](../../../../../docs/development/mobile-evidence/2026-10-15-remote-preview-only-ipad.json).
-Screenshots: [desktop](../../../../../docs/development/mobile-evidence/2026-10-15-remote-preview-only-desktop-browser.png),
-[Android](../../../../../docs/development/mobile-evidence/2026-10-15-remote-preview-only-android-browser.png),
-[iPhone](../../../../../docs/development/mobile-evidence/2026-10-15-remote-preview-only-iphone-browser.png),
-[iPad](../../../../../docs/development/mobile-evidence/2026-10-15-remote-preview-only-ipad-browser.png).
+Android (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-android.json`),
+iPhone (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-iphone.json`),
+iPad (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-ipad.json`).
+Screenshots: desktop (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-desktop-browser.png`),
+Android (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-android-browser.png`),
+iPhone (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-iphone-browser.png`),
+iPad (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-ipad-browser.png`).
 
 
 ### Final code and UI review

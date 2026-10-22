@@ -74,7 +74,7 @@ Focused lint and whitespace checks passed. The full mobile host run is clean for
 this snapshot; the older reader/privacy failures below are historical evidence.
 
 The rebuilt iPhone simulator passed all 30 cases plus final UI/navigation review.
-[Exact local evidence](../../../../../docs/development/mobile-evidence/2026-10-15-rclone-completion-ios-native-ui-local.json)
+Exact local evidence (local artifact `test-results/mobile-evidence/2026-10-15-rclone-completion-ios-native-ui-local.json`)
 records source snapshot `7d9b6cffc747f94f55f8356b6197e001dddc4146b6e434e8cdcad0c67309440a`.
 The moved preview adapter and generic host match the tested payload. Native tests
 covered encrypted previews/readers and edits, crypt failure/lock behavior,
@@ -205,7 +205,7 @@ Second increment:
   all 29 case groups passed. The new case reads an existing encrypted note while
   an actual bandwidth-limited embedded download is still running, refuses a
   second transfer and cancels the first without cancelling the reader. The
-  protected contents and native I/O are real; all data is synthetic. [Evidence](../../../../../docs/development/mobile-evidence/2026-10-15-rclone-concurrent-read-ios-native-ui-local.json).
+  protected contents and native I/O are real; all data is synthetic. Evidence (local artifact `test-results/mobile-evidence/2026-10-15-rclone-concurrent-read-ios-native-ui-local.json`).
 - Shared `ReviewRequest`, `ReviewSnapshot` and `ReviewScan` now live under the
   feature and are used by both desktop and mobile presentations. Desktop uses
   rclone's JSON sync-comparison logger and metadata inventories; mobile uses
@@ -223,7 +223,7 @@ Second increment:
   private resource leases close after review. No desktop screen-capture behavior
   was added.
 - The native iPhone suite then passed all 30 case groups, adding cancelled Pull,
-  confirmed Pull/Push, and early proceed into a new Local copy. [Evidence](../../../../../docs/development/mobile-evidence/2026-10-15-rclone-shared-review-ios-native-ui-local.json).
+  confirmed Pull/Push, and early proceed into a new Local copy. Evidence (local artifact `test-results/mobile-evidence/2026-10-15-rclone-shared-review-ios-native-ui-local.json`).
 
 Regression validation: 229 mobile host tests passed. The desktop rclone/session/
 LocalCrypt group passed 66 tests; the final expanded review group passed all 8
@@ -299,7 +299,7 @@ The rebuilt iPhone simulator completed all 30 native case groups plus final UI
 and navigation checks. The expanded shared-review case confirms crypt cleanup
 and its remote deletion, saves native option controls, and pushes an inferred
 ordinary folder through a crypt remote with a followed file link and excluded
-file. [Exact local evidence](../../../../../docs/development/mobile-evidence/2026-10-15-rclone-shared-behavior-ios-native-ui-local.json)
+file. Exact local evidence (local artifact `test-results/mobile-evidence/2026-10-15-rclone-shared-behavior-ios-native-ui-local.json`)
 uses source snapshot `9679f166f243a6307e899ffdc9a324a10cb60b2ea3541fb9d2bb019a56b486d8`.
 Older comic/EPUB test assertions were updated to inspect the currently displayed
 canvas, text view and passage bookmarks; their content/privacy assertions remain.
@@ -348,7 +348,7 @@ inner archives and encrypted file operations. Final isolated packaged startup
 passed; changed production modules passed focused lint and `git diff --check`.
 
 The final iPhone simulator run passed all 30 native cases plus the UI review and
-navigation checks. [Exact local evidence](../../../../../docs/development/mobile-evidence/2026-10-15-rclone-ownership-ios-native-ui-local.json)
+navigation checks. Exact local evidence (local artifact `test-results/mobile-evidence/2026-10-15-rclone-ownership-ios-native-ui-local.json`)
 matches source snapshot
 `6e1de15ec7e056623bf0b1f008b41e0672ad023b5f391bf2ea6d489741109af1`.
 Reader test helpers now resolve the displayed canvas across responsive reflows,
@@ -405,7 +405,7 @@ host bridge. Focused lint and whitespace checks passed.
 The rebuilt iPhone simulator passed all 30 cases plus the final UI/navigation
 review. Native pins/pulls and ordinary/crypt Push checks now drive the current
 shared review controls instead of the removed workflows.
-[Exact local evidence](../../../../../docs/development/mobile-evidence/2026-10-15-rclone-final-cleanup-ios-native-ui-local.json)
+Exact local evidence (local artifact `test-results/mobile-evidence/2026-10-15-rclone-final-cleanup-ios-native-ui-local.json`)
 matches source snapshot `272ea7ab7f2f2709b4b51c620f51b753d8e389cdd8f64f053f179f2377a65437`.
 Packaged rclone and app-host modules match the current checkout. Separate Books
 speech edits made during the run are outside this saved native snapshot and this
@@ -459,7 +459,7 @@ The actual throttled encrypted Pull stayed active while Documents, the main
 library shortcut and Documents' library shortcut listed and opened completed local
 ciphertext. Assertions retained the transfer cancellation handle, one-transfer
 restriction and reader content after cancellation.
-[Exact local evidence](../../../../../docs/development/mobile-evidence/2026-10-15-rclone-final-four-items-ios-native-ui-local.json)
+Exact local evidence (local artifact `test-results/mobile-evidence/2026-10-15-rclone-final-four-items-ios-native-ui-local.json`)
 identifies source snapshot `6bfa84cf5919a576fa780ed1b3c3e4f458e6fa193531e21c50cad52f4c3837d6`.
 The rclone/shared-policy and affected library/Files/navigation files match that
 snapshot. Concurrent Settings extraction (`settings_ui.py`, `app.py` and the
@@ -500,7 +500,7 @@ reader/privacy changes were left intact; this is not a clean full-suite result.
 The rebuilt iPhone simulator passed all 30 cases plus final UI/navigation review,
 including actual migrated Sync fixture setup/readback, shared review confirmation,
 crypt authentication, and Documents/library reading during an encrypted download.
-[Exact local evidence](../../../../../docs/development/mobile-evidence/2026-10-15-rclone-review-retries-native-cleanup-ios-native-ui-local.json)
+Exact local evidence (local artifact `test-results/mobile-evidence/2026-10-15-rclone-review-retries-native-cleanup-ios-native-ui-local.json`)
 records snapshot `be466eacc81d801873c6296082ed3b1509975f5d2416b0e1b929a754e521756c`.
 All changed review/transfer implementation files match the tested payload.
 A concurrent credential-generation check added to `mobile/cloud_ui.py` after

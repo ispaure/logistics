@@ -187,9 +187,9 @@ portable import blocker; no full-smoke success is claimed.
   publication, provider search/bookmark cleanup, manga spread turns and native
   explicit-field batch metadata.
 
-See the [simulator report](../../../../../docs/development/mobile-evidence/2026-10-15-reader-parity-ios-native-probe.json),
-[probe source](../../../../../docs/development/mobile-evidence/2026-10-15-reader-parity-ios-probe.py) and
-[synthetic manga spread](../../../../../docs/development/mobile-evidence/2026-10-15-reader-parity-manga-spread.png).
+See the simulator report (local artifact `test-results/mobile-evidence/2026-10-15-reader-parity-ios-native-probe.json`),
+probe source (local artifact `test-results/mobile-evidence/2026-10-15-reader-parity-ios-probe.py`) and
+synthetic manga spread (local artifact `test-results/mobile-evidence/2026-10-15-reader-parity-manga-spread.png`).
 The report includes the dirty staged-source manifest and probe/executable hashes.
 No production bundle, real book, remote account or real device was used.
 
@@ -221,10 +221,10 @@ The private view checks confirm the native nonpersistent/cache configuration and
 scan the app cache/data container for a random synthetic plaintext sentinel after
 closing. They do not certify physical-device storage or OS memory behavior.
 
-Current evidence: [Android report](../../../../../docs/development/mobile-evidence/2026-10-15-reader-validation-android.json),
-[iPad report](../../../../../docs/development/mobile-evidence/2026-10-15-reader-validation-ipad.json),
-[Android spread](../../../../../docs/development/mobile-evidence/2026-10-15-reader-validation-android-spread.png),
-[iPad spread](../../../../../docs/development/mobile-evidence/2026-10-15-reader-validation-ipad-spread.png), and the
+Current evidence: Android report (local artifact `test-results/mobile-evidence/2026-10-15-reader-validation-android.json`),
+iPad report (local artifact `test-results/mobile-evidence/2026-10-15-reader-validation-ipad.json`),
+Android spread (local artifact `test-results/mobile-evidence/2026-10-15-reader-validation-android-spread.png`),
+iPad spread (local artifact `test-results/mobile-evidence/2026-10-15-reader-validation-ipad-spread.png`), and the
 [reusable standalone probe](../../../../../mobile_build/native_tests/tests/logisticsmobile/reader_parity_probe.py).
 Each report identifies the staged dirty-source snapshot and native artifact hash.
 
@@ -256,8 +256,8 @@ multitouch ergonomics. Source pixel samples and screenshots verify manga order,
 transparent gutter and that the fitted surface remains inside the window.
 
 Composite evidence is recorded separately from the earlier two-canvas runs:
-[Android report](../../../../../docs/development/mobile-evidence/2026-10-15-composite-comic-zoom-android.json) and
-[iPad report](../../../../../docs/development/mobile-evidence/2026-10-15-composite-comic-zoom-ipad.json).
+Android report (local artifact `test-results/mobile-evidence/2026-10-15-composite-comic-zoom-android.json`) and
+iPad report (local artifact `test-results/mobile-evidence/2026-10-15-composite-comic-zoom-ipad.json`).
 
 
 The final composite run passes 18 targeted checks on each platform, 25 mobile
@@ -309,8 +309,8 @@ archive writers, native processing jobs, fixed-layout EPUB fidelity, and physica
 speech/gesture/accessibility/release validation remained open. No private metadata is
 routed into the ordinary index to make these gaps appear closed.
 
-Targeted evidence: [Android](../../../../../docs/development/mobile-evidence/2026-10-15-speech-typography-library-android.json)
-and [iPad](../../../../../docs/development/mobile-evidence/2026-10-15-speech-typography-library-ipad.json). These use
+Targeted evidence: Android (local artifact `test-results/mobile-evidence/2026-10-15-speech-typography-library-android.json`)
+and iPad (local artifact `test-results/mobile-evidence/2026-10-15-speech-typography-library-ipad.json`). These use
 synthetic files and a separate app ID; Android rebuilds its Java/Python app with
 the existing JNI bridge, and iPad reuses the simulator executable with current Python.
 The speech checks require actual native completion of a nine-unit selected passage,
@@ -362,8 +362,8 @@ remain available through document sessions. Single and batch comic forms
 use the same persisted ordinary suggestion catalogue. Private batch suggestions
 remain scoped to their current in-memory snapshots.
 
-Native evidence: [Android](../../../../../docs/development/mobile-evidence/2026-10-15-private-batch-large-library-android.json)
-and [iPad](../../../../../docs/development/mobile-evidence/2026-10-15-private-batch-large-library-ipad.json). The separate
+Native evidence: Android (local artifact `test-results/mobile-evidence/2026-10-15-private-batch-large-library-android.json`)
+and iPad (local artifact `test-results/mobile-evidence/2026-10-15-private-batch-large-library-ipad.json`). The separate
 probe uses synthetic credentials, actual native encryption/archive transactions,
 plain and inner password-protected comics, and 260 real imported archives. Portable
 tests additionally exercise a 5,001-entry index, incremental reopen, interrupted

@@ -47,7 +47,7 @@ writes. A Java cast correction also resolves the current rail source's build err
 The shared signed release `202610250` supersedes the measured release; APK inspection
 confirms identical native Go code and bytecode for the three performance owners,
 with no startup probes. Its navigation rendering differs, and its latency is not
-separately timed. Device data is retained. [Numeric evidence](mobile-evidence/2026-10-20-boox-background-publication.json)
+separately timed. Device data is retained. Numeric evidence (local artifact `test-results/mobile-evidence/2026-10-20-boox-background-publication.json`)
 contains every trial and diagnostic method span; real-device captures remain in
 ignored logs.
 
@@ -88,7 +88,7 @@ also confirms populated Cloud sources with unlocked icons, without opening a
 remote. Full Go tests, targeted race checks, and 41 focused mobile host tests pass.
 Tests cover encryption equivalence, reuse and failed-batch atomicity. Signed
 release `202610247` removes all probes and is installed over existing device data.
-[Numeric evidence](mobile-evidence/2026-10-20-boox-vault-stages.json) records each
+Numeric evidence (local artifact `test-results/mobile-evidence/2026-10-20-boox-vault-stages.json`) records each
 stage and trial; real-device captures remain in ignored local logs.
 
 ## BOOX connection setup without hidden UI — 2026-10-20
@@ -122,7 +122,7 @@ folder icons and first-visit connection settings; visiting settings did not repe
 vault restoration. Focused cloud, credential, startup, navigation, discovery, reader,
 storage and transfer checks pass, as does the Go bridge suite during the release
 build. The final deployment restores the signed release without probes and retains
-device data. [Per-run evidence](mobile-evidence/2026-10-20-boox-connection-setup.json)
+device data. Per-run evidence (local artifact `test-results/mobile-evidence/2026-10-20-boox-connection-setup.json`)
 contains only numeric metrics and fixed workload names; actual UI captures remain
 in ignored local logs.
 
@@ -153,7 +153,7 @@ tab with unlocked folder icons; the recorded bridge actions were local
 `vault_open`, `crypt_remotes` and `crypt_path`, without opening a remote or starting
 a transfer. Full Go tests, targeted cipher-lifecycle race checks and eleven Python
 credential checks pass. The final deployment restores the release without probes
-and retains device data. [Numeric evidence](mobile-evidence/2026-10-20-boox-cipher-reuse.json)
+and retains device data. Numeric evidence (local artifact `test-results/mobile-evidence/2026-10-20-boox-cipher-reuse.json`)
 records each run. Screenshots and UI dumps remain in ignored local logs.
 
 ## BOOX Home startup — 2026-10-20
@@ -176,7 +176,7 @@ restoration was pending opened the local browser, which remained visible after
 completion. The final device installation is release build `202610241`, without
 the temporary timing probes; existing data was retained.
 
-The [numeric evidence](mobile-evidence/2026-10-20-boox-home-startup.json) records
+The numeric evidence (local artifact `test-results/mobile-evidence/2026-10-20-boox-home-startup.json`) records
 the measurement scope and checks. Fifty-two focused startup, credential,
 document-navigation, reader/loading and packaged-startup tests pass. Broader
 navigation/workflow suites retain nine existing failures reproduced with the

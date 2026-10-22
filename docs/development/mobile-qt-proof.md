@@ -17,8 +17,8 @@ not a production runtime migration or completion of the remaining navigation pha
 All four programmatic checks pass on an iPhone Duo simulator with iOS 27.1 and
 an iPad Pro 11-inch (M5) simulator with iOS 27.0. These execute actual Qt widgets
 and statically linked rclone, not a desktop mock or fake service response.
-[Phone evidence](mobile-evidence/2026-10-14-qt-proof-phone/evidence.json) and
-[tablet evidence](mobile-evidence/2026-10-14-qt-proof-ipad/evidence.json) include
+Phone evidence (local artifact `test-results/mobile-evidence/2026-10-14-qt-proof-phone/evidence.json`) and
+tablet evidence (local artifact `test-results/mobile-evidence/2026-10-14-qt-proof-ipad/evidence.json`) include
 screenshots alongside their reports. The app remains available in the simulators
 under its separate name; the Toga app is preserved.
 

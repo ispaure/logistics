@@ -200,20 +200,20 @@ widget workflow pass locally. Native iOS project generation and dependency
 installation succeeded, but the local Xcode storyboard build failed with
 `iOS 26.5 Platform Not Installed`; no simulator devices were available. Both [hosted native builds](https://github.com/ispaure/logistics/actions/runs/38353619087)
 passed at `a02a4ba`, producing an Android debug APK and iOS Simulator app; see
-[build evidence](mobile-evidence/2026-10-13-native-initial.json). The
+build evidence (local artifact `test-results/mobile-evidence/2026-10-13-native-initial.json`). The
 [first Logistics runtime run](https://github.com/ispaure/logistics/actions/runs/38353619071)
 passed all 13 initial cases on iOS, recorded in
-[iOS evidence](mobile-evidence/2026-10-13-ios-initial.json). Android ran all 13 but
+iOS evidence (local artifact `test-results/mobile-evidence/2026-10-13-ios-initial.json`). Android ran all 13 but
 reported seven errors because its sandbox rejected hard-link publication of new
-files; [the failed record](mobile-evidence/2026-10-13-android-initial.json) is retained.
+files; the failed record (local artifact `test-results/mobile-evidence/2026-10-13-android-initial.json`) is retained.
 New private files now use exclusive creation followed by publication of a durable
 recovery record, and the suite has a fourteenth case enforcing that contract.
 The [corrected runtime run](https://github.com/ispaure/logistics/actions/runs/38354610543)
 passed all 14 cases with zero failures, errors or skips on both Android and iOS at
-`5c4a528`; retained reports are [Android](mobile-evidence/2026-10-13-android-corrected.json)
-and [iOS](mobile-evidence/2026-10-13-ios-corrected.json). Both corrected native builds
+`5c4a528`; retained reports are Android (local artifact `test-results/mobile-evidence/2026-10-13-android-corrected.json`)
+and iOS (local artifact `test-results/mobile-evidence/2026-10-13-ios-corrected.json`). Both corrected native builds
 also passed in [run 38354610510](https://github.com/ispaure/logistics/actions/runs/38354610510);
-see [build evidence](mobile-evidence/2026-10-13-native-corrected.json).
+see build evidence (local artifact `test-results/mobile-evidence/2026-10-13-native-corrected.json`).
 No physical-device or actual native picker result is claimed here.
 
 Source releases require both mobile native builds and document runtime checks
@@ -283,8 +283,8 @@ keyboard/touch/accessibility and suspension remain independent validation work.
 
 At `428d1d7`, [native run 38365625757](https://github.com/ispaure/logistics/actions/runs/38365625757)
 passed all seven actual app cases on Android and iOS, including DOM rendering and
-native PNG decoding. Retained [Android](mobile-evidence/2026-10-13-android-native-ui-phase2.json)
-and [iOS](mobile-evidence/2026-10-13-ios-native-ui-phase2.json) reports identify the
+native PNG decoding. Retained Android (local artifact `test-results/mobile-evidence/2026-10-13-android-native-ui-phase2.json`)
+and iOS (local artifact `test-results/mobile-evidence/2026-10-13-ios-native-ui-phase2.json`) reports identify the
 real backend and source commits. The initial failures exposed an Android AVD/tool
 mismatch, the pinned backend's required AndroidX WebView asset loader, and an iOS
 blank-document navigation race. Briefcase now creates the selected emulator with
@@ -440,8 +440,8 @@ at `e3f7194`, after all desktop checks, 25-case core checks and eight native UI
 cases passed on both mobile runtimes in [run 38379277207](https://github.com/ispaure/logistics/actions/runs/38379277207).
 Its exact commit was promoted to main and `v0.1.1-main.05` was requested without
 waiting for that separate pipeline. Retained native reports:
-[Android](mobile-evidence/2026-10-13-android-native-ui-phase3.json) and
-[iOS](mobile-evidence/2026-10-13-ios-native-ui-phase3.json).
+Android (local artifact `test-results/mobile-evidence/2026-10-13-android-native-ui-phase3.json`) and
+iOS (local artifact `test-results/mobile-evidence/2026-10-13-ios-native-ui-phase3.json`).
 
 `native_loop.py` binds Toga 0.5.7 Android cooperative dispatch to the app's owned
 asyncio loop. Java callbacks can enter Python with a different callback-local
@@ -469,8 +469,8 @@ On 2026-10-13, the local uncommitted implementation passed all 14 native UI case
 on an iPhone 17 Pro simulator (iOS 26.5) and an ARM64 Android 35 emulator.
 The LocalCrypt cases cover reading, text/Markdown editing, comic/EPUB metadata
 editing with inner AES ZIP passwords, save-conflict preservation and locking.
-Retained local reports: [iOS](mobile-evidence/2026-10-13-localcrypt-ios-native-ui-local.json)
-and [Android](mobile-evidence/2026-10-13-localcrypt-android-native-ui-local.json).
+Retained local reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-ios-native-ui-local.json`)
+and Android (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-android-native-ui-local.json`).
 Both bind the staged source fingerprint
 `e002b8ca59668c23e7decd8255ea394639092484e20564e7afab73cb7664de36`.
 They explicitly record dirty sources and are not release-gate evidence.
@@ -486,8 +486,8 @@ after a move, Save As to crypt/Local, continued saves, and collision rejection.
 The shared deletion engine is exercised natively; the confirmation/cancel UI is
 covered by the dummy-backend regression. Final source fingerprint:
 `9b9bfd2610615c299fd2d4ca7c35cdfa7eedddbae040763db1205a8caa71922f`.
-Reports: [iOS](mobile-evidence/2026-10-13-localcrypt-files-ios-native-ui-local.json)
-and [Android](mobile-evidence/2026-10-13-localcrypt-files-android-native-ui-local.json).
+Reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-files-ios-native-ui-local.json`)
+and Android (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-files-android-native-ui-local.json`).
 These retain the dirty-source marker and do not replace release-gate evidence.
 
 Two review passes covered mutation safety and UI/provider lifecycle. Fixes included
@@ -509,8 +509,8 @@ modules, partial-failure reporting, explicit encrypted transfer stream and exclu
 staging ownership. Cases cover reading, text/Markdown editing, inner-password comic
 and EPUB metadata, file operations, Save As, stale saves and credential locking.
 
-Reports: [iOS](mobile-evidence/2026-10-13-localcrypt-refactor-ios-native-ui-local.json)
-and [Android](mobile-evidence/2026-10-13-localcrypt-refactor-android-native-ui-local.json).
+Reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-refactor-ios-native-ui-local.json`)
+and Android (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-refactor-android-native-ui-local.json`).
 Both are marked dirty local-development evidence, not release evidence. System file
 picker interaction and physical devices were not tested by these runs.
 
@@ -524,8 +524,8 @@ rejection. The mobile dummy-backend UI suite passed all 11 cases.
 
 Payload `141c29aff3512f96383b018fe513bbf222e54de06a1aa5c0b5bc8c2b4562f646`
 passed all 15 native cases on both the iOS simulator and Android API 35 emulator.
-Reports: [iOS](mobile-evidence/2026-10-13-provider-audit-ios-native-ui-local.json),
-[Android](mobile-evidence/2026-10-13-provider-audit-android-native-ui-local.json).
+Reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-provider-audit-ios-native-ui-local.json`),
+Android (local artifact `test-results/mobile-evidence/2026-10-13-provider-audit-android-native-ui-local.json`).
 These are dirty local-development reports, not release or physical-device evidence;
 system file pickers remain outside this suite.
 
@@ -563,8 +563,8 @@ On 2026-10-13 the local snapshot
 `036c19b5b81f7ccebb705cb7825ce6d21326988781d9f9ba9e4a9d3afadab547`
 passed all 15 native UI groups on iPhone 17 Pro / iOS 26.5 Simulator and the Android
 API 35 emulator, including the shared browser and 40 MiB archive checks above.
-Reports: [iOS](mobile-evidence/2026-10-13-shared-browser-ios-native-ui-local.json),
-[Android](mobile-evidence/2026-10-13-shared-browser-android-native-ui-local.json).
+Reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-shared-browser-ios-native-ui-local.json`),
+Android (local artifact `test-results/mobile-evidence/2026-10-13-shared-browser-android-native-ui-local.json`).
 These are exact local development snapshots, not committed release evidence or
 physical-device/system-picker validation. The desktop browser suites (19 host
 window checks and 7 shared provider/view checks), 13 dummy mobile UI checks, and
@@ -604,8 +604,8 @@ The local source snapshot
 `c8c2b958584bebe1ed0b63850c980e40660bcbe3de3bd632a2b0c80452b479b3`
 passed all 15 native UI groups on both iPhone 17 Pro / iOS 26.5 Simulator and
 Android API 35 emulator, including the 257 MiB ordinary comic and shared navigation
-checks. Reports: [iOS](mobile-evidence/2026-10-13-streaming-navigation-ios-native-ui-local.json),
-[Android](mobile-evidence/2026-10-13-streaming-navigation-android-native-ui-local.json).
+checks. Reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-streaming-navigation-ios-native-ui-local.json`),
+Android (local artifact `test-results/mobile-evidence/2026-10-13-streaming-navigation-android-native-ui-local.json`).
 The 37 portable host core checks, 14 mobile widget checks, four portable browse
 checks and seven desktop shared-view checks also passed. These reports identify a
 local development snapshot, not a clean release build or physical-device testing.
@@ -617,8 +617,8 @@ The final recursive-search and search-layout snapshot
 `494b23ea39d6a48b3adc5a2f1e1207d4358270741a9c7bd36cdd0425fe968aa9`
 passed all 15 native UI groups on both simulators, including nested LocalCrypt
 search results and restoring the folder listing on closing search. Reports:
-[iOS](mobile-evidence/2026-10-13-search-final-ios-native-ui-local.json),
-[Android](mobile-evidence/2026-10-13-search-final-android-native-ui-local.json).
+iOS (local artifact `test-results/mobile-evidence/2026-10-13-search-final-ios-native-ui-local.json`),
+Android (local artifact `test-results/mobile-evidence/2026-10-13-search-final-android-native-ui-local.json`).
 
 ## Standalone password-protected comics
 
@@ -642,8 +642,8 @@ legacy fixtures, retry, page navigation, bookmarks, lock and restart behavior.
 
 Standalone comic validation passed all 15 native UI groups on both simulators for
 source snapshot `af8377a815c46db9d48164519ea3c383316af904d20b66b633c164656a9935ac`.
-Reports: [iOS](mobile-evidence/2026-10-13-standalone-comics-ios-native-ui-local.json),
-[Android](mobile-evidence/2026-10-13-standalone-comics-android-native-ui-local.json).
+Reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-standalone-comics-ios-native-ui-local.json`),
+Android (local artifact `test-results/mobile-evidence/2026-10-13-standalone-comics-android-native-ui-local.json`).
 These are local development snapshots; native file pickers and physical devices
 were not exercised. The host native decoder, Go bridge suite and 15 mobile widget
 checks also passed, including AES and legacy passwords, retry and locking.
@@ -669,8 +669,8 @@ session integration and independent windows remain later work.
 Checkpoint validation: 42 mobile widget/workflow tests, six shared workspace/cloud
 checks and the Go bridge suite passed. Both native suites passed all 18 cases,
 including a real embedded-rclone folder pull, opening its local copy and checking
-its bytes: [iPhone Duo](mobile-evidence/2026-10-14-mobile-checkpoint-ios-native-ui-local.json)
-and [Android](mobile-evidence/2026-10-14-mobile-checkpoint-android-native-ui-local.json).
+its bytes: iPhone Duo (local artifact `test-results/mobile-evidence/2026-10-14-mobile-checkpoint-ios-native-ui-local.json`)
+and Android (local artifact `test-results/mobile-evidence/2026-10-14-mobile-checkpoint-android-native-ui-local.json`).
 Both reports identify local snapshot
 `3862ab9c3f839f7c79b3cb9c92a0dbeef62a9f31225941e9867721e6b005724e`.
 These are local development checks, not a published release or physical-device
@@ -741,7 +741,7 @@ including `native_private_workspace`). It edits two encrypted resources, browses
 Files, switches through Settings, reopens the same owner, cancels Close, verifies
 that forgetting credentials cannot discard either draft, checks manifest privacy,
 and invalidates callbacks when both owners are explicitly discarded. Reports in
-`mobile-evidence/2026-10-14-phase1-*-native-ui-local.json` retain the exact local
+`test-results/mobile-evidence/2026-10-14-phase1-*-native-ui-local.json` retain the exact local
 staged fingerprint. They remain development evidence, not clean release gates.
 
 
@@ -797,8 +797,8 @@ exactly one current ordinary connection; changed/missing identities fail closed.
 
 Both native suites pass 20 cases, including real bridge folder pulls, preserved
 local edits and separate conflict snapshots, local/remote pins, persistence and
-retained browser state. Reports: [iOS](mobile-evidence/2026-10-14-phase2-ios-native-ui-local.json)
-and [Android](mobile-evidence/2026-10-14-phase2-android-native-ui-local.json). These
+retained browser state. Reports: iOS (local artifact `test-results/mobile-evidence/2026-10-14-phase2-ios-native-ui-local.json`)
+and Android (local artifact `test-results/mobile-evidence/2026-10-14-phase2-android-native-ui-local.json`). These
 are labeled local source snapshots; physical provider/device checks remain limits.
 The 57 host widget/workflow tests and native Go bridge suite also pass.
 
@@ -937,7 +937,7 @@ simulator iOS 27.0 and Android 15, including actual secondary iPad scenes and ma
 Local/LocalCrypt folder transfers. The tracked mobile host suite passes 67 tests;
 Go bridge race tests and Python lint pass. The source alpha gates independently
 validate the clean tagged source before publication. Local snapshot evidence is
-retained under `mobile-evidence/2026-10-14-phase5-part2-*-native-ui-local.json` and
+retained under `test-results/mobile-evidence/2026-10-14-phase5-part2-*-native-ui-local.json` and
 correctly records its pre-commit dirty source identity.
 
 The original submission was `v0.1.1-alpha.33`. Its Windows comic-library fixture
@@ -963,7 +963,7 @@ reports actual independent scenes. Both embedded runtime inventories contain all
 transfer/runtime sources were verified after download.
 
 Clean native reports are retained under
-`mobile-evidence/2026-10-14-alpha34-*-native-ui-ci.json`. Physical original-window
+`test-results/mobile-evidence/2026-10-14-alpha34-*-native-ui-ci.json`. Physical original-window
 closure remains explicitly unverified, and the device limits above still apply.
 This final documentation checkpoint changes no released runtime behavior.
 
@@ -1109,7 +1109,7 @@ disposable `storage_chrome_probe.py` harness. The actual comic canvas measured
 controls and route exit restored them. The probe also exercised Android volume
 enumeration, external app-specific file copying, the Legacy switch and dispatch
 of developer settings. This does not establish physical removable-card behavior.
-See [retained proof](mobile-evidence/2026-10-15-storage-android-fullscreen.json).
+See retained proof (local artifact `test-results/mobile-evidence/2026-10-15-storage-android-fullscreen.json`).
 
 The portable document runtime harness declares 45 tests, including credential
 replacement, session privacy and retired mirror-operation checks. Its declared

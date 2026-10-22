@@ -46,6 +46,9 @@ The packaging tool validates pinned submodule checkouts and archive integrity.
 It excludes Git metadata, workflow files, virtual environments, caches and build
 outputs. It preserves executable permissions for macOS/Linux launchers. Local
 credentials, optional software and other untracked/ignored files are not bundled.
+Local test evidence under `test-results/` and the legacy
+`docs/development/mobile-evidence/` path is explicitly excluded, even if supplied
+to the packager. See [local validation artifacts](validation-artifacts.md).
 
 Local validation covers packaging layout, submodule contents and publishing
 failure cases. A hosted run must succeed before claiming GitHub execution is tested.

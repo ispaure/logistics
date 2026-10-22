@@ -12,6 +12,7 @@ EXCLUDED_DIRS = {
     '.git', '.github', '__pycache__', '.venv', 'venv', 'env', 'ENV',
     '.pytest_cache', '.mypy_cache', '.ruff_cache', '.idea', '__MACOSX',
     'build', 'dist', 'htmlcov', 'test-results', 'node_modules', '.gradle', 'DerivedData',
+    'mobile-evidence',
 }
 REQUIRED = {
     'README.md', 'LICENSE.md', 'docs/docs.md', 'docs/user/user.md', 'docs/user/configuration.md', 'launch_config.ini',

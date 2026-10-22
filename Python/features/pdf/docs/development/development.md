@@ -91,7 +91,7 @@ Native verification on 2026-10-17 passed PDFKit and Android PdfRenderer opening,
 rasterization, page jumps, embedded-text search, reading mode and memory release.
 Android bitmap background fill explicitly uses Chaquopy jint(-1), preventing the
 long color-space overload from raising Invalid ID: 63. Reports and screenshots
-are in the root development mobile-evidence/2026-10-17-pdf-search folder.
+are in the root development test-results/mobile-evidence/2026-10-17-pdf-search folder.
 
 ## Mobile contents hierarchy
 

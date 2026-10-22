@@ -34,7 +34,7 @@ layout-direction edge. The bar remains inside the viewport: changing native
 inset padding alone would not reduce Toga's independently sized content width.
 This applies to the workspace hierarchy, independently of native file lists.
 
-The [mobile spacing evidence](mobile-evidence/2026-10-20-mobile-outline-spacing.json)
+The mobile spacing evidence (local artifact `test-results/mobile-evidence/2026-10-20-mobile-outline-spacing.json`)
 records the source audit, synthetic native phone/tablet checks and validation
 limits. `test_workspace_surfaces.py` covers background-padding preservation and
 the iOS disclosure reservation.
@@ -48,8 +48,8 @@ installed after Toga publishes the initial data source, since assigning the
 footer can synchronously query row counts. Every UIKit row, including the last
 and single-row groups, keeps the same bounded separator inset: oversized leading
 insets also shift native cell content and can hide the final entry on iPhone.
-See the [native group checks and Boox
-deployment](mobile-evidence/2026-10-20-rounded-file-lists.json).
+See the native group checks and Boox
+deployment (local artifact `test-results/mobile-evidence/2026-10-20-rounded-file-lists.json`).
 
 ## iOS Workspaces folder ancestry
 
@@ -320,7 +320,7 @@ Destination-tab visibility ignores retained iOS secondary routes while
 controller; their presence alone must not hide the list's destination tabs.
 Visible reader details and their secondary controls still hide destination tabs.
 `test_document_chrome.py` covers list return and resuming the retained detail.
-The [native reopening evidence](mobile-evidence/2026-10-20-reader-reopen.json)
+The native reopening evidence (local artifact `test-results/mobile-evidence/2026-10-20-reader-reopen.json`)
 records iPhone/iPad list-tab restoration, recovery from a deliberately blank EPUB
 WebView at its saved passage, and file-browser open/close. It does not establish
 what caused an intermittent blank reader on a physical device.
@@ -853,7 +853,7 @@ fixtures and an existing SDK 27.1 executable with refreshed Python sources.
 The 315-test mobile suite passed 312 checks inside the sandbox; the three blocked
 localhost fixture checks passed on a network-enabled rerun. A focused 76-test
 navigation/reader run passed, as did the final bitmap refinement tests. Evidence:
-[fold seam geometry](mobile-evidence/2026-10-15-duo-fold-seam.json).
+fold seam geometry (local artifact `test-results/mobile-evidence/2026-10-15-duo-fold-seam.json`).
 
 ## Fullscreen reader system chrome
 
@@ -873,11 +873,11 @@ The isolated Duo simulator check passed comic fullscreen → controls → fullsc
 transitions at the full 951-point window width, with status-bar restoration.
 Imported EPUB fullscreen retained 16-point outer margins and its restore action.
 The check uses only synthetic cache fixtures and an injected partial posture;
-see [local reader evidence](mobile-evidence/2026-10-15-reader-fullscreen-duo.json).
+see local reader evidence (local artifact `test-results/mobile-evidence/2026-10-15-reader-fullscreen-duo.json`).
 
 The same isolated check passed on a regular iPhone 17 Pro at 402 points,
 including EPUB margins, restore controls and status-bar restoration;
-see [regular iPhone evidence](mobile-evidence/2026-10-15-reader-fullscreen-iphone.json).
+see regular iPhone evidence (local artifact `test-results/mobile-evidence/2026-10-15-reader-fullscreen-iphone.json`).
 Android uses the existing shared immersive-bar implementation; these iOS reports
 do not claim native Android gesture verification.
 
@@ -933,7 +933,7 @@ checks. An isolated preview with valid synthetic domain messages passed 16
 configurations across iPad and Duo: portrait/landscape, light/dark, and drawer
 open/closed. Native assertions verified action bounds, centered composer width,
 bottom containment, noninteractive fade, and unchanged hamburger ownership.
-See [native measurements](mobile-evidence/2026-10-16-chat-wide-layout.json).
+See native measurements (local artifact `test-results/mobile-evidence/2026-10-16-chat-wide-layout.json`).
 These are simulator results, not physical fold/keyboard interaction evidence.
 
 
@@ -1136,7 +1136,7 @@ Back with the keyboard open, and returning to Home, Workspaces and Documents.
 Both its default rail and a test-forced native bottom bar passed. A real swipe
 established the folder viewport; closing the document preserved its filter,
 selection and exact scroll offset in both layouts. See the
-[Android navigation evidence](mobile-evidence/2026-10-20-android-document-navigation.json)
+Android navigation evidence (local artifact `test-results/mobile-evidence/2026-10-20-android-document-navigation.json`)
 for source hashes and coverage limits. The separate synthetic QA installation
 does not update the production app.
 
@@ -1146,7 +1146,7 @@ landscape suppressed the bars; first Back dismissed the IME without reaching the
 document-close handler, and second Back closed the document. Rotation, native bar
 snapshot transfer, retiring a document while suppression was active, and folder
 search keyboard dismissal passed. Closing restored the same filter, selection
-and exact native scroll offset. See the [phone keyboard evidence](mobile-evidence/2026-10-20-android-phone-keyboard.json)
+and exact native scroll offset. See the phone keyboard evidence (local artifact `test-results/mobile-evidence/2026-10-20-android-phone-keyboard.json`)
 for measurements, source hashes and the cutout-adjusted landscape breakpoint.
 
 The Android 16 predictive-Back follow-up used real left/right edge swipes and
@@ -1155,13 +1155,13 @@ readers, the close prompt and IME state. With an unsaved draft and keyboard open
 the committed gesture dismissed the IME; the next gesture opened the close prompt.
 Back from that prompt retained the draft. Native cold Workspaces unlock, wrong
 password retry, automatic LocalCrypt folder resume and the single browser header
-also passed. See [predictive Back and LocalCrypt evidence](mobile-evidence/2026-10-20-android-predictive-back-localcrypt.json)
+also passed. See predictive Back and LocalCrypt evidence (local artifact `test-results/mobile-evidence/2026-10-20-android-predictive-back-localcrypt.json`)
 for input details, callback evidence and physical-device/animation limits.
 
 The physical BOOX Note Air5 C follow-up verified the cold Workspaces LocalCrypt
 path using real native folder and Unlock button taps. Wrong-password retry,
 automatic encrypted-folder resume, a detached source strip and one visible folder
-header in the tablet workspace frame passed. See [BOOX LocalCrypt evidence](mobile-evidence/2026-10-20-boox-localcrypt-workspaces.json)
+header in the tablet workspace frame passed. See BOOX LocalCrypt evidence (local artifact `test-results/mobile-evidence/2026-10-20-boox-localcrypt-workspaces.json`)
 for source hashes, input details and scope. The synthetic QA installation did not
 replace the normal app or use user credentials.
 
@@ -1281,7 +1281,7 @@ and iPad (81 total), with actual native Search/Save target dispatch. Separate
 XCTest taps verified the normal toolbar menu on iPhone/iPad and the system
 Duo overflow menu. The probe is `mobile_build/native_tests/tests/logisticsmobile/ios_toolbar_probe.py`;
 the UI test source is `mobile_build/native_tests/ios/ToolbarMenuUITests.swift`.
-See the [native toolbar evidence](mobile-evidence/2026-10-21-ios-adaptive-toolbars.json)
+See the native toolbar evidence (local artifact `test-results/mobile-evidence/2026-10-21-ios-adaptive-toolbars.json`)
 for source hashes, layouts and limits. Inner-display fold poses, older native
 runtimes, accessibility settings and live remote providers were not exercised.
 Primary-menu items clear their native target/action so a single tap opens the

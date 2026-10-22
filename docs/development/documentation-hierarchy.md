@@ -8,6 +8,10 @@ Shared commonUtils API guides and optional external feature internals stay in
 their own repositories. Compatibility entries contain links rather than copied guides.
 Historical migration reports do not override these current ownership rules.
 
+Screenshots, recordings and raw test results stay in ignored local artifact
+directories, outside the documentation wiki. See [local validation artifacts](validation-artifacts.md)
+for locations and packaging rules. Public guides must not link to local-only files.
+
 ## Pages and scopes
 
 Each wiki starts at `docs/docs.md`. Audience branches use `user/user.md`,

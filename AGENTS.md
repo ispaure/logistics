@@ -60,3 +60,11 @@ Documentation wikis use `docs/docs.md` as their scope landing. Each nested folde
 has a same-named landing page (`banana/banana.md`), with explicit links to every
 child page. Every Markdown page begins with an H1, after optional YAML properties.
 Keep package README and `user_docs/index.md` compatibility entries as short links.
+
+Keep raw test evidence (screenshots, recordings, reports and one-off probe copies)
+under ignored `test-results/` or `mobile_build/logs/`, outside documentation wikis.
+The historical archive is local-only at `test-results/mobile-evidence/`; never add
+it or the legacy `docs/development/mobile-evidence/` location to Git, release
+packages or mobile offline help. Keep reusable test drivers/fixtures tracked in
+their test owners, and retain concise validation scope in developer guides.
+Public documentation must not link to local-only artifacts.

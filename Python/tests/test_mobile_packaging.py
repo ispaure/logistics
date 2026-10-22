@@ -99,6 +99,15 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             git(repo, 'init')
             git(repo, 'add', 'Python/mobile', 'Python/features', 'Python/services', 'Python/configFile.ini', 'LICENSE.md', 'README.md')
             git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-m', 'fixture')
+            # Local QA material must not enter offline help, even from an old
+            # checkout with evidence still underneath the docs directory.
+            for name in ('docs/development/mobile-evidence/nested/report.md',
+                         'test-results/mobile-evidence/report.md'):
+                artifact = repo / name
+                artifact.parent.mkdir(parents=True, exist_ok=True)
+                artifact.write_text('# Local QA fixture\n')
+            guide = repo / 'docs/development/development.md'
+            guide.write_text('# Public development guide\n')
             payload = base / 'payload'
             manifest = mobile_tools.stage(repo, payload)
             self.assertFalse(manifest['dirty'])
@@ -117,6 +126,11 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             self.assertFalse((payload / 'commonUtils/private.py').exists())
             self.assertFalse((payload / 'commonUtils/remoteConfig.ini').exists())
             self.assertFalse((payload / 'commonUtils/.git').exists())
+            self.assertEqual((payload / 'mobile/help/docs/development/development.md').read_text(),
+                             '# Public development guide\n')
+            self.assertFalse(any('mobile-evidence' in path.parts for path in payload.rglob('*')))
+            self.assertTrue((repo / 'docs/development/mobile-evidence/nested/report.md').is_file())
+            self.assertTrue((repo / 'test-results/mobile-evidence/report.md').is_file())
             self.assertTrue((payload / 'features/books/epub.py').exists())
             self.assertTrue((payload / 'features/text_editor/mobile/provider_markdown.py').is_file())
             self.assertTrue((payload / 'commonUtils/ui/native/android/io/github/ispaure/commonutils/NavigationBack.java').exists())

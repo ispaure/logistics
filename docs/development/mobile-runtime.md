@@ -131,7 +131,7 @@ buttons use one native glass configuration (gray on older systems), restored on
 trait refresh. `test_ios_bar_controls.py` covers grouping/repaint policy and the
 disposable `ios_bubble_probe.py` checks native layout, menus, fullscreen return,
 light/dark rendering and existing save/cancel/discard/conflict guards.
-The [October 20 glass-button evidence](mobile-evidence/2026-10-20-ios-bubbles.json)
+The October 20 glass-button evidence (local artifact `test-results/mobile-evidence/2026-10-20-ios-bubbles.json`)
 records iOS 27 iPhone/iPad simulator results, portrait/landscape return, source
 hashes and screenshots. The disposable apps were removed after evidence capture.
 Native-only filename/status controls are detached to avoid duplicate titles;
@@ -340,15 +340,15 @@ commits a page; EPUB release commits a chapter, while its badge retains the
 current chapter percentage. Status/error labels remain available to native
 header diagnostics. `reader_progress.py` supplies the palette, reading direction and refresh registry;
 commonUtils owns native slider painting.
-The [progress-footer native check](mobile-evidence/2026-10-20-reader-progress.json)
+The progress-footer native check (local artifact `test-results/mobile-evidence/2026-10-20-reader-progress.json`)
 verifies all three formats on iPhone, iPad and BOOX, including scrubbing.
 Imported and provider comic canvases, PDFs and images use zero
 outer frame margin. UIKit reader titles use the pane width between controls
-without a fixed 320-point cap. The [reader-space native check](mobile-evidence/2026-10-20-reader-space.json)
+without a fixed 320-point cap. The reader-space native check (local artifact `test-results/mobile-evidence/2026-10-20-reader-space.json`)
 verifies the single-row footer on iPhone, iPad and BOOX, plus full-title fit on iPad.
 `reader_close_icon_probe.py` additionally checks native X artwork/labels, closing
 comics, and cancel/save/discard/conflict behavior for edited documents. The
-[October 20 focused results](mobile-evidence/2026-10-20-close-icon.json) cover
+October 20 focused results (local artifact `test-results/mobile-evidence/2026-10-20-close-icon.json`) cover
 iPhone/iPad simulators and a physical Android BOOX using isolated synthetic files.
 
 Add host modules to `Python/mobile/mobile_sources.json` and feature/service modules to their owning manifests in the same change as imports. `mobile_build/tools.py` aggregates and validates these declarations.
@@ -389,7 +389,7 @@ on both platforms expose a visible contextual ellipsis, while retaining
 tap-to-open and the platform's existing selection gesture. Recycled controls
 validate their row/source identity before invoking contextual commands.
 Open-only document drawers omit contextual selection controls. See the
-[native parity checks](mobile-evidence/2026-10-20-chrome-parity.json) for the
+native parity checks (local artifact `test-results/mobile-evidence/2026-10-20-chrome-parity.json`) for the
 tested scope and screenshots.
 
 The Text Editor mobile owner uses `commonUtils.ui.native.code_input.CodeInput`
@@ -417,7 +417,7 @@ font collection extraction and lossless WOFF tables. The isolated
 `mobile_build/native_tests/tests/logisticsmobile/markdown_font_probe.py` checks actual
 font loading and native glyph measurements across preview, formatted editing
 and large private pages, using the device font plus serif and monospace faces.
-The [2026-10-18 Note Air 5C report](mobile-evidence/2026-10-18-markdown-font.json)
+The 2026-10-18 Note Air 5C report (local artifact `test-results/mobile-evidence/2026-10-18-markdown-font.json`)
 records all nine successful Android 15 checks and the tested source hashes.
 
 Desktop and mobile share language detection and Pygments grammars through
@@ -428,10 +428,10 @@ characters while retaining editing and logical line numbers. Android's
 CodeEditorSupport Java bridge draws the gutter against native wrapped lines;
 iOS uses a UITextView overlay with native line-fragment geometry.
 
-The isolated [iOS editor evidence](mobile-evidence/2026-10-17-source-editor/editor.json)
+The isolated iOS editor evidence (local artifact `test-results/mobile-evidence/2026-10-17-source-editor/editor.json`)
 covers native typing into Markdown, a rendered table, live updates, syntax
-colouring and preserved selection. The [source screenshot](mobile-evidence/2026-10-17-source-editor/source-python.png)
-and [live preview screenshot](mobile-evidence/2026-10-17-source-editor/markdown-live.png)
+colouring and preserved selection. The source screenshot (local artifact `test-results/mobile-evidence/2026-10-17-source-editor/source-python.png`)
+and live preview screenshot (local artifact `test-results/mobile-evidence/2026-10-17-source-editor/markdown-live.png`)
 use synthetic files and a separate simulator app identity. Android bridge compilation
 and host editor regressions passed; this evidence does not certify physical-device
 keyboards, IME/undo gestures or Android runtime editor appearance.
@@ -557,7 +557,7 @@ The disposable `recycled_list_probe.py` under `mobile_build/native_tests/tests/l
 uses 10,005 synthetic file records to validate native viewport bounds, scrolling
 to the last result, activation, search, sorting, stale callback rejection and
 clearing. It is a QA launcher only and must not replace production launchers.
-[Native verification evidence](mobile-evidence/2026-10-19-recycled-file-lists.json)
+Native verification evidence (local artifact `test-results/mobile-evidence/2026-10-19-recycled-file-lists.json`)
 records 20 visible Android rows (40 created views while jumping to the last
 entry) on a BOOX Note Air 5C and 10 visible iOS simulator cells, with complete
 search, last-item activation, source replacement, visible-row thumbnails and
@@ -647,7 +647,7 @@ saves workspace state once afterward. These paths are shared by Android and iOS.
 
 ### BOOX file-list before/after profiling — 2026-10-19
 
-The [paired BOOX report](mobile-evidence/2026-10-19-boox-file-list-profile.json)
+The paired BOOX report (local artifact `test-results/mobile-evidence/2026-10-19-boox-file-list-profile.json`)
 compares the original progressive browser against the recycled List renderer in
 one isolated QA process on a physical Note Air 5C (Android API 35, reported
 refresh rate 38 Hz). It uses production appearance hooks with normal system

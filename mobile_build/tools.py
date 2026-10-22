@@ -193,6 +193,9 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
                   if owner.is_dir() and not owner.is_symlink() and (owner / 'docs').is_dir()]
     for doc_root in doc_roots:
         for page in sorted(doc_root.rglob('*.md')):
+            # Old local checkouts may still keep their ignored QA archive here.
+            if page.is_relative_to(repo / 'docs/development/mobile-evidence'):
+                continue
             copy(page, Path('mobile/help') / page.relative_to(repo))
     copy(repo / 'README.md', Path('mobile/help/README.md'))
     copy(repo / 'LICENSE.md', Path('mobile/LICENSE.md'))

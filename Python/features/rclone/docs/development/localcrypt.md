@@ -368,7 +368,7 @@ Exclusions are never interpreted as cleanup patterns and `--delete-excluded` is
 not used. Dry-run/query paths do not delete generated files.
 
 Editor picker native evidence is retained in
-`mobile-evidence/2026-10-13-editor-picker-{ios,android}-native-ui-local.json` for
+`test-results/mobile-evidence/2026-10-13-editor-picker-{ios,android}-native-ui-local.json` for
 source SHA-256 `c38cd17da93fcaf9ec510170dccf8bc768e125573bc4adf92ea603f91c9dcb6b`.
 Both platforms passed all 15 native case groups; file management also exercises
 decoded editor Open, Save As, active recovery cleanup and hidden widget reset.
@@ -392,7 +392,7 @@ asserts that the replacement editor is visible. Construction/navigation failures
 retain the original reader and draft. General view replacement restores the
 previous view if attaching its replacement raises an exception.
 
-Follow-up native evidence: `mobile-evidence/2026-10-13-final-audit-{ios,android}-native-ui-local.json`, source SHA-256 `66ebad8e3c280532411053031e140675088baa5808d7e534d6b5cb64326cb4bd`. Both simulator/emulator runs passed all 15 groups. Desktop/provider/native-bridge regressions passed 50 tests; mobile UI failure tests passed 11 tests, and the Go bridge suite passed.
+Follow-up native evidence: `test-results/mobile-evidence/2026-10-13-final-audit-{ios,android}-native-ui-local.json`, source SHA-256 `66ebad8e3c280532411053031e140675088baa5808d7e534d6b5cb64326cb4bd`. Both simulator/emulator runs passed all 15 groups. Desktop/provider/native-bridge regressions passed 50 tests; mobile UI failure tests passed 11 tests, and the Go bridge suite passed.
 
 
 ## Shared save handoff consolidation
@@ -405,7 +405,7 @@ changed destination instead of accepting its new contents as the saved draft.
 Encryption, credential lifetimes, inner ZIP passwords, archive rewriting, native
 widgets and recovery policy remain in their existing Logistics owners.
 
-Shared-handoff validation: 30 desktop/provider checks, 3 focused shared lifecycle checks and 11 mobile UI checks passed. Both native simulator/emulator suites passed all 15 groups for source SHA-256 `010cfbeed8df7931f309393e0b10a8a6127f64f0400283a30a756d2d4dbc085f`; reports are `mobile-evidence/2026-10-13-shared-handoff-{ios,android}-native-ui-local.json`.
+Shared-handoff validation: 30 desktop/provider checks, 3 focused shared lifecycle checks and 11 mobile UI checks passed. Both native simulator/emulator suites passed all 15 groups for source SHA-256 `010cfbeed8df7931f309393e0b10a8a6127f64f0400283a30a756d2d4dbc085f`; reports are `test-results/mobile-evidence/2026-10-13-shared-handoff-{ios,android}-native-ui-local.json`.
 
 
 ### Regular browser navigation and Workspaces
@@ -680,14 +680,14 @@ AirPlay and OS lifecycle enforcement require device validation; mocked policy
 tests do not establish those platform guarantees.
 
 The isolated native probe passed on an iOS simulator and Android emulator with
-the source fingerprint recorded in the [iOS result](../../../../../docs/development/mobile-evidence/2026-10-15-session-privacy-ios.json)
-and [Android result](../../../../../docs/development/mobile-evidence/2026-10-15-session-privacy-android.json).
+the source fingerprint recorded in the iOS result (local artifact `test-results/mobile-evidence/2026-10-15-session-privacy-ios.json`)
+and Android result (local artifact `test-results/mobile-evidence/2026-10-15-session-privacy-android.json`).
 It checks credential-load activation before a view opens, a real switch to
 Settings and back, wrong/correct resume passwords, preserved unsaved edits,
 Save As draft protection after credentials are cleared, and final protection
 release after the remaining view closes. Android also checks FLAG_SECURE on/off.
-The returned lock screens are recorded for [iOS](../../../../../docs/development/mobile-evidence/2026-10-15-session-privacy-ios-locked.png)
-and [Android](../../../../../docs/development/mobile-evidence/2026-10-15-session-privacy-android-locked.png).
+The returned lock screens are recorded for iOS (local artifact `test-results/mobile-evidence/2026-10-15-session-privacy-ios-locked.png`)
+and Android (local artifact `test-results/mobile-evidence/2026-10-15-session-privacy-android-locked.png`).
 These checks do not validate physical AirPlay, all capture routes or frame-by-frame
 OS snapshot timing. The focused host regression run passed 63 tests. The broader
 mobile run has an unrelated library-label expectation failure; loopback fixture
@@ -741,8 +741,8 @@ is a platform capture control, not a defense against a compromised device.
 - The iOS 27.0 iPhone simulator passed all 27 native UI cases, including private
   reading/editing/metadata, revocation, file management and direct shield
   conceal/reveal. The captured covered UIWindow is entirely black and foreground
-  recovery was verified. [Native report](../../../../../docs/development/mobile-evidence/2026-10-15-localcrypt-security-ios-native-ui-local.json)
-  and [shield image](../../../../../docs/development/mobile-evidence/2026-10-15-localcrypt-privacy-shield.png).
+  recovery was verified. Native report (local artifact `test-results/mobile-evidence/2026-10-15-localcrypt-security-ios-native-ui-local.json`)
+  and shield image (local artifact `test-results/mobile-evidence/2026-10-15-localcrypt-privacy-shield.png`).
   The local source snapshot is `051f545d7d49c74ec83a3974c9acc747ef3f6e16fc877f0e395b22779ad18a5f`.
 - Ruff and diff whitespace checks passed. Android capture enforcement, physical
   iOS app-switcher snapshots, actual recording/mirroring transitions and iPad
@@ -786,7 +786,7 @@ passed, including confirmation that session lock never deletes the saved vault.
 All 28 iOS simulator UI cases passed with real native widgets and the compiled
 bridge; the new credential-visibility case checks Settings unlocking, wrong
 passwords, hidden locked remote-only actions and preservation of saved ciphertext.
-[Native evidence](../../../../../docs/development/mobile-evidence/2026-10-15-folder-hub-credential-visibility-ios-native-ui-local.json).
+Native evidence (local artifact `test-results/mobile-evidence/2026-10-15-folder-hub-credential-visibility-ios-native-ui-local.json`).
 Ruff and diff whitespace checks passed. Android native runtime behavior was not
 rerun for this change; its Workspaces and Settings controller code is shared.
 

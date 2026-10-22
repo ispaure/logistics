@@ -245,9 +245,9 @@ browsing local folders and find newer UIKit floating tab labels outside the
   editor, credential and report checks, correctness lint and diff checks passed.
 - Normal iOS and Android launchers were restored and rebuilt after test mode.
 
-Exact-source local reports: [iPhone](mobile-evidence/2026-10-17-refactor-iphone-native-ui-local.json),
-[iPad](mobile-evidence/2026-10-17-refactor-ipad-native-ui-local.json), and
-[Android](mobile-evidence/2026-10-17-refactor-android-native-ui-local.json).
+Exact-source local reports: iPhone (local artifact `test-results/mobile-evidence/2026-10-17-refactor-iphone-native-ui-local.json`),
+iPad (local artifact `test-results/mobile-evidence/2026-10-17-refactor-ipad-native-ui-local.json`), and
+Android (local artifact `test-results/mobile-evidence/2026-10-17-refactor-android-native-ui-local.json`).
 All three identify snapshot
 `cb846c0089e5a930c39a4f2223e763b731e9555bda464691562e0b673e6f4277`,
 staged from refactor commit `05fb5861` with these fixes. Reports retain
@@ -362,7 +362,7 @@ Each behavioral correction first failed a targeted regression, then passed after
 the fix. The complete mobile rerun and desktop suite, focused LM/doctor/dialog/
 rendering tests, release/runner tests, Go bridge suite, lint, architecture,
 dependency and documentation checks verify this follow-up. The emulator's
-[review acceptance summary](mobile-evidence/2026-10-21-reader-review-android.json)
+review acceptance summary (local artifact `test-results/mobile-evidence/2026-10-21-reader-review-android.json`)
 records exact tested source hashes and seven sleep/trim/wake cases plus one-pixel
 native decoding. No physical Boox or iOS interaction is claimed by this review.
 

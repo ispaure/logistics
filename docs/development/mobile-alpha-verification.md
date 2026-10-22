@@ -60,10 +60,10 @@ copied or compared. This audit does not install local alpha fixes on that phone.
 
 ## Retained evidence
 
-- [Android native cases](mobile-evidence/2026-10-14-alpha-audit-android-native-ui-local.json)
-- [iPad native cases](mobile-evidence/2026-10-14-alpha-audit-ipad-native-ui-local.json)
-- [iPhone native cases](mobile-evidence/2026-10-14-alpha-audit-iphone-native-ui-local.json)
-- [Portable host core](mobile-evidence/2026-10-14-alpha-audit-host-core-local.json)
+- Android native cases (local artifact `test-results/mobile-evidence/2026-10-14-alpha-audit-android-native-ui-local.json`)
+- iPad native cases (local artifact `test-results/mobile-evidence/2026-10-14-alpha-audit-ipad-native-ui-local.json`)
+- iPhone native cases (local artifact `test-results/mobile-evidence/2026-10-14-alpha-audit-iphone-native-ui-local.json`)
+- Portable host core (local artifact `test-results/mobile-evidence/2026-10-14-alpha-audit-host-core-local.json`)
 
 The frozen audit patch is retained locally at `mobile_build/logs/alpha-audit-fixes.patch`;
 host output is `/private/tmp/logistics-alpha-audit-host.log`. Native runtime
