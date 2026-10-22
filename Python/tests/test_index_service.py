@@ -2,6 +2,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic, sleep
+import sqlite3
 from unittest.mock import patch
 
 from commonUtils.filesystem.index import DirectoryCache
@@ -27,8 +28,16 @@ class IndexServiceTests(QtTestCase):
                     service.start()
                     try:
                         deadline = monotonic()+10
-                        while service.coordinator.status(identity)['state'] != 'done':
+                        while True:
                             self.assertLess(monotonic(), deadline)
+                            try:
+                                if service.coordinator.status(identity)['state'] == 'done':
+                                    break
+                            except sqlite3.OperationalError as error:
+                                # Receipt reads can contend with the writer on Windows.
+                                # Keep the existing deadline and pump Qt between retries.
+                                if not any(word in str(error) for word in ('locked', 'busy')):
+                                    raise
                             app.processEvents()
                             sleep(.02)
                         self.assertTrue(service.worker.isRunning())

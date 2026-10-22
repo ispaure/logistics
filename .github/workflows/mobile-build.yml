@@ -51,9 +51,10 @@ jobs:
         with:
           go-version: '1.26.9'
           cache-dependency-path: mobile_build/rclone_bridge/go.sum
-      - name: Select the SDK required for native Duo adaptation
+      - name: Prepare the SDK and simulator required for native Duo adaptation
         if: matrix.target == 'ios'
-        run: python mobile_build/select_ios_sdk.py --github-env "$GITHUB_ENV"
+        timeout-minutes: 30
+        run: python mobile_build/select_ios_sdk.py --github-env "$GITHUB_ENV" --prepare-duo
       - name: Prepare a clean, curated mobile payload
         run: |
           python -m pip install briefcase==0.4.5

@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import subprocess
@@ -34,14 +35,62 @@ def installed():
     return candidates
 
 
+def simulator_data(kind, env):
+    return json.loads(subprocess.check_output(
+        ['xcrun', 'simctl', 'list', kind, '--json'], env=env, text=True))
+
+
+def prepare_duo(path, sdk):
+    """Provision the required runtime/device; never substitute an ordinary phone."""
+    if version(sdk) < version('27.1'):
+        raise RuntimeError('Duo requires an iOS Simulator SDK >= 27.1.')
+    env = dict(os.environ, DEVELOPER_DIR=path)
+    data = simulator_data('devices', env)
+    def is_duo(device):
+        identity = device.get('deviceTypeIdentifier') or device.get('name', '')
+        return 'iPhone-Duo' in identity or 'iPhone Duo' in identity
+    devices = [device for runtime, items in data['devices'].items() if '.iOS-' in runtime
+               for device in items if device.get('isAvailable')
+               and is_duo(device)]
+    if devices:
+        return sorted(devices, key=lambda device: device['state'] != 'Booted')[0]['udid']
+
+    def compatible():
+        return [runtime for runtime in simulator_data('runtimes', env)['runtimes']
+                if runtime.get('isAvailable') and '.iOS-' in runtime['identifier']
+                and version(runtime['version']) >= version('27.1')]
+    runtimes = compatible()
+    if not runtimes:
+        subprocess.run(['xcodebuild', '-downloadPlatform', 'iOS', '-buildVersion', sdk,
+                        '-architectureVariant', 'arm64' if platform.machine() == 'arm64' else 'universal'],
+                       env=env, check=True, timeout=1800)
+        runtimes = compatible()
+    if not runtimes:
+        raise RuntimeError('No available iOS Simulator runtime >= 27.1 after provisioning.')
+    runtime = max(runtimes, key=lambda row: version(row['version']))
+    types = [row for row in simulator_data('devicetypes', env)['devicetypes']
+             if 'iPhone-Duo' in row['identifier'] or 'iPhone Duo' in row['name']]
+    if not types:
+        raise RuntimeError('The selected Xcode has no iPhone Duo simulator device type.')
+    device = subprocess.check_output(['xcrun', 'simctl', 'create', 'Logistics Validation Duo',
+        types[0]['identifier'], runtime['identifier']], env=env, text=True).strip()
+    if not device:
+        raise RuntimeError('Creating the required Duo simulator returned no device identifier.')
+    return device
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--minimum-sdk', default='27.1')
     parser.add_argument('--github-env', type=Path)
     parser.add_argument('--path-only', action='store_true')
+    parser.add_argument('--prepare-duo', action='store_true')
     args = parser.parse_args()
     path, sdk = choose(installed(), args.minimum_sdk)
     if args.github_env:
         with args.github_env.open('a') as stream:
             stream.write('DEVELOPER_DIR=' + path + '\n')
-    print(path if args.path_only else json.dumps(dict(developer_dir=path, simulator_sdk=sdk)))
+    result = dict(developer_dir=path, simulator_sdk=sdk)
+    if args.prepare_duo:
+        result['duo_device'] = prepare_duo(path, sdk)
+    print(path if args.path_only else json.dumps(result))
