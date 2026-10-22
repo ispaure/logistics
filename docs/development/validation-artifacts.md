@@ -17,5 +17,7 @@ Keep concise descriptions of validation scope and known limits in the owning
 developer guides. Past results do not validate later changes; use the
 [testing guide](testing.md) to rerun the relevant checks.
 
-Removing artifacts from the current tree does not remove them from earlier Git
-commits or replace previously published release archives.
+Published branches and tags were separately rewritten to remove the historical
+archives, and affected GitHub releases were deleted. Existing Git checkouts should
+back up local changes and re-clone rather than merge the old and cleaned histories.
+Private recovery bundles remain under ignored `test-results/history-cleanup/`.
