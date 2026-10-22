@@ -124,3 +124,6 @@ coverage.xml
 *.swp
 *.swo
 *~
+
+# Local source snapshots for sharing with ChatGPT.
+/*-snapshot-*.zip

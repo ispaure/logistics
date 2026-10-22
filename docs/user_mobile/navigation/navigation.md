@@ -61,6 +61,11 @@ active detail; compact drawers close first.
 
 ## Home and document search
 
+The file browser shows dot-prefixed files and folders with muted grey names in
+List, Tiles and search results. Local entries also respect native hidden metadata
+when the filesystem supplies it. These items still open normally; selected Android
+rows use the selection text colour to stay readable.
+
 In the file browser, Search checks filenames in the current folder and its
 subfolders, ignoring case. Separate words all have to appear, in any order:
 `end eternity` finds `The End of Eternityla.epub`. Double quotes keep words

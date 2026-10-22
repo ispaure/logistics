@@ -49,7 +49,8 @@ def entry_icon(directory, *, landing_page=False):
 
 def highlight_entry(widget, selected):
     surface(widget, radius=8, background='hover' if selected else 'surface',
-            foreground='text' if isinstance(widget, toga.Button) else None,
+            foreground=('muted' if getattr(widget, 'browser_hidden', False) else 'text')
+            if isinstance(widget, toga.Button) else None,
             outlined=False, eink_outlined=selected, eink_selected=selected)
 
 
