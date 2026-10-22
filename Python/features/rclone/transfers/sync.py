@@ -72,7 +72,7 @@ def rclone_sync(source_path, destination_path, *, config_path, query=False, wait
             from commonUtils.ui import pyside as qt
             app = qt.QApplication.instance()
             if not wait_for_output and app is not None and qt.QThread.currentThread() == app.thread():
-                from commonUtils.ui.resource_picker import ResourceTaskDialog
+                from commonUtils.ui.resources.picker import ResourceTaskDialog
                 dialog = ResourceTaskDialog(None, 'Checking LocalCrypt before push')
                 result = []
                 def completed(value, error):

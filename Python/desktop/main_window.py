@@ -634,7 +634,7 @@ class MainWindow(pyside.Window):
         self.documents.closing = True
         self.actions.closing = True
         from commonUtils.ui.tasks.process_progress import prepare_close_all
-        from commonUtils.ui.resource_picker import resource_tasks_pending
+        from commonUtils.ui.resources.picker import resource_tasks_pending
         ready = not resource_tasks_pending(self.dlg)
         ready = prepare_close_all(self.dlg.close) and ready
         ready = self.documents.prepare_close() and ready

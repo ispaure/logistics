@@ -444,7 +444,7 @@ class ComicReaderWindow(qt.QMainWindow):
         return CloseOutcome.ACCEPTED if accepted else CloseOutcome.VETOED
 
     def closeEvent(self, event):
-        from commonUtils.ui.resource_picker import resource_tasks_pending
+        from commonUtils.ui.resources.picker import resource_tasks_pending
         if resource_tasks_pending(self):
             self.closing = True
             event.ignore()

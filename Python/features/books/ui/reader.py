@@ -534,7 +534,7 @@ class BooksPage(Bookmarks, qt.QWidget):
                   'Saving encrypted metadata…' if self.private else 'Saving metadata and backing up the original…')
 
     def prepare_close(self):
-        from commonUtils.ui.resource_picker import resource_tasks_pending
+        from commonUtils.ui.resources.picker import resource_tasks_pending
         self._closing = True
         if resource_tasks_pending(self.reader_window() or self):
             return False

@@ -248,7 +248,7 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
         return CloseOutcome.PENDING if self._close_pending else CloseOutcome.VETOED
 
     def closeEvent(self, event):
-        from commonUtils.ui.resource_picker import resource_tasks_pending
+        from commonUtils.ui.resources.picker import resource_tasks_pending
         if resource_tasks_pending(self):
             event.ignore()
             return

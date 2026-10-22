@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.resource_browser import ResourceBrowser
+from commonUtils.ui.resources.browser import ResourceBrowser
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from features.rclone.remote_policy import direct_kind, LOCAL_COPY_MESSAGE, TEXT_LIMIT
 

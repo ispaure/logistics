@@ -4,8 +4,8 @@ from pathlib import Path
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.resource_picker import ResourcePicker
-from commonUtils.ui.resource_editor import ResourceTextWindow
+from commonUtils.ui.resources.picker import ResourcePicker
+from commonUtils.ui.resources.editor import ResourceTextWindow
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceChoice, ResourceTextSession
 
@@ -120,7 +120,7 @@ class EditorResourcePickerTests(QtTestCase):
 
     def test_cancelled_private_reader_open_releases_choice_without_presenting(self):
         from threading import Event
-        from commonUtils.ui.resource_picker import ResourceTaskDialog
+        from commonUtils.ui.resources.picker import ResourceTaskDialog
         from services.documents.ui.readers import open_reader_choice
         release_worker = Event()
         def dialog(parent, title):

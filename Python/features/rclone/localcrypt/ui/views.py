@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.resource_browser import ResourceBrowser
+from commonUtils.ui.resources.browser import ResourceBrowser
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.ui.document_host import show_document
 from features.rclone import session, executable
@@ -491,7 +491,7 @@ class CryptBrowserView(qt.QMainWindow):
         (parent if isinstance(parent, qt.QDockWidget) else self).close()
 
     def prepare_close(self):
-        from commonUtils.ui.resource_picker import resource_tasks_pending
+        from commonUtils.ui.resources.picker import resource_tasks_pending
         if resource_tasks_pending(self):
             return False
         self.closing = True

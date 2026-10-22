@@ -2,7 +2,7 @@
 from contextlib import nullcontext
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.resource_picker import ResourceTaskDialog
+from commonUtils.ui.resources.picker import ResourceTaskDialog
 from services.documents.ui.editors import choose_editor_resource, retain
 
 

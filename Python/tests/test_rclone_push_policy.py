@@ -185,7 +185,7 @@ class PushPolicyUITests(QtTestCase):
                     time.sleep(.01)
                 check_cancelled(cancelled)
             def cancel():
-                from commonUtils.ui.resource_picker import ResourceTaskDialog
+                from commonUtils.ui.resources.picker import ResourceTaskDialog
                 for widget in self.app.topLevelWidgets():
                     if isinstance(widget, ResourceTaskDialog):
                         widget.reject()
