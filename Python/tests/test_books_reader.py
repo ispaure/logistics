@@ -112,7 +112,16 @@ class ReaderTests(QtTestCase):
         self.page.text.repaginate()
         self.page.text._resize_anchor = 0
         self.page.text.show_page(2)
-        self.page.turn_page(1)
+        from services.documents.ui.page_transition import page_slide
+        slide = page_slide(self.page.reading_area)
+        finish = slide.finish
+        def capture_with_pending_resize():
+            finish()
+            # Some Qt backends queue a stale layout anchor while grabbing the
+            # outgoing page, after turn_page has cleared the previous resize.
+            self.page.text._resize_anchor = 0
+        with patch.object(slide, 'finish', side_effect=capture_with_pending_resize):
+            self.page.turn_page(1)
         anchor = self.page.text.location()
         self.page.resize(900, 650); QTest.qWait(200)
         cursor = qt.QTextCursor(self.page.text.document()); cursor.setPosition(anchor)

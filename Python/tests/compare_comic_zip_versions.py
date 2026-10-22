@@ -19,7 +19,7 @@ ROOT = args.output_dir.resolve() if args.output_dir else Path(mkdtemp(prefix='lo
 ROOT.mkdir(parents=True, exist_ok=True)
 OLD = ROOT / 'before'
 OLD.mkdir()
-ref = '43e777cafe8c5bd45fece1538ba32ee75ca2db91'
+ref = '51b610ed3f0d55e94bd9b179621545fe867ccb38'
 shared_ref = subprocess.check_output(['git', 'rev-parse', f'{ref}:Python/commonUtils'], cwd=REPO, text=True).strip()
 for repo, revision, destination, paths in [(REPO, ref, OLD, ['Python']), (REPO / 'Python/commonUtils', shared_ref, OLD / 'Python/commonUtils', [])]:
     destination.mkdir(parents=True, exist_ok=True)

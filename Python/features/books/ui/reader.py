@@ -341,6 +341,11 @@ class BooksPage(Bookmarks, qt.QWidget):
             self.text.repaginate()
             self.text.show_page(target)
             slide.finish()
+            # Capturing the outgoing page can resize the text viewport and
+            # queue another anchor. Subsequent layout must retain the page the
+            # user just selected, rather than that capture-time position.
+            self.text._resize_anchor = None
+            self.text.resize_settle.stop()
         elif direction > 0 and self._current + 1 < len(self.book.spine):
             self.go_chapter(self._current + 1)
         elif direction < 0 and self._current > 0:

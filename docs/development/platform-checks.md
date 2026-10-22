@@ -20,9 +20,10 @@ fixture directory is `test-results/`, which is ignored by Git. A second run shou
 use a new `--results-dir` or remove the previous disposable reports first.
 
 The historical comparison requires the Git history for Logistics
-`43e777cafe8c5bd45fece1538ba32ee75ca2db91` and commonUtils
-`70117045020ee9a8f78c9e6ba3be47a9c7cd2ca6`. CI fetches the latter explicitly.
-Shallow clones may need to fetch those commits before running locally.
+`51b610ed3f0d55e94bd9b179621545fe867ccb38` and commonUtils
+`d5c42ffd4306c010d9625b8a9bae57cdf097a567`. CI fetches the latter explicitly.
+These are the cleaned-history equivalents of the original pre-password baseline;
+its implementation is unchanged. Shallow clones may need to fetch those commits before running locally.
 The comparison can also run by itself:
 
 ```sh

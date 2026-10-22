@@ -35,6 +35,8 @@ See the [user guide](../user/user.md) for reading controls, settings and backups
   legacy proportional positions remain a fallback. Font/viewport changes map
   the saved text offset into the new page layout; no whole-book pagination scan
   is required. Search and chapter anchors snap to their containing page.
+  Manual page turns also discard resize anchors queued during outgoing-page
+  capture, so a later layout change preserves the newly selected page.
 - `ui/preview.py`: bounded cover decoding for file-browser metadata panels and tile
   thumbnails. Covers resolve via EPUB 3 manifest properties, EPUB 2 metadata,
   or a cover guide/first-page image; images retain their aspect ratio.
