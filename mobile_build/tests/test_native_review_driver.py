@@ -40,6 +40,19 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bandwidth.value, '1')
         self.assertIn('*.skip', excludes.value)
 
+    def test_settings_save_follows_promoted_ios_toolbar_action(self):
+        saved = []
+        save = State(text='Save settings', on_press=lambda: saved.append(True))
+        form = State(children=[State(text='Transfer settings'), State(value=False),
+            State(text='Bandwidth limit (MB/s)'), State(value=''),
+            State(text='Push exclusions (one pattern per line)'), State(value='*.tmp'), State(text='Status')],
+            _ios_toolbar_buttons=[save])
+        app = State(body=State(children=[form]), show_transfer_options=lambda: None)
+        save_transfer_settings(app)
+        self.assertEqual(saved, [True])
+        self.assertTrue(form.children[1].value)
+        self.assertEqual(form.children[3].value, '1')
+
     async def test_confirms_changed_completed_review_again(self):
         app, calls = self.app()
         await approve_transfer(app, timeout=1)

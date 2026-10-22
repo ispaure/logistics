@@ -74,6 +74,7 @@ def save_transfer_settings(app):
             candidate.on_press()
             break
         pending.extend(list(getattr(candidate, 'children', ()) or ()))
+        pending.extend(getattr(candidate, '_ios_toolbar_buttons', ()))
     else:
         raise AssertionError('Native transfer settings save button was not presented')
 
