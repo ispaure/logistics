@@ -13,7 +13,8 @@ The [user guide](../user/user.md) describes available workflows and limits.
 | `agent.py` | Read-only tool rounds, context/call limits and cooperative worker ownership |
 | `project_tools.py` | Project path/exclusion checks, bounded file listing, text search and line reads |
 | `session.py` | Conversation record, edit lease, dirty state, publication and streaming response transitions; no widget dependencies |
-| `ui/page.py` | Navigation, UI value collection, transport dispatch, GUI-thread timers, save feedback and close prompts |
+| `generation.py` | Request preparation and publish-before-dispatch orchestration over captured inputs; no widgets |
+| `ui/page.py` | Navigation, UI value collection, generation presentation, GUI-thread timers, save feedback and close prompts |
 | `ui/layout.py` | Widget construction and layout, without conversation state ownership |
 | `ui/composer.py`, `ui/mode_tabs.py` | Enter/Shift+Enter, screenshot paste/drop, sampling controls and Chat/Code tabs |
 | `ui/profiles.py` | Identity-preserving server profile editor |
@@ -39,6 +40,14 @@ after acquiring their lease. Response insertion and draft clearing publish befor
 network dispatch; failure restores the record and leaves it dirty for retry.
 Completion clears active response ownership while retaining partial text, even
 when publication fails. Storage errors propagate to the page for recovery UI.
+
+`GenerationCoordinator` builds a request from `GenerationInputs` (captured profile,
+project and editor buffers) and the conversation session. Its prepared plan holds
+no token. `start` publishes the pending response before invoking the page's
+publication callback and starting transport. Publication failure prevents both;
+transport startup failure saves a failed response while retaining the user turn.
+A secondary save failure is reported separately, leaving the session dirty for
+retry/export. `test_lm_generation.py` exercises these boundaries without widgets.
 
 The page checks transport availability and saves outgoing widget values before
 switching records. It owns credentials, draft widget/image previews, timers,

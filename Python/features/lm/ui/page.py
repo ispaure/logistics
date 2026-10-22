@@ -6,13 +6,13 @@ from uuid import uuid4
 
 from commonUtils.ui import pyside as qt
 from commonUtils.persistence import atomic_write_bytes, atomic_write_json
-from ..domain import build_request, conversation, defaults, message, validate_settings
+from ..domain import conversation, defaults, message, validate_settings
 from ..storage import Store, export_markdown
 from ..session import ConversationSession
 from ..agent import AgentClient
 from ..screenshots import encode_screenshot, MAX_IMAGES
 from .image_view import ScreenshotView
-from ..project_tools import ProjectTools, TOOLS
+from ..generation import GenerationCoordinator, GenerationInputs
 from .ide_context import registered_projects, editor_context
 from .icons import chat_icon, action_button
 from .layout import build_layout
@@ -71,6 +71,7 @@ class LMPage(qt.QWidget):
         self.last_conversations = {}
         self.mode_search = {}
         self.session = ConversationSession(self.store)
+        self.generation = GenerationCoordinator(self.session, self.client)
         session = self.session
         # Capture only the session, never the widget being destroyed.
         self.destroyed.connect(lambda: session.release_lease())
@@ -759,50 +760,42 @@ class LMPage(qt.QWidget):
             return False
         try:
             self.collect()
-            project_tools = None
+            project, buffers = None, None
             if self.data.get('mode') == 'code':
                 key = self.project_picker.currentData()
                 self.projects = self.context_projects()
                 project = self.projects.get(key)
-                if project is None:
-                    raise ValueError('Choose a registered IDE project. Register one in IDE, then refresh projects.')
-                buffers, _ = self.context_buffers(project)
-                project_tools = ProjectTools(project, buffers)
-            payload, metadata = build_request(self.data, tools=TOOLS if project_tools else None,
-                                             project_name=project_tools.name if project_tools else None)
-            if project_tools:
-                metadata['project_id'] = project.id
-                metadata['project_name'] = project.name
-                metadata['project_root'] = str(project.root)
+                if project is not None:
+                    buffers, _ = self.context_buffers(project)
+            plan = self.generation.prepare(GenerationInputs(profile, project, buffers))
         except ValueError as error:
             self.status.setText(str(error))
             return False
-        metadata['base_url'] = profile['base_url']
         self.save_timer.stop()
+
+        def published():
+            self.reflect_saved_state()
+            if clear_draft:
+                self.draft_images = []
+                self.refresh_draft_images()
+                self.loading = True
+                self.composer.clear()
+                self.loading = False
+
         try:
-            self.session.begin_response(metadata, clear_draft=clear_draft)
+            result = self.generation.start(plan, self.token.text(), clear_draft=clear_draft, published=published)
         except (OSError, ValueError, UnicodeError) as error:
             self.show_save_error(error)
             return False
-        self.reflect_saved_state()
-        if clear_draft:
-            self.draft_images = []
-            self.refresh_draft_images()
-            self.loading = True
-            self.composer.clear()
-            self.loading = False
-        try:
-            if project_tools:
-                self.client.start(profile, self.token.text(), payload, project_tools=project_tools,
-                                  context_tokens=self.data['settings']['context_tokens'])
+        if not result.started:
+            if result.save_error is not None:
+                self.show_save_error(result.save_error)
             else:
-                self.client.start(profile, self.token.text(), payload)
-        except (ValueError, OSError) as error:
-            self.session.complete_response('failed', str(error), {})
-            self.persist()
-            self.status.setText(str(error))
+                self.reflect_saved_state()
+            self.status.setText(result.error)
             self.render()
             return True  # The saved user turn remains retryable.
+        metadata = plan.metadata
         self.status.setText(f'Generating… Approximately {metadata["estimated_input_tokens"]} input tokens; {metadata["omitted_turns"]} earlier turns omitted.')
         self.checkpoint_timer.start()
         self.render()

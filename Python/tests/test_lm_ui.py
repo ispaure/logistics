@@ -790,6 +790,20 @@ class LMUITests(QtTestCase):
             self.assertEqual(self.page.data['messages'][-1]['content'], 'Bonjour 🌍')
         self.assertTrue(self.page.persist())
 
+    def test_transport_start_failure_keeps_saved_turn_and_clears_published_draft(self):
+        self.page.new_conversation()
+        self.page.model.setCurrentText('fixture-model')
+        self.page.composer.setPlainText('Keep this retryable message')
+        with patch.object(self.page.client, 'start', side_effect=OSError('Synthetic offline')):
+            self.page.send()
+        self.assertEqual(self.page.composer.toPlainText(), '')
+        self.assertIn('Synthetic offline', self.page.status.text())
+        saved = self.store.load(self.page.data['id'])
+        self.assertEqual(saved['messages'][0]['content'], 'Keep this retryable message')
+        self.assertEqual(saved['messages'][-1]['status'], 'failed')
+        self.assertIsNone(self.page.active_message)
+        self.assertEqual(self.server.requests, [])
+
     def test_first_publication_failure_keeps_unsent_user_draft(self):
         self.page.new_conversation()
         self.page.model.setCurrentText('fixture-model')

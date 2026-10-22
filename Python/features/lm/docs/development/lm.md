@@ -8,7 +8,8 @@ import its implementation. The `lm` sidebar glyph is additive; the reserved Misc
 menu/glyph remains intact. No additional runtime dependency is required.
 
 Desktop presentation lives under `Python/features/lm/ui/`: `page.py` coordinates
-navigation and transport dispatch, `layout.py` builds widgets, and composer,
+navigation and generation presentation, `generation.py` coordinates request
+preparation/publication/transport over captured inputs, `layout.py` builds widgets, and composer,
 profile, transcript, image and IDE-context modules own their specific UI work.
 The root `session.py` owns the conversation record, edit lease, dirty state and
 response transitions independently of widgets. See the feature's
