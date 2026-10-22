@@ -83,3 +83,35 @@ class FixedControlAuditTests(unittest.TestCase):
             rect.origin.x = 0
             with self.assertRaises(AssertionError):
                 rotation_checks.assert_visible_controls(app)
+
+    def test_uikit_owned_navigation_controls_are_audited_after_promotion(self):
+        import toga
+        import sys
+        from unittest.mock import patch
+        from mobile_build.native_tests.tests.logisticsmobile import rotation_checks
+        window = SimpleNamespace(ptr=SimpleNamespace(value=1),
+            safeAreaInsets=SimpleNamespace(left=47, right=47, top=0, bottom=21),
+            bounds=SimpleNamespace(size=SimpleNamespace(width=844, height=390)))
+        rect = SimpleNamespace(origin=SimpleNamespace(x=47, y=20),
+                               size=SimpleNamespace(width=100, height=44))
+        button = toga.Button('Promoted folder action')
+        body = toga.Box()
+        body.title_actions = (button,)
+        native = SimpleNamespace(window=lambda: window, isHidden=lambda: False, alpha=1,
+            bounds=object(), convertRect=lambda *args, **kwargs: rect,
+            accessibilityLabel=lambda: 'Promoted folder action',
+            isKindOfClass=lambda cls: True, subviews=[])
+        bar = SimpleNamespace(isHidden=lambda: False, alpha=1, window=lambda: window,
+            isKindOfClass=lambda cls: False, subviews=lambda: [native])
+        host = SimpleNamespace(adapter=SimpleNamespace(navigation=[SimpleNamespace(navigationBar=lambda: bar)]),
+            destinations=['files'], state=SimpleNamespace(destination='files'))
+        app = SimpleNamespace(body=body, native_host=host,
+            main_window=SimpleNamespace(_impl=SimpleNamespace(native=window)))
+        with patch.object(rotation_checks.sys, 'platform', 'ios'), \
+                patch.dict(sys.modules, {'rubicon.objc': SimpleNamespace(ObjCClass=lambda name: object())}), \
+                patch.object(body._impl, 'native', SimpleNamespace(window=lambda: window), create=True), \
+                patch.object(button._impl, 'native', SimpleNamespace(window=lambda: None), create=True):
+            self.assertEqual(rotation_checks.assert_visible_controls(app), 1)
+            rect.origin.x = 0
+            with self.assertRaises(AssertionError):
+                rotation_checks.assert_visible_controls(app)

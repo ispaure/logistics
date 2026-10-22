@@ -131,7 +131,6 @@ def assert_visible_controls(app):
         return 0
     import toga
     window = app.main_window._impl.native
-    safe, size = window.safeAreaInsets, window.bounds.size
     checked = (toga.Button, toga.Selection, toga.TextInput, toga.MultilineTextInput)
     count = 0
     seen = set()
@@ -149,12 +148,7 @@ def assert_visible_controls(app):
             if rect.size.width > 0 and rect.size.height > 0:
                 count += 1
                 label = getattr(widget, 'accessible_name', None) or getattr(widget, 'text', type(widget).__name__)
-                details = (label, float(rect.origin.x), float(rect.origin.y),
-                           float(rect.size.width), float(rect.size.height))
-                assert rect.origin.x >= safe.left - 1, details
-                assert rect.origin.x + rect.size.width <= size.width - safe.right + 1, details
-                assert rect.origin.y >= safe.top - 1, details
-                assert rect.origin.y + rect.size.height <= size.height - safe.bottom + 1, details
+                assert_control_bounds(rect, window, label)
         # Folder actions are retained Toga buttons mounted into UIKit's bar.
         # They no longer have a parent in the Toga content tree.
         for control in getattr(widget, 'title_actions', ()):
@@ -164,7 +158,39 @@ def assert_visible_controls(app):
             for child in widget.children:
                 visit(child)
     visit(app.body)
+    # UIKit bar items retain Toga callbacks, but mount UIKit-owned controls:
+    # the original UIButton has no window and cannot provide their geometry.
+    adapter = getattr(getattr(app, 'native_host', None), 'adapter', None)
+    if adapter is not None:
+        from commonUtils.ui.native.keyboard import native_value
+        from rubicon.objc import ObjCClass
+        navigation = adapter.navigation[app.native_host.destinations.index(app.native_host.state.destination)]
+        control_class = ObjCClass('UIControl')
+        def visit_bar(native):
+            nonlocal count
+            if native.isHidden() or float(native.alpha) <= 0:
+                return
+            owner = native_value(native.window)
+            if (native.isKindOfClass(control_class) and owner is not None
+                    and owner.ptr.value == window.ptr.value):
+                rect = native.convertRect(native.bounds, toView=window)
+                if rect.size.width > 0 and rect.size.height > 0:
+                    assert_control_bounds(rect, window, str(native_value(native.accessibilityLabel) or 'Navigation control'))
+                    count += 1
+            for child in native_value(native.subviews):
+                visit_bar(child)
+        visit_bar(native_value(navigation.navigationBar))
     return count
+
+
+def assert_control_bounds(rect, window, label):
+    safe, size = window.safeAreaInsets, window.bounds.size
+    details = (label, float(rect.origin.x), float(rect.origin.y),
+               float(rect.size.width), float(rect.size.height))
+    assert rect.origin.x >= safe.left - 1, details
+    assert rect.origin.x + rect.size.width <= size.width - safe.right + 1, details
+    assert rect.origin.y >= safe.top - 1, details
+    assert rect.origin.y + rect.size.height <= size.height - safe.bottom + 1, details
 
 
 async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
