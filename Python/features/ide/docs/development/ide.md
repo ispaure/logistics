@@ -380,8 +380,10 @@ The shared rich editor itself and its interactive controls remain in commonUtils
 project identity, file operations, conflict checks, watcher registration and close
 policy remain in IDE. Standard shortcuts route through project menus, while
 Markdown-specific formatting shortcuts remain local. Local document links request
-project opens rather than replacing a tab's identity. Native destruction of a
-Markdown view detaches its source document and stops speech/diagram work; project
+project opens rather than replacing a tab's identity. Markdown link destinations
+inherit the originating tab's Read/Edit state and Formatted/Source choice, including
+when reusing an already open destination tab. Native destruction of a Markdown
+view detaches its source document and stops speech/diagram work; project
 shutdown also stops those services. Navigation/persisted positions use source
 UTF-16 offsets. Rich undo stacks are per view; source undo is shared.
 

@@ -149,7 +149,15 @@ class MarkdownDocument(MarkdownViewer):
         if resolved.isLocalFile() and Path(resolved.toLocalFile()) != self.path:
             target = Path(resolved.toLocalFile())
             if target.suffix.lower() in ('.md', '.markdown'):
-                self.workspace.open_path(target, on_open=lambda view: view.browser.scrollToAnchor(resolved.fragment()))
+                editing = self.edit_button.isChecked()
+                mode = self.edit_mode.currentData()
+                def opened(view):
+                    view.set_edit_mode(mode)
+                    view.set_editing(editing)
+                    view.browser.scrollToAnchor(resolved.fragment())
+                    if editing and view.active_editor() is view.formatted_editor and resolved.fragment():
+                        view._scroll_formatted_heading(resolved.fragment())
+                self.workspace.open_path(target, on_open=opened)
                 return
         super().follow_link(link)
 

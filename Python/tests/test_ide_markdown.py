@@ -37,6 +37,8 @@ class MarkdownTabTests(QtTestCase):
             self.assertEqual(first.editor.column_guide, 120)
             self.assertEqual(workspace.active_group.count(), 2)
             self.assertEqual(first.edit_mode.currentData(), 'formatted')
+            self.assertEqual(first.active_editor().textCursor().position(), 0)
+            self.assertEqual(first.active_editor().verticalScrollBar().value(), 0)
             self.assertTrue(workspace.save_current())
             self.assertEqual(path.read_bytes(), b'# Guide\r\n\r\nOriginal\r\n')
             workspace.split_right()
@@ -98,5 +100,34 @@ class MarkdownTabTests(QtTestCase):
             self.assertTrue(second.find_bar.isVisibleTo(second))
             self.wait(workspace)
             self.assertTrue(workspace.can_close())
+            workspace.prepare_close()
+            workspace.close()
+
+    def test_linked_tabs_inherit_read_and_edit_modes(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            origin, target = root / 'origin.md', root / 'target.md'
+            origin.write_text('# Origin\n\n[Target](target.md#details)\n')
+            target.write_text('# Target\n\n## Details\n\nText\n')
+            workspace = ProjectWorkspace(Project('test', directory))
+            self.wait(workspace)
+            workspace.open_path(origin)
+            self.wait(workspace)
+            first = workspace.current
+            for editing, mode in ((False, 'formatted'), (True, 'formatted'),
+                                  (True, 'source'), (False, 'source')):
+                with self.subTest(editing=editing, mode=mode):
+                    workspace.open_path(origin)
+                    first.set_edit_mode(mode)
+                    first.set_editing(editing)
+                    first.follow_link(qt.QUrl('target.md#details'))
+                    self.wait(workspace)
+                    linked = workspace.current
+                    self.assertEqual(linked.path, target)
+                    self.assertEqual(linked.edit_button.isChecked(), editing)
+                    self.assertEqual(linked.edit_mode.currentData(), mode)
+                    self.assertIs(linked.pages.currentWidget(),
+                                  linked.active_editor() if editing else linked.browser)
+                    self.assertEqual(first.edit_button.isChecked(), editing)
             workspace.prepare_close()
             workspace.close()
