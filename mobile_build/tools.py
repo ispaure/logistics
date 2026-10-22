@@ -51,7 +51,7 @@ SHARED_REQUIRED_MODULES += ('ui/native/navigation_state.py', 'ui/native/navigati
                             'ui/native/android/io/github/ispaure/commonutils/NavigationBack.java')
 
 SHARED_REQUIRED_MODULES += ('runtime/resources/documents.py', 'runtime/protected_keys.py',
-                            'filesystem/snapshots.py', 'archives/rebuilding.py',
+                            'filesystem/snapshots.py', 'archives/rebuilding.py', 'archives/callbacks.py',
                             'ui/native/event_loop.py', 'ui/native/memory.py',
                             'ui/native/documents.py', 'ui/native/menus.py',
                             'ui/native/presentation.py', 'ui/native/editor_search.py', 'ui/native/markdown_search.py',
@@ -74,7 +74,7 @@ SHARED_REQUIRED_MODULES += ('ui/native/draw_ready.py', 'ui/native/android/io/git
 
 SHARED_REQUIRED_MODULES += ('ui/native/keyboard.py',)
 
-SHARED_REQUIRED_MODULES += ('runtime/progress.py', 'runtime/streams/progress.py')
+SHARED_REQUIRED_MODULES += ('runtime/streams/sse.py', 'runtime/progress.py', 'runtime/streams/progress.py')
 
 SHARED_REQUIRED_MODULES += ('ui/native/text_size.py',)
 
@@ -89,7 +89,7 @@ SHARED_REQUIRED_MODULES += ('ui/native/forms.py',)
 SHARED_REQUIRED_MODULES += ('ui/native/bars.py',)
 
 SHARED_REQUIRED_MODULES += ('runtime/signals.py',)
-SHARED_REQUIRED_MODULES += ('runtime/name_search.py',)
+SHARED_REQUIRED_MODULES += ('runtime/name_search.py', 'runtime/resources/indexed_search.py')
 
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):

@@ -1,12 +1,11 @@
 """Lazy native archive views shared by ordinary and encrypted document sources."""
 import base64
 from contextlib import contextmanager
-from io import BytesIO
 from zipfile import ZipInfo
-from commonUtils.runtime.operations import check_cancelled
+from commonUtils.archives.callbacks import CallbackArchive
 
 
-class NativeArchive:
+class NativeArchive(CallbackArchive):
     def __init__(self, source):
         self.source = source
         self.members = []
@@ -16,37 +15,13 @@ class NativeArchive:
             info.flag_bits = 0  # This facade exposes authenticated decoded members.
             self.members.append(info)
         self.protected = [row['name'] for row in source.headers if row['flags'] & 1 and not row['directory']]
+        super().__init__(self.members, read_member=source.read_member, manifest=self._native_manifest)
 
-    def content_manifest(self, *, cancelled=lambda: False):
-        check_cancelled(cancelled)
+    def _native_manifest(self):
         action = getattr(self.source, 'manifest_action', None)
         if action is None:
             raise ValueError('This archive source does not provide a content manifest.')
-        rows = self.source.request(action)
-        check_cancelled(cancelled)
-        return {name: None if value is None else tuple(value) for name, value in rows.items()}
-
-    def infolist(self):
-        return list(self.members)
-
-    def namelist(self):
-        return [member.filename for member in self.members]
-
-    def getinfo(self, name):
-        for info in self.members:
-            if info.filename == name:
-                return info
-        raise KeyError(name)
-
-    def read(self, member):
-        name = member.filename if isinstance(member, ZipInfo) else member
-        self.getinfo(name)
-        return self.source.read_member(name)
-
-    @contextmanager
-    def open(self, member, *args, **kwargs):
-        with BytesIO(self.read(member)) as stream:
-            yield stream
+        return self.source.request(action)
 
 
 class NativeArchiveAccess:

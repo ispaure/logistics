@@ -238,3 +238,10 @@ stream/draft checks validate presentation without a real server account.
 `ui/menus.py` assembles the conversation menu bar from the page's existing actions
 and callbacks. The page retains conversation state, persistence, control enablement
 and signal ownership; menu assembly does not create a second session owner.
+
+## Stream framing boundary
+
+`streaming.StreamDecoder` consumes shared bounded data-only SSE framing. The LM
+feature retains `[DONE]`, JSON validation, choices, tool fragments, response limits,
+finish reasons and usage. It preserves partial text on later record failures and
+keeps desktop/mobile response-policy differences in their transports.

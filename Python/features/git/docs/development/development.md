@@ -234,3 +234,12 @@ UI completion callbacks apply only to the still-current repository. Existing Git
 preferences, confirmations, credential handling and no-automatic-retry policy
 remain unchanged. `test_git_commands` covers captured context and stale execution;
 Git UI/backend tests cover forms, stash/index behavior and worker retirement.
+
+## Command capture ownership
+
+`runner.GitRunner` retains Git options, repository environment filtering, input
+limits, credentials policy, version requirements and error translation. Its shared
+capture backend spools stdout/stderr separately, preserving binary stdout, stderr
+progress/tail, timeout/cancellation and completion-before-truncation behavior.
+Sensitive requests discard both outputs. Diagnostic redaction is best effort;
+Git does not use it as a substitute for discarding sensitive output.

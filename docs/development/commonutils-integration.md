@@ -224,3 +224,23 @@ index and workspace guides describe the consolidated lifecycle and phase owners.
 Logistics keeps voice preferences/privacy, source/credential identity, transfer
 approval and document routing. As with the other links here, inspect the pinned
 checkout for locally committed changes before they are published upstream.
+
+## Readability extraction boundaries
+
+Cache-backed local search now composes the shared directory index and resource
+search. Logistics supplies its explicit ordinary-provider allowlist and database
+location; private, remote and session-only sources continue to search in memory.
+
+Git delegates disk-spooled process capture and best-effort diagnostic filtering,
+but retains arguments, environment filtering, sensitive-operation policy and Git
+errors. LM delegates data-only SSE framing; response JSON, tool interpretation and
+response limits stay feature-owned.
+
+Native document sources adapt shared callback-backed archive views. Bridge action
+names, passwords, member limits, revision validation and credential retirement
+remain in Logistics. Images uses shared optional Pillow encoding and exclusive
+publication mechanics; Images and Comics retain quality choices, acceptance
+thresholds, animation preservation, source-change checks and file deletion/moves.
+Shared copy fallback retains its existing non-atomic guarantee; atomic exclusive
+rename remains a different operation. API details belong in commonUtils' resource,
+archive, format, process, stream and persistence guides.
