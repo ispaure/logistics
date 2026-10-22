@@ -97,12 +97,16 @@ class FixedControlAuditTests(unittest.TestCase):
         button = toga.Button('Promoted folder action')
         body = toga.Box()
         body.title_actions = (button,)
+        button._ios_action_item = SimpleNamespace(accessibilityLabel='Promoted folder action')
         native = SimpleNamespace(window=lambda: window, isHidden=lambda: False, alpha=1,
             bounds=object(), convertRect=lambda *args, **kwargs: rect,
             accessibilityLabel=lambda: 'Promoted folder action',
             isKindOfClass=lambda cls: True, subviews=[])
-        bar = SimpleNamespace(isHidden=lambda: False, alpha=1, window=lambda: window,
-            isKindOfClass=lambda cls: False, subviews=lambda: [native])
+        hit_region = SimpleNamespace(isHidden=lambda: False, alpha=1, window=lambda: window,
+            isKindOfClass=lambda cls: True, accessibilityLabel=None, subviews=[],
+            bounds=object(), convertRect=Mock(side_effect=AssertionError('System hit region is not an app action')))
+        bar = SimpleNamespace(isHidden=lambda: False, alpha=1, window=lambda: window, accessibilityLabel=None,
+            isKindOfClass=lambda cls: False, subviews=lambda: [hit_region, native])
         host = SimpleNamespace(adapter=SimpleNamespace(navigation=[SimpleNamespace(navigationBar=lambda: bar)]),
             destinations=['files'], state=SimpleNamespace(destination='files'))
         app = SimpleNamespace(body=body, native_host=host,

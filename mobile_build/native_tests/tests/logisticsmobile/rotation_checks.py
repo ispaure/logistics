@@ -134,6 +134,8 @@ def assert_visible_controls(app):
     checked = (toga.Button, toga.Selection, toga.TextInput, toga.MultilineTextInput)
     count = 0
     seen = set()
+    action_labels = set()
+    from commonUtils.ui.native.keyboard import native_value
     def visit(widget):
         nonlocal count
         if id(widget) in seen:
@@ -149,10 +151,13 @@ def assert_visible_controls(app):
                 count += 1
                 label = getattr(widget, 'accessible_name', None) or getattr(widget, 'text', type(widget).__name__)
                 assert_control_bounds(rect, window, label)
-        # Folder actions are retained Toga buttons mounted into UIKit's bar.
-        # They no longer have a parent in the Toga content tree.
-        for control in getattr(widget, 'title_actions', ()):
-            visit(control)
+        item = getattr(widget, '_ios_action_item', None)
+        if item is not None:
+            action_labels.add(str(native_value(item.accessibilityLabel)))
+        # Promoted actions retain callbacks outside the Toga content tree.
+        for field in ('title_actions', '_ios_toolbar_buttons', '_ios_toolbar_leading'):
+            for control in getattr(widget, field, ()):
+                visit(control)
         # Scrollable form content is deliberately allowed beyond its viewport.
         if not isinstance(widget, toga.ScrollContainer):
             for child in widget.children:
@@ -162,7 +167,6 @@ def assert_visible_controls(app):
     # the original UIButton has no window and cannot provide their geometry.
     adapter = getattr(getattr(app, 'native_host', None), 'adapter', None)
     if adapter is not None:
-        from commonUtils.ui.native.keyboard import native_value
         from rubicon.objc import ObjCClass
         navigation = adapter.navigation[app.native_host.destinations.index(app.native_host.state.destination)]
         control_class = ObjCClass('UIControl')
@@ -171,11 +175,14 @@ def assert_visible_controls(app):
             if native.isHidden() or float(native.alpha) <= 0:
                 return
             owner = native_value(native.window)
-            if (native.isKindOfClass(control_class) and owner is not None
-                    and owner.ptr.value == window.ptr.value):
+            label = str(native_value(native.accessibilityLabel) or '')
+            # UIKit's unnamed navigation hit regions may extend past the safe
+            # margins. Audit our explicitly labelled actions, not those regions.
+            if (native.isKindOfClass(control_class) and label in action_labels
+                    and owner is not None and owner.ptr.value == window.ptr.value):
                 rect = native.convertRect(native.bounds, toView=window)
                 if rect.size.width > 0 and rect.size.height > 0:
-                    assert_control_bounds(rect, window, str(native_value(native.accessibilityLabel) or 'Navigation control'))
+                    assert_control_bounds(rect, window, label)
                     count += 1
             for child in native_value(native.subviews):
                 visit_bar(child)
