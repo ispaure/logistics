@@ -7,7 +7,7 @@ class CompositeGeometryTests(unittest.TestCase):
     def test_unequal_pages_keep_proportions_at_one_common_height(self):
         size, rects = spread_geometry([(125, 301), (151, 401)])
         self.assertEqual(size[1], 401)
-        self.assertEqual(rects[1], (rects[0][2] + 8, 0, 151, 401))
+        self.assertEqual(rects[1], (rects[0][2], 0, 151, 401))
         for source, (_, _, width, height) in zip([(125, 301), (151, 401)], rects):
             self.assertLess(abs(width - height * source[0] / source[1]), 1)
 
@@ -19,13 +19,18 @@ class CompositeGeometryTests(unittest.TestCase):
             self.assertTrue(all(w > 0 and h > 0 for _, _, w, h in rects))
             self.assertEqual(rects[-1][0] + rects[-1][2], width)
 
-    def test_fitted_gutter_matches_desktop_spacing_across_page_sizes_and_viewports(self):
-        for sizes in [[(100, 200)] * 2, [(2000, 4000)] * 2, [(100, 200), (80, 220)]]:
+    def test_fitted_spreads_have_no_gutter_across_page_sizes_and_viewports(self):
+        # Standard spreads follow the documented zero-gap policy. Physical
+        # hinge clearance is a separate seam_gap contract in test_fold_layout.
+        for sizes in [[(100, 200)] * 2, [(2000, 4000)] * 2,
+                      [(100, 200), (80, 220)], [(4000, 8000)] * 2]:
             for viewport in [(411, 683), (834, 1158), (1200, 500)]:
-                (width, height), rects = spread_geometry(sizes, viewport=viewport)
-                gap = rects[1][0] - rects[0][2]
-                fitted_gap = gap * min(viewport[0] / width, viewport[1] / height)
-                self.assertLess(abs(fitted_gap - 8), 1)
+                with self.subTest(sizes=sizes, viewport=viewport):
+                    (width, height), rects = spread_geometry(sizes, viewport=viewport)
+                    self.assertEqual(rects[1][0], rects[0][0] + rects[0][2])
+                    self.assertEqual(rects[-1][0] + rects[-1][2], width)
+                    self.assertLessEqual(width * height, MAX_PIXELS)
+                    self.assertLessEqual(max(width, height), MAX_SIDE)
 
     def test_empty_excess_or_zero_sized_pages_are_rejected(self):
         for sizes in [[], [(1, 2)] * 3, [(0, 2)], [(-1, 2)]]:
