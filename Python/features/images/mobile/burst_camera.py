@@ -70,7 +70,7 @@ def save_camera_preferences(app, camera, rate):
 def settings_controls(app, box):
     import toga
     from toga.style import Pack
-    from logisticsmobile.settings_ui import SettingsLabel
+    from commonUtils.ui.native.forms import FittedLabel as SettingsLabel
     keys = [key for key in available_cameras() if key in CAMERAS]
     saved = app.preferences.values['burst_camera']
     labels = {key: CAMERAS[key] for key in keys}

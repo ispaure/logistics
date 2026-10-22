@@ -119,6 +119,11 @@ camera and 3-pictures-per-second choices reached the controller, including its
 updated signed build was installed and launched on the paired iPhone 15 Pro Max.
 Actual rate and quality on each physical lens remain part of on-device testing.
 
+Camera settings use `commonUtils.ui.native.forms.FittedLabel`, the same label
+class used by the mobile Settings host. The feature imports it directly and has
+no dependency on the mobile application package. The architecture check and
+`test_burst_camera.py` cover the boundary and preference controls.
+
 Viewer lens/rate menus share `save_camera_preferences()` with Settings. A retained
 Rubicon BOOL block writes the same validated INI keys before native changes apply;
 retained Settings controls refresh with event suppression to avoid recursive saves.
