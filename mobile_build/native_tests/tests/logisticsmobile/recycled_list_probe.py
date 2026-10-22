@@ -44,11 +44,18 @@ class Probe(toga.App):
             native = browser.native_list._impl.native
             android = browser.native_list.factory.DetailedList.__module__.startswith('toga_android.')
             if android:
-                assert native.getDivider() is not None
                 assert native.getDividerHeight() > 0
                 from mobile.palette import android_palette, argb
                 colors = android_palette(native.getResources().getConfiguration().uiMode & 0x30 == 0x20)
-                assert native.getDivider().getDrawable().getColor() == argb(colors['border'])
+                divider = native.getDivider()
+                if divider is None:
+                    # The current bridge paints row boundaries itself so hidden
+                    # rows and selection fills share the same clipped viewport.
+                    field = native.getClass().getDeclaredField('rowDivider')
+                    field.setAccessible(True)
+                    assert field.get(native).getColor() == argb(colors['border'])
+                else:
+                    assert divider.getDrawable().getColor() == argb(colors['border'])
             result['platform'] = 'android' if android else 'ios'
             result['initial_visible'] = int(native.getChildCount()) if android else len(native.visibleCells)
             assert 0 < result['initial_visible'] < 100, result
