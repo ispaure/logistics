@@ -181,7 +181,7 @@ class DocumentsPage(qt.QWidget):
             self.changed.emit()
 
     def document_launchers(self):
-        from .launch_catalog import document_launchers
+        from .navigation.catalog import document_launchers
         return document_launchers()
 
     def _features_changed(self):

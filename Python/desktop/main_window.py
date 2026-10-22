@@ -203,44 +203,24 @@ class MainWindow(pyside.Window):
 
     @staticmethod
     def _launch_key(feature, page_id):
-        return {'git.workspace': 'git', 'ide.workspace': 'ide'}.get(page_id, 'feature:' + feature + ':' + page_id)
+        from .navigation.catalog import launch_key
+        return launch_key(feature, page_id)
+
+    def _launch_catalog(self, *, refresh=False):
+        if not refresh and hasattr(self, 'launch_catalog'):
+            return self.launch_catalog
+        from .navigation.catalog import LaunchCatalog
+        catalog = LaunchCatalog(core_types={'browser': FileBrowserPage, 'folders': FoldersPage})
+        self.launch_catalog = catalog.snapshot(self._core_pages, self._feature_pages,
+                                is_present=lambda page: self.tabs.indexOf(page) >= 0,
+                                actions=self.actions, bulk_rename=self.bulk_rename)
+        return self.launch_catalog
 
     def _launch_targets(self):
-        targets = {}
-        for _, _, page in self._core_pages:
-            if isinstance(page, FileBrowserPage):
-                targets['browser'] = page
-            elif isinstance(page, FoldersPage):
-                targets['folders'] = page
-        for (feature, page_id), page in self._feature_pages.items():
-            if page.property('navigation_icon') and self.tabs.indexOf(page) >= 0:
-                targets[self._launch_key(feature, page_id)] = page
-        if self.actions.count:
-            targets['actions'] = self.actions
-        if self.bulk_rename is not None:
-            targets['bulk_rename'] = self.bulk_rename
-        return targets
+        return self._launch_catalog().targets
 
     def _tool_launchers(self):
-        targets = self._launch_targets()
-        entries = []
-        for key, title, detail, icon in (
-                ('browser', 'File Browser', 'Browse and organize files.', 'browser'),
-                ('folders', 'Workspaces', 'Browse configured folders and services.', 'hub'),
-                ('bulk_rename', 'Bulk Rename', 'Preview and rename files and folders.', 'rename')):
-            if key in targets or key == 'bulk_rename':
-                entries.append((key, title, detail, icon))
-        states = {state.name: state for state in registry.get_feature_states()}
-        for registered in registry.get_pages():
-            contribution = registered.contribution
-            key = self._launch_key(registered.feature_name, contribution.page_id)
-            if contribution.navigation_icon and key in targets:
-                state = states.get(registered.feature_name)
-                detail = contribution.launch_description or getattr(state, 'description', '') or f'Open {contribution.name}.'
-                entries.append((key, contribution.name, detail, contribution.navigation_icon))
-        if 'actions' in targets:
-            entries.append(('actions', 'Workspace actions', 'Continue running operations and review their results.', 'actions'))
-        return entries
+        return [entry.card for entry in self._launch_catalog().destinations]
 
     def _launch(self, mode):
         if mode == 'bulk_rename' and self.bulk_rename is None:
@@ -284,14 +264,10 @@ class MainWindow(pyside.Window):
             self.tabs.setCurrentWidget(settings)
 
     def _launch_document(self, key, new=False):
-        launcher = self.sidebar.launchers.get(key)
-        if launcher is None:
-            return
-        callback = launcher.new_document if new else launcher.open_document
-        # The document host reveals successful opens. A cancelled picker keeps
-        # the chooser and the current launch mode intact.
-        if callback is not None:
-            callback(self.documents)
+        from .navigation.catalog import launch_document
+        # Successful openers reveal the existing document host. Cancellation
+        # preserves the current chooser and standalone/hub presentation.
+        return launch_document(self._launch_catalog().documents, key, self.documents, new=new)
 
     def _return_to_tool(self):
         page = self._standalone_page
@@ -484,9 +460,10 @@ class MainWindow(pyside.Window):
         self._refresh_sidebar()
 
     def _refresh_sidebar(self):
-        self.sidebar.refresh(self.tabs, self._core_pages)
-        self.landing.set_document_launchers(self.sidebar.launchers)
-        self.landing.set_tool_launchers(self._tool_launchers())
+        catalog = self._launch_catalog(refresh=True)
+        self.sidebar.refresh(self.tabs, self._core_pages, catalog=catalog)
+        self.landing.set_document_launchers(catalog.documents)
+        self.landing.set_tool_launchers([entry.card for entry in catalog.destinations])
         if self._standalone_page is not None and self.tabs.indexOf(self._standalone_page) < 0:
             self._show_landing()
 

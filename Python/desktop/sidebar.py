@@ -337,9 +337,10 @@ class DestinationRail(qt.QWidget):
         self.document_overlay.hide()
         self.home_requested.emit()
 
-    def refresh(self, tabs, core):
+    def refresh(self, tabs, core, *, catalog=None):
         core = {page: (order, name) for order, name, page in core}
         self.pages = {}
+        destinations = catalog.by_page if catalog is not None else {}
         for key in self.feature_buttons:
             self.buttons[key].hide()
         self.tools_menu.clear()
@@ -360,9 +361,10 @@ class DestinationRail(qt.QWidget):
                    'hub' if info and info[0] == 5 else
                    'debug' if info and info[1] == 'Debug' else
                    'settings' if info and info[1] == 'Settings' else None)
-            icon = page.property('navigation_icon')
+            destination = destinations.get(page)
+            icon = destination.icon if destination is not None else page.property('navigation_icon')
             if key is None and icon:
-                key = f'feature:{id(page)}'
+                key = (destination.rail_key or destination.key) if destination is not None else f'feature:{id(page)}'
                 if key not in self.buttons:
                     button = self._button(key, tabs.tabText(index), icon)
                     if page.property('navigation_position') == 'workspace' and icon == 'actions':
@@ -399,7 +401,7 @@ class DestinationRail(qt.QWidget):
             self.buttons[key].setVisible(key in self.pages)
         self.buttons['tools'].setVisible(bool(self.tools_menu.actions()))
         self.buttons['documents'].setVisible(True)
-        self._refresh_editors()
+        self._refresh_editors(catalog)
         if self.actions is not None:
             self.pages['actions'] = self.actions
             button = self.buttons['actions']
@@ -460,15 +462,14 @@ class DestinationRail(qt.QWidget):
         overlay.show()
         self.document_tree.setFocus()
 
-    def _refresh_editors(self):
-        from .launch_catalog import document_launchers
-        self.launchers = document_launchers()
+    def _refresh_editors(self, catalog=None):
+        from .navigation.catalog import document_launchers
+        self.launchers = catalog.documents if catalog is not None else document_launchers()
 
     def _launch_editor(self, key, *, new=False):
         self.document_overlay.hide()
-        launcher = self.launchers[key]
-        callback = launcher.new_document if new else launcher.open_document
-        callback(self.documents)
+        from .navigation.catalog import launch_document
+        launch_document(self.launchers, key, self.documents, new=new)
         self._populate_document_tree()
 
     def _open_bulk_rename(self):
