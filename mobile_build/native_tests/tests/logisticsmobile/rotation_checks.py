@@ -187,6 +187,18 @@ def assert_visible_controls(app):
     return count
 
 
+
+async def settled_visible_controls(app):
+    """Wait briefly for UIKit's rotation morph, retaining strict final bounds."""
+    for attempt in range(21):
+        try:
+            return assert_visible_controls(app)
+        except AssertionError:
+            if attempt == 20:
+                raise
+            await asyncio.sleep(.1)
+
+
 def assert_bar_control_bounds(rect, bounds, label):
     details = (label, str(rect), str(bounds))
     assert rect.origin.x >= bounds.origin.x - 1, details
@@ -217,11 +229,12 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
         for cycle in range(cycles):
             for orientation in ('portrait', 'landscape-left', 'portrait', 'landscape-right', 'portrait'):
                 await rotate(app, orientation)
+                controls = await settled_visible_controls(app)
                 actual = panel_state(app)
                 assert actual == expected, (name, orientation, expected, actual)
                 sample = dict(panel=name, cycle=cycle, orientation=orientation,
                               pose=pose_snapshot(app), **safe_geometry(app))
-                sample['fixed_controls'] = assert_visible_controls(app)
+                sample['fixed_controls'] = controls
                 if sys.platform == 'ios' and name in ('folder', 'nested-folder', 'home-file-picker'):
                     assert sample['fixed_controls'] >= 1, ('No mounted controls audited', name)
                 samples.append(sample)
