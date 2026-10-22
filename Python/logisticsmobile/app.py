@@ -119,18 +119,8 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         root = self.private_root
         previous = _active_hosts.get(str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary'))
         if previous is not None and previous is not self:
-            pending = getattr(previous, 'startup_task', None)
-            if pending is not None and not pending.done():
-                pending.cancel()
-            store = getattr(previous, 'store', None)
-            if store is not None:
-                store.flush_checkpoints()
-            lists = getattr(previous, 'credential_document_lists', None)
-            if lists is not None:
-                lists.flush_writes()
-            if hasattr(previous, 'chat_current') and not previous.checkpoint_chat():
-                raise OSError('Could not preserve the previous conversation.')
-            previous.active_host = False
+            from .application_lifecycle import lifecycle
+            lifecycle(previous).prepare_replacement()
         self._startup_models = await asyncio.to_thread(load_startup_models, root,
             getattr(self, 'workspace_root', root))
 
@@ -151,49 +141,9 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         yield STEPS[1]
         host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
         previous_host = _active_hosts.get(host_identity)
-        if previous_host is not None:
-            store = getattr(previous_host, 'store', None)
-            if store is not None:
-                store.flush_checkpoints()
-            lists = getattr(previous_host, 'credential_document_lists', None)
-            if lists is not None:
-                lists.flush_writes()
-            if hasattr(previous_host, 'chat_current') and not previous_host.checkpoint_chat():
-                raise OSError('Could not preserve the previous conversation.')
-            pending = getattr(previous_host, 'startup_task', None)
-            if pending is not None and not pending.done():
-                pending.cancel()
-            from .markdown_speech import stop_markdown_speech
-            stop_markdown_speech(previous_host)
-            from features.books.mobile.media_controls import stop_media
-            stop_media(previous_host)
-            vault = getattr(previous_host, 'vault_browser', None)
-            if vault is not None:
-                vault.dispose()
-            memory = getattr(previous_host, 'memory_pressure', None)
-            if memory is not None:
-                memory.dispose()
-            privacy = getattr(previous_host, 'screen_privacy', None)
-            if privacy is not None:
-                privacy.dispose()
-            previous_host.active_host = False
-            background = getattr(previous_host, 'cloud_startup_task', None)
-            if background is not None:
-                background.cancel()
-            if getattr(previous_host, 'cloud_client', None) is not None:
-                previous_host.cancel_cloud()
-            picker = getattr(previous_host, '_editor_picker', None)
-            if picker is not None:
-                picker.clear()
-            previous_workspace = getattr(previous_host, 'workspace', None)
-            for session in getattr(previous_workspace, 'sessions', {}).values():
-                previous_workspace.invalidate(session.id)
-            cancelled = getattr(previous_host, '_crypt_cancel', None)
-            if cancelled is not None:
-                cancelled.set()
-                client = getattr(previous_host, 'cloud_client', None)
-                if client is not None:
-                    client.cancel()
+        if previous_host is not None and previous_host is not self:
+            from .application_lifecycle import lifecycle
+            lifecycle(previous_host).retire_for_replacement()
         self.active_host = True
         self.navigation_generation = 0
         _active_hosts[host_identity] = self

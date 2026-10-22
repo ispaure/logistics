@@ -1011,12 +1011,17 @@ modules in dirty local development payloads. See the
 
 ## Application shutdown and disposable resources
 
-`application_lifecycle.py` owns application exit vetoes, checkpoint-before-disposal
-ordering and memory-pressure resource release. `LogisticsMobile` delegates its
+`application_lifecycle.HostLifecycle` owns application exit vetoes, host replacement
+and memory-pressure resource release. Replacement preparation flushes documents,
+credential lists and chat before retiring callbacks; async model loading and final
+retirement share that preparation once. Failed chat preservation leaves the old
+host active for retry. Replacement disposal and successful exit are idempotent;
+memory trimming remains repeatable and preserves the current speech owner. `LogisticsMobile` delegates its
 existing callbacks to this module, so startup cancellation, active transfers,
 private documents and native callback signatures keep their existing behavior.
 `reader_lifecycle.py` still owns individual document exit/Back behavior. Host tests
-include startup progress, reset, private sessions, LocalCrypt and speech media.
+include `test_application_lifecycle.py`, startup progress, reset, private sessions,
+LocalCrypt and speech media.
 
 ## Provider presentation assembly
 
