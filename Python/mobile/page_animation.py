@@ -1,4 +1,5 @@
 """Reader animation policy, with an explicit visible iOS outgoing page."""
+from commonUtils.ui.native.keyboard import native_value
 from commonUtils.ui.native.transitions import (
     page_direction as page_direction, finish_page_slide as finish_slide,
 )
@@ -54,7 +55,8 @@ def begin_page_slide(content, direction, preferences):
         from types import SimpleNamespace
         reduced = CDLL(None).UIAccessibilityIsReduceMotionEnabled
         reduced.restype = c_bool
-        if reduced() or impl.native.window is None:
+        window = native_value(impl.native.window)
+        if reduced() or window is None:
             return
         # Toga iOS flattens widget views into one ControlledContainer: a Box
         # does not own its image/text siblings. Capture its rectangle from that
@@ -87,7 +89,6 @@ def begin_page_slide(content, direction, preferences):
                     (float(picture.origin.x - rect.origin.x), float(picture.origin.y - rect.origin.y)),
                     (float(picture.size.width), float(picture.size.height))))
             else:
-                window = native.window
                 window_rect = native.convertRect(native.bounds, toView=window)
                 window.drawViewHierarchyInRect(CGRect((-float(window_rect.origin.x), -float(window_rect.origin.y)),
                     (float(window.bounds.size.width), float(window.bounds.size.height))), afterScreenUpdates=True)

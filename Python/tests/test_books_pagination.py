@@ -54,8 +54,8 @@ class BookPaginationTests(QtTestCase):
         page.turn_page(-1)
         self.assertEqual(page.text.page_index, 0)
         self.assertEqual(slide.direction, -1)
-        QTest.qWait(260)
-        self.assertTrue(slide.image.isNull())
+        self.wait_until(lambda: slide.image.isNull(), timeout=3,
+                        message='Completed page slide retained its outgoing image')
         page.go_chapter(1)
         QTest.qWait(20)
         self.assertEqual(slide.direction, 1)

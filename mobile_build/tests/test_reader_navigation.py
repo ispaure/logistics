@@ -202,3 +202,32 @@ class ReaderNavigationTests(unittest.TestCase):
         snapshot.removeFromSuperview.assert_called_once_with()
         cancel_page_slide(content)
         snapshot.removeFromSuperview.assert_called_once_with()
+
+    def test_ios_capture_resolves_the_native_window_getter(self):
+        from types import SimpleNamespace as NS
+        import sys
+        geometry = NS(origin=NS(x=0, y=0), size=NS(width=320, height=480))
+        window = NS(bounds=geometry, drawViewHierarchyInRect=Mock())
+        root = object()
+        native = NS(bounds=geometry, window=lambda: window, layer=Mock())
+        def convert(rect, *, toView):
+            self.assertIn(toView, (root, window))
+            return rect
+        native.convertRect = convert
+        impl = type('Backend', (), {'__module__': 'toga_iOS.widgets.box'})()
+        impl.native, impl.container = native, NS(native=root)
+        content = NS(_impl=impl, children=[])
+        renderer, picture, bezier = Mock(), Mock(), Mock()
+        renderer.imageWithActions.side_effect = lambda block: (block(None), object())[1]
+        classes = {'UIGraphicsImageRenderer': Mock(), 'UIImageView': Mock(), 'UIBezierPath': bezier}
+        classes['UIGraphicsImageRenderer'].alloc.return_value.initWithSize.return_value = renderer
+        classes['UIImageView'].alloc.return_value.initWithImage.return_value = picture
+        objc = NS(ObjCClass=classes.__getitem__, Block=lambda function, *args: function,
+                  objc_id=object(), CGRect=lambda *args: args)
+        reduced = Mock(return_value=False)
+        with patch.dict(sys.modules, {'rubicon.objc': objc}), \
+                patch('ctypes.CDLL', return_value=NS(UIAccessibilityIsReduceMotionEnabled=reduced)), \
+                patch('mobile.appearance.apple_color', return_value=Mock()):
+            begin_page_slide(content, 1, {})
+        window.drawViewHierarchyInRect.assert_called_once()
+        self.assertIs(impl._ios_page_slide.snapshot, picture)

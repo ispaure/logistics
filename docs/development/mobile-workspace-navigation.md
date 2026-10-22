@@ -1346,6 +1346,7 @@ inside clipped reading bounds. A CATransition on a container's empty layer can
 exist without visibly moving its image/text subviews. Completion and cancellation
 remove the snapshot wrapper and release its pixels. The bitmap is cropped from
 Toga's real flat native container, with an explicit background fill for margins.
+The native window getter is resolved before UIKit receives it as the capture target.
 The optional native pose audit `--page-turns` exercises forward/backward turns in
 normal/high-contrast mode for imported EPUB/comics and provider EPUB/PDF/comics,
 plus real WKWebView in-chapter motion and suppression.

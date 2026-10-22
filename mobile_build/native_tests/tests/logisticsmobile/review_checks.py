@@ -51,6 +51,33 @@ async def wait_for_held_review(app, held, *, timeout=30):
     raise AssertionError('Native comparison never reached the held-result fixture: ' + app.transfer_message)
 
 
+def save_transfer_settings(app):
+    """Follow native settings even when adaptive layout moves its actions."""
+    app.show_transfer_options()
+    pending = [app.body]
+    settings = None
+    while pending:
+        candidate = pending.pop()
+        children = list(getattr(candidate, 'children', ()) or ())
+        if children and getattr(children[0], 'text', None) == 'Transfer settings':
+            settings = candidate
+            break
+        pending.extend(children)
+    assert settings is not None, 'Native transfer settings were not presented'
+    settings.children[1].value = True
+    settings.children[3].value = '1'
+    settings.children[5].value += '\n*.skip'
+    pending = [app.body]
+    while pending:
+        candidate = pending.pop()
+        if getattr(candidate, 'text', None) == 'Save settings':
+            candidate.on_press()
+            break
+        pending.extend(list(getattr(candidate, 'children', ()) or ()))
+    else:
+        raise AssertionError('Native transfer settings save button was not presented')
+
+
 async def exercise_reviews(app):
     from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
     store, client = app.mirror_store(), app.cloud_client
@@ -162,21 +189,7 @@ async def exercise_reviews(app):
     # Save actual native settings controls, then infer an ordinary local folder
     # beneath the selected remote, including a followed file link and exclusions.
     from features.rclone.transfers.transfer_options import TransferOptions, save_options
-    app.show_transfer_options()
-    pending = [app.body]
-    settings = None
-    while pending:
-        candidate = pending.pop()
-        children = list(getattr(candidate, 'children', ()) or ())
-        if children and getattr(children[0], 'text', None) == 'Transfer settings':
-            settings = candidate
-            break
-        pending.extend(children)
-    assert settings is not None, 'Native transfer settings were not presented'
-    settings.children[1].value = True
-    settings.children[3].value = '1'
-    settings.children[5].value += '\n*.skip'
-    settings.children[-2].on_press()
+    save_transfer_settings(app)
     assert app.transfer_options().track_renames and app.transfer_options().bw_limit == 1
     folder = 'native-options-source'
     local = app.private_root / 'LocalFiles' / folder

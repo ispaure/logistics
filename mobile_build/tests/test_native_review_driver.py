@@ -2,7 +2,7 @@
 import asyncio
 from types import SimpleNamespace as State
 import unittest
-from mobile_build.native_tests.tests.logisticsmobile.review_checks import approve_transfer, wait_for_held_review
+from mobile_build.native_tests.tests.logisticsmobile.review_checks import approve_transfer, wait_for_held_review, save_transfer_settings
 
 
 class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
@@ -25,6 +25,20 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
             main_window=State(dialog=None), transfer_message='Transferring fixture')
         self.addCleanup(lambda: result.cancel() if not result.done() else None)
         return app, calls
+
+    def test_settings_save_finds_actions_moved_out_of_the_form(self):
+        saved = []
+        rename, bandwidth, excludes = State(value=False), State(value=''), State(value='*.tmp')
+        form = State(children=[State(text='Transfer settings'), rename,
+            State(text='Bandwidth limit (MB/s)'), bandwidth,
+            State(text='Push exclusions (one pattern per line)'), excludes, State(text='Status')])
+        save = State(text='Save settings', on_press=lambda: saved.append(True))
+        app = State(body=State(children=[form, State(children=[save])]), show_transfer_options=lambda: None)
+        save_transfer_settings(app)
+        self.assertEqual(saved, [True])
+        self.assertTrue(rename.value)
+        self.assertEqual(bandwidth.value, '1')
+        self.assertIn('*.skip', excludes.value)
 
     async def test_confirms_changed_completed_review_again(self):
         app, calls = self.app()
