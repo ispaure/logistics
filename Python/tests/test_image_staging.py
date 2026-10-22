@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from PIL import Image
 from features.images import actions, processing
+from commonUtils.persistence import exclusive_copy
 
 
 class ImageStagingTests(unittest.TestCase):
@@ -121,7 +122,7 @@ class ImageStagingTests(unittest.TestCase):
         for code in {errno.EXDEV, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP, errno.EPERM}:
             with self.subTest(errno=code):
                 source = self.source('page.png')
-                with patch.object(processing.os, 'link', side_effect=OSError(code, 'Unavailable')):
+                with patch.object(exclusive_copy.os, 'link', side_effect=OSError(code, 'Unavailable')):
                     self.assertTrue(self.run_batch(True))
                 self.assertFalse(source.exists())
                 output = self.root / 'page.webp'
@@ -138,7 +139,7 @@ class ImageStagingTests(unittest.TestCase):
         def unavailable_link(*args):
             destination.write_bytes(b'another output')
             raise OSError(errno.EOPNOTSUPP, 'Unavailable')
-        with patch.object(processing.os, 'link', unavailable_link):
+        with patch.object(exclusive_copy.os, 'link', unavailable_link):
             self.assertFalse(self.run_batch(True))
         self.assertEqual(source.read_bytes(), original)
         self.assertEqual(destination.read_bytes(), b'another output')
@@ -150,8 +151,8 @@ class ImageStagingTests(unittest.TestCase):
         def failed_copy(source, destination):
             destination.write(b'partial')
             raise OSError('Copy failed')
-        with patch.object(processing.os, 'link', side_effect=OSError(errno.EOPNOTSUPP, 'Unavailable')), \
-                patch.object(processing.shutil, 'copyfileobj', failed_copy):
+        with patch.object(exclusive_copy.os, 'link', side_effect=OSError(errno.EOPNOTSUPP, 'Unavailable')), \
+                patch.object(exclusive_copy.shutil, 'copyfileobj', failed_copy):
             self.assertFalse(self.run_batch(True))
         self.assertEqual(source.read_bytes(), original)
         self.assertEqual(list(self.root.iterdir()), [source])
@@ -159,7 +160,7 @@ class ImageStagingTests(unittest.TestCase):
     def test_failed_copy_flush_preserves_source_and_cleans_output(self):
         source = self.source('page.png')
         original = source.read_bytes()
-        with patch.object(processing.os, 'link', side_effect=OSError(errno.ENOTSUP, 'Unavailable')), \
+        with patch.object(exclusive_copy.os, 'link', side_effect=OSError(errno.ENOTSUP, 'Unavailable')), \
                 patch.object(processing.os, 'fsync', side_effect=OSError('Flush failed')):
             self.assertFalse(self.run_batch(True))
         self.assertEqual(source.read_bytes(), original)
@@ -168,8 +169,8 @@ class ImageStagingTests(unittest.TestCase):
     def test_other_link_errors_do_not_trigger_copy_fallback(self):
         source = self.source('page.png')
         original = source.read_bytes()
-        with patch.object(processing.os, 'link', side_effect=OSError(errno.EIO, 'I/O failed')), \
-                patch.object(processing.shutil, 'copyfileobj') as copy:
+        with patch.object(exclusive_copy.os, 'link', side_effect=OSError(errno.EIO, 'I/O failed')), \
+                patch.object(exclusive_copy.shutil, 'copyfileobj') as copy:
             self.assertFalse(self.run_batch(True))
             copy.assert_not_called()
         self.assertEqual(source.read_bytes(), original)
@@ -177,12 +178,12 @@ class ImageStagingTests(unittest.TestCase):
 
     def test_copy_fallback_checks_source_before_deletion(self):
         source = self.source('page.png')
-        actual_copy = processing.shutil.copyfileobj
+        actual_copy = exclusive_copy.shutil.copyfileobj
         def editing_copy(input_file, output_file):
             actual_copy(input_file, output_file)
             source.write_bytes(b'edited during copy')
-        with patch.object(processing.os, 'link', side_effect=OSError(errno.EOPNOTSUPP, 'Unavailable')), \
-                patch.object(processing.shutil, 'copyfileobj', editing_copy):
+        with patch.object(exclusive_copy.os, 'link', side_effect=OSError(errno.EOPNOTSUPP, 'Unavailable')), \
+                patch.object(exclusive_copy.shutil, 'copyfileobj', editing_copy):
             self.assertFalse(self.run_batch(True))
         self.assertEqual(source.read_bytes(), b'edited during copy')
         self.assertTrue((self.root / 'page.webp').exists())

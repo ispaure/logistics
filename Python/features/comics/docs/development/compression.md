@@ -89,3 +89,29 @@ Encryption must leave the extraction, sanitization, image retention, XML and log
 rules unchanged. Compare decrypted manifests, with log time frozen, rather than
 ZIP container bytes or timestamps. Separate ZIP creation may cancel between
 chunks; comic compression must finish its current archive before batch cancellation.
+
+## Cleanup phases and refactor comparisons
+
+`sanitization.py` names the existing sequential phases: remove macOS sidecar
+folders, remove unwanted files, normalize supported wrapper layouts, then validate
+and repair padding. A failure stops later phases; earlier deletions/moves remain
+applied to the extracted workspace. This is intentionally not a whole-cleanup
+transaction or an eager plan that changes failure ordering.
+
+The strict compression threshold, quality values, animation/multipage exceptions,
+alpha rules, naming, metadata rebuilding and archive publication remain owned by
+Comics. Shared image encoding does not choose which originals to delete or retain.
+
+`Python/tests/compare_readability_versions.py --baseline-ref <commit> --output <ignored-json>`
+replays 80 generated cleanup/failure cases against archived source and compares
+outcomes, remaining paths/bytes, operation order and application diagnostics. It
+also compares 24 byte-identical JPEG/WebP encoding cases with orientation, alpha,
+ICC metadata, resizing and color/grayscale decisions. Run with `PYTHONPATH=Python`
+and the desktop interpreter. Keep the output under ignored `test-results/`.
+
+`Python/tests/compare_comic_zip_versions.py --baseline-ref <commit> --encrypted-baseline --output-dir <ignored-directory>`
+compares complete plain/AES compression at extraction, cleanup, staging and final
+member manifests for four layouts and both retention modes. Omit
+`--encrypted-baseline` for the historical baseline without encrypted compression.
+Raw reports are local evidence; the drivers and existing regression fixtures are
+tracked. Host comparisons do not certify a different Pillow version or platform.

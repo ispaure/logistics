@@ -1,4 +1,4 @@
-"""Compare pristine pre-password compression against the current worktree."""
+"""Compare an archived compression baseline against the current worktree."""
 import io
 import json
 import os
@@ -13,13 +13,17 @@ import platform
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output-dir', type=Path, help='New directory for disposable fixtures, traces and comparison.json')
+parser.add_argument('--baseline-ref', default='51b610ed3f0d55e94bd9b179621545fe867ccb38',
+                    help='Logistics commit to compare (including its pinned commonUtils)')
+parser.add_argument('--encrypted-baseline', action='store_true',
+                    help='Also compare full AES compression when supported by the baseline')
 args = parser.parse_args()
 REPO = Path(__file__).resolve().parents[2]
 ROOT = args.output_dir.resolve() if args.output_dir else Path(mkdtemp(prefix='logistics-zip-version-parity-'))
 ROOT.mkdir(parents=True, exist_ok=True)
 OLD = ROOT / 'before'
 OLD.mkdir()
-ref = '51b610ed3f0d55e94bd9b179621545fe867ccb38'
+ref = args.baseline_ref
 shared_ref = subprocess.check_output(['git', 'rev-parse', f'{ref}:Python/commonUtils'], cwd=REPO, text=True).strip()
 for repo, revision, destination, paths in [(REPO, ref, OLD, ['Python']), (REPO / 'Python/commonUtils', shared_ref, OLD / 'Python/commonUtils', [])]:
     destination.mkdir(parents=True, exist_ok=True)
@@ -127,7 +131,11 @@ for entries in layouts.values():
 results = {}
 for layout, entries in layouts.items():
     for keep in (False, True):
-        for version, source, password in [('before-plain', OLD, None), ('after-plain', REPO, None), ('after-aes256', REPO, 'test-only-comic-password')]:
+        versions = [('before-plain', OLD, None), ('after-plain', REPO, None),
+                    ('after-aes256', REPO, 'test-only-comic-password')]
+        if args.encrypted_baseline:
+            versions.append(('before-aes256', OLD, 'test-only-comic-password'))
+        for version, source, password in versions:
             name = f'{layout}-keep{int(keep)}-{version}'
             folder = ROOT / 'runs' / name
             folder.mkdir(parents=True)
@@ -152,28 +160,30 @@ for layout, entries in layouts.items():
             if password:
                 assert records['all_aes256'], name
             results[name] = records
-        group = [results[f'{layout}-keep{int(keep)}-{version}'] for version in ('before-plain', 'after-plain', 'after-aes256')]
+        group = [results[f'{layout}-keep{int(keep)}-{version}'] for version, _, _ in versions]
         for stage in ('explicit_extraction', 'compression_extraction', 'sanitized', 'staged_result', 'final', 'archive_comment'):
             assert all(record[stage] == group[0][stage] for record in group[1:]), (layout, keep, stage)
         print(f'PASS {layout}, always_keep={keep}: all extraction/sanitization/staging/final manifests equal', flush=True)
 
-# The old application did not supply passwords during comic compression.
-folder = ROOT / 'runs' / 'before-aes256-unsupported'
-folder.mkdir(parents=True)
-path = folder / 'comic.cbz'
-with pyzipper.AESZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
-    archive.setpassword(b'test-only-comic-password')
-    archive.setencryption(pyzipper.WZ_AES, nbits=256)
-    for filename, data in layouts['root'].items():
-        archive.writestr(filename, data)
-output = folder / 'trace.json'
-completed = subprocess.run([sys.executable, str(CHILD), str(path), str(output), 'test-only-comic-password', '0', '0'], cwd=OLD, env=dict(os.environ, PYTHONPATH=str(OLD / 'Python'), QT_QPA_PLATFORM='offscreen'), capture_output=True, text=True)
-(folder / 'run.log').write_text(completed.stdout + completed.stderr)
-assert completed.returncode == 0, folder / 'run.log'
-legacy = json.loads(output.read_text())
-assert legacy['explicit_extract_success']
-assert legacy['explicit_extraction'] == results['root-keep0-before-plain']['explicit_extraction']
-assert not legacy['compression_success'] and legacy['original_unchanged']
+legacy = None
+if not args.encrypted_baseline:
+    # The old application did not supply passwords during comic compression.
+    folder = ROOT / 'runs' / 'before-aes256-unsupported'
+    folder.mkdir(parents=True)
+    path = folder / 'comic.cbz'
+    with pyzipper.AESZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.setpassword(b'test-only-comic-password')
+        archive.setencryption(pyzipper.WZ_AES, nbits=256)
+        for filename, data in layouts['root'].items():
+            archive.writestr(filename, data)
+    output = folder / 'trace.json'
+    completed = subprocess.run([sys.executable, str(CHILD), str(path), str(output), 'test-only-comic-password', '0', '0'], cwd=OLD, env=dict(os.environ, PYTHONPATH=str(OLD / 'Python'), QT_QPA_PLATFORM='offscreen'), capture_output=True, text=True)
+    (folder / 'run.log').write_text(completed.stdout + completed.stderr)
+    assert completed.returncode == 0, folder / 'run.log'
+    legacy = json.loads(output.read_text())
+    assert legacy['explicit_extract_success']
+    assert legacy['explicit_extraction'] == results['root-keep0-before-plain']['explicit_extraction']
+    assert not legacy['compression_success'] and legacy['original_unchanged']
 windows_original_flush_failure = None
 if sys.platform == 'win32':
     folder = ROOT / 'runs' / 'before-plain-pristine-windows'
@@ -191,7 +201,7 @@ if sys.platform == 'win32':
     assert 'Bad file descriptor' in completed.stdout + completed.stderr
     assert pristine['staged_result'] == results['root-keep0-before-plain']['staged_result']
     windows_original_flush_failure = pristine
-summary = {'windows_pristine_baseline_flush_failure': windows_original_flush_failure, 'windows_baseline_flush_adjustment': sys.platform == 'win32', 'platform': platform.platform(), 'python': sys.version, 'baseline_logistics': ref, 'baseline_commonutils': shared_ref, 'successful_full_runs': 24, 'legacy_password_extraction_same_layout': True, 'legacy_encrypted_full_compression_unsupported_original_preserved': True, 'compared_stages': ['explicit extraction', 'compression extraction', 'sanitized', 'staged result', 'final archive'], 'results': results, 'legacy_encrypted': legacy}
+summary = {'windows_pristine_baseline_flush_failure': windows_original_flush_failure, 'windows_baseline_flush_adjustment': sys.platform == 'win32', 'platform': platform.platform(), 'python': sys.version, 'baseline_logistics': ref, 'baseline_commonutils': shared_ref, 'successful_full_runs': len(results), 'legacy_password_extraction_same_layout': legacy is not None, 'legacy_encrypted_full_compression_unsupported_original_preserved': legacy is not None, 'compared_stages': ['explicit extraction', 'compression extraction', 'sanitized', 'staged result', 'final archive'], 'results': results, 'legacy_encrypted': legacy}
 (ROOT / 'comparison.json').write_text(json.dumps(summary, indent=2))
 print('RESULT_ROOT=' + str(ROOT), flush=True)
-print('All 24 full compression runs passed; old AES extraction matched, old encrypted compression safely failed.', flush=True)
+print(f'All {len(results)} full compression runs passed; encrypted baseline compared: {args.encrypted_baseline}.', flush=True)

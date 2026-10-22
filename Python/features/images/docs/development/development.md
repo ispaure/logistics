@@ -144,3 +144,16 @@ preferences and retained Settings controls, and rechecked PhotoKit saves and
 failure retention. The viewer screenshot was inspected and the signed update
 installed and launched on the paired iPhone 15 Pro Max. Physical lens switching
 and achieved capture rates remain on-device checks.
+
+## Encoding versus compression policy
+
+`processing.ImageFile` delegates Pillow encoding and chroma classification to the
+optional shared format owner. The feature still selects grayscale/color quality,
+allocates its exclusive dot-prefixed stage, verifies output and source revisions,
+chooses whether to retain a candidate, and publishes/deletes files. The allocator
+runs at the existing point after pixel preparation. EXIF orientation, ICC handling,
+alpha behavior, resize rounding, JPEG optimization and WebP method 6 are unchanged.
+
+Exclusive link/copy publication comes from the shared persistence owner. Its copy
+fallback is deliberately non-atomic and retains the stage; feature code still owns
+source removal. Image staging regressions patch the canonical persistence owner.
