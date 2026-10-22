@@ -469,76 +469,77 @@ class ProviderUI(FilesUI):
                 right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
         elif view.crypt_reader.kind in {'.epub', '.pdf'} and view.crypt_content.children:
             direction = page_direction(getattr(view, '_provider_displayed_index', None), index)
-        if not publication.begin(direction):
-            return
-        if view.crypt_reader.book is not None:
-            from features.books.mobile.provider_reader import provider_view
-            from features.books.mobile.typography import options as typography_options
-            book = view.crypt_reader.book
-            index = view.crypt_reader.labels.index(view.crypt_page.value)
-            locations = getattr(view, '_provider_epub_locations', {})
-            view._provider_epub_locations = locations
-            target = getattr(controller, '_provider_epub_target', None)
-            controller._provider_epub_target = None
-            offset = locations.get(book.spine[index], 0)
-            if target is not None:
-                offset = content[1].anchors.get(target, 0) if isinstance(target, str) else target
-            from .palette import themed_chapter
-            content = (themed_chapter(content[0], self.preferences.values['reading_theme']), content[1])
-            def position_changed(value):
-                locations[book.spine[index]] = value
-                if hasattr(view, 'page_footer'):
-                    view.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
-            from .chapter_drawer import ChapterDrawer
-            view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
-                font_size=int(self.preferences.values['epub_font_size']),
-                margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
-                on_chapter=controller.open_provider_epub_chapter,
-                on_position=position_changed,
-                motion_enabled=self.preferences.values.get('android_eink') != 'true',
-                sidebar_factory=lambda *args, **kwargs: ChapterDrawer(*args, app=self, **kwargs))
-            from .font_scaling import bind
-            epub_surface = getattr(view.provider_epub_view, 'webview', None)
-            if epub_surface is not None:
-                from .fold_layout import bind_epub_geometry
-                bind_epub_geometry(epub_surface)
-                bind(self, epub_surface, 'epub', web=True)
+        with publication.preparing(direction) as current:
+            if not current:
+                return
+            if view.crypt_reader.book is not None:
+                from features.books.mobile.provider_reader import provider_view
+                from features.books.mobile.typography import options as typography_options
+                book = view.crypt_reader.book
+                index = view.crypt_reader.labels.index(view.crypt_page.value)
+                locations = getattr(view, '_provider_epub_locations', {})
+                view._provider_epub_locations = locations
+                target = getattr(controller, '_provider_epub_target', None)
+                controller._provider_epub_target = None
+                offset = locations.get(book.spine[index], 0)
+                if target is not None:
+                    offset = content[1].anchors.get(target, 0) if isinstance(target, str) else target
+                from .palette import themed_chapter
+                content = (themed_chapter(content[0], self.preferences.values['reading_theme']), content[1])
+                def position_changed(value):
+                    locations[book.spine[index]] = value
+                    if hasattr(view, 'page_footer'):
+                        view.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
+                from .chapter_drawer import ChapterDrawer
+                view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
+                    font_size=int(self.preferences.values['epub_font_size']),
+                    margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
+                    on_chapter=controller.open_provider_epub_chapter,
+                    on_position=position_changed,
+                    motion_enabled=self.preferences.values.get('android_eink') != 'true',
+                    sidebar_factory=lambda *args, **kwargs: ChapterDrawer(*args, app=self, **kwargs))
+                from .font_scaling import bind
+                epub_surface = getattr(view.provider_epub_view, 'webview', None)
+                if epub_surface is not None:
+                    from .fold_layout import bind_epub_geometry
+                    bind_epub_geometry(epub_surface)
+                    bind(self, epub_surface, 'epub', web=True)
+                else:
+                    bind(self, view.provider_epub_view.text, 'epub')
+                chapters = getattr(view.provider_epub_view, 'chapters', None)
+                if chapters is not None:
+                    from .appearance import hierarchy_row_style
+                    chapters.row_style, chapters.current = hierarchy_row_style, index
+                    chapters.render()
+                view.provider_epub_view.page_motion_enabled = lambda: self.preferences.values.get('android_eink') != 'true'
+                if epub_surface is None:
+                    view.provider_epub_view.page_motion = (
+                        lambda surface, delta: begin_page_slide(surface, delta, self.preferences.values),
+                        lambda surface, delta: finish_page_slide(surface, delta, self.preferences.values))
+                tools = view.provider_epub_view.tools
+                if tools.button in tools.widget.children:
+                    tools.widget.remove(tools.button)
+                for control in (view.crypt_bookmark_button, view.crypt_bookmark_selector):
+                    if control.parent is not None:
+                        control.parent.remove(control)
+                    tools.panel.add(control)
+                tools.panel.add(toga.Label('Bookmarks stay in this session\nand are cleared on close.'))
+                surface = view.provider_epub_view
+            elif kind == 'spread':
+                from features.comics.mobile.presentation import place_page
+                place_page(prepared_spread, controller.format_services.page_region(view.crypt_content))
+                surface = prepared_spread
+            elif kind == 'image':
+                view.crypt_image._external_comic_page = view.crypt_reader.kind in {'.cbz', '.zip'}
+                view.crypt_image.image = toga.Image(src=content)
+                surface = view.crypt_image
             else:
-                bind(self, view.provider_epub_view.text, 'epub')
-            chapters = getattr(view.provider_epub_view, 'chapters', None)
-            if chapters is not None:
-                from .appearance import hierarchy_row_style
-                chapters.row_style, chapters.current = hierarchy_row_style, index
-                chapters.render()
-            view.provider_epub_view.page_motion_enabled = lambda: self.preferences.values.get('android_eink') != 'true'
-            if epub_surface is None:
-                view.provider_epub_view.page_motion = (
-                    lambda surface, delta: begin_page_slide(surface, delta, self.preferences.values),
-                    lambda surface, delta: finish_page_slide(surface, delta, self.preferences.values))
-            tools = view.provider_epub_view.tools
-            if tools.button in tools.widget.children:
-                tools.widget.remove(tools.button)
-            for control in (view.crypt_bookmark_button, view.crypt_bookmark_selector):
-                if control.parent is not None:
-                    control.parent.remove(control)
-                tools.panel.add(control)
-            tools.panel.add(toga.Label('Bookmarks stay in this session\nand are cleared on close.'))
-            surface = view.provider_epub_view
-        elif kind == 'spread':
-            from features.comics.mobile.presentation import place_page
-            place_page(prepared_spread, controller.format_services.page_region(view.crypt_content))
-            surface = prepared_spread
-        elif kind == 'image':
-            view.crypt_image._external_comic_page = view.crypt_reader.kind in {'.cbz', '.zip'}
-            view.crypt_image.image = toga.Image(src=content)
-            surface = view.crypt_image
-        else:
-            view.crypt_text.value = content
-            surface = view.crypt_text
-        if not publication.mount(surface, direction=direction, publish=publish_spread,
-                                 keep=(view.crypt_image, view.crypt_text),
-                                 retired=(old_epub,) if old_epub is not None else ()):
-            return
+                view.crypt_text.value = content
+                surface = view.crypt_text
+            if not publication.mount(surface, direction=direction, publish=publish_spread,
+                                     keep=(view.crypt_image, view.crypt_text),
+                                     retired=(old_epub,) if old_epub is not None else ()):
+                return
         if kind == 'spread':
             view.provider_spread = prepared_spread
             view.crypt_reader.comic_navigation.commit(indices)

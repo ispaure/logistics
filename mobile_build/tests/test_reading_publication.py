@@ -30,15 +30,32 @@ class ReadingPublicationTests(unittest.TestCase):
         publication = ReadingPublication(SimpleNamespace(preferences=SimpleNamespace(values={})), box, lambda: current[0])
         def fail():
             raise ValueError('Synthetic decoding failure')
-        with patch('mobile.page_animation.begin_page_slide'), patch('mobile.page_animation.finish_page_slide'):
+        with patch('mobile.page_animation.begin_page_slide'), patch('mobile.page_animation.finish_page_slide'), \
+                patch('mobile.page_animation.cancel_page_slide') as cancel:
             with self.assertRaises(ValueError):
                 publication.mount(new, publish=fail)
             self.assertEqual(box.children, [old])
             self.assertFalse(old.disposed)
+            cancel.assert_called_once_with(box)
             current[0] = False
             self.assertFalse(publication.mount(new))
             self.assertTrue(new.disposed)
             self.assertEqual(box.children, [old])
+
+    def test_failed_view_construction_releases_outgoing_animation(self):
+        old = Surface()
+        box = Container(old)
+        publication = ReadingPublication(SimpleNamespace(preferences=SimpleNamespace(values={})), box, lambda: True)
+        with patch('mobile.page_animation.begin_page_slide'), \
+                patch('mobile.page_animation.cancel_page_slide') as cancel:
+            with self.assertRaisesRegex(ValueError, 'native allocation'):
+                with publication.preparing(1) as current:
+                    self.assertTrue(current)
+                    raise ValueError('native allocation')
+            cancel.assert_called_once_with(box)
+        self.assertFalse(publication.begun)
+        self.assertFalse(old.disposed)
+        self.assertEqual(box.children, [old])
 
     def test_replacement_retires_old_view_once_and_preserves_reserved_text(self):
         old, reserved, new = Surface(), Surface(), Surface()

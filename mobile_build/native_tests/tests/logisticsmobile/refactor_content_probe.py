@@ -82,12 +82,37 @@ class Probe(LogisticsMobile):
             await owner.read_crypt_page()
             assert owner._provider_displayed_index == 1
             assert len(owner.crypt_content.children) == 1
+            if path == epub:
+                import features.books.mobile.provider_reader as provider_reader
+                before = tuple(owner.crypt_content.children)
+                old_panel = owner.provider_epub_view
+                kind, content = await asyncio.to_thread(owner.provider_page_content, owner.crypt_reader, 0)
+                owner.crypt_page.value = owner.crypt_reader.labels[0]
+                factory = provider_reader.provider_view
+                def fail(*args, **kwargs):
+                    raise RuntimeError('Synthetic native allocation failure')
+                provider_reader.provider_view = fail
+                try:
+                    try:
+                        owner._show_crypt_content(kind, content)
+                    except RuntimeError:
+                        pass
+                    else:
+                        raise AssertionError('Expected synthetic preparation failure')
+                finally:
+                    provider_reader.provider_view = factory
+                assert tuple(owner.crypt_content.children) == before
+                assert owner.provider_epub_view is old_panel
+                assert getattr(owner.crypt_content._impl, '_ios_page_slide', None) is None
+                await owner.read_crypt_page()
+                assert owner._provider_displayed_index == 0
+                assert len(owner.crypt_content.children) == 1
         (fixtures / 'Synthetic.txt').write_text('Editable synthetic text')
         assert await self.open_crypt(copies=LocalTextCopies(LocalFiles(fixtures)), key='Synthetic.txt')
         owner = self.private_sessions.active
         assert owner.crypt_text.value == 'Editable synthetic text'
         assert owner.crypt_content.children[0] is owner.crypt_text
-        return dict(library=published, provider=['comic', 'epub', 'text'], position=1)
+        return dict(library=published, provider=['comic', 'epub', 'text'], position=1, failed_preparation_recovered=True)
 
     async def check(self):
         result = dict(success=False, backend=type(self._impl).__module__)

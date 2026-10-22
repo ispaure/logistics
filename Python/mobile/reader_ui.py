@@ -295,23 +295,24 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 right_to_left=getattr(reader, 'right_to_left', False))
         elif record['kind'] == 'epub' and self.book_content.children:
             direction = page_direction(record['position'], index)
-        if not publication.begin(direction):
-            return
-        if record['kind'] == 'epub':
-            self.epub_text, self.epub_offset, content = prepared_epub
-            self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
-                on_event=lambda action, value: self.epub_event(reader, epoch, index, action, value),
-                on_link=lambda href: self.epub_link(reader, epoch, index, href),
-                motion_enabled=self.preferences.values.get('android_eink') != 'true')
-            from .fold_layout import bind_epub_geometry
-            bind_epub_geometry(self.epub_view)
-            from .font_scaling import bind
-            bind(self, self.epub_view, 'epub', web=True)
-            view = self.epub_view
-        self.close_read_aloud()
-        if not publication.mount(view, direction=direction,
-                                 publish=publish if record['kind'] == 'comic' else None):
-            return
+        with publication.preparing(direction) as current:
+            if not current:
+                return
+            if record['kind'] == 'epub':
+                self.epub_text, self.epub_offset, content = prepared_epub
+                self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
+                    on_event=lambda action, value: self.epub_event(reader, epoch, index, action, value),
+                    on_link=lambda href: self.epub_link(reader, epoch, index, href),
+                    motion_enabled=self.preferences.values.get('android_eink') != 'true')
+                from .fold_layout import bind_epub_geometry
+                bind_epub_geometry(self.epub_view)
+                from .font_scaling import bind
+                bind(self, self.epub_view, 'epub', web=True)
+                view = self.epub_view
+            self.close_read_aloud()
+            if not publication.mount(view, direction=direction,
+                                     publish=publish if record['kind'] == 'comic' else None):
+                return
         if record['kind'] == 'comic':
             from .magnifier import bind
             bind(self, view)

@@ -1,4 +1,5 @@
 """Prepare before retiring pixels; reject work belonging to a retired reader."""
+from contextlib import contextmanager
 from .sources import capture_library, capture_provider
 
 
@@ -23,27 +24,47 @@ class ReadingPublication:
         self.begun = True
         return True
 
+    def abort(self):
+        if self.begun:
+            from mobile.page_animation import cancel_page_slide
+            cancel_page_slide(self.container)
+            self.begun = False
+
+    @contextmanager
+    def preparing(self, direction):
+        try:
+            yield self.begin(direction)
+        finally:
+            # Failed/cancelled construction must release outgoing private pixels.
+            self.abort()
+
     def mount(self, surface, *, direction=0, publish=None, keep=(), retired=()):
         if not self.current():
+            self.abort()
             if surface not in self.container.children and surface not in keep and hasattr(surface, 'dispose'):
                 surface.dispose()
             return False
-        from mobile.page_animation import finish_page_slide
-        if not self.begun:
-            self.begin(direction)
-        if publish is not None:
-            publish()
-        disposed = set()
-        for child in [*self.container.children, *retired]:
-            if child is not surface and child not in keep and id(child) not in disposed:
-                if hasattr(child, 'dispose'):
-                    child.dispose()
-                disposed.add(id(child))
-        for child in list(self.container.children):
-            self.container.remove(child)
-        self.container.add(surface)
-        finish_page_slide(self.container, direction, self.owner.preferences.values)
-        return True
+        try:
+            from mobile.page_animation import finish_page_slide
+            if not self.begun:
+                self.begin(direction)
+            if publish is not None:
+                publish()
+            disposed = set()
+            for child in [*self.container.children, *retired]:
+                if child is not surface and child not in keep and id(child) not in disposed:
+                    if hasattr(child, 'dispose'):
+                        child.dispose()
+                    disposed.add(id(child))
+            for child in list(self.container.children):
+                self.container.remove(child)
+            self.container.add(surface)
+            finish_page_slide(self.container, direction, self.owner.preferences.values)
+            self.begun = False
+            return True
+        except BaseException:
+            self.abort()
+            raise
 
     def footer(self, view, *, comic, count, index, right_to_left=False, chapter=None):
         if not self.current():
