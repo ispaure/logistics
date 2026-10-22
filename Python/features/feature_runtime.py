@@ -2,7 +2,6 @@
 Feature discovery, dependency handling, initialization, and contribution aggregation for Logistics.
 """
 
-from configparser import Error
 import json
 import weakref
 from dataclasses import dataclass
@@ -29,6 +28,9 @@ from features.contributions import (
 )
 
 
+from .runtime.preferences import PreferenceState
+from .runtime.activation import FeatureActivation
+from .runtime.catalog import ContributionCatalog
 from .discovery import get_feature_names as discover_feature_names, load_named_features
 
 T = TypeVar('T')
@@ -58,12 +60,59 @@ class FeatureRegistry:
         self._features_path = features_path or (lambda: Path(__file__).parent)
         self._feature_loader = feature_loader
         self._settings_provider = settings_provider
-        self._disabled_features = set()
-        self._initialized_features = set()
+        self.preferences = PreferenceState(lambda: self.feature_settings_store())
+        self.activation = FeatureActivation()
+        self.catalog = ContributionCatalog()
         self._listeners = []
         self._definitions = weakref.WeakKeyDictionary()
-        self._preferences_path = None
-        self._layered_preferences = False
+
+    @property
+    def _disabled_features(self):
+        return self.preferences.disabled
+
+    @_disabled_features.setter
+    def _disabled_features(self, value):
+        self.preferences.disabled = value
+
+    @_disabled_features.deleter
+    def _disabled_features(self):
+        del self.preferences.disabled
+
+    @property
+    def _preferences_path(self):
+        return self.preferences.path
+
+    @_preferences_path.setter
+    def _preferences_path(self, value):
+        self.preferences.path = value
+
+    @_preferences_path.deleter
+    def _preferences_path(self):
+        del self.preferences.path
+
+    @property
+    def _layered_preferences(self):
+        return self.preferences.layered
+
+    @_layered_preferences.setter
+    def _layered_preferences(self, value):
+        self.preferences.layered = value
+
+    @_layered_preferences.deleter
+    def _layered_preferences(self):
+        del self.preferences.layered
+
+    @property
+    def _initialized_features(self):
+        return self.activation.initialized
+
+    @_initialized_features.setter
+    def _initialized_features(self, value):
+        self.activation.initialized = value
+
+    @_initialized_features.deleter
+    def _initialized_features(self):
+        del self.activation.initialized
 
     def feature_settings_store(self):
         if self._settings_provider is not None:
@@ -72,14 +121,7 @@ class FeatureRegistry:
         return settings_store(Path(__file__).resolve().parents[1] / 'configFile.ini')
 
     def default_disabled_features(self):
-        raw = self.feature_settings_store().safe_values('application').get(('FeatureDefaults', 'disabled_list-str'), '[]')
-        try:
-            values = json.loads(raw)
-            if isinstance(values, list) and all(isinstance(name, str) for name in values):
-                return set(values)
-        except ValueError:
-            pass
-        return set()
+        return self.preferences.default_disabled_features()
 
     def set_feature_default(self, name, enabled):
         feature_map = self._get_feature_map()
@@ -109,97 +151,19 @@ class FeatureRegistry:
         self._notify_changed()
 
     def load_feature_preferences(self, path=None):
-        """Load defaults before feature initialization; no package folders are renamed."""
-        from .preferences import preferences_path, load_disabled
-        self._layered_preferences = path is None
-        path = Path(path) if path is not None else preferences_path()
-        disabled = load_disabled(path)
-        if self._layered_preferences:
-            store = self.feature_settings_store()
-            try:
-                from .settings import migration_ledger
-                overrides = store.overrides()
-                def migrate():
-                    if path.exists():
-                        store.save({('FeatureDefaults', 'disabled_list-str'): json.dumps(sorted(disabled))})
-                migration_ledger(store).run('feature-enable-v1', migrate,
-                                           already_applied=('Migration', 'features_bool') in overrides)
-            except (OSError, UnicodeError, Error, ValueError) as error:
-                log(Severity.ERROR, 'Feature settings', f'Could not migrate preferences; original files preserved: {error}')
-            try:
-                self._migrate_feature_overrides(store)
-                disabled = self._effective_disabled_features(store)
-            except (OSError, UnicodeError, Error, ValueError) as error:
-                log(Severity.ERROR, 'Feature settings', f'Could not migrate per-feature choices; original files preserved: {error}')
-                disabled = self._effective_disabled_features(store)
-        self._disabled_features.clear()
-        self._disabled_features.update(disabled)
-        self._preferences_path = path
+        return self.preferences.load_feature_preferences(path)
 
     def feature_overrides(self):
-        """Return explicit per-engine personal choices, including matching defaults."""
-        result = {}
-        for (section, key), value in self.feature_settings_store().overrides().items():
-            if section == 'FeatureOverrides' and key.endswith('_bool'):
-                if value.lower() in ('true', 'false'):
-                    result[key.removesuffix('_bool')] = value.lower() == 'true'
-        return result
+        return self.preferences.feature_overrides()
 
     def _effective_disabled_features(self, store):
-        disabled = self.default_disabled_features()
-        # Preserve the old selection if migration cannot publish; retry next launch.
-        try:
-            legacy = store.overrides().get(('FeatureDefaults', 'disabled_list-str'))
-        except (OSError, UnicodeError, Error):
-            return disabled
-        if legacy is not None:
-            try:
-                values = json.loads(legacy)
-                if isinstance(values, list) and all(isinstance(name, str) for name in values):
-                    disabled = set(values)
-            except ValueError:
-                pass
-        for name, enabled in self.feature_overrides().items():
-            if enabled:
-                disabled.discard(name)
-            else:
-                disabled.add(name)
-        return disabled
+        return self.preferences._effective_disabled_features(store)
 
     def _migrate_feature_overrides(self, store):
-        from .settings import migration_ledger
-        def migrate():
-            overrides = store.overrides()
-            identity = 'FeatureDefaults', 'disabled_list-str'
-            if identity not in overrides:
-                return
-            values = json.loads(overrides[identity])
-            if not isinstance(values, list) or not all(isinstance(name, str) for name in values):
-                raise ValueError('Invalid legacy feature selection; personal file preserved')
-            disabled = set(values)
-            # Legacy snapshots cannot tell deliberate matching values from untouched
-            # features. Preserve differences and let matching choices inherit again.
-            changes = {identity: None}
-            for name in disabled ^ self.default_disabled_features():
-                key = 'FeatureOverrides', name + '_bool'
-                if key not in overrides:
-                    changes[key] = 'false' if name in disabled else 'true'
-            store.save(changes)
-        migration_ledger(store).run('feature-overrides-v2', migrate)
+        return self.preferences._migrate_feature_overrides(store)
 
     def _save_feature_preferences(self, changes=None):
-        if self._layered_preferences:
-            store = self.feature_settings_store()
-            fields = ({('FeatureOverrides', name + '_bool'): None if enabled is None else str(enabled).lower()
-                       for name, enabled in changes.items()} if changes is not None else
-                      {key: None for key in store.overrides() if key[0] == 'FeatureOverrides'})
-            if changes is None:
-                fields['FeatureDefaults', 'disabled_list-str'] = None
-            store.save(fields)
-            return
-        if self._preferences_path is not None:
-            from .preferences import save_disabled
-            save_disabled(self._preferences_path, self._disabled_features)
+        return self.preferences._save_feature_preferences(changes)
 
     def reset_feature_defaults(self):
         """Remove personal choices and restore software defaults atomically."""
@@ -320,7 +284,7 @@ class FeatureRegistry:
 
     def _is_feature_available(self, feature_name: str, feature_map: dict[str, ModuleType],
                               resolving: tuple[str, ...] = ()) -> bool:
-        from .feature_graph import available
+        from .runtime.dependencies import available
         return available(feature_name, feature_map, self.get_feature_dependencies, resolving)
 
     def is_feature_available(self, feature_name: str) -> bool:
@@ -366,7 +330,7 @@ class FeatureRegistry:
             )
 
     def _get_initialization_order(self, features: list[ModuleType]) -> list[ModuleType]:
-        from .feature_graph import initialization_order
+        from .runtime.dependencies import initialization_order
         return initialization_order(features, self._get_feature_name, self.get_feature_dependencies)
 
     def initialize_features(self) -> list[ModuleType]:
@@ -377,25 +341,8 @@ class FeatureRegistry:
         return features
 
     def _activate_features(self, features):
-        # Validate all hooks before starting any work.
-        self._get_startup_hooks(features, 'register_file_types')
-        self._get_startup_hooks(features, 'initialize')
-        from commonUtils.formats.registry import file_types, register_builtin_file_types
-        register_builtin_file_types()
-        for feature in features:
-            definition = self.get_feature_definition(feature)
-            hook = definition.register_types if definition is not None else getattr(feature, 'register_file_types', None)
-            if hook is not None and self._get_feature_name(feature) not in self._initialized_features:
-                with file_types.owner_scope(self._get_feature_name(feature)):
-                    hook()
-        for feature in features:
-            name = self._get_feature_name(feature)
-            if name not in self._initialized_features:
-                definition = self.get_feature_definition(feature)
-                hook = definition.initialize if definition is not None else getattr(feature, 'initialize', None)
-                if hook is not None:
-                    hook()
-                self._initialized_features.add(name)
+        return self.activation.activate(features, name_of=self._get_feature_name,
+                                        definition_of=self.get_feature_definition)
 
     def get_enabled_features(self):
         available = self.get_available_features()
@@ -547,76 +494,15 @@ class FeatureRegistry:
         defaults = self.default_disabled_features()
         self._set_feature_enabled(name, all(member not in defaults for member in members), _inherit=True)
 
-    def _get_startup_hooks(self, features: list[ModuleType], name: str) -> list[Callable[[], None]]:
-        """Validate the full startup plan before invoking any feature hook."""
+    def _get_startup_hooks(self, features, name):
+        return self.activation.hooks(features, self.get_feature_definition, name)
 
-        hooks = []
-        for feature in features:
-            definition = self.get_feature_definition(feature)
-            hook = (definition.register_types if name == 'register_file_types' else definition.initialize) if definition is not None else getattr(feature, name, None)
-            if hook is None:
-                continue
-            if not callable(hook):
-                raise TypeError(f"Feature '{feature.__name__}' {name} must be callable.")
-            hooks.append(hook)
-        return hooks
+    def get_feature_contributions(self):
+        return self.catalog.get(self.get_enabled_features(), self.get_feature_definition)
 
-    def get_feature_contributions(self) -> list[tuple[ModuleType, FeatureContributions]]:
-        """Return enabled contributions, checking category types before UI creation."""
-        feature_contributions = []
-        expected_types = {
-            'local_folder_sources': LocalFolderSourceContribution,
-            'remote_folder_sources': RemoteFolderSourceContribution,
-            'folder_features': FolderFeatureContribution,
-            'server_providers': ServerProviderContribution,
-            'debug_actions': DebugActionContribution,
-            'workflows': WorkflowContribution,
-            'pages': PageContribution,
-            'document_launchers': DocumentLauncherContribution,
-            'settings': SettingsContribution,
-            'browser_extensions': BrowserExtensionContribution,
-        }
-        for feature in self.get_enabled_features():
-            definition = self.get_feature_definition(feature)
-            if definition is not None:
-                contributions = definition if isinstance(definition, FeatureContributions) else FeatureContributions()
-            else:
-                get_contributions = getattr(feature, 'get_contributions', None)
-                if get_contributions is None:
-                    continue
-                if not callable(get_contributions):
-                    raise TypeError(f"Feature '{feature.__name__}' defines get_contributions, but it is not callable.")
-                contributions = get_contributions()
-                if not isinstance(contributions, FeatureContributions):
-                    raise TypeError(f"Feature '{feature.__name__}' get_contributions() must return "
-                                    f'FeatureContributions, got {type(contributions).__name__}.')
-            for category, expected in expected_types.items():
-                for item in getattr(contributions, category):
-                    if not isinstance(item, expected):
-                        raise TypeError(f"Feature '{feature.__name__}' {category} requires "
-                                        f'{expected.__name__}, got {type(item).__name__}.')
-            feature_contributions.append((feature, contributions))
-        return feature_contributions
-
-    def _collect_contributions(self, attribute_name: str) -> list[RegisteredContribution[T]]:
-        """Collect one contribution type from every available feature."""
-
-        registered = []
-
-        for feature, contributions in self.get_feature_contributions():
-            feature_name = self._get_feature_name(feature)
-            feature_label = self._get_feature_label(feature)
-
-            for contribution in getattr(contributions, attribute_name):
-                registered.append(
-                    RegisteredContribution(
-                        feature_name=feature_name,
-                        feature_label=feature_label,
-                        contribution=contribution
-                    )
-                )
-
-        return registered
+    def _collect_contributions(self, attribute_name):
+        return self.catalog.collect(self.get_feature_contributions(), attribute_name,
+                                    self._get_feature_name, self._get_feature_label)
 
     def get_local_folder_sources(self) -> list[RegisteredContribution[LocalFolderSourceContribution]]:
         """Return all local-folder source contributions in deterministic order."""
