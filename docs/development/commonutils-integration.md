@@ -80,6 +80,14 @@ The shared hierarchy and resource operations do not require either UI toolkit.
 Logistics owns the storage selector, mirror associations, credentials, private
 document sessions, action approval and routing into readers/editors.
 
+Mobile Files and text Open/Save As await the previous browser's close before
+constructing its replacement. Scrolled-out tiles may still have cooperative
+storage reads retiring; removing their controls or stopping the visible browser
+is not evidence that those reads finished. Keep source dependencies alive until
+retirement. Credential revocation still invalidates private generations immediately.
+The shared [browser lifetime guide](https://github.com/ispaure/commonUtils/blob/main/ui/native_browser/README.md#shared-work-and-thumbnail-lifetime)
+describes task ownership; the pinned checkout is authoritative for local changes.
+
 Within mobile, Files, Move and editor Open/Save As now resolve storage through
 `FilesUI.storage_provider`. Existing pulled providers are reused with their
 namespace intact; display labels are not parsed into a new provider. This keeps
