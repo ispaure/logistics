@@ -403,7 +403,7 @@ class SettingsPageTests(QtTestCase):
 
     def test_settings_api_rejects_duplicate_identity(self):
         contribution = RegisteredContribution('test', 'Test', SettingsContribution('Custom', 'custom', lambda parent: None))
-        with patch.object(registry, '_collect_contributions', return_value=[contribution, contribution]):
+        with patch.object(registry.default_registry, '_collect_contributions', return_value=[contribution, contribution]):
             with self.assertRaisesRegex(ValueError, 'Duplicate settings ID'):
                 registry.get_settings()
 

@@ -49,6 +49,9 @@
     ],
     "features.minecraft.folder_widget": [
       "features.minecraft.ui.folder_widget"
+    ],
+    "features.registry": [
+      "features.feature_runtime"
     ]
   }
 }

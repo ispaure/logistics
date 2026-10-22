@@ -13,12 +13,12 @@ class FeaturePreferencesTests(unittest.TestCase):
         self.temporary = TemporaryDirectory(); self.addCleanup(self.temporary.cleanup)
         self.path = Path(self.temporary.name) / 'preferences.ini'
         for name, value in [('_disabled_features', set()), ('_initialized_features', set()), ('_preferences_path', None), ('_layered_preferences', False)]:
-            replacement = patch.object(registry, name, value); replacement.start(); self.addCleanup(replacement.stop)
+            replacement = patch.object(registry.default_registry, name, value); replacement.start(); self.addCleanup(replacement.stop)
         self.base = ModuleType('features.pref_base'); self.base.FEATURE_NAME = 'pref_base'
         self.child = ModuleType('features.pref_child'); self.child.FEATURE_NAME = 'pref_child'
         self.child.FEATURE_DEPENDENCIES = ('pref_base',)
         self.base.initialize = Mock(); self.child.initialize = Mock()
-        replacement = patch.object(registry, 'load_features', return_value=[self.base, self.child])
+        replacement = patch.object(registry.default_registry, 'load_features', return_value=[self.base, self.child])
         replacement.start(); self.addCleanup(replacement.stop)
 
     def test_saved_choices_load_before_startup_hooks_and_dependencies_reenable(self):
@@ -26,7 +26,7 @@ class FeaturePreferencesTests(unittest.TestCase):
         registry.set_feature_enabled('pref_child', False)
         registry.set_feature_enabled('pref_base', False)
         self.assertEqual(load_disabled(self.path), {'pref_base', 'pref_child'})
-        registry._disabled_features.clear()
+        registry.default_registry._disabled_features.clear()
         registry.load_feature_preferences(self.path)
         self.assertEqual(registry.initialize_features(), [])
         self.base.initialize.assert_not_called(); self.child.initialize.assert_not_called()
@@ -81,7 +81,7 @@ class FeaturePreferencesTests(unittest.TestCase):
         defaults = self.path.with_name('defaults.ini')
         defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
         store = register_settings(defaults, self.path.with_name('personal.ini'))
-        with patch('features.registry.feature_settings_store', return_value=store), \
+        with patch('features.registry.default_registry.feature_settings_store', return_value=store), \
                 patch('features.preferences.preferences_path', return_value=self.path):
             registry.set_feature_default('pref_child', False)
             self.assertEqual(registry.default_disabled_features(), {'pref_child'})
@@ -102,7 +102,7 @@ class FeaturePreferencesTests(unittest.TestCase):
         store = register_settings(defaults, self.path.with_name('personal.ini'))
         save_disabled(self.path, {'pref_child'})
         original = self.path.read_bytes()
-        with patch('features.registry.feature_settings_store', return_value=store), \
+        with patch('features.registry.default_registry.feature_settings_store', return_value=store), \
                 patch('features.preferences.preferences_path', return_value=self.path):
             registry.load_feature_preferences()
             self.assertFalse(registry.is_feature_enabled('pref_child'))
@@ -116,7 +116,7 @@ class FeaturePreferencesTests(unittest.TestCase):
         defaults = self.path.with_name('defaults.ini')
         defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
         store = register_settings(defaults, self.path.with_name('personal.ini'))
-        replacement = patch.object(registry, 'feature_settings_store', return_value=store)
+        replacement = patch.object(registry.default_registry, 'feature_settings_store', return_value=store)
         replacement.start(); self.addCleanup(replacement.stop)
         replacement = patch('features.preferences.preferences_path', return_value=self.path)
         replacement.start(); self.addCleanup(replacement.stop)

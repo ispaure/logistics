@@ -253,9 +253,9 @@ class TextEditorTests(QtTestCase):
         )
         self.assertTrue(activate_text(ActionContext(None, None, None, (File(path),))))
         with (
-            patch.object(registry, "load_features", return_value=[text_editor]),
-            patch.object(registry, "_disabled_features", set()),
-            patch.object(registry, "_initialized_features", set()),
+            patch.object(registry.default_registry, "load_features", return_value=[text_editor]),
+            patch.object(registry.default_registry, "_disabled_features", set()),
+            patch.object(registry.default_registry, "_initialized_features", set()),
         ):
             registry.set_feature_enabled("text_editor", False)
             self.assertFalse(registry.is_feature_enabled("text_editor"))

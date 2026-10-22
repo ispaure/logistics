@@ -319,12 +319,14 @@
     "feature-infrastructure": {
       "sources": [
         "Python/features/registry.py",
+        "Python/features/feature_runtime.py",
         "Python/features/settings.py"
       ],
       "guide": "docs/development/feature-infrastructure.md",
       "tests": {
         "desktop": [
           "test_feature_registry.py",
+          "test_feature_runtime.py",
           "test_architecture_contracts.py"
         ]
       }

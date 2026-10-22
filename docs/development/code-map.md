@@ -14,7 +14,7 @@ put new code. The [restructuring record](restructuring.md) retains migration his
 | `Python/launch.py` | Desktop startup and shutdown composition |
 | `Python/ui_new/` | Desktop application shell: destinations, documents, menus, settings and browser hosting; `ui_new` is the current package name |
 | `Python/features/<id>/` | Feature behavior, registration, configuration and feature-specific presentation |
-| `Python/features/{discovery,registry,contributions,settings,preferences}.py` | Application feature infrastructure, rather than individual tools; see its [ownership map](feature-infrastructure.md) |
+| `Python/features/{discovery,registry,feature_runtime,contributions,settings,preferences}.py` | Application feature infrastructure, rather than individual tools; see its [ownership map](feature-infrastructure.md) |
 | `Python/models/` | Host-level models, including folder identities |
 | `Python/services/` | Logistics policies and host services; see the [domain map](services.md) |
 | `Python/logisticsmobile/` | Toga mobile host and composed workflows; see the [module and test map](mobile-runtime.md) |
@@ -36,7 +36,7 @@ not the source to edit. Root platform launchers remain desktop entry points.
 | Desktop startup | `Python/launch.py` | [Architecture](architecture.md) |
 | Rail, landing chooser or destination hosting | `Python/ui_new/{main_window,sidebar,landing}.py` | [Architecture](architecture.md) |
 | Open document tabs or cooperative close | `Python/ui_new/documents.py` | [Architecture](architecture.md#independent-text-documents) |
-| Feature discovery, enablement or dependencies | `Python/features/registry.py`, `contributions.py` | [Feature lifecycle](features.md) |
+| Feature discovery, enablement or dependencies | `Python/features/feature_runtime.py`; public facade in `registry.py`, declarations in `contributions.py` | [Feature lifecycle](features.md) |
 | Register a feature page, settings group or launcher | The feature's `__init__.py` and any delegated contribution module | [Extension points](extension-points.md) |
 | Browser actions, previews or file activation | Feature registration and handlers; `Python/ui_new/file_browser.py` for host integration | [Browser extensions](file-browser.md) |
 | Desktop Workspaces | `Python/ui_new/pages/folders.py`, `Python/services/folders/sources.py` | [Feature lifecycle](features.md#remote-folder-source-context) |

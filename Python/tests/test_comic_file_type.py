@@ -54,6 +54,6 @@ class ComicFileTypeTests(unittest.TestCase):
         features = [SimpleNamespace(__name__='early', initialize=lambda: events.append('initialize early')),
                     SimpleNamespace(__name__='later', register_file_types=lambda: events.append('register later'),
                                     initialize=lambda: events.append('initialize later'))]
-        with patch.object(registry, '_log_unavailable_features'), patch.object(registry, 'get_available_features', return_value=features):
+        with patch.object(registry.default_registry, '_log_unavailable_features'), patch.object(registry.default_registry, 'get_available_features', return_value=features):
             registry.initialize_features()
         self.assertEqual(events, ['register later', 'initialize early', 'initialize later'])

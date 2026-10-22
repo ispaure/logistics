@@ -31,8 +31,8 @@ class ReadingFeatureTests(QtTestCase):
 
     def test_group_has_one_state_and_toggles_all_engines_with_dependencies(self):
         engines = self.engines()
-        with patch.object(registry, 'load_features', return_value=list(engines)), \
-             patch.object(registry, '_disabled_features', set()), patch.object(registry, '_initialized_features', set()):
+        with patch.object(registry.default_registry, 'load_features', return_value=list(engines)), \
+             patch.object(registry.default_registry, '_disabled_features', set()), patch.object(registry.default_registry, '_initialized_features', set()):
             states = {state.name: state for state in registry.get_feature_states()}
             self.assertEqual(set(states), {'owner', 'dependency'})
             self.assertEqual(states['owner'].members, ('owner', 'child'))
@@ -49,14 +49,14 @@ class ReadingFeatureTests(QtTestCase):
     def test_failed_group_enable_rolls_back_both_engines(self):
         engines = self.engines()
         engines[1].register = lambda: Feature(id='child', initialize=Mock(side_effect=RuntimeError('Cannot initialize')))
-        with patch.object(registry, 'load_features', return_value=list(engines)), \
-             patch.object(registry, '_disabled_features', {'owner', 'child'}), patch.object(registry, '_initialized_features', set()):
+        with patch.object(registry.default_registry, 'load_features', return_value=list(engines)), \
+             patch.object(registry.default_registry, '_disabled_features', {'owner', 'child'}), patch.object(registry.default_registry, '_initialized_features', set()):
             with self.assertRaisesRegex(RuntimeError, 'Cannot initialize'):
                 registry.set_feature_enabled('owner', True)
-            self.assertEqual(registry._disabled_features, {'owner', 'child'})
+            self.assertEqual(registry.default_registry._disabled_features, {'owner', 'child'})
 
     def test_real_feature_is_one_settings_entry_and_keeps_legacy_definitions(self):
-        with patch.object(registry, 'load_features', return_value=[books, comics, images]):
+        with patch.object(registry.default_registry, 'load_features', return_value=[books, comics, images]):
             states = {state.name: state for state in registry.get_feature_states()}
             self.assertNotIn('comics', states)
             self.assertEqual(states['books'].label, 'Books & Comics')

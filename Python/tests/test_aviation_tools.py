@@ -31,14 +31,14 @@ class AviationToolsTests(QtTestCase):
 
     def test_feature_is_discovered_and_contributes_its_own_tab(self):
         self.assertIn('aviation_tools', registry.get_feature_names())
-        with patch.object(registry, 'get_enabled_features', return_value=[aviation_tools]), \
+        with patch.object(registry.default_registry, 'get_enabled_features', return_value=[aviation_tools]), \
                 patch.object(main_window, 'CORE_TABS', ()):
             window = main_window.MainWindow()
             self.addCleanup(window.dlg.deleteLater)
             self.assertEqual(window.tabs.tabText(0), 'Aviation Tools')
             page = window.tabs.widget(0)
             self.assertIsInstance(page, AviationToolsPage)
-            with patch.object(registry, 'get_enabled_features', return_value=[]):
+            with patch.object(registry.default_registry, 'get_enabled_features', return_value=[]):
                 window._sync_feature_pages()
                 self.assertEqual(window.tabs.count(), 0)
             window._sync_feature_pages()

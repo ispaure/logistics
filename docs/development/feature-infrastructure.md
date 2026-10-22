@@ -10,7 +10,8 @@ optional tools:
 | Module | Responsibility |
 | --- | --- |
 | `contributions.py` | Logistics contribution declarations and the extended Feature contract |
-| `registry.py` | Discovery, availability, dependency order, enablement and contribution aggregation |
+| `registry.py` | Compatible module functions forwarding to the application default registry |
+| `feature_runtime.py` | Instance-owned discovery, enablement, initialization, preferences, declaration cache and observers |
 | `discovery.py` | Direct package enumeration and isolated import failures |
 | `settings.py` | Application and feature configuration registration/store composition |
 | `preferences.py` | Feature preference paths, loading and migration |
@@ -30,8 +31,7 @@ empty layers or duplicate Core UI/Bulk Rename packages to match a template.
 
 Start feature-infrastructure validation with `Python/tests/test_feature_registry.py`,
 `test_feature_preferences.py` and `test_settings_page.py`. The isolated regression
-runner requires flat test directories; group ownership in documentation before
-changing discovery or CI.
+runner supports nested test files while keeping one process per file. Existing flat paths remain supported.
 
 Desktop editor baseline discovery, markers and hunk review live in `Python/services/editors/ui/`; Text Editor and IDE consume that neutral host integration.
 
@@ -60,3 +60,21 @@ patch points. Preferences/migrations, activation and contribution aggregation
 remain registry responsibilities; graph traversal does not read settings, discover
 features or run registration hooks. Existing registry regressions cover cycles,
 missing dependencies, duplicate identities and startup ordering.
+
+## Registry runtime ownership
+
+`FeatureRegistry` owns its enabled/initialized sets, preference mode/path, weak
+registered-declaration cache and weak observers. The application uses
+`registry.default_registry`; existing module functions preserve their signatures
+and delegate to that instance at call time. Independent owners can inject a
+`feature_loader`, `settings_provider` and discovery `features_path` callback.
+Preferences, dependency ordering, activation rollback and contribution validation
+keep their existing behavior. Shared commonUtils file-type machinery remains
+process-owned and is shared by independent registries.
+
+Tests that replace internal registry dependencies target `default_registry`, or
+construct their own instance. Public caller mocks can still replace the module
+facade functions. `test_feature_runtime.py` verifies independent preferences,
+declaration caches, once-per-owner initialization and observer retirement;
+`test_feature_registry.py` and `test_feature_preferences.py` retain behavioral
+contracts through the module facade.

@@ -33,14 +33,14 @@ class FeaturesPageTests(QtTestCase):
         defaults = Path(temporary.name) / 'defaults.ini'
         defaults.write_text('[FeatureDefaults]\ndisabled_list-str = []\n')
         self.store = register_settings(defaults, Path(temporary.name) / 'personal.ini')
-        store_patch = patch.object(registry, 'feature_settings_store', return_value=self.store)
+        store_patch = patch.object(registry.default_registry, 'feature_settings_store', return_value=self.store)
         store_patch.start(); self.addCleanup(store_patch.stop)
         for target, value in [('_disabled_features', set()), ('_initialized_features', set()),
                               ('_layered_preferences', True), ('_preferences_path', None)]:
-            patcher = patch.object(registry, target, value)
+            patcher = patch.object(registry.default_registry, target, value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        self.feature_patch = patch.object(registry, 'load_features', return_value=[self.base, self.child, self.missing])
+        self.feature_patch = patch.object(registry.default_registry, 'load_features', return_value=[self.base, self.child, self.missing])
         self.feature_patch.start()
         self.addCleanup(self.feature_patch.stop)
         self.addCleanup(file_types.set_owner_enabled, 'test_base', True)
@@ -131,7 +131,7 @@ class FeaturesPageTests(QtTestCase):
             feature.FEATURE_LABEL = f'Scroll {index:02}'
             feature.FEATURE_DESCRIPTION = 'A short description of this feature.'
             features.append(feature)
-        registry.load_features.return_value = features
+        registry.default_registry.load_features.return_value = features
         self.page.refresh()
         self.page.resize(650, 450); self.page.show(); self.app.processEvents()
         self.page.activateWindow(); self.app.processEvents()

@@ -1,774 +1,247 @@
-"""
-Feature discovery, dependency handling, initialization, and contribution aggregation for Logistics.
-"""
+"""Compatibility facade for the application's default feature registry.
 
-import importlib
-from configparser import Error
-import json
-import weakref
-from dataclasses import dataclass
+Use FeatureRegistry with explicit providers for an independent runtime. Existing
+module functions retain their signatures and resolve default_registry at call time.
+"""
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from typing import TypeVar
 
-from commonUtils.runtime.diagnostics import Severity, log
-from commonUtils.ui.features import Feature as CommonFeature
-from features.contributions import (
-    BrowserExtensionContribution,
-    DebugActionContribution,
-    DocumentLauncherContribution,
-    FeatureContributions,
-    FolderFeatureContribution,
-    LocalFolderSourceContribution,
-    PageContribution,
-    RegisteredContribution,
-    RemoteFolderSourceContribution,
-    ServerProviderContribution,
-    SettingsContribution,
-    WorkflowContribution,
+from .feature_runtime import FeatureRegistry, FeatureState  # noqa: F401 - public value type
+from .contributions import (
+    BrowserExtensionContribution, DebugActionContribution, DocumentLauncherContribution,
+    FeatureContributions, FolderFeatureContribution, LocalFolderSourceContribution,
+    PageContribution, RegisteredContribution, RemoteFolderSourceContribution,
+    ServerProviderContribution, WorkflowContribution,
 )
 
-
 T = TypeVar('T')
-_disabled_features = set()
-_initialized_features = set()
-_listeners = []
-_definitions = weakref.WeakKeyDictionary()
-_preferences_path = None
-_layered_preferences = False
+
+default_registry = FeatureRegistry(features_path=lambda: Path(__file__).parent)
 
 
 def feature_settings_store():
-    from .settings import settings_store
-    return settings_store(Path(__file__).resolve().parents[1] / 'configFile.ini')
+    return default_registry.feature_settings_store()
 
 
 def default_disabled_features():
-    raw = feature_settings_store().safe_values('application').get(('FeatureDefaults', 'disabled_list-str'), '[]')
-    try:
-        values = json.loads(raw)
-        if isinstance(values, list) and all(isinstance(name, str) for name in values):
-            return set(values)
-    except ValueError:
-        pass
-    return set()
+    return default_registry.default_disabled_features()
 
 
 def set_feature_default(name, enabled):
-    feature_map = _get_feature_map()
-    if name not in feature_map:
-        raise ValueError(f'Unknown feature: {name}')
-    leaders, groups = _feature_groups(feature_map)
-    members = groups[leaders[name]]
-    disabled = default_disabled_features()
-    if enabled:
-        required = set()
-        def visit(current):
-            if current in required:
-                return
-            required.add(current)
-            for dependency in get_feature_dependencies(feature_map[current]):
-                visit(dependency)
-        for member in members:
-            visit(member)
-        disabled.difference_update(required)
-    else:
-        dependents = [other for other, module in feature_map.items() if other not in members
-                      and other not in disabled and any(member in get_feature_dependencies(module) for member in members)]
-        if dependents:
-            raise ValueError('Disable these default dependent features first: ' + ', '.join(dependents))
-        disabled.update(members)
-    feature_settings_store().save({('FeatureDefaults', 'disabled_list-str'): json.dumps(sorted(disabled))}, scope='application')
-    _notify_changed()
+    return default_registry.set_feature_default(name, enabled)
 
 
 def load_feature_preferences(path=None):
     """Load defaults before feature initialization; no package folders are renamed."""
-    from .preferences import preferences_path, load_disabled
-    global _preferences_path, _layered_preferences
-    _layered_preferences = path is None
-    path = Path(path) if path is not None else preferences_path()
-    disabled = load_disabled(path)
-    if _layered_preferences:
-        store = feature_settings_store()
-        try:
-            from .settings import migration_ledger
-            overrides = store.overrides()
-            def migrate():
-                if path.exists():
-                    store.save({('FeatureDefaults', 'disabled_list-str'): json.dumps(sorted(disabled))})
-            migration_ledger(store).run('feature-enable-v1', migrate,
-                                       already_applied=('Migration', 'features_bool') in overrides)
-        except (OSError, UnicodeError, Error, ValueError) as error:
-            log(Severity.ERROR, 'Feature settings', f'Could not migrate preferences; original files preserved: {error}')
-        try:
-            _migrate_feature_overrides(store)
-            disabled = _effective_disabled_features(store)
-        except (OSError, UnicodeError, Error, ValueError) as error:
-            log(Severity.ERROR, 'Feature settings', f'Could not migrate per-feature choices; original files preserved: {error}')
-            disabled = _effective_disabled_features(store)
-    _disabled_features.clear()
-    _disabled_features.update(disabled)
-    _preferences_path = path
+    return default_registry.load_feature_preferences(path)
 
 
 def feature_overrides():
     """Return explicit per-engine personal choices, including matching defaults."""
-    result = {}
-    for (section, key), value in feature_settings_store().overrides().items():
-        if section == 'FeatureOverrides' and key.endswith('_bool'):
-            if value.lower() in ('true', 'false'):
-                result[key.removesuffix('_bool')] = value.lower() == 'true'
-    return result
+    return default_registry.feature_overrides()
 
 
 def _effective_disabled_features(store):
-    disabled = default_disabled_features()
-    # Preserve the old selection if migration cannot publish; retry next launch.
-    try:
-        legacy = store.overrides().get(('FeatureDefaults', 'disabled_list-str'))
-    except (OSError, UnicodeError, Error):
-        return disabled
-    if legacy is not None:
-        try:
-            values = json.loads(legacy)
-            if isinstance(values, list) and all(isinstance(name, str) for name in values):
-                disabled = set(values)
-        except ValueError:
-            pass
-    for name, enabled in feature_overrides().items():
-        if enabled:
-            disabled.discard(name)
-        else:
-            disabled.add(name)
-    return disabled
+    return default_registry._effective_disabled_features(store)
 
 
 def _migrate_feature_overrides(store):
-    from .settings import migration_ledger
-    def migrate():
-        overrides = store.overrides()
-        identity = 'FeatureDefaults', 'disabled_list-str'
-        if identity not in overrides:
-            return
-        values = json.loads(overrides[identity])
-        if not isinstance(values, list) or not all(isinstance(name, str) for name in values):
-            raise ValueError('Invalid legacy feature selection; personal file preserved')
-        disabled = set(values)
-        # Legacy snapshots cannot tell deliberate matching values from untouched
-        # features. Preserve differences and let matching choices inherit again.
-        changes = {identity: None}
-        for name in disabled ^ default_disabled_features():
-            key = 'FeatureOverrides', name + '_bool'
-            if key not in overrides:
-                changes[key] = 'false' if name in disabled else 'true'
-        store.save(changes)
-    migration_ledger(store).run('feature-overrides-v2', migrate)
+    return default_registry._migrate_feature_overrides(store)
 
 
 def _save_feature_preferences(changes=None):
-    if _layered_preferences:
-        store = feature_settings_store()
-        fields = ({('FeatureOverrides', name + '_bool'): None if enabled is None else str(enabled).lower()
-                   for name, enabled in changes.items()} if changes is not None else
-                  {key: None for key in store.overrides() if key[0] == 'FeatureOverrides'})
-        if changes is None:
-            fields['FeatureDefaults', 'disabled_list-str'] = None
-        store.save(fields)
-        return
-    if _preferences_path is not None:
-        from .preferences import save_disabled
-        save_disabled(_preferences_path, _disabled_features)
-
+    return default_registry._save_feature_preferences(changes)
 
 
 def reset_feature_defaults():
     """Remove personal choices and restore software defaults atomically."""
-    before = set(_disabled_features)
-    feature_map = _get_feature_map()
-    from commonUtils.formats.registry import file_types
-    def activate(name, enabled):
-        definition = get_feature_definition(feature_map[name])
-        if definition is not None:
-            definition.set_enabled(enabled)
-        else:
-            file_types.set_owner_enabled(name, enabled)
-    try:
-        _disabled_features.clear()
-        if _layered_preferences:
-            _disabled_features.update(default_disabled_features())
-        for name in feature_map:
-            activate(name, name not in _disabled_features and _is_feature_available(name, feature_map))
-        initialize_features()
-        _save_feature_preferences()
-    except Exception:
-        _disabled_features.clear()
-        _disabled_features.update(before)
-        for name in feature_map:
-            activate(name, name not in before and _is_feature_available(name, feature_map))
-        raise
-    _notify_changed()
+    return default_registry.reset_feature_defaults()
 
-
-# ----------------------------------------------------------------------------------------------------------------------
-# FEATURE DISCOVERY
-
-from .discovery import get_feature_names as discover_feature_names, load_named_features
 
 def get_feature_names():
-    return discover_feature_names(Path(__file__).parent)
+    return default_registry.get_feature_names()
 
 
 def load_features() -> list[ModuleType]:
-    return load_named_features(get_feature_names(), __package__)
+    return default_registry.load_features()
 
-
-# ----------------------------------------------------------------------------------------------------------------------
-# FEATURE METADATA / DEPENDENCIES
 
 def get_feature_definition(feature):
     """Return the cached register() declaration, or None for a legacy feature."""
-    if isinstance(feature, str):
-        feature = _get_feature_map().get(feature)
-        if feature is None:
-            raise ValueError('Unknown feature')
-    register = getattr(feature, 'register', None)
-    if register is None:
-        return None
-    if not callable(register):
-        raise TypeError(f"Feature '{feature.__name__}' register must be callable")
-    if feature not in _definitions:
-        definition = register()
-        if not isinstance(definition, CommonFeature):
-            raise TypeError(f"Feature '{feature.__name__}' register() must return Feature")
-        _definitions[feature] = definition
-    return _definitions[feature]
+    return default_registry.get_feature_definition(feature)
 
 
 def _get_feature_name(feature: ModuleType) -> str:
     """Return the stable feature name for a feature module."""
-
-    definition = get_feature_definition(feature)
-    return definition.id if definition is not None else getattr(feature, 'FEATURE_NAME', feature.__name__.rsplit('.', 1)[-1])
+    return default_registry._get_feature_name(feature)
 
 
 def _get_feature_label(feature: ModuleType) -> str:
     """Return the human-readable feature label used for grouping contributions."""
-
-    definition = get_feature_definition(feature)
-    if definition is not None:
-        return definition.label
-    explicit_label = getattr(feature, 'FEATURE_LABEL', None)
-
-    if explicit_label is not None:
-        return explicit_label
-
-    return _get_feature_name(feature).replace('_', ' ').title()
+    return default_registry._get_feature_label(feature)
 
 
 def _get_dependency_names(feature: ModuleType, attribute_name: str) -> tuple[str, ...]:
     """Return and validate one dependency metadata tuple from a feature."""
-
-    dependency_names = getattr(feature, attribute_name, ())
-
-    if not isinstance(dependency_names, (tuple, list)):
-        raise TypeError(
-            f"Feature '{feature.__name__}' {attribute_name} must be a tuple/list of feature names."
-        )
-
-    for dependency_name in dependency_names:
-        if not isinstance(dependency_name, str) or not dependency_name:
-            raise TypeError(
-                f"Feature '{feature.__name__}' {attribute_name} contains an invalid feature name."
-            )
-
-    return tuple(dependency_names)
+    return default_registry._get_dependency_names(feature, attribute_name)
 
 
 def get_feature_dependencies(feature: ModuleType) -> tuple[str, ...]:
     """Return hard dependencies declared by a feature."""
-
-    definition = get_feature_definition(feature)
-    return definition.requires if definition is not None else _get_dependency_names(feature, 'FEATURE_DEPENDENCIES')
+    return default_registry.get_feature_dependencies(feature)
 
 
 def get_feature_optional_dependencies(feature: ModuleType) -> tuple[str, ...]:
     """Return optional dependencies declared by a feature."""
-
-    definition = get_feature_definition(feature)
-    return definition.optional_requires if definition is not None else _get_dependency_names(feature, 'FEATURE_OPTIONAL_DEPENDENCIES')
+    return default_registry.get_feature_optional_dependencies(feature)
 
 
 def _get_feature_map() -> dict[str, ModuleType]:
     """Return loaded features indexed by stable FEATURE_NAME."""
-
-    feature_map = {}
-
-    for feature in load_features():
-        feature_name = _get_feature_name(feature)
-
-        if feature_name in feature_map:
-            raise ValueError(f'Duplicate Logistics feature name: {feature_name}')
-
-        feature_map[feature_name] = feature
-
-    return feature_map
+    return default_registry._get_feature_map()
 
 
 def _is_feature_available(feature_name: str, feature_map: dict[str, ModuleType],
                           resolving: tuple[str, ...] = ()) -> bool:
-    from .feature_graph import available
-    return available(feature_name, feature_map, get_feature_dependencies, resolving)
+    return default_registry._is_feature_available(feature_name, feature_map, resolving)
 
 
 def is_feature_available(feature_name: str) -> bool:
-    """
-    Return whether a feature exists and all of its hard dependencies are available.
-
-    Optional dependencies do not affect feature availability.
-    """
-
-    return _is_feature_available(feature_name, _get_feature_map())
+    """Return whether a feature exists and all of its hard dependencies are available."""
+    return default_registry.is_feature_available(feature_name)
 
 
 def get_available_features() -> list[ModuleType]:
     """Return features whose hard dependencies are all available."""
-
-    feature_map = _get_feature_map()
-
-    return [
-        feature
-        for feature in feature_map.values()
-        if _is_feature_available(_get_feature_name(feature), feature_map)
-    ]
+    return default_registry.get_available_features()
 
 
 def _log_unavailable_features() -> None:
     """Log features skipped because one or more hard dependencies are unavailable."""
+    return default_registry._log_unavailable_features()
 
-    feature_map = _get_feature_map()
-
-    for feature_name, feature in feature_map.items():
-        if _is_feature_available(feature_name, feature_map):
-            continue
-
-        dependencies = get_feature_dependencies(feature)
-        missing = [
-            dependency_name
-            for dependency_name in dependencies
-            if not _is_feature_available(dependency_name, feature_map)
-        ]
-
-        log(
-            Severity.WARNING,
-            'Feature Registry',
-            f'Skipping feature "{feature_name}". Missing hard dependencies: {", ".join(missing)}'
-        )
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# FEATURE INITIALIZATION
 
 def _get_initialization_order(features: list[ModuleType]) -> list[ModuleType]:
-    from .feature_graph import initialization_order
-    return initialization_order(features, _get_feature_name, get_feature_dependencies)
+    return default_registry._get_initialization_order(features)
 
 
 def initialize_features() -> list[ModuleType]:
     """Register enabled types before initializing dependencies, once per session."""
-    _log_unavailable_features()
-    features = _get_initialization_order(get_enabled_features())
-    _activate_features(features)
-    return features
+    return default_registry.initialize_features()
 
 
 def _activate_features(features):
-    # Validate all hooks before starting any work.
-    _get_startup_hooks(features, 'register_file_types')
-    _get_startup_hooks(features, 'initialize')
-    from commonUtils.formats.registry import file_types, register_builtin_file_types
-    register_builtin_file_types()
-    for feature in features:
-        definition = get_feature_definition(feature)
-        hook = definition.register_types if definition is not None else getattr(feature, 'register_file_types', None)
-        if hook is not None and _get_feature_name(feature) not in _initialized_features:
-            with file_types.owner_scope(_get_feature_name(feature)):
-                hook()
-    for feature in features:
-        name = _get_feature_name(feature)
-        if name not in _initialized_features:
-            definition = get_feature_definition(feature)
-            hook = definition.initialize if definition is not None else getattr(feature, 'initialize', None)
-            if hook is not None:
-                hook()
-            _initialized_features.add(name)
+    return default_registry._activate_features(features)
 
 
 def get_enabled_features():
-    available = get_available_features()
-    feature_map = {_get_feature_name(feature): feature for feature in available}
-    enabled = set(feature_map) - _disabled_features
-    # Remove consumers of disabled dependencies, including transitive consumers.
-    while True:
-        filtered = {name for name in enabled if all(dep in enabled for dep in
-                    get_feature_dependencies(feature_map[name]))}
-        if filtered == enabled:
-            return [feature for feature in available if _get_feature_name(feature) in enabled]
-        enabled = filtered
+    return default_registry.get_enabled_features()
 
 
 def is_feature_enabled(name):
-    return any(_get_feature_name(feature) == name for feature in get_enabled_features())
-
-
-@dataclass(frozen=True)
-class FeatureState:
-    name: str
-    label: str
-    available: bool
-    enabled: bool
-    dependencies: tuple[str, ...]
-    dependents: tuple[str, ...]
-    members: tuple[str, ...] = ()
-    error: str = ''
-    description: str = ''
+    return default_registry.is_feature_enabled(name)
 
 
 def _feature_groups(feature_map):
     """Present grouped engines together while preserving their runtime identities."""
-    leaders = {}
-    for name, feature in feature_map.items():
-        group = getattr(feature, 'FEATURE_GROUP', None)
-        if group is not None and (not isinstance(group, str) or not group):
-            raise TypeError(f'{name} FEATURE_GROUP must be a feature name')
-        leaders[name] = group if group in feature_map else name
-    groups = {}
-    for name, leader in leaders.items():
-        if leaders[leader] != leader:
-            raise ValueError('Feature groups must point directly to their visible leader')
-        groups.setdefault(leader, []).append(name)
-    return leaders, groups
+    return default_registry._feature_groups(feature_map)
 
 
 def get_feature_states():
-    feature_map = _get_feature_map()
-    enabled = {_get_feature_name(feature) for feature in get_enabled_features()}
-    leaders, groups = _feature_groups(feature_map)
-    states = []
-    for name, members in groups.items():
-        dependencies = tuple(dict.fromkeys(leaders.get(dependency, dependency)
-            for member in members for dependency in get_feature_dependencies(feature_map[member])
-            if dependency not in members))
-        dependents = tuple(dict.fromkeys(leaders[other] for other, module in feature_map.items()
-            if other in enabled and other not in members
-            and any(member in get_feature_dependencies(module) for member in members)))
-        states.append(FeatureState(name, _get_feature_label(feature_map[name]),
-            all(_is_feature_available(member, feature_map) for member in members),
-            all(member in enabled for member in members), dependencies, dependents, tuple(members),
-            "; ".join(getattr(feature_map[member], 'FEATURE_LOAD_ERROR', '') for member in members).strip('; '),
-            getattr(feature_map[name], 'FEATURE_DESCRIPTION', '')))
-    return states
+    return default_registry.get_feature_states()
 
 
 def subscribe(callback):
     """Observe session state changes without retaining UI instances."""
-    reference = weakref.WeakMethod(callback) if getattr(callback, '__self__', None) is not None else weakref.ref(callback)
-    _listeners.append(reference)
-    def unsubscribe(*args):
-        if reference in _listeners:
-            _listeners.remove(reference)
-    return unsubscribe
+    return default_registry.subscribe(callback)
 
 
 def _notify_changed():
-    for reference in tuple(_listeners):
-        callback = reference()
-        if callback is None:
-            _listeners.remove(reference)
-        else:
-            try:
-                callback()
-            except Exception as error:
-                log(Severity.ERROR, 'Feature Registry', f'Cannot update a feature observer: {error}')
+    return default_registry._notify_changed()
 
 
 def set_feature_enabled(name, enabled):
     """Persist an explicit choice, even when it matches the software default."""
-    _set_feature_enabled(name, enabled)
+    return default_registry.set_feature_enabled(name, enabled)
 
 
 def _set_feature_enabled(name, enabled, *, _inherit=False):
     """Enable dependencies and refuse disabling required features."""
-    feature_map = _get_feature_map()
-    if name not in feature_map:
-        raise ValueError(f'Unknown feature: {name}')
-    leaders, groups = _feature_groups(feature_map)
-    members = groups[leaders[name]]
-    if not _layered_preferences and all(is_feature_enabled(member) == enabled for member in members):
-        return
-    from commonUtils.formats.registry import file_types
-    before = set(_disabled_features)
-    changes = {member: None if _inherit else enabled for member in members}
-    def activate(current, value):
-        definition = get_feature_definition(feature_map[current])
-        if definition is not None:
-            definition.set_enabled(value)
-        else:
-            file_types.set_owner_enabled(current, value)
-    if enabled and not (_inherit and not all(_is_feature_available(member, feature_map) for member in members)):
-        if not all(_is_feature_available(member, feature_map) for member in members):
-            raise ValueError(f'{name} has missing required dependencies')
-        required = set()
-        def visit(current):
-            if current in required:
-                return
-            required.add(current)
-            for dependency in get_feature_dependencies(feature_map[current]):
-                visit(dependency)
-        for member in members:
-            visit(member)
-        plan = _get_initialization_order([feature_map[item] for item in feature_map if item in required])
-        _disabled_features.difference_update(required)
-        changes.update({item: True for item in required & before if item not in members})
-        for item in required:
-            activate(item, True)
-        try:
-            _activate_features(plan)
-        except Exception:
-            _disabled_features.clear()
-            _disabled_features.update(before)
-            for item in required:
-                activate(item, item not in before)
-            raise
-    else:
-        dependents = list(dict.fromkeys(_get_feature_label(feature_map[leaders[other]])
-            for other, module in feature_map.items() if other not in members and is_feature_enabled(other)
-            and any(member in get_feature_dependencies(module) for member in members)))
-        if dependents:
-            raise ValueError(f'Disable these dependent features first: {", ".join(dependents)}')
-        for member in members:
-            if _inherit and member not in default_disabled_features():
-                _disabled_features.discard(member)
-            else:
-                _disabled_features.add(member)
-            activate(member, member not in _disabled_features and _is_feature_available(member, feature_map))
-    try:
-        if _inherit:
-            initialize_features()
-        _save_feature_preferences(changes)
-    except Exception:
-        _disabled_features.clear()
-        _disabled_features.update(before)
-        for current in feature_map:
-            activate(current, current not in before and _is_feature_available(current, feature_map))
-        raise
-    _notify_changed()
+    return default_registry._set_feature_enabled(name, enabled, _inherit=_inherit)
 
 
 def reset_feature_override(name):
     """Remove this visible feature's explicit choices; keep other overrides."""
-    feature_map = _get_feature_map()
-    if name not in feature_map:
-        raise ValueError(f'Unknown feature: {name}')
-    leaders, groups = _feature_groups(feature_map)
-    members = groups[leaders[name]]
-    defaults = default_disabled_features()
-    _set_feature_enabled(name, all(member not in defaults for member in members), _inherit=True)
+    return default_registry.reset_feature_override(name)
 
 
 def _get_startup_hooks(features: list[ModuleType], name: str) -> list[Callable[[], None]]:
     """Validate the full startup plan before invoking any feature hook."""
+    return default_registry._get_startup_hooks(features, name)
 
-    hooks = []
-    for feature in features:
-        definition = get_feature_definition(feature)
-        hook = (definition.register_types if name == 'register_file_types' else definition.initialize) if definition is not None else getattr(feature, name, None)
-        if hook is None:
-            continue
-        if not callable(hook):
-            raise TypeError(f"Feature '{feature.__name__}' {name} must be callable.")
-        hooks.append(hook)
-    return hooks
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# CONTRIBUTIONS
 
 def get_feature_contributions() -> list[tuple[ModuleType, FeatureContributions]]:
     """Return enabled contributions, checking category types before UI creation."""
-    feature_contributions = []
-    expected_types = {
-        'local_folder_sources': LocalFolderSourceContribution,
-        'remote_folder_sources': RemoteFolderSourceContribution,
-        'folder_features': FolderFeatureContribution,
-        'server_providers': ServerProviderContribution,
-        'debug_actions': DebugActionContribution,
-        'workflows': WorkflowContribution,
-        'pages': PageContribution,
-        'document_launchers': DocumentLauncherContribution,
-        'settings': SettingsContribution,
-        'browser_extensions': BrowserExtensionContribution,
-    }
-    for feature in get_enabled_features():
-        definition = get_feature_definition(feature)
-        if definition is not None:
-            contributions = definition if isinstance(definition, FeatureContributions) else FeatureContributions()
-        else:
-            get_contributions = getattr(feature, 'get_contributions', None)
-            if get_contributions is None:
-                continue
-            if not callable(get_contributions):
-                raise TypeError(f"Feature '{feature.__name__}' defines get_contributions, but it is not callable.")
-            contributions = get_contributions()
-            if not isinstance(contributions, FeatureContributions):
-                raise TypeError(f"Feature '{feature.__name__}' get_contributions() must return "
-                                f'FeatureContributions, got {type(contributions).__name__}.')
-        for category, expected in expected_types.items():
-            for item in getattr(contributions, category):
-                if not isinstance(item, expected):
-                    raise TypeError(f"Feature '{feature.__name__}' {category} requires "
-                                    f'{expected.__name__}, got {type(item).__name__}.')
-        feature_contributions.append((feature, contributions))
-    return feature_contributions
+    return default_registry.get_feature_contributions()
 
 
 def _collect_contributions(attribute_name: str) -> list[RegisteredContribution[T]]:
     """Collect one contribution type from every available feature."""
-
-    registered = []
-
-    for feature, contributions in get_feature_contributions():
-        feature_name = _get_feature_name(feature)
-        feature_label = _get_feature_label(feature)
-
-        for contribution in getattr(contributions, attribute_name):
-            registered.append(
-                RegisteredContribution(
-                    feature_name=feature_name,
-                    feature_label=feature_label,
-                    contribution=contribution
-                )
-            )
-
-    return registered
+    return default_registry._collect_contributions(attribute_name)
 
 
 def get_local_folder_sources() -> list[RegisteredContribution[LocalFolderSourceContribution]]:
     """Return all local-folder source contributions in deterministic order."""
-
-    sources = _collect_contributions('local_folder_sources')
-
-    return sorted(
-        sources,
-        key=lambda registered: (
-            registered.contribution.order,
-            registered.contribution.name.casefold()
-        )
-    )
+    return default_registry.get_local_folder_sources()
 
 
 def get_remote_folder_sources() -> list[RegisteredContribution[RemoteFolderSourceContribution]]:
     """Return all remote-folder source contributions in deterministic order."""
-
-    sources = _collect_contributions('remote_folder_sources')
-
-    return sorted(
-        sources,
-        key=lambda registered: (
-            registered.contribution.order,
-            registered.contribution.name.casefold()
-        )
-    )
+    return default_registry.get_remote_folder_sources()
 
 
 def get_folder_features() -> list[RegisteredContribution[FolderFeatureContribution]]:
     """Return all folder-feature contributions."""
-
-    return _collect_contributions('folder_features')
+    return default_registry.get_folder_features()
 
 
 def get_server_providers() -> list[RegisteredContribution[ServerProviderContribution]]:
     """Return all server-provider contributions."""
-
-    return _collect_contributions('server_providers')
+    return default_registry.get_server_providers()
 
 
 def get_debug_actions() -> list[RegisteredContribution[DebugActionContribution]]:
     """Return all debug-action contributions."""
-
-    return _collect_contributions('debug_actions')
+    return default_registry.get_debug_actions()
 
 
 def get_workflows() -> list[RegisteredContribution[WorkflowContribution]]:
     """Return all contributed UI workflows."""
-
-    return _collect_contributions('workflows')
+    return default_registry.get_workflows()
 
 
 def get_workflow(workflow_id: str) -> RegisteredContribution[WorkflowContribution]:
     """Return one contributed workflow and enforce globally unique workflow IDs."""
-
-    matches = [
-        registered
-        for registered in get_workflows()
-        if registered.contribution.workflow_id == workflow_id
-    ]
-
-    if not matches:
-        raise ValueError(f'Unknown UI workflow: {workflow_id}')
-
-    if len(matches) > 1:
-        feature_names = ', '.join(
-            sorted(registered.feature_name for registered in matches)
-        )
-        raise ValueError(
-            f'Duplicate UI workflow ID "{workflow_id}" contributed by: {feature_names}'
-        )
-
-    return matches[0]
+    return default_registry.get_workflow(workflow_id)
 
 
 def get_pages() -> list[RegisteredContribution[PageContribution]]:
-
     """Return all standalone page contributions, ordered by page order then name."""
-
-    pages = _collect_contributions('pages')
-
-    return sorted(
-        pages,
-        key=lambda registered: (
-            registered.contribution.order,
-            registered.contribution.name.casefold()
-        )
-    )
+    return default_registry.get_pages()
 
 
 def get_browser_extensions() -> list[RegisteredContribution[BrowserExtensionContribution]]:
     """Return extensions installed into each Logistics browser host."""
-    extensions = _collect_contributions('browser_extensions')
-    for feature in get_enabled_features():
-        definition = get_feature_definition(feature)
-        if definition is not None and definition.browser is not None:
-            extensions.append(RegisteredContribution(definition.id, definition.label,
-                BrowserExtensionContribution(lambda host, definition=definition:
-                    definition.install_browser(host.file_browser, host=host))))
-    return extensions
+    return default_registry.get_browser_extensions()
 
 
 def get_settings():
     """Return lazy feature settings, with stable identities within each feature."""
-    entries = _collect_contributions('settings')
-    seen = set()
-    for entry in entries:
-        key = (entry.feature_name, entry.contribution.settings_id)
-        if key in seen:
-            raise ValueError(f'Duplicate settings ID for {entry.feature_name}: {key[1]}')
-        seen.add(key)
-    return sorted(entries, key=lambda entry: (entry.contribution.order, entry.contribution.name.casefold()))
+    return default_registry.get_settings()
 
 
 def get_document_launchers() -> list[RegisteredContribution[DocumentLauncherContribution]]:
     """Return enabled editor categories and their lazy openers in navigation order."""
-    return sorted(_collect_contributions('document_launchers'),
-                  key=lambda entry: (entry.contribution.order, entry.contribution.name.casefold()))
+    return default_registry.get_document_launchers()
