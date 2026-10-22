@@ -16,6 +16,7 @@ from ..generation import GenerationCoordinator, GenerationInputs
 from .ide_context import registered_projects, editor_context
 from .icons import chat_icon, action_button
 from .layout import build_layout
+from .menus import build_menus
 from .attachments import AttachmentController
 from .composer import Composer
 from .profiles import ProfilesDialog
@@ -118,7 +119,7 @@ class LMPage(qt.QWidget):
         self.styling.bind(self.transcript, 'reading')
         self.styling.bind(self.composer, 'reading')
         self.styling.changed.connect(self.render)
-        self.create_menus(layout)
+        build_menus(self, layout)
         self.apply_chrome()
         self.styling.changed.connect(self.apply_chrome)
         theme = getattr(qt.QApplication.instance(), '_commonutils_theme', None)
@@ -131,39 +132,6 @@ class LMPage(qt.QWidget):
             self.list.setCurrentItem(first)
         self.update_controls()
 
-    def create_menus(self, layout):
-        self.menu_bar = qt.QMenuBar()
-        self.menu_bar.setNativeMenuBar(False)
-        layout.insertWidget(0, self.menu_bar)
-        file = self.menu_bar.addMenu('File')
-        self.idle_menu_actions = [file.addAction('New conversation', self.new_conversation),
-                                  file.addAction('New folder…', self.new_folder)]
-        file.addSeparator()
-        for action in (self.rename_button, self.move_button, self.export_button, self.delete_button):
-            file.addAction(action)
-        edit = self.menu_bar.addMenu('Edit')
-        self.draft_actions = []
-        for label, callback in [('Undo draft', self.composer.undo), ('Redo draft', self.composer.redo),
-                                ('Cut draft selection', self.composer.cut), ('Copy draft selection', self.composer.copy),
-                                ('Paste into draft', self.composer.paste), ('Select draft', self.composer.selectAll)]:
-            self.draft_actions.append(edit.addAction(label, callback))
-        chat = self.menu_bar.addMenu('Conversation')
-        chat.addAction(self.pin_action)
-        chat.addAction(self.fork_action)
-        view = self.menu_bar.addMenu('View')
-        self.idle_menu_actions.append(view.addAction('Refresh conversations', self.refresh))
-        view.addAction('Find conversations', self.search.setFocus)
-        sidebar = view.addAction('Conversation sidebar')
-        sidebar.setCheckable(True)
-        sidebar.setChecked(True)
-        sidebar.toggled.connect(self.sidebar.setVisible)
-        generation = view.addAction('Generation settings')
-        generation.setCheckable(True)
-        generation.toggled.connect(self.settings_toggle.setChecked)
-        self.settings_toggle.toggled.connect(generation.setChecked)
-        server = self.menu_bar.addMenu('Server')
-        self.idle_menu_actions.extend([server.addAction('Manage profiles…', self.edit_profiles),
-                                      server.addAction('Test connection / Refresh models', self.refresh_models)])
 
     def conversation_menu(self, point):
         item = self.list.itemAt(point)

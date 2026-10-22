@@ -8,7 +8,7 @@ import toga
 from .control_icons import icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
-from .folder_hub import folder_tree, credential_choices, source_choices, folder_storage_label, folder_browse_copy
+from .folder_hub import folder_row_presentation, folder_tree, credential_choices, source_choices, folder_storage_label, folder_browse_copy
 from features.rclone.mobile.messages import import_hint
 from textwrap import fill
 from .appearance import list_button, batch_surfaces
@@ -329,18 +329,10 @@ class FolderHubUI:
         def row_for(path, title, node):
             name = node['names'][0] if node['names'] else None
             if name is not None:
-                entry = visible[name]
-                target = folder_browse_copy(entry, self.folder_source)
-                storage = (folder_storage_label(entry) if self.folder_source == 'Network shares'
-                           else target['source'])
-                remote = target.get('remote') or entry.get('remote')
-                encrypted = ('LocalCrypt' in storage or ('Remote' in storage and (
-                    remote in crypt_remotes
-                    or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ())))))
-                state = ('unlocked' if remote in loaded_remotes else 'locked') if encrypted else None
-                icon = 'folder_' + state if state else 'folder'
-                description = storage + (', ' + state if state else '')
-                presentation = (title, icon, description)
+                projected = folder_row_presentation(title, visible[name], self.folder_source,
+                                                    loaded_remotes, crypt_remotes)
+                icon, description, state = projected.icon, projected.description, projected.state
+                presentation = (projected.title, icon, description)
             record = tab.nodes.get(path)
             if record is None or record.name != name:
                 row = toga.Box(style=Pack(direction=ROW, align_items=CENTER,

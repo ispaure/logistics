@@ -162,7 +162,8 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
             self._startup_in_progress = False
 
     async def _prepare_startup_phase(self, index):
-        if index != 1:
+        from .startup import StartupPhase
+        if index != StartupPhase.PREFERENCES:
             return
         from .startup import load_startup_models
         root = self.private_root
@@ -178,8 +179,26 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         self.cloud_startup_task = self.loop.create_task(restore_cloud_in_background(self))
 
     def _startup_steps(self):
-        from .startup import STEPS
-        yield STEPS[0]
+        """Yield before each phase, preserving native draw and worker boundaries."""
+        from .startup import STEPS, StartupPhase
+        yield STEPS[StartupPhase.STORAGE]
+        root = self._prepare_startup_storage()
+        yield STEPS[StartupPhase.PREFERENCES]
+        models, workspace_root = self._prepare_startup_preferences(root)
+        yield STEPS[StartupPhase.DOCUMENTS]
+        restored_document = self._prepare_startup_documents(root, models, workspace_root)
+        yield STEPS[StartupPhase.EDITOR]
+        self._prepare_startup_editor()
+        yield STEPS[StartupPhase.NAVIGATION]
+        self._prepare_startup_navigation()
+        yield STEPS[StartupPhase.RESTORE]
+        self._restore_startup_documents(restored_document)
+        yield STEPS[StartupPhase.WORKSPACE]
+        self._prepare_startup_workspace()
+        yield STEPS[StartupPhase.WINDOW]
+        self._attach_startup_window(restored_document)
+
+    def _prepare_startup_storage(self):
         root = Path(self.storage_root or self.paths.data)
         if type(self._impl).__module__.startswith('toga_iOS.') and self.storage_root is None:
             from .app_reset import finish_ios_reset
@@ -187,7 +206,9 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
             from .ios_storage import prepare_for_app
             root = prepare_for_app(self)
         self.private_root = root
-        yield STEPS[1]
+        return root
+
+    def _prepare_startup_preferences(self, root):
         host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
         previous_host = _active_hosts.get(host_identity)
         if previous_host is not None and previous_host is not self:
@@ -201,7 +222,9 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         self.preferences = models['preferences'] if models is not None else Preferences(workspace_root)
         from .appearance import configure_android_eink
         configure_android_eink(self)
-        yield STEPS[2]
+        return models, workspace_root
+
+    def _prepare_startup_documents(self, root, models, workspace_root):
         self.store = models['store'] if models is not None else DocumentStore(root / 'Documents')
         from .recent_documents import RecentDocuments, MAX_RECENT
         self.recent_documents = models['recent'] if models is not None else RecentDocuments(workspace_root)
@@ -220,14 +243,17 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         if hasattr(self, 'scene_manager'):
             self.scene_manager.owners.attach(self.window_id, self)
             self.scene_manager.bind_workspace(self.window_id, self)
-        yield STEPS[3]
+        return restored_document
+
+    def _prepare_startup_editor(self):
         self.text_views = {}
         self.current = None
         self.loading = True
         self.labels = {}
         self.editor_view = TextEditorView(self)
         self.editor_view.bind()
-        yield STEPS[4]
+
+    def _prepare_startup_navigation(self):
         self.native_host = NativeNavigationHost(DESTINATION_ITEMS, on_select=self.select_destination)
         self.routes = MobileRoutes(self, self.native_host, guard=self.checkpoint, changed=self.route_changed,
                              intent=self.mark_navigation)
@@ -244,7 +270,8 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
             install_scenes(self)
         self.scene_manager.activate()
         self.on_exit = self.exit_app
-        yield STEPS[5]
+
+    def _restore_startup_documents(self, restored_document):
         self.refresh_documents()
         self.loading = False
         if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
@@ -265,13 +292,15 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
                 self._pending_managed_restore = key
             else:
                 self.open_document(key)
-        yield STEPS[6]
+
+    def _prepare_startup_workspace(self):
         if not getattr(self, '_async_startup', False):
             self.show_documents_hub()
             self.show_folder_picker(initialize=False)
         self.show_home()
         self.save_workspace(capture=False)
-        yield STEPS[7]
+
+    def _attach_startup_window(self, restored_document):
         if hasattr(self, 'startup_screen'):
             self.startup_screen.cover_workspace(self)
             self.startup_screen.restore_chrome(self)

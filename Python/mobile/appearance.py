@@ -242,256 +242,265 @@ def show_android_dialog(impl, host_window, future, *, show):
 
 
 def install_appearance(app):
+    """Install each backend's application policy once per process."""
     backend = type(app._impl).__module__
     if backend in _installed:
         return
     if backend.startswith('toga_iOS.'):
-        from .ios_reader_chrome import install
-        install()
-        from rubicon.objc import objc_method, send_super, objc_id
-        import toga_iOS.widgets.box as box_module
-        # CALayer stores a resolved CGColor. Refresh card strokes when UIKit
-        # changes traits, while dynamic text/background colours update themselves.
-        class LogisticsSurfaceView(box_module.TogaView):
-            @objc_method
-            def traitCollectionDidChange_(self, previous: objc_id) -> None:
-                send_super(__class__, self, 'traitCollectionDidChange:', previous, argtypes=[objc_id])
-                impl = self.impl
-                if impl in _surfaces:
-                    paint_surface(impl, _surfaces[impl])
-        box_module.TogaView = LogisticsSurfaceView
-        import toga_iOS.widgets.scrollcontainer as scroll_module
-
-        class LogisticsScrollView(scroll_module.TogaScrollView):
-            @objc_method
-            def refreshContent(self) -> None:
-                # Toga queues this selector during layout. UIKit may retain
-                # the view after its weak Python interface has been collected.
-                interface = self.interface
-                if interface is not None and interface.content is not None:
-                    interface.content.refresh()
-
-            @objc_method
-            def scrollViewDidScroll_(self, scroll_view) -> None:
-                interface = self.interface
-                if interface is not None:
-                    interface.on_scroll()
-
-        scroll_module.TogaScrollView = LogisticsScrollView
-        from ctypes import c_bool
-        from rubicon.objc.types import CGPoint
-        import toga_iOS.widgets.button as button_module
-
-        class LogisticsActionButton(button_module.TogaButton):
-            @objc_method
-            def traitCollectionDidChange_(self, previous: objc_id) -> None:
-                send_super(__class__, self, 'traitCollectionDidChange:', previous, argtypes=[objc_id])
-                impl = self.impl
-                if impl in _surfaces:
-                    paint_surface(impl, _surfaces[impl])
-
-            @objc_method
-            def pointInside_withEvent_(self, point: CGPoint, event: objc_id) -> bool:
-                inside = send_super(__class__, self, 'pointInside:withEvent:', point, event,
-                                    restype=c_bool, argtypes=[CGPoint, objc_id])
-                if not inside or self.impl is None:
-                    return bool(inside)
-                # The visible boundary is the touch target, including its edges.
-                outlined = getattr(self.impl, '_surface_roles', (None, None, False))[2]
-                filled = getattr(self.impl, '_surface_roles', ('transparent',))[0] != 'transparent'
-                if (filled or outlined or getattr(self.impl, '_row_hint', False) or self.bounds.size.width <= 52
-                        or self.configuration is not None):
-                    return True
-                title = self.titleRectForContentRect(self.bounds)
-                left, right = title.origin.x, title.origin.x + title.size.width
-                if self.imageForState(0) is not None:
-                    image = self.imageRectForContentRect(self.bounds)
-                    left = min(left, image.origin.x)
-                    right = max(right, image.origin.x + image.size.width)
-                # Plain text still needs a complete 44-point target. Keep it
-                # inside the button so adjacent commands never steal touches.
-                center = (left + right) / 2
-                half = max(22, (right - left) / 2 + 2)
-                return max(0, center - half) <= point.x <= min(self.bounds.size.width, center + half)
-
-        button_module.TogaButton = LogisticsActionButton
-        original_create_button = button_module.Button.create
-        def create_action_button(impl):
-            original_create_button(impl)
-            outline_command(impl)
-            from rubicon.objc import SEL
-            impl.native.removeTarget(impl.native, action=SEL('onPress:'), forControlEvents=1)
-            impl.native.addTarget(impl.native, action=SEL('onPress:'), forControlEvents=1 << 6)
-        button_module.Button.create = create_action_button
-        from toga_iOS.widgets.base import Widget
-        from toga_iOS.widgets.button import Button
-        original_background = Widget.set_background_color
-        def set_background(impl, value):
-            if value is None and isinstance(impl, (TextInput, MultilineTextInput, Selection)):
-                impl._default_background_color = apple_color('surface')
-            original_background(impl, value)
-            if impl in _surfaces:
-                paint_surface(impl, _surfaces[impl])
-        Widget.set_background_color = set_background
-        original_button_color = Button.set_color
-        def button_color(impl, value):
-            if impl in _surfaces:
-                paint_surface(impl, _surfaces[impl])
-                return
-            if value is None:
-                impl.native.tintColor = apple_color('accent')
-            original_button_color(impl, value)
-        Button.set_color = button_color
-        from toga_iOS.widgets.label import Label
-        from toga_iOS.widgets.textinput import TextInput
-        from toga_iOS.widgets.multilinetextinput import MultilineTextInput
-        import toga_iOS.widgets.selection as selection_module
-
-        class LogisticsPickerView(selection_module.TogaPickerView):
-            @objc_method
-            def pickerView_didSelectRow_inComponent_(
-                    self, picker_view: objc_id, row: int, component: int) -> None:
-                commit_apple_selection(self, row)
-
-        selection_module.TogaPickerView = LogisticsPickerView
-        Selection = selection_module.Selection
-        original_select_item = Selection.select_item
-        def select_item(impl, index, item):
-            return select_apple_item(impl, index, item, select=original_select_item)
-        Selection.select_item = select_item
-        for cls in (Label, TextInput, MultilineTextInput, Selection):
-            original = cls.set_color
-            def set_color(impl, value, previous=original):
-                if value not in (None, BLACK):
-                    return previous(impl, value)
-                impl.native.textColor = apple_color('text')
-                placeholder = getattr(impl, 'placeholder_label', None)
-                if placeholder is not None:
-                    placeholder.textColor = apple_color('muted')
-                    placeholder.alpha = 1.0
-            cls.set_color = set_color
-        for cls in (TextInput, MultilineTextInput, Selection):
-            original = cls.create
-            def create(impl, previous=original):
-                previous(impl)
-                impl.native.backgroundColor = apple_color('surface')
-                if not isinstance(impl, Selection):
-                    impl.native.tintColor = apple_color('accent')
-                if isinstance(impl, MultilineTextInput):
-                    # The navigation host already reserves keyboard/safe areas.
-                    # UIKit's automatic text-view insets can exceed a compact
-                    # editor's height; iOS 26's scroll-edge veil then covers its
-                    # text while typing. Keep scrolling inside the measured box.
-                    impl.native.contentInsetAdjustmentBehavior = 2  # never
-                    from rubicon.objc import SEL
-                    for edge in ('topEdgeEffect', 'bottomEdgeEffect'):
-                        if impl.native.respondsToSelector(SEL(edge)):
-                            getattr(impl.native, edge).hidden = True
-            cls.create = create
+        _install_ios_appearance(app)
     elif backend.startswith('toga_android.'):
-        from toga_android.dialogs import BaseDialog
-        original_show_dialog = BaseDialog.show
-        def show_dialog(impl, host_window, future):
-            return show_android_dialog(impl, host_window, future, show=original_show_dialog)
-        BaseDialog.show = show_dialog
-        from android import R
-        from android.content.res import ColorStateList
-        from toga_android.widgets.label import TextViewWidget
-        from toga_android.widgets.selection import Selection
-        from toga_android.widgets.button import Button
-        from toga_android.widgets.textinput import TextInput
-        from com.google.android.material import R as MaterialR
-        from android.text import TextUtils
-        from travertino.size import at_least
-        from toga_android.widgets.base import Widget
-        from toga_android.widgets.switch import Switch
-        original_theme_color = Widget.get_theme_color
-        roles = {R.attr.colorBackground: 'window', MaterialR.attr.colorSurface: 'surface',
-                 R.attr.colorButtonNormal: 'surface', R.attr.textColorPrimary: 'text',
-                 R.attr.textColorSecondary: 'muted', R.attr.colorControlNormal: 'border',
-                 R.attr.colorAccent: 'accent'}
-        def theme_color(impl, attribute):
-            role = roles.get(attribute)
-            if role is None:
-                return original_theme_color(impl, attribute)
-            colors = android_palette(impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20)
-            return argb(colors[role])
-        Widget.get_theme_color = theme_color
-        original_create = Button.create
-        original_rehint = Button.rehint
-        def create_button(impl):
-            original_create(impl)
-            outline_command(impl)
-            impl.native.setAllCaps(False)
-            impl.native.setSingleLine(True)
-            impl.native.setEllipsize(TextUtils.TruncateAt.END)
-        def rehint_button(impl):
-            original_rehint(impl)
-            if not impl._icon:
-                natural = impl.interface.intrinsic.width.value
-                impl.interface.intrinsic.width = at_least(44 if impl.interface.style.flex else min(natural, 256))
-        Button.create = create_button
-        Button.rehint = rehint_button
-        original = TextViewWidget.set_color
-        def set_color(impl, value):
-            _widgets.add(impl)
-            restore_eink_button(impl)
-            if not eink_enabled() and value not in (None, BLACK):
-                return original(impl, value)
-            impl.native.setTextColor(impl.get_theme_color(R.attr.textColorPrimary))
-            if isinstance(impl, TextInput):
-                impl.native.setHintTextColor(impl.get_theme_color(R.attr.textColorSecondary))
-                surface = impl.get_theme_color(MaterialR.attr.colorSurface)
-                foreground = impl.get_theme_color(R.attr.textColorPrimary)
-                accent = readable_accent(impl.get_theme_color(R.attr.colorAccent), foreground, surface)
-                normal = impl.get_theme_color(R.attr.colorControlNormal)
-                impl.native.setBackgroundTintList(ColorStateList([[R.attr.state_focused], []], [accent, normal]))
-                impl.native_toplevel.setBackgroundColor(surface)
-            if isinstance(impl, Switch):
-                paint_eink_switch(impl)
-            if isinstance(impl, Button):
-                attribute = MaterialR.attr.colorSurface if getattr(impl, '_list_row', False) else R.attr.colorButtonNormal
-                impl.native.setBackgroundTintList(ColorStateList.valueOf(impl.get_theme_color(attribute)))
-                role = getattr(impl, '_action_role', None)
-                if role is not None:
-                    action_button(impl.interface, destructive=role == 'destructive')
-                if eink_enabled():
-                    paint_eink_button(impl)
-                if impl in _surfaces:
-                    paint_surface(impl, _surfaces[impl])
-        TextViewWidget.set_color = set_color
-        def selection_color(impl, value):
-            _widgets.add(impl)
-            impl.native.setBackgroundTintList(ColorStateList.valueOf(impl.get_theme_color(R.attr.textColorSecondary)))
-            child = impl.native.getChildAt(0)
-            if child is not None:
-                child.setTextColor(impl.get_theme_color(R.attr.textColorPrimary))
-        Selection.set_color = selection_color
-        from toga_android.widgets.box import Box
-        original_box_background = Box.set_background_color
-        def box_background(impl, value):
-            _android_boxes.add(impl)
-            if eink_enabled():
-                impl.native_toplevel.setBackgroundColor(argb('#ffffff'))
-            else:
-                original_box_background(impl, value)
-        Box.set_background_color = box_background
-        from toga_android.widgets.webview import WebView
-        from .android_markdown_font import install_font_responses
-        install_font_responses()
-        original_content = WebView.set_content
-        def web_content(impl, root_url, content):
-            from .palette import eink_html
-            from .android_markdown_font import style_markdown
-            _android_webviews.add(impl)
-            content = eink_html(style_markdown(content, impl=impl))
-            if getattr(impl.interface, 'private_configured', False) and len(content.encode('utf-8')) > 2 * 1024 * 1024:
-                raise ValueError('Private HTML exceeds the memory-only limit after appearance styling.')
-            original_content(impl, root_url, content)
-        WebView.set_content = web_content
+        _install_android_appearance(app)
     else:
         return
     _installed.add(backend)
+
+
+def _install_ios_appearance(app):
+    from .ios_reader_chrome import install
+    install()
+    from rubicon.objc import objc_method, send_super, objc_id
+    import toga_iOS.widgets.box as box_module
+    # CALayer stores a resolved CGColor. Refresh card strokes when UIKit
+    # changes traits, while dynamic text/background colours update themselves.
+    class LogisticsSurfaceView(box_module.TogaView):
+        @objc_method
+        def traitCollectionDidChange_(self, previous: objc_id) -> None:
+            send_super(__class__, self, 'traitCollectionDidChange:', previous, argtypes=[objc_id])
+            impl = self.impl
+            if impl in _surfaces:
+                paint_surface(impl, _surfaces[impl])
+    box_module.TogaView = LogisticsSurfaceView
+    import toga_iOS.widgets.scrollcontainer as scroll_module
+
+    class LogisticsScrollView(scroll_module.TogaScrollView):
+        @objc_method
+        def refreshContent(self) -> None:
+            # Toga queues this selector during layout. UIKit may retain
+            # the view after its weak Python interface has been collected.
+            interface = self.interface
+            if interface is not None and interface.content is not None:
+                interface.content.refresh()
+
+        @objc_method
+        def scrollViewDidScroll_(self, scroll_view) -> None:
+            interface = self.interface
+            if interface is not None:
+                interface.on_scroll()
+
+    scroll_module.TogaScrollView = LogisticsScrollView
+    from ctypes import c_bool
+    from rubicon.objc.types import CGPoint
+    import toga_iOS.widgets.button as button_module
+
+    class LogisticsActionButton(button_module.TogaButton):
+        @objc_method
+        def traitCollectionDidChange_(self, previous: objc_id) -> None:
+            send_super(__class__, self, 'traitCollectionDidChange:', previous, argtypes=[objc_id])
+            impl = self.impl
+            if impl in _surfaces:
+                paint_surface(impl, _surfaces[impl])
+
+        @objc_method
+        def pointInside_withEvent_(self, point: CGPoint, event: objc_id) -> bool:
+            inside = send_super(__class__, self, 'pointInside:withEvent:', point, event,
+                                restype=c_bool, argtypes=[CGPoint, objc_id])
+            if not inside or self.impl is None:
+                return bool(inside)
+            # The visible boundary is the touch target, including its edges.
+            outlined = getattr(self.impl, '_surface_roles', (None, None, False))[2]
+            filled = getattr(self.impl, '_surface_roles', ('transparent',))[0] != 'transparent'
+            if (filled or outlined or getattr(self.impl, '_row_hint', False) or self.bounds.size.width <= 52
+                    or self.configuration is not None):
+                return True
+            title = self.titleRectForContentRect(self.bounds)
+            left, right = title.origin.x, title.origin.x + title.size.width
+            if self.imageForState(0) is not None:
+                image = self.imageRectForContentRect(self.bounds)
+                left = min(left, image.origin.x)
+                right = max(right, image.origin.x + image.size.width)
+            # Plain text still needs a complete 44-point target. Keep it
+            # inside the button so adjacent commands never steal touches.
+            center = (left + right) / 2
+            half = max(22, (right - left) / 2 + 2)
+            return max(0, center - half) <= point.x <= min(self.bounds.size.width, center + half)
+
+    button_module.TogaButton = LogisticsActionButton
+    original_create_button = button_module.Button.create
+    def create_action_button(impl):
+        original_create_button(impl)
+        outline_command(impl)
+        from rubicon.objc import SEL
+        impl.native.removeTarget(impl.native, action=SEL('onPress:'), forControlEvents=1)
+        impl.native.addTarget(impl.native, action=SEL('onPress:'), forControlEvents=1 << 6)
+    button_module.Button.create = create_action_button
+    from toga_iOS.widgets.base import Widget
+    from toga_iOS.widgets.button import Button
+    original_background = Widget.set_background_color
+    def set_background(impl, value):
+        if value is None and isinstance(impl, (TextInput, MultilineTextInput, Selection)):
+            impl._default_background_color = apple_color('surface')
+        original_background(impl, value)
+        if impl in _surfaces:
+            paint_surface(impl, _surfaces[impl])
+    Widget.set_background_color = set_background
+    original_button_color = Button.set_color
+    def button_color(impl, value):
+        if impl in _surfaces:
+            paint_surface(impl, _surfaces[impl])
+            return
+        if value is None:
+            impl.native.tintColor = apple_color('accent')
+        original_button_color(impl, value)
+    Button.set_color = button_color
+    from toga_iOS.widgets.label import Label
+    from toga_iOS.widgets.textinput import TextInput
+    from toga_iOS.widgets.multilinetextinput import MultilineTextInput
+    import toga_iOS.widgets.selection as selection_module
+
+    class LogisticsPickerView(selection_module.TogaPickerView):
+        @objc_method
+        def pickerView_didSelectRow_inComponent_(
+                self, picker_view: objc_id, row: int, component: int) -> None:
+            commit_apple_selection(self, row)
+
+    selection_module.TogaPickerView = LogisticsPickerView
+    Selection = selection_module.Selection
+    original_select_item = Selection.select_item
+    def select_item(impl, index, item):
+        return select_apple_item(impl, index, item, select=original_select_item)
+    Selection.select_item = select_item
+    for cls in (Label, TextInput, MultilineTextInput, Selection):
+        original = cls.set_color
+        def set_color(impl, value, previous=original):
+            if value not in (None, BLACK):
+                return previous(impl, value)
+            impl.native.textColor = apple_color('text')
+            placeholder = getattr(impl, 'placeholder_label', None)
+            if placeholder is not None:
+                placeholder.textColor = apple_color('muted')
+                placeholder.alpha = 1.0
+        cls.set_color = set_color
+    for cls in (TextInput, MultilineTextInput, Selection):
+        original = cls.create
+        def create(impl, previous=original):
+            previous(impl)
+            impl.native.backgroundColor = apple_color('surface')
+            if not isinstance(impl, Selection):
+                impl.native.tintColor = apple_color('accent')
+            if isinstance(impl, MultilineTextInput):
+                # The navigation host already reserves keyboard/safe areas.
+                # UIKit's automatic text-view insets can exceed a compact
+                # editor's height; iOS 26's scroll-edge veil then covers its
+                # text while typing. Keep scrolling inside the measured box.
+                impl.native.contentInsetAdjustmentBehavior = 2  # never
+                from rubicon.objc import SEL
+                for edge in ('topEdgeEffect', 'bottomEdgeEffect'):
+                    if impl.native.respondsToSelector(SEL(edge)):
+                        getattr(impl.native, edge).hidden = True
+        cls.create = create
+
+
+def _install_android_appearance(app):
+    from toga_android.dialogs import BaseDialog
+    original_show_dialog = BaseDialog.show
+    def show_dialog(impl, host_window, future):
+        return show_android_dialog(impl, host_window, future, show=original_show_dialog)
+    BaseDialog.show = show_dialog
+    from android import R
+    from android.content.res import ColorStateList
+    from toga_android.widgets.label import TextViewWidget
+    from toga_android.widgets.selection import Selection
+    from toga_android.widgets.button import Button
+    from toga_android.widgets.textinput import TextInput
+    from com.google.android.material import R as MaterialR
+    from android.text import TextUtils
+    from travertino.size import at_least
+    from toga_android.widgets.base import Widget
+    from toga_android.widgets.switch import Switch
+    original_theme_color = Widget.get_theme_color
+    roles = {R.attr.colorBackground: 'window', MaterialR.attr.colorSurface: 'surface',
+             R.attr.colorButtonNormal: 'surface', R.attr.textColorPrimary: 'text',
+             R.attr.textColorSecondary: 'muted', R.attr.colorControlNormal: 'border',
+             R.attr.colorAccent: 'accent'}
+    def theme_color(impl, attribute):
+        role = roles.get(attribute)
+        if role is None:
+            return original_theme_color(impl, attribute)
+        colors = android_palette(impl.native.getResources().getConfiguration().uiMode & 0x30 == 0x20)
+        return argb(colors[role])
+    Widget.get_theme_color = theme_color
+    original_create = Button.create
+    original_rehint = Button.rehint
+    def create_button(impl):
+        original_create(impl)
+        outline_command(impl)
+        impl.native.setAllCaps(False)
+        impl.native.setSingleLine(True)
+        impl.native.setEllipsize(TextUtils.TruncateAt.END)
+    def rehint_button(impl):
+        original_rehint(impl)
+        if not impl._icon:
+            natural = impl.interface.intrinsic.width.value
+            impl.interface.intrinsic.width = at_least(44 if impl.interface.style.flex else min(natural, 256))
+    Button.create = create_button
+    Button.rehint = rehint_button
+    original = TextViewWidget.set_color
+    def set_color(impl, value):
+        _widgets.add(impl)
+        restore_eink_button(impl)
+        if not eink_enabled() and value not in (None, BLACK):
+            return original(impl, value)
+        impl.native.setTextColor(impl.get_theme_color(R.attr.textColorPrimary))
+        if isinstance(impl, TextInput):
+            impl.native.setHintTextColor(impl.get_theme_color(R.attr.textColorSecondary))
+            surface = impl.get_theme_color(MaterialR.attr.colorSurface)
+            foreground = impl.get_theme_color(R.attr.textColorPrimary)
+            accent = readable_accent(impl.get_theme_color(R.attr.colorAccent), foreground, surface)
+            normal = impl.get_theme_color(R.attr.colorControlNormal)
+            impl.native.setBackgroundTintList(ColorStateList([[R.attr.state_focused], []], [accent, normal]))
+            impl.native_toplevel.setBackgroundColor(surface)
+        if isinstance(impl, Switch):
+            paint_eink_switch(impl)
+        if isinstance(impl, Button):
+            attribute = MaterialR.attr.colorSurface if getattr(impl, '_list_row', False) else R.attr.colorButtonNormal
+            impl.native.setBackgroundTintList(ColorStateList.valueOf(impl.get_theme_color(attribute)))
+            role = getattr(impl, '_action_role', None)
+            if role is not None:
+                action_button(impl.interface, destructive=role == 'destructive')
+            if eink_enabled():
+                paint_eink_button(impl)
+            if impl in _surfaces:
+                paint_surface(impl, _surfaces[impl])
+    TextViewWidget.set_color = set_color
+    def selection_color(impl, value):
+        _widgets.add(impl)
+        impl.native.setBackgroundTintList(ColorStateList.valueOf(impl.get_theme_color(R.attr.textColorSecondary)))
+        child = impl.native.getChildAt(0)
+        if child is not None:
+            child.setTextColor(impl.get_theme_color(R.attr.textColorPrimary))
+    Selection.set_color = selection_color
+    from toga_android.widgets.box import Box
+    original_box_background = Box.set_background_color
+    def box_background(impl, value):
+        _android_boxes.add(impl)
+        if eink_enabled():
+            impl.native_toplevel.setBackgroundColor(argb('#ffffff'))
+        else:
+            original_box_background(impl, value)
+    Box.set_background_color = box_background
+    from toga_android.widgets.webview import WebView
+    from .android_markdown_font import install_font_responses
+    install_font_responses()
+    original_content = WebView.set_content
+    def web_content(impl, root_url, content):
+        from .palette import eink_html
+        from .android_markdown_font import style_markdown
+        _android_webviews.add(impl)
+        content = eink_html(style_markdown(content, impl=impl))
+        if getattr(impl.interface, 'private_configured', False) and len(content.encode('utf-8')) > 2 * 1024 * 1024:
+            raise ValueError('Private HTML exceeds the memory-only limit after appearance styling.')
+        original_content(impl, root_url, content)
+    WebView.set_content = web_content
 
 
 def refresh_appearance(app):

@@ -232,3 +232,26 @@ def discover_folder_choices(snapshot):
                 key = title if title not in choices else title + ' (Local)'
                 choices[key] = dict(source='Local', kind='shared-local', value=title, name=title, copies=[])
     return FolderDiscoveryResult(choices, tuple(crypt.items()) if roots else snapshot.crypt_locations)
+
+
+@dataclass(frozen=True)
+class FolderRowPresentation:
+    title: str
+    icon: str
+    description: str
+    state: str | None
+
+
+def folder_row_presentation(title, entry, source, loaded_remotes, crypt_remotes):
+    """Project folder labels and lock state without constructing native controls."""
+    target = folder_browse_copy(entry, source)
+    storage = (folder_storage_label(entry) if source == 'Network shares'
+               else target['source'])
+    remote = target.get('remote') or entry.get('remote')
+    encrypted = ('LocalCrypt' in storage or ('Remote' in storage and (
+        remote in crypt_remotes
+        or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ())))))
+    state = ('unlocked' if remote in loaded_remotes else 'locked') if encrypted else None
+    icon = 'folder_' + state if state else 'folder'
+    description = storage + (', ' + state if state else '')
+    return FolderRowPresentation(title, icon, description, state)

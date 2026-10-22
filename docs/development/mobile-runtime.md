@@ -1148,3 +1148,17 @@ Connection adapters receive the existing `ConnectionPresentation` callbacks from
 composition. Reload discards stale widget references and recreates categories
 lazily; preference keys and storage remain unchanged. Settings navigation/UI,
 connection and isolated-payload checks cover these boundaries.
+
+### Readable startup and reader assembly
+
+`app._startup_steps()` names the eight startup phases with `startup.StartupPhase`.
+It still yields each existing progress label before its work; asynchronous model
+loading remains between the preferences yield and the preferences phase. Explicit
+phase results carry the storage root, prepared models and restored document.
+
+`provider_presentation` chooses actions, builds PDF tools, and mounts reader/editor
+surfaces in separate functions. The private session owner still supplies validity,
+credentials and disposal. `folder_hub.folder_row_presentation` computes labels and
+lock state without widgets; tab reconciliation retains native row identity.
+Appearance installation dispatches to separate iOS/Android installers, retaining
+process-wide installation guards and the existing backend hooks.

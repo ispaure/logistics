@@ -232,3 +232,9 @@ user turn and records failure. Preserve lease/revision checks and surface a
 secondary save failure for retry/export. Focused coverage is in
 `test_lm_session`, `test_lm_generation` and mobile chat tests; native synthetic
 stream/draft checks validate presentation without a real server account.
+
+## Desktop menu assembly
+
+`ui/menus.py` assembles the conversation menu bar from the page's existing actions
+and callbacks. The page retains conversation state, persistence, control enablement
+and signal ownership; menu assembly does not create a second session owner.

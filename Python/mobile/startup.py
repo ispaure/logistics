@@ -2,10 +2,22 @@
 import asyncio
 import inspect
 import logging
+from enum import IntEnum
 
 import toga
 from toga.style import Pack
 from toga.style.pack import CENTER, COLUMN
+
+class StartupPhase(IntEnum):
+    STORAGE = 0
+    PREFERENCES = 1
+    DOCUMENTS = 2
+    EDITOR = 3
+    NAVIGATION = 4
+    RESTORE = 5
+    WORKSPACE = 6
+    WINDOW = 7
+
 
 STEPS = ('Preparing private storage…', 'Loading preferences…', 'Restoring documents…',
          'Preparing the editor…', 'Preparing navigation…', 'Restoring open documents…',
