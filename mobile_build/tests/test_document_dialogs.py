@@ -64,7 +64,8 @@ class DocumentCloseLifetimeTests(TestCase):
         from mobile.reader_lifecycle import ReaderLifecycle
         from unittest.mock import AsyncMock
         async def exercise():
-            app = NS(active_host=True, workspace=NS(sessions={'doc': object()}),
+            app = NS(active_host=True, workspace=NS(sessions={'doc': object()}, token=lambda key: (key, 0),
+                accepts=lambda token: token == ('doc', 0)),
                      main_window=NS(dialog=AsyncMock(side_effect=asyncio.CancelledError)),
                      loop=asyncio.get_running_loop(), _reader_closing={'doc'})
             ReaderLifecycle.document_close_dialog(app, 'doc', 'Draft', Mock(), Mock())

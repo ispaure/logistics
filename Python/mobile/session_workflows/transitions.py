@@ -164,12 +164,15 @@ class SessionTransitions:
         pending = host.__dict__.setdefault('_document_close_tasks', {})
         if key in pending:
             return True
+        if key not in host.workspace.sessions:
+            return False
+        token = host.workspace.token(key)
         async def decide():
             try:
                 choice = await host.main_window.dialog(DocumentDialog(
                     'Save changes to ' + title + '?',
                     'Your unsaved changes will be lost if you quit without saving.'))
-                if not host.active_host or key not in host.workspace.sessions:
+                if not host.active_host or not host.workspace.accepts(token):
                     return
                 if choice in ('save', 'discard'):
                     result = (save if choice == 'save' else discard)()
