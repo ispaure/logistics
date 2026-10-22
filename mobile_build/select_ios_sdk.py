@@ -58,15 +58,18 @@ def prepare_duo(path, sdk):
     def compatible():
         return [runtime for runtime in simulator_data('runtimes', env)['runtimes']
                 if runtime.get('isAvailable') and '.iOS-' in runtime['identifier']
-                and version(runtime['version']) >= version('27.1')]
+                and version(runtime['version']) >= version('27.1')
+                and any('iPhone-Duo' in device['identifier']
+                        for device in runtime.get('supportedDeviceTypes', ()))]
     runtimes = compatible()
     if not runtimes:
-        subprocess.run(['xcodebuild', '-downloadPlatform', 'iOS', '-buildVersion', sdk,
+        # Duo has a dedicated 27.1 runtime; a newer generic runtime can omit it.
+        subprocess.run(['xcodebuild', '-downloadPlatform', 'iOS', '-buildVersion', '27.1',
                         '-architectureVariant', 'arm64' if platform.machine() == 'arm64' else 'universal'],
                        env=env, check=True, timeout=1800)
         runtimes = compatible()
     if not runtimes:
-        raise RuntimeError('No available iOS Simulator runtime >= 27.1 after provisioning.')
+        raise RuntimeError('No Duo-compatible iOS Simulator runtime after provisioning.')
     runtime = max(runtimes, key=lambda row: version(row['version']))
     types = [row for row in simulator_data('devicetypes', env)['devicetypes']
              if 'iPhone-Duo' in row['identifier'] or 'iPhone Duo' in row['name']]

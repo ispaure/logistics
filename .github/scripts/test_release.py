@@ -20,7 +20,9 @@ class PackageTests(unittest.TestCase):
         private = ['Credentials/rclone/private.zip', 'Python/__pycache__/launch.pyc',
                    '.env.local', 'local-signing.p12', 'profile.prof', 'debug.log',
                    'test-results/mobile-evidence/report.json',
-                   'docs/development/mobile-evidence/screenshot.png']
+                   'docs/development/mobile-evidence/screenshot.png',
+                   'docs/developer/mobile-evidence/old-report.json',
+                   'Python/features/books/docs/mobile-evidence/report.json']
         for folder in ('Mobile', 'mobile_build'):
             private.extend(folder + '/' + name for name in (
                 'payload/mobile/app.py', 'build/generated.py', 'logs/deploy.log',
@@ -46,6 +48,7 @@ class PackageTests(unittest.TestCase):
                     'node_modules/package/index.js', 'DerivedData/project/file',
                     'app.xcarchive/Info.plist', 'app.dSYM/file']
         excluded.extend(['docs/development/mobile-evidence/report.json',
+                         'docs/developer/mobile-evidence/old-report.json',
                          'docs/development/mobile-evidence/nested/screenshot.png',
                          'Python/commonUtils/docs/developer/mobile-evidence/report.json',
                          'test-results/mobile-evidence/report.json'])

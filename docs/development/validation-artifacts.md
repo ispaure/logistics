@@ -21,3 +21,5 @@ Published branches and tags were separately rewritten to remove the historical
 archives, and affected GitHub releases were deleted. Existing Git checkouts should
 back up local changes and re-clone rather than merge the old and cleaned histories.
 Private recovery bundles remain under ignored `test-results/history-cleanup/`.
+
+Logistics ignores directories named `mobile-evidence` under either legacy documentation layout, including `docs/developer/mobile-evidence/`.

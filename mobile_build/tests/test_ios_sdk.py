@@ -15,9 +15,11 @@ class AppleSDKTests(unittest.TestCase):
 
 
 class DuoSimulatorSetupTests(unittest.TestCase):
-    def runtime(self, value='27.1'):
+    def runtime(self, value='27.1', *, duo=True):
         return {'identifier': 'com.apple.CoreSimulator.SimRuntime.iOS-' + value.replace('.', '-'),
-                'version': value, 'isAvailable': True}
+                'version': value, 'isAvailable': True,
+                'supportedDeviceTypes': [{'identifier': 'com.apple.CoreSimulator.SimDeviceType.' +
+                                          ('iPhone-Duo' if duo else 'iPhone-18-Pro')}]}
 
     def device_types(self):
         return {'devicetypes': [{'identifier': 'com.apple.CoreSimulator.SimDeviceType.iPhone-Duo',
@@ -41,7 +43,7 @@ class DuoSimulatorSetupTests(unittest.TestCase):
         with patch('mobile_build.select_ios_sdk.simulator_data', side_effect=[
                 {'devices': {self.runtime()['identifier']: [dict(name='iPhone Duo', udid='ordinary', state='Shutdown',
                     deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro', isAvailable=True)]}},
-                {'runtimes': [self.runtime()]}, self.device_types()]), \
+                {'runtimes': [self.runtime(), self.runtime('27.2', duo=False)]}, self.device_types()]), \
                 patch('mobile_build.select_ios_sdk.subprocess.run') as download, \
                 patch('mobile_build.select_ios_sdk.subprocess.check_output', return_value='created\n') as create:
             self.assertEqual(prepare_duo('/selected', '27.2'), 'created')
@@ -50,18 +52,18 @@ class DuoSimulatorSetupTests(unittest.TestCase):
                                                         self.runtime()['identifier']])
         self.assertEqual(create.call_args.kwargs['env']['DEVELOPER_DIR'], '/selected')
 
-    def test_missing_runtime_downloads_the_selected_sdk_version_before_creating(self):
+    def test_newer_runtime_without_duo_downloads_the_compatible_runtime(self):
         from unittest.mock import patch
         from mobile_build.select_ios_sdk import prepare_duo
         with patch('mobile_build.select_ios_sdk.simulator_data', side_effect=[
-                {'devices': {}}, {'runtimes': [self.runtime('27.0')]},
-                {'runtimes': [self.runtime('27.2')]}, self.device_types()]), \
+                {'devices': {}}, {'runtimes': [self.runtime('27.2', duo=False)]},
+                {'runtimes': [self.runtime()]}, self.device_types()]), \
                 patch('mobile_build.select_ios_sdk.platform.machine', return_value='arm64'), \
                 patch('mobile_build.select_ios_sdk.subprocess.run') as download, \
                 patch('mobile_build.select_ios_sdk.subprocess.check_output', return_value='created'):
             self.assertEqual(prepare_duo('/selected', '27.2'), 'created')
         self.assertEqual(download.call_args.args[0], ['xcodebuild', '-downloadPlatform', 'iOS',
-            '-buildVersion', '27.2', '-architectureVariant', 'arm64'])
+            '-buildVersion', '27.1', '-architectureVariant', 'arm64'])
         self.assertEqual(download.call_args.kwargs['env']['DEVELOPER_DIR'], '/selected')
 
     def test_unavailable_runtime_after_download_fails_without_phone_substitution(self):
@@ -71,7 +73,7 @@ class DuoSimulatorSetupTests(unittest.TestCase):
                 {'devices': {}}, {'runtimes': []}, {'runtimes': []}]), \
                 patch('mobile_build.select_ios_sdk.subprocess.run'), \
                 patch('mobile_build.select_ios_sdk.subprocess.check_output') as create:
-            with self.assertRaisesRegex(RuntimeError, 'runtime >= 27.1'):
+            with self.assertRaisesRegex(RuntimeError, 'Duo-compatible iOS Simulator runtime'):
                 prepare_duo('/selected', '27.2')
         create.assert_not_called()
 

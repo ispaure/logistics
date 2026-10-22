@@ -52,8 +52,8 @@ Desktop.ini
 
 # Local cross-platform validation reports and disposable comic fixtures
 /test-results/
-# Legacy test-evidence location; keep new artifacts under test-results/.
-/docs/development/mobile-evidence/
+# Legacy evidence archives, including both documentation layouts.
+mobile-evidence/
 
 # Release dry-run output (CI writes outside the checkout)
 /release.zip

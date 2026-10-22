@@ -347,10 +347,11 @@ the simulator build. `ui_tools.py ios-device` excludes Duo, `ios-ipad` selects
 an iPad and `ios-duo` selects Duo using its simulator device-type identifier,
 including renamed devices. The Duo run requires observed hinge capability and
 portrait plus both landscape directions for every tested panel. It preserves
-its report separately as `logs/duo-native-ui.json`. SDK preparation downloads a
-matching runtime when no iOS 27.1+ runtime is available, then creates a dedicated
-Duo simulator if the runner has none. Provisioning failures fail the lane rather
-than silently substituting an ordinary phone.
+its report separately as `logs/duo-native-ui.json`. SDK preparation checks each runtime’s advertised device types. It downloads the
+dedicated iOS 27.1 runtime when Duo support is missing, then creates a dedicated
+Duo simulator if the runner has none. A newer generic runtime is not a substitute
+for the Duo runtime; see [Apple’s Xcode release notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-27_2-release-notes).
+Provisioning failures fail the lane rather than substituting an ordinary phone.
 
 Rotation evidence records actual scene dimensions, size classes, hinge status
 and reserved divisions, alongside retained routes and logical reader/draft
