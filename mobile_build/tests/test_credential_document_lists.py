@@ -226,7 +226,7 @@ class CredentialDocumentListTests(unittest.TestCase):
         self.assertNotIn('d' * 64, self.cache.states)
 
     def test_live_reader_replaces_restored_entry_and_explicit_close_updates_cache(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         self.client.unlock()
         folder = self.root / 'SyntheticEncryptedProvider'

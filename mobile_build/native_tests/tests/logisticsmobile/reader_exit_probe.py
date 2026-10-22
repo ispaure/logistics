@@ -6,7 +6,7 @@ import traceback
 from uuid import uuid4
 
 from mobile.app import LogisticsMobile
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from features.text_editor.resources import LocalTextCopies
 
 BUNDLE = 'io.github.ispaure.logisticsreaderexitqa'

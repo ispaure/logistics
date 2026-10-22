@@ -392,7 +392,7 @@ class AndroidBackTests(unittest.TestCase):
         self.assertNotIn(reader.crypt_view, app.body.children)
 
     def test_notes_library_back_closes_browse_then_retraces_links(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from mobile.obsidian import open_vault
         app = self.app
         vault = app.private_root / 'Vault'

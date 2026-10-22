@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.app import LogisticsMobile
 from mobile.document_sources import show_in_folder
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books

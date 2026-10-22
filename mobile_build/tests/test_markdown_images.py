@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from PIL import Image
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from mobile.preview import folder_image_source, markdown_preview, reader_image_source
 from features.text_editor.mobile.markdown_editor import editor_blocks, editor_html
 

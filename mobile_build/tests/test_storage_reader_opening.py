@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
 from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
 from mobile.app import LogisticsMobile

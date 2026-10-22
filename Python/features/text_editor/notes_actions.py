@@ -11,7 +11,7 @@ def sources(entry):
             from features.rclone.localcrypt.backend import CryptResources
             result.append(('LocalCrypt', lambda: CryptResources(entry.local.connection), False))
         else:
-            from commonUtils.runtime.local_files import LocalFiles
+            from commonUtils.runtime.resources.local import LocalFiles
             result.append(('Local', lambda: LocalFiles(entry.local.path), False))
     if entry.remote_source == 'rclone' and entry.remote_name is not None and entry.remote_context is not None:
         def remote():

@@ -2,7 +2,7 @@
 
 import asyncio
 import threading
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from services.workflow_host import HostAttribute
 
 

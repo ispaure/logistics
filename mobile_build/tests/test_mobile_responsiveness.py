@@ -182,7 +182,7 @@ class ResponsivenessTests(unittest.TestCase):
         app.loop.run_until_complete(exercise())
 
     def test_local_markdown_initial_render_runs_once_off_ui_thread(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         from mobile.preview import markdown_preview
         app = self.app
@@ -240,7 +240,7 @@ class ResponsivenessTests(unittest.TestCase):
         self.app.loop.run_until_complete(browser.close())
 
     def test_cancel_during_markdown_render_does_not_publish_reader(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         app = self.app
         app.show_cloud(present=False)
@@ -268,7 +268,7 @@ class ResponsivenessTests(unittest.TestCase):
         app.loop.run_until_complete(exercise())
 
     def test_markdown_render_error_keeps_source_without_rerendering_on_ui_thread(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         app = self.app
         app.show_cloud(present=False)

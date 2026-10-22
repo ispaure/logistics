@@ -9,7 +9,7 @@ from threading import RLock, Event, Thread
 from uuid import uuid4
 
 from commonUtils.persistence import atomic_write_bytes
-from commonUtils.runtime.resource_provider import resource_path
+from commonUtils.runtime.resources.paths import resource_path
 from services.identifiers import uuid, digest as valid_digest
 from features.rclone.transfers.local_policy import transfer_inventory, cleanup_candidates, remove_generated
 from features.rclone.transfers.transfer_options import TransferOptions, DEFAULT_EXCLUDES, CLEANUP_NAMES

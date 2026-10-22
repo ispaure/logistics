@@ -213,7 +213,7 @@ class Probe(LogisticsMobile):
 
         try:
             await asyncio.sleep(1)
-            from commonUtils.runtime.local_files import LocalFiles
+            from commonUtils.runtime.resources.local import LocalFiles
             from features.text_editor.resources import LocalTextCopies
             from types import SimpleNamespace
             local = output / 'local'

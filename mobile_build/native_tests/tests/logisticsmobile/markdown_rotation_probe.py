@@ -5,7 +5,7 @@ from pathlib import Path
 import traceback
 from uuid import uuid4
 
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from features.text_editor.resources import LocalTextCopies
 from mobile.app import LogisticsMobile
 

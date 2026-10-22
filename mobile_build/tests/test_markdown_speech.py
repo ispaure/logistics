@@ -89,7 +89,7 @@ class MarkdownSpeechTests(unittest.TestCase):
 
     def test_document_preview_and_provider_cleanup(self):
         from features.text_editor.resources import LocalTextCopies
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         self.app.show_documents()
         self.app.name.value = 'Draft.md'
         self.app.editor.value = '# Draft'

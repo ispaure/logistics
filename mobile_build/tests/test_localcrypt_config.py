@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from commonUtils.archives.zip_access import ArchivePasswordError
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 

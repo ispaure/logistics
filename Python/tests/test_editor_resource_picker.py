@@ -6,8 +6,8 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.resource_picker import ResourcePicker
 from commonUtils.ui.resource_editor import ResourceTextWindow
-from commonUtils.runtime.local_files import LocalFiles
-from commonUtils.runtime.resource_selection import ResourceChoice, ResourceTextSession
+from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.selection import ResourceChoice, ResourceTextSession
 
 
 class EditorResourcePickerTests(QtTestCase):

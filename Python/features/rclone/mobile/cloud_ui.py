@@ -684,7 +684,7 @@ class CloudBrowserPresentation:
 
     def publish(self, rows, remote, folder):
         from types import SimpleNamespace
-        from commonUtils.runtime.resource_provider import resource_path
+        from commonUtils.runtime.resources.paths import resource_path
         cloud = self.cloud
         root = Path('/remote') / remote
         provider = SimpleNamespace(root=root, remote=remote, relative=lambda path:

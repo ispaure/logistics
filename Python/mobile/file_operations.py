@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from threading import Event
 from typing import Callable
 
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.operations import MutationIncomplete, check_cancelled
-from commonUtils.runtime.resource_provider import resource_path
-from commonUtils.runtime.resource_mutations import (
+from commonUtils.runtime.resources.paths import resource_path
+from commonUtils.runtime.resources.mutations import (
     create_resource_folder, delete_resource, move_resource, rename_resource,
 )
 from features.rclone.mobile.storage_location import CollectionFiles

@@ -1,6 +1,6 @@
 """Native remote previews, transfer workflows and retained credential lifecycle."""
 import base64
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 
 
 async def exercise_connections(app, fixtures, background_comic, passed):

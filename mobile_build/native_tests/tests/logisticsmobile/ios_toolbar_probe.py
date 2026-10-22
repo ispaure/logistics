@@ -70,8 +70,8 @@ class ToolbarProbe(LogisticsMobile):
         (self.output / 'result.json').unlink(missing_ok=True)
         self.report = dict(success=False, screens=[], checks=[])
         try:
-            from commonUtils.runtime.document_access import LocalDocuments
-            from commonUtils.runtime.local_files import LocalFiles
+            from commonUtils.runtime.resources.documents import LocalDocuments
+            from commonUtils.runtime.resources.local import LocalFiles
             from features.text_editor.resources import LocalTextCopies
             from features.rclone.mobile.storage_location import collection_path
             from tests.logisticsmobile.fixtures import make_books, png_page

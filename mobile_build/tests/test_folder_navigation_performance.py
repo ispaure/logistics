@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from features.rclone.mobile.storage_location import CollectionFiles
 from features.rclone.localcrypt.mobile.resources import CryptFiles
 from commonUtils.runtime.operations import OperationCancelled
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from mobile.app import LogisticsMobile
 
 

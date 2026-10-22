@@ -20,7 +20,7 @@ from local_crypt_fixture import crypt_fixture
 
 class LocalCryptTests(QtTestCase):
     def test_recursive_search_uses_one_listing_and_opens_nested_results(self):
-        from commonUtils.runtime.resource_search import search_resources
+        from commonUtils.runtime.resources.search import search_resources
         from io import BytesIO
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             f.provider.mkdir('nested')
@@ -907,7 +907,7 @@ class LocalCryptTests(QtTestCase):
                 self.assertEqual(list(f.item.data.glob('*.bak*')), [])
 
     def test_private_comic_picker_owns_provider_and_reused_reader_releases_extra_choice(self):
-        from commonUtils.runtime.resource_selection import ResourceChoice
+        from commonUtils.runtime.resources.selection import ResourceChoice
         from commonUtils.ui.readers.reader_menus import RecentFiles
         from services.documents.ui.readers import open_reader_choice
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
@@ -942,7 +942,7 @@ class LocalCryptTests(QtTestCase):
     def test_private_epub_picker_reads_and_saves_metadata_without_persistent_state(self):
         from io import BytesIO
         from books_fixture import make_book
-        from commonUtils.runtime.resource_selection import ResourceChoice
+        from commonUtils.runtime.resources.selection import ResourceChoice
         from commonUtils.ui.readers.reader_menus import RecentFiles
         from features.books.epub import EPUBBook
         from services.documents.ui.readers import open_reader_choice
@@ -1022,7 +1022,7 @@ class LocalCryptTests(QtTestCase):
 
     def test_private_markdown_save_as_retargets_local_and_crypt_without_overwrite(self):
         from features.rclone.localcrypt.ui.views import MarkdownStorage, PrivateMarkdownWindow
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             path = f.item.data / 'note.md'
             storage = MarkdownStorage(f.provider, path, f.original, {}, lambda *_: None)

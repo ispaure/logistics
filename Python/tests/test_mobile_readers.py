@@ -9,7 +9,7 @@ from zipfile import ZipFile
 import zlib
 
 from books_fixture import make_book
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.library import LibraryStore
 from features.books.mobile.content import chapter_html
 from features.images.validation import image_dimensions

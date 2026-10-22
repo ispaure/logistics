@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch, Mock
 
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from features.rclone.mobile.cloud import CloudClient, Downloads, download_name, PACKAGE_LIMIT
 
 

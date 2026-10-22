@@ -156,7 +156,7 @@ class SpeechPrivacyIntegrationTests(unittest.TestCase):
     def test_private_markdown_background_opt_in_trim_and_revocation(self):
         import json
         from unittest.mock import AsyncMock, patch
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         from test_markdown_speech import Engine as SpeechEngine
         class Copies(LocalTextCopies):

@@ -10,7 +10,7 @@ import sys
 import traceback
 from zipfile import ZipFile
 
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from features.comics.mobile.index import CollectionIndex
 from features.rclone.localcrypt.mobile.resources import CryptFiles, encrypted_document
 from mobile.app import LogisticsMobile

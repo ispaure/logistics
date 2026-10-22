@@ -20,7 +20,7 @@ class ReaderNavigationTests(unittest.TestCase):
                 fixtures = root / 'fixtures'
                 fixtures.mkdir()
                 epub, _ = make_books(fixtures)
-                from commonUtils.runtime.document_access import LocalDocuments
+                from commonUtils.runtime.resources.documents import LocalDocuments
 
                 def tap(destination):
                     host = app.native_host
@@ -70,7 +70,7 @@ class ReaderNavigationTests(unittest.TestCase):
                 fixtures = root / 'fixtures'
                 fixtures.mkdir()
                 paths = make_books(fixtures)
-                from commonUtils.runtime.document_access import LocalDocuments
+                from commonUtils.runtime.resources.documents import LocalDocuments
 
                 async def exercise():
                     store = app.reader_manager().catalog.library_store

@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.operations import OperationCancelled
 from features.comics.comicinfo import ComicInfoXML
 from features.comics.mobile.private_batch import PrivateCollectionBatch

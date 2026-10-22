@@ -10,7 +10,7 @@ from unittest.mock import patch, Mock, AsyncMock
 from mobile.app import LogisticsMobile
 from features.rclone.mobile.credential_packages import CredentialPackages
 from features.rclone.mobile.cloud_ui import SelectedCredentialZIP
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 
 
 PACKAGE = (Path(__file__).resolve().parents[1] / 'rclone_bridge/testdata/credentials-aes256.zip').read_bytes()

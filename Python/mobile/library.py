@@ -3,7 +3,7 @@ from hashlib import sha256
 from collections import OrderedDict
 from copy import deepcopy
 from threading import RLock
-from commonUtils.runtime.archive_source import LocalArchiveSource
+from commonUtils.runtime.resources.archives import LocalArchiveSource
 from commonUtils.runtime.streams import iter_chunks
 from .loading_progress import file_sha256, reading_stream
 import json

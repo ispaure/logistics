@@ -42,7 +42,7 @@ class ReaderSpaceProbe(LogisticsMobile):
                 archive.writestr('page1.png', portrait_png())
                 archive.writestr('page2.png', portrait_png())
             self.preferences.values['comic_layout'] = 'single'
-            from commonUtils.runtime.document_access import LocalDocuments
+            from commonUtils.runtime.resources.documents import LocalDocuments
             record = self.reader_manager().catalog.library_store.import_book(LocalDocuments(), path)
             assert await self.open_book(record['id'])
             owner = self.readers.active

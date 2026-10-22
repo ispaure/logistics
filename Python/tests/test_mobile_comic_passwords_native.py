@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from commonUtils.archives.zip_access import ArchivePasswordError
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from features.rclone.mobile.cloud import CloudClient
 from mobile.library import LibraryStore
 

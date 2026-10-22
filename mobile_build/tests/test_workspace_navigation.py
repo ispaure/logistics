@@ -30,7 +30,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
     def test_readers_use_the_same_native_menu_slot_as_documents(self):
         from unittest.mock import PropertyMock
         from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
-        from commonUtils.runtime.document_access import LocalDocuments
+        from commonUtils.runtime.resources.documents import LocalDocuments
         folder = Path(self.directory.name) / 'fixtures'
         folder.mkdir()
         epub, _ = make_books(folder)
@@ -104,7 +104,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         self.directory.cleanup()
 
     def test_system_metadata_is_hidden_in_folders_and_file_lists(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from mobile.browser_ui import FileBrowser
         app = self.app
         root = Path(self.directory.name) / 'metadata-fixture'
@@ -220,7 +220,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 rows = [dict(path=path, name=Path(path).name, directory=directory)
                         for path, directory in [('Legacy-old', True), ('Books', True),
                             ('Books/Legacy-file.cbz', False), ('Legacy-old/book.cbz', False)]]
-                from commonUtils.runtime.resource_selection import ResourceSelection
+                from commonUtils.runtime.resources.selection import ResourceSelection
                 browser.set_entries(ResourceSelection(provider), '', rows)
                 expected = [] if remote.startswith('Legacy-') else ['Books', 'Legacy-file.cbz']
                 self.assertEqual(sorted(entry.label for entry in browser.entries), expected)

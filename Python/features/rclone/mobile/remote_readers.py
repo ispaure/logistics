@@ -7,7 +7,7 @@ from threading import Event, Thread
 from uuid import uuid4
 
 from commonUtils.runtime.operations import check_cancelled
-from commonUtils.runtime.range_reader import RangeReader
+from commonUtils.runtime.resources.range_reader import RangeReader
 from services.documents.archive_access import NativeArchiveAccess
 from services.documents.readers import PrivateReader
 from features.rclone.remote_policy import direct_kind, TEXT_LIMIT, LocalCopyRequired

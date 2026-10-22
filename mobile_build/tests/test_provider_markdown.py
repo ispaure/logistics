@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import quote
 
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from features.text_editor.resources import LocalTextCopies
 from mobile.app import LogisticsMobile
 

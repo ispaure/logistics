@@ -7,7 +7,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 from mobile.app import LogisticsMobile
 from services.documents.readers import PrivateReader
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 
 

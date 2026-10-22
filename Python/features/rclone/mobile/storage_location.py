@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from commonUtils.persistence import atomic_write_json
 from commonUtils.runtime.operations import check_cancelled
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 
 CONFIG = 'collection-storage.json'
 MARKER = '.logistics-storage'

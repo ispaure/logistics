@@ -1,8 +1,8 @@
 """Logistics Open/Save browser catalog and private document handoffs."""
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from commonUtils.runtime.local_files import LocalFiles
-from commonUtils.runtime.resource_selection import ResourceChoice
+from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.selection import ResourceChoice
 from commonUtils.runtime.platform import get_os, OS
 from commonUtils.ui.resource_picker import choose_resource, ResourceTaskDialog
 
@@ -128,7 +128,7 @@ def markdown_action(viewer, mode):
 
 
 def publish_handoff(choice, data, parent, *, markdown=False, completed=lambda: None, before=lambda: None):
-    from commonUtils.runtime.resource_mutations import save_resource_and_reopen
+    from commonUtils.runtime.resources.mutations import save_resource_and_reopen
     dialog = ResourceTaskDialog(parent, 'Save As')
     operation = dialog.operation
     parent.setEnabled(False)

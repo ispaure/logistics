@@ -3,7 +3,7 @@ import asyncio
 import base64
 import json
 from pathlib import Path
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from commonUtils.runtime.platform import get_os, OS
 from .web_checks import wait_for_text
 

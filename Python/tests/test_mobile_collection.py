@@ -10,7 +10,7 @@ from features.comics.mobile.collection import (
     scan_comics,
     CollectionBatch,
 )
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 
 
 class CollectionTests(unittest.TestCase):

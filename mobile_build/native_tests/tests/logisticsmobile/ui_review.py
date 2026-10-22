@@ -12,7 +12,7 @@ async def exercise_ui_review(app):
         base64.b64decode('UklGRl4AAABXRUJQVlA4WAoAAAAQAAAAAQAAAgAAQUxQSAcAAAAAgICAgICAAFZQOCAwAAAA0AEAnQEqAgADAAFAJiWgAnS6AfgAA7AA/vLrf/zYFc1z7/f/0uD9Lg/S4P/SkAAA')]
     from features.images.validation import image_dimensions
     from services.documents.readers import PrivateReader
-    from commonUtils.runtime.document_access import LocalDocuments
+    from commonUtils.runtime.resources.documents import LocalDocuments
     from zipfile import ZipFile
     from .reader_checks import wait_for_reader, assert_comic_centered
     comic = app.storage_root / 'WebP review.cbz'
@@ -257,7 +257,7 @@ async def exercise_ui_review(app):
         await capture('transfer-confirmation')
         native.getButton(-2).performClick()
     assert not await pending
-    from commonUtils.runtime.local_files import LocalFiles
+    from commonUtils.runtime.resources.local import LocalFiles
     from mobile.browser_preview import callbacks
     provider = LocalFiles(root)
     thumbnail, _ = callbacks(provider, app.cloud_client)

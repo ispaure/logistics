@@ -9,7 +9,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 from books_fixture import make_book
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from features.books.locations import ChapterText, contents, link_destination, utf16_length
 from features.books.mobile.content import chapter_html
 from features.comics.mobile.navigation import ComicNavigation, adjacent_comic

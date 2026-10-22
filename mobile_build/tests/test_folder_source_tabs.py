@@ -215,7 +215,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(app.file_browser.location_bar.parent_button.control_icon, 'back')
         with self.assertRaises(ValueError):
             app.file_provider.entry('Local')
-        from commonUtils.runtime.resource_search import search_resources
+        from commonUtils.runtime.resources.search import search_resources
         (documents / 'Local' / 'Managed' / 'find-me.txt').write_text('collection content')
         result = search_resources(app.file_provider, '', 'find-me')
         self.assertTrue(result.complete)
@@ -233,7 +233,7 @@ class FolderSourceTabTests(unittest.TestCase):
 
     def test_unified_root_preserves_collection_mutations_pins_and_editor_identity(self):
         from unittest.mock import AsyncMock, patch
-        from commonUtils.runtime.resource_mutations import delete_resource
+        from commonUtils.runtime.resources.mutations import delete_resource
         from mobile.local_sources import shared_files
         app = self.app
         documents = Path(self.directory.name) / 'Documents'

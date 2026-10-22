@@ -1,5 +1,5 @@
 """iOS shared browser root with a protected managed Local directory."""
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from features.rclone.mobile.storage_location import shared_documents_path
 
 

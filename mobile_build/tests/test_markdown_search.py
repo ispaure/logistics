@@ -95,7 +95,7 @@ class MarkdownSearchTests(unittest.TestCase):
         owner.preview_search.dispose()
 
     def test_provider_preview_search_is_cleared_on_close(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         async def exercise():
             await self.app.open_crypt(copies=LocalTextCopies(LocalFiles(self.root)), key='index.md')

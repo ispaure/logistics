@@ -289,7 +289,7 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
     await check('text-editor')
     app.show_home()
     from .fixtures import make_books
-    from commonUtils.runtime.document_access import LocalDocuments
+    from commonUtils.runtime.resources.documents import LocalDocuments
     fixtures = root / 'Readers'
     fixtures.mkdir(exist_ok=True)
     epub, comic = make_books(fixtures)
@@ -302,7 +302,7 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
             owner.set_reading_mode(False)
         await check(name)
         app.show_home()
-    from commonUtils.runtime.local_files import LocalFiles
+    from commonUtils.runtime.resources.local import LocalFiles
     from features.text_editor.resources import LocalTextCopies
     app.show_home()
     assert await app.open_crypt(copies=LocalTextCopies(LocalFiles(root / 'Child')), key='Note.md')

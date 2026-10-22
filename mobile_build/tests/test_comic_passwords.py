@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from zipfile import ZipFile
 from commonUtils.archives.zip_access import ArchivePasswordError
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.app import LogisticsMobile
 
 

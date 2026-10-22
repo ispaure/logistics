@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import toga
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from features.books.epub import EPUBBook
 from features.books.mobile.provider_reader import RichBookView
 from features.books.mobile.text_reader import TextBookView

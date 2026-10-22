@@ -1,6 +1,6 @@
 """Cache-first local filename search; private/virtual providers stay in RAM."""
 from commonUtils.runtime.operations import check_cancelled
-from commonUtils.runtime.resource_search import SearchResult, search_resources
+from commonUtils.runtime.resources.search import SearchResult, search_resources
 
 
 class LocalSearch:
@@ -12,7 +12,7 @@ class LocalSearch:
     def supports(provider):
         # Explicit adapters only: encrypted LocalFiles subclasses map names and
         # must never be enumerated through a physical filesystem index.
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.rclone.mobile.storage_location import CollectionFiles
         from .local_sources import SharedFiles
         return (type(provider) in (LocalFiles, CollectionFiles, SharedFiles)

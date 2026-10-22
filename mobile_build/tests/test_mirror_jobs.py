@@ -468,7 +468,7 @@ class MirrorJobTests(unittest.TestCase):
                 sibling = target.parent / 'sibling'
                 sibling.mkdir()
                 with (patch.object(store, 'inspect', side_effect=AssertionError('No content scan')),
-                      patch('commonUtils.runtime.resource_mutations.inventory', side_effect=AssertionError('No inventory'))):
+                      patch('commonUtils.runtime.resources.mutations.inventory', side_effect=AssertionError('No inventory'))):
                     store.delete_copy(job['id'])
                 self.assertFalse(target.exists())
                 self.assertTrue(sibling.exists())

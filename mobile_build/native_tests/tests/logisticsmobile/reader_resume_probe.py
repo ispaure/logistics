@@ -5,8 +5,8 @@ from pathlib import Path
 import traceback
 from uuid import uuid4
 
-from commonUtils.runtime.document_access import LocalDocuments
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.documents import LocalDocuments
+from commonUtils.runtime.resources.local import LocalFiles
 from features.pdf.mobile.copies import PDFCopies
 from features.text_editor.resources import LocalTextCopies
 from features.rclone.mobile.session_privacy import ResumePassword
@@ -169,7 +169,7 @@ class ReaderResumeProbe(LogisticsMobile):
             await self.wait_until(lambda: self.close_session(owner.session.id), 'PDF close did not settle')
             # A separate synthetic gate exercises the already supported session-only path.
             from services.documents.readers import PrivateReader
-            from commonUtils.runtime.archive_source import LocalArchiveSource
+            from commonUtils.runtime.resources.archives import LocalArchiveSource
             class ComicCopies:
                 root = fixtures
                 encrypted = False

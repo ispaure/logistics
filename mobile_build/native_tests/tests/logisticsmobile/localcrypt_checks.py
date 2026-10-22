@@ -446,8 +446,8 @@ async def exercise_localcrypt(app, passed):
     await app.move_file()
     assert (local / 'exported/moved/note.md').read_bytes() == b'# Edited after native move'
     assert (local / 'exported/moved/empty').is_dir()
-    from commonUtils.runtime.local_files import LocalFiles
-    from commonUtils.runtime.resource_mutations import delete_resource
+    from commonUtils.runtime.resources.local import LocalFiles
+    from commonUtils.runtime.resources.mutations import delete_resource
     await asyncio.to_thread(delete_resource, LocalFiles(local), 'exported')
     assert not (local / 'exported').exists()
     await app.clear_cloud()
@@ -457,8 +457,8 @@ async def exercise_localcrypt(app, passed):
     await app.show_files()
     from zipfile import ZipFile
     from features.rclone.localcrypt.mobile.resources import ManagedCopies
-    from commonUtils.runtime.resource_mutations import move_resource
-    from commonUtils.runtime.local_files import LocalFiles
+    from commonUtils.runtime.resources.mutations import move_resource
+    from commonUtils.runtime.resources.local import LocalFiles
     plain_copy = app.crypt_copies.open(fixture['copies']['plain.cbz']['key'])
     image = plain_copy.page(0)[1]
     big = local / 'large-browser.cbz'

@@ -6,7 +6,7 @@ from threading import Event, get_ident
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.operations import check_cancelled, MutationIncomplete, MutationResult
 from mobile.app import LogisticsMobile
 from mobile.file_operations import FileDestination, FileOperationRequest, FileOperations, FileOperationsHost

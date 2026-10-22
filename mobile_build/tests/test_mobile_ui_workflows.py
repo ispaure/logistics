@@ -268,7 +268,7 @@ class MobileWorkflowTests(unittest.TestCase):
             app.file_location.value = 'Older'
             import asyncio
             import threading
-            from commonUtils.runtime.local_files import LocalFiles
+            from commonUtils.runtime.resources.local import LocalFiles
             started, release = threading.Event(), threading.Event()
             original = LocalFiles.list
             def delayed(provider, path='', **kwargs):

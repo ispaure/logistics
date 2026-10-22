@@ -9,8 +9,8 @@ import stat
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
-from commonUtils.runtime.local_files import LocalFiles
-from commonUtils.runtime.resource_provider import ResourceCapabilities
+from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.provider import ResourceCapabilities
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies

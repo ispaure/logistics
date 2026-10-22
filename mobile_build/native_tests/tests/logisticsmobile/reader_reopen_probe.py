@@ -5,7 +5,7 @@ from pathlib import Path
 import traceback
 from uuid import uuid4
 
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.app import LogisticsMobile
 from tests.logisticsmobile.fixtures import make_books, capture_window
 

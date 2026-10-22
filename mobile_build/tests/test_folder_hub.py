@@ -888,14 +888,14 @@ class FolderHubTests(unittest.TestCase):
                 app.show_picker_folder(entry)
                 async def exercise():
                     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=False)):
-                        with patch('commonUtils.runtime.resource_mutations.inventory', side_effect=AssertionError('No pre-confirmation scan')):
+                        with patch('commonUtils.runtime.resources.mutations.inventory', side_effect=AssertionError('No pre-confirmation scan')):
                             self.assertFalse(await app.delete_picker_folder(entry))
                         self.assertTrue(folder.exists())
                     async def confirm(*args, **kwargs):
                         (folder / 'added-while-confirming').write_text('delete too')
                         return True
                     with patch.object(app.main_window, 'dialog', new=confirm):
-                        with patch('commonUtils.runtime.resource_mutations.inventory', side_effect=AssertionError('No inventory')):
+                        with patch('commonUtils.runtime.resources.mutations.inventory', side_effect=AssertionError('No inventory')):
                             self.assertTrue(await app.delete_picker_folder(entry))
                     self.assertFalse(folder.exists())
                     self.assertTrue(sibling.exists())
@@ -927,7 +927,7 @@ class FolderHubTests(unittest.TestCase):
                     async def exercise():
                         with (patch.object(app.main_window, 'dialog', new=confirm),
                               patch.object(store, 'inspect', side_effect=AssertionError('No tree inspection')),
-                              patch('commonUtils.runtime.resource_mutations.inventory', side_effect=AssertionError('No inventory'))):
+                              patch('commonUtils.runtime.resources.mutations.inventory', side_effect=AssertionError('No inventory'))):
                             self.assertTrue(await app.delete_mirror_copy(job['id']))
                     app.loop.run_until_complete(exercise())
                     self.assertFalse(target.exists())

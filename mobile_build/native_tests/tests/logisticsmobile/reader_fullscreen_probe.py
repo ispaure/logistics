@@ -37,7 +37,7 @@ class Probe(LogisticsMobile):
                     assert abs(sample['x']) < 1 and abs(sample['width'] - sample['window_width']) < 2, sample
                     assert sample['status_hidden'], sample
             from zipfile import ZipFile
-            from commonUtils.runtime.document_access import LocalDocuments
+            from commonUtils.runtime.resources.documents import LocalDocuments
             from mobile.reader_ui import ReaderUI
             epub = out / 'synthetic.epub'
             with ZipFile(epub, 'w') as z:

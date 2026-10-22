@@ -9,7 +9,7 @@ async def fixture_reader(app, output, *, pages=1, right_to_left=False):
     import struct
     import zlib
     from zipfile import ZipFile
-    from commonUtils.runtime.document_access import LocalDocuments
+    from commonUtils.runtime.resources.documents import LocalDocuments
     from .library import LibraryStore
     from .reader_sessions import ReaderController
     from .reader_ui import ReaderUI

@@ -3,8 +3,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from commonUtils.runtime.local_files import LocalFiles
-from commonUtils.runtime.resource_selection import ResourceChoice
+from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.selection import ResourceChoice
 from services.documents.preparation import prepare_editor
 
 

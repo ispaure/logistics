@@ -99,8 +99,8 @@ class MobileCryptNativeTests(unittest.TestCase):
     def test_large_archive_streamed_move_preview_and_metadata(self):
         from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies, DownloadedCryptFile
         from mobile.browser_preview import callbacks
-        from commonUtils.runtime.local_files import LocalFiles
-        from commonUtils.runtime.resource_mutations import move_resource
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.runtime.resources.mutations import move_resource
         from local_crypt_fixture import crypt_fixture
         client = CloudClient(library=os.environ['LOGISTICS_MOBILE_BRIDGE'])
         with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as f:

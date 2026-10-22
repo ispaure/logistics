@@ -130,7 +130,7 @@ class FileUITests(unittest.TestCase):
     def test_superseded_host_ignores_late_folder_results_and_errors(self):
         import asyncio
         from threading import Event
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         for failed in (False, True):
             with self.subTest(failed=failed), TemporaryDirectory() as directory:
                 LogisticsMobile.storage_root = Path(directory).resolve()

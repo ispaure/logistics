@@ -6,7 +6,7 @@ from threading import Event
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from mobile.app import LogisticsMobile
 
 
@@ -99,7 +99,7 @@ class EditorPickerTests(unittest.TestCase):
         root = app.private_root / 'LocalFiles'
         (root / 'note.md').write_text('Keep the previous editor')
         app.save_as_name.value = 'note.md'
-        from commonUtils.runtime.resource_selection import ResourceSelection
+        from commonUtils.runtime.resources.selection import ResourceSelection
         started, release = Event(), Event()
         original = ResourceSelection.resolve
         def delayed(model, *args, **kwargs):
@@ -126,7 +126,7 @@ class EditorPickerTests(unittest.TestCase):
     def test_cancelled_save_keeps_draft_without_publishing_or_reopening(self):
         app = self.app
         app.loop.run_until_complete(app.show_text_destination('retained.md', b'Retained draft'))
-        from commonUtils.runtime.resource_mutations import save_resource_and_reopen
+        from commonUtils.runtime.resources.mutations import save_resource_and_reopen
         started, release = Event(), Event()
         def delayed(*args, **kwargs):
             started.set()
@@ -134,7 +134,7 @@ class EditorPickerTests(unittest.TestCase):
                 raise RuntimeError('Save fixture not released')
             return save_resource_and_reopen(*args, **kwargs)
         async def exercise():
-            with patch('commonUtils.runtime.resource_mutations.save_resource_and_reopen', side_effect=delayed), patch.object(
+            with patch('commonUtils.runtime.resources.mutations.save_resource_and_reopen', side_effect=delayed), patch.object(
                     app, 'open_crypt', new_callable=AsyncMock) as opened:
                 task = asyncio.create_task(app.save_text_destination())
                 try:

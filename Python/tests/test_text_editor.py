@@ -189,8 +189,8 @@ class TextEditorTests(QtTestCase):
                 return_value=qt.QMessageBox.StandardButton.Save,
             ),
             patch('services.documents.ui.editors.choose_editor_resource',
-                  return_value=__import__('commonUtils.runtime.resource_selection', fromlist=['ResourceChoice']).ResourceChoice(
-                      __import__('commonUtils.runtime.local_files', fromlist=['LocalFiles']).LocalFiles(path.parent), path.name)),
+                  return_value=__import__('commonUtils.runtime.resources.selection', fromlist=['ResourceChoice']).ResourceChoice(
+                      __import__('commonUtils.runtime.resources.local', fromlist=['LocalFiles']).LocalFiles(path.parent), path.name)),
         ):
             self.window.close_tab(0)
             self.wait()

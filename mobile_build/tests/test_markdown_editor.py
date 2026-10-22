@@ -82,7 +82,7 @@ class MarkdownEditorTests(unittest.TestCase):
     def test_provider_preview_conversion_runs_in_worker(self):
         import threading
         from unittest.mock import patch
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         from mobile.preview import markdown_preview
         root = Path(self.temporary.name) / 'worker-preview'
@@ -104,7 +104,7 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertIsNone(owner._private_preview_token)
 
     def test_provider_markdown_uses_one_toolbar_and_no_clean_save(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         root = Path(self.temporary.name) / 'provider-compact'
         root.mkdir()
@@ -193,7 +193,7 @@ class MarkdownEditorTests(unittest.TestCase):
         from io import BytesIO
         from PIL import Image
         from unittest.mock import patch
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         self.app.show_cloud()
         local = Path(self.temporary.name) / 'images'
@@ -216,7 +216,7 @@ class MarkdownEditorTests(unittest.TestCase):
             self.assertFalse(owner.private_dirty())
 
     def test_provider_preview_edit_source_resume_and_explicit_editor_open(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         self.app.show_cloud()
         local = Path(self.temporary.name) / 'provider'
@@ -255,7 +255,7 @@ class MarkdownEditorTests(unittest.TestCase):
         self.app.private_sessions.close(owner.session.id, discard=True)
 
     def test_memory_trim_preserves_active_markdown_surface_across_sleep(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         root = Path(self.temporary.name) / 'sleep'
         root.mkdir()

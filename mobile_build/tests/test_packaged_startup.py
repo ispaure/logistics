@@ -81,7 +81,7 @@ for saved_document in (False, True):
     assert type(discovery).__module__ == 'mobile.folder_discovery'
     assert 'All files' in discovery.cached_choices()
     assert 'All files' in app.folder_picker_choices
-    from commonUtils.runtime.local_files import LocalFiles
+    from commonUtils.runtime.resources.local import LocalFiles
     from features.text_editor.resources import LocalTextCopies
     notes = root / 'provider-notes'
     notes.mkdir(exist_ok=True)

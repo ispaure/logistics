@@ -69,7 +69,7 @@ class ReaderCloseIconProbe(LogisticsMobile):
             result['platform'] = 'android' if self.android else 'ios'
             await self.show_files()
             origin = self.body
-            from commonUtils.runtime.local_files import LocalFiles
+            from commonUtils.runtime.resources.local import LocalFiles
             from features.text_editor.resources import LocalTextCopies
             path = self.private_root / 'Synthetic close safety.txt'
             path.write_text('Original saved text')

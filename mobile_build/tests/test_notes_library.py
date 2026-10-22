@@ -4,7 +4,7 @@ import json
 import shutil
 from unittest.mock import patch
 import test_obsidian
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from mobile.notes_actions import RemoteNotes, offer_notes
 from features.text_editor.notes import NotesLibrary
 import toga

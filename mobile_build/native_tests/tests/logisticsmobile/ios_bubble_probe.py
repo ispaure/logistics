@@ -39,7 +39,7 @@ class BubbleProbe(ReaderCloseIconProbe):
                 paint_surface(standalone._impl, 8)
                 assert standalone._impl.native.configuration is not None
                 assert standalone._impl.native.backgroundColor.isEqual(ObjCClass('UIColor').clearColor)
-            from commonUtils.runtime.document_access import LocalDocuments
+            from commonUtils.runtime.resources.documents import LocalDocuments
             fixtures = Path(self.paths.cache) / 'bubble-fixtures'
             fixtures.mkdir(exist_ok=True)
             epub, _ = make_books(fixtures)

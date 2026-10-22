@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from commonUtils.runtime.local_files import LocalFiles
-from commonUtils.runtime.resource_mutations import move_resource, delete_resource
+from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.mutations import move_resource, delete_resource
 from features.rclone import executable
 from local_crypt_fixture import crypt_fixture
 
@@ -51,7 +51,7 @@ class DesktopFileOperationsTests(unittest.TestCase):
             move_resource(crypt, 'destination/moved', local, 'exported')
             self.assertEqual((plain / 'exported/book.cbz').read_bytes(), original_zip)
             self.assertEqual((plain / 'exported/note.txt').read_bytes(), b'file-operation-private-sentinel')
-            from commonUtils.runtime.resource_mutations import save_resource_bytes
+            from commonUtils.runtime.resources.mutations import save_resource_bytes
             save_resource_bytes(crypt, 'saved-as.md', b'# Saved As')
             self.assertEqual(crypt.read_bytes('saved-as.md'), b'# Saved As')
             crypt.encrypted_path('fake.md').write_bytes(b'plaintext masquerading as encrypted content' * 10)

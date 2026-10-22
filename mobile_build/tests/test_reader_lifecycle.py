@@ -6,7 +6,7 @@ from unittest import TestCase
 from unittest.mock import patch
 import toga
 
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from features.text_editor.resources import LocalTextCopies
 from features.rclone.mobile.remote_readers import RemoteReaders
 from mobile.app import LogisticsMobile

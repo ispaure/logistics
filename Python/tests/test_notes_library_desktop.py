@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from features.text_editor.ui.notes_library import NotesLibraryWindow
 from features.text_editor.notes_actions import actions
 from models.folder_entry import FolderEntry

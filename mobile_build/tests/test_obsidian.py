@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from commonUtils.runtime.local_files import LocalFiles
-from commonUtils.runtime.resource_selection import ResourceSelection
+from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.selection import ResourceSelection
 from mobile.app import LogisticsMobile
 from mobile.browser_ui import FileBrowser
 from mobile.obsidian import VaultBrowser, vault_root, open_vault

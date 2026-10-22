@@ -4,7 +4,7 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from pathlib import Path
 
-from commonUtils.runtime.range_reader import RangeReader
+from commonUtils.runtime.resources.range_reader import RangeReader
 from commonUtils.filesystem.snapshots import file_revision
 from commonUtils.runtime.operations import check_cancelled
 

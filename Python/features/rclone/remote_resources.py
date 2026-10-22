@@ -10,8 +10,9 @@ from uuid import uuid4
 
 from commonUtils.integrations.wrappers.cmdShellWrapper.binary import BinaryCommandError, run_bytes
 from commonUtils.runtime.operations import check_cancelled
-from commonUtils.runtime.range_reader import RangeReader
-from commonUtils.runtime.resource_provider import ResourceCapabilities, resource_path
+from commonUtils.runtime.resources.range_reader import RangeReader
+from commonUtils.runtime.resources.paths import resource_path
+from commonUtils.runtime.resources.provider import ResourceCapabilities
 from . import session
 
 _providers = weakref.WeakSet()
@@ -222,7 +223,7 @@ class RemoteResources:
     @contextmanager
     def open_archive(self, path, password=None):
         from commonUtils.archives.zip_access import open_archive, validate_members
-        from commonUtils.runtime.archive_source import BoundedArchive
+        from commonUtils.runtime.resources.archives import BoundedArchive
         from .remote_policy import LocalCopyRequired
         provider = self
         class RemoteArchive(BoundedArchive):

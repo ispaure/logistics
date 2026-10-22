@@ -205,7 +205,7 @@ async def _reopen_file(app, source):
         path = local_document_path(app, source['path'])
         if path.suffix.lower() in {'.pdf', '.epub', '.cbz', '.zip'}:
             return await app.open_download(path=path)
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         return await app.open_crypt(copies=LocalTextCopies(LocalFiles(path.parent)), key=path.name)
     app.show_cloud(present=False)
@@ -329,7 +329,7 @@ async def show_in_folder(app, session, owner=None):
                     return False
                 browser = app.file_browser
             else:
-                from commonUtils.runtime.local_files import LocalFiles
+                from commonUtils.runtime.resources.local import LocalFiles
                 provider, key = LocalFiles(path.parent), path.name
                 drawer = app.adaptive.browser('files')
                 if not await drawer.show_main_browser(path.parent.name, provider=provider):

@@ -10,7 +10,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 from commonUtils.runtime.operations import MutationIncomplete
-from commonUtils.runtime.resource_selection import ResourceSelection
+from commonUtils.runtime.resources.selection import ResourceSelection
 from features.rclone.localcrypt.mobile.resources import encrypted_copies
 from .control_icons import icon_button
 from .host_services import HostService
@@ -308,7 +308,7 @@ class EditorPicker:
             self.resume_crypt() if self.provider_sessions().active is not None else self.show_documents()
 
     async def save_text_destination(self, widget=None, **kwargs):
-        from commonUtils.runtime.resource_mutations import save_resource_and_reopen
+        from commonUtils.runtime.resources.mutations import save_resource_and_reopen
         from features.text_editor.resources import LocalTextCopies
         if self.cloud_busy or self.save_as_data is None:
             return

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 from toga_dummy.utils import EventLog
 
 import toga
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from features.text_editor.resources import LocalTextCopies
 from mobile.app import LogisticsMobile
 from mobile.document_sources import reopen_file
@@ -164,7 +164,7 @@ class FileLoadingTests(TestCase):
         self.delayed_open(back=True, download=True)
 
     def test_book_keeps_loading_panel_until_first_page_is_ready(self):
-        from commonUtils.runtime.document_access import LocalDocuments
+        from commonUtils.runtime.resources.documents import LocalDocuments
         from mobile.reader_sessions import ReaderController
         from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 

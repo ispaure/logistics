@@ -12,9 +12,9 @@ from uuid import uuid4
 
 from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
 from commonUtils.persistence import atomic_write_json
-from commonUtils.runtime.range_reader import RangeReader
+from commonUtils.runtime.resources.range_reader import RangeReader
 from commonUtils.runtime.operations import check_cancelled
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive, serialize_mutation
 from features.rclone import configuration, executable, session
 
@@ -285,7 +285,7 @@ class CryptResources(LocalFiles):
         if isinstance(path, Path) and path.is_absolute():
             path = path.relative_to(self.root).as_posix()
         text = str(path).replace(os.sep, '/') if isinstance(path, Path) else str(path)
-        from commonUtils.runtime.resource_provider import resource_path
+        from commonUtils.runtime.resources.paths import resource_path
         return resource_path(text)
 
     def command(self, operation, path='', *extra, input_data=None, input_writer=None, limit=1024 * 1024, cancelled=lambda: False):
@@ -528,7 +528,7 @@ class CryptResources(LocalFiles):
 
     @serialize_mutation
     def replace_stream(self, path, writer, *, expected_revision, verify=None):
-        from commonUtils.runtime.resource_provider import require_capability
+        from commonUtils.runtime.resources.provider import require_capability
         require_capability(self, 'replace')
         path = self.relative(path)
         target = self.encrypted_path(path)

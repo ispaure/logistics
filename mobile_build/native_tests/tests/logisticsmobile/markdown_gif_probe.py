@@ -62,7 +62,7 @@ class MarkdownGifProbe(toga.App):
         await asyncio.sleep(5)  # Driver saves multiple native frames during this window.
 
     async def probe(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from commonUtils.ui.native.markdown_images import folder_image_source
         from mobile.preview import markdown_preview
         from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput

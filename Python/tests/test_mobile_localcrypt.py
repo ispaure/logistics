@@ -203,7 +203,7 @@ class MobileLocalCryptTests(unittest.TestCase):
 class LocalAdapterTests(unittest.TestCase):
     def test_local_text_late_cancel_and_external_write_after_save(self):
         from unittest.mock import patch
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from commonUtils.runtime.operations import MutationIncomplete
         from features.text_editor.resources import LocalTextCopies
         with TemporaryDirectory() as directory:

@@ -30,17 +30,17 @@ class LocalTextCopies:
 
     @property
     def offline(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         return isinstance(self.provider, LocalFiles)
 
     def open(self, key, *, password='', cancelled=lambda: False, read_provider=None):
-        from commonUtils.runtime.resource_selection import ResourceTextSession
+        from commonUtils.runtime.resources.selection import ResourceTextSession
         session = ResourceTextSession.open(read_provider if read_provider is not None else self.provider,
                                           key, cancelled=cancelled)
         return TextReader(session.text.name, session.text.data, key=session.path, revision=session.text.revision)
 
     def save(self, reader, text, *, cancelled=lambda: False):
-        from commonUtils.runtime.resource_selection import ResourceTextSession
+        from commonUtils.runtime.resources.selection import ResourceTextSession
         session = ResourceTextSession(self.provider, reader.key, reader.session)
         updated = session.save(text, cancelled=cancelled)
         return TextReader(updated.text.name, updated.text.data, key=updated.path, revision=updated.text.revision)

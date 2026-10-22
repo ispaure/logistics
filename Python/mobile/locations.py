@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from uuid import uuid4
 from commonUtils.persistence import atomic_write_bytes
-from commonUtils.runtime.resource_provider import resource_path
+from commonUtils.runtime.resources.paths import resource_path
 
 LIMIT = 32
 MAX_BYTES = 16384

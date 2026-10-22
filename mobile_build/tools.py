@@ -43,14 +43,14 @@ def load_source_modules(repo):
 
 APP_MODULES, DOCUMENT_MODULES = load_source_modules(Path(__file__).resolve().parents[1])
 
-SHARED_REQUIRED_MODULES = ('formats/markdown_wiki.py', 'formats/markdown_images.py', 'ui/native/markdown.py', 'ui/native/adaptive.py', 'ui/native/markdown_preview.py', 'ui/native/markdown_images.py', 'runtime/resource_provider.py', 'runtime/local_files.py', 'runtime/resource_mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resource_selection.py', 'runtime/browsing.py', 'runtime/range_reader.py', 'runtime/archive_source.py', 'runtime/resource_search.py', 'ui/native_browser/__init__.py', 'ui/native/__init__.py', 'ui/native/image_canvas.py')
+SHARED_REQUIRED_MODULES = ('formats/markdown_wiki.py', 'formats/markdown_images.py', 'ui/native/markdown.py', 'ui/native/adaptive.py', 'ui/native/markdown_preview.py', 'ui/native/markdown_images.py', 'runtime/resources/provider.py', 'runtime/resources/local.py', 'runtime/resources/mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resources/selection.py', 'runtime/browsing.py', 'runtime/resources/range_reader.py', 'runtime/resources/archives.py', 'runtime/resources/search.py', 'ui/native_browser/__init__.py', 'ui/native/__init__.py', 'ui/native/image_canvas.py')
 
 SHARED_REQUIRED_MODULES += ('ui/native/navigation_state.py', 'ui/native/navigation.py',
                             'ui/native/routes.py', 'ui/native/chrome.py',
                             'ui/native/android/io/github/ispaure/commonutils/ImageCanvasView.java',
                             'ui/native/android/io/github/ispaure/commonutils/NavigationBack.java')
 
-SHARED_REQUIRED_MODULES += ('runtime/document_access.py', 'runtime/protected_keys.py',
+SHARED_REQUIRED_MODULES += ('runtime/resources/documents.py', 'runtime/protected_keys.py',
                             'filesystem/snapshots.py', 'archives/rebuilding.py',
                             'ui/native/event_loop.py', 'ui/native/memory.py',
                             'ui/native/documents.py', 'ui/native/menus.py',

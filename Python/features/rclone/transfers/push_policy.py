@@ -5,7 +5,7 @@ import stat
 from commonUtils.persistence import atomic_write_json
 from commonUtils.persistence.publication import mutation_lock
 from commonUtils.runtime.operations import check_cancelled
-from commonUtils.runtime.resource_mutations import delete_resource, inventory
+from commonUtils.runtime.resources.mutations import delete_resource, inventory
 from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
 from features.rclone import configuration, session
 from features.rclone.transfers.local_policy import inventory as _inventory

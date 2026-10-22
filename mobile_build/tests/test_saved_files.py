@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.app import LogisticsMobile
 from mobile.library import LibraryStore
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books

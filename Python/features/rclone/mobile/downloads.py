@@ -39,7 +39,7 @@ class DownloadWorkflow:
 
     async def _open_download(self, *, path, destination=None):
         cloud = self.cloud
-        from commonUtils.runtime.document_access import LocalDocuments
+        from commonUtils.runtime.resources.documents import LocalDocuments
         destination = destination or cloud.native_host.state.destination
         if not hasattr(cloud, 'cloud_view'):
             cloud.show_cloud(present=False)
@@ -47,7 +47,7 @@ class DownloadWorkflow:
         selected = Path(selected) if selected is not None else None
         if selected is not None and Path(selected).suffix.lower() == '.pdf':
             from features.pdf.mobile.copies import PDFCopies
-            from commonUtils.runtime.local_files import LocalFiles
+            from commonUtils.runtime.resources.local import LocalFiles
             selected = Path(selected)
             return await cloud.open_crypt(copies=PDFCopies(LocalFiles(selected.parent)), key=selected.name, destination=destination)
         independent = (cloud.cloud_busy and path is not None

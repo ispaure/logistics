@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from commonUtils.persistence.text import FileConflictError
 from mobile.documents import DocumentStore, MAX_BYTES
-from commonUtils.runtime.document_access import LocalDocuments, IOSDocuments, AndroidDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments, IOSDocuments, AndroidDocuments
 
 
 class MobileDocumentsTests(unittest.TestCase):

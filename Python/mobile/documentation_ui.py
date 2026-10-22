@@ -122,7 +122,7 @@ def show_documentation(app, directory=None, path=None):
         if path is None:
             path = directory / 'user_mobile/user_mobile.md' 
     def open_file(path):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         if not hasattr(app, 'cloud_client'):
             app.show_cloud(present=False)

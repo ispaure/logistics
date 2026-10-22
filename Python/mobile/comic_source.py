@@ -1,7 +1,7 @@
 """Lazy standalone encrypted CBZ reads; passwords and decoded members stay in RAM."""
 from collections import OrderedDict
 from contextlib import contextmanager
-from commonUtils.runtime.archive_source import LocalArchiveSource
+from commonUtils.runtime.resources.archives import LocalArchiveSource
 from services.documents.archive_access import NativeArchiveAccess
 
 

@@ -1,5 +1,5 @@
 """Portable provider document preparation; dialogs and windows stay in ui/."""
-from commonUtils.runtime.resource_selection import ResourceTextSession
+from commonUtils.runtime.resources.selection import ResourceTextSession
 
 
 def prepare_editor(choice, *, markdown=False, cancelled=lambda: False):

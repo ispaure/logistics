@@ -27,7 +27,7 @@ class TVProbe(LogisticsMobile):
             while getattr(self, '_startup_in_progress', False):
                 await asyncio.sleep(.1)
             await asyncio.sleep(1)
-            from commonUtils.runtime.document_access import LocalDocuments
+            from commonUtils.runtime.resources.documents import LocalDocuments
             from features.rclone.mobile.cloud import CloudClient
             from features.rclone.mobile.session_privacy import ResumePassword
             from mobile.external_display import sync, comic_canvas

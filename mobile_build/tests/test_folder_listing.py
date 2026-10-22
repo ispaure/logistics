@@ -126,7 +126,7 @@ class FolderListingAdapterTests(unittest.TestCase):
         from pathlib import Path
         from tempfile import TemporaryDirectory
         from unittest.mock import patch
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from mobile.app import LogisticsMobile
         from mobile.workspace_navigation import FileDrawer
 

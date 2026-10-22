@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import AsyncMock, patch
 from toga_dummy.utils import EventLog
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from mobile.app import LogisticsMobile
 from features.text_editor.resources import LocalTextCopies
 

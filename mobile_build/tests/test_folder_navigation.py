@@ -437,7 +437,7 @@ class ShowInFolderTests(TestCase):
         app.loop.run_until_complete(exercise())
 
     def test_provider_text_reveals_original_and_unbacked_document_has_no_action(self):
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         from mobile.document_sources import folder_action, show_in_folder
         app = self.app

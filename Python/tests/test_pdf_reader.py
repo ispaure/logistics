@@ -92,7 +92,7 @@ class PDFReaderTests(QtTestCase):
         self.assertEqual(reader.page(2)[0], 'image')
 
     def test_bounded_reads_support_large_remote_range_sources(self):
-        from commonUtils.runtime.range_reader import RangeReader
+        from commonUtils.runtime.resources.range_reader import RangeReader
         from features.pdf.document import read_pdf
         data = b'x' * (17 * 1024 * 1024)
         with RangeReader(len(data), lambda start, count: data[start:start + count],
@@ -103,7 +103,7 @@ class PDFReaderTests(QtTestCase):
                 read_pdf(BytesIO(data))
 
     def test_desktop_private_choice_uses_provider_stream(self):
-        from commonUtils.runtime.resource_selection import ResourceChoice
+        from commonUtils.runtime.resources.selection import ResourceChoice
         from services.documents.ui.readers import open_reader_choice
         class Provider:
             root = Path('/virtual-private-pdf')

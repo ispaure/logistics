@@ -53,7 +53,7 @@ class ChromeParityProbe(LogisticsMobile):
                 assert bar.isShowing()
                 result['lock_hides_document_chrome'] = True
                 from .compact_reading_probe import epub_bytes
-                from commonUtils.runtime.document_access import LocalDocuments
+                from commonUtils.runtime.resources.documents import LocalDocuments
                 fixture = Path(self.paths.cache) / 'synthetic.epub'
                 fixture.write_bytes(epub_bytes())
                 record = self.reader_manager().catalog.library_store.import_book(LocalDocuments(), fixture)

@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from commonUtils.runtime.platform import OS
-from commonUtils.runtime.document_access import AndroidDocuments, IOSDocuments, LocalDocuments
+from commonUtils.runtime.resources.documents import AndroidDocuments, IOSDocuments, LocalDocuments
 from mobile.pickers import pick_document, export_document
 
 

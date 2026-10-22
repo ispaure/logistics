@@ -9,7 +9,7 @@ from services.documents.ui.editors import choose_editor_resource, retain
 def choose_reader_document(parent, kind, *, current=None, open_local=None):
     source = getattr(current, 'source', None)
     if current is not None and source is None:
-        from commonUtils.runtime.local_files import LocalFiles
+        from commonUtils.runtime.resources.local import LocalFiles
         source = LocalFiles(Path(current.path).anchor)
     directory = source.relative(current.path.parent) if current is not None else None
     choice = choose_editor_resource(parent, 'open', source, directory=directory,

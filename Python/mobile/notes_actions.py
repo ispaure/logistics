@@ -4,7 +4,7 @@ import base64
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
-from commonUtils.runtime.resource_provider import resource_path
+from commonUtils.runtime.resources.paths import resource_path
 from features.text_editor.notes import vault_root
 from commonUtils.runtime.operations import OperationCancelled
 
@@ -57,7 +57,7 @@ class RemoteNotes:
 
 def resolve_source(app, entry):
     from features.rclone.mobile.storage_location import collection_path
-    from commonUtils.runtime.local_files import LocalFiles
+    from commonUtils.runtime.resources.local import LocalFiles
     from features.rclone.localcrypt.mobile.resources import encrypted_storage, CryptFiles
     kind, value = entry['kind'], entry['value']
     client = getattr(app, 'cloud_client', None)

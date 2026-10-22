@@ -7,7 +7,7 @@ import unittest
 from uuid import uuid4
 from zipfile import ZipFile
 
-from commonUtils.runtime.document_access import LocalDocuments
+from commonUtils.runtime.resources.documents import LocalDocuments
 from features.rclone.mobile.cloud import CloudClient
 from features.rclone.mobile.remote_readers import RemoteReaders
 

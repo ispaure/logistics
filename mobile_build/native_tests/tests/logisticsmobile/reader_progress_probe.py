@@ -23,8 +23,8 @@ class ReaderProgressProbe(LogisticsMobile):
         try:
             await self.show_files()
             await asyncio.sleep(.6)
-            from commonUtils.runtime.document_access import LocalDocuments
-            from commonUtils.runtime.local_files import LocalFiles
+            from commonUtils.runtime.resources.documents import LocalDocuments
+            from commonUtils.runtime.resources.local import LocalFiles
             from features.pdf.mobile.copies import PDFCopies
             from .reader_space_probe import portrait_png
             from .fixtures import capture_window, make_books

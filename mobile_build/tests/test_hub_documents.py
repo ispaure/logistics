@@ -645,7 +645,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertTrue(any(hasattr(widget, 'session_id') for widget in widgets(section)))
 
     def test_restored_sessions_resolve_filenames_without_opening_readers(self):
-        from commonUtils.runtime.document_access import LocalDocuments
+        from commonUtils.runtime.resources.documents import LocalDocuments
         from mobile.workspace import Workspace
         from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
         app = self.app

@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from commonUtils.runtime.resource_provider import capabilities
+from commonUtils.runtime.resources.provider import capabilities
 from features.rclone import executable, session
 from features.rclone.remote_resources import RemoteResources
 from features.rclone.remote_policy import direct_kind, LocalCopyRequired

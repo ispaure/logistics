@@ -10,7 +10,7 @@ from .control_icons import icon_button
 from .host_services import OwnedAttribute
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from commonUtils.runtime.local_files import LocalFiles
+from commonUtils.runtime.resources.local import LocalFiles
 from features.rclone.localcrypt.mobile.resources import encrypted_document
 
 

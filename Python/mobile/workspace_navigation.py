@@ -10,7 +10,7 @@ import weakref
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from commonUtils.runtime.resource_selection import ResourceSelection
+from commonUtils.runtime.resources.selection import ResourceSelection
 from .appearance import list_button
 from .adaptive_workspace import AdaptiveWorkspace
 from .files_ui import local_read_available

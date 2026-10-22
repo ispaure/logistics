@@ -48,7 +48,7 @@ class MarkdownStorage:
     def open_link(self, path, fragment=''):
         if Path(path).suffix.lower() in {'.md', '.markdown', '.txt'}:
             from services.documents.ui.editors import open_editor_choice
-            from commonUtils.runtime.resource_selection import ResourceChoice
+            from commonUtils.runtime.resources.selection import ResourceChoice
             choice = ResourceChoice(self.provider, self.provider.relative(path),
                                     self.provider.acquire() if hasattr(self.provider, 'acquire') else lambda: None)
             return open_editor_choice(choice, self.window, markdown=Path(path).suffix.lower() != '.txt', fragment=fragment, edit=False)
@@ -92,7 +92,7 @@ class MarkdownStorage:
         return self.data
 
     def write_bytes(self, path, data, *, expected=None, cancelled=lambda: False):
-        from commonUtils.runtime.resource_selection import ResourceTextSession
+        from commonUtils.runtime.resources.selection import ResourceTextSession
         session = ResourceTextSession.open(self.provider, path, max_bytes=8 * 1024 * 1024, cancelled=cancelled)
         if expected is not None and session.text.data != expected:
             raise ValueError('File changed. Reopen it before saving.')
@@ -109,7 +109,7 @@ class MarkdownStorage:
         return False
 
     def save_as(self, viewer):
-        from commonUtils.runtime.resource_mutations import save_resource_bytes
+        from commonUtils.runtime.resources.mutations import save_resource_bytes
         if self.operation.busy:
             return False
         selected = choose_destination(self.window, self.provider, self.path.name, 'Save As')
@@ -139,7 +139,7 @@ class MarkdownStorage:
             viewer.complete_save(self.path, data)
         self.pending_write = data, completed
         def save_copy(report, cancelled):
-            from commonUtils.runtime.resource_selection import ResourceTextSession
+            from commonUtils.runtime.resources.selection import ResourceTextSession
             from commonUtils.persistence.text import TextSession
             baseline = ResourceTextSession(provider, target, TextSession(Path(target).name, data, max_bytes=8 * 1024 * 1024))
             return baseline.publish(provider, target, data, cancelled=cancelled)
@@ -335,8 +335,8 @@ class CryptBrowserView(qt.QMainWindow):
             return ()
 
     def import_item(self, folder=False):
-        from commonUtils.runtime.local_files import LocalFiles
-        from commonUtils.runtime.resource_mutations import move_resource
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.runtime.resources.mutations import move_resource
         from features.rclone.localcrypt.backend import for_path, storage_root
         if self.file_browser.operation.busy:
             return
@@ -354,7 +354,7 @@ class CryptBrowserView(qt.QMainWindow):
         self.file_browser.mutate(lambda cancelled: move_resource(source, path.name, self.provider, target, cancelled=cancelled))
 
     def move_item(self, path):
-        from commonUtils.runtime.resource_mutations import move_resource
+        from commonUtils.runtime.resources.mutations import move_resource
         selected = choose_destination(self, self.provider, Path(path).name, 'Move')
         if selected is None:
             return
@@ -427,12 +427,12 @@ class CryptBrowserView(qt.QMainWindow):
         suffix = path.suffix.lower()
         if suffix in {'.pdf', '.epub', '.cbz', '.zip'}:
             from services.documents.ui.readers import open_reader_choice
-            from commonUtils.runtime.resource_selection import ResourceChoice
+            from commonUtils.runtime.resources.selection import ResourceChoice
             return open_reader_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()),
                                       self, 'pdf' if suffix == '.pdf' else 'epub' if suffix == '.epub' else 'comic', password=password)
         if suffix == '.txt':
             from services.documents.ui.editors import open_editor_choice
-            from commonUtils.runtime.resource_selection import ResourceChoice
+            from commonUtils.runtime.resources.selection import ResourceChoice
             open_editor_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)
             return
         self.pending_document = (path, fragment, password)
