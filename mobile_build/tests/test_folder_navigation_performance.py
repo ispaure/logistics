@@ -143,6 +143,7 @@ class FolderNavigationTests(unittest.TestCase):
         with TemporaryDirectory() as root:
             provider = CollectionFiles(root)
             (provider.root / 'folder').mkdir()
+            (provider.root / '.hidden').write_text('hidden')
             for index in range(120):
                 (provider.root / f'{index}.txt').write_text(str(index))
             expected = LocalFiles.list(provider)

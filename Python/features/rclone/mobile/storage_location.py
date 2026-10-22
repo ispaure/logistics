@@ -123,6 +123,9 @@ class CollectionFiles(LocalFiles):
                     (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
                 rows.append(dict(name=child.name, path='/'.join(p for p in (path, child.name) if p),
                     directory=directory, size=info.st_size, revision=revision,
+                    hidden=(child.name.startswith('.')
+                        or bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_HIDDEN', 0))
+                        or bool(getattr(info, 'st_flags', 0) & getattr(stat, 'UF_HIDDEN', 0))),
                     modified=_modified_time(info.st_mtime)))
         check_cancelled(cancelled)
         self._guard(folder)
