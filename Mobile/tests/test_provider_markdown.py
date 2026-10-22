@@ -56,6 +56,26 @@ class ProviderMarkdownTests(unittest.TestCase):
         self.assertTrue(first.private_dirty())
         self.assertEqual((self.files / 'First.md').read_bytes(), b'# First\r\n\r\nUntouched.\r\n')
 
+    def test_session_owns_state_and_close_veto_preserves_resources(self):
+        owner = self.owner
+        session = owner.provider_document()
+        self.assertIs(session.reader, owner.crypt_reader)
+        self.assertNotIn('crypt_reader', vars(owner))
+        self.assertIs(session.metadata_fields, owner.crypt_metadata_fields)
+        owner.crypt_text.value = '# Unsaved'
+        with patch.object(owner.crypt_text, 'dispose', wraps=owner.crypt_text.dispose) as dispose:
+            self.assertFalse(owner.clear_private_reader())
+            self.assertFalse(session.closed)
+            self.assertIsNotNone(session.reader)
+            dispose.assert_not_called()
+            self.assertTrue(owner.clear_private_reader(discard=True))
+            self.assertTrue(owner.clear_private_reader(discard=True))
+            dispose.assert_called_once_with()
+        self.assertTrue(session.closed)
+        self.assertIsNone(session.reader)
+        self.assertEqual(session.metadata_fields, {})
+        self.assertEqual(owner.crypt_text.value, '')
+
     def test_initial_native_text_notification_does_not_reload_rendered_preview(self):
         owner = self.owner
         with patch.object(owner.crypt_preview, 'set_content', wraps=owner.crypt_preview.set_content) as load:

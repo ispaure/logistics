@@ -55,6 +55,19 @@ class _MarkdownState:
 
 
 class ProviderUI(FilesUI):
+    from .host_services import OwnedAttribute
+
+    crypt_reader = OwnedAttribute('provider_document', 'reader')
+    crypt_metadata_fields = OwnedAttribute('provider_document', 'metadata_fields')
+    crypt_metadata_initial = OwnedAttribute('provider_document', 'metadata_initial')
+    crypt_metadata_values = OwnedAttribute('provider_document', 'metadata_values')
+
+    def provider_document(self):
+        from .provider_document import ProviderDocumentSession
+        if '_provider_document' not in self.__dict__:
+            self._provider_document = ProviderDocumentSession(self)
+        return self._provider_document
+
     crypt_preview = _MarkdownState('preview')
     crypt_formatted = _MarkdownState('formatted')
     crypt_preview_search = _MarkdownState('search')
@@ -81,66 +94,7 @@ class ProviderUI(FilesUI):
             self.crypt_title.text = private_label('Unsaved changes: save, or discard and close.')
             self.resume_crypt()
             return False
-        for name in ('_provider_layout_task', '_provider_width_task'):
-            task = getattr(self, name, None)
-            if task is not None:
-                task.cancel()
-                setattr(self, name, None)
-        if hasattr(self, 'provider_epub_view'):
-            self.provider_epub_view.dispose()
-            del self.provider_epub_view
-        self._provider_epub_locations = {}
-        search = getattr(self, 'pdf_search', None)
-        if search is not None:
-            search.dispose()
-        contents = getattr(self, 'pdf_contents', None)
-        if contents is not None:
-            contents.dispose()
-        reader = self.crypt_reader
-        if reader is not None and reader.kind == '.pdf':
-            reader.pdf.close()
-            reader.data = b''
-            from services.documents.readers import MemorySource
-            if isinstance(reader.source, MemorySource):
-                reader.source.data = b''
-        from .page_animation import cancel_page_slide
-        cancel_page_slide(getattr(self, 'crypt_content', None))
-        from .ios_content_background import clear
-        clear(getattr(self, 'app', self))
-        self.crypt_reader = None
-        for field in self.crypt_metadata_fields.values():
-            field.value = ''
-        self.crypt_metadata_fields = {}
-        self.crypt_metadata_initial = {}
-        self.crypt_metadata_values = {}
-        if hasattr(self, 'crypt_metadata_view'):
-            self.crypt_metadata_view.content = None
-            self.crypt_metadata_status.text = ''
-        workflow = getattr(self, '_provider_markdown', None)
-        if workflow is not None:
-            workflow.dispose()
-        if hasattr(self, 'crypt_text'):
-            self.crypt_text.value = ''
-            dispose = getattr(self.crypt_text, 'dispose', None)
-            if dispose is not None:
-                dispose()
-        if hasattr(self, 'provider_spread'):
-            self.provider_spread.dispose()
-        if hasattr(self, 'crypt_image'):
-            self.crypt_image.dispose()
-        if hasattr(self, 'crypt_page'):
-            self.crypt_page.items = []
-        if hasattr(self, 'epub_session_bookmarks'):
-            self.epub_session_bookmarks.clear()
-        if hasattr(self, 'crypt_bookmarks'):
-            self.crypt_bookmarks.clear()
-            self.crypt_bookmark_selector.items = []
-        if hasattr(self, 'crypt_title'):
-            self.crypt_title.text = private_label('Encrypted copy closed')
-        if hasattr(self, 'crypt_password'):
-            self.crypt_password.value = ''
-        from .external_display import sync as sync_external
-        sync_external(getattr(self, 'app', self))
+        self.provider_document().dispose()
         return True
 
     def clear_private_catalog(self):

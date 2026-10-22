@@ -1026,7 +1026,11 @@ LocalCrypt and speech media.
 ## Provider presentation assembly
 
 `provider_presentation.py` builds the provider reader chrome only after the session
-owner opens a document. `provider_ui.py` retains session commands, credential
+owner opens a document. `provider_document.ProviderDocumentSession` owns the current reader and metadata
+draft state and disposes its format resources after the busy/dirty guards accept
+closure. Compatibility attributes on the controller forward to this session;
+repeated disposal is harmless, and adopting a reader starts a new lifetime.
+`provider_ui.py` retains session commands, credential
 identity checks and publication; Books, Comics and Markdown controllers retain
 format navigation. The `compact_private_view` host callback remains compatible.
 Private-session, provider-Markdown and reader-chrome tests cover the assembly.

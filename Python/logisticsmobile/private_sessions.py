@@ -21,10 +21,7 @@ class PrivateController(ReaderHost, ProviderUI):
         self.manager, self.app, self.session = manager, manager.app, session
         from .feature_hosts import reading_presentation
         self.format_services = reading_presentation(self)
-        self.crypt_reader = None
-        self.crypt_metadata_fields = {}
-        self.crypt_metadata_initial = {}
-        self.crypt_metadata_values = {}
+        self.provider_document()
         self._crypt_cancel = None
         self.operation_busy = False
         import asyncio

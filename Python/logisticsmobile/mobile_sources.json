@@ -74,6 +74,7 @@
     "private_sessions.py",
     "provider_presentation.py",
     "provider_ui.py",
+    "provider_document.py",
     "reader_chrome.py",
     "reader_controls.py",
     "reader_host.py",
