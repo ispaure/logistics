@@ -102,6 +102,9 @@ class TransferReviewUI:
     def begin_transfer_review(self, key=None, *, push=False, remote=None, folder='', storage=None, local_folder=None, specific=False):
         if self.cloud_busy or getattr(self, 'transfer_busy', False) or getattr(self, '_review_starting', False):
             return
+        # Workspaces can start a mapped transfer before any remote browser has
+        # created the status/progress controls used by credential checks.
+        self.show_cloud(present=False)
         if push and local_folder is not None:
             from features.rclone.transfers.scope import push_scope
             remote, folder = push_scope(local_folder, remote, specific=specific)

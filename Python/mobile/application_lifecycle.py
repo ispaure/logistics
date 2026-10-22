@@ -13,6 +13,12 @@ class HostLifecycle:
         self.replaced = False
         self.exited = False
 
+    def stop_local_searches(self):
+        for value in tuple(vars(self.host).values()):
+            stop = getattr(type(value), 'stop_local_search', None)
+            if stop is not None:
+                stop(value)
+
     def prepare_replacement(self):
         """Flush durable state before replacement loads it on a worker thread."""
         if self.replacement_prepared:
@@ -30,6 +36,7 @@ class HostLifecycle:
         if pending is not None and not pending.done():
             pending.cancel()
         host.active_host = False
+        self.stop_local_searches()
         self.replacement_prepared = True
 
     def retire_for_replacement(self):
@@ -115,6 +122,7 @@ class HostLifecycle:
             host.screen_privacy.dispose()
             host.seasonal_snow.dispose()
         if saved:
+            self.stop_local_searches()
             self.exited = True
         return saved
 

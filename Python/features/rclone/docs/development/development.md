@@ -13,6 +13,9 @@ keeps approved execution routed through the existing mandatory sync preflight.
 Mobile uses the same review state with `transfers/mobile/review_ui.py`
 and the embedded `mirror_review` adapter. Programmatic synchronization APIs retain
 their explicit low-level execution behavior; user-facing Push/Pull always reviews.
+The mobile review entry initializes cloud controls without navigation before
+credential checks, so mapped Workspaces Pull/Push also works on a cold launch.
+`test_workspace_popup_menus.py` covers both cold command paths.
 It has no hard feature dependencies; FUSE and Plex depend on it, while YouTube
 Downloader uses it optionally. See the [user guide](../user/user.md) for controls,
 [resource setup](../../../../../docs/user/configuration.md) for paths/provisioning, and

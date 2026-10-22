@@ -61,6 +61,20 @@ active detail; compact drawers close first.
 
 ## Home and document search
 
+In the file browser, Search checks filenames in the current folder and its
+subfolders, ignoring case. Separate words all have to appear, in any order:
+`end eternity` finds `The End of Eternityla.epub`. Double quotes keep words
+adjacent and ordered: `"end eternity"` does not match that filename, but
+`"end of eternity"` does. Within quotes, spaces, underscores and hyphens are
+equivalent separators, as on desktop.
+
+Opening Search prepares or refreshes an on-device database for ordinary local
+folders in the background. Later queries reuse the saved index, including after
+restarting the app. Reopen Search or refresh the folder to check for added or
+renamed files. The first search in a large folder may take longer while the index
+is built. Private, session-only and virtual sources use background scans without
+saving their names to this database. Search covers names, not file contents.
+
 On iPhone Duo, pages retain their full available height when the system moves
 the destination bar into a vertical rail. The rail uses the native side safe
 area; bottom-bar clearance applies only to a horizontal destination bar.

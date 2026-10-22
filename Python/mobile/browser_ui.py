@@ -1,5 +1,7 @@
 """Compact Logistics presentation over the shared native browser."""
 import weakref
+import asyncio
+from threading import Event
 from pathlib import PurePosixPath
 import toga
 from .control_icons import apply_icon
@@ -307,12 +309,66 @@ class LogisticsBrowserPresentation(BrowserPresentation):
         return file_list_icon(folder)
 
 class FileBrowser(RecycledBrowser):
-    def __init__(self, *, folder_visible=None, **kwargs):
+    def __init__(self, *, folder_visible=None, local_search=None, **kwargs):
         from .recycled_file_list import RecycledFileList
         self.folder_visible = folder_visible
+        if local_search is None and getattr(toga.App.app, 'private_root', None) is not None:
+            from .local_search import LocalSearch
+            local_search = LocalSearch(toga.App.app.private_root / 'Cache' / 'directory-index.sqlite3')
+        self.local_search = local_search
+        self._index_cancel = Event()
+        self._index_error = None
+        self._index_started = False
+        if local_search is not None:
+            kwargs['resource_search'] = local_search.search
         super().__init__(presentation=LogisticsBrowserPresentation(),
                          list_factory=RecycledFileList, inline_details=False, **kwargs)
         self.native_list.menu_provider = self._native_row_menu
+
+    def set_entries(self, provider, directory, rows, *, location=None):
+        self._index_cancel.set()
+        self._index_cancel = Event()
+        self._index_error = None
+        self._index_started = False
+        super().set_entries(provider, directory, rows, location=location)
+        if self.search_open:
+            self._start_local_index()
+
+    def _start_local_index(self):
+        provider = self.search_provider
+        if (not self._index_started and provider is not None and self.local_search is not None
+                and self.local_search.supports(provider)):
+            self._index_started = True
+            self._index_cancel = Event()
+            self._spawn(self._prepare_local_search(provider, self.search_directory, self._index_cancel))
+
+    async def _prepare_local_search(self, provider, directory, cancelled):
+        from commonUtils.runtime.operations import OperationCancelled
+        try:
+            await asyncio.to_thread(self.local_search.prepare, provider, directory,
+                                    cancelled=cancelled.is_set)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        except OperationCancelled:
+            return
+        except Exception as error:
+            if not cancelled.is_set():
+                self._index_error = str(error)
+                self.page_label.text = 'Search index update failed: ' + self._index_error[:80]
+            return
+        if not self.closed and not cancelled.is_set() and self.search.value:
+            # Replace partial/cached results after reconciliation, including
+            # updates which keep the same number of matching files.
+            self.query_changed()
+
+    def stop(self):
+        self.stop_local_search()
+        super().stop()
+
+    def stop_local_search(self):
+        self._index_cancel.set()
+        self.search_cancelled.set()
 
     location_header = FolderLocationHeader
 
@@ -379,8 +435,11 @@ class FileBrowser(RecycledBrowser):
         if self.page_label not in self.widget.children:
             self.widget.insert(0 if hasattr(self, '_search_toolbar') else 1, self.page_label)
         self.search.focus()
+        self._start_local_index()
 
     def close_search(self, widget=None, **kwargs):
+        self._index_cancel.set()
+        self._index_started = False
         self.search.value = ''
         if self.search_open:
             self.search_panel.parent.remove(self.search_panel)

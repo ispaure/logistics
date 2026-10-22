@@ -68,3 +68,36 @@ class AppleWorkspaceMenuTests(TestCase):
             provider(completion)
             self.assertEqual(completion.call_args.args[0], [])
             self.assertEqual(loader.call_count, 2)
+
+
+class ColdWorkspaceTransferTests(TestCase):
+    def test_mapped_pull_and_push_initialize_connection_ui_before_credentials(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import AsyncMock
+        from mobile.app import LogisticsMobile
+        from test_mirror_jobs import MirrorClient
+        for push in (False, True):
+            with self.subTest(push=push), TemporaryDirectory() as directory:
+                LogisticsMobile.storage_root = Path(directory)
+                app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                try:
+                    app.cloud_client = MirrorClient()
+                    app.cloud_client.cancel = Mock()
+                    job, _ = app.mirror_store().create(app.cloud_client, 'Remote', 'folder')
+                    app.show_locations()
+                    self.assertFalse(hasattr(app, 'cloud_view'))
+                    actions = dict(app.workspace_menu_actions('folder'))
+                    async def exercise():
+                        with patch.object(app, 'require_remote_credentials_async',
+                                          new=AsyncMock(return_value=False)) as credentials:
+                            await actions['Push…' if push else 'Pull…']()
+                            self.assertFalse(await app.transfer_task)
+                            credentials.assert_awaited_once()
+                            self.assertTrue(hasattr(app, 'cloud_view'))
+                            self.assertFalse(app._review_starting)
+                    app.loop.run_until_complete(exercise())
+                finally:
+                    app.main_window.close()
+                    app.loop.close()
+                    LogisticsMobile.storage_root = None

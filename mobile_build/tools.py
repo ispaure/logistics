@@ -88,6 +88,7 @@ SHARED_REQUIRED_MODULES += ('ui/native/forms.py',)
 SHARED_REQUIRED_MODULES += ('ui/native/bars.py',)
 
 SHARED_REQUIRED_MODULES += ('runtime/signals.py',)
+SHARED_REQUIRED_MODULES += ('runtime/name_search.py',)
 
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):

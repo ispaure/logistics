@@ -1,5 +1,26 @@
 # Mobile workspace drawers and paired documents
 
+## Persistent local filename search
+
+`mobile.local_search.LocalSearch` adapts the desktop SQLite directory cache for
+ordinary `LocalFiles`, `CollectionFiles` and `SharedFiles`. `FileBrowser` starts a
+cancellable preparation worker when Search opens and when an open search changes
+folders or refreshes. Queries run on workers, read saved snapshots first and use
+the desktop keyword/quoted-phrase rules. Finishing preparation reruns the active
+query so cached or partial results give way to reconciled names. The database is
+under the app-private `Cache` directory, independent of collection storage.
+
+Provider guards revalidate matching hits and supply current revisions. Private,
+session-only, remote and other virtual providers keep live in-memory searches;
+their names never enter this index. Navigation, browser stop and host retirement
+cancel obsolete work. Existing directory-cache generations/checkpoints retain
+interrupted scans. No file text is indexed.
+
+`mobile_build/tests/test_local_search.py` verifies restart reuse without directory
+enumeration, matching parity, refreshed names, source exclusions, scoped queries,
+worker-thread preparation and cancellation. Native BOOX performance and appearance
+still require device validation.
+
 Saved local file references from iOS Documents recover after an app container
 relocation: if the historical path is missing, reopening and Show in folder use
 the same relative file under the currently registered Logistics Documents root.
