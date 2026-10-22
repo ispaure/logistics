@@ -29,11 +29,12 @@ class PackageTests(unittest.TestCase):
                 '.android-beta/signing.json', '.deploy-workspaces/ios/pyproject.toml'))
         public = ['mobile_build/pyproject.toml', 'mobile_build/resources/logistics.png',
                   'Python/mobile/mobile_sources.json', 'Python/desktop/main_window.py']
-        result = subprocess.run(['git', 'check-ignore', '--no-index', '--stdin'],
-                                cwd=root, input='\n'.join(private + public) + '\n',
-                                text=True, capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(set(result.stdout.splitlines()), set(private))
+        result = subprocess.run(['git', 'check-ignore', '--no-index', '-z', '--stdin'],
+                                cwd=root, input=os.fsencode('\0'.join(private + public) + '\0'),
+                                capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr.decode(errors='replace'))
+        self.assertEqual({os.fsdecode(name) for name in result.stdout.split(b'\0') if name},
+                         set(private))
 
     def test_private_material_and_generated_mobile_outputs_never_ship(self):
         excluded = ['nested/signing.key', 'certificate.pem', 'upload.p8', 'release.p12',
