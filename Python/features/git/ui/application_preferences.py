@@ -108,9 +108,11 @@ class ApplicationPreferences:
         return False
 
     def stage_files(self, paths, unstage=False):
+        repository = self.path
+        branch = self.snapshot.status.branch if self.snapshot else None
         if self.preferences.options['confirm_stage'] and not self._confirm('Unstage files?' if unstage else 'Stage files?', '\n'.join(paths)): return
         self.commands.dispatch('Unstage files' if unstage else 'Stage files',
-                               'unstage' if unstage else 'stage', paths, repository=self.path)
+                               'unstage' if unstage else 'stage', paths, repository=repository, branch=branch)
 
     def run_custom_action(self, entry):
         if self.busy or not self.path: return

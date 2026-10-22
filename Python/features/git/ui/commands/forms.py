@@ -17,7 +17,12 @@ class RepositoryCommands:
         if repository is None or view.closing or view.path != repository:
             return False
         sensitive = method in {'commit', 'push', 'push_current_to_origin', 'pull', 'merge',
-                               'cherry_pick', 'revert', 'finish_operation', 'discard', 'stash_save'}
+                               'cherry_pick', 'revert', 'finish_operation', 'discard', 'stash_save',
+                               'stash_action', 'create_branch', 'create_tag', 'switch', 'checkout_tracking',
+                               'stage', 'unstage', 'apply_hunk', 'save_conflict'}
+        if sensitive and branch is None:
+            snapshot = getattr(view, 'snapshot', None)
+            branch = snapshot.status.branch if snapshot is not None else None
         request = GitCommand.capture(repository, label, method, args, kwargs,
                                      expected_branch=branch if sensitive else None)
         def completed(result):
@@ -145,27 +150,33 @@ class RepositoryCommands:
         value = item.data(0, qt.Qt.ItemDataRole.UserRole) if item else None
         if not value: return
         kind, name, ref = value
+        def invoke(callback, *args):
+            snapshot = view.snapshot
+            if (view.closing or view.path != captured_path
+                    or (snapshot.status.branch if snapshot else None) != captured_branch):
+                return
+            return callback(*args)
         menu = qt.QMenu(view)
         if kind == 'branch':
             menu.addAction('Switch branch', lambda: self.dispatch('Switch branch', 'switch', name, repository=captured_path, branch=captured_branch))
-            menu.addAction('Merge into current branch…', lambda: view._merge(name))
-            menu.addAction('Rename…', lambda: view.rename_branch(name))
-            menu.addAction('Set upstream…', lambda: view.upstream_dialog(name))
-            menu.addAction('Delete merged branch…', lambda: view.delete_branch(name))
+            menu.addAction('Merge into current branch…', lambda: invoke(view._merge, name))
+            menu.addAction('Rename…', lambda: invoke(view.rename_branch, name))
+            menu.addAction('Set upstream…', lambda: invoke(view.upstream_dialog, name))
+            menu.addAction('Delete merged branch…', lambda: invoke(view.delete_branch, name))
         elif kind == 'remote_branch' and not name.endswith('/HEAD'):
-            menu.addAction('Check out tracking branch…', lambda: view.checkout_remote(name))
-            menu.addAction('Merge into current branch…', lambda: view._merge(ref.name))
+            menu.addAction('Check out tracking branch…', lambda: invoke(view.checkout_remote, name))
+            menu.addAction('Merge into current branch…', lambda: invoke(view._merge, ref.name))
         elif kind == 'remote':
             menu.addAction('Fetch', lambda: self.dispatch('Fetch remote', 'fetch', name, repository=captured_path, branch=captured_branch))
-            menu.addAction('Edit URL…', lambda: view.remote_dialog(name))
-            menu.addAction('Remove remote…', lambda: view.remove_remote(name))
+            menu.addAction('Edit URL…', lambda: invoke(view.remote_dialog, name))
+            menu.addAction('Remove remote…', lambda: invoke(view.remove_remote, name))
         elif kind == 'stash':
             for action in ('apply', 'pop', 'drop'):
-                menu.addAction(action.capitalize() + '…', lambda checked=False, action=action: view.stash_action(action, name))
+                menu.addAction(action.capitalize() + '…', lambda checked=False, action=action: invoke(view.stash_action, action, name))
         elif kind == 'tag':
-            menu.addAction('View tag commit', lambda: view.show_ref_commit(ref))
-            menu.addAction('Push tag…', lambda: view.push_tag(name))
-            menu.addAction('Delete local tag…', lambda: view.delete_tag(name))
+            menu.addAction('View tag commit', lambda: invoke(view.show_ref_commit, ref))
+            menu.addAction('Push tag…', lambda: invoke(view.push_tag, name))
+            menu.addAction('Delete local tag…', lambda: invoke(view.delete_tag, name))
         if menu.actions(): menu.exec(view.refs.viewport().mapToGlobal(point))
 
 
@@ -208,7 +219,7 @@ class RepositoryCommands:
         name = dialog.text('Local branch name', ref.split('/', 1)[1])
         if dialog.submitted():
             value = name.text()
-            self.dispatch('Create tracking branch', 'checkout_tracking', value, ref, repository=captured_path)
+            self.dispatch('Create tracking branch', 'checkout_tracking', value, ref, repository=captured_path, branch=captured_branch)
 
 
     def stash_action(self, action, ref):
@@ -260,14 +271,17 @@ class RepositoryCommands:
         if not view.snapshot: return
         dialog = FormDialog('Merge into current branch', view)
         ref = dialog.choice('Branch to merge', [r.name for r in view.snapshot.refs if not r.current and not r.name.startswith('refs/tags/')])
-        if dialog.submitted() and ref.currentText(): view._merge(ref.currentText())
+        if dialog.submitted() and ref.currentText():
+            self._merge(ref.currentText(), repository=captured_path, branch=captured_branch)
 
 
-    def _merge(self, ref):
+    def _merge(self, ref, *, repository=None, branch=None):
         view = self.view
-        captured_path = view.path
-        captured_branch = view.snapshot.status.branch if view.snapshot else None
-        if view._confirm('Merge branch?', f'Merge {ref} into {view.snapshot.status.branch}? Conflicts will appear in Changes.'):
+        captured_path = repository if repository is not None else view.path
+        captured_branch = branch if branch is not None else view.snapshot.status.branch if view.snapshot else None
+        if view.closing or view.path != captured_path:
+            return
+        if view._confirm('Merge branch?', f'Merge {ref} into {captured_branch}? Conflicts will appear in Changes.'):
             self.dispatch('Merge branch', 'merge', ref, repository=captured_path, branch=captured_branch)
 
 

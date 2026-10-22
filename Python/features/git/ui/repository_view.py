@@ -418,6 +418,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
 
     def apply_hunk(self, context, index, action):
         if self.busy or not self.path or str(self.path) != context['root'] or not context['allowed']: return
+        repository = self.path
+        branch = self.snapshot.status.branch if self.snapshot else None
         if action == 'discard' and not self._confirm('Discard this hunk?',
                 'Discard only these unstaged edits? They cannot be recovered through Git.'):
             return
@@ -425,7 +427,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
             self._refresh_preview_pending = (context['path'], context['staged'])
         self.commands.dispatch(action.capitalize() + ' hunk', 'apply_hunk',
             context['path'], index, context['patch'], staged=context['staged'], discard=action == 'discard',
-            repository=self.path, after=applied)
+            repository=repository, branch=branch, after=applied)
 
     def compare_change(self):
         return self.history_controller.compare_change()
