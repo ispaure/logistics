@@ -39,14 +39,14 @@ cross-wiki history and the staged payload without checkout packages on its impor
 path. Packaged feature links resolve within the bundled documentation mirror.
 
 ```sh
-PYTHONPATH=Python:Mobile/tests:Python/tests TOGA_BACKEND=toga_dummy \
-  Mobile/.venv/bin/python -m unittest test_documentation_ui test_packaged_startup \
+PYTHONPATH=Python:mobile_build/tests:Python/tests TOGA_BACKEND=toga_dummy \
+  mobile_build/.venv/bin/python -m unittest test_documentation_ui test_packaged_startup \
   commonUtils.tests.test_native_markdown -q
 ```
 
 ## Native simulator evidence and limits
 
-`Mobile/native_tests/tests/logisticsmobile/documentation_probe.py` provides a
+`mobile_build/native_tests/tests/logisticsmobile/documentation_probe.py` provides a
 full-app probe and an independent native documentation host. Run `main()` in an
 isolated simulator test bundle for the full application, or `standalone_main()`
 to isolate the documentation viewer from unrelated startup failures. Each uses

@@ -1,10 +1,10 @@
 name: Documentation contracts
 on:
   pull_request:
-    paths: ['docs/**', 'README.md', 'AGENTS.md', 'Python/features/**', 'Python/ui_new/**', 'Python/commonUtils', 'Python/tests/test_documentation_layout.py', '.github/workflows/documentation.yml']
+    paths: ['docs/**', 'README.md', 'AGENTS.md', 'Python/features/**', 'Python/desktop/**', 'Python/commonUtils', 'Python/tests/test_documentation_layout.py', '.github/workflows/documentation.yml']
   push:
     branches: [main, alpha]
-    paths: ['docs/**', 'README.md', 'AGENTS.md', 'Python/features/**', 'Python/ui_new/**', 'Python/commonUtils', 'Python/tests/test_documentation_layout.py', '.github/workflows/documentation.yml']
+    paths: ['docs/**', 'README.md', 'AGENTS.md', 'Python/features/**', 'Python/desktop/**', 'Python/commonUtils', 'Python/tests/test_documentation_layout.py', '.github/workflows/documentation.yml']
   workflow_dispatch:
 permissions:
   contents: read

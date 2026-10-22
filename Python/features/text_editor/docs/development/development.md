@@ -14,7 +14,7 @@ contributions while retaining open documents for re-enablement.
 | Module | Responsibility |
 | --- | --- |
 | `contributions.py`, `ui/page.py` | Lazy feature registration, entry point and browser integration |
-| `mobile/provider_markdown.py` | Provider Markdown modes, web surfaces, preview tasks, search/speech attachment and cleanup; test with `Mobile/tests/test_provider_markdown.py` and `test_markdown_editor.py` |
+| `mobile/provider_markdown.py` | Provider Markdown modes, web surfaces, preview tasks, search/speech attachment and cleanup; test with `mobile_build/tests/test_provider_markdown.py` and `test_markdown_editor.py` |
 | `ui/service.py` | Per-document window ownership and browser save notifications |
 | `ui/window.py` | Single-document presentation, menus, status and close lifecycle |
 | `ui/document.py` | Per-document snapshot, encoding and editing metadata |
@@ -142,7 +142,7 @@ publication. Cancellation alone does not make a worker result current.
 
 `ProviderMarkdownHost` enumerates rendering, image resources, font/appearance,
 validity, busy state, speech, menu and toolbar callbacks. Composition lives in
-`logisticsmobile.feature_hosts.provider_markdown`; the feature never imports the
+`mobile.feature_hosts.provider_markdown`; the feature never imports the
 application host. `ProviderUI` retains forwarding methods and state aliases for
 existing callers, plus non-Markdown controls. Private sessions keep document
 identity, credentials, saving, Save As, conflicts, memory budgets and dirty-close
@@ -153,7 +153,7 @@ Run `python3 dev.py test mobile test_provider_markdown.py` for ownership, stale
 results/errors, lock/close and replacement regressions. Also run
 `test_markdown_*.py`, `test_private_sessions.py` and `test_remote_readers.py`.
 `Python/tests/test_mobile_packaging.py` checks allowlist omissions;
-`Mobile/tests/test_packaged_startup.py` opens a provider Markdown view and switches between preview and editing
+`mobile_build/tests/test_packaged_startup.py` opens a provider Markdown view and switches between preview and editing
 using only freshly staged sources. See the root [validation guide](../../../../../docs/development/testing.md)
 for environment setup (`py` instead of `python3` on Windows).
 
@@ -214,7 +214,7 @@ files use their existing folder-owned deletion workflow.
 Closing an iOS editor stops its live WebView and detaches WebKit delegates before
 replacing preview content. Queued native navigation decisions must not outlive
 the Toga interface. Native close/discard checks explicitly collect closed editors.
-Regression coverage lives in `Mobile/tests/test_markdown_editor.py`,
+Regression coverage lives in `mobile_build/tests/test_markdown_editor.py`,
 `test_source_editor.py` and the workspace/provider suites. The isolated native
 `editor_probe.py` checks blank-page hit targets, default preview, formatted typing and toolbar edits,
 source fallback, table structure undo/redo and unchanged neighboring syntax in
@@ -246,13 +246,13 @@ range/decryption stream without creating plaintext files.
 
 The formatted editor renders images inside protected inline spans while retaining
 Markdown syntax for serialization. Wiki embeds retain their exact block source.
-Missing images fall back to alt text. Tests in `Mobile/tests/test_markdown_images.py`
+Missing images fall back to alt text. Tests in `mobile_build/tests/test_markdown_images.py`
 and `test_markdown_editor.py` cover rooted paths, GIF/WebP/PNG/JPEG, encrypted-provider
 reads, revoked access and source preservation. GIFs retain their complete encoded
 bytes for native WebView animation. Shared image markup interprets Obsidian width
 and height hints and caps image width at its containing page. Size hints stay in
 the image's protected Markdown reference during surrounding paragraph edits.
-`Mobile/native_tests/tests/logisticsmobile/markdown_gif_probe.py` exercises real
+`mobile_build/native_tests/tests/logisticsmobile/markdown_gif_probe.py` exercises real
 iOS/Android WebViews using synthetic provider files, save/reopen and source
 serialization; a native screenshot driver must verify visible frame changes.
 
@@ -262,7 +262,7 @@ serialization; a native screenshot driver must verify visible frame changes.
 reads and immediate-child filtering. Desktop `notes_actions.py` contributes the
 location command; `ui/notes_library.py` owns its lazy Documents window and
 cooperative workers. Mobile resolves the same location scopes in
-`logisticsmobile.notes_actions` and presents them through the retained adaptive
+`mobile.notes_actions` and presents them through the retained adaptive
 reader. `mobile/notes_library.py` owns that presentation through a declared
 `NotesHost` contract. The host retains entry-point routing, workspace sessions,
 provider resolution and credential lifetimes. The shared native private WebView
@@ -276,7 +276,7 @@ for lifecycle and cross-platform validation.
 
 ## Mobile new-document form
 
-`logisticsmobile.document_choices` owns one scrollable form shared by Home,
+`mobile.document_choices` owns one scrollable form shared by Home,
 Documents and the editor action menu. It validates the display name, adds the
 selected text/Markdown extension if absent, and optionally seeds Markdown with
 a first heading. Creation passes the name and UTF-8 content to the managed

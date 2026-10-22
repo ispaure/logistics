@@ -37,7 +37,7 @@ UIKit symbols and Workspaces artwork into small, regenerated cache PNGs and
 assigns real Toga icons before refreshing the native items. The cached artwork
 contains no user content and keeps template tinting for selected and dark states.
 
-`Mobile/native_tests/tests/logisticsmobile/tab_icons_probe.py` reproduces the
+`mobile_build/native_tests/tests/logisticsmobile/tab_icons_probe.py` reproduces the
 original stars by reapplying tab titles, then checks native images against their
 retained icons through title/icon reconstruction, destination switches, and light
 and dark appearance. Local iPhone and iPad simulator runs on 2026-10-18 passed all
@@ -46,7 +46,7 @@ do not claim physical-device access.
 
 The native suite retains all existing feature cases and adds
 `native_navigation_foundation`, for 16 required cases. Local reports and
-screenshots are retained under ignored `Mobile/logs/navigation/` directories.
+screenshots are retained under ignored `mobile_build/logs/navigation/` directories.
 Reports record the staged source fingerprint; lifecycle reports refer to the
 proof revision they exercised rather than claiming to cover later edits.
 
@@ -137,7 +137,7 @@ publication remove staging. The native descriptor is sampled every 200 ms on a
 worker to report bytes without changing the bridge ABI. UI progress is dispatched
 on the event loop; the bar measures the current file, stays animated for unknown
 sizes, and completes only after publication. Folder status also counts completed
-files. `Mobile/tests/test_copy_ui.py` covers destination browsing, collisions,
+files. `mobile_build/tests/test_copy_ui.py` covers destination browsing, collisions,
 source generation changes, retry, cancellation and progress using the dummy host;
 these checks are not physical iOS/Android interaction evidence.
 

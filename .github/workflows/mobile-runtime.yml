@@ -3,7 +3,7 @@ name: Logistics mobile document runtimes
 on:
   push:
     branches: [alpha]
-    paths: ['Python/logisticsmobile/**', 'Python/features/**', 'Python/services/**', 'Python/commonUtils', 'Python/commonUtils/**', 'Python/tests/test_mobile_*.py', 'Mobile/**', '.github/workflows/mobile-runtime.yml']
+    paths: ['Python/mobile/**', 'Python/features/**', 'Python/services/**', 'Python/commonUtils', 'Python/commonUtils/**', 'Python/tests/test_mobile_*.py', 'mobile_build/**', '.github/workflows/mobile-runtime.yml']
   workflow_dispatch:
     inputs:
       target:
@@ -55,7 +55,7 @@ jobs:
       - name: Prepare source and report build environment
         run: |
           mkdir -p reports
-          python logistics/Mobile/tools.py stage payload --repo logistics --testbed
+          python logistics/mobile_build/tools.py stage payload --repo logistics --testbed
           python -m pip install --only-binary=:all: --no-deps --no-compile --target payload markdown-it-py==4.2.0 mdurl==0.1.2
           cp payload/source.json reports/source.json
           test -n "$ANDROID_HOME"
@@ -90,9 +90,9 @@ jobs:
         working-directory: cpython
         run: |
           set -o pipefail
-          python Android/android.py test --managed maxVersion --site-packages "$GITHUB_WORKSPACE/payload" -- -m logisticsmobile.smoke --target android 2>&1 | tee ../reports/android-testbed.log
+          python Android/android.py test --managed maxVersion --site-packages "$GITHUB_WORKSPACE/payload" -- -m mobile.smoke --target android 2>&1 | tee ../reports/android-testbed.log
       - name: Require actual emulator evidence
-        run: python logistics/Mobile/tools.py verify reports/android-testbed.log --target android --output reports/android-result.json
+        run: python logistics/mobile_build/tools.py verify reports/android-testbed.log --target android --output reports/android-result.json
       - name: Preserve diagnostics even on failure
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -128,7 +128,7 @@ jobs:
       - name: Prepare source and report build environment
         run: |
           mkdir -p reports
-          python logistics/Mobile/tools.py stage payload --repo logistics --testbed
+          python logistics/mobile_build/tools.py stage payload --repo logistics --testbed
           python -m pip install --only-binary=:all: --no-deps --no-compile --target payload markdown-it-py==4.2.0 mdurl==0.1.2
           cp payload/source.json reports/source.json
           test "$(uname -m)" = arm64
@@ -147,13 +147,13 @@ jobs:
           # The pinned upstream --app option copies into Testbed/app, but its
           # iOS Xcode project bundles iOSTestbed/app. Populate that resource root.
           cp -R "$GITHUB_WORKSPACE/payload/." "$GITHUB_WORKSPACE/ios-testbed/iOSTestbed/app/"
-          test -f "$GITHUB_WORKSPACE/ios-testbed/iOSTestbed/app/logisticsmobile/smoke.py"
+          test -f "$GITHUB_WORKSPACE/ios-testbed/iOSTestbed/app/mobile/smoke.py"
       - name: Run inside the iOS Simulator testbed application
         run: |
           set -o pipefail
-          python ios-testbed run -- logisticsmobile.smoke --target ios 2>&1 | tee reports/ios-testbed.log
+          python ios-testbed run -- mobile.smoke --target ios 2>&1 | tee reports/ios-testbed.log
       - name: Require actual simulator evidence
-        run: python logistics/Mobile/tools.py verify reports/ios-testbed.log --target ios --output reports/ios-result.json
+        run: python logistics/mobile_build/tools.py verify reports/ios-testbed.log --target ios --output reports/ios-result.json
       - name: Preserve diagnostics even on failure
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

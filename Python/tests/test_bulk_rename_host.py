@@ -7,8 +7,8 @@ from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.filesystem.rename import RenameRules
-from ui_new import main_window
-from ui_new.bulk_rename import open_bulk_rename
+from desktop import main_window
+from desktop.bulk_rename import open_bulk_rename
 
 
 class BulkRenameHostTests(QtTestCase):
@@ -53,7 +53,7 @@ class BulkRenameHostTests(QtTestCase):
             self.app.processEvents()
 
     def test_latest_selection_wins_during_scan(self):
-        from ui_new.bulk_rename.widget import BulkRenameWidget
+        from desktop.bulk_rename.widget import BulkRenameWidget
         with TemporaryDirectory() as folder:
             a=Path(folder)/'a'; a.write_text('a'); b=Path(folder)/'b'; b.write_text('b')
             widget=BulkRenameWidget(paths=[a]); self.app.processEvents()

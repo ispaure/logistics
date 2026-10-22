@@ -11,7 +11,7 @@ import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from commonUtils.ui import pyside as qt
-from ui_new.bulk_rename import BulkRenameWidget, open_bulk_rename
+from desktop.bulk_rename import BulkRenameWidget, open_bulk_rename
 from commonUtils.filesystem.rename import RenameRules
 
 
@@ -97,7 +97,7 @@ class BulkRenameWidgetTests(QtTestCase):
                            + widget.undo_button.width())
 
     def test_menu_actions_follow_preview_readiness_and_reuse_rule_controls(self):
-        from ui_new.bulk_rename.menus import build_menus
+        from desktop.bulk_rename.menus import build_menus
         host = qt.QMainWindow()
         menus = build_menus(host, self.widget)
         self.addCleanup(host.deleteLater)
@@ -128,7 +128,7 @@ class BulkRenameWidgetTests(QtTestCase):
         self.fail(f'Folder did not become visible in tree: {path}')
 
     def test_preview_bolds_changed_spans_and_prioritizes_filename_columns(self):
-        from ui_new.bulk_rename.preview import changed_spans, change_formats, preview_tooltip, RenamePreviewDelegate
+        from desktop.bulk_rename.preview import changed_spans, change_formats, preview_tooltip, RenamePreviewDelegate
         self.assertEqual(changed_spans('page2.txt','page3.txt'),((4,5),))
         self.assertEqual(changed_spans('old-page.txt','page.txt'),())
         self.assertEqual(preview_tooltip('old-page.txt','page.txt'),'page.txt\nRemoved: old-')
@@ -264,7 +264,7 @@ class BulkRenameWidgetTests(QtTestCase):
         self.assertTrue(self.widget.rename_button.isEnabled())
 
     def test_selection_and_rule_previews_keep_layout_scroll_and_selection_stable(self):
-        from ui_new.bulk_rename import widget as module
+        from desktop.bulk_rename import widget as module
         for index in range(100):
             (self.root / f'sample{index}.txt').write_text('sample')
         self.widget.resize(1000, 800)
@@ -314,7 +314,7 @@ class BulkRenameWidgetTests(QtTestCase):
         self.assertIs(self.widget.table.currentItem(), item)
 
     def test_quiet_preview_can_be_cancelled_from_existing_preview_button(self):
-        from ui_new.bulk_rename import widget as module
+        from desktop.bulk_rename import widget as module
         entered, release = Event(), Event()
         original = module.plan_renames
         def delayed(*args, **kwargs):
@@ -440,13 +440,13 @@ class BulkRenameWidgetTests(QtTestCase):
     def test_opt_in_browser_provider_uses_selection_and_refreshes_after_rename(self):
         from types import SimpleNamespace
         from unittest.mock import MagicMock
-        from ui_new.bulk_rename import bulk_rename_actions
+        from desktop.bulk_rename import bulk_rename_actions
         browser = MagicMock()
         context = SimpleNamespace(selection=(SimpleNamespace(path=self.first),), widget=browser, browser=browser)
         actions = bulk_rename_actions(None, context)
         self.assertEqual(actions[0].title, 'Bulk Rename…')
         self.assertEqual(actions[0].category, 'rename')
-        with patch('ui_new.bulk_rename.open_bulk_rename') as opened:
+        with patch('desktop.bulk_rename.open_bulk_rename') as opened:
             actions[0].run(context)
             opened.assert_called_once_with(paths=[self.first], parent=browser.window())
             callback = opened.return_value.renamer.renamed.connect.call_args.args[0]

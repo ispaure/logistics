@@ -75,7 +75,7 @@ host reader methods compose those services; format parsing/search/spread rules
 are not duplicated there. commonUtils continues to own generic archive sources,
 atomic publication, native canvases/gestures and toolkit mechanisms.
 
-`Mobile/tools.py` explicitly stages every added runtime module. Portable feature
+`mobile_build/tools.py` explicitly stages every added runtime module. Portable feature
 imports do not load Qt, Toga, Pillow, Rubicon or Java. Platform presentations may
 load Toga; native image decoding remains subject to the mobile bounds.
 
@@ -124,7 +124,7 @@ suspend/close and are restarted when the current session renders again.
 
 ## Imported metadata publication
 
-`logisticsmobile/library_edits.py` owns the import-copy transaction:
+`mobile/library_edits.py` owns the import-copy transaction:
 
 1. Revalidate the library record/checksum and prepare the feature metadata patch.
 2. Stage a replacement and verify the complete resource manifest and format model.
@@ -225,7 +225,7 @@ Current evidence: [Android report](../../../../../docs/development/mobile-eviden
 [iPad report](../../../../../docs/development/mobile-evidence/2026-10-15-reader-validation-ipad.json),
 [Android spread](../../../../../docs/development/mobile-evidence/2026-10-15-reader-validation-android-spread.png),
 [iPad spread](../../../../../docs/development/mobile-evidence/2026-10-15-reader-validation-ipad-spread.png), and the
-[reusable standalone probe](../../../../../Mobile/native_tests/tests/logisticsmobile/reader_parity_probe.py).
+[reusable standalone probe](../../../../../mobile_build/native_tests/tests/logisticsmobile/reader_parity_probe.py).
 Each report identifies the staged dirty-source snapshot and native artifact hash.
 
 The targeted host suite passes 22 reader/session/private-view tests; format,

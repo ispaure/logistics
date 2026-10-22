@@ -4,7 +4,7 @@ from pathlib import Path
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.workspaces.workspace import Workspace
-from ui_new.file_browser import BROWSER_POLICY, _new_browser_tab
+from desktop.file_browser import BROWSER_POLICY, _new_browser_tab
 
 
 class BrowserPolicyTests(QtTestCase):

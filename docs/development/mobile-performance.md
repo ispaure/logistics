@@ -193,7 +193,7 @@ isolated storage root; reports contain fixed workload names and numeric metrics.
 
 ## Verification baseline
 
-`Mobile/native_tests/tests/logisticsmobile/performance_probe.py` retains its
+`mobile_build/native_tests/tests/logisticsmobile/performance_probe.py` retains its
 Android tab/first-draw measurements and adds `performance_workloads.py` scenarios
 for typing, a 1,000-file folder, opening text, a comic page turn and streaming
 Markdown. The helper measures elapsed time, maximum loop delay and Python peak
@@ -212,7 +212,7 @@ Host dummy-backend baseline, with allocation tracing enabled (2026-10-19):
 
 These are host measurements with instrumentation overhead, not device latency
 claims. Native draw, native memory and visual correctness remain separate device
-checks. `Mobile/tests/test_performance_workloads.py` verifies detection of blocked
+checks. `mobile_build/tests/test_performance_workloads.py` verifies detection of blocked
 callbacks and omission of operation return values from reports.
 
 ## Ordered work

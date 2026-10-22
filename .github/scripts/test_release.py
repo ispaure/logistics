@@ -15,19 +15,38 @@ import publish_release as publishing
 
 
 class PackageTests(unittest.TestCase):
+    def test_gitignore_protects_mobile_outputs_after_the_directory_rename(self):
+        root = Path(__file__).resolve().parents[2]
+        private = ['Credentials/rclone/private.zip', 'Python/__pycache__/launch.pyc',
+                   '.env.local', 'local-signing.p12', 'profile.prof', 'debug.log']
+        for folder in ('Mobile', 'mobile_build'):
+            private.extend(folder + '/' + name for name in (
+                'payload/mobile/app.py', 'build/generated.py', 'logs/deploy.log',
+                '.venv/bin/python', '.device.json', '.testflight-auth.json',
+                '.testflight-keys/upload.p8', '.tools/test-devices.json',
+                '.android-beta/signing.json', '.deploy-workspaces/ios/pyproject.toml'))
+        public = ['mobile_build/pyproject.toml', 'mobile_build/resources/logistics.png',
+                  'Python/mobile/mobile_sources.json', 'Python/desktop/main_window.py']
+        result = subprocess.run(['git', 'check-ignore', '--no-index', '--stdin'],
+                                cwd=root, input='\n'.join(private + public) + '\n',
+                                text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(set(result.stdout.splitlines()), set(private))
+
     def test_private_material_and_generated_mobile_outputs_never_ship(self):
         excluded = ['nested/signing.key', 'certificate.pem', 'upload.p8', 'release.p12',
                     'app.jks', 'secrets.json', 'nested/.env.production', 'service-account-prod.json',
-                    'Mobile/payload/source.json', 'Mobile/logs/device.json',
-                    'Mobile/.deploy-workspaces/qa/pyproject.toml', 'Mobile/.device.json',
-                    'Mobile/.testflight-auth.json', 'app.apk', 'app.ipa',
+                    'mobile_build/payload/source.json', 'mobile_build/logs/device.json',
+                    'Mobile/payload/source.json', 'Mobile/.testflight-auth.json',
+                    'mobile_build/.deploy-workspaces/qa/pyproject.toml', 'mobile_build/.device.json',
+                    'mobile_build/.testflight-auth.json', 'app.apk', 'app.ipa',
                     'node_modules/package/index.js', 'DerivedData/project/file',
                     'app.xcarchive/Info.plist', 'app.dSYM/file']
         for name in excluded:
             with self.subTest(name=name):
                 self.assertFalse(packaging.included(name))
-        for name in ['Python/uv.lock', 'Mobile/rclone_bridge/go.sum',
-                     'Mobile/pyproject.toml', 'Mobile/resources/logistics.png']:
+        for name in ['Python/uv.lock', 'mobile_build/rclone_bridge/go.sum',
+                     'mobile_build/pyproject.toml', 'mobile_build/resources/logistics.png']:
             self.assertTrue(packaging.included(name))
 
     def test_release_identity_is_stamped_and_managed_by_the_install_manifest(self):

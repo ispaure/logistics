@@ -12,7 +12,7 @@ class MobilePortabilityTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         env = dict(os.environ, PYTHONPATH=os.pathsep.join((str(root / 'Python'), str(root / 'Python/tests'))))
         try:
-            completed = subprocess.run([sys.executable, '-m', 'logisticsmobile.smoke', '--target', 'host'],
+            completed = subprocess.run([sys.executable, '-m', 'mobile.smoke', '--target', 'host'],
                                        cwd=root, env=env, capture_output=True, text=True, timeout=30)
         except subprocess.TimeoutExpired as error:
             self.fail(f'Mobile harness timed out. stdout={error.stdout!r}; stderr={error.stderr!r}')

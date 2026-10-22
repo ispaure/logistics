@@ -12,7 +12,7 @@ from features.books.ui.content import chapter_html as desktop_html
 from features.books.mobile.content import chapter_html, chapter_text
 from features.books.mobile.navigation import chapter_labels
 from features.books.epub import BookError
-from logisticsmobile.library import LibraryStore
+from mobile.library import LibraryStore
 from services.documents.readers import PrivateReader
 from test_mobile_readers import png_page
 
@@ -70,7 +70,7 @@ class ReadingParityTests(unittest.TestCase):
     def test_browser_cover_uses_the_same_page_filter_as_readers(self):
         import base64
         from contextlib import contextmanager
-        from logisticsmobile.browser_preview import callbacks
+        from mobile.browser_preview import callbacks
         image = png_page()
         content = BytesIO()
         with ZipFile(content, 'w') as archive:

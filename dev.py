@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent
 
 
 def environment_python(mobile=False):
-    environment = ROOT / ('Mobile/.venv' if mobile else '.venv')
+    environment = ROOT / ('mobile_build/.venv' if mobile else '.venv')
     return environment / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
 
 
@@ -69,14 +69,14 @@ def main(argv=None):
     # Resolving the interpreter symlink escapes a virtual environment.
     interpreter = Path(os.path.abspath(args.python.expanduser())) if args.python else environment_python(mobile)
     environment = os.environ.copy()
-    # Include the repository for tests importing Mobile tooling. Do not inherit
+    # Include the repository for tests importing mobile_build tooling. Do not inherit
     # unrelated PYTHONPATH entries that can shadow this checkout's packages.
     environment['PYTHONPATH'] = os.pathsep.join((str(ROOT / 'Python'), str(ROOT)))
     environment['QT_QPA_PLATFORM'] = 'offscreen'
     if args.command == 'test':
         if not args.pattern.endswith('.py') or any(c in args.pattern for c in '/\\'):
             parser.error('Use a test filename or quoted filename glob, not a path.')
-        suite = ROOT / ('Mobile/tests' if mobile else 'Python/tests')
+        suite = ROOT / ('mobile_build/tests' if mobile else 'Python/tests')
         if not any(path.is_file() for path in suite.rglob(args.pattern)):
             parser.error(f'No test files match {args.pattern!r} in {suite.relative_to(ROOT)}.')
         if mobile:
@@ -85,7 +85,7 @@ def main(argv=None):
                    str(suite), '--pattern', args.pattern, '--isolate-modules']
     else:
         command = [str(interpreter), '-m', 'ruff', 'check', '--config',
-                   'Python/pyproject.toml', 'dev.py', 'Python', 'Mobile', 'Scripts', '.github/scripts']
+                   'Python/pyproject.toml', 'dev.py', 'Python', 'mobile_build', 'Scripts', '.github/scripts']
     print(f'Working directory: {ROOT}', flush=True)
     for name in ('PYTHONPATH', 'QT_QPA_PLATFORM', 'TOGA_BACKEND'):
         if name in environment:

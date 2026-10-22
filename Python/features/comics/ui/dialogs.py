@@ -7,7 +7,7 @@ from commonUtils.ui import pyside
 
 from features.comics import actions as comics_actions
 from features.comics import cbz, conversion, metadata
-from ui_new.dialogs.tool_dialog import ToolDialog, coerce_initial_path
+from desktop.dialogs.tool_dialog import ToolDialog, coerce_initial_path
 
 
 class ComicsToolDialog(ToolDialog):

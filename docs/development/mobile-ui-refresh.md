@@ -48,13 +48,13 @@ document, followed by long plain-text and Markdown Source inputs. It checks
 caret bounds through repeated typing, stable toolbar position, zero outer-page
 scroll and unchanged WebView ownership. The iOS software-keyboard check requires
 a nonzero native keyboard inset; screenshots/reports are retained locally under
-`Mobile/logs/editor-keyboard/`. The Android probe also exercises native IME
+`mobile_build/logs/editor-keyboard/`. The Android probe also exercises native IME
 composition, plain/source caret bounds, new documents and the last blank
 Markdown block. A 360 × 640 logical-pixel phone at 1.3 system font scale
 reproduced a caret clipped above its writing viewport: fixed 12-pixel padding
 could not fit around a line in the keyboard-reduced area. Caret spacing now
 shrinks to the available room. Before/after reports and screenshots are retained
-under `Mobile/logs/editor-keyboard/android/`; these are Android 15 emulator
+under `mobile_build/logs/editor-keyboard/android/`; these are Android 15 emulator
 checks at phone sizes, not Samsung firmware or physical keyboard certification.
 The fixed build passed all six scenarios at 360 × 640 with 1.3 system font
 scale, 360 × 780, and approximately 411 × 914 logical pixels. Checks cover
@@ -94,7 +94,7 @@ The disposable `command_buttons_probe` captures Home, Documents, Chat, Settings
 and Workspaces in light/dark appearance and checks that ordinary commands remain
 unselected, outlined and usable after disabled-state changes. It also supports
 Android E Ink. iOS Simulator checks passed and screenshots were reviewed under
-`Mobile/logs/command-buttons/`. Android emulator validation is unavailable locally:
+`mobile_build/logs/command-buttons/`. Android emulator validation is unavailable locally:
 the cached system image has no system disk. Host tests cover Android light/dark
 and E Ink stroke, disabled-text and ripple restoration contracts.
 
@@ -108,7 +108,7 @@ after E Ink was already enabled and restoring native geometry after disabling it
 The isolated iOS `settings_links_probe` passed selection-preserving cancellation,
 URL validation, Enter-to-insert and toolbar-only link-icon checks. Light/dark
 Settings and the keyboard-sized link dialog were visually reviewed under
-`Mobile/logs/settings-links/`; its URL input and both actions remain visible.
+`mobile_build/logs/settings-links/`; its URL input and both actions remain visible.
 These follow-up changes are local and have not been redeployed to test devices.
 
 ### Intervention alert dimming — 2026-10-18
@@ -143,7 +143,7 @@ iOS 27.1 Duo simulator, with an explicitly injected partial-hinge status (observ
 status was fully open). All text lines and controls fit their detail pane,
 category scroll views reached their bottom, and the split stayed within 0.5
 points of the window crease. Screenshots were reviewed locally under
-`Mobile/logs/settings-layout/`. The [native geometry report](mobile-evidence/2026-10-18-duo-settings.json)
+`mobile_build/logs/settings-layout/`. The [native geometry report](mobile-evidence/2026-10-18-duo-settings.json)
 records scope and source hashes. Physical hinge transitions and a production app
 deployment were not tested.
 
@@ -209,7 +209,7 @@ closes before handlers can replace a view or navigate. Programmatic selection
 continues through Toga's existing implementation; Android keeps its native
 Spinner behavior.
 
-`logisticsmobile/settings_ui.py` owns compact label/switch rows. Each row retains
+`mobile/settings_ui.py` owns compact label/switch rows. Each row retains
 its explanation in `_settings_note`; the shared presentation places that muted
 13-point label below the rounded option group. Explanations wrap to the pane
 width and remain visible across all categories. Native accessibility names
@@ -218,9 +218,9 @@ and Save/Reload behavior remain authoritative.
 
 The bottom About section reuses `services.build_version.BuildVersion.label` for
 desktop-style revision/date formatting, with the installed Toga app version,
-platform and short source snapshot. `Mobile/tools.py` includes that portable
+platform and short source snapshot. `mobile_build/tools.py` includes that portable
 service and stamps `logistics_committed_at` alongside the existing commit, dirty
-flag and source digest in packaged `logisticsmobile/source.json`. Device display
+flag and source digest in packaged `mobile/source.json`. Device display
 reads this bundled manifest offline. Source checkouts fall back to the existing
 installed-build service. Only the information is grey; the heading stays normal.
 
@@ -299,7 +299,7 @@ passed 100 tests and the portable document suite passed 39 without skips.
 - [Portable core report](mobile-evidence/2026-10-14-ui-refresh-host-core-local.json)
 
 Actual synthetic-workspace screenshots are retained locally under
-`Mobile/logs/ui-refresh/phone/` and `Mobile/logs/ui-refresh/ipad/`. They are local
+`mobile_build/logs/ui-refresh/phone/` and `mobile_build/logs/ui-refresh/ipad/`. They are local
 review artifacts rather than publication of user content. The refreshed build
 was installed and launched on the configured physical iPhone over localNetwork;
 all 57 packaged runtime modules and the source stamp match this verified snapshot.
@@ -368,7 +368,7 @@ measured image viewport growth when controls hide. Android checks deliver actual
 MotionEvent down/up events; iOS checks exercise native recognizer delegates and
 swipe target dispatch. These are automated gesture checks, not a claim of manual
 physical-touch testing. Actual phone screenshots are retained under
-Mobile/logs/ui-refresh/phone/ui-review-comic-{page,controls}.png.
+mobile_build/logs/ui-refresh/phone/ui-review-comic-{page,controls}.png.
 
 
 Final comic refinement evidence uses source snapshot
@@ -872,8 +872,8 @@ Local validation for the explicit storage and transfer-details changes: 159 mobi
 host tests passed, followed by all 26 native cases on iPhone, iPad and Android.
 The transfer-result screenshot confirms complete wrapped text. The same source
 snapshot was signed, installed in place and launched on the paired iPhone over
-Wi-Fi. Local reports are retained under `Mobile/logs/explicit-storage-*-native-ui-local.json`
-and `Mobile/logs/device-deployment.json`; these are local dirty-source checks,
+Wi-Fi. Local reports are retained under `mobile_build/logs/explicit-storage-*-native-ui-local.json`
+and `mobile_build/logs/device-deployment.json`; these are local dirty-source checks,
 not release or TestFlight evidence.
 
 ### Conversation-first Chat presentation
@@ -913,7 +913,7 @@ that updated native case still needs a simulator/emulator run.
 
 ## Slate palette and menu touch targets (local follow-up)
 
-`logisticsmobile.palette` owns Qt-free mobile roles based on desktop Slate's
+`mobile.palette` owns Qt-free mobile roles based on desktop Slate's
 current default colours, including the 6% blue tint on dark neutral surfaces.
 Light cards use near-white `#fafbfc`; the window uses `#f0f2f6`. Mobile does not
 import Qt or synchronize desktop custom theme preferences. `appearance` adapts
@@ -939,7 +939,7 @@ content hit testing, native bar geometry and inline TouchDown/TouchUpInside
 cancellation. It used the existing simulator executable with current Python UI
 sources; this is targeted evidence, not a new full native-suite/device-build
 claim. Screenshots, the probe and source hashes are retained locally in
-`Mobile/logs/palette-review/`. Android native rendering and physical touch
+`mobile_build/logs/palette-review/`. Android native rendering and physical touch
 confirmation remain pending. No device installation, commit or release was made.
 
 
@@ -973,7 +973,7 @@ were measured above the tab bar with and without the keyboard. Android's body
 was measured at the full 411-point window allocation.
 
 Local gallery, scripts, logs, results and source hashes are under
-`Mobile/logs/ux-three-pass/` (`review.html` is the gallery). The Apple probes reuse
+`mobile_build/logs/ux-three-pass/` (`review.html` is the gallery). The Apple probes reuse
 an existing simulator executable with the current Python UI sources; Android
 builds an isolated probe from cached native scaffolding/bridge. These checks do
 not replace the full native release gate, physical touch/screen-reader/OS Dynamic
@@ -1020,12 +1020,12 @@ persistence. The emulator's original system night setting was restored afterward
 
 ## Control icons and iOS/Android parity review (2026-10-15)
 
-`logisticsmobile/control_icons.py` owns compact action presentation: UIKit SF
+`mobile/control_icons.py` owns compact action presentation: UIKit SF
 Symbols and Android stroked PathShape drawables on the existing Toga buttons.
 It preserves callback/menu ownership and enabled state, sets native accessibility
 names and 48-point targets, and retains readable glyph fallbacks for host tests.
 Android drawables have state-aware text/muted tints and refresh with app appearance
-and E Ink changes. `Mobile/tools.py` explicitly stages this module.
+and E Ink changes. `mobile_build/tools.py` explicitly stages this module.
 
 Reader and browser previous/next controls, browser history, parent-folder
 navigation, editor Find and match navigation, reader Contents/Appearance,
@@ -1069,7 +1069,7 @@ Validation for these control changes:
   images, descriptive accessibility labels and 48-point targets. Light and
   dark/disabled screenshots are retained under
   `mobile-evidence/2026-10-15-control-icons-*`. The reusable review app is
-  `Mobile/native_tests/tests/logisticsmobile/control_icons_probe.py`; run it only
+  `mobile_build/native_tests/tests/logisticsmobile/control_icons_probe.py`; run it only
   in a disposable probe bundle, as it replaces its own test workspace view.
   It uses Logistics' actual scene and appearance handling and also captures
   Android E Ink. These probes do not certify full physical-device interaction.
@@ -1107,5 +1107,5 @@ control bounds against each viewport, verifies the last option is reachable, and
 checks that category icons survive reflow. Disposable iPhone and iPad simulators
 and an iPhone Duo simulator with an injected landscape crease exercise compact
 routes, wide panes and seam alignment. Evidence is stored locally under
-`Mobile/logs/settings-groups/`. Android backend category/navigation tests also run;
+`mobile_build/logs/settings-groups/`. Android backend category/navigation tests also run;
 Android native rendering still needs a device or emulator review.

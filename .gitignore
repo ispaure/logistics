@@ -12,7 +12,7 @@
 # TEMPORARY / RUNTIME FILES
 
 [Tt]emp/
-debug.log
+*.log
 
 # ----------------------------------------------------------------------------------------------------------------------
 # PYTHON
@@ -57,16 +57,16 @@ Desktop.ini
 /release.zip
 
 # Curated mobile payloads and native build tool output
-/Mobile/payload/
-/Mobile/logs/
-/Mobile/.briefcase/
-/Mobile/.device.json
-/Mobile/.testflight-auth.json
-/Mobile/.testflight-keys/
-/Mobile/.tools/
-/Mobile/.android-beta/
+/mobile_build/payload/
+/mobile_build/logs/
+/mobile_build/.briefcase/
+/mobile_build/.device.json
+/mobile_build/.testflight-auth.json
+/mobile_build/.testflight-keys/
+/mobile_build/.tools/
+/mobile_build/.android-beta/
 # Isolated Android/iOS test-deployment projects, payloads, device IDs and logs.
-/Mobile/.deploy-workspaces/
+/mobile_build/.deploy-workspaces/
 *.p8
 *.p12
 *.mobileprovision
@@ -102,3 +102,23 @@ node_modules/
 secrets.json
 secrets.local.*
 service-account*.json
+
+# Legacy mobile build locations may remain in existing local checkouts.
+/Mobile/payload/
+/Mobile/logs/
+/Mobile/.briefcase/
+/Mobile/.device.json
+/Mobile/.testflight-auth.json
+/Mobile/.testflight-keys/
+/Mobile/.tools/
+/Mobile/.android-beta/
+/Mobile/.deploy-workspaces/
+
+# Local test/coverage artifacts and editor scratch files.
+.coverage.*
+coverage.xml
+*.prof
+*.tmp
+*.swp
+*.swo
+*~

@@ -68,12 +68,12 @@ Priority here means maintenance order, not a claim of a user-visible defect.
 
 | Order | Finding and source evidence | Proposed owner and outcome |
 | --- | --- | --- |
-| 1 | Books speech presentation imports the application it is meant to serve: `ReadAloudPanel` imports `logisticsmobile.control_icons`, `appearance` and `speech_overlay` in [speech_view.py](../../Python/features/books/mobile/speech_view.py). [Markdown speech](../../Python/logisticsmobile/markdown_speech.py) and Settings also use Books' speech implementation. | First inject presentation, voice preferences and overlay factories through explicit services. Then extract reusable utterance/session/native-engine mechanics into commonUtils. Keep document text extraction, highlight mapping, preference keys and privacy decisions with their Logistics owners. |
-| 2 | [PrivateWebView](../../Python/features/books/mobile/private_view.py) implements nonpersistent WebKit/Android behavior, but [Notes Library browsing](../../Python/logisticsmobile/obsidian.py) also consumes it. This is a shared native component housed inside an EPUB feature. | A proposed commonUtils native private-WebView component should own backend construction, bounded memory-only content and disposal. Books retains EPUB HTML/bridge policy; Notes retains vault routing and link containment. Inject bounds and neutral messages rather than carrying book-specific limits/errors into the shared API. |
-| 3 | [reader_ui.py](../../Python/logisticsmobile/reader_ui.py) combines library presentation, importing, unlock prompts, EPUB events/search/location saving and comic navigation. [provider_ui.py](../../Python/logisticsmobile/provider_ui.py) repeats those format responsibilities for provider-backed documents alongside private editor/session handling. | Introduce feature-owned Books and Comics presentation controllers using a small host contract. Retain provider identity, credential revocation, writer ownership, workspace routing and publication approval in the host. Move one complete workflow with its state/cancellation owner at a time. |
+| 1 | Books speech presentation imports the application it is meant to serve: `ReadAloudPanel` imports `mobile.control_icons`, `appearance` and `speech_overlay` in [speech_view.py](../../Python/features/books/mobile/speech_view.py). [Markdown speech](../../Python/mobile/markdown_speech.py) and Settings also use Books' speech implementation. | First inject presentation, voice preferences and overlay factories through explicit services. Then extract reusable utterance/session/native-engine mechanics into commonUtils. Keep document text extraction, highlight mapping, preference keys and privacy decisions with their Logistics owners. |
+| 2 | [PrivateWebView](../../Python/features/books/mobile/private_view.py) implements nonpersistent WebKit/Android behavior, but [Notes Library browsing](../../Python/mobile/obsidian.py) also consumes it. This is a shared native component housed inside an EPUB feature. | A proposed commonUtils native private-WebView component should own backend construction, bounded memory-only content and disposal. Books retains EPUB HTML/bridge policy; Notes retains vault routing and link containment. Inject bounds and neutral messages rather than carrying book-specific limits/errors into the shared API. |
+| 3 | [reader_ui.py](../../Python/mobile/reader_ui.py) combines library presentation, importing, unlock prompts, EPUB events/search/location saving and comic navigation. [provider_ui.py](../../Python/mobile/provider_ui.py) repeats those format responsibilities for provider-backed documents alongside private editor/session handling. | Introduce feature-owned Books and Comics presentation controllers using a small host contract. Retain provider identity, credential revocation, writer ownership, workspace routing and publication approval in the host. Move one complete workflow with its state/cancellation owner at a time. |
 | 4 | [comics/mobile/collection.py](../../Python/features/comics/mobile/collection/__init__.py) contains portable scans and metadata batch execution, but also dispatches EPUB metadata through `features.books.mobile.metadata`. [index.py](../../Python/features/comics/mobile/index.py) indexes mixed ordinary imports. Neither module imports a native toolkit. | Nest comic scanning/batch logic under a portable Comics collection package. Put mixed Books & Comics catalogue coordination under a Books library package; supply per-format metadata loaders instead of making the comic engine dispatch EPUBs. Split portable EPUB catalogue mapping from its mobile form adapter. |
-| 5 | [library_ui.py](../../Python/logisticsmobile/library_ui.py) handles mixed metadata indexing and comic batch editing; [files_ui.py](../../Python/logisticsmobile/files_ui.py) hosts provider/local comic batch workflows. These workflows are not general file-browser operations. | Move batch form orchestration to Comics mobile collection presentation. Move mixed library filtering/catalogue presentation to Books mobile library presentation. The host supplies storage access, current-generation checks, navigation and publication callbacks. |
-| 6 | [obsidian.py](../../Python/logisticsmobile/obsidian.py) owns a full Notes Library browser with history, preview, links and editing; [notes_actions.py](../../Python/logisticsmobile/notes_actions.py) also resolves storage and cloud locations. Desktop Notes Library UI and its portable model already belong to Text Editor. | Move browser presentation beside `features/text_editor/mobile/`, with an explicit host contract. Keep storage/location resolution and credential lifetimes in the mobile host. Retain Obsidian detection as the existing supported library-entry convention; do not merge Text Editor with the external Obsidian launcher feature. |
+| 5 | [library_ui.py](../../Python/mobile/library_ui.py) handles mixed metadata indexing and comic batch editing; [files_ui.py](../../Python/mobile/files_ui.py) hosts provider/local comic batch workflows. These workflows are not general file-browser operations. | Move batch form orchestration to Comics mobile collection presentation. Move mixed library filtering/catalogue presentation to Books mobile library presentation. The host supplies storage access, current-generation checks, navigation and publication callbacks. |
+| 6 | [obsidian.py](../../Python/mobile/obsidian.py) owns a full Notes Library browser with history, preview, links and editing; [notes_actions.py](../../Python/mobile/notes_actions.py) also resolves storage and cloud locations. Desktop Notes Library UI and its portable model already belong to Text Editor. | Move browser presentation beside `features/text_editor/mobile/`, with an explicit host contract. Keep storage/location resolution and credential lifetimes in the mobile host. Retain Obsidian detection as the existing supported library-entry convention; do not merge Text Editor with the external Obsidian launcher feature. |
 | 7 | [images/validation.py](../../Python/features/images/validation.py) is already shared by EPUB, comic and Markdown rendering, but hard-codes mobile byte/dimension/animation policy in the parser. | Candidate for a toolkit-independent commonUtils image-header probe. Keep allowed formats, 8 MiB/16 MP/8192-edge bounds and animation acceptance in caller policy wrappers. This is header inspection, not complete image integrity validation; do not expand its promises during extraction. |
 | 8 | [Git preferences](../../Python/features/git/preferences.py) still implement a JSON temporary-file/fsync/replace writer while [commonUtils persistence](../../Python/commonUtils/persistence/__init__.py) already supplies atomic byte publication. | Serialize the exact existing Git payload locally and delegate publication mechanics to the existing shared API. Retain indentation, escaping, legacy custom-path fields, malformed-file protection and sparse INI migration policy. This needs a compatibility check, not a new generic settings framework. |
 | 9 | [code_font.py](../../Python/features/code_font.py) sits in feature infrastructure, is used by Git/IDE/Text Editor, and imports Text Editor preferences. Default font coordination already delegates to commonUtils styling; the local coordinator handles custom paths. | Move the remaining consumer-specific adapter to `services/editors/ui/`, preserving custom-path behavior and patch/import compatibility where required. Reuse shared styling for defaults. Do not move Text Editor preference schemas into commonUtils. |
@@ -115,15 +115,15 @@ registration/UI integration should remain lazy and be reviewed separately from
 the domain dependency. Registration strings are not all captured by a normal
 Python import scan.
 
-Do not relocate the whole [LibraryStore](../../Python/logisticsmobile/library.py)
-and [LibraryEdits](../../Python/logisticsmobile/library_edits.py) into Books. They
+Do not relocate the whole [LibraryStore](../../Python/mobile/library.py)
+and [LibraryEdits](../../Python/mobile/library_edits.py) into Books. They
 own UUID/checksum records, recovery journals, conflict detection and durable
 publication. Those are Logistics storage contracts. A move into neutral document
 services is reasonable only after extracting their current host dependencies and
 proving recovery behavior. The existing storage location and record schema need
 not change.
 
-Likewise, [LocalComicSource](../../Python/logisticsmobile/comic_source.py) is not
+Likewise, [LocalComicSource](../../Python/mobile/comic_source.py) is not
 automatically a Comics feature candidate because of its name. It supplies a native
 archive transport over a host client. Either leave it at the host boundary or
 move/generalize it beside document archive adapters after checking the supported
@@ -169,8 +169,8 @@ page (843). Counts describe this working-tree snapshot and are not split limits.
 
 For the reading work, separate library/import coordination, format presentation,
 private document lifecycle and private text editing. Reuse existing
-[reader host services](../../Python/logisticsmobile/reader_host.py) and
-[composed workflows](../../Python/logisticsmobile/host_services.py); avoid replacing
+[reader host services](../../Python/mobile/reader_host.py) and
+[composed workflows](../../Python/mobile/host_services.py); avoid replacing
 the remaining inheritance with controllers that still forward an unrestricted
 application object. Each controller should enumerate its dependencies and own its
 tasks, cancellation, generation and disposal state.
@@ -180,7 +180,7 @@ extract an independently changing workflow, not an arbitrary block of methods.
 LM already has a conversation session and Git already has job/history owners.
 Review their remaining page coordination before introducing additional layers.
 
-Keep `ui_new`, flat test discovery and feature infrastructure import paths stable
+Keep `desktop`, flat test discovery and feature infrastructure import paths stable
 during these moves. Preserve `DestinationRail.tools_menu` and the reserved Misc
 glyph. The external feature checkout is excluded from this cleanup and public
 documentation navigation. No root README expansion is needed for these internal
@@ -196,7 +196,7 @@ ownership changes.
 3. Move portable collection/batch behavior out of `mobile/`; extract per-format
    catalogue adapters and then relocate mixed library presentation. Keep record
    schemas, index privacy exclusions and output ordering unchanged.
-4. Remove Books speech imports of `logisticsmobile` through explicit services.
+4. Remove Books speech imports of `mobile` through explicit services.
    Extract private WebView and reusable speech/image primitives into commonUtils
    with their shared tests and owning API documentation. Publish an available
    shared commit before advancing the Logistics submodule pointer.
@@ -277,14 +277,14 @@ This is a focused local baseline, not a full release/platform certification.
 | Runtime | Isolated test files |
 | --- | --- |
 | Desktop `.venv` | `test_books_epub`, `test_books_reader`, `test_comics`, `test_calibre`, `test_mobile_collection`, `test_mobile_collection_index`, `test_notes_library_desktop`, `test_mobile_speech_typography`, `test_mobile_speech_timer`, `test_mobile_packaging`, `test_mobile_portability` |
-| Mobile `Mobile/.venv` | `test_obsidian`, `test_notes_library`, `test_collection_parity`, `test_reader_cohesion`, `test_markdown_speech` |
+| Mobile `mobile_build/.venv` | `test_obsidian`, `test_notes_library`, `test_collection_parity`, `test_reader_cohesion`, `test_markdown_speech` |
 
 The common invocation was `QT_QPA_PLATFORM=offscreen PYTHONPATH=Python
 <interpreter> Python/tests/run_regressions.py <suite> --pattern <file.py>`, with
 one process per file. Comics initially failed because disposable workspaces tried
 to use the sandbox-restricted default Application Support directory; it passed
 with `COMMONUTILS_STORAGE_ROOT` set to an isolated temporary directory. Reader
-cohesion passed with `PYTHONPATH=Python:.`, required for its `Mobile` fixture
+cohesion passed with `PYTHONPATH=Python:.`, required for its `mobile_build` fixture
 import. The portability harness initially failed its two synthetic chat fixtures
 because localhost binding was denied; it passed when run with localhost access.
 Those initial failures are environment findings, not demonstrated product bugs.

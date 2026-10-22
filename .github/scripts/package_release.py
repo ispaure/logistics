@@ -36,7 +36,7 @@ def included(name):
             and path.name != 'secrets.json'
             and not path.name.startswith(('secrets.local.', 'service-account'))
             and not any(part.endswith(('.xcarchive', '.dSYM')) for part in path.parts)
-            and not (len(path.parts) > 1 and path.parts[0] == 'Mobile'
+            and not (len(path.parts) > 1 and path.parts[0] in {'mobile_build', 'Mobile'}
                      and path.parts[1] in {'payload', 'logs', '.tools', '.briefcase',
                                            '.deploy-workspaces', '.android-beta', '.testflight-keys',
                                            '.device.json', '.testflight-auth.json'})

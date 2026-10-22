@@ -1,17 +1,17 @@
 # Local iPhone and iPad deployment
 
 For the combined PySide test-device and tester-distribution window, use
-`Mobile/deploy_test_devices.command`; see the
+`mobile_build/deploy_test_devices.command`; see the
 [window guide](mobile-launchers.md#simple-deployment-window). It reuses the iOS
 configuration below and remembers discovered Android devices locally.
 The window runs iOS alongside Android in separate ignored platform workspaces;
 the saved iOS devices remain sequential. Its iOS build and deployment logs live
-under `Mobile/.deploy-workspaces/ios/logs/`. Standalone `device_tools.py` keeps
+under `mobile_build/.deploy-workspaces/ios/logs/`. Standalone `device_tools.py` keeps
 the paths described below.
 
-`Mobile/device_tools.py` owns the local physical-device workflow; the executable
-`Mobile/deploy_ios.command` anchors paths to its own directory and uses the
-ignored `Mobile/.venv` and optional `Mobile/.tools/go` installation. See the
+`mobile_build/device_tools.py` owns the local physical-device workflow; the executable
+`mobile_build/deploy_ios.command` anchors paths to its own directory and uses the
+ignored `mobile_build/.venv` and optional `mobile_build/.tools/go` installation. See the
 [operator guide](mobile-launchers.md#build-and-deploy-to-a-paired-iphone-over-wi-fi)
 for setup and commands. This workflow does not automate TestFlight.
 
@@ -24,7 +24,7 @@ their phone.
 
 Configuration pins the existing `io.github.ispaure.logisticsmobile` identity,
 default paired physical iPhone/iPad UDID and Apple development team in ignored
-`Mobile/.device.json`. Simulator entries and ambiguous device selections are
+`mobile_build/.device.json`. Simulator entries and ambiguous device selections are
 rejected. Debug and Release target configurations receive automatic signing
 with the selected team. An existing different team or bundle ID is rejected;
 the helper does not resolve mismatches by changing identity or uninstalling.
@@ -47,12 +47,12 @@ sources and builds for its own provisioning destination. Failure on one device
 does not prevent attempts on the others; any failure makes the batch exit
 unsuccessfully. Existing single-target commands keep their saved default.
 Successful installation/launch reports also persist under
-`Mobile/logs/device-deployment-<UDID>.json`, alongside the latest report.
+`mobile_build/logs/device-deployment-<UDID>.json`, alongside the latest report.
 
 Each build validates app-owned imports against `APP_MODULES`, then stages the
 explicit public mobile source allowlist with local dirty sources allowed, refreshes the generated Briefcase application and native
 license notices, rebuilds both native bridge variants, restores the plist's
-`MainModule` to `logisticsmobile`, and runs a Debug arm64 device build.
+`MainModule` to `mobile`, and runs a Debug arm64 device build.
 Existing projects also refresh Briefcase requirements on every deployment;
 source-only updates retain stale `app_packages` and can crash during startup
 when newly imported dependencies such as `markdown_it` are absent. The deployment
@@ -63,7 +63,7 @@ On 2026-10-17, the physical iPhone console confirmed a startup
 After refreshing requirements and installing in place over Wi-Fi, the app
 remained running and a physical-device screenshot showed Workspaces with its
 existing configured folders. All 11 deployment tests passed; the screenshot is
-retained locally at `Mobile/logs/iphone-startup-dependencies-fixed.png`.
+retained locally at `mobile_build/logs/iphone-startup-dependencies-fixed.png`.
 The toolchain selector requires SDK 27.1 or newer and supplies `DEVELOPER_DIR`
 to child processes without changing the global `xcode-select` setting.
 `cloud_build.ios_compiler` quotes the SDK path in Go's `CC` argument string so
@@ -100,7 +100,7 @@ tunnel wrote/read/deleted a temporary file, verified its bytes, and denied acces
 to private Application Support storage. The shared directory was empty again
 after cleanup. A physical-device screenshot showed the normal Settings UI.
 This validates the Documents-only service without claiming a manual Finder USB
-interaction. Ignored evidence is retained in `Mobile/logs/iphone-local-sharing-*`.
+interaction. Ignored evidence is retained in `mobile_build/logs/iphone-local-sharing-*`.
 
 `deploy` verifies CoreDevice transport immediately before installation.
 `localNetwork` (Xcode 27.1) and `wireless` are accepted; a wired deployment
@@ -112,10 +112,10 @@ Errors stop the workflow and retain diagnostic logs. Local configuration,
 profiles, certificates, payloads, environments, screenshots and device logs
 are excluded from Git; no credentials are written by the helper.
 
-Focused unit checks in `Mobile/tests/test_device_tools.py` cover identity
+Focused unit checks in `mobile_build/tests/test_device_tools.py` cover identity
 rejection, normal-launcher restoration, physical-device selection and SDK
 paths containing spaces. Actual build/install/launch evidence lives in ignored
-`Mobile/logs/device-*.log` and `device-deployment.json`; this workflow does not
+`mobile_build/logs/device-*.log` and `device-deployment.json`; this workflow does not
 claim the full mobile functional test suite passed on the physical device.
 
 ## Local verification, 2026-10-13
@@ -143,9 +143,9 @@ showing a black screen even though signing, installation and process launch all
 succeeded. Simulator probes that overlay the whole source package do not detect
 an omitted allowlist entry.
 
-`Mobile/tools.py` now rejects app-relative imports absent from the allowlist before
+`mobile_build/tools.py` now rejects app-relative imports absent from the allowlist before
 creating a payload. Packaging tests remove the recent-documents entry to assert
-that this check fails. `Mobile/tests/test_packaged_startup.py` stages the actual
+that this check fails. `mobile_build/tests/test_packaged_startup.py` stages the actual
 allowlist and starts Home in a separate process with only that payload on its
 application import path, using empty and existing-document storage. This host test
 uses Toga's dummy backend; a successful deploy must still be visually checked on
@@ -156,7 +156,7 @@ The corrected signed build was installed in place over Wi-Fi on the existing
 paired iPhone 15 Pro Max. A physical-device screenshot showed Home and the
 existing unsaved document's Continue card. No app uninstall or data reset was
 performed. The screenshot and deployment logs are retained locally as
-`Mobile/logs/iphone-startup-check.png` and `iphone-startup-fix-deploy.log`.
+`mobile_build/logs/iphone-startup-check.png` and `iphone-startup-fix-deploy.log`.
 
 ## Deployment terminology
 
@@ -182,7 +182,7 @@ system log when installation and process launch succeed without a usable UI.
 
 The corrected signed build was installed in place on the paired iPhone over
 Wi-Fi. A physical-device screenshot showed Workspaces and the destination bar;
-the local evidence is `Mobile/logs/iphone-startup-appearance-fixed.png`.
+the local evidence is `mobile_build/logs/iphone-startup-appearance-fixed.png`.
 All 10 focused appearance and packaged-startup tests passed. No uninstall or
 app-data reset was performed.
 
@@ -203,7 +203,7 @@ missing page content, inspect startup exceptions before changing tab artwork.
 The fix was installed in place on the paired iPhone and iPad. Physical iPhone
 screenshots confirmed the normal destination icons and the populated, saved
 Cloud workspace hierarchy. Local evidence is retained at
-`Mobile/logs/iphone-workspace-startup-fixed-home.png`,
+`mobile_build/logs/iphone-workspace-startup-fixed-home.png`,
 `iphone-workspaces-restored.png` and `iphone-workspace-startup-failure.log`.
 All 44 appearance, workspace-hub and packaged-startup host checks passed.
 No uninstall or app-data reset was performed; this does not certify every

@@ -9,7 +9,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.typography import point_size
 from commonUtils.ui.appearance.theme import SLATE_DARK, SLATE_LIGHT, theme_palette, theme_stylesheet
 from features.contributions import DocumentLauncherContribution
-from ui_new.landing import LandingPage
+from desktop.landing import LandingPage
 
 
 class LandingAppearanceTests(QtTestCase):

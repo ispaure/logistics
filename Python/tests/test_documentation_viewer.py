@@ -9,7 +9,7 @@ from commonUtils.ui.markdown import MarkdownViewer
 from commonUtils.ui.markdown.window import _windows
 from commonUtils.formats.markdown_wiki import MarkdownWiki
 from features import registry
-from ui_new.pages.settings import FeatureSettingsPanel
+from desktop.pages.settings import FeatureSettingsPanel
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -48,9 +48,9 @@ class DocumentationViewerTests(QtTestCase):
 
     def test_header_menu_browser_and_bulk_help_open_their_real_scopes(self):
         from types import MethodType
-        from ui_new.header_menus import HeaderMenus
-        from ui_new.browser_menus import BrowserMenus
-        from ui_new.bulk_rename import BulkRenameWindow
+        from desktop.header_menus import HeaderMenus
+        from desktop.browser_menus import BrowserMenus
+        from desktop.bulk_rename import BulkRenameWindow
         host = qt.QMainWindow()
         menu = qt.QMenu(host)
         harness = SimpleNamespace(owner=SimpleNamespace(dlg=host), guides=menu)
@@ -61,7 +61,7 @@ class DocumentationViewerTests(QtTestCase):
         with patch.object(registry, 'get_feature_states', return_value=states):
             HeaderMenus.update_guides(harness)
         expected = {'Logistics Guide': ROOT / 'docs/user/user.md',
-                    'Bulk Rename Guide': ROOT / 'Python/ui_new/bulk_rename/docs/user/user.md'}
+                    'Bulk Rename Guide': ROOT / 'Python/desktop/bulk_rename/docs/user/user.md'}
         expected.update({state.label: ROOT / 'Python/features' / state.name / 'docs/user/user.md'
                          for state in states})
         for action in menu.actions():
@@ -87,12 +87,12 @@ class DocumentationViewerTests(QtTestCase):
         before = set(_windows)
         help_menu.actions()[0].trigger()
         window = (set(_windows) - before).pop()
-        scope = ROOT / 'Python/ui_new/bulk_rename/docs'
+        scope = ROOT / 'Python/desktop/bulk_rename/docs'
         self.assert_scope(window.viewer, scope / 'user/user.md', scope)
         window.close(); bulk.close(); host.close()
 
     def test_real_folder_rows_open_landings_and_up_history_keep_scope(self):
-        scopes = [ROOT / 'docs', ROOT / 'Python/ui_new/bulk_rename/docs'] + [
+        scopes = [ROOT / 'docs', ROOT / 'Python/desktop/bulk_rename/docs'] + [
             p / 'docs' for p in (ROOT / 'Python/features').iterdir()
             if not p.is_symlink() and (p / 'docs/docs.md').is_file()]
         for scope in scopes:

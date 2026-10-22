@@ -151,7 +151,7 @@ class EncryptedComicTests(unittest.TestCase):
         before = self.path.read_bytes()
         ComicDocument(self.path)  # Even a cached valid password cannot bypass a bad INI in compression.
         self.configure('incorrect-config')
-        with patch('ui_new.dialogs.archive_password.ask_password', side_effect=AssertionError('No batch dialogs')):
+        with patch('desktop.dialogs.archive_password.ask_password', side_effect=AssertionError('No batch dialogs')):
             stats = compress_selected_cbz([self.path])
         self.assertEqual(stats.error_during_compression, 1)
         self.assertEqual(stats.compressed_file_count, 0)
@@ -211,7 +211,7 @@ class EncryptedComicTests(unittest.TestCase):
     def test_locked_background_previews_never_prompt(self):
         self.archive()
         self.config.unlink()
-        with patch('ui_new.dialogs.archive_password.ask_password', side_effect=AssertionError('Unexpected prompt')):
+        with patch('desktop.dialogs.archive_password.ask_password', side_effect=AssertionError('Unexpected prompt')):
             cbz = CBZFile(self.path)
             self.assertTrue(cbz.browser_thumbnail((120, 165)).startswith(b'\x89PNG'))
             details = cbz._comic_details()

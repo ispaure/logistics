@@ -4,16 +4,16 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
-from logisticsmobile.workspace import Workspace, MAX_SESSIONS
+from mobile.workspace import Workspace, MAX_SESSIONS
 
 
 class WorkspaceTests(unittest.TestCase):
     def test_unchanged_workspace_skips_durable_writes_but_rechecks_disk_and_view_changes(self):
-        from logisticsmobile.workspace import atomic_write_json
+        from mobile.workspace import atomic_write_json
         with TemporaryDirectory() as directory:
             workspace = Workspace(Path(directory))
             session = workspace.open('managed-text', 'a' * 32, 'text')
-            with patch('logisticsmobile.workspace.atomic_write_json', wraps=atomic_write_json) as write:
+            with patch('mobile.workspace.atomic_write_json', wraps=atomic_write_json) as write:
                 workspace.save()
                 workspace.save()
                 self.assertEqual(write.call_count, 1)

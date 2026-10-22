@@ -1,8 +1,8 @@
 """Canonical folder artwork for desktop and mobile.
 
 Edit FOLDER_PATHS/FOLDER_FILLS on their 24-point grid and LOCK_LIGHT/LOCK_DARK here.
-After geometry/fill/stroke edits, run Mobile/generate_folder_icons.py to refresh
-the generated mobile browser indicators in logisticsmobile/hub_icons.py.
+After geometry/fill/stroke edits, run mobile_build/generate_folder_icons.py to refresh
+the generated mobile browser indicators in mobile/hub_icons.py.
 """
 
 from math import cos, sin, pi

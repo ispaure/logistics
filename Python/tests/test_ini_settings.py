@@ -19,7 +19,7 @@ class SettingsIntegrationTests(QtTestCase):
         self.path = Path(self.temp.name) / 'config.ini'
 
     def test_configuration_panel_explicitly_enables_typed_keys(self):
-        from ui_new.pages.settings import ConfigurationPanel
+        from desktop.pages.settings import ConfigurationPanel
         self.path.write_text('[S]\non_bool = true\n')
         panel = ConfigurationPanel([self.path])
         self.addCleanup(panel.deleteLater)

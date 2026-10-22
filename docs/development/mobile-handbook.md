@@ -14,13 +14,13 @@ install beta versions; uploading is separate from Apple's processing and review.
 
 | Location | What you do here |
 | --- | --- |
-| `Python/logisticsmobile/` | Edit the mobile application |
+| `Python/mobile/` | Edit the mobile application |
 | `Python/features/`, `Python/services/` | Edit feature/service source; mobile staging selects supported modules |
 | `Python/commonUtils/` | Shared library, maintained in its own Git repository/submodule |
-| `Mobile/` | Build helpers, project configuration, native bridge, tests and artwork |
-| `Mobile/payload/` | Generated copies of selected source; do not edit |
-| `Mobile/build/` | Generated Xcode/Android projects, built apps and release workspaces; do not use as source |
-| `Mobile/logs/` | Local diagnostic logs |
+| `mobile_build/` | Build helpers, project configuration, native bridge, tests and artwork |
+| `mobile_build/payload/` | Generated copies of selected source; do not edit |
+| `mobile_build/build/` | Generated Xcode/Android projects, built apps and release workspaces; do not use as source |
+| `mobile_build/logs/` | Local diagnostic logs |
 
 A source change does not automatically update an existing Xcode project. The
 source must be staged, Briefcase updated, and the app rebuilt. The paired-iPhone
@@ -45,8 +45,8 @@ not included in a source checkout.
    cd ~/GIT
    git clone --branch alpha --recurse-submodules https://github.com/ispaure/logistics.git
    cd logistics
-   python3.12 -m venv Mobile/.venv
-   Mobile/.venv/bin/python -m pip install briefcase==0.4.5 -r Mobile/requirements-testflight.txt
+   python3.12 -m venv mobile_build/.venv
+   mobile_build/.venv/bin/python -m pip install briefcase==0.4.5 -r mobile_build/requirements-testflight.txt
    ```
 
    For an existing checkout, inspect `git status` before updating. Once your work
@@ -58,9 +58,9 @@ not included in a source checkout.
 
    ```sh
    cd ~/GIT/logistics
-   source Mobile/.venv/bin/activate
-   export PATH="$PWD/Mobile/.tools/go/bin:$PATH"
-   export DEVELOPER_DIR="$(python Mobile/select_ios_sdk.py --path-only)"
+   source mobile_build/.venv/bin/activate
+   export PATH="$PWD/mobile_build/.tools/go/bin:$PATH"
+   export DEVELOPER_DIR="$(python mobile_build/select_ios_sdk.py --path-only)"
    python --version
    go version
    python -m briefcase --version
@@ -75,7 +75,7 @@ A simulator is a virtual phone on your Mac; it does not install onto your iPhone
 or upload anything. From the repository root in the prepared Terminal:
 
 ```sh
-python Mobile/tools.py stage Mobile/payload --allow-dirty
+python mobile_build/tools.py stage mobile_build/payload --allow-dirty
 cd Mobile
 python cloud_build.py licenses
 python -m briefcase create iOS --no-input
@@ -84,13 +84,13 @@ python -m briefcase build iOS --no-input
 python -m briefcase open iOS
 ```
 
-For subsequent builds, first move the old `Mobile/payload` to a unique backup
-location (for example `Mobile/build/payload-before-edit-1`, creating `build` if
+For subsequent builds, first move the old `mobile_build/payload` to a unique backup
+location (for example `mobile_build/build/payload-before-edit-1`, creating `build` if
 needed). Staging requires a new destination and will not overwrite one. Repeat
 staging and licenses, then use **`update` instead of `create`**, followed by
 `cloud_build.py ios`, `build` and `open`. `--allow-dirty` is for local development;
 release staging requires committed sources. All `cloud_build.py` commands above
-run from `Mobile`, not from the repository root.
+run from `mobile_build`, not from the repository root.
 
 In Xcode:
 
@@ -103,7 +103,7 @@ In Xcode:
    final generic “build failed” message.
 
 The generated project is
-`Mobile/build/logisticsmobile/ios/xcode/Logistics Mobile.xcodeproj`.
+`mobile_build/build/logisticsmobile/ios/xcode/Logistics Mobile.xcodeproj`.
 Use `briefcase open iOS` to open the correct project. Lasting changes belong in
 source/configuration/build helpers, because project regeneration can replace
 manual edits in Xcode. Automated native UI checks use a special test launcher;
@@ -122,9 +122,9 @@ Use your **existing** Apple development team ID and the paired phone's identifie
 (UDID) from Xcode. Replace the example values below; do not enter them literally:
 
 ```sh
-Mobile/deploy_ios.command configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
-Mobile/deploy_ios.command status
-Mobile/deploy_ios.command build
+mobile_build/deploy_ios.command configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
+mobile_build/deploy_ios.command status
+mobile_build/deploy_ios.command build
 ```
 
 These commands run from the repository root. `configure` saves local choices,
@@ -132,14 +132,14 @@ These commands run from the repository root. `configure` saves local choices,
 To install and launch wirelessly, unlock the phone, unplug USB, then run:
 
 ```sh
-Mobile/deploy_ios.command
+mobile_build/deploy_ios.command
 ```
 
-You can also double-click `Mobile/deploy_ios.command` in Finder. For an explicitly
-wired initial installation use `Mobile/deploy_ios.command deploy --allow-wired`.
+You can also double-click `mobile_build/deploy_ios.command` in Finder. For an explicitly
+wired initial installation use `mobile_build/deploy_ios.command deploy --allow-wired`.
 After a first-launch trust prompt, trust the developer in the iPhone's
 **Settings → General → VPN & Device Management**, then run
-`Mobile/deploy_ios.command launch` to retry without rebuilding.
+`mobile_build/deploy_ios.command launch` to retry without rebuilding.
 
 Keep the bundle ID **`io.github.ispaure.logisticsmobile`**, existing team and
 Keychain identity. Signing errors need their underlying account/profile problem
@@ -160,7 +160,7 @@ explains that process.
 
 1. Follow [one-time API setup](mobile-testflight.md#api-setup-and-distribution) to
    save an App Store Connect team API key reference on this Mac. Install the
-   requirements from the Mac setup above. `python Mobile/testflight_external.py check`
+   requirements from the Mac setup above. `python mobile_build/testflight_external.py check`
    verifies account/app/group access without uploading.
 2. Make sure the intended source and commonUtils revision are committed and
    pushed. A local commit alone is not a GitHub backup. Review `git status` and
@@ -168,15 +168,15 @@ explains that process.
    of commits. Do not use an unsigned rehearsal for an upload.
 3. Check App Store Connect's TestFlight tab for the latest build number. Choose
    a new increasing number, at most nine digits, unused both there and under
-   `Mobile/build/testflight`. The number below is illustrative: replace it.
+   `mobile_build/build/testflight`. The number below is illustrative: replace it.
 4. In the prepared Terminal at the repository root, use the **same number** for
    each step of this release:
 
    ```sh
    MOBILE_RELEASE_NUMBER=202610151
-   python Mobile/testflight_tools.py plan --build-number "$MOBILE_RELEASE_NUMBER"
-   python Mobile/testflight_tools.py archive --build-number "$MOBILE_RELEASE_NUMBER"
-   python Mobile/testflight_tools.py export --build-number "$MOBILE_RELEASE_NUMBER"
+   python mobile_build/testflight_tools.py plan --build-number "$MOBILE_RELEASE_NUMBER"
+   python mobile_build/testflight_tools.py archive --build-number "$MOBILE_RELEASE_NUMBER"
+   python mobile_build/testflight_tools.py export --build-number "$MOBILE_RELEASE_NUMBER"
    ```
 
    `plan` previews identity and settings. `archive` compiles the release.
@@ -188,7 +188,7 @@ explains that process.
 5. When you intend to send it to Apple and the configured testers, run:
 
    ```sh
-   TESTFLIGHT_UPLOAD=1 python Mobile/testflight_tools.py upload --build-number "$MOBILE_RELEASE_NUMBER"
+   TESTFLIGHT_UPLOAD=1 python mobile_build/testflight_tools.py upload --build-number "$MOBILE_RELEASE_NUMBER"
    ```
 
    The upload also attempts Friends assignment, beta-review submission when
@@ -202,14 +202,14 @@ If upload succeeded but processing/distribution stopped, resolve the reported
 issue, then resume the existing build with:
 
 ```sh
-python Mobile/testflight_tools.py distribute --build-number "$MOBILE_RELEASE_NUMBER"
+python mobile_build/testflight_tools.py distribute --build-number "$MOBILE_RELEASE_NUMBER"
 ```
 
 This does not upload again. An invalid binary needs a fixed build and a new
 number. If archiving failed after creating its workspace, preserve that directory
 for diagnosis and choose another number for the next archive attempt.
 
-Release records live under `Mobile/build/testflight/<number>/`: `release.json`,
+Release records live under `mobile_build/build/testflight/<number>/`: `release.json`,
 `Logistics.xcarchive`, `export/*.ipa`, `export-verified.json`, `upload-result.json`,
 `external-distribution.json` and `logs/`. Keep them in a separate release backup.
 A recorded group assignment does not establish that Apple has approved review.
@@ -234,7 +234,7 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 ```
 
 Use the Python/Go environment above. Prepare a fresh payload from the repository
-root as in the simulator steps, then from `Mobile`:
+root as in the simulator steps, then from `mobile_build`:
 
 ```sh
 python cloud_build.py licenses
@@ -254,7 +254,7 @@ debugging enabled and the computer authorized. See the
 for SDK/device setup.
 
 The debug APK is
-`Mobile/build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk`.
+`mobile_build/build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk`.
 The current repository has debug build/runtime automation; it does **not** provide
 a Google Play upload/release-signing workflow. TestFlight only distributes Apple
 apps. Play publication would need its own signing and store setup.
@@ -266,13 +266,13 @@ GitHub preserves pushed source, not the whole working computer.
 | Item | Recovery plan |
 | --- | --- |
 | Logistics commits and commonUtils commits | Push both repositories; commit the shared revision pointer in Logistics |
-| `Mobile/.device.json` | Private backup of team/device and signing/Keychain baseline; restore before rebuilding an existing app identity |
-| `Mobile/.testflight-auth.json` | Private backup of API key reference; reconfigure its absolute path on another Mac |
-| `.p8` in `Mobile/.testflight-keys/` or elsewhere | Encrypted private backup, never Git; a reference file alone does not preserve the key |
+| `mobile_build/.device.json` | Private backup of team/device and signing/Keychain baseline; restore before rebuilding an existing app identity |
+| `mobile_build/.testflight-auth.json` | Private backup of API key reference; reconfigure its absolute path on another Mac |
+| `.p8` in `mobile_build/.testflight-keys/` or elsewhere | Encrypted private backup, never Git; a reference file alone does not preserve the key |
 | Signing certificates/private keys in macOS Keychain | Use Xcode/Keychain export or Apple account recovery; these are outside the source checkout |
 | GitHub environment secrets and Apple account access | Retain access/recovery information privately; repository cloning does not restore these |
 | Release archives, IPA and release records | Separate backup if you need distribution history/debug symbols; do not treat all of `build` as expendable |
-| `Mobile/payload`, generated projects, `.venv`, `.tools`, `.briefcase` | Recreate with these instructions and the pinned tools |
+| `mobile_build/payload`, generated projects, `.venv`, `.tools`, `.briefcase` | Recreate with these instructions and the pinned tools |
 | App documents and credentials on a device | Separate app-data/export backup; a Git checkout does not contain them |
 
 The optional external feature link is maintained in its own repository and is
@@ -282,7 +282,7 @@ excluded from public mobile builds. It is not part of a Logistics clone.
 
 | Symptom | Next step |
 | --- | --- |
-| `python3.12`, `go` or Briefcase missing | Check tool installation and activate `Mobile/.venv` in this Terminal |
+| `python3.12`, `go` or Briefcase missing | Check tool installation and activate `mobile_build/.venv` in this Terminal |
 | No compatible SDK/runtime | Install the required Xcode/platform/runtime, then rerun the SDK selector |
 | Payload already exists | Move the old generated payload aside; stage into a new directory |
 | Edited source does not appear | Restage, update Briefcase, rerun the platform bridge helper and rebuild |
@@ -292,21 +292,21 @@ excluded from public mobile builds. It is not part of a Logistics clone.
 | TestFlight says processing/review pending | Check App Store Connect; use `distribute` after prerequisites are resolved |
 | Apple rejects an uploaded binary | Read Apple's specific error; repair source/packaging and use a new build number |
 
-Device logs: `Mobile/logs/device-*.log`. Release logs:
-`Mobile/build/testflight/<number>/logs/`. Xcode: Report navigator. Source checks
+Device logs: `mobile_build/logs/device-*.log`. Release logs:
+`mobile_build/build/testflight/<number>/logs/`. Xcode: Report navigator. Source checks
 and host tests are described in [docs/development/mobile-launchers.md](mobile-launchers.md#host-validation);
 passing them does not replace simulator and physical-device testing.
 
 
 ## Android tester distribution and combined launcher
 
-`Mobile/deploy_android_firebase.command` wraps `firebase_deploy.py`. It uses
+`mobile_build/deploy_android_firebase.command` wraps `firebase_deploy.py`. It uses
 interactive Firebase CLI Google sign-in, verifies project access and the registered
 Android package, and resolves the configured tester group by alias or display
 name without assuming capitalization. Authentication/setup failures stop before
 native build preparation. `--login` signs in and verifies setup without building;
 `--check` verifies existing access. Firebase configuration lives in
-`Mobile/firebase-distribution.json`; private credentials are never stored there.
+`mobile_build/firebase-distribution.json`; private credentials are never stored there.
 
 The builder reuses Android local-source staging and the rclone bridge helper.
 Existing generated projects refresh their Python requirements as well as app
@@ -315,21 +315,21 @@ It uses Gradle `assembleRelease` with a temporary init script for versionCode,
 then SDK zipalign/apksigner and aapt for signature and package/version verification.
 It does not rewrite debug signing or the generated project's default version.
 The persistent PKCS12 key/password and reserved version counter live under ignored,
-owner-only `Mobile/.android-beta/`; back up this directory securely. A nonblocking
+owner-only `mobile_build/.android-beta/`; back up this directory securely. A nonblocking
 lock prevents concurrent beta runs. Device deployment and beta building share
 the generated project/payload: do not run them concurrently in separate terminals.
-Builds/logs are under `Mobile/build/firebase/<number>/`. No device is installed
+Builds/logs are under `mobile_build/build/firebase/<number>/`. No device is installed
 or uninstalled by the beta builder. Upload requires an explicit confirmation.
 Firebase handles invitations and notifications; testers approve APK installation.
 
-`Mobile/deploy_all.command` invokes the two device launchers followed by the two
+`mobile_build/deploy_all.command` invokes the two device launchers followed by the two
 distribution launchers sequentially. Distribution prompts are retained. On failure,
 the user can stop or continue; any failed step produces a nonzero final status.
 See [the mobile launcher guide](mobile-launchers.md#double-click-android-firebase-distribution).
 
 ## Android deploy launcher
 
-For a normal Android app, `Mobile/deploy_android.command` stages current Logistics
+For a normal Android app, `mobile_build/deploy_android.command` stages current Logistics
 and commonUtils sources and refreshes Briefcase before each build. It rebuilds
 both bridge ABIs, resolves the SDK and cached JDK, then installs the debug APK with
 `adb install -r` and launches the normal activity. The normal Briefcase build
@@ -361,8 +361,8 @@ For a synthetic local audit without replacing the normal app, use an existing
 Logistics Simulator build (selected with Xcode 27.1):
 
 ```sh
-python Mobile/duo_pose_tools.py --app '/absolute/path/Logistics Mobile.app' \
-  --device DUO_UDID --output Mobile/logs/duo-outer-review
+python mobile_build/duo_pose_tools.py --app '/absolute/path/Logistics Mobile.app' \
+  --device DUO_UDID --output mobile_build/logs/duo-outer-review
 ```
 
 This prepares the curated source snapshot in a temporary directory, installs

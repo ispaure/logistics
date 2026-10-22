@@ -17,8 +17,8 @@ from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 from features.rclone.localcrypt.mobile.resources import CryptFiles
 from features.rclone.transfers.mobile.jobs import MirrorJobs
 from features.rclone.mobile.credential_vault import ProtectedVault
-assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile.app',
-    'logisticsmobile.provider_ui', 'features.rclone.configuration', 'config')) for name in sys.modules)
+assert not any(name.startswith(('PySide', 'toga', 'mobile.app',
+    'mobile.provider_ui', 'features.rclone.configuration', 'config')) for name in sys.modules)
 '''
         result = subprocess.run([sys.executable, '-c', code],
             env=dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1])),

@@ -3,7 +3,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.readers.reader_chrome import ReaderFullscreen
 from PySide6.QtTest import QTest
-from ui_new.fullscreen import WindowFullscreen
+from desktop.fullscreen import WindowFullscreen
 
 
 class WindowFullscreenTests(QtTestCase):

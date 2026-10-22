@@ -10,7 +10,7 @@ from features.comics.reading import comic_siblings, visible_pages
 from features.comics.reading_state import ReadingState, remember_position
 from commonUtils.ui.tasks.operations import Operation
 from services.documents.zip_passwords import is_password_error
-from ui_new.dialogs.archive_password import ask_password
+from desktop.dialogs.archive_password import ask_password
 from .reader_pages import PageCanvas, read_image, read_candidates, read_previous
 from .reader_controls import ReaderControls, ReaderMenus
 from .reader_keys import ReaderKeyHandler

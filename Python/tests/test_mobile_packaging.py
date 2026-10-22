@@ -10,26 +10,26 @@ from tempfile import TemporaryDirectory
 import unittest
 
 REPO = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('mobile_tools', REPO / 'Mobile/tools.py')
+spec = importlib.util.spec_from_file_location('mobile_tools', REPO / 'mobile_build/tools.py')
 mobile_tools = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mobile_tools)
 
 
 class MobilePackagingTests(unittest.TestCase):
     def test_qt_proof_packages_the_feature_owned_bridge_without_the_app(self):
-        spec = importlib.util.spec_from_file_location('qt_proof_prepare', REPO / 'Mobile/qt_proof/prepare.py')
+        spec = importlib.util.spec_from_file_location('qt_proof_prepare', REPO / 'mobile_build/qt_proof/prepare.py')
         prepare = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(prepare)
         with TemporaryDirectory() as directory:
             root = Path(directory)
             payload = prepare.stage(root / 'payload')
-            self.assertFalse((payload / 'logisticsmobile').exists())
+            self.assertFalse((payload / 'mobile').exists())
             self.assertFalse((payload / 'features/rclone/api.py').exists())
             code = '''
 import sys
 from features.rclone.mobile.cloud import CloudClient
 assert CloudClient.__module__ == 'features.rclone.mobile.cloud'
-assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) for name in sys.modules)
+assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name in sys.modules)
 '''
             result = subprocess.run([sys.executable, '-c', code], cwd=root,
                 env=dict(os.environ, PYTHONPATH=str(payload)), capture_output=True, text=True, timeout=15)
@@ -39,29 +39,29 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
         feature_modules = tuple(name for name in mobile_tools.DOCUMENT_MODULES
                                 if name.startswith('features/rclone/') and not name.endswith('/credential_vault.py'))
         with self.assertRaisesRegex(ValueError, 'imports unstaged features.rclone.mobile.credential_vault'):
-            mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile', feature_modules=feature_modules)
+            mobile_tools.validate_app_modules(REPO / 'Python/mobile', feature_modules=feature_modules)
 
     def test_app_imports_are_all_in_the_packaged_payload(self):
-        mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile')
+        mobile_tools.validate_app_modules(REPO / 'Python/mobile')
         # This omission caused a black launch screen in signed iPhone builds.
         missing_recent = tuple(name for name in mobile_tools.APP_MODULES if name != 'recent_documents.py')
-        with self.assertRaisesRegex(ValueError, 'imports unstaged logisticsmobile.recent_documents'):
-            mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile', missing_recent)
+        with self.assertRaisesRegex(ValueError, 'imports unstaged mobile.recent_documents'):
+            mobile_tools.validate_app_modules(REPO / 'Python/mobile', missing_recent)
         missing_discovery = tuple(name for name in mobile_tools.APP_MODULES if name != 'folder_discovery.py')
-        with self.assertRaisesRegex(ValueError, 'imports unstaged logisticsmobile.folder_discovery'):
-            mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile', missing_discovery)
+        with self.assertRaisesRegex(ValueError, 'imports unstaged mobile.folder_discovery'):
+            mobile_tools.validate_app_modules(REPO / 'Python/mobile', missing_discovery)
         missing_listing = tuple(name for name in mobile_tools.APP_MODULES if name != 'folder_listing.py')
-        with self.assertRaisesRegex(ValueError, 'imports unstaged logisticsmobile.folder_listing'):
-            mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile', missing_listing)
+        with self.assertRaisesRegex(ValueError, 'imports unstaged mobile.folder_listing'):
+            mobile_tools.validate_app_modules(REPO / 'Python/mobile', missing_listing)
         missing_operations = tuple(name for name in mobile_tools.APP_MODULES if name != 'file_operations.py')
-        with self.assertRaisesRegex(ValueError, 'imports unstaged logisticsmobile.file_operations'):
-            mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile', missing_operations)
+        with self.assertRaisesRegex(ValueError, 'imports unstaged mobile.file_operations'):
+            mobile_tools.validate_app_modules(REPO / 'Python/mobile', missing_operations)
 
 
         missing_markdown = tuple(name for name in mobile_tools.DOCUMENT_MODULES
                                  if name != 'features/text_editor/mobile/provider_markdown.py')
         with self.assertRaisesRegex(ValueError, 'imports unstaged features.text_editor.mobile.provider_markdown'):
-            mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile', document_modules=missing_markdown)
+            mobile_tools.validate_app_modules(REPO / 'Python/mobile', document_modules=missing_markdown)
 
     def test_payload_excludes_private_files_desktop_features_and_links(self):
         with TemporaryDirectory() as directory:
@@ -81,11 +81,11 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
             git(shared, '-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-m', 'fixture')
             (shared / 'private.py').write_text('must not ship')
             (shared / 'remoteConfig.ini').write_text('must not ship')
-            app = repo / 'Python/logisticsmobile'
+            app = repo / 'Python/mobile'
             app.mkdir()
             for name in mobile_tools.APP_MODULES:
                 (app / name).parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(REPO / 'Python/logisticsmobile' / name, app / name)
+                shutil.copyfile(REPO / 'Python/mobile' / name, app / name)
             for name in mobile_tools.DOCUMENT_MODULES:
                 target = repo / 'Python' / name
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -97,7 +97,7 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
             (repo / 'LICENSE.md').write_text('Application license fixture')
             (repo / 'README.md').write_text('# Application fixture\n')
             git(repo, 'init')
-            git(repo, 'add', 'Python/logisticsmobile', 'Python/features', 'Python/services', 'Python/configFile.ini', 'LICENSE.md', 'README.md')
+            git(repo, 'add', 'Python/mobile', 'Python/features', 'Python/services', 'Python/configFile.ini', 'LICENSE.md', 'README.md')
             git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-m', 'fixture')
             payload = base / 'payload'
             manifest = mobile_tools.stage(repo, payload)
@@ -105,13 +105,15 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
             self.assertEqual(manifest['logistics_committed_at'],
                 git(repo, 'show', '-s', '--format=%cI', 'HEAD').stdout.decode().strip())
             self.assertTrue((payload / 'services/build_version.py').is_file())
-            self.assertTrue((payload / 'logisticsmobile/settings_ui.py').is_file())
+            self.assertTrue((payload / 'mobile/settings_ui.py').is_file())
             self.assertEqual(manifest['features'], ['text', 'markdown', 'epub', 'comics', 'lm', 'rclone'])
-            self.assertTrue((payload / 'logisticsmobile/app.py').is_file())
-            self.assertTrue((payload / 'logisticsmobile/folder_discovery.py').is_file())
-            self.assertTrue((payload / 'logisticsmobile/file_operations.py').is_file())
-            self.assertTrue((payload / 'logisticsmobile/folder_listing.py').is_file())
-            self.assertTrue((payload / 'logisticsmobile/recent_documents.py').is_file())
+            self.assertTrue((payload / 'mobile/app.py').is_file())
+            self.assertTrue((payload / 'logisticsmobile/__main__.py').is_file())
+            self.assertFalse((payload / 'logisticsmobile/app.py').exists())
+            self.assertTrue((payload / 'mobile/folder_discovery.py').is_file())
+            self.assertTrue((payload / 'mobile/file_operations.py').is_file())
+            self.assertTrue((payload / 'mobile/folder_listing.py').is_file())
+            self.assertTrue((payload / 'mobile/recent_documents.py').is_file())
             self.assertFalse((payload / 'commonUtils/private.py').exists())
             self.assertFalse((payload / 'commonUtils/remoteConfig.ini').exists())
             self.assertFalse((payload / 'commonUtils/.git').exists())
@@ -151,10 +153,10 @@ assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile', 'config')) 
         selected = tuple(name for name in mobile_tools.DOCUMENT_MODULES
                          if name != 'services/documents/readers.py')
         with self.assertRaisesRegex(ValueError, 'imports unstaged services.documents.readers'):
-            mobile_tools.validate_app_modules(REPO / 'Python/logisticsmobile', document_modules=selected)
+            mobile_tools.validate_app_modules(REPO / 'Python/mobile', document_modules=selected)
 
     def test_verifier_requires_complete_clean_mobile_evidence(self):
-        spec = importlib.util.spec_from_file_location('smoke_contract', REPO / 'Python/logisticsmobile/smoke.py')
+        spec = importlib.util.spec_from_file_location('smoke_contract', REPO / 'Python/mobile/smoke.py')
         contract = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(contract)
         report = dict(schema=1, suite='logistics-mobile-documents', target='android',

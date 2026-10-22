@@ -44,7 +44,7 @@ Update `Python/features/<owner>/docs/user/` for desktop workflows,
 root `docs/user/`, `docs/user_mobile/` and `docs/development/`. Update the root README for setup or
 major capabilities. Preserve `user_docs/index.md` as an in-app compatibility link.
 Systemic Core UI and Folder Hub guides belong in the Logistics wiki; Bulk Rename
-keeps its documentation beside its existing `ui_new` owner.
+keeps its documentation beside its existing `desktop` owner.
 Describe implemented behavior and verify consequential operations against source/tests.
 Shared commonUtils APIs are documented in their own repository, not copied here.
 

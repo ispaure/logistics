@@ -21,7 +21,7 @@ def ensure_session(config_path, *, package=None, parent=None):
     if package is None:
         qt.QMessageBox.warning(parent, 'Unlock credentials', 'Select and unlock the matching credential ZIP in Settings first.')
         return False
-    from ui_new.dialogs.archive_password import ask_validated_password
+    from desktop.dialogs.archive_password import ask_validated_password
     values = ask_validated_password(package, 'Unlock the crypt settings and cloud credentials in this ZIP.',
                                     lambda password: session.read_package(package, password), parent)
     if values is None:
@@ -243,7 +243,7 @@ class CryptBrowserView(qt.QMainWindow):
         self.file_browser.activated.connect(self.open_document)
         self.file_browser.directory_changed.connect(lambda path: self.title_changed.emit(self.view_title))
         self.file_browser.idle.connect(self.idle)
-        from ui_new.location_context import install_browser_location
+        from desktop.location_context import install_browser_location
         install_browser_location(self.file_browser, self.provider)
         self._private_view_guard.revoked.connect(self.file_browser.storage_location.refresh)
         self.workspace_controls = self.file_browser.workspace_controls
@@ -455,7 +455,7 @@ class CryptBrowserView(qt.QMainWindow):
         if error or result is None:
             from services.documents.zip_passwords import is_password_error
             if is_password_error(error):
-                from ui_new.dialogs.archive_password import ask_password
+                from desktop.dialogs.archive_password import ask_password
                 password = ask_password(path, error, self, source=self.provider)
                 if password:
                     self.open_document(path, fragment, password=password)

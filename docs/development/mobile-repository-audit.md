@@ -38,11 +38,11 @@ The following code/artwork is local only and not backed up by a commit/push:
 
 | Path | Status / purpose |
 | --- | --- |
-| `Mobile/cloud_build.py` | Modified: imports the new helper and installs icons in generated projects |
-| `Mobile/icon_build.py` | Untracked: icon installation and optional artwork resizing |
-| `Mobile/resources/icons/ios/` | Untracked: iOS PNG artwork and asset catalog |
-| `Mobile/resources/icons/android/` | Untracked: Android PNG artwork and XML resources |
-| `Mobile/tests/test_icon_build.py` | Untracked: artwork/catalog and repeated-installation checks |
+| `mobile_build/cloud_build.py` | Modified: imports the new helper and installs icons in generated projects |
+| `mobile_build/icon_build.py` | Untracked: icon installation and optional artwork resizing |
+| `mobile_build/resources/icons/ios/` | Untracked: iOS PNG artwork and asset catalog |
+| `mobile_build/resources/icons/android/` | Untracked: Android PNG artwork and XML resources |
+| `mobile_build/tests/test_icon_build.py` | Untracked: artwork/catalog and repeated-installation checks |
 
 There are **67 artwork/resource files**: 60 PNGs, six XML files and one JSON
 catalog. Including the build helper, test and changed build entry point, group A
@@ -68,7 +68,7 @@ new handbook, navigation links, corrected historical release status and this aud
 The existing icon documentation describes group A. If approving only documentation,
 leave its icon-specific additions out until the corresponding code is approved.
 Other handbook/status/navigation changes can be committed independently.
-`Python/logisticsmobile/user_docs/index.md` remains the compatibility link.
+`Python/mobile/user_docs/index.md` remains the compatibility link.
 The root README's optional Ally Tools sentence is preserved unchanged.
 
 For individual review, `git diff` shows tracked modifications and
@@ -88,13 +88,13 @@ duplicates; this is not a full assessment of overlapping implementations.
 
 | Local item | Action |
 | --- | --- |
-| `Mobile/.device.json` | Private backup: preserves device/team and established signing/Keychain baseline |
-| `Mobile/.testflight-auth.json` | Private backup: key reference; paths may need reconfiguration on another Mac |
-| `Mobile/.testflight-keys/` and any externally stored `.p8` | Encrypted private backup; never commit |
+| `mobile_build/.device.json` | Private backup: preserves device/team and established signing/Keychain baseline |
+| `mobile_build/.testflight-auth.json` | Private backup: key reference; paths may need reconfiguration on another Mac |
+| `mobile_build/.testflight-keys/` and any externally stored `.p8` | Encrypted private backup; never commit |
 | Certificates/private keys in macOS Keychain | Private export/account recovery plan; not stored in this checkout |
-| `Mobile/build/testflight/` archives, IPA, debug symbols and release records | Separate release backup if historical artifacts are needed |
-| `Mobile/payload/`, other generated build projects, `.venv`, `.tools`, `.briefcase` | Rebuild/download using the handbook |
-| `Mobile/logs/`, `test-results/`, caches | Optional diagnostic backup, not source |
+| `mobile_build/build/testflight/` archives, IPA, debug symbols and release records | Separate release backup if historical artifacts are needed |
+| `mobile_build/payload/`, other generated build projects, `.venv`, `.tools`, `.briefcase` | Rebuild/download using the handbook |
+| `mobile_build/logs/`, `test-results/`, caches | Optional diagnostic backup, not source |
 | Private software/resources/configuration and external feature link | Keep separate; not public mobile source or a Logistics Git backup |
 
 Private key contents were not printed. The audit did not inspect Apple account

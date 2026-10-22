@@ -345,7 +345,7 @@ class TextEditorTests(QtTestCase):
         from features.text_editor.ui.service import EditorService
         from commonUtils.filesystem.files import File
         from commonUtils.formats.markdownType import MarkdownFile
-        from ui_new.file_browser import FileBrowserWindow
+        from desktop.file_browser import FileBrowserWindow
         from features import registry
 
         service = self.window.service
@@ -408,7 +408,7 @@ class TextEditorTests(QtTestCase):
     def test_production_indentation_control_opens_central_settings(self):
         self.window.preferences.custom = False
         try:
-            with patch('ui_new.settings.window.open_settings') as settings, \
+            with patch('desktop.settings.window.open_settings') as settings, \
                     patch.object(qt.QInputDialog, 'getInt') as legacy_dialog:
                 self.window.choose_indentation()
                 settings.assert_called_once_with(self.window, 'feature:text_editor')

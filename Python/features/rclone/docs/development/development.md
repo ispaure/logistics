@@ -140,7 +140,7 @@ inventory, generated-file cleanup classification and local file-link policy.
 Mobile captures `TransferOptions` once for native review and execution; its
 settings storage stays in the app container. CLI/embedded runners and crypt I/O
 remain platform adapters. Mobile rclone controllers and providers now live in
-`mobile/`; generic provider document hosting remains in `logisticsmobile`.
+`mobile/`; generic provider document hosting remains in `mobile`.
 
 The cloud controller passes its application host to native credential-vault
 creation, including retained ZIP storage. Android requires the real native
@@ -164,20 +164,20 @@ live under this feature; portable policy lives in its owning workflow.
 | Feature transfer operations | `transfers/mobile/jobs.py` |
 | Feature ciphertext storage | `localcrypt/mobile/copies.py`, `file_resources.py`, `crypt_stream.py`, `previews.py` |
 | Feature native presentation | `mobile/cloud_ui.py`, `mirror_ui.py`, `transfer_review_ui.py`, `localcrypt_ui.py`, `messages.py` |
-| Generic app document hosting | `logisticsmobile/provider_ui.py`, `provider_readers.py`, `text_resources.py`, `native_archives.py`, `private_sessions.py` |
-| Generic app integration | Workspaces, Files, navigation/scenes, document persistence, screen privacy and OS picker access stay in `logisticsmobile` |
+| Generic app document hosting | `mobile/provider_ui.py`, `provider_readers.py`, `text_resources.py`, `native_archives.py`, `private_sessions.py` |
+| Generic app integration | Workspaces, Files, navigation/scenes, document persistence, screen privacy and OS picker access stay in `mobile` |
 
 Feature UI adapters consume host navigation, pickers and document services through
 explicit imports and the existing app/controller interfaces. Ciphertext storage
 adapts to the app's generic memory-only reader; book/comic behavior is still owned
 by those format features. Ordinary text resources and native archive facades do
 not import rclone adapters. Host code imports feature services where it offers a
-remote/encrypted capability. Removed `logisticsmobile` feature paths have no
+remote/encrypted capability. Removed `mobile` feature paths have no
 forwarding modules; all in-repository callers and tests use their current owner.
 
-`Mobile/tools.py` explicitly packages these modules and checks imports in both
+`mobile_build/tools.py` explicitly packages these modules and checks imports in both
 host and feature adapters. Desktop-only rclone UI/configuration is excluded from
-the mobile payload. `Mobile/rclone_bridge` stays alongside native build tooling:
+the mobile payload. `mobile_build/rclone_bridge` stays alongside native build tooling:
 it is the embedded Go/C-ABI target and also supplies ordinary archive/image I/O.
 This ownership pass changes Python organization, not stored paths, schemas,
 credential formats, bridge actions or transfer behavior.
@@ -227,7 +227,7 @@ hashes for all six desktop platforms. A regression checks those pins against the
 Go module and native build version. New versions still require platform testing.
 
 `mobile/previews.py` owns native crypt preview source construction and encrypted
-thumbnail requests. `logisticsmobile/browser_preview.py` retains generic preview
+thumbnail requests. `mobile/browser_preview.py` retains generic preview
 orchestration and format metadata, delegating encrypted I/O to the feature.
 Existing controller callbacks remain host/feature integration points; this move
 has not replaced them with a new host API. The [implementation record](rclone-parity.md#current-audit--2026-10-15)
@@ -242,7 +242,7 @@ remain mandatory after review, including explicit early approval.
 
 ## Mobile host boundary
 
-The feature imports no `logisticsmobile` modules. `mobile/host.py:MobileHostUI` declares injected presentation callbacks. Transfer status uses its
+The feature imports no `mobile` modules. `mobile/host.py:MobileHostUI` declares injected presentation callbacks. Transfer status uses its
 `refresh_folder_source_actions` callback to refresh host toolbar visibility
 without importing the application package. The application supplies browser/menu/picker and visibility policy through its composition root. Document reader and native archive adapters live in neutral Logistics services; rclone owns storage and transfer adapters.
 
@@ -267,7 +267,7 @@ cover this boundary. Update the owner mobile manifest with source moves.
 ## Python–Go bridge contract
 
 `mobile/bridge_protocol.py` owns supported Python action names and validates the
-response envelope. `Mobile/rclone_bridge/protocol_contract.json` is a public,
+response envelope. `mobile_build/rclone_bridge/protocol_contract.json` is a public,
 synthetic contract fixture consumed by Python and Go tests. It is not a native
 payload or credential store. The contract is version one; no new wire version or
 saved-data migration is introduced.

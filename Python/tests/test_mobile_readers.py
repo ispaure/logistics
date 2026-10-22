@@ -10,7 +10,7 @@ import zlib
 
 from books_fixture import make_book
 from commonUtils.runtime.document_access import LocalDocuments
-from logisticsmobile.library import LibraryStore
+from mobile.library import LibraryStore
 from features.books.mobile.content import chapter_html
 from features.images.validation import image_dimensions
 
@@ -166,7 +166,7 @@ class MobileReaderTests(unittest.TestCase):
             record = store.import_book(LocalDocuments(), source)
             self.assertGreater(store.path(record['id'], '.cbz').stat().st_size, 256 * 1024 * 1024)
             # The checksum collected during import avoids another whole-file scan.
-            with patch('logisticsmobile.library.file_sha256', side_effect=AssertionError('Unnecessary rehash')):
+            with patch('mobile.library.file_sha256', side_effect=AssertionError('Unnecessary rehash')):
                 record, reader = store.open(record['id'])
                 self.assertEqual(reader.read_page(1), (image, 'image/png'))
             # A reopened store still verifies bytes with a bounded hash stream.

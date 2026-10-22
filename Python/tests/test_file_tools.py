@@ -13,7 +13,7 @@ from commonUtils.ui import pyside as qt
 from features.file_tools import filesystem
 from features.file_tools.ui.dialogs import WeirdCharactersDialog, DeletePycDialog
 from features import registry
-from ui_new.file_browser import FileBrowserWindow
+from desktop.file_browser import FileBrowserWindow
 
 
 class _FileToolsFixture(QtTestCase):

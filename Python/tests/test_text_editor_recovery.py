@@ -175,7 +175,7 @@ class EditorRecoveryTests(QtTestCase):
         self.assertEqual(owner.current.editor.toPlainText(), "keep me")
 
     def test_host_shutdown_keeps_session_without_saving_original(self):
-        from ui_new.documents import DocumentsPage
+        from desktop.documents import DocumentsPage
         from commonUtils.ui.document_host import register_document_host
         host = DocumentsPage(lambda: None)
         register_document_host(host)

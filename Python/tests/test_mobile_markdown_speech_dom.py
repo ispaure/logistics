@@ -15,7 +15,7 @@ class MarkdownSpeechDOMTests(QtTestCase):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         # Importing the mobile module would initialize Toga. Read its actual JS
         # constant instead so this verifies production code without mobile UI.
-        source = Path(__file__).parents[1] / 'logisticsmobile/markdown_speech.py'
+        source = Path(__file__).parents[1] / 'mobile/markdown_speech.py'
         constants = {node.targets[0].id: ast.literal_eval(node.value)
                      for node in ast.parse(source.read_text()).body
                      if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)

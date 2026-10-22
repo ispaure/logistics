@@ -15,7 +15,7 @@ features/<feature>/
     └── dialogs.py
 ```
 
-The generic `ui_new` package owns only application-level presentation:
+The generic `desktop` package owns only application-level presentation:
 
 - Main window / tab host.
 - Generic Folders page.
@@ -26,8 +26,8 @@ The generic `ui_new` package owns only application-level presentation:
 
 ## Startup and refresh
 
-`Python/logisticsmobile` is a separate Toga entry point packaged from curated
-sources under `Mobile/`. It uses portable commonUtils persistence without loading
+`Python/mobile` is a separate Toga entry point packaged from curated
+sources under `mobile_build/`. It uses portable commonUtils persistence without loading
 desktop feature discovery or the Qt facade. Its storage, native import boundaries
 and runtime/build gates are described in [mobile preparation](mobile-preparation.md).
 
@@ -45,7 +45,7 @@ Bulk Rename has one retained application page. `models/` carries folder identiti
 `Python/launch.py` owns the application startup sequence. Qt is created before
 feature initialization so startup failures can display their error dialogs.
 
-`ui_new.landing.LandingPage` is the initial launch chooser, outside the destination
+`desktop.landing.LandingPage` is the initial launch chooser, outside the destination
 tab host. Full hub reveals the existing rail; File Browser, Git (`git.workspace`)
 and IDE (`ide.workspace`) reuse their pages with the rail hidden. This is a
 presentation mode, not a reduced feature-loading or worker lifecycle: all enabled
@@ -182,7 +182,7 @@ Logistics tools retain their own status semantics, progress/cancel controls and
 error recovery; only presentation is shared. Settings reset notices are bounded
 above the content splitter and do not consume its stretch allocation.
 
-`ui_new.notifications.notification_service()` retains a bounded NotificationCenter
+`desktop.notifications.notification_service()` retains a bounded NotificationCenter
 for the QApplication. Features publish Notice events through `notify`, with source,
 ID, title, plain-text message, outcome, optional details action and native delivery
 preference. Stable IDs deduplicate an event; acknowledgement clears unread state.
@@ -307,7 +307,7 @@ on registry notifications. Disabled entries are removed from launch cards and th
 Settings category tree, while Features still exposes enable/disable controls and
 retained editors still participate in close/reset handling.
 
-`ui_new.launch_catalog` owns core Markdown plus enabled document-launcher
+`desktop.launch_catalog` owns core Markdown plus enabled document-launcher
 registrations for all document-choice surfaces. `DocumentLauncherContribution.description`
 is displayed on cards. Chooser windows remain workspace-owned utility tabs; they
 are excluded from document entries and counts without changing their close/detach
@@ -317,7 +317,7 @@ columns and enables ordinary vertical scrollbar/wheel navigation for long catalo
 ## Application update handoff
 
 `services.updates` owns Logistics repository/channel policy, protected roots,
-layered Updates settings and restart launchers. `ui_new.updater.UpdateController`
+layered Updates settings and restart launchers. `desktop.updater.UpdateController`
 checks on an owned worker and offers the accent-colored button only on the landing
 page. Label changes resize and reposition the offer so preparation text fits.
 Tests constructing windows
@@ -342,7 +342,7 @@ reader actions show them directly rather than registering them with the document
 host; feature controllers retain their normal save, worker and shutdown lifecycle.
 Reading windows continue to use the shared document host.
 
-`ui_new.fullscreen.WindowFullscreen` keeps F11 and the Logistics fullscreen menu
+`desktop.fullscreen.WindowFullscreen` keeps F11 and the Logistics fullscreen menu
 command scoped to the main OS window across destination changes. Its application
 event filter accepts unmodified F11 at ShortcutOverride and handles KeyPress once,
 avoiding ambiguity with embedded reader actions. Dialogs retain their own keys.

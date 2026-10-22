@@ -15,7 +15,7 @@ from features.git.preferences import Preferences
 from features.git.graph import layout_graph
 from features.git.models import Commit
 from features.git.ui.repository_view import RepositoryView
-from ui_new.sidebar import DestinationRail
+from desktop.sidebar import DestinationRail
 
 
 @unittest.skipUnless(shutil.which('git'), 'Git executable required')
@@ -699,7 +699,7 @@ class GitUITests(QtTestCase):
 
     def test_main_window_retries_close_when_git_worker_becomes_idle(self):
         from features.contributions import PageContribution, RegisteredContribution
-        from ui_new import main_window
+        from desktop import main_window
         # The page is separately owned by this fixture after the main window dies.
         contribution = RegisteredContribution('git', 'Git', PageContribution(
             'Git', 'git.workspace', lambda parent: self.page, navigation_icon='git'))

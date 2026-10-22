@@ -469,7 +469,7 @@ class LocalCryptTests(QtTestCase):
             self.assertEqual(local_crypt.unlock(f.item, 'synthetic-package-password')['Secret']['type'], 'crypt')
 
     def test_regular_browser_routes_navigation_and_reuses_private_tab(self):
-        from ui_new.file_browser import FileBrowserPage, _browser_view, _new_browser_tab
+        from desktop.file_browser import FileBrowserPage, _browser_view, _new_browser_tab
         from features.rclone.localcrypt.ui.views import CryptBrowserView
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
              patch('features.registry.get_browser_extensions', return_value=[]), \
@@ -486,8 +486,8 @@ class LocalCryptTests(QtTestCase):
                 self.assertEqual(private.file_browser.tree.topLevelItemCount(), 5)
                 self.assertIn('note.md', [private.file_browser.tree.topLevelItem(i).text(0) for i in range(5)])
                 self.assertEqual(browser.navigation.directory, f.root)
-                with patch('ui_new.file_browser.time.monotonic', return_value=123), \
-                     patch('ui_new.file_browser._crypt_location', return_value=(f.item, True)) as resolve, \
+                with patch('desktop.file_browser.time.monotonic', return_value=123), \
+                     patch('desktop.file_browser._crypt_location', return_value=(f.item, True)) as resolve, \
                      patch.object(local_crypt, 'storage_root', return_value=f.item.root) as root_lookup:
                     for _ in range(1000):
                         self.assertTrue(original._directory_boundary(f.item.data))
@@ -662,7 +662,7 @@ class LocalCryptTests(QtTestCase):
 
     def test_regular_and_private_file_passwords_retry_in_the_same_prompt(self):
         from PySide6.QtTest import QTest
-        from ui_new.dialogs.archive_password import ask_password, ValidatedPasswordDialog
+        from desktop.dialogs.archive_password import ask_password, ValidatedPasswordDialog
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             for source, path in ((None, f.plain / 'encrypted.cbz'), (f.provider, f.item.data / 'encrypted.cbz')):
                 state = {'phase': 0, 'checks': [], 'timeout': time.monotonic() + 10}
@@ -1013,7 +1013,7 @@ class LocalCryptTests(QtTestCase):
                 for member in source.infolist():
                     target.writestr(member.filename, source.read(member))
             f.provider.command('rcat', 'book.epub', input_data=protected.getvalue(), limit=0)
-            with patch('ui_new.dialogs.archive_password.ask_password', return_value='different-inner-password') as prompt:
+            with patch('desktop.dialogs.archive_password.ask_password', return_value='different-inner-password') as prompt:
                 window = MetadataWindow(f.item.data / 'book.epub', source=f.provider)
                 self.wait(lambda: window.editor is not None)
                 self.assertEqual(window.book.password, 'different-inner-password')
@@ -1073,7 +1073,7 @@ class LocalCryptTests(QtTestCase):
 
 class LocalCryptNamingTests(unittest.TestCase):
     def test_browser_recognizes_relocated_copy_and_external_aliases(self):
-        from ui_new.file_browser import _crypt_location
+        from desktop.file_browser import _crypt_location
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             item = local_crypt.Connection(root / 'one.zip', 'Secret', root / 'LocalCrypt')

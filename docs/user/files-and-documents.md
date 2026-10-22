@@ -176,7 +176,7 @@ recovery applies to indexing, not copying, moving, compression or transfers.
 ## Organize files
 
 Use the selection's copy, cut, paste, rename or removal actions. Existing paste
-destinations are preserved on collisions. Use [Bulk Rename](../../Python/ui_new/bulk_rename/docs/user/user.md)
+destinations are preserved on collisions. Use [Bulk Rename](../../Python/desktop/bulk_rename/docs/user/user.md)
 for a previewed filename transformation across many items.
 
 Trash/Recycle Bin asks for confirmation; if the location cannot use Trash, files

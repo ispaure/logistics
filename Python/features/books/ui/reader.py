@@ -114,7 +114,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         try:
             appearance_store(key).save({(section, field): str(value)}, scope='personal')
         except (OSError, ValueError) as error:
-            from ui_new.notifications import notify
+            from desktop.notifications import notify
             notify('books', 'Could not save reading appearance', str(error), outcome='failure')
             self._settings_changed()
             return

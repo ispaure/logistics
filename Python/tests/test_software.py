@@ -39,9 +39,9 @@ class SoftwareTests(QtTestCase):
             for key in ('version', 'url', 'path', 'archive_member', 'sha256', 'installed_sha256'):
                 self.assertEqual(settings[platform][key + '_str'], values[key])
             self.assertEqual(values['version'], '1.74.1')
-        native = (repo / 'Mobile/rclone_bridge/go.mod').read_text()
+        native = (repo / 'mobile_build/rclone_bridge/go.mod').read_text()
         self.assertIn('github.com/rclone/rclone v1.74.1', native)
-        self.assertIn('fs.Version=v1.74.1', (repo / 'Mobile/cloud_build.py').read_text())
+        self.assertIn('fs.Version=v1.74.1', (repo / 'mobile_build/cloud_build.py').read_text())
 
     def test_rclone_ini_overrides_and_required_hash_validation(self):
         with TemporaryDirectory() as tmp:

@@ -8,13 +8,13 @@ import unittest
 from commonUtils.archives.zip_access import ArchivePasswordError
 from commonUtils.runtime.document_access import LocalDocuments
 from features.rclone.mobile.cloud import CloudClient
-from logisticsmobile.library import LibraryStore
+from mobile.library import LibraryStore
 
 
 @unittest.skipUnless(os.environ.get('LOGISTICS_MOBILE_BRIDGE'), 'Host native bridge required')
 class StandaloneComicNativeTests(unittest.TestCase):
     def test_password_retry_page_navigation_lock_and_restart_preserve_encryption(self):
-        fixture = json.loads((Path(__file__).parents[2] / 'Mobile/native_tests/tests/logisticsmobile/comic_fixture.json').read_text())
+        fixture = json.loads((Path(__file__).parents[2] / 'mobile_build/native_tests/tests/logisticsmobile/comic_fixture.json').read_text())
         client = CloudClient(library=os.environ['LOGISTICS_MOBILE_BRIDGE'])
         client.request('clear')
         for kind in ('aes', 'legacy'):

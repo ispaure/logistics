@@ -16,7 +16,7 @@ def selected_tests(root, owner):
         raise ValueError('Unknown owner. Choose: ' + ', '.join(sorted(groups)))
     selected = []
     for suite, patterns in groups[owner]['tests'].items():
-        folder = root / ('Python/tests' if suite == 'desktop' else 'Mobile/tests')
+        folder = root / ('Python/tests' if suite == 'desktop' else 'mobile_build/tests')
         for pattern in patterns:
             matches = sorted(folder.rglob(pattern))
             if not matches:

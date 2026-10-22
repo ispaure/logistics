@@ -86,7 +86,7 @@ class BlenderReleaseSettingsTests(QtTestCase):
     def test_both_settings_scopes_have_custom_panels_without_duplicate_raw_ini(self):
         from features.contributions import RegisteredContribution
         from features.registry import FeatureState
-        from ui_new.pages.settings import FeatureSettingsPanel
+        from desktop.pages.settings import FeatureSettingsPanel
         entries = [RegisteredContribution('blender', 'Blender', entry) for entry in register().settings]
         state = FeatureState('blender', 'Blender', True, True, (), ())
         with patch('features.registry.get_settings', return_value=entries):

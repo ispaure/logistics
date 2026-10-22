@@ -108,7 +108,7 @@ class ArchivePage(qt.QWidget):
                 qt.QTimer.singleShot(0, self, lambda: self.open_archive(result))
 
         if kind in ('create', 'edit', 'extract', 'test'):
-            from ui_new.notifications import notify
+            from desktop.notifications import notify
             outcome = 'failure' if error else 'cancelled' if result is None else 'success'
             notify('archives', 'Archive operation', self.status.text(), outcome=outcome)
 

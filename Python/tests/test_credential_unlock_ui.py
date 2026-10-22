@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from ui_new.dialogs.archive_password import ValidatedPasswordDialog
+from desktop.dialogs.archive_password import ValidatedPasswordDialog
 from features.rclone.localcrypt.ui.views import ensure_session, open_browser
 
 
@@ -49,7 +49,7 @@ class CredentialUnlockTests(QtTestCase):
             self.assertIsNone(open_browser(item))
             window.assert_not_called()
         with patch('features.rclone.session.credentials', return_value=None), \
-             patch('ui_new.dialogs.archive_password.ask_validated_password', return_value=None), \
+             patch('desktop.dialogs.archive_password.ask_validated_password', return_value=None), \
              patch('features.rclone.session.remember') as remember:
             self.assertFalse(ensure_session(item.context, package=item.package))
             remember.assert_not_called()

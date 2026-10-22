@@ -16,10 +16,10 @@ class ArchitectureTests(unittest.TestCase):
             folder = root / 'features/books'
             folder.mkdir(parents=True)
             path = folder / 'example.py'
-            path.write_text("from ..comics import pages\nFACTORY = 'ui_new.dialogs.prompt'\n")
+            path.write_text("from ..comics import pages\nFACTORY = 'desktop.dialogs.prompt'\n")
             found = references(path, root)
             self.assertIn('features.comics.pages', found)
-            self.assertIn('ui_new.dialogs.prompt', found)
+            self.assertIn('desktop.dialogs.prompt', found)
 
     def test_external_feature_link_is_not_scanned(self):
         with TemporaryDirectory() as temporary:

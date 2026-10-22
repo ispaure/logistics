@@ -3,7 +3,7 @@ from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.operations import OperationCancelled, BatchResult
 from features.calibre.export import build_export_plan, execute_export_plan
-from ui_new.dialogs.tool_dialog import ToolDialog
+from desktop.dialogs.tool_dialog import ToolDialog
 
 
 class ExportDialog(ToolDialog):

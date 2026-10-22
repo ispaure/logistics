@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from PySide6.QtWidgets import QMessageBox
 from commonUtils.tests.qt_test_case import QtTestCase
-from Mobile import deploy_ui as ui
+from mobile_build import deploy_ui as ui
 
 
 class DeploymentUITests(QtTestCase):

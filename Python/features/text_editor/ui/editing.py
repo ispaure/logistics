@@ -130,7 +130,7 @@ class EditingCommands:
                 checkable=True,
             )
         self.action(self._view_menu, "font", "Choose Font…", self.choose_font)
-        from ui_new.settings.window import open_settings
+        from desktop.settings.window import open_settings
         self.action(self._view_menu, 'logistics_settings', 'Logistics Settings…',
                     lambda: open_settings(self, 'feature:text_editor'))
         self.action(
@@ -229,7 +229,7 @@ class EditingCommands:
         self._preferences_changed()
 
     def choose_font(self):
-        from ui_new.settings.window import open_settings
+        from desktop.settings.window import open_settings
         open_settings(self, 'commonutils')
 
     def zoom(self, direction):
@@ -278,7 +278,7 @@ class EditingCommands:
 
     def choose_indentation(self):
         if not self.preferences.custom:
-            from ui_new.settings.window import open_settings
+            from desktop.settings.window import open_settings
             open_settings(self, 'feature:text_editor')
             return
         if not self.current:

@@ -115,7 +115,7 @@ class MobileFileOperationsTests(unittest.TestCase):
         from features.rclone.mobile.cloud import CloudClient
         from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
         from features.rclone.localcrypt.mobile.resources import CryptFiles, DownloadedCryptFile, ManagedCopies
-        fixture = json.loads(Path('Mobile/native_tests/tests/logisticsmobile/localcrypt_fixture.json').read_text())
+        fixture = json.loads(Path('mobile_build/native_tests/tests/logisticsmobile/localcrypt_fixture.json').read_text())
         client = CloudClient(library=os.environ['LOGISTICS_MOBILE_BRIDGE'])
         client.request('import', package=fixture['package'], password='', package_name='Synthetic.zip', session_only=True)
         with TemporaryDirectory() as directory:

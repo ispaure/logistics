@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def inventory(root=ROOT):
     entries = json.loads((root / 'Scripts/compatibility.json').read_text())['modules']
     paths = []
-    for area in ('features', 'services', 'ui_new', 'logisticsmobile'):
+    for area in ('features', 'services', 'desktop', 'mobile'):
         for path in (root / 'Python' / area).rglob('*.py'):
             if 'emulation' not in path.parts and '__pycache__' not in path.parts and not path.is_symlink():
                 paths.append(path)

@@ -214,5 +214,5 @@ described in [LocalCrypt](../../Python/features/rclone/docs/development/localcry
 
 The [shared configuration guide](https://github.com/ispaure/commonUtils/blob/main/configuration/README.md)
 covers schema APIs, editor embedding and gradual migration. Logistics keeps its
-`ui_new.settings` imports as compatibility wrappers; its editor opts into typed
+`desktop.settings` imports as compatibility wrappers; its editor opts into typed
 keys by default.

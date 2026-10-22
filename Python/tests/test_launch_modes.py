@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.contributions import DocumentLauncherContribution, PageContribution, RegisteredContribution
-from ui_new import main_window
+from desktop import main_window
 
 
 class Browser(qt.QWidget):
@@ -31,7 +31,7 @@ class LaunchModeTests(QtTestCase):
 
     def test_launch_cards_are_stable_from_their_first_paint(self):
         window = self.window
-        from ui_new.landing import LandingPage
+        from desktop.landing import LandingPage
         page = LandingPage()
         page.set_tool_launchers(window._tool_launchers())
         page.set_document_launchers(window.sidebar.launchers)
@@ -286,7 +286,7 @@ class LaunchModeTests(QtTestCase):
         self.assertIs(self.window._feature_pages['sample', 'sample.workspace'], retained)
 
     def test_chooser_expands_reflows_and_scrolls_with_mouse_wheel(self):
-        from ui_new.landing import DocumentChooser
+        from desktop.landing import DocumentChooser
         chooser = DocumentChooser(); self.addCleanup(chooser.deleteLater)
         launchers = {f'sample_{i}': DocumentLauncherContribution(
             f'sample_{i}', f'Editor {i}', Mock(), 'text', i,
@@ -321,7 +321,7 @@ class LaunchModeTests(QtTestCase):
     @patch('commonUtils.ui.appearance.typography.font_dpi', new=lambda: 72)
     def test_cards_grow_uniformly_for_wrapped_large_text(self):
         from commonUtils.ui.appearance.typography import point_size
-        from ui_new.landing import LandingPage
+        from desktop.landing import LandingPage
         page = LandingPage()
         self.addCleanup(page.deleteLater)
         page.set_tool_launchers([('short', 'Short', 'Small detail.', 'ide'),

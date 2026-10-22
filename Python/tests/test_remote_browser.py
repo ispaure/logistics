@@ -111,7 +111,7 @@ class RemoteBrowserTests(QtTestCase):
             self.assertEqual(provider.read_bytes('nested/subfolder/note.txt'), b'nested plaintext sentinel')
 
     def test_tab_duplication_current_folder_filter_and_read_only_text(self):
-        from ui_new.file_browser import FileBrowserWindow, _new_browser_tab
+        from desktop.file_browser import FileBrowserWindow, _new_browser_tab
         from features.rclone.ui.remote_browser import RemoteLocation
         with self.temporary_directory() as folder:
             data = Path(folder) / 'files'
@@ -168,7 +168,7 @@ class RemoteBrowserTests(QtTestCase):
                 provider.list()
 
     def test_desktop_preview_only_actions_and_manual_copy_dialog(self):
-        from ui_new.file_browser import FileBrowserWindow
+        from desktop.file_browser import FileBrowserWindow
         from features.rclone.ui.remote_browser import RemoteLocation
         from features.rclone.remote_policy import LOCAL_COPY_MESSAGE
         with self.temporary_directory() as folder:
@@ -201,7 +201,7 @@ class RemoteBrowserTests(QtTestCase):
                     window.grab().save(capture)
 
     def test_real_reader_menus_corrupt_files_and_recovery(self):
-        from ui_new.file_browser import FileBrowserWindow
+        from desktop.file_browser import FileBrowserWindow
         from features.rclone.ui.remote_browser import RemoteLocation
         from features.books.ui.reader import BookWindow
         from features.comics.ui.reader import ComicReaderWindow

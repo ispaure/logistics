@@ -13,7 +13,7 @@ from features.aviation_tools.location import locationUtils
 from features.aviation_tools.plane import planeUtils
 from features.aviation_tools.mathUtils import flightUtils
 from features.aviation_tools.ui.page import AviationToolsPage, Calculator, DatasetBrowser
-from ui_new import main_window
+from desktop import main_window
 
 
 class AviationToolsTests(QtTestCase):

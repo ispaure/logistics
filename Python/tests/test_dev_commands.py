@@ -15,7 +15,7 @@ spec.loader.exec_module(dev)
 
 class DeveloperCommandTests(unittest.TestCase):
     def test_host_suites_use_their_own_interpreters_and_isolate_files(self):
-        for suite, folder in (('desktop', 'Python'), ('mobile', 'Mobile')):
+        for suite, folder in (('desktop', 'Python'), ('mobile', 'mobile_build')):
             with self.subTest(suite=suite), patch.object(dev.subprocess, 'run') as run, \
                     patch.object(Path, 'is_file', return_value=True):
                 run.return_value.returncode = 7
@@ -71,7 +71,7 @@ class DeveloperCommandTests(unittest.TestCase):
             self.assertEqual(dev.main(['lint']), 0)
             command = run.call_args.args[0]
             self.assertEqual(command[1:5], ['-m', 'ruff', 'check', '--config'])
-            self.assertEqual(command[-5:], ['dev.py', 'Python', 'Mobile', 'Scripts', '.github/scripts'])
+            self.assertEqual(command[-5:], ['dev.py', 'Python', 'mobile_build', 'Scripts', '.github/scripts'])
 
 
 class SetupCommandTests(unittest.TestCase):

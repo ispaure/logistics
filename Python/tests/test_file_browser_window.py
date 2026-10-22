@@ -15,8 +15,8 @@ from PIL import Image
 from commonUtils.ui import pyside as qt
 from features import registry
 from features.contributions import BrowserExtensionContribution, FeatureContributions, RegisteredContribution
-from ui_new.file_browser import FileBrowserWindow, open_file_browser
-from ui_new.pages.debug import DebugPage
+from desktop.file_browser import FileBrowserWindow, open_file_browser
+from desktop.pages.debug import DebugPage
 
 
 def _install_browser_extension(host):
@@ -25,7 +25,7 @@ def _install_browser_extension(host):
 
 class BrowserWindowTests(QtTestCase):
     def test_new_unconstrained_tab_starts_at_home_and_can_go_up(self):
-        from ui_new.file_browser import FileBrowserPage
+        from desktop.file_browser import FileBrowserPage
         home = self.root / 'home'
         home.mkdir()
         with patch.object(Path, 'home', return_value=home), patch.object(registry, 'get_browser_extensions', return_value=[]):
@@ -82,7 +82,7 @@ class BrowserWindowTests(QtTestCase):
             self.app.processEvents()
 
     def test_default_page_starts_at_home_with_filesystem_boundary_and_scoped_extra_tabs(self):
-        from ui_new.file_browser import FileBrowserPage
+        from desktop.file_browser import FileBrowserPage
         from commonUtils.filesystem.index import DirectoryCache
         cache_temp = TemporaryDirectory()
         self.addCleanup(cache_temp.cleanup)
@@ -269,7 +269,7 @@ class BrowserWindowTests(QtTestCase):
         with patch.object(registry, 'get_debug_actions', return_value=[]):
             page = DebugPage()
             page.refresh()
-        with patch('ui_new.file_browser.open_file_browser') as opened:
+        with patch('desktop.file_browser.open_file_browser') as opened:
             page.open_browser_button.click()
             opened.assert_called_once_with(page.window())
         page.deleteLater()
@@ -280,16 +280,16 @@ class BrowserWindowTests(QtTestCase):
             page.refresh()
         self.addCleanup(page.deleteLater)
         with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(self.root)), \
-                patch('ui_new.bulk_rename.open_bulk_rename') as opened:
+                patch('desktop.bulk_rename.open_bulk_rename') as opened:
             page.bulk_rename_button.click()
             opened.assert_called_once_with(str(self.root), parent=page.window())
         with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=''), \
-                patch('ui_new.bulk_rename.open_bulk_rename') as opened:
+                patch('desktop.bulk_rename.open_bulk_rename') as opened:
             page.bulk_rename_button.click()
             opened.assert_not_called()
 
     def test_choose_folder_cancel_and_window_retention(self):
-        from ui_new import file_browser
+        from desktop import file_browser
         with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=''):
             self.assertIsNone(open_file_browser())
         with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(self.root)), patch.object(

@@ -3,7 +3,7 @@ name: Native mobile prototype builds
 on:
   push:
     branches: [alpha]
-    paths: ['Python/logisticsmobile/**', 'Python/features/**', 'Python/services/**', 'Python/commonUtils', 'Python/commonUtils/**', 'Mobile/**', '.github/workflows/mobile-build.yml']
+    paths: ['Python/mobile/**', 'Python/features/**', 'Python/services/**', 'Python/commonUtils', 'Python/commonUtils/**', 'mobile_build/**', '.github/workflows/mobile-build.yml']
   workflow_dispatch:
     inputs:
       target:
@@ -50,17 +50,17 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version: '1.26.9'
-          cache-dependency-path: Mobile/rclone_bridge/go.sum
+          cache-dependency-path: mobile_build/rclone_bridge/go.sum
       - name: Select the SDK required for native Duo adaptation
         if: matrix.target == 'ios'
-        run: python Mobile/select_ios_sdk.py --github-env "$GITHUB_ENV"
+        run: python mobile_build/select_ios_sdk.py --github-env "$GITHUB_ENV"
       - name: Prepare a clean, curated mobile payload
         run: |
           python -m pip install briefcase==0.4.5
-          python Mobile/tools.py stage Mobile/payload
+          python mobile_build/tools.py stage mobile_build/payload
       - name: Generate and build the Android application
         if: matrix.target == 'android'
-        working-directory: Mobile
+        working-directory: mobile_build
         env:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
@@ -72,7 +72,7 @@ jobs:
           cp build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/Logistics-android-debug.apk"
       - name: Generate and build the iOS Simulator application
         if: matrix.target == 'ios'
-        working-directory: Mobile
+        working-directory: mobile_build
         env:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
@@ -88,7 +88,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$app" "$RUNNER_TEMP/Logistics-ios-simulator.zip"
       - name: Exercise Android panels, rotation and safe areas
         if: matrix.target == 'android'
-        working-directory: Mobile
+        working-directory: mobile_build
         env:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
@@ -96,7 +96,7 @@ jobs:
           python ui_tools.py run android --device '{"avd":"LogisticsValidation","device_type":"pixel","skin":null,"system_image":"system-images;android-35;google_apis;x86_64"}'
       - name: Exercise iPhone, iPad and Duo panels, rotation and safe areas
         if: matrix.target == 'ios'
-        working-directory: Mobile
+        working-directory: mobile_build
         env:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
@@ -113,7 +113,7 @@ jobs:
           cp logs/ios-native-ui.json logs/duo-native-ui.json
       - name: Capture iOS startup and crash diagnostics
         if: failure() && matrix.target == 'ios'
-        working-directory: Mobile
+        working-directory: mobile_build
         run: python ui_tools.py ios-diagnostics
       - name: Preserve native builds and diagnostics
         if: always()
@@ -121,8 +121,8 @@ jobs:
         with:
           name: logistics-native-${{ matrix.target }}
           path: |
-            Mobile/payload/source.json
-            Mobile/logs/
+            mobile_build/payload/source.json
+            mobile_build/logs/
             ${{ runner.temp }}/Logistics-android-debug.apk
             ${{ runner.temp }}/Logistics-ios-simulator.zip
           retention-days: 14

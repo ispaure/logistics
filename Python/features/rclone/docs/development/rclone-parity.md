@@ -41,7 +41,7 @@ range/archive and validation APIs still serve active editing/reading/security pa
 Most Python rclone/crypt behavior is under `Python/features/rclone`: portable
 policy/review at its root, desktop adapters/UI beside it, native-host adapters in
 `mobile/`. Generic provider documents, navigation, privacy, local file pickers and
-format-specific readers remain with their owners. `Mobile/rclone_bridge` remains
+format-specific readers remain with their owners. `mobile_build/rclone_bridge` remains
 the native build/C-ABI boundary and also provides ordinary archive/image I/O;
 moving the whole bridge for folder symmetry would mix feature and generic code.
 Host controller callbacks still couple the feature UI to the app; this is an
@@ -149,10 +149,10 @@ platform bindings. Use local test fixtures rather than live account transfers.
 
 The initial source inspection confirmed two separate blockers, not just disabled buttons:
 
-- `logisticsmobile/folder_hub_ui.py` disables non-Local browse actions while
+- `mobile/folder_hub_ui.py` disables non-Local browse actions while
   `cloud_busy` is set and rejects entry into those folders. Its current status
   explicitly says encrypted operations must wait.
-- `Mobile/rclone_bridge/main.go` takes the same `serial` mutex for transfers and
+- `mobile_build/rclone_bridge/main.go` takes the same `serial` mutex for transfers and
   local crypt requests. A long `mirror_sync` therefore blocks local path decoding,
   stat/range reads and archive operations. Only ordinary local image/archive work
   and transfer-progress queries currently bypass that lock. The bridge also uses
@@ -242,8 +242,8 @@ simulator, not a physical device; Android native runtime was not rerun here.
 ## Source baseline before the ownership cleanup
 
 Desktop workflows live in `Python/features/rclone/{actions,sync,push_policy}.py`;
-mobile workflows live in `Python/logisticsmobile/{mirror_jobs,mirror_ui}.py`
-and `Mobile/rclone_bridge`. The mobile packaging allowlist is in `Mobile/tools.py`.
+mobile workflows live in `Python/mobile/{mirror_jobs,mirror_ui}.py`
+and `mobile_build/rclone_bridge`. The mobile packaging allowlist is in `mobile_build/tools.py`.
 Both sides already share lower-level commonUtils resource and persistence
 primitives. Mobile now packages the portable rclone options and review modules;
 the rest of the mobile backend/presentation ownership migration is pending.
@@ -320,7 +320,7 @@ credential identifiers and native request names remain unchanged.
 2. Moved remote/transfer/review/catalog screens to the same feature package. Split
    the shared provider reader/editor UI into app-owned `ProviderUI`; private-session
    controllers inherit that generic UI directly. Kept ordinary/native archive
-   facades in `logisticsmobile/native_archives.py`. The focused presentation group
+   facades in `mobile/native_archives.py`. The focused presentation group
    passed 50 tests.
 3. Moved the local-Push chooser form into the feature review controller, leaving
    Workspaces with navigation/action dispatch. Updated the separate Qt proof to
@@ -336,7 +336,7 @@ private-session lifecycle and screen privacy stay app-owned. Generic ID validato
 live in `services/identifiers.py`; generic resource-import records do not depend
 on a transfer-job module for hash validation. Mobile adapters consume generic host
 reader/navigation services; policy continues to live at the rclone feature root.
-The Go bridge stays with native build/link tooling under `Mobile/rclone_bridge`,
+The Go bridge stays with native build/link tooling under `mobile_build/rclone_bridge`,
 including the ordinary archive/image actions shared with app document readers.
 
 Validation: the full mobile host suite passed 239 tests after the presentation
@@ -415,7 +415,7 @@ local and unstaged; no commits.
 
 ## Final four consolidation items
 
-- Shared `logisticsmobile.files_ui.local_read_available` admits offline encrypted
+- Shared `mobile.files_ui.local_read_available` admits offline encrypted
   reads during a managed transfer from Files, Documents and library shortcuts.
   Documents keeps crypt roots available, retains scoped provider/account identity,
   and rejects a credential generation change before publishing rows or opening.

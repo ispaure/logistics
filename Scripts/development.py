@@ -43,7 +43,7 @@ def doctor(root, interpreter):
         print(f'{"AVAILABLE" if shutil.which(tool) else "OPTIONAL / absent"} native tool: {tool}')
     print('Setup: python3 dev.py setup desktop | python3 dev.py setup mobile')
     print('Missing commonUtils: git submodule update --init --recursive (preserve local edits first).')
-    print('Generated environments, Mobile/build, payload, logs and deployment workspaces stay local.')
+    print('Generated environments, mobile_build/build, payload, logs and deployment workspaces stay local.')
     return int(not all(ready for _, ready in checks))
 
 
@@ -59,10 +59,10 @@ def setup(root, suite, interpreter, *, dry_run=False):
         commands = [[uv, 'sync', '--project', str(root / 'Python'), '--locked', '--python', '3.12.2']]
     else:
         python = interpreter(True)
-        commands = [] if python.is_file() else [[uv, 'venv', '--python', '3.12.2', str(root / 'Mobile/.venv')]]
+        commands = [] if python.is_file() else [[uv, 'venv', '--python', '3.12.2', str(root / 'mobile_build/.venv')]]
         # Additive installation preserves native build tools in an existing environment.
         commands.append([uv, 'pip', 'install', '--python', str(python), '--require-hashes',
-                         '-r', str(root / 'Mobile/requirements-host.txt')])
+                         '-r', str(root / 'mobile_build/requirements-host.txt')])
     for command in commands:
         print(subprocess.list2cmdline(command) if os.name == 'nt' else shlex.join(command), flush=True)
         if not dry_run:

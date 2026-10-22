@@ -140,7 +140,7 @@ specific. `Open beside another document` is offered only at widths of at least
 640 logical pixels and for sessions supported by the editable pane host. Resize
 refreshes retained menus; the picker also rejects compact invocation.
 
-`Mobile/tests/test_folder_navigation.py` covers native ancestor controllers,
+`mobile_build/tests/test_folder_navigation.py` covers native ancestor controllers,
 multi-level pop callbacks, guarded Back, retained reader return, Home reveal,
 file selection and unsaved provider drafts. These mocked native and dummy-host
 checks do not certify physical iOS gesture rendering.
@@ -224,12 +224,12 @@ Documents secondary column. Failure removes the temporary route and reveals the
 retained origin. Cleanup never selects a tab the user has left. Library readers
 prepare their first page before presenting their view.
 
-`Mobile/tests/test_file_loading.py` checks the panel contents and replacement
+`mobile_build/tests/test_file_loading.py` checks the panel contents and replacement
 across Home, Documents and Workspaces, failure recovery and Back during loading.
 
 ## Compact Android top chrome
 
-`logisticsmobile.navigation.install_android_navigation_appearance` hides the
+`mobile.navigation.install_android_navigation_appearance` hides the
 redundant activity ActionBar after startup restores native chrome. Page headings
 and in-page Back controls remain owned by their existing screens. Both bottom
 navigation and the tablet rail use this policy. Logistics supplies its own
@@ -248,14 +248,14 @@ window title remains available as metadata. Reader fullscreen and keyboard
 chrome snapshots therefore normally capture an already hidden activity bar.
 Home uses an 8-point content top margin without an additional heading top margin.
 
-`Mobile/tests/test_navigation_contrast.py` checks initial tablet installation,
+`mobile_build/tests/test_navigation_contrast.py` checks initial tablet installation,
 late rail creation, and preserved selection appearance with mocked Android APIs.
-`Mobile/tests/test_hub_documents.py` checks the Home heading inset. Physical Boox
+`mobile_build/tests/test_hub_documents.py` checks the Home heading inset. Physical Boox
 layout still requires device validation.
 
 ## Android Back policy and panel audit (2026-10-18)
 
-`logisticsmobile.routes.MobileRoutes` specializes the shared route host at
+`mobile.routes.MobileRoutes` specializes the shared route host at
 the Android dispatcher entry point. It installs the existing lifecycle-scoped
 AndroidX `NavigationBack` bridge with `system_back`; explicit toolbar Back and
 Cancel pop their route directly. Document routes stay within the opening
@@ -298,7 +298,7 @@ serialized until completion; failed browser navigation retains its history.
 Checkpoint refusal consumes Back without popping or changing tabs. Returning Home
 runs destination selection and route rendering, restoring body ownership and chrome.
 
-`Mobile/tests/test_android_back.py` covers these policies with real app panels,
+`mobile_build/tests/test_android_back.py` covers these policies with real app panels,
 synthetic local files/books/PDFs, remote navigation fixtures, and a mocked Java
 listener boundary. These host tests do not certify physical gestures, IME ordering
 or predictive animations. The local QA emulator could not boot for this audit:
@@ -349,13 +349,13 @@ recovery using the dummy native backend.
 marker detection and bounded revision-checked note reads for both desktop and
 mobile. Desktop Text Editor contributes **Open Notes Library** to location
 actions through `notes_actions` and hosts `ui.notes_library` in Documents.
-`logisticsmobile.notes_actions` resolves the selected Local, LocalCrypt, mapped
+`mobile.notes_actions` resolves the selected Local, LocalCrypt, mapped
 copy or Remote scope without opening its file browser; a background root probe
 adds the command to the location's Push/Pull actions page only when `.obsidian`
 is a directory. Probes perform no filesystem mutations, and generation/navigation
 checks discard stale results.
 
-`logisticsmobile.obsidian` retains the native adaptive folder/page reader and
+`mobile.obsidian` retains the native adaptive folder/page reader and
 owns a transient `notes-library` Documents session. Its hamburger, history,
 parent navigation and read-aloud controls stay with the reader. Closing the
 library removes its session; private catalog revocation clears its tree, speech
@@ -366,7 +366,7 @@ loading. No plaintext staging directory is created.
 Remote adapters advertise `remote_storage`; neither UI creates a search field
 for them. Root detection and explicit folder expansion use immediate listings,
 with no recursive enumeration, prefetch or remote search. Local name filtering
-only examines loaded rows. `Mobile/tests/test_notes_library.py` and desktop
+only examines loaded rows. `mobile_build/tests/test_notes_library.py` and desktop
 `test_notes_library_desktop.py` cover action placement, Documents ownership,
 remote call bounds, containment, cancellation and credential retirement. Native
 `obsidian_checks.py` covers real Local/LocalCrypt reads and action screenshots.
@@ -457,7 +457,7 @@ export commands remain available from Chat. No model request starts from
 navigation. The conversation list represents the existing flat conversation
 store; no new folder or branching persistence format is introduced.
 
-Host coverage is in `Mobile/tests/test_workspace_navigation.py`, including
+Host coverage is in `mobile_build/tests/test_workspace_navigation.py`, including
 compact drawers, nested-file opening, independent drafts, two-document/browser
 switches, collapse and close, and chat history/draft restoration. The native UI
 review calls `workspace_checks.py` to exercise real phone/tablet content and
@@ -490,7 +490,7 @@ and repeated reopens occupied the complete 834-point safe width at x=0; normal
 controls used the native Documents menu slot and left reading status 16 points
 above the destination-bar boundary. The diagnostic restored ordinary startup
 after cleanup. Detailed local measurements are retained in ignored
-`Mobile/logs/ipad-reader-layout.json`. This does not establish the cause of the
+`mobile_build/logs/ipad-reader-layout.json`. This does not establish the cause of the
 user's original intermittent Workspaces failure.
 
 Workspaces constructs discovery results and its replacement page before clearing
@@ -628,7 +628,7 @@ and composer bounds/hit testing with keyboard and six-line drafts; wide iPad
 Workspaces panes measured 405/405 points and met at x=417 in an 834-point window.
 These are targeted local checks, not full native-suite, Android-rendering,
 physical-device or Duo fold-transition evidence. Probe sources, screenshots,
-results and source hashes are retained under `Mobile/logs/feedback-review/`.
+results and source hashes are retained under `mobile_build/logs/feedback-review/`.
 
 
 ## iPhone tab labels at cold start
@@ -648,7 +648,7 @@ Native suite startup now inspects rendered iPhone label bounds before it exercis
 navigation, and host coverage verifies titles, glyphs and selection preservation.
 The iPad's hidden legacy tab labels are excluded from the phone-only pixel check;
 its visible native tab/sidebar presentation is checked separately. Local captures
-and measurements live in `Mobile/logs/tab-label-review/`.
+and measurements live in `mobile_build/logs/tab-label-review/`.
 
 
 Validation for this fix: 185 mobile host tests passed, including startup from the
@@ -707,7 +707,7 @@ platform skips; native bridge Go tests; lint and whitespace checks. Targeted iOS
 26.5 simulator probes verified first Chat selection, 20 drawer toggles, a 402-point
 plain button rejecting blank-edge hits and accepting its text center, Credential
 label spacing and an opened Markdown document nested beneath its launcher actions.
-Sources/screenshots/results are in the ignored Mobile/logs/credential-followup/
+Sources/screenshots/results are in the ignored mobile_build/logs/credential-followup/
 folder. These targeted checks do not constitute a full Android or native-suite run.
 
 ## Native first-selection ordering
@@ -759,7 +759,7 @@ CryptFiles/ManagedCopies, verified its decoded first image and correct storage
 selection, then opened an INI in the private text view. Native INI saving is
 covered by the Go round-trip and host UI save tests; the targeted simulator used
 its existing executable for the open/display checks. Source/results/screenshots
-are retained in ignored `Mobile/logs/localcrypt-open-review/`. Android rendering
+are retained in ignored `mobile_build/logs/localcrypt-open-review/`. Android rendering
 and a full native suite were not exercised in this follow-up.
 
 
@@ -822,7 +822,7 @@ window. Android's action bar follows the same light/dark surface palette.
 
 ## Partially open Duo seam layout
 
-`logisticsmobile.fold_layout` observes `UIHingeInteraction` on each host window
+`mobile.fold_layout` observes `UIHingeInteraction` on each host window
 when available (iOS 27.1+), retaining its update block and interaction. Status 2
 activates the seam policy; fully open, unknown/unavailable and horizontal-fold
 orientations use ordinary layout. Coordinates come from the window midpoint
@@ -839,7 +839,7 @@ gutter. Layout watchers compare posture/seam as well as viewport dimensions and
 wait for fit zoom before rebuilding. Provider worker loads use a main-thread
 snapshot of the layout mode and never read UIKit hinge geometry on a worker.
 
-`Mobile/tests/test_fold_layout.py` covers rail offsets, status/orientation fallback,
+`mobile_build/tests/test_fold_layout.py` covers rail offsets, status/orientation fallback,
 unequal aspect ratios, unpaired manga and landscape isolation. The cache-only
 `fold_seam_probe` records native Home joins and a real composed comic; its partial
 status is injected explicitly when the simulator is flat, so it does not claim
@@ -1003,14 +1003,14 @@ controls before entering credential checks, so cold-start unlocking uses the sam
 password prompt and resume callback as Home unlock.
 Private app data is never used as the shared root. Managed copies continue using
 `CollectionFiles` and their transfer mappings.
-Regression coverage is in `Mobile/tests/test_folder_source_tabs.py` and the hub
+Regression coverage is in `mobile_build/tests/test_folder_source_tabs.py` and the hub
 and document-layout tests. Native device appearance still requires a device run.
 
 ## Offline documentation wiki
 
-`logisticsmobile.documentation_ui.show_documentation` opens the shared
+`mobile.documentation_ui.show_documentation` opens the shared
 `commonUtils.ui.native.markdown.MarkdownWikiView` with Logistics appearance.
-The catalog, native wiki UI and inert Markdown renderer belong to commonUtils. Settings opens the bundled `logisticsmobile/user_docs` tree in a detail
+The catalog, native wiki UI and inert Markdown renderer belong to commonUtils. Settings opens the bundled `mobile/user_docs` tree in a detail
 route. The shared `AdaptiveSidebar` uses a 260-point sidebar, 448-point article minimum
 and 12-point gap after the wiki's margins; narrower allocations use a hamburger.
 `resize_workspace` supplies the Settings content width after native rails/safe
@@ -1021,7 +1021,7 @@ expanded-folder state survive page changes. Links are restricted to cataloged
 local Markdown pages. This is a read-only help route, separate from editable
 workspace documents, so opening help does not replace a document session.
 
-`Mobile/tools.py` stages the documentation UI, portable catalog and all bundled
+`mobile_build/tools.py` stages the documentation UI, portable catalog and all bundled
 Markdown guides explicitly. New guide files must remain under the owner directory
 and pass the existing linked-source rejection. Shared desktop API details remain
 in commonUtils' Markdown guide.
@@ -1036,7 +1036,7 @@ links/images. Documentation opts into local links and heading navigation through
 the shared wiki. Its rows reserve disclosure space for leaves and indent every
 level, so expanding a folder cannot move child labels left of their parent.
 Focused regressions live in `commonUtils.tests.test_native_markdown` and
-`Mobile/tests/test_documentation_ui.py`; host/dummy checks do not certify native
+`mobile_build/tests/test_documentation_ui.py`; host/dummy checks do not certify native
 iOS or Android visual layout. See the shared native embedding guide for API details.
 
 
@@ -1057,7 +1057,7 @@ Validation for this presentation change: 67 focused mobile host checks passed.
 An isolated iPad simulator preview verified selected rows and measured both
 Markdown toolbars at the article's left edge (documentation x=284, Notes Library
 x=272 logical points), beyond each 260-point browser pane. Local screenshots
-and measurements are in ignored `Mobile/logs/browser-pane-review/`. Android
+and measurements are in ignored `mobile_build/logs/browser-pane-review/`. Android
 rendering was not visually verified in this pass.
 
 ## Settings categories and responsive panes
@@ -1174,7 +1174,7 @@ The iPad check also covers native tab selection updating the Python route state.
 
 The focused host run passed 152 mobile checks, seven packaging checks and 50
 desktop/document-store checks. Local evidence is retained under the ignored
-`Mobile/logs/navigation-flow-fixes/` directory, including XCTest source,
+`mobile_build/logs/navigation-flow-fixes/` directory, including XCTest source,
 attachments, logs, a swipe recording and `report.json`. This validates the tested
 simulator flows; physical devices and live remote providers need separate checks.
 
@@ -1219,7 +1219,7 @@ Library and Help. A settings category may move between a compact route and a wid
 pane while retaining its logical identity. Fullscreen image content intentionally
 extends beneath system chrome and is tested separately by the comic suite.
 
-These checks run through `Mobile/ui_tools.py` in `.github/workflows/mobile-build.yml`,
+These checks run through `mobile_build/ui_tools.py` in `.github/workflows/mobile-build.yml`,
 which is a required dependency of `.github/workflows/release.yml`. They belong to
 the real native app gate, not the pure-Python document-runtime smoke test. Native
 geometry samples and failures are included in the uploaded mobile diagnostics.
@@ -1230,7 +1230,7 @@ provider behavior still require their own targeted verification.
 
 ## Selection policy owner
 
-`logisticsmobile/workspace_policy.py` resolves retained editable session views and
+`mobile/workspace_policy.py` resolves retained editable session views and
 owns pinned-document selection, focus swapping, unavailable-session retirement
 and pair-picker eligibility without importing a native toolkit. The navigation
 adapter composes `WorkspaceSelection`; its `pinned` property remains compatible.
@@ -1241,7 +1241,7 @@ navigation and reader-lifetime regressions.
 
 ## Adaptive iOS toolbar actions
 
-`logisticsmobile.ios_toolbar` maps retained Logistics buttons to ordinary
+`mobile.ios_toolbar` maps retained Logistics buttons to ordinary
 `UIBarButtonItem` instances and semantic `UIBarButtonItemGroup` groups in the
 owning navigation controller. It forwards actions to the retained button target,
 copies current native menus, and keeps bar-item enabled state synchronized with
@@ -1279,8 +1279,8 @@ also require simulator/device validation.
 The October 21 isolated QA run passed 27 screen states on each of Duo, iPhone
 and iPad (81 total), with actual native Search/Save target dispatch. Separate
 XCTest taps verified the normal toolbar menu on iPhone/iPad and the system
-Duo overflow menu. The probe is `Mobile/native_tests/tests/logisticsmobile/ios_toolbar_probe.py`;
-the UI test source is `Mobile/native_tests/ios/ToolbarMenuUITests.swift`.
+Duo overflow menu. The probe is `mobile_build/native_tests/tests/logisticsmobile/ios_toolbar_probe.py`;
+the UI test source is `mobile_build/native_tests/ios/ToolbarMenuUITests.swift`.
 See the [native toolbar evidence](mobile-evidence/2026-10-21-ios-adaptive-toolbars.json)
 for source hashes, layouts and limits. Inner-display fold poses, older native
 runtimes, accessibility settings and live remote providers were not exercised.

@@ -177,7 +177,7 @@ class GitPreferencesForm(qt.QWidget):
         box = self.page('Diff'); form = qt.QFormLayout(); box.addLayout(form)
         self.font_button = qt.QPushButton('Shared code font in Logistics Settings…')
         def choose_font():
-            from ui_new.settings.window import open_settings
+            from desktop.settings.window import open_settings
             open_settings(self, 'commonutils')
         self.font_button.clicked.connect(choose_font); form.addRow('Code font', self.font_button)
         self.number(form, 'diff_limit_kb', 'Text preview limit (KiB)', 16, 16384)

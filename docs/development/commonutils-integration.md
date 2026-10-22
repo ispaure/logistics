@@ -65,7 +65,7 @@ explicitly. Feature archive and browser code likewise imports the shared owners.
 
 ## Mobile browser boundary
 
-The mobile browser is Python. Logistics' `logisticsmobile.browser_ui.FileBrowser`
+The mobile browser is Python. Logistics' `mobile.browser_ui.FileBrowser`
 customizes the optional Toga browser in commonUtils; Toga supplies UIKit controls
 on iOS and Android controls on Android. Desktop continues to use the Qt browser.
 
@@ -130,7 +130,7 @@ guards active hosts and chooses resource cleanup/theme refresh; subscriptions
 suppress queued callbacks after disposal.
 
 System document selection and scoped byte access live in shared native documents
-and runtime document-access adapters. `logisticsmobile.pickers` retains document
+and runtime document-access adapters. `mobile.pickers` retains document
 name validation, text export limits and MIME policy; Logistics owns import storage.
 
 Native menu construction and presentation helpers now use shared `ui.native`

@@ -69,9 +69,9 @@ Use disposable copies when testing behavioral changes to these operations.
 
 `mobile/burst_camera.py` presents `LGBurstCameraController` from
 `mobile/ios/BurstCamera.m` through Rubicon. The iOS-only entry is appended to
-Home, after documents and status. `Mobile/camera_build.py` refreshes the native
+Home, after documents and status. `mobile_build/camera_build.py` refreshes the native
 source included by the generated launcher's existing compilation unit and adds
-the two purpose strings. `Mobile/cloud_build.py` invokes it and links AVFoundation
+the two purpose strings. `mobile_build/cloud_build.py` invokes it and links AVFoundation
 and Photos. Do not edit generated launcher copies.
 
 The native controller owns a serial capture queue. Touch-down requests capture
@@ -87,7 +87,7 @@ leave the files for manual recovery. Foreground loss stops capture and the
 session; Done dismisses after requesting teardown while accepted captures finish.
 
 Host validation: `test_burst_camera`, `test_hub_documents` and
-`test_packaged_startup` in `Mobile/tests`. Native source must also compile and
+`test_packaged_startup` in `mobile_build/tests`. Native source must also compile and
 run on iOS; a simulator cannot establish physical capture latency or quality.
 See the [mobile user guide](../user_mobile/user_mobile.md).
 
@@ -98,7 +98,7 @@ simulator builds succeeded. The isolated `burst_camera_probe.py` verified native
 Home presentation, camera-unavailable UI, shutter guards, dismissal, a synthetic
 image saved through PhotoKit, successful-save original cleanup, and retention plus
 burst stop after a forced Photos save failure. Local results/screenshots are in
-`Mobile/logs/burst-camera-result.json`, `burst-home.png`, and `burst-camera.png`.
+`mobile_build/logs/burst-camera-result.json`, `burst-home.png`, and `burst-camera.png`.
 The signed app installed and launched in place over Wi-Fi on the paired iPhone
 15 Pro Max. Sensor capture, physical shutter latency and comparison with Apple's
 Camera image quality still require the on-device trial; simulator evidence does

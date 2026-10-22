@@ -6,7 +6,7 @@ from commonUtils.ui.appearance.theme import apply_theme
 from commonUtils.ui.appearance.styling import apply_styling
 from features.settings import initialize_settings
 from features import registry
-from ui_new.main_window import MainWindow
+from desktop.main_window import MainWindow
 from services.folders.ui.indexing import IndexService
 
 
@@ -22,7 +22,7 @@ def main() -> int:
         indexing.start()
         apply_theme(app)
         apply_styling(app)
-        from ui_new.settings.window import open_settings
+        from desktop.settings.window import open_settings
         app._commonutils_open_settings = open_settings
         log(Severity.DEBUG, 'Logistics', 'Initialize Features')
         registry.load_feature_preferences()

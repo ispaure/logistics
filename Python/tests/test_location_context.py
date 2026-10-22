@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from ui_new.documents import DocumentsPage
-from ui_new.location_context import (
+from desktop.documents import DocumentsPage
+from desktop.location_context import (
     document_title, install_browser_location, location_catalog, location_context,
 )
 

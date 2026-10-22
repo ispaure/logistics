@@ -230,7 +230,7 @@ class ReaderTests(QtTestCase):
     def test_failed_appearance_save_restores_displayed_value(self):
         shared, books = self.appearance_stores
         with patch.object(shared, 'save', side_effect=OSError('settings unavailable')), \
-                patch('ui_new.notifications.notify') as notification:
+                patch('desktop.notifications.notify') as notification:
             self.page.font_size.setValue(24)
         self.assertEqual(self.page.font_size.value(), 15)
         self.assertEqual(self.page.text.document().defaultFont().pointSize(), 15)

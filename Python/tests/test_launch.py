@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 import unittest
 
 import launch
-from ui_new import __main__ as module_launcher
+from desktop import __main__ as module_launcher
 
 
 class LaunchTests(unittest.TestCase):

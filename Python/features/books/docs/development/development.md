@@ -130,7 +130,7 @@ resources and the speech-service query. `mobile/speech_host.py` declares explici
 icon, overlay, saved-voice and playback factories; `speech_view.py` imports no
 mobile application modules. The host composes its existing presentation and
 locked-session policy through those factories.
-`Mobile/cloud_build.py` also refreshes the configured Java source roots in reused
+`mobile_build/cloud_build.py` also refreshes the configured Java source roots in reused
 Gradle projects: Briefcase's source update alone does not apply newly added roots.
 Without this refresh, older projects can omit the shared `SpeechListener` and report
 that speech support is missing even with an installed system voice.
@@ -142,7 +142,7 @@ Playback buttons share the available row width and status text sits below them.
 The overlay height includes the section spacing and grows for wrapped status
 messages. `test_speech_overlay` covers slider quantization and timer behavior;
 `speech_controls_probe` checks native control bounds with a silent fixture engine.
-`logisticsmobile/speech_overlay.py` hosts them in a detached iOS container or
+`mobile/speech_overlay.py` hosts them in a detached iOS container or
 Android popup, leaving the document layout tree unchanged. Disposal detaches the
 surface. Both native hosts size the popup to its status message and controls,
 expanding for wrapped errors and shrinking again for short playback messages.
@@ -205,7 +205,7 @@ including inline formatting and block separators, and applies those same UTF-16
 ranges to its DOM. The map is removed when the speech owner is disposed. Preview-read failures
 show a recoverable error instead of escaping the Play handler.
 
-`Mobile/native_tests/tests/logisticsmobile/speech_probe.py` is an isolated-bundle
+`mobile_build/native_tests/tests/logisticsmobile/speech_probe.py` is an isolated-bundle
 probe of the real Markdown preview Play handler and EPUB bridge, native range
 callbacks, visible word highlights and completion cleanup. Android emulator and
 iPhone simulator runs completed both passages with native word events and DOM
@@ -245,7 +245,7 @@ explicitly reopening an already loaded imported EPUB. A retained archive decoder
 does not establish that the native WebView still has its document. Reopen waits
 for pending position writes through `move_book_page`, replaces the chapter bridge
 and restores the saved passage without creating another session or import.
-`Mobile/tests/test_reader_sessions.py` covers this recovery path. Switching
+`mobile_build/tests/test_reader_sessions.py` covers this recovery path. Switching
 destinations alone does not trigger a chapter reload.
 
 `mobile/speech.py` keeps bounded utterances and a private in-memory word-offset

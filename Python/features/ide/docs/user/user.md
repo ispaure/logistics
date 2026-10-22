@@ -189,7 +189,12 @@ along with the shared editor's C/C++, C#, Java, Rust, Go, SQL and INI grammars.
 `.blade.php` is recognized before `.php`; Blade directives and single-line
 expressions combine with HTML/PHP highlighting. Multiline Blade constructs have
 limited highlighting. Unknown text remains editable as plain text. Colors follow
-the application palette.
+the application palette: muted orange keywords in dark mode, blue keywords in
+light mode, green strings, blue numbers, purple built-ins and italic gray
+comments. Module paths and function names retain ordinary text colors, and the
+editor keeps its existing plain text and background colors. The same accents
+are used in Text Editor, source search previews and syntax-highlighted diff/merge
+views.
 
 This initial IDE has no debugger, terminal, automatic diagnostics or automatic hover.
 Git staging, commits and repository operations remain available in the Git

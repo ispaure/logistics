@@ -10,9 +10,9 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.configuration.layered import register_settings
 from services import updates
-from ui_new.updater import UpdateController
-from ui_new.landing import LaunchSurface
-from ui_new.pages.settings import ConfigurationPanel
+from desktop.updater import UpdateController
+from desktop.landing import LaunchSurface
+from desktop.pages.settings import ConfigurationPanel
 
 
 class UpdatePolicyTests(unittest.TestCase):
@@ -47,7 +47,7 @@ class UpdateUITests(QtTestCase):
             root = Path(temp)
             path = updates.ROOT / 'Python/configFile.ini'
             store = register_settings(path, root / 'personal.ini')
-            with patch('ui_new.pages.settings.settings_store', return_value=store):
+            with patch('desktop.pages.settings.settings_store', return_value=store):
                 panel = ConfigurationPanel([path], layered=True, scoped=False, scope='personal')
             editor = panel.stack.currentWidget()
             tabs = [editor.sections.tabText(i) for i in range(editor.sections.count())]
@@ -69,7 +69,7 @@ class UpdateUITests(QtTestCase):
         surface.resize(850, 550)
         owner = SimpleNamespace(dlg=dialog, launch_surface=surface,
                                 _closing=False, pending_update=None, _update_offer_visibility=Mock())
-        with patch('ui_new.updater.preferences_path', return_value=Path('/missing-test/preferences.json')), patch('ui_new.updater.qt.QTimer.singleShot'):
+        with patch('desktop.updater.preferences_path', return_value=Path('/missing-test/preferences.json')), patch('desktop.updater.qt.QTimer.singleShot'):
             controller = UpdateController(owner)
         self.addCleanup(dialog.deleteLater)
         controller.timer.stop()
@@ -90,7 +90,7 @@ class UpdateUITests(QtTestCase):
         self.assertGreaterEqual(button.width(), button.sizeHint().width())
         self.assertGreaterEqual(button.height(), button.sizeHint().height())
         self.assertEqual(button.x() + button.width(), owner.launch_surface.width() - 12)
-        with patch('ui_new.updater.notify'):
+        with patch('desktop.updater.notify'):
             controller._finished(None, 'Preparation failed')
         self.assertEqual(button.width(), idle_width)
         self.assertEqual(button.x() + button.width(), owner.launch_surface.width() - 12)
@@ -110,7 +110,7 @@ class UpdateUITests(QtTestCase):
     def test_failed_prepare_keeps_app_open_and_notifies(self):
         controller, owner = self.controller()
         controller.operation = 'prepare'
-        with patch('ui_new.updater.notify') as notice, patch.object(owner.dlg, 'close') as close:
+        with patch('desktop.updater.notify') as notice, patch.object(owner.dlg, 'close') as close:
             controller._finished(None, 'local tracked changes')
         self.assertIsNone(owner.pending_update)
         close.assert_not_called()

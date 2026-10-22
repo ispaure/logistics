@@ -105,7 +105,7 @@ with the [mobile build and release handbook](docs/development/mobile-handbook.md
 | --- | --- |
 | [File Browser & Markdown](docs/user/files-and-documents.md) | Browse files, explore storage usage, and open Markdown Notes Libraries from location actions |
 | [Git](Python/features/git/docs/user/user.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
-| [Bulk Rename](Python/ui_new/bulk_rename/docs/user/user.md) | Preview and apply changes to many filenames at once |
+| [Bulk Rename](Python/desktop/bulk_rename/docs/user/user.md) | Preview and apply changes to many filenames at once |
 | [Text Editor](Python/features/text_editor/docs/user/user.md) | Edit text and code in tabs, search/replace, see Git change markers, and preserve file encodings |
 | [IDE](Python/features/ide/docs/user/user.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, search project files, and autosave with Git change markers |
 | [LM Chat](Python/features/lm/docs/user/user.md) | Chat with an existing LM server, paste screenshots, discuss IDE projects with read-only file tools, and save conversations locally |
@@ -134,6 +134,11 @@ with the [mobile build and release handbook](docs/development/mobile-handbook.md
 Additional emulator tools are available on request through ispaure’s **ally-tools**.
 
 ## Learn more
+
+Application source lives under `Python/`: `desktop/` hosts the desktop app,
+`mobile/` hosts the mobile app, and `features/` contains the tools they use.
+Mobile packaging and deployment scripts live in `mobile_build/`. See the
+[code map](docs/development/code-map.md) for ownership and native compatibility.
 
 For contributors, start with [developer setup](docs/development/testing.md).
 `python3 dev.py doctor` checks the local environment; `dev.py setup desktop` and

@@ -10,7 +10,7 @@ their domain rules and link here for browser wiring.
 
 `commonUtils.ui.file_browser.FileBrowser` owns views, root-bounded navigation,
 selection, generic File Information, filesystem actions and background preview/scan
-workers. `ui_new/file_browser.py:BrowserView` hosts it and installs enabled
+workers. `desktop/file_browser.py:BrowserView` hosts it and installs enabled
 Logistics contributions through `registry.get_browser_extensions()`. Feature-owned
 hosts can add their own controls around the same component.
 
@@ -34,7 +34,7 @@ Show Legacy (session only)** starts unchecked and uses an application-owned
 Discovery refreshes and window changes preserve it; no configuration value is
 read or written for it.
 
-`ui_new.location_context` presents storage identity in document dock titles and
+`desktop.location_context` presents storage identity in document dock titles and
 a browser row beneath the navigation controls. `FoldersPage` publishes local
 workspace roots from its discovered snapshot; longest-root matching distinguishes
 nested workspace names. The configured managed Local root covers files opened

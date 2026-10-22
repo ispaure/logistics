@@ -6,7 +6,7 @@ from .pages import ComicPages
 from .archive_io import archive_unchanged
 from .ui.reader import ComicReaderWindow
 from commonUtils.archives.zip_access import ArchivePasswordError
-from ui_new.dialogs.archive_password import ask_password
+from desktop.dialogs.archive_password import ask_password
 
 _windows = []
 

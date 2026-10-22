@@ -9,7 +9,7 @@ from commonUtils.ui.tasks.operation_progress import OperationProgress
 from features.blender.addons.scanning import inspect_addons, scan_preset
 from features.blender.addons.library import AddonLibrary, version_tuple
 from features.blender.addons.ui.page import source_label
-from ui_new.landing import LaunchCard
+from desktop.landing import LaunchCard
 from .layout import build_layout
 from features.blender.presets.manager import get_manager
 from features.blender.addons import bluehole

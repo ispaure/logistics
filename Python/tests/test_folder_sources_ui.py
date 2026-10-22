@@ -14,10 +14,10 @@ from features.contributions import (
     RemoteFolderSourceContribution, RegisteredContribution,
 )
 from models.local_folder import LocalFolder
-from ui_new.main_window import MainWindow
-from ui_new.pages.folders import FoldersPage
+from desktop.main_window import MainWindow
+from desktop.pages.folders import FoldersPage
 from services.folders.sources import discover_folder_sources
-from ui_new.settings.workspaces import WorkspaceVisibility, workspace_visibility
+from desktop.settings.workspaces import WorkspaceVisibility, workspace_visibility
 
 
 class FolderSourceTests(QtTestCase):
@@ -91,7 +91,7 @@ class FolderSourceTests(QtTestCase):
             idle = qt.Signal()
             def prepare_close(self):
                 return True
-        patcher = patch('ui_new.pages.folders.FoldersPage._create_browser', side_effect=lambda *args, **kwargs: BrowserStub())
+        patcher = patch('desktop.pages.folders.FoldersPage._create_browser', side_effect=lambda *args, **kwargs: BrowserStub())
         self.browser_factory = patcher.start()
         self.browser_patcher = patcher
         self.addCleanup(patcher.stop)
@@ -239,7 +239,7 @@ class FolderSourceTests(QtTestCase):
         self.assertFalse(icon_item.icon(0).isNull())
         self.assertEqual(icon_item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'LocalCrypt, locked')
         page.folder_tree.setCurrentItem(icon_item)
-        from ui_new.file_browser import _PrivateBrowserLocation
+        from desktop.file_browser import _PrivateBrowserLocation
         self.assertEqual(self.browser_factory.call_args.args, (_PrivateBrowserLocation(connection, cipher),))
         page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
         self.wait(page)
@@ -343,7 +343,7 @@ class FolderSourceTests(QtTestCase):
         page._folder_features = [RegisteredContribution('test', 'Test', FolderFeatureContribution(
             'Test', available, get_actions=lambda entry: [], supports_private_folders=True))]
         with patch('features.registry.get_folder_features', return_value=page._folder_features), patch(
-                'ui_new.file_browser._browser_view', return_value=opened) as factory, patch(
+                'desktop.file_browser._browser_view', return_value=opened) as factory, patch(
                 'features.rclone.localcrypt.ui.views.ensure_session', side_effect=AssertionError('Popup requested')), patch(
                 'features.rclone.session.read_package', side_effect=[ValueError('bad password'), {'Private': {'type': 'crypt'}}]):
             self.select_first(page)
@@ -398,7 +398,7 @@ class FolderSourceTests(QtTestCase):
             get_actions=lambda entry: [UIAction('Fixture action', callback=lambda: None)],
             supports_private_folders=True)
         with patch('features.registry.get_folder_features', return_value=[RegisteredContribution('test', 'Test', tool)]), patch(
-                'ui_new.file_browser._browser_view', side_effect=OSError('synthetic browser failure')), patch(
+                'desktop.file_browser._browser_view', side_effect=OSError('synthetic browser failure')), patch(
                 'features.rclone.session.read_package', return_value={name: {'type': 'crypt'} for name in ('One', 'Two')}):
             page = self.page()
             page.show()
@@ -662,7 +662,7 @@ class FolderSourceTests(QtTestCase):
             def prepare_close(self):
                 return True
         opened = Opened()
-        with patch('ui_new.file_browser._browser_view', return_value=opened) as factory, patch(
+        with patch('desktop.file_browser._browser_view', return_value=opened) as factory, patch(
                 'features.rclone.session.read_package', return_value={
                     'Shared': {'type': 'crypt'}, 'Additional': {'type': 'drive'}}):
             unlock.password.setText('synthetic password')

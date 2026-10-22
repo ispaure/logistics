@@ -5,8 +5,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from logisticsmobile.preferences import Preferences
-from logisticsmobile.preview import markdown_preview
+from mobile.preferences import Preferences
+from mobile.preview import markdown_preview
 
 
 class MobileHubTests(unittest.TestCase):

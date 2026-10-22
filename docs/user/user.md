@@ -6,7 +6,7 @@ libraries, servers and remote storage. **Documents** lists open readers/editors;
 together, and disabling a dependency with active dependents is refused.
 
 - [Files, search, storage, panes and Markdown](files-and-documents.md)
-- [Bulk Rename: preview, apply and recover](../../Python/ui_new/bulk_rename/docs/user/user.md)
+- [Bulk Rename: preview, apply and recover](../../Python/desktop/bulk_rename/docs/user/user.md)
 - [Configuration: paths, credentials and saved settings](configuration.md)
 
 Save settings explicitly; some changes apply to new windows or after a restart.

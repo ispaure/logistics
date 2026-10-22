@@ -2,7 +2,7 @@
 
 `features.pdf` owns PDF registration, desktop launching and native page rendering.
 It declares a PDF file type and a document launcher, with lazy desktop imports.
-`mobile_sources.json` is included in the mobile source owners in `Mobile/tools.py`.
+`mobile_sources.json` is included in the mobile source owners in `mobile_build/tools.py`.
 
 `document.PDFDocument` accepts bounded memory bytes or reads at most 32 MiB plus
 one byte from a provider stream. It discovers page count, enforces 10,000 pages
@@ -36,7 +36,7 @@ Validation:
 
 - `Python/tests/test_pdf_reader.py`: real PDF rendering, bounds, registration,
   provider reads, desktop page jumps and dragging, and document buffer release.
-- `Mobile/tests/test_pdf_reader.py`: Toga dummy UI integration for local, remote
+- `mobile_build/tests/test_pdf_reader.py`: Toga dummy UI integration for local, remote
   and offline LocalCrypt reading, numeric navigation, vertical gesture dispatch,
   credential revocation and no plaintext persistence. Native rasterization is
   replaced by a small fixture in these mobile UI tests.
@@ -74,7 +74,7 @@ Documents session. Page jump and PDF search share a collapsible Pages & search
 panel. PDFCanvas specializes the shared ImageCanvas with vertical paging.
 Tapping toggles fullscreen; the ReadingFrame hides header/footer/navigation and
 enables the shared hold magnifier only while fullscreen.
-`logisticsmobile.magnifier.bind` connects PDF and comic canvases to the same
+`mobile.magnifier.bind` connects PDF and comic canvases to the same
 validated `magnifier_zoom` preference. Native lens-button requests save before applying;
 failed saves preserve the displayed zoom. Live canvases and Settings selectors
 share updates by preference path, including independent app windows. Page replacement keeps
@@ -84,7 +84,7 @@ backends as comics. Fullscreen removes reader margins and fits the entire page
 using the smaller viewport-to-image scale factor, preserving aspect ratio. The
 native PDF probe checks actual rendered bounds and centering for portrait and
 landscape pages on both platforms, alongside fullscreen gestures and the lens.
-`Mobile/native_tests/tests/logisticsmobile/pdf_probe.py` exercises actual platform
+`mobile_build/native_tests/tests/logisticsmobile/pdf_probe.py` exercises actual platform
 rasterization, navigation, search and memory release in an isolated test app.
 
 Native verification on 2026-10-17 passed PDFKit and Android PdfRenderer opening,
@@ -102,7 +102,7 @@ are omitted; PDFs without contents return an empty tuple.
 `mobile.contents.PDFContents` loads on demand in a worker, checks the owning
 session before publishing or navigating, and keeps page jump/search available
 when parsing fails. It uses `commonUtils.ui.native.presentation.HierarchyList`;
-the host injects colours through `hierarchy_row_style`. `Mobile/tests/test_contents_hierarchy.py`
+the host injects colours through `hierarchy_row_style`. `mobile_build/tests/test_contents_hierarchy.py`
 covers real PDF destinations, disclosure independence and stale-session guards.
 
 ## Backend layout

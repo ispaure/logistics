@@ -98,7 +98,7 @@ class MobileCryptNativeTests(unittest.TestCase):
 
     def test_large_archive_streamed_move_preview_and_metadata(self):
         from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies, DownloadedCryptFile
-        from logisticsmobile.browser_preview import callbacks
+        from mobile.browser_preview import callbacks
         from commonUtils.runtime.local_files import LocalFiles
         from commonUtils.runtime.resource_mutations import move_resource
         from local_crypt_fixture import crypt_fixture

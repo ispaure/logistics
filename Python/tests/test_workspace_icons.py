@@ -5,7 +5,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from services.folders.appearance import LOCK_LIGHT, LOCK_DARK
-from ui_new.pages.workspace_icons import folder_icon
+from desktop.pages.workspace_icons import folder_icon
 
 
 class WorkspaceIconTests(QtTestCase):

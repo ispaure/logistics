@@ -11,7 +11,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.formats.registry import file_types
 from features import registry
 from features.contributions import FeatureContributions
-from ui_new.pages.features import FeaturesPage
+from desktop.pages.features import FeaturesPage
 
 
 class FeaturesPageTests(QtTestCase):

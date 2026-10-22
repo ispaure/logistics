@@ -33,7 +33,7 @@ folder needs its own landing and parent links; see [documentation ownership](doc
 Follow factories in `__init__.py` to find canonical implementations. Old root-level
 modules may forward imports to `ui/`; keep compatibility where needed and put
 new behavior in the implementation. Do not create duplicate feature packages for
-core browser/Markdown hosting or Bulk Rename, which retains its existing `ui_new`
+core browser/Markdown hosting or Bulk Rename, which retains its existing `desktop`
 owner. Registry/settings infrastructure also retains its current `features/`
 paths; see [infrastructure ownership](feature-infrastructure.md).
 
@@ -149,7 +149,7 @@ it. Browser construction waits for page visibility. Replaced views cancel work a
 remain owned until `idle` and `prepare_close()` permit deletion; page shutdown
 waits for discovery, detail detection and every retained browser.
 
-`ui_new/pages/workspace_panes.py` supplies resizable native dock panes. Set
+`desktop/pages/workspace_panes.py` supplies resizable native dock panes. Set
 `WORKSPACE_PANES_LOCKED = False` or construct `FoldersPage(panes_locked=False)` to
 experiment with moving/detaching them. The default hides the fixed pane headers
 and removes closing, moving and floating controls. Split dividers remain usable. This is a code setting,
@@ -224,7 +224,7 @@ with an H1, below optional YAML properties, and mention each child page in its
 parent's text. Use relative links. User guides explain prerequisites, controls,
 outcomes and recovery; developer guides explain ownership, contracts and checks.
 Application-wide UI and Workspaces workflows live in the root Logistics wiki;
-Bulk Rename stays with its existing `ui_new` owner. Shared APIs and external
+Bulk Rename stays with its existing `desktop` owner. Shared APIs and external
 feature internals remain documented in their own repositories.
 
 The shared `commonUtils.ui.markdown` viewer owns rendering, local link history and

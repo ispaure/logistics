@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from commonUtils.persistence.text import FileConflictError
-from logisticsmobile.documents import DocumentStore, MAX_BYTES
+from mobile.documents import DocumentStore, MAX_BYTES
 from commonUtils.runtime.document_access import LocalDocuments, IOSDocuments, AndroidDocuments
 
 
@@ -22,15 +22,15 @@ class MobileDocumentsTests(unittest.TestCase):
 
     def test_unchanged_checkpoint_skips_serialization_and_disk_flushes(self):
         doc = self.store.create(content=b'original')
-        with patch('logisticsmobile.documents.atomic_write_json') as write, \
+        with patch('mobile.documents.atomic_write_json') as write, \
                 patch.object(type(doc.snapshot), 'encode', side_effect=AssertionError('Re-encoded unchanged text')):
             self.store.checkpoint(doc)
         write.assert_not_called()
 
     def test_changed_text_name_and_saved_baseline_are_checkpointed(self):
-        from logisticsmobile.documents import atomic_write_json
+        from mobile.documents import atomic_write_json
         doc = self.store.create(content=b'original')
-        with patch('logisticsmobile.documents.atomic_write_json', wraps=atomic_write_json) as write:
+        with patch('mobile.documents.atomic_write_json', wraps=atomic_write_json) as write:
             doc.text = 'unsaved edits'
             self.store.checkpoint(doc)
             self.store.checkpoint(doc)
@@ -46,7 +46,7 @@ class MobileDocumentsTests(unittest.TestCase):
         self.assertFalse(recovered.modified)
 
     def test_missing_edited_and_replaced_recovery_files_force_checkpoint(self):
-        from logisticsmobile.documents import atomic_write_json
+        from mobile.documents import atomic_write_json
         doc = self.store.create(content=b'original')
         path = self.store.path(doc.id, '.json')
         for change in ('missing', 'edited', 'replaced'):
@@ -59,7 +59,7 @@ class MobileDocumentsTests(unittest.TestCase):
                     replacement = path.with_suffix('.replacement')
                     replacement.write_bytes(path.read_bytes())
                     replacement.replace(path)
-                with patch('logisticsmobile.documents.atomic_write_json', wraps=atomic_write_json) as write:
+                with patch('mobile.documents.atomic_write_json', wraps=atomic_write_json) as write:
                     self.store.checkpoint(doc)
                 write.assert_called_once()
                 self.assertEqual(DocumentStore(self.store.root).open(doc.id).text, 'original')
@@ -75,7 +75,7 @@ class MobileDocumentsTests(unittest.TestCase):
             self.store.checkpoint(doc)
 
     def test_failed_durable_checkpoint_retries_even_after_file_publication(self):
-        from logisticsmobile.documents import atomic_write_json
+        from mobile.documents import atomic_write_json
         doc = self.store.create(content=b'original')
         doc.text = 'unsaved edits'
         # Model a late durability failure after real publication. Windows has
@@ -86,10 +86,10 @@ class MobileDocumentsTests(unittest.TestCase):
             self.assertEqual(json.loads(self.store.path(doc.id, '.json').read_text())['text'],
                              'unsaved edits')
             raise OSError('durability acknowledgement failed')
-        with patch('logisticsmobile.documents.atomic_write_json', side_effect=fail_after_publication):
+        with patch('mobile.documents.atomic_write_json', side_effect=fail_after_publication):
             with self.assertRaises(OSError):
                 self.store.checkpoint(doc)
-        with patch('logisticsmobile.documents.atomic_write_json', wraps=atomic_write_json) as write:
+        with patch('mobile.documents.atomic_write_json', wraps=atomic_write_json) as write:
             self.store.checkpoint(doc)
             self.store.checkpoint(doc)
         write.assert_called_once()
@@ -133,12 +133,12 @@ class MobileDocumentsTests(unittest.TestCase):
         self.assertEqual(outside.read_text(), 'outside')
 
     def test_private_creation_works_without_hard_links_and_hides_incomplete_records(self):
-        with patch('logisticsmobile.documents.os.link', side_effect=PermissionError('sandbox forbids links')):
+        with patch('mobile.documents.os.link', side_effect=PermissionError('sandbox forbids links')):
             doc = self.store.create(content=b'original')
             doc.text = 'copy'
             self.assertEqual(self.store.save_copy(doc).text, 'copy')
         existing = set(self.store.root.iterdir())
-        with patch('logisticsmobile.documents.os.fsync', side_effect=OSError('flush failed')):
+        with patch('mobile.documents.os.fsync', side_effect=OSError('flush failed')):
             with self.assertRaises(OSError):
                 self.store.create(content=b'incomplete')
         self.assertEqual(set(self.store.root.iterdir()), existing)
@@ -177,11 +177,11 @@ class MobileDocumentsTests(unittest.TestCase):
         self.store.checkpoint(doc)
         before = self.store.path(doc.id, '.json').read_bytes()
         doc.text = 'latest unsaved edit'
-        with patch('logisticsmobile.documents.atomic_write_json', side_effect=OSError('disk full')):
+        with patch('mobile.documents.atomic_write_json', side_effect=OSError('disk full')):
             with self.assertRaises(OSError):
                 self.store.checkpoint(doc)
         self.assertEqual(self.store.path(doc.id, '.json').read_bytes(), before)
-        with patch('logisticsmobile.documents.write_text_file', side_effect=OSError('write failure')):
+        with patch('mobile.documents.write_text_file', side_effect=OSError('write failure')):
             with self.assertRaises(OSError):
                 self.store.save(doc)
         self.assertEqual(doc.snapshot.path.read_bytes(), b'before')
@@ -208,7 +208,7 @@ class MobileDocumentsTests(unittest.TestCase):
         doc.text = 'draft'
         self.store.checkpoint(doc)
         doc.snapshot.path.write_bytes(b'external')
-        with patch('logisticsmobile.documents.atomic_write_json', side_effect=OSError('disk full')):
+        with patch('mobile.documents.atomic_write_json', side_effect=OSError('disk full')):
             with self.assertRaises(OSError):
                 self.store.discard(doc)
         self.assertEqual(doc.text, 'draft')

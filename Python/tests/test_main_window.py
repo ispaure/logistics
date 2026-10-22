@@ -8,7 +8,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 
 from commonUtils.ui import pyside as qt
 from features.contributions import PageContribution, RegisteredContribution
-from ui_new import main_window
+from desktop import main_window
 
 
 class MainWindowTests(QtTestCase):
@@ -118,7 +118,7 @@ class MainWindowTests(QtTestCase):
             self.assertEqual([a.text() for a in window.dlg.menuBar().actions()], ['Logistics'])
 
     def test_notification_footer_releases_space_when_empty(self):
-        from ui_new.notifications import notify
+        from desktop.notifications import notify
         from uuid import uuid4
         window = self.window(); window.dlg.show(); self.app.processEvents()
         self.assertTrue(window.dlg.statusBar().isHidden())
@@ -406,14 +406,14 @@ class MainWindowTests(QtTestCase):
         window.dlg.show()
         key = window._launch_key('feature', 'example.page')
         for enabled in (True, False):
-            with patch('ui_new.main_window.get_setting', return_value=enabled) as setting:
+            with patch('desktop.main_window.get_setting', return_value=enabled) as setting:
                 window._launch(key)
             self.app.processEvents()
             setting.assert_called_once_with('Menus', 'launch_with_sidebar_bool', True)
             self.assertEqual(window.sidebar.isVisible(), enabled)
             self.assertEqual(window.settings_button.isVisible(), not enabled)
             self.assertIs(window.tabs.currentWidget(), window._feature_pages[('feature', 'example.page')])
-        with patch('ui_new.main_window.get_setting', return_value=False):
+        with patch('desktop.main_window.get_setting', return_value=False):
             window._launch('hub')
         self.app.processEvents()
         self.assertTrue(window.sidebar.isVisible())
@@ -601,7 +601,7 @@ class MainWindowTests(QtTestCase):
             window.dlg.close()
 
     def test_sidebar_groups_tools_and_keeps_documents_when_features_change(self):
-        from ui_new.documents import show_document
+        from desktop.documents import show_document
         contribution = self.contribution('Calculator', 'calculator')
         window = self.window([contribution]); window.dlg.show(); self.app.processEvents()
         self.assertTrue(window.tabs.tabBar().isHidden())
@@ -661,7 +661,7 @@ class MainWindowTests(QtTestCase):
     def browser_window(self, extensions=()):
         from pathlib import Path
         from tempfile import TemporaryDirectory
-        from ui_new.file_browser import FileBrowserPage
+        from desktop.file_browser import FileBrowserPage
         self.temporary = TemporaryDirectory(); self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         (self.root / 'file.txt').write_text('fixture')
@@ -740,7 +740,7 @@ class MainWindowTests(QtTestCase):
         import time
         window = self.browser_window()
         self.wait_browser(window.tabs.widget(0))
-        with patch('ui_new.main_window.get_setting', return_value=False):
+        with patch('desktop.main_window.get_setting', return_value=False):
             window._launch('browser')
         renamer = window._show_bulk_rename(self.root)
         deadline = time.monotonic() + 8
@@ -783,7 +783,7 @@ class MainWindowTests(QtTestCase):
 
     def test_document_popup_lists_and_selects_individual_text_buffers(self):
         from features.text_editor.ui.window import EditorWindow
-        from ui_new.documents import show_document
+        from desktop.documents import show_document
         window = self.browser_window(); self.wait_browser(window.tabs.widget(0))
         editor = EditorWindow(history_path=self.root/'recent.json', preferences_path=self.root/'editor.ini')
         first = editor.current
@@ -807,7 +807,7 @@ class MainWindowTests(QtTestCase):
         window.dlg.close(); self.app.processEvents()
 
     def test_all_detached_documents_keep_documents_selected_and_sidebar_return_route(self):
-        from ui_new.documents import show_document
+        from desktop.documents import show_document
         window = self.browser_window()
         browser = window.tabs.widget(0); self.wait_browser(browser)
         reader = qt.QMainWindow(); reader.setWindowTitle('Reader')

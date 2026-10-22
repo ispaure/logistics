@@ -14,7 +14,7 @@ from features.archives.ui.page import ArchivePage
 from features.archives.ui.window import _windows
 from features import registry
 from features.contributions import BrowserExtensionContribution, RegisteredContribution
-from ui_new.file_browser import BrowserView
+from desktop.file_browser import BrowserView
 
 
 class ArchiveBrowserTests(QtTestCase):

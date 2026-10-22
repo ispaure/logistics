@@ -56,7 +56,7 @@ class MetadataWindow(qt.QDialog):
                     self.status.setText(task.error)
                     from services.documents.zip_passwords import is_password_error
                     if self.source is not None and self.book is None and is_password_error(task.error):
-                        from ui_new.dialogs.archive_password import ask_password
+                        from desktop.dialogs.archive_password import ask_password
                         password = ask_password(self.path, task.error, self, source=self.source)
                         if password is not None:
                             self.password = password

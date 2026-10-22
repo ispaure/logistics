@@ -4,103 +4,103 @@
   "host_adapters": [
     [
       "Python/features/archives/ui/page.py",
-      "ui_new.notifications"
+      "desktop.notifications"
     ],
     [
       "Python/features/archives/ui/session.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/blender/ui/layout.py",
-      "ui_new.landing"
+      "desktop.landing"
     ],
     [
       "Python/features/blender/ui/page.py",
-      "ui_new.landing"
+      "desktop.landing"
     ],
     [
       "Python/features/books/ui/metadata_window.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/books/ui/reader.py",
-      "ui_new.notifications"
+      "desktop.notifications"
     ],
     [
       "Python/features/calibre/ui/export_dialog.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/comics/reader.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/comics/ui/browser_services.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/comics/ui/dialogs.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/comics/ui/library.py",
-      "ui_new.bulk_rename"
+      "desktop.bulk_rename"
     ],
     [
       "Python/features/comics/ui/metadata_editor.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/comics/ui/reader.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/dropbox/ui/dialogs.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/file_tools/ui/dialogs.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/fuse/actions.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/git/ui/application_settings.py",
-      "ui_new.settings"
+      "desktop.settings"
     ],
     [
       "Python/features/images/ui/dialogs.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/media/ui/dialogs.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/rclone/localcrypt/ui/views.py",
-      "ui_new.dialogs"
+      "desktop.dialogs"
     ],
     [
       "Python/features/rclone/localcrypt/ui/views.py",
-      "ui_new.location_context"
+      "desktop.location_context"
     ],
     [
       "Python/features/rclone/ui/remote_browser.py",
-      "ui_new.file_browser"
+      "desktop.file_browser"
     ],
     [
       "Python/features/rclone/ui/remote_browser.py",
-      "ui_new.location_context"
+      "desktop.location_context"
     ],
     [
       "Python/features/rclone/ui/workspace_unlock.py",
-      "ui_new.file_browser"
+      "desktop.file_browser"
     ],
     [
       "Python/features/text_editor/ui/editing.py",
-      "ui_new.settings"
+      "desktop.settings"
     ]
   ],
   "feature_dependencies": [

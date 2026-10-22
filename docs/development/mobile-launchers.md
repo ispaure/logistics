@@ -20,8 +20,8 @@ See the [user guide](../user_mobile/user_mobile.md) and
 
 ## Simple deployment window
 
-Double-click `Mobile/deploy_test_devices.command` for the small PySide window.
-It uses the root `.venv` for PySide6 and `Mobile/.venv` for build tools. Existing
+Double-click `mobile_build/deploy_test_devices.command` for the small PySide window.
+It uses the root `.venv` for PySide6 and `mobile_build/.venv` for build tools. Existing
 SDK, Go, signing, device and tester-group settings are reused.
 
 - **Deploy test devices** checks availability first, builds Android once, updates
@@ -39,19 +39,19 @@ SDK, Go, signing, device and tester-group settings are reused.
 - **TestFlight → Friends** archives/exports with the current TestFlight parameters;
   it retains the existing requirement for committed, clean release sources.
 - **Refresh** reads device availability again. **Open logs** opens the isolated
-  workspaces after test-device operations, or `Mobile/logs` after tester operations;
+  workspaces after test-device operations, or `mobile_build/logs` after tester operations;
   distribution output also identifies its build-specific log directory.
 
 Tester buttons ask once in the window after the build is prepared and verified,
 before upload and notification. Declining keeps the prepared build on disk.
 Firebase sign-in, if expired or missing, must first be completed using
-`Mobile/deploy_android_firebase.command --login`; the window reports this rather
+`mobile_build/deploy_android_firebase.command --login`; the window reports this rather
 than waiting for a hidden terminal answer. Apple processing/review can delay
 TestFlight availability. Button labels reflect the current Friends configuration;
 the underlying distribution configuration remains authoritative.
 
 Android devices are remembered automatically in ignored
-`Mobile/.tools/test-devices.json`, using hardware serials to combine USB and
+`mobile_build/.tools/test-devices.json`, using hardware serials to combine USB and
 wireless connections to the same device. New authorized Android connections are
 included automatically. iOS membership stays in `.device.json`. Connect the
 Galaxy S8+ by USB, enable USB debugging and accept the computer authorization
@@ -67,11 +67,11 @@ clears its data. The S8+ is not considered validated until it has actually been
 connected, installed and tested.
 
 Test-device deployments use separate persistent workspaces under ignored
-`Mobile/.deploy-workspaces/android/` and `Mobile/.deploy-workspaces/ios/`. Each
+`mobile_build/.deploy-workspaces/android/` and `mobile_build/.deploy-workspaces/ios/`. Each
 owns its staged payload, Briefcase project/cache, generated native libraries,
 build products and logs. The first run creates new projects; later runs reuse
 them. Canonical sources, SDK settings and the saved iOS signing/device identity
-still come from `Mobile/`; credentials are not copied into these workspaces.
+still come from `mobile_build/`; credentials are not copied into these workspaces.
 `logs/deployment.log` under each workspace captures that platform's full worker
 output; the window prefixes progress with `[Android]` or `[iOS]`. A failed
 platform does not cancel the other, and the batch waits for both before reporting
@@ -102,9 +102,9 @@ before installation; the helper never replaces keys or uninstalls the app.
 The first launch may take up to 90 seconds on slower devices; a startup timeout
 is reported without undoing a successful installation.
 
-Optional Terminal usage: `Mobile/deploy_android.command --device SERIAL` or
-`Mobile/deploy_android.command --build-only`. Build/install logs are under
-`Mobile/logs/android-*.log`. It builds local sources; it does not pull from GitHub.
+Optional Terminal usage: `mobile_build/deploy_android.command --device SERIAL` or
+`mobile_build/deploy_android.command --build-only`. Build/install logs are under
+`mobile_build/logs/android-*.log`. It builds local sources; it does not pull from GitHub.
 The launcher remembers the configured local SDK/cache paths and attempts to
 reconnect advertised wireless ADB devices using existing pairing keys. Pair once
 through Android Wireless debugging. Wake the tablet and enable that setting if
@@ -123,7 +123,7 @@ It resolves the configured **Friends** display name to its actual group alias.
 Use the Google account that owns the Firebase project. The CLI stores sign-in
 credentials in its own user configuration; never commit or share them.
 
-For sign-in without building, run `Mobile/deploy_android_firebase.command --login`.
+For sign-in without building, run `mobile_build/deploy_android_firebase.command --login`.
 `--check` verifies access and group configuration. After setup, double-clicking
 stages current local sources (including uncommitted edits), builds a release APK,
 assigns an increasing version code, aligns/signs/verifies it, then asks before
@@ -131,10 +131,10 @@ uploading and notifying testers. `--build-only` saves the signed APK without upl
 No connected Android device, Firebase SDK, Analytics SDK or Play account is needed.
 The app ID and group are configured in `firebase-distribution.json`.
 
-Back up ignored `Mobile/.android-beta/` securely: it contains the persistent
+Back up ignored `mobile_build/.android-beta/` securely: it contains the persistent
 signing key, its private password and build counter. Losing the key prevents
 updates to previously distributed builds. Missing signing files stop deployment;
-they are never silently replaced. APKs and logs live in `Mobile/build/firebase/`.
+they are never silently replaced. APKs and logs live in `mobile_build/build/firebase/`.
 Firebase CLI diagnostic logs stay in ignored `.tools/`.
 Release-signed betas cannot update a debug-signed device installation in place;
 this launcher never uninstalls an app or deletes its data.
@@ -171,7 +171,7 @@ bridge; Android uses NDK 27.2.12479018 (installed by the build helper if needed)
 source changes:
 
 ```sh
-python Mobile/tools.py stage Mobile/payload
+python mobile_build/tools.py stage mobile_build/payload
 cd Mobile
 python cloud_build.py licenses
 briefcase create android --no-input
@@ -184,7 +184,7 @@ briefcase build iOS --no-input
 ```
 
 Staging creates a new directory and refuses to replace an existing payload. Move
-or remove your previous generated `Mobile/payload` before staging again. For local
+or remove your previous generated `mobile_build/payload` before staging again. For local
 development, `--allow-dirty` permits uncommitted mobile and tracked shared sources.
 The release evidence verifier still rejects dirty payloads. Explicit local runs
 use `python ui_tools.py run android --device <device> --local` (or `ios`), verify
@@ -198,7 +198,7 @@ For native iPhone Duo display/bar adaptation, select an installed iOS 27.1 SDK
 or newer before creating/building the iOS app:
 
 ```sh
-export DEVELOPER_DIR="$(python Mobile/select_ios_sdk.py --path-only)"
+export DEVELOPER_DIR="$(python mobile_build/select_ios_sdk.py --path-only)"
 ```
 
 Run this from the repository root. It selects a compatible installed Xcode;
@@ -215,7 +215,7 @@ native selection callbacks, draft retention, focus and widget cleanup. This
 fixture supplements the normal app's Home/Files/Documents/Settings navigation shell.
 
 For live resize and lifecycle checks, build/install the test-mode app first and
-run from `Mobile` with a booted validation device:
+run from `mobile_build` with a booted validation device:
 
 ```sh
 python navigation_tools.py --adb /path/to/android-sdk/platform-tools/adb --device emulator-5554
@@ -226,7 +226,7 @@ These commands activate an isolated, synthetic draft under the test app's cache.
 Android exercises keyboard insets, phone/tablet sizes, real activity recreation
 and process restoration, and resets its size/density overrides afterward. Apple
 exercises scene rotation, background/resume and process restoration. Reports and
-screenshots go under `Mobile/logs/navigation`. They do not establish physical
+screenshots go under `mobile_build/logs/navigation`. They do not establish physical
 BOOX E Ink/stylus behavior, an actual fold gesture, or independent app windows.
 
 Only public, selected Python sources and licenses enter the payload. Private
@@ -262,9 +262,9 @@ The helper also supports paired iPads. To add one alongside your existing iPhone
 3. On the iPad, enable **Settings → Privacy & Security → Developer Mode**, restart
    and confirm when prompted. Wait for Xcode's device preparation to finish.
 4. Copy the iPad's Identifier/UDID from Xcode. For an initial USB deployment, run
-   `Mobile/deploy_ios.command deploy --device YOUR_IPAD_UDID --allow-wired`.
+   `mobile_build/deploy_ios.command deploy --device YOUR_IPAD_UDID --allow-wired`.
 5. For subsequent wireless deployments, put both devices on the same Wi-Fi,
-   unplug USB and run `Mobile/deploy_ios.command deploy --device YOUR_IPAD_UDID`.
+   unplug USB and run `mobile_build/deploy_ios.command deploy --device YOUR_IPAD_UDID`.
 
 `--device` also works with `status`, `build` and `launch`, and accepts an exact
 device name when unambiguous. It selects a target for that command without
@@ -273,29 +273,29 @@ the saved device. Builds provision and verify the selected iPhone or iPad before
 installation. If configuring a Mac for the first time with several devices
 connected, pass `--device` to `configure` explicitly.
 
-On a configured Mac, double-click `Mobile/deploy_ios.command` in Finder, or run
+On a configured Mac, double-click `mobile_build/deploy_ios.command` in Finder, or run
 it from any directory. With no arguments it runs `deploy-all --allow-wired`:
 build, verify, install and launch on every UDID listed in the ignored
-`Mobile/.device.json` `device_ids` array, using USB or Wi-Fi. Without that optional
+`mobile_build/.device.json` `device_ids` array, using USB or Wi-Fi. Without that optional
 array, it deploys only to the original `device_id`. Keep personal UDIDs in that
 local configuration, not in the launcher. Each target runs the normal deployment;
 a failed target is reported while the remaining targets are still attempted.
 The batch exits unsuccessfully if any device fails. Successful per-device reports
-are retained as `Mobile/logs/device-deployment-<UDID>.json`.
+are retained as `mobile_build/logs/device-deployment-<UDID>.json`.
 
 Explicit `deploy --device YOUR_UDID` selects one device; `deploy-all` uses the
 saved list. Add `--allow-wired` to explicit commands to permit USB. The launcher
 also accepts `build`, `status` and `launch` (launch without rebuilding).
 
-The launcher uses `Mobile/.venv` and an optional local Go installation at
-`Mobile/.tools/go`. To prepare another Mac:
+The launcher uses `mobile_build/.venv` and an optional local Go installation at
+`mobile_build/.tools/go`. To prepare another Mac:
 
 ```sh
-python3.12 -m venv Mobile/.venv
-Mobile/.venv/bin/python -m pip install briefcase==0.4.5
-# Install Go 1.26.9 on PATH, or extract it into Mobile/.tools/go.
-Mobile/deploy_ios.command configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
-Mobile/deploy_ios.command
+python3.12 -m venv mobile_build/.venv
+mobile_build/.venv/bin/python -m pip install briefcase==0.4.5
+# Install Go 1.26.9 on PATH, or extract it into mobile_build/.tools/go.
+mobile_build/deploy_ios.command configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
+mobile_build/deploy_ios.command
 ```
 
 Use the Python 3.12 environment containing Briefcase 0.4.5, with Go 1.26.9
@@ -305,14 +305,14 @@ Xcode's Apple Accounts settings and obtain your existing development team ID
 from Signing & Capabilities. Configure once from the repository root:
 
 ```sh
-python Mobile/device_tools.py configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
-python Mobile/device_tools.py status
-python Mobile/device_tools.py deploy
+python mobile_build/device_tools.py configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
+python mobile_build/device_tools.py status
+python mobile_build/device_tools.py deploy
 ```
 
 The device can be omitted during configuration if exactly one paired physical
 iPhone is discoverable. Team and device choices are stored in ignored
-`Mobile/.device.json`; no account credentials are stored. To deploy wirelessly,
+`mobile_build/.device.json`; no account credentials are stored. To deploy wirelessly,
 pair the iPhone in Xcode, enable Developer Mode, put both devices on the same
 Wi-Fi, unlock the iPhone, and unplug USB. Check `status` for `localNetwork` or
 `wireless` transport. Explicit `deploy` refuses a wired connection by default;
@@ -333,13 +333,13 @@ unpairs the device; resolve any reported installation error and rerun.
 Do not change the bundle ID or uninstall to work around a signing error.
 Enrollment pending may leave Xcode showing a Personal Team. Review the saved
 signing identity before switching to a newly available paid team.
-Logs are in `Mobile/logs/device-*.log`, the signed app in
-`Mobile/build/physical-device/Build/Products/Debug-iphoneos`, and successful
-deployment details in `Mobile/logs/device-deployment.json`.
+Logs are in `mobile_build/logs/device-*.log`, the signed app in
+`mobile_build/build/physical-device/Build/Products/Debug-iphoneos`, and successful
+deployment details in `mobile_build/logs/device-deployment.json`.
 
 For the first Personal Team launch, iOS may require trusting the developer in
 Settings → General → VPN & Device Management. After trusting, run
-`Mobile/deploy_ios.command launch`; a rebuild or uninstall is unnecessary.
+`mobile_build/deploy_ios.command launch`; a rebuild or uninstall is unnecessary.
 If another launch error appears, inspect the device error instead of treating
 every security error as a trust problem.
 
@@ -384,7 +384,7 @@ python3 dev.py test mobile
 ```
 
 The first command runs desktop-side mobile contracts using root `.venv`; the
-second runs widget/workflow contracts using `Mobile/.venv` and the dummy Toga
+second runs widget/workflow contracts using `mobile_build/.venv` and the dummy Toga
 backend. A filename or quoted glob selects a focused file or group. Each file
 runs in a fresh process; failures and per-file timeouts fail the command.
 These host checks do not certify device interfaces.
@@ -393,11 +393,11 @@ For the standalone host smoke, use the desktop environment directly:
 
 ```sh
 # macOS / Linux
-PYTHONPATH=Python:Python/tests .venv/bin/python -m logisticsmobile.smoke --target host
+PYTHONPATH=Python:Python/tests .venv/bin/python -m mobile.smoke --target host
 ```
 
 On Windows PowerShell, set `$env:PYTHONPATH = "Python;Python/tests"` and run
-`.venv/Scripts/python.exe -m logisticsmobile.smoke --target host`.
+`.venv/Scripts/python.exe -m mobile.smoke --target host`.
 
 ## Hosted builds and runtime checks
 

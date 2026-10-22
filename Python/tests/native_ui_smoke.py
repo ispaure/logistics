@@ -33,7 +33,7 @@ def main():
             from commonUtils.ui.appearance.styling import apply_styling
             from features.settings import initialize_settings
             from features import registry
-            from ui_new import main_window
+            from desktop import main_window
             phase('create QApplication')
             app = qt.initialize_q_app()
             phase('initialize isolated settings and styling')

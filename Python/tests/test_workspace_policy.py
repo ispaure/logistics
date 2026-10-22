@@ -1,7 +1,7 @@
 """Workspace decisions can run without a native toolkit or application instance."""
 from types import SimpleNamespace as NS
 import unittest
-from logisticsmobile.workspace_policy import WorkspaceSelection, session_view
+from mobile.workspace_policy import WorkspaceSelection, session_view
 
 
 class WorkspacePolicyTests(unittest.TestCase):

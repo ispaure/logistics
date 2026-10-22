@@ -62,7 +62,7 @@ class RemoteBrowserView(qt.QMainWindow):
         self.file_browser.activated.connect(self.open_document)
         self.file_browser.directory_changed.connect(lambda *_: self.title_changed.emit(self.view_title))
         self.file_browser.idle.connect(self.idle)
-        from ui_new.location_context import install_browser_location
+        from desktop.location_context import install_browser_location
         install_browser_location(self.file_browser, self.provider)
         self.operation = OperationProgress(self)
         self.operation.completed.connect(self._completed)
@@ -175,7 +175,7 @@ def open_remote(config, remote, parent=None, directory='', *, package=None):
     try:
         if workspace is not None:
             return workspace.add_view(location)
-        from ui_new.file_browser import FileBrowserWindow, _windows
+        from desktop.file_browser import FileBrowserWindow, _windows
         window = FileBrowserWindow(location, parent)
         _windows.append(window)
         window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)

@@ -8,7 +8,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 
 from commonUtils.ui import pyside as qt
 from features.contributions import RegisteredContribution, ServerProviderContribution
-from ui_new.pages.servers import ServersPage
+from desktop.pages.servers import ServersPage
 
 
 class ServerPageTests(QtTestCase):

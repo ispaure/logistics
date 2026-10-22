@@ -35,7 +35,7 @@ class NotesLibraryDesktopTests(QtTestCase):
 
     def test_location_action_and_documents_host_open_library(self):
         from commonUtils.ui.document_host import register_document_host
-        from ui_new.documents import DocumentsPage
+        from desktop.documents import DocumentsPage
         with self.temporary_directory() as directory:
             root=Path(directory);self.fixture(root)
             commands=actions(FolderEntry('Notes',local=LocalFolder(root)))

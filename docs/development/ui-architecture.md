@@ -16,7 +16,7 @@ See [worker lifetime and cancellation](architecture.md#long-running-workflows-an
 ### Seasonal snow
 
 `services.seasonal.snow_enabled` owns the local-date season (December 15 through
-January 2, inclusive) and high-contrast exclusion shared with mobile. `ui_new.snow.SnowOverlay`
+January 2, inclusive) and high-contrast exclusion shared with mobile. `desktop.snow.SnowOverlay`
 paints an input-transparent child of the main window. It observes Qt accessibility
 contrast changes and polls the saved setting/date once per second; its drawing
 timer stops for inactive or minimized windows. The Appearance panel saves
@@ -35,20 +35,20 @@ inside the complete folder outline with Balanced, nearly square bodies and no
 chains; the unlocked shackle swings
 outward to the right. Regular folders use the same blue as unlocked folders.
 
-Desktop's `Python/ui_new/pages/workspace_icons.py` renders these paths with Qt;
-mobile's `Python/logisticsmobile/control_icons.py` renders them with UIKit and
+Desktop's `Python/desktop/pages/workspace_icons.py` renders these paths with Qt;
+mobile's `Python/mobile/control_icons.py` renders them with UIKit and
 Android drawing APIs. Mobile's `palette.py` imports the shared colors and uses
 black for both states in monochrome mode. Keep distinct shapes and accessible
 state labels so color is not the only signal.
 
 Passive mobile browser indicators also need bundled PNGs in
-`Python/logisticsmobile/hub_icons.py`. These are generated copies, not a second
+`Python/mobile/hub_icons.py`. These are generated copies, not a second
 artwork source. After changing geometry, fills or stroke width, regenerate and check
 them from the repository root (Pillow is needed only by this development tool):
 
 ```sh
-.venv/bin/python Mobile/generate_folder_icons.py
-.venv/bin/python Mobile/generate_folder_icons.py --check
+.venv/bin/python mobile_build/generate_folder_icons.py
+.venv/bin/python mobile_build/generate_folder_icons.py --check
 ```
 
 Commit the updated embedded PNGs with the source change; mobile does not need
@@ -59,7 +59,7 @@ are separate artwork.
 
 ### Workspace layout
 
-`ui_new/pages/folders.py` hosts separate Info and Actions tabs below the source
+`desktop/pages/folders.py` hosts separate Info and Actions tabs below the source
 list, with Actions selected initially. General workspace metadata is populated in
 `info_scroll` for each selection, including selections whose actions need an
 unlock. Feature widgets and action groups continue to populate `detail_scroll`;
@@ -72,7 +72,7 @@ icon-only refresh button at its upper right, with a tooltip and accessible name.
 
 ## Desktop Folder Hub requests
 
-`ui_new/pages/folder_controller.py` owns source/detail request generations,
+`desktop/pages/folder_controller.py` owns source/detail request generations,
 pending refresh state and worker preparation without Qt. `FoldersPage` composes
 it and retains native widgets, credential-revocation checks, stale-result rejection
 and cooperative close. Compatibility state attributes delegate to that controller.

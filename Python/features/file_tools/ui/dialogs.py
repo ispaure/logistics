@@ -2,7 +2,7 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from features.file_tools import filesystem
-from ui_new.dialogs.tool_dialog import ToolDialog, coerce_initial_path
+from desktop.dialogs.tool_dialog import ToolDialog, coerce_initial_path
 
 
 class _ResultsDialog(ToolDialog):

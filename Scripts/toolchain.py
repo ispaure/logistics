@@ -13,10 +13,10 @@ def pins(text):
 
 def check(root=ROOT):
     desktop = tomllib.loads((root / 'Python/pyproject.toml').read_text())
-    mobile = tomllib.loads((root / 'Mobile/pyproject.toml').read_text())
-    host = pins((root / 'Mobile/requirements-host.in').read_text())
-    host.update(pins((root / 'Mobile/requirements-testflight.txt').read_text()))
-    locked = pins((root / 'Mobile/requirements-host.txt').read_text())
+    mobile = tomllib.loads((root / 'mobile_build/pyproject.toml').read_text())
+    host = pins((root / 'mobile_build/requirements-host.in').read_text())
+    host.update(pins((root / 'mobile_build/requirements-testflight.txt').read_text()))
+    locked = pins((root / 'mobile_build/requirements-host.txt').read_text())
     app = mobile['tool']['briefcase']['app']['logisticsmobile']
     errors = []
     for name, version in host.items():

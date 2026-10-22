@@ -2,20 +2,20 @@
 
 ## Launcher artwork
 
-`Mobile/resources/icons` contains pre-sized PNGs derived from the supplied light,
+`mobile_build/resources/icons` contains pre-sized PNGs derived from the supplied light,
 dark and monochrome artwork. iOS uses 20–180 pixel legacy slots and 1024 pixel
 light/dark/tinted slots. Android uses 48–192 pixel legacy icons and 108–432 pixel
 adaptive layers, with night-qualified artwork and API 33 monochrome resources.
 Adaptive foregrounds include padding to retain the complete supplied tile within
 the launcher mask. Android launchers control whether night/themed icons refresh.
 
-`Mobile/icon_build.py` installs these resources from `cloud_build.py` after
+`mobile_build/icon_build.py` installs these resources from `cloud_build.py` after
 Briefcase create/update, including device deployments and isolated TestFlight
 archives. It also replaces the template launch artwork. Build-time installation
 uses only the standard library; Pillow is needed only for asset regeneration:
 
 ```sh
-Mobile/.venv/bin/python Mobile/icon_build.py /path/to/light.png /path/to/dark.png /path/to/monochrome.png
+mobile_build/.venv/bin/python mobile_build/icon_build.py /path/to/light.png /path/to/dark.png /path/to/monochrome.png
 ```
 
 Regeneration downsamples the complete square images with Lanczos filtering,
@@ -25,7 +25,7 @@ mask converts inverse grayscale luminance, multiplied by source alpha, to opacit
 this retains the original shading when the launcher supplies its tint. Original
 downloads are not changed. Native launchers apply their own final icon masks.
 
-Verify catalog and resource installation with `Mobile/tests/test_icon_build.py`.
+Verify catalog and resource installation with `mobile_build/tests/test_icon_build.py`.
 Compile the generated iOS catalog with Xcode's asset compiler when changing its
 appearance slots. Home-screen appearance and launcher cache refresh still need
 device validation; host tests do not establish those behaviors.
@@ -79,15 +79,15 @@ invalidates old session generations and cancels pending private file work. This
 is the single-workspace Activity-recreation contract; independent OS windows
 require a separate writer/scene ownership model before enabling them.
 
-The --workspace mode of Mobile/navigation_tools.py drives the actual app, rather
+The --workspace mode of mobile_build/navigation_tools.py drives the actual app, rather
 than the minimal foundation fixture. Local matrices passed two-draft keyboard,
 phone/tablet resize, Activity recreation and restart on Android, and rotation,
 background/resume and restart on Duo and iPad. Physical BOOX, real fold gestures,
 iOS 15 runtime interaction and accessibility/device touch checks remain unverified.
 
 Logistics has an independent native text/Markdown prototype in
-`Python/logisticsmobile`, with Briefcase configuration and tooling under
-[`Mobile/`](mobile-launchers.md). The desktop Qt launcher and its dependency
+`Python/mobile`, with Briefcase configuration and tooling under
+[`mobile_build/`](mobile-launchers.md). The desktop Qt launcher and its dependency
 pins remain separate. The shared Qt facade retains its desktop capability gate:
 the mobile host uses Toga and portable commonUtils persistence rather than
 importing desktop initialization, menus or dialogs.
@@ -108,7 +108,7 @@ the existing implementation and its development history.
 | `preferences.py` | Immutable defaults and bounded private INI; validation, atomic replace, malformed-file preservation and concurrent-edit rejection |
 | `preview.py` | Bounded basic Markdown HTML; escaped raw input, inert links and offline CSP |
 | `smoke.py` | Fresh-interpreter desktop-dependency rejection, real runtime identity, exact test inventory and structured evidence |
-| `Mobile/tools.py` | Whitelisted Logistics sources, tracked/clean shared Python sources, licenses, source SHAs and dirty-state records; strict emulator/simulator evidence verification |
+| `mobile_build/tools.py` | Whitelisted Logistics sources, tracked/clean shared Python sources, licenses, source SHAs and dirty-state records; strict emulator/simulator evidence verification |
 
 The host's `paths.data` supplies private storage. Caller-provided names remain
 metadata; they never become filesystem paths. UUIDs are validated before deriving
@@ -342,7 +342,7 @@ tap-to-choose label. Its hint lists available crypt remote names, identifies a
 selected crypt, and explains when the ZIP has no crypt configuration. It does
 not silently choose a backing remote or remap remote identifiers.
 
-`Mobile/rclone_bridge` is a pinned Go module using rclone 1.74.1 and yeka/zip for
+`mobile_build/rclone_bridge` is a pinned Go module using rclone 1.74.1 and yeka/zip for
 WinZip AES/ZipCrypto interoperability. `cloud_build.py` builds Android arm64/x86_64
 C shared libraries with NDK 27.2.12479018 and explicit 16 KiB ELF page alignment, and iOS arm64 device plus host-architecture
 Simulator C archives. Generated projects link only the narrow C bridge. Go 1.26.9
@@ -354,7 +354,7 @@ The bridge exposes import, list, bounded read, offline probe, cancel and clear;
 it does not expose generic RC, commands or remote mutation. No RC listener starts.
 Drive/dropbox/onedrive/s3/webdav/smb/memory backends are linked (plus crypt). Parsed credentials
 are checked against explicit per-backend option allowlists before publication.
-Config uses the synchronized Storage in `Mobile/rclone_bridge/vault.go`;
+Config uses the synchronized Storage in `mobile_build/rclone_bridge/vault.go`;
 configfile.Install is never called. A nonempty logical config path allows rclone to
 install that custom Storage without using a plaintext config loader. Session mode
 uses only RAM. Saved mode writes AES-256-GCM snapshots with fresh random nonces,
@@ -840,7 +840,7 @@ then activates the original scene. A forced original-scene disconnect retains
 its checkpointed owner until process restoration; it does not grant a competing
 writer. No independent Android activity capability is enabled.
 
-`Mobile/scene_build.py` applies scene support reproducibly to the generated plist
+`mobile_build/scene_build.py` applies scene support reproducibly to the generated plist
 because the pinned template otherwise forces it off. It does not modify Toga
 packages. The iOS release job runs both iPhone and iPad tests, requiring explicit
 `independent_windows_tested` evidence on iPad rather than accepting resize as a
@@ -1023,7 +1023,7 @@ transfer destination resolution uses this boundary. Retained collection provider
 revalidate the selected marker before filesystem operations. No missing-card
 fallback or replacement directory is created.
 
-`logisticsmobile/storage_ui.py` enumerates mounted Android storage volumes and
+`mobile/storage_ui.py` enumerates mounted Android storage volumes and
 opens the app-specific All files access Settings screen. The manifest helper
 declares `MANAGE_EXTERNAL_STORAGE` idempotently. The user grants special access;
 no ADB permission override is part of the workflow. This direct-path file-manager
@@ -1043,7 +1043,7 @@ Root-level marker and private state must be preserved when manually moving cards
 
 ### iOS shared Local storage
 
-`logisticsmobile/ios_storage.py` prepares production iOS storage before any
+`mobile/ios_storage.py` prepares production iOS storage before any
 preferences, workspace, providers or transfer services are created. Toga iOS
 0.5.7's `paths.data` is the system `Documents` directory, so enabling file sharing
 requires relocating the old private root to `Library/Application Support/Logistics`.
@@ -1083,7 +1083,7 @@ Installation enables the static plist capability before first launch. Old root
 contents can therefore be visible to a trusted computer between installation and
 the first successful migration; users must open the update before file sharing.
 There is no runtime plist switch that can defer this capability until migration.
-`Mobile/tests/test_ios_storage.py` covers data/mapping preservation, fresh installs,
+`mobile_build/tests/test_ios_storage.py` covers data/mapping preservation, fresh installs,
 relaunch, interruption in both phases, conflicts, links, and backup failure.
 
 Android and iOS now share the Show Legacy preference and filtering; dummy/desktop
@@ -1100,7 +1100,7 @@ component owns visibility/behavior restoration and inset reapplication; Logistic
 continues to own which visible reader route requests fullscreen. See commonUtils'
 native component guide for its contract. Android Settings also exposes a direct
 `APPLICATION_DEVELOPMENT_SETTINGS` intent, and the deployment helper caches local
-SDK paths in ignored `Mobile/.tools/android-sdk.json` and reconnects advertised
+SDK paths in ignored `mobile_build/.tools/android-sdk.json` and reconnects advertised
 `_adb-tls-connect._tcp` endpoints. It never pairs silently or enables debugging.
 
 Native validation for these changes passed on the Android emulator using the
@@ -1113,7 +1113,7 @@ See [retained proof](mobile-evidence/2026-10-15-storage-android-fullscreen.json)
 
 The portable document runtime harness declares 45 tests, including credential
 replacement, session privacy and retired mirror-operation checks. Its declared
-method list must match the cases loaded by `logisticsmobile.smoke` exactly.
+method list must match the cases loaded by `mobile.smoke` exactly.
 
 The Android privacy lifecycle proxy explicitly handles the activity configuration
 callback during uiMode changes. Native reader checks wait for layout-triggered
@@ -1122,7 +1122,7 @@ action into view before testing native hit dispatch.
 
 ## Side-by-side credential contexts
 
-`Mobile/rclone_bridge/credential_sets.go` owns up to 32 package contexts. The
+`mobile_build/rclone_bridge/credential_sets.go` owns up to 32 package contexts. The
 process-wide rclone config is a nonpersistent aggregate view whose remote aliases
 delegate to their original package stores. Names remain unchanged unless they
 collide; collision aliases incorporate the ZIP filename and package digest.
@@ -1187,4 +1187,4 @@ creating files. Native touch/render validation remains a separate device check.
 
 ## Owner-declared source selection
 
-Each supported feature and the mobile host/services own a `mobile_sources.json` file (`schema: 1`, explicit `modules` paths relative to that owner). Add a source there when introducing a dependency. `Mobile/tools.py` aggregates the allowlists without importing feature registration, validates selected application/feature/service imports, and packages the manifests as part of source identity. Type-checking-only dependencies and uncalled feature registration factories do not enter the runtime payload. Generated Briefcase projects and `Mobile/payload/` remain outputs.
+Each supported feature and the mobile host/services own a `mobile_sources.json` file (`schema: 1`, explicit `modules` paths relative to that owner). Add a source there when introducing a dependency. `mobile_build/tools.py` aggregates the allowlists without importing feature registration, validates selected application/feature/service imports, and packages the manifests as part of source identity. Type-checking-only dependencies and uncalled feature registration factories do not enter the runtime payload. Generated Briefcase projects and `mobile_build/payload/` remain outputs.

@@ -3,7 +3,7 @@ from threading import Event
 from types import SimpleNamespace as NS
 import unittest
 from commonUtils.runtime.operations import OperationCancelled
-from ui_new.pages.folder_controller import FolderController
+from desktop.pages.folder_controller import FolderController
 
 
 class FolderControllerTests(unittest.TestCase):

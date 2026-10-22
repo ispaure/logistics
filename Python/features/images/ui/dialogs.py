@@ -7,7 +7,7 @@ from commonUtils.ui import pyside
 
 from features.images import actions as image_actions
 from features.images import processing
-from ui_new.dialogs.tool_dialog import ToolDialog, coerce_initial_path
+from desktop.dialogs.tool_dialog import ToolDialog, coerce_initial_path
 
 
 class ImageCompressDialog(ToolDialog):

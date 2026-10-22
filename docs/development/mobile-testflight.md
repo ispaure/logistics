@@ -3,7 +3,7 @@
 For first-time setup and step-by-step operating instructions, start with the
 [mobile handbook](mobile-handbook.md). This page is the detailed release reference.
 
-The release entry point is `Mobile/testflight_tools.py`. A manual GitHub workflow
+The release entry point is `mobile_build/testflight_tools.py`. A manual GitHub workflow
 in `.github/workflows/testflight.yml` invokes the same commands after the existing
 iOS native UI and CPython runtime workflows pass. Upload is disabled by default.
 Explicit uploads now invoke `testflight_external.py` to distribute the resulting
@@ -15,7 +15,7 @@ existing testers and beta groups; App Store publication remains a separate workf
 Use the existing bundle ID **`io.github.ispaure.logisticsmobile`** when registering
 the identifier and creating the App Store Connect app record. Keep the existing
 application identifier prefix and Keychain access. On the configured Mac,
-`Mobile/.device.json` supplies that baseline. The helper refuses a different
+`mobile_build/.device.json` supplies that baseline. The helper refuses a different
 team, bundle ID, application identifier or effective Keychain groups. If the
 approved membership exposes another team ID, resolve that mapping before
 uploading; do not bypass the check by changing identity or uninstalling the app.
@@ -47,7 +47,7 @@ before the first upload. The local selector requires SDK 27.1 or newer.
 
 ## Double-click launcher
 
-`Mobile/deploy_ios_testflight.command` uses the existing local environment and
+`mobile_build/deploy_ios_testflight.command` uses the existing local environment and
 `testflight_deploy.py` to run plan, archive and export in order. It chooses a build
 number above existing local release workspaces, then asks for an explicit `y`
 before invoking upload with the existing opt-in flag. Failed steps stop the flow;
@@ -62,17 +62,17 @@ Use the persistent Python 3.12/Briefcase 0.4.5 environment prepared for device
 deployment and Go 1.26.9. For example, from the repository root:
 
 ```sh
-export PATH="$PWD/Mobile/.tools/go/bin:$PATH"
-Mobile/.venv/bin/python Mobile/testflight_tools.py plan --build-number 202610132
-Mobile/.venv/bin/python Mobile/testflight_tools.py archive --build-number 202610132
-Mobile/.venv/bin/python Mobile/testflight_tools.py export --build-number 202610132
+export PATH="$PWD/mobile_build/.tools/go/bin:$PATH"
+mobile_build/.venv/bin/python mobile_build/testflight_tools.py plan --build-number 202610132
+mobile_build/.venv/bin/python mobile_build/testflight_tools.py archive --build-number 202610132
+mobile_build/.venv/bin/python mobile_build/testflight_tools.py export --build-number 202610132
 # After reviewing the verified IPA and choosing to upload:
-TESTFLIGHT_UPLOAD=1 Mobile/.venv/bin/python Mobile/testflight_tools.py upload --build-number 202610132
+TESTFLIGHT_UPLOAD=1 mobile_build/.venv/bin/python mobile_build/testflight_tools.py upload --build-number 202610132
 ```
 
 `plan` prints the pinned identity, version, build number and export options without
 building or contacting Apple. `archive` generates a new curated payload and
-Briefcase project under `Mobile/build/testflight/<number>`, builds both native
+Briefcase project under `mobile_build/build/testflight/<number>`, builds both native
 bridge variants, restores the normal app launcher and creates a Release arm64
 `.xcarchive`. It does not rewrite the physical-device project or `.device.json`.
 Existing release workspaces are preserved; choose another build number after
@@ -106,7 +106,7 @@ archiving; install the matching certificate/private key and profile first.
 `privacy_build.py` supplies the OpenSSL declaration published by the Python Apple
 Support provider in commit `c012e5d4309b3a6767bcc5787f9cd57cfbcd48e9`
 ([upstream fix](https://github.com/beeware/Python-Apple-support/pull/285)). The exact
-file and source fingerprint are retained in `Mobile/privacy/`. This is a targeted
+file and source fingerprint are retained in `mobile_build/privacy/`. This is a targeted
 packaging fix for the pinned Python 3.12 support package b10, whose OpenSSL-backed
 `_hashlib` and `_ssl` modules lack their provider privacy manifests.
 
@@ -121,7 +121,7 @@ behavior, not the app's full privacy answers or an encryption exemption.
 
 ### API setup and distribution
 
-`Mobile/testflight-distribution.json` enables external distribution to the existing
+`mobile_build/testflight-distribution.json` enables external distribution to the existing
 **Friends** group for App Store Connect app `6822787800`. The helper verifies the
 app's bundle ID and requires one exact external group name match. It never creates
 a group or enables a public link. Set `enabled` to `false` for an upload that should
@@ -137,17 +137,17 @@ One-time local setup:
 2. Install host-side authentication support and save the key reference locally:
 
    ```sh
-   Mobile/.venv/bin/python -m pip install -r Mobile/requirements-testflight.txt
-   Mobile/.venv/bin/python Mobile/testflight_external.py configure \
+   mobile_build/.venv/bin/python -m pip install -r mobile_build/requirements-testflight.txt
+   mobile_build/.venv/bin/python mobile_build/testflight_external.py configure \
      --key-path /absolute/private/path/AuthKey_KEYID.p8 \
      --key-id YOUR_KEY_ID --issuer-id YOUR_ISSUER_ID
-   Mobile/.venv/bin/python Mobile/testflight_external.py check
+   mobile_build/.venv/bin/python mobile_build/testflight_external.py check
    ```
 
-   The key reference is saved in ignored `Mobile/.testflight-auth.json` with mode
+   The key reference is saved in ignored `mobile_build/.testflight-auth.json` with mode
    `0600`; the configuration command itself does not copy key content. On the
    configured Mac, the downloaded key is retained in ignored
-   `Mobile/.testflight-keys/` (directory `0700`, key `0600`) and the reference
+   `mobile_build/.testflight-keys/` (directory `0700`, key `0600`) and the reference
    points there so clearing Downloads does not break uploads. CI instead uses the existing
    `ASC_KEY_PATH`, `ASC_KEY_ID`, and `ASC_ISSUER_ID` variables installed by the
    signing helper. Environment values take precedence over local references.
@@ -171,7 +171,7 @@ exemption, private session-cookie authentication, or implicit retry of a failed
 upload. Once the issue is resolved, retry distribution for the existing upload:
 
 ```sh
-Mobile/.venv/bin/python Mobile/testflight_tools.py distribute --build-number 202610144
+mobile_build/.venv/bin/python mobile_build/testflight_tools.py distribute --build-number 202610144
 ```
 
 This command does not rebuild or re-upload. It finds the exact app/version/build
@@ -203,7 +203,7 @@ current approval status. Check App Store Connect for live processing/review stat
 An unsigned packaging check is available while enrollment is pending:
 
 ```sh
-Mobile/.venv/bin/python Mobile/testflight_tools.py archive --build-number 202610133 --unsigned-check
+mobile_build/.venv/bin/python mobile_build/testflight_tools.py archive --build-number 202610133 --unsigned-check
 ```
 
 It allows dirty local sources and ad-hoc signing of Python framework modules
@@ -304,7 +304,7 @@ review-only credentials through App Store Connect. Never supply personal keys.
 | --- | --- |
 | App name / platform | Logistics Mobile / iOS |
 | Bundle ID | `io.github.ispaure.logisticsmobile` |
-| Version | `0.1.7` in `Mobile/pyproject.toml`; confirm against the selected archive |
+| Version | `0.1.7` in `mobile_build/pyproject.toml`; confirm against the selected archive |
 | Primary language and SKU | Choose when creating the app record; a proposed internal SKU is `logistics-mobile-ios` |
 | Feedback email | Owner must choose a monitored address |
 | Beta review contact | Owner must supply name, email and phone |
@@ -329,7 +329,7 @@ as intended. Focused unit tests cover pinned identity, profile type/expiry,
 effective default Keychain access, build-number validation and export defaults.
 On 2026-10-14, a fresh unsigned Release archive of the shared working tree packaged
 successfully as version `0.1.5`, build `202610143`, using Xcode 27.1. The native Go
-bridge tests passed. The archive is retained under `Mobile/build/testflight/202610143`
+bridge tests passed. The archive is retained under `mobile_build/build/testflight/202610143`
 with its `release.json`, curated source fingerprint and build logs. It records
 dirty source and cannot be exported or uploaded. Attempts `202610141` and
 `202610142` stopped at sandbox cache access and remain as diagnostic workspaces.

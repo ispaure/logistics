@@ -2,7 +2,7 @@
 from commonUtils.ui import pyside as qt
 from commonUtils.filesystem.rename import apply_renames
 from features.media import mka
-from ui_new.dialogs.tool_dialog import ToolDialog, coerce_initial_path
+from desktop.dialogs.tool_dialog import ToolDialog, coerce_initial_path
 
 
 class RenameMkaDialog(ToolDialog):

@@ -333,7 +333,7 @@
     },
     "desktop-shell": {
       "sources": [
-        "Python/ui_new"
+        "Python/desktop"
       ],
       "guide": "docs/development/ui-architecture.md",
       "tests": {
@@ -347,7 +347,7 @@
     },
     "mobile-host": {
       "sources": [
-        "Python/logisticsmobile"
+        "Python/mobile"
       ],
       "guide": "docs/development/mobile-runtime.md",
       "tests": {
@@ -366,8 +366,8 @@
     },
     "mobile-storage": {
       "sources": [
-        "Python/logisticsmobile/private_sessions.py",
-        "Python/logisticsmobile/library.py"
+        "Python/mobile/private_sessions.py",
+        "Python/mobile/library.py"
       ],
       "guide": "docs/development/mobile-runtime.md",
       "tests": {
@@ -395,7 +395,7 @@
     },
     "packaging": {
       "sources": [
-        "Mobile/tools.py",
+        "mobile_build/tools.py",
         ".github"
       ],
       "guide": "docs/development/mobile-preparation.md",

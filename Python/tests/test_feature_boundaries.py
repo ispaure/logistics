@@ -19,7 +19,7 @@ class FeatureBoundaryTests(unittest.TestCase):
             for node in ast.walk(tree):
                 names = ([node.module or ''] if isinstance(node, ast.ImportFrom) else
                          [alias.name for alias in node.names] if isinstance(node, ast.Import) else [])
-                self.assertFalse(any(name == 'logisticsmobile' or name.startswith('logisticsmobile.')
+                self.assertFalse(any(name == 'mobile' or name.startswith('mobile.')
                                      for name in names), str(path))
 
     def test_provider_adapters_import_without_ui_or_application_host(self):
@@ -31,7 +31,7 @@ from services.documents.preparation import prepare_editor
 from features.images.validation import image_dimensions
 from features.books.mobile.content import chapter_html
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
-assert not any(name.startswith(('PySide', 'toga', 'logisticsmobile')) for name in sys.modules)
+assert not any(name.startswith(('PySide', 'toga', 'mobile')) for name in sys.modules)
 reader = PrivateReader('hello.txt', b'hello')
 assert reader.page(0) == ('text', 'hello')
 '''

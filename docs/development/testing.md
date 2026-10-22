@@ -45,7 +45,7 @@ do not build or deploy an app. From the repository root, use `python3` on macOS/
 For repeatable setup, run `python3 dev.py setup desktop` or
 `python3 dev.py setup mobile` (use `py` on Windows). Both accept `--dry-run`.
 The desktop setup uses the existing uv lock and root `.venv`. Mobile setup creates
-`Mobile/.venv` if absent and installs the hash-locked host test requirements
+`mobile_build/.venv` if absent and installs the hash-locked host test requirements
 additively, preserving any native build tools already present. It needs no native
 SDK. Setup needs uv and network access for uncached packages.
 
@@ -77,18 +77,18 @@ Replace `python3` with `py` on Windows. Quote wildcard patterns so the shell doe
 not expand them. Omit the filename/pattern to run the whole selected suite.
 No matching files is an error. Each test file runs in a fresh process; failing
 files or timeouts fail the command. The helper returns the check's exit status.
-Lint covers `dev.py`, `Python`, `Mobile`, `Scripts` and `.github/scripts`, matching CI's scope.
+Lint covers `dev.py`, `Python`, `mobile_build`, `Scripts` and `.github/scripts`, matching CI's scope.
 
 For **mobile host tests**, use a separate environment, without installing a
 native SDK or Briefcase just to run dummy-backend checks:
 
 ```sh
-# macOS / Linux; use py -3.12 and Mobile/.venv/Scripts/python.exe on Windows
+# macOS / Linux; use py -3.12 and mobile_build/.venv/Scripts/python.exe on Windows
 python3 dev.py setup mobile
 python3 dev.py test mobile test_editor_picker.py
 ```
 
-The helper uses root `.venv` for desktop/lint and `Mobile/.venv` for mobile,
+The helper uses root `.venv` for desktop/lint and `mobile_build/.venv` for mobile,
 including Windows `Scripts/python.exe` paths. For a differently located environment,
 append `--python /path/to/python`. Append `--dry-run` to inspect the command without
 running it. Mobile tests use `TOGA_BACKEND=toga_dummy`; desktop tests use offscreen
@@ -129,9 +129,9 @@ the map does not invent individual maintainer assignments.
 | LM conversation lifecycle and presentation | `Python/tests/test_lm_session.py`, `test_lm_ui.py`, `test_lm_appearance.py` |
 | Git history, search, preview and job ownership | `Python/tests/test_git_ui.py`, `test_git_preferences.py`, `test_git_repository_tabs.py`, `test_git_hunk_layout.py` |
 | Blender presentation and operation lifecycle | `Python/tests/test_blender_page.py`, `test_blender_settings.py`, `test_blender_library.py` |
-| Mobile Open/Save As and file management | `Mobile/tests/test_editor_picker.py`, `test_files_ui.py`, `test_private_sessions.py` |
-| Mobile saved imports and window ownership | `Mobile/tests/test_saved_files.py`, `test_window_owners.py`, `test_workspace_ui.py` |
-| Mobile source selection and import isolation | `Python/tests/test_mobile_packaging.py`, `test_mobile_portability.py`, `Mobile/tests/test_packaged_startup.py` |
+| Mobile Open/Save As and file management | `mobile_build/tests/test_editor_picker.py`, `test_files_ui.py`, `test_private_sessions.py` |
+| Mobile saved imports and window ownership | `mobile_build/tests/test_saved_files.py`, `test_window_owners.py`, `test_workspace_ui.py` |
+| Mobile source selection and import isolation | `Python/tests/test_mobile_packaging.py`, `test_mobile_portability.py`, `mobile_build/tests/test_packaged_startup.py` |
 
 The [mobile owner map](mobile-runtime.md) explains controller
 and packaging boundaries. For focused runs, use `dev.py test desktop <filename>` or
@@ -265,16 +265,16 @@ enabled.
 
 ## Updating mobile host dependencies
 
-Edit `Mobile/requirements-host.in`, then regenerate its hash lock with
-`uv pip compile Mobile/requirements-host.in --python-version 3.12 --universal
---generate-hashes --output-file Mobile/requirements-host.txt`. Commit both files.
-Native app requirements remain in `Mobile/pyproject.toml`; authentication tools
+Edit `mobile_build/requirements-host.in`, then regenerate its hash lock with
+`uv pip compile mobile_build/requirements-host.in --python-version 3.12 --universal
+--generate-hashes --output-file mobile_build/requirements-host.txt`. Commit both files.
+Native app requirements remain in `mobile_build/pyproject.toml`; authentication tools
 remain host-only. Do not copy a host virtual environment into a mobile payload.
 
 ## Local disk usage and private files
 
-Virtual environments, `Mobile/build/`, `Mobile/payload/`, `Mobile/logs/`,
-`Mobile/.tools/` and `Mobile/.deploy-workspaces/` are ignored generated output.
+Virtual environments, `mobile_build/build/`, `mobile_build/payload/`, `mobile_build/logs/`,
+`mobile_build/.tools/` and `mobile_build/.deploy-workspaces/` are ignored generated output.
 They can be much larger than the tracked source. Git exclusions do not reclaim
 local space. Stop builds and apps, and save wanted reports before removing a
 particular generated directory; the corresponding setup/build recreates it.

@@ -65,7 +65,7 @@ copied or compared. This audit does not install local alpha fixes on that phone.
 - [iPhone native cases](mobile-evidence/2026-10-14-alpha-audit-iphone-native-ui-local.json)
 - [Portable host core](mobile-evidence/2026-10-14-alpha-audit-host-core-local.json)
 
-The frozen audit patch is retained locally at `Mobile/logs/alpha-audit-fixes.patch`;
+The frozen audit patch is retained locally at `mobile_build/logs/alpha-audit-fixes.patch`;
 host output is `/private/tmp/logistics-alpha-audit-host.log`. Native runtime
 fingerprint: `2f48b0f7d3dc098a4320b4ab3de004630bfb8f5dd3a60008d578b6a05cdd0932`.
 These are local development checks, not clean-release evidence. The shared

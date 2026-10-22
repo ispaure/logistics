@@ -70,7 +70,7 @@ def mount_and_open_remote(
     rclone_path = ensure_rclone()
     if rclone_path is None:
         return False
-    from ui_new.dialogs.tool_dialog import ToolDialog
+    from desktop.dialogs.tool_dialog import ToolDialog
 
     class MountDialog(ToolDialog):
         def __init__(self):

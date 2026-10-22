@@ -27,7 +27,7 @@ def references(path, source_root):
             result.add(module)
             result.update(module + '.' + alias.name for alias in node.names if alias.name != '*')
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if re.fullmatch(r'(features|ui_new|logisticsmobile)(\.[A-Za-z_]\w*)+', node.value):
+            if re.fullmatch(r'(features|desktop|mobile)(\.[A-Za-z_]\w*)+', node.value):
                 result.add(node.value)
     return result
 
@@ -44,7 +44,7 @@ def feature_edges(root):
             source = path.relative_to(root).as_posix()
             for module in references(path, root / 'Python'):
                 parts = module.split('.')
-                if parts[0] in {'ui_new', 'logisticsmobile'}:
+                if parts[0] in {'desktop', 'mobile'}:
                     # Preserve module-level approval when an imported symbol is added.
                     host.add((source, '.'.join(parts[:2])))
                 if parts[0] == 'features' and len(parts) > 1 and parts[1] != owner.name and parts[1] not in INFRASTRUCTURE:
@@ -63,7 +63,7 @@ def check(root=ROOT):
     for name in policy['portable_modules']:
         path = root / 'Python' / (name.replace('.', '/') + '.py')
         for module in references(path, root / 'Python'):
-            if module.split('.')[0] in {'PySide6', 'toga', 'ui_new', 'logisticsmobile'} or module.startswith('commonUtils.ui'):
+            if module.split('.')[0] in {'PySide6', 'toga', 'desktop', 'mobile'} or module.startswith('commonUtils.ui'):
                 errors.append(f'Portable module {name} imports presentation: {module}')
     for error in errors:
         print(error)

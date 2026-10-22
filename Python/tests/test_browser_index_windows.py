@@ -12,7 +12,7 @@ from commonUtils.filesystem.index import DirectoryCache
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.workspaces.workspace import Workspace
 from commonUtils.ui.file_browser.status import WorkspaceIndexStatus
-from ui_new.file_browser import BrowserView
+from desktop.file_browser import BrowserView
 from commonUtils.ui.file_browser.index_policy import IndexPolicy
 
 
@@ -36,7 +36,7 @@ class BrowserWindowIndexTests(QtTestCase):
             'commonUtils.filesystem.index.directory_cache',
             'commonUtils.ui.file_browser.index_worker.directory_cache',
             'commonUtils.ui.file_browser.index_search.directory_cache')]
-        self.patches.append(patch('ui_new.file_browser.registry.get_browser_extensions', return_value=[]))
+        self.patches.append(patch('desktop.file_browser.registry.get_browser_extensions', return_value=[]))
         # These cases exercise the optional recursive background mode. The
         # cache-first/visited default has separate policy and navigation tests.
         self.patches.append(patch('commonUtils.ui.file_browser.index_policy.index_policy', return_value=IndexPolicy()))

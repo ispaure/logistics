@@ -65,7 +65,7 @@ def open_reader_choice(choice, parent, kind, *, password=None):
             if error:
                 from services.documents.zip_passwords import is_password_error
                 if is_password_error(error):
-                    from ui_new.dialogs.archive_password import ask_password
+                    from desktop.dialogs.archive_password import ask_password
                     retry = ask_password(path, error, parent, source=choice.provider)
                     if retry is not None:
                         window = open_reader_choice(choice, parent, kind, password=retry)

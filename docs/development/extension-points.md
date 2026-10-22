@@ -10,7 +10,7 @@ invokes the workflow.
 
 This prevents unrelated feature UI modules from being imported together.
 
-`ui_new.actions.execute_action()` handles actions consistently for Folders,
+`desktop.actions.execute_action()` handles actions consistently for Folders,
 Servers, and Debug. Disabled actions cannot execute. Workflow actions pass their
 data and parent through to the feature-owned handler, whose dialog owns any
 confirmation and refresh. Destructive callback actions retain the application
@@ -26,7 +26,7 @@ its implementation lives.
 
 The Debug page provides a core **Open File Browser…** button and renders
 `DebugActionContribution` objects from the feature registry. The core button asks
-for a folder and opens `ui_new.file_browser.FileBrowserWindow`. If a Debug action references a workflow, the generic workflow
+for a folder and opens `desktop.file_browser.FileBrowserWindow`. If a Debug action references a workflow, the generic workflow
 dispatcher resolves the corresponding feature-contributed workflow.
 
 The Debug page never imports feature implementations directly.
@@ -139,7 +139,7 @@ Workspaces and Bulk Rename provided by the host.
 `DocumentLauncherContribution` adds a Read & edit card through `editor_id`, `name`,
 `icon`, `order`, `open_document`, optional `new_document`, and `description`.
 Only Markdown is supplied by the core. Register readers/editors here rather than
-creating a second top-area card. `ui_new.launch_catalog.document_launchers()` is
+creating a second top-area card. `desktop.launch_catalog.document_launchers()` is
 the single document catalog used by the landing page, sidebar and workspace chooser.
 
 Both catalogs consume enabled registry contributions and update through existing

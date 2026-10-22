@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from commonUtils.ui import pyside as qt
 from features import registry
 from features.contributions import SettingsContribution, RegisteredContribution
-from ui_new.pages.settings import SettingsPage, ConfigurationPanel
+from desktop.pages.settings import SettingsPage, ConfigurationPanel
 
 
 class SettingsPageTests(QtTestCase):
@@ -22,7 +22,7 @@ class SettingsPageTests(QtTestCase):
                                dependencies=(), dependents=())
 
     def test_workspaces_legacy_setting_is_shared_and_independent_of_configuration_scope(self):
-        from ui_new.settings.workspaces import workspace_visibility, WorkspaceVisibility
+        from desktop.settings.workspaces import workspace_visibility, WorkspaceVisibility
         visibility = workspace_visibility()
         visibility.set_show_legacy(False)
         self.addCleanup(visibility.set_show_legacy, False)
@@ -61,8 +61,8 @@ class SettingsPageTests(QtTestCase):
     def test_global_reset_confirmation_cancel_keeps_configuration(self):
         with patch.object(registry, 'get_feature_states', return_value=[]):
             page = SettingsPage(); self.addCleanup(page.deleteLater)
-        with patch('ui_new.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.No) as question, \
-                patch('ui_new.pages.settings.reset_personal_preferences') as reset:
+        with patch('desktop.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.No) as question, \
+                patch('desktop.pages.settings.reset_personal_preferences') as reset:
             page.reset_personal_button.click()
         reset.assert_not_called()
         self.assertIn('ALL categories', question.call_args.args[2])
@@ -98,7 +98,7 @@ class SettingsPageTests(QtTestCase):
                 defaults = config.stack.currentWidget()
                 defaults.fields['Styling', 'code_font_size_int'].setValue(12)
                 page.scope_selector.setCurrentIndex(page.scope_selector.findData('personal'))
-                with patch('ui_new.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.Yes), \
+                with patch('desktop.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.Yes), \
                         patch.object(registry, 'reset_feature_defaults') as features_reset:
                     page.reset_personal_button.click()
                 features_reset.assert_called_once()
@@ -112,8 +112,8 @@ class SettingsPageTests(QtTestCase):
     def test_global_reset_failure_reports_error_without_reloading_editors(self):
         with patch.object(registry, 'get_feature_states', return_value=[]):
             page = SettingsPage(); self.addCleanup(page.deleteLater)
-        with patch('ui_new.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.Yes), \
-                patch('ui_new.pages.settings.reset_personal_preferences', side_effect=OSError('Read only')):
+        with patch('desktop.pages.settings.qt.QMessageBox.question', return_value=qt.QMessageBox.StandardButton.Yes), \
+                patch('desktop.pages.settings.reset_personal_preferences', side_effect=OSError('Read only')):
             page.reset_personal_button.click()
         self.assertIn('Could not reset', page.reset_status.text())
         self.assertIn('Read only', page.reset_status.text())
@@ -173,7 +173,7 @@ class SettingsPageTests(QtTestCase):
                 self.assertNotIsInstance(panel, qt.QDialog)
 
     def test_indexing_has_boolean_rules_and_explicit_save_preserves_other_sections(self):
-        from ui_new.settings.indexing import IndexSettingsPanel
+        from desktop.settings.indexing import IndexSettingsPanel
         from commonUtils.ui.file_browser.index_policy import index_policy
         with TemporaryDirectory() as temporary:
             path = Path(temporary)/'configFile.ini'
@@ -188,7 +188,7 @@ class SettingsPageTests(QtTestCase):
             self.assertIn('value=kept', path.read_text())
 
     def test_indexing_dependencies_keep_saved_values_and_independent_triggers(self):
-        from ui_new.settings.indexing import IndexSettingsPanel
+        from desktop.settings.indexing import IndexSettingsPanel
         from commonUtils.ui.file_browser.index_policy import index_policy
         with TemporaryDirectory() as temporary:
             path = Path(temporary)/'config.ini'
@@ -245,7 +245,7 @@ class SettingsPageTests(QtTestCase):
             path.write_text('[WheelNavigation]\nsensitivity=20\n')
             from commonUtils.configuration.layered import register_settings
             store = register_settings(path, Path(temporary) / 'personal.ini')
-            with patch('ui_new.pages.settings.settings_path', return_value=path), patch('ui_new.pages.settings.settings_store', return_value=store), \
+            with patch('desktop.pages.settings.settings_path', return_value=path), patch('desktop.pages.settings.settings_store', return_value=store), \
                     patch('pathlib.Path.home', return_value=Path(temporary) / 'marca'):
                 page = SettingsPage(); self.addCleanup(page.deleteLater)
                 item = next(page.sidebar.topLevelItem(i) for i in range(page.sidebar.topLevelItemCount()) if page.sidebar.topLevelItem(i).data(0, qt.Qt.ItemDataRole.UserRole) == 'commonutils')
@@ -301,7 +301,7 @@ class SettingsPageTests(QtTestCase):
         self.assertEqual(contributions.settings[0].scope, 'personal')
 
     def test_feature_guide_is_in_header_and_available_when_disabled(self):
-        from ui_new.pages.settings import FeatureSettingsPanel
+        from desktop.pages.settings import FeatureSettingsPanel
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             guide = root / 'test' / 'user_docs' / 'index.md'
@@ -314,14 +314,14 @@ class SettingsPageTests(QtTestCase):
                 self.assertTrue(panel.guide_button.isEnabled())
                 self.assertGreater(panel.guide_button.x(), panel.width() / 2)
                 self.assertLess(panel.guide_button.y(), 60)
-                with patch('ui_new.pages.settings.open_markdown') as opened:
+                with patch('desktop.pages.settings.open_markdown') as opened:
                     panel.guide_button.click()
                 opened.assert_called_once_with(guide, directory=guide.parent, parent=panel.window(), detached=True, allow_new_tabs=False)
                 self.assertIn('Alt', panel.guide_button.toolTip())
                 panel.close()
 
     def test_feature_guide_opens_owned_wiki_scope(self):
-        from ui_new.pages.settings import FeatureSettingsPanel
+        from desktop.pages.settings import FeatureSettingsPanel
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             guide = root / 'test/docs/user/user.md'
@@ -331,14 +331,14 @@ class SettingsPageTests(QtTestCase):
                     patch.object(registry, 'get_settings', return_value=[]):
                 panel = FeatureSettingsPanel(self.state())
                 self.addCleanup(panel.deleteLater)
-                with patch('ui_new.pages.settings.open_markdown') as opened:
+                with patch('desktop.pages.settings.open_markdown') as opened:
                     panel.guide_button.click()
                 opened.assert_called_once_with(guide, directory=root / 'test/docs',
                                               parent=panel.window(), detached=True, allow_new_tabs=False)
                 panel.close()
 
     def test_tabbed_settings_retain_custom_state_and_unsaved_ini_edits(self):
-        from ui_new.pages.settings import FeatureSettingsPanel
+        from desktop.pages.settings import FeatureSettingsPanel
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / 'config.ini'; path.write_text('[Test]\nkey=value\n')
             factory = Mock(side_effect=lambda parent: qt.QLineEdit('credential state', parent))
@@ -377,7 +377,7 @@ class SettingsPageTests(QtTestCase):
 
 
     def test_ini_files_are_combined_once_per_scope_with_retained_buffers(self):
-        from ui_new.pages.settings import FeatureSettingsPanel
+        from desktop.pages.settings import FeatureSettingsPanel
         with TemporaryDirectory() as temporary:
             paths = [Path(temporary) / name for name in ('app.ini', 'another.ini', 'personal.ini')]
             for path in paths:
@@ -421,7 +421,7 @@ class SettingsPageTests(QtTestCase):
             editor.text.document().setModified(False)
 
     def test_feature_status_directs_enablement_to_features_and_reports_missing_dependencies(self):
-        from ui_new.pages.settings import FeatureSettingsPanel
+        from desktop.pages.settings import FeatureSettingsPanel
         state = self.state()
         state.enabled = False
         with patch.object(registry, 'get_settings', return_value=[]):
@@ -433,7 +433,7 @@ class SettingsPageTests(QtTestCase):
             self.assertIn('dependencies are unavailable', panel.status.text())
 
     def test_empty_feature_settings_keep_heading_and_status_at_top(self):
-        from ui_new.pages.settings import FeatureSettingsPanel
+        from desktop.pages.settings import FeatureSettingsPanel
         with patch.object(registry, 'get_settings', return_value=[]):
             panel = FeatureSettingsPanel(self.state()); self.addCleanup(panel.deleteLater)
             panel.resize(850, 800); panel.show(); self.app.processEvents()
@@ -442,7 +442,7 @@ class SettingsPageTests(QtTestCase):
             panel.close()
 
     def test_description_is_compact_and_configuration_editor_fills_page(self):
-        from ui_new.pages.settings import FeatureSettingsPanel
+        from desktop.pages.settings import FeatureSettingsPanel
         with TemporaryDirectory() as temporary:
             path = Path(temporary) / 'config.ini'; path.write_text('[Test]\nkey=value\n')
             contribution = RegisteredContribution('test', 'Test', SettingsContribution(
@@ -457,7 +457,7 @@ class SettingsPageTests(QtTestCase):
                 panel.close()
 
     def test_custom_expanding_layout_fills_available_space(self):
-        from ui_new.pages.settings import FeatureSettingsPanel
+        from desktop.pages.settings import FeatureSettingsPanel
         def factory(parent):
             widget = qt.QWidget(parent)
             layout = qt.QVBoxLayout(widget)

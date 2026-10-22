@@ -121,7 +121,7 @@ is restored, so refreshing does not silently replace it with the first model.
 Initial conversation discovery can complete while a connection request owns the
 controls. Keep the initial selection pending during that request and refresh it
 when the controls become idle, so an existing draft is restored or an initial
-conversation is created before sending. `Mobile/tests/test_chat_inventory.py`
+conversation is created before sending. `mobile_build/tests/test_chat_inventory.py`
 checks both an existing conversation and an empty library under this ordering.
 
 `mobile_api_url` adds `/v1` only to addresses with no API path; profile validation
@@ -135,7 +135,7 @@ The ten-minute generation deadline is checked between event reads; a pending
 read remains bounded by the socket idle timeout.
 
 Focused verification: `Python/tests/test_mobile_chat.py` checks URL normalization,
-request paths, timeout stages and cancellation; `Mobile/tests/test_chat_ui.py`
+request paths, timeout stages and cancellation; `mobile_build/tests/test_chat_ui.py`
 checks discovery without a model, selection persistence and validation feedback
 through Toga's dummy backend. Native device layout and real-server behavior need
 separate Android/iOS verification.

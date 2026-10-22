@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from features.lm.domain import build_request, message
 from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
-from logisticsmobile.chat_fixture import fixture_server
+from mobile.chat_fixture import fixture_server
 from features.lm.mobile.transport import ChatClient, ChatCancelled, mobile_api_url
 
 

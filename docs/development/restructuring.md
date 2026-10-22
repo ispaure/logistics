@@ -38,7 +38,7 @@ See the [mobile map](mobile-runtime.md),
 [Git owners](../../Python/features/git/docs/development/development.md), and
 [Blender owners](../../Python/features/blender/docs/development/development.md).
 
-Shell and infrastructure naming has been reassessed: keep `ui_new` and the
+Shell and infrastructure naming has been reassessed: keep `desktop` and the
 feature infrastructure import paths stable during these migrations. The
 [feature infrastructure map](feature-infrastructure.md) and
 [host service map](services.md) make their ownership explicit.
@@ -116,8 +116,8 @@ limits or reasons to split a module on their own.
 | Current module | Evidence | First useful boundary |
 | --- | --- | --- |
 | `Python/features/lm/page.py` (~1,385 lines) | Contains composer widgets, profile selection, conversation selection, edit leases, persistence, generation and closing | Move composer widgets into feature `ui/`; then give conversation persistence/lease/generation lifecycle an explicit controller, retaining GUI-thread timers and close vetoes |
-| `Python/logisticsmobile/files_ui.py` (~908 lines, active local edits) | Contains file mutations, editor Open/Save As selection and comic batch entry points | Extract editor picker state and callbacks as one owned workflow; keep privacy checks, provider identity and cancellation explicit |
-| `Python/logisticsmobile/app.py` (~938 lines) | Composes many UI mixins and owns startup plus document operations | Keep startup as the composition root; introduce owned controllers incrementally, following the explicit services already used by `reader_host.py` |
+| `Python/mobile/files_ui.py` (~908 lines, active local edits) | Contains file mutations, editor Open/Save As selection and comic batch entry points | Extract editor picker state and callbacks as one owned workflow; keep privacy checks, provider identity and cancellation explicit |
+| `Python/mobile/app.py` (~938 lines) | Composes many UI mixins and owns startup plus document operations | Keep startup as the composition root; introduce owned controllers incrementally, following the explicit services already used by `reader_host.py` |
 | `Python/features/git/ui/repository_view.py` (~966 lines) | Coordinates rendering, previews, history search and repository commands, with jobs/layout already extracted | Follow existing job ownership; separate history/preview orchestration before adding more UI mixins |
 
 The mobile reader cleanup already moved format presentation into Books/Comics
@@ -134,13 +134,13 @@ all current code. Its completed extractions should not be proposed again.
    first, then lifecycle ownership. Verify streaming, persistence failure,
    lease release and cooperative closing before proceeding to other features.
 3. Extract the mobile editor picker after the active Workspaces work settles.
-   Update `Mobile/tools.py` in the same change; exercise host tests, packaging
+   Update `mobile_build/tools.py` in the same change; exercise host tests, packaging
    checks and native Open/Save As behavior across Local/LocalCrypt providers.
 4. Reduce mobile host inheritance one workflow at a time. Preserve multi-window
    writer ownership, cancellation, navigation generations and private content
    cleanup. A file move alone does not establish those contracts.
 5. Reassess shell and infrastructure names after those boundaries are clearer.
-   `ui_new` is misleading but a global rename has less immediate value than
+   `desktop` is misleading but a global rename has less immediate value than
    clarifying ownership. A future rename must update lazy references, tests,
    packaging and launchers together.
 
@@ -166,7 +166,7 @@ Mobile chat storage, transport and presentation now live in `features/lm/mobile/
 
 ### 2. rclone host boundary
 
-rclone mobile adapters no longer import `logisticsmobile`. Provider readers, document limits and native archive facades have neutral service owners. `MobileHostUI` declares presentation hooks; `logisticsmobile/feature_hosts.py` supplies them. The app composes provider presentation rather than inheriting it through the rclone feature.
+rclone mobile adapters no longer import `mobile`. Provider readers, document limits and native archive facades have neutral service owners. `MobileHostUI` declares presentation hooks; `mobile/feature_hosts.py` supplies them. The app composes provider presentation rather than inheriting it through the rclone feature.
 
 ### 3. Mobile workflow composition
 
@@ -198,7 +198,7 @@ Document adapters, limits, metadata dispatch and ZIP password policy live in `se
 
 ### 10. Owner-declared mobile sources
 
-Each supported feature, the mobile host and neutral services declare selected modules in `mobile_sources.json`. `Mobile/tools.py` aggregates these strict data-only allowlists, validates staged feature/service imports (including nested adapters), and copies manifests into the payload source hash. Stage reads the target checkout manifests; no feature discovery or desktop registration runs during packaging. Existing public APP_MODULES/DOCUMENT_MODULES inventories remain available to validation tools.
+Each supported feature, the mobile host and neutral services declare selected modules in `mobile_sources.json`. `mobile_build/tools.py` aggregates these strict data-only allowlists, validates staged feature/service imports (including nested adapters), and copies manifests into the payload source hash. Stage reads the target checkout manifests; no feature discovery or desktop registration runs during packaging. Existing public APP_MODULES/DOCUMENT_MODULES inventories remain available to validation tools.
 
 ### Integration audit follow-up
 
@@ -366,7 +366,7 @@ dependency and documentation checks verify this follow-up. The emulator's
 records exact tested source hashes and seven sleep/trim/wake cases plus one-pixel
 native decoding. No physical Boox or iOS interaction is claimed by this review.
 
-Native output remains in ignored `Mobile/logs/reader-resume/review`; the disposable
+Native output remains in ignored `mobile_build/logs/reader-resume/review`; the disposable
 QA package is removed after evidence capture. This follow-up does not change
 commonUtils. Commit timestamp rewriting is limited to commits absent from refreshed
 remote references; it changes author/committer times and IDs, preserving file trees,

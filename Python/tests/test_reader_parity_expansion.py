@@ -13,7 +13,7 @@ from commonUtils.runtime.document_access import LocalDocuments
 from features.books.locations import ChapterText, contents, link_destination, utf16_length
 from features.books.mobile.content import chapter_html
 from features.comics.mobile.navigation import ComicNavigation, adjacent_comic
-from logisticsmobile.library import LibraryStore
+from mobile.library import LibraryStore
 from test_mobile_readers import png_page
 
 
@@ -132,7 +132,7 @@ class ReaderExpansionTests(unittest.TestCase):
                 store.save_metadata(record, reader, {'title': ['Stale']})
 
     def test_published_archive_recovers_after_record_write_failure(self):
-        import logisticsmobile.library_edits as edits
+        import mobile.library_edits as edits
         with TemporaryDirectory() as directory:
             root = Path(directory)
             source = make_book(root / 'book.epub')

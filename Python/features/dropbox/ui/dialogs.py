@@ -1,7 +1,7 @@
 """Review content before removing identical Dropbox conflict copies."""
 from commonUtils.ui import pyside as qt
 from features.dropbox import conflicts
-from ui_new.dialogs.tool_dialog import ToolDialog, coerce_initial_path
+from desktop.dialogs.tool_dialog import ToolDialog, coerce_initial_path
 
 
 class DropboxConflictsDialog(ToolDialog):

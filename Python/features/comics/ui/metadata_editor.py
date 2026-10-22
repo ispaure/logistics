@@ -7,7 +7,7 @@ from features.comics.selection import ComicSelection, normalize_targets
 from .metadata_form import MetadataForm
 from commonUtils.ui.tasks.operations import Operation
 from services.documents.zip_passwords import is_password_error
-from ui_new.dialogs.archive_password import ask_password
+from desktop.dialogs.archive_password import ask_password
 
 WINDOW_SIZE = (789, 635)
 BUTTON_SIZE = (105, 28)

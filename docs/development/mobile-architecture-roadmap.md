@@ -17,7 +17,7 @@ until the user authorizes commits and pushes.
 ## Local implementation status
 
 The subsequent host restructuring gives text Open/Save As a composed
-`EditorPicker` in `logisticsmobile.editor_picker`, with state and cancellation
+`EditorPicker` in `mobile.editor_picker`, with state and cancellation
 owned outside `FilesUI`. Saved-import inventory/deletion is now a composed
 `SavedFilesController`, rather than an application mixin. `host_services.py`
 centralizes explicit host dependencies and compatibility attribute access.
@@ -27,14 +27,14 @@ These changes have host-level verification; they do not replace native evidence
 for actual Open/Save As layout, Back and encrypted transfers.
 
 The October 16 cleanup consolidates library and provider gesture scheduling in
-`logisticsmobile.reader_controls.schedule_swipe`. Both spread-relative and
+`mobile.reader_controls.schedule_swipe`. Both spread-relative and
 absolute-page gestures reject busy, closed and inactive-host sessions and retain
 one in-flight task. Format adapters still choose spread targets, store progress,
 report read failures and enforce their own private-content policies.
 `ReadingFrame` also owns the EPUB restore-controls button across repeated
 immersive transitions; comics retain their image gesture for restoring controls.
 
-Retained import inventory/deletion lives in `logisticsmobile.saved_files_ui`,
+Retained import inventory/deletion lives in `mobile.saved_files_ui`,
 separate from preference rows and installed-build information in `settings_ui`.
 The new owner is explicitly included in the curated payload list. Its existing
 multi-window, busy-reader, confirmation and original-source protections remain
@@ -80,12 +80,12 @@ including iPhone/Android/iPad native runs and physical iPhone screenshots/geomet
 | EPUB package parsing and resource resolution | `Python/features/books/epub.py` | Useful portable core already reused by mobile |
 | Comic archive access, page ordering and metadata | `Python/features/comics/{archive_io,library,pages,comicinfo}.py` | Useful feature ownership already reused by mobile |
 | Desktop reader presentation | Books reader modules and Comics reader/UI modules | Qt presentation can remain separate from Toga |
-| Mobile catalogue, progress records and book/comic views | `logisticsmobile/{library,library_ui,reading,reader_chrome}.py` | Format ownership and presentation are mixed across a broad mobile package |
-| Provider-backed readers and editing | `logisticsmobile/{localcrypt,localcrypt_ui,private_sessions,file_resources}.py` | Storage/security decisions are important; several reading controls duplicate ordinary readers |
+| Mobile catalogue, progress records and book/comic views | `mobile/{library,library_ui,reading,reader_chrome}.py` | Format ownership and presentation are mixed across a broad mobile package |
+| Provider-backed readers and editing | `mobile/{localcrypt,localcrypt_ui,private_sessions,file_resources}.py` | Storage/security decisions are important; several reading controls duplicate ordinary readers |
 | Reader sessions | `reader_sessions.py` and `private_sessions.py` | Controllers exist, but publish compatibility attributes onto the app and fall back to it dynamically |
 | File browsing | `commonUtils.ui.native_browser` with Logistics `browser_ui.py` and `files_ui.py` | Good shared-component/host-policy boundary, though the subclass reconstructs parts of shared presentation |
 | Native navigation and image gestures | `native_navigation.py`, `routing.py`, `adaptive_workspace.py`, `comic_canvas.py`, Android bridges | Reusable mechanisms remain coupled to Logistics destinations, callbacks or packaging |
-| Build and source selection | `Mobile/tools.py`, `cloud_build.py`, `pyproject.toml` | Explicit staging prevents the mobile app from importing the entire desktop application; moves must update this boundary |
+| Build and source selection | `mobile_build/tools.py`, `cloud_build.py`, `pyproject.toml` | Explicit staging prevents the mobile app from importing the entire desktop application; moves must update this boundary |
 
 Mobile is mostly Python. Toga provides the cross-platform widget interface;
 Python adapters also use Rubicon/Objective-C access on Apple platforms and Java
@@ -260,7 +260,7 @@ safe-area ownership and layout listeners must remain coordinated.
    Move/include Android native source under shared ownership, with an explicit
    consumer packaging contract. Adjust Java imports and source-set configuration;
    remove the duplicate Logistics bridge after migration.
-4. Update shared source staging and Logistics `Mobile/tools.py`, Android Gradle
+4. Update shared source staging and Logistics `mobile_build/tools.py`, Android Gradle
    configuration, tests and source hashing. Confirm packaged native source is
    included in the exact-source evidence contract.
 5. Extract navigation in separate increments: configurable destination state,
@@ -308,7 +308,7 @@ Comics unless an existing shared format API clearly owns the generic portion.
 Keep the shared reader-control component in a small Logistics presentation owner
 until both feature adapters can consume it without circular dependencies. The
 mobile host imports the feature adapters and supplies contracts/services; feature
-adapters should not import `logisticsmobile.app`. If a genuinely shared reader
+adapters should not import `mobile.app`. If a genuinely shared reader
 contract is needed, place it in a neutral Logistics module with no toolkit imports.
 
 Keep catalogue records, app-private import storage, workspace identity, credential
@@ -360,7 +360,7 @@ a new framework, a Swift rewrite or a switch to PySide on mobile.
 
 ## Validation and documentation
 
-Existing tests to retain include `Mobile/tests/test_reader_sessions.py`,
+Existing tests to retain include `mobile_build/tests/test_reader_sessions.py`,
 `test_mobile_ui_workflows.py`, `test_files_ui.py`, `test_window_owners.py`, and
 `Python/tests/test_mobile_{readers,localcrypt,workspace,portability,packaging}.py`.
 Native checks cover reader behavior, LocalCrypt, navigation and browser Back.

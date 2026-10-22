@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from ui_new.documents import DocumentsPage, document_is_open, register_document_host, show_document
+from desktop.documents import DocumentsPage, document_is_open, register_document_host, show_document
 from shiboken6 import isValid
 
 

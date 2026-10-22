@@ -150,7 +150,7 @@ but settings are not written to plaintext config files or command arguments.
 Mobile rclone ownership is under `Python/features/rclone/mobile`: bridge/credentials,
 transfer jobs, ciphertext copies/providers and their native operation screens.
 The app retains generic provider-document controllers in
-`logisticsmobile/provider_ui.py`, memory-only format coordination in
+`mobile/provider_ui.py`, memory-only format coordination in
 `provider_readers.py`, ordinary text adapters in `text_resources.py`, and the shared
 native archive facade in `native_archives.py`. Private sessions, format-feature
 views, navigation, persistence and screen privacy remain with their existing owners.
@@ -227,10 +227,10 @@ passwords remain in session memory and are cleared with the private reader.
 
 `test_local_crypt.py` exercises actual desktop rclone mirror/read/save operations,
 revocation, leases, cancellation, invalid mappings and failure preservation.
-`Mobile/rclone_bridge/localcrypt_test.go` covers real rclone cipher listing, exact
+`mobile_build/rclone_bridge/localcrypt_test.go` covers real rclone cipher listing, exact
 ciphertext copies, offline decrypt after remote removal, re-unlock, tampering and
 unsafe backing rejection. `test_mobile_localcrypt.py` covers ciphertext bookkeeping
-and portable RAM readers; `Mobile/tests/test_localcrypt_ui.py` covers dummy-backend editing and lifecycle controls.
+and portable RAM readers; `mobile_build/tests/test_localcrypt_ui.py` covers dummy-backend editing and lifecycle controls.
 Host tests do not establish Android/iOS native runtime behavior. The native suite
 also exercises desktop-generated ciphertext through real platform widgets and the
 compiled bridge: reading, text/Markdown saves, comic/EPUB metadata saves with inner

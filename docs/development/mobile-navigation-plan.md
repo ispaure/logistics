@@ -105,18 +105,18 @@ These are the starting conditions to preserve or replace deliberately:
 
 | Area | Source and current condition | Consequence |
 | --- | --- | --- |
-| Mobile shell | `Python/logisticsmobile/app.py` builds ordinary Home/Documents/Settings buttons and swaps a single body view | Replace the navigation host; do not merely restyle the buttons |
+| Mobile shell | `Python/mobile/app.py` builds ordinary Home/Documents/Settings buttons and swaps a single body view | Replace the navigation host; do not merely restyle the buttons |
 | Text documents | `documents.py` stores UUID identities, encoding, original bytes, drafts and conflict-aware saves; `app.py` holds one `current` document and one editor | Reuse storage contracts, introduce multiple independently owned sessions |
 | Books and comics | `library.py`, `library_ui.py` and `reading.py` provide private imports, progress, bookmarks and archive access; UI holds one active reader | Add reader sessions without duplicating archives or changing format support |
 | Private readers | `localcrypt_ui.py` holds one private reader and refuses to clear unsaved edits; private content and passwords stay out of ordinary recovery | Preserve the privacy boundary when making sessions switchable |
 | Storage | `files_ui.py`, `file_resources.py`, `cloud_ui.py` and shared providers implement browsing and capability-aware operations | Reorganize their entry points without replacing provider transactions |
-| Python and native host | `Mobile/pyproject.toml` pins Toga 0.5.7 and Briefcase 0.4.5; iOS minimum is 15.0 | Evaluate upgrades separately; modern APIs need availability checks |
+| Python and native host | `mobile_build/pyproject.toml` pins Toga 0.5.7 and Briefcase 0.4.5; iOS minimum is 15.0 | Evaluate upgrades separately; modern APIs need availability checks |
 | iOS tabs | The generated pinned backend's `OptionContainer` wraps `UITabBarController` | A native tab foundation exists; new sidebar/Duo behavior still needs proof |
 | iOS windows | The pinned iOS backend rejects secondary windows and binds its scene delegate to the current main window | Independent iPad windows require backend lifecycle work |
 | Android tabs | The generated pinned backend wraps Material `BottomNavigationView` | Use native bottom navigation first; adaptive rails need additional integration |
 | Android dependencies | The backend requires Material; the app's explicit Gradle dependency list does not declare it | Audit the resolved dependencies and declare the verified compatible requirement |
 | Android lifecycle | The generated activity handles orientation, screen size, screen layout and hidden-keyboard changes itself | Test both configuration callbacks and genuine recreation/process restoration |
-| Packaging | `Mobile/tools.py` explicitly lists allowed app modules | Add new modules, icons and native build resources to staging and its tests |
+| Packaging | `mobile_build/tools.py` explicitly lists allowed app modules | Add new modules, icons and native build resources to staging and its tests |
 
 Generated build files are evidence of backend behavior, not source files to patch.
 Keep reproducible changes in tracked application, configuration and build tooling.
@@ -145,7 +145,7 @@ Use the following ownership boundaries:
 | Workspace state | One window's destination, session selection and pane visibility; initially one workspace, later one per scene/activity instance |
 | Native host | Containers, bars, gestures, insets, accessibility, lifecycle callbacks and capability reporting |
 
-Start application-specific modules under `Python/logisticsmobile/`, with proposed
+Start application-specific modules under `Python/mobile/`, with proposed
 names such as `navigation.py`, `sessions.py`, `workspace_state.py` and
 `platform_ui/`. Final names follow the implementation's actual boundaries.
 `app.py` becomes a composition root rather than the owner of every feature's

@@ -1,13 +1,13 @@
 # Mobile host code
 
-This package is the Toga application source. `Mobile/` owns builds, deployment
+This package is the Toga application source. `mobile_build/` owns builds, deployment
 and native acceptance packaging. Start with the [code map](code-map.md)
 and [mobile preparation guide](mobile-preparation.md).
 User behavior belongs in [the mobile user guide](../user_mobile/user_mobile.md).
 
 ## Owners
 
-`logisticsmobile.snow.SeasonalSnow` uses `services.seasonal` for the shared
+`mobile.snow.SeasonalSnow` uses `services.seasonal` for the shared
 December 15–January 2 season, including both endpoints. The default-on `seasonal_snow` preference is edited
 in Appearance on both platforms. A touch-transparent UIView with animated
 CALayers on iOS and `SnowView.java` on Android provide the decoration. A one-second
@@ -17,7 +17,7 @@ manifests include the policy and Android view. `test_seasonal_snow.py` covers
 preferences/settings; `native_tests/tests/logisticsmobile/snow_probe.py` is the
 isolated native overlay smoke test.
 
-Workspace navigation sizes are defined in `logisticsmobile.ui_metrics`: 17 native
+Workspace navigation sizes are defined in `mobile.ui_metrics`: 17 native
 pt/sp body text, 16 control text, 13 caption text and 48 pt/dp touch targets.
 `toga_font_size()` converts native design sizes by 72/96 because both pinned Toga
 mobile font backends multiply explicit fonts by 96/72. Pack requires integer
@@ -74,15 +74,15 @@ workflow composition. Shared toolkit mechanisms remain in commonUtils.
 Feature adapters receive application policy through presentation contracts.
 `MobileHostUI` supplies folder-route recording and temporary loading-panel scopes
 to rclone; `MobilePresentation` supplies font sizing/binding and folder actions to
-the text editor. Feature code must not import the `logisticsmobile` host to reach
+the text editor. Feature code must not import the `mobile` host to reach
 those services. Secondary scene hosts share the application's command registry
 alongside its other application infrastructure, while retaining independent
 document and navigation state.
 
 `navigation.py` installs the desktop destination artwork on Android bottom bars
 and rails and iOS tabs: Home, Workspaces, stacked Documents, the Chat bubble and
-Settings sliders. `Mobile/generate_navigation_icons.py` renders the canonical
-`ui_new.sidebar.DestinationIcon` drawings into bundled transparent 3x PNGs in
+Settings sliders. `mobile_build/generate_navigation_icons.py` renders the canonical
+`desktop.sidebar.DestinationIcon` drawings into bundled transparent 3x PNGs in
 `hub_icons.py`; run it with the desktop interpreter, or use `--check` to verify
 the generated assets. Mobile has no Qt runtime dependency. Material and UIKit
 own selection/theme tinting; iOS retains the artwork in each Toga OptionItem so
@@ -260,7 +260,7 @@ menu retains its measured width across repeated tab and layout callbacks and
 refits when the pane width changes. Category status messages continue to refit
 as their text changes; compact/wide routes keep the same preference controls.
 These contracts are covered by `test_folder_hub.py`, `test_settings_ui.py`,
-`test_settings_navigation.py` and `test_settings_checkpoints.py` in `Mobile/tests`.
+`test_settings_navigation.py` and `test_settings_checkpoints.py` in `mobile_build/tests`.
 Host profiles measure Python work only; Android draw latency requires the native
 `performance_probe.py` with an attached device.
 
@@ -351,27 +351,27 @@ comics, and cancel/save/discard/conflict behavior for edited documents. The
 [October 20 focused results](mobile-evidence/2026-10-20-close-icon.json) cover
 iPhone/iPad simulators and a physical Android BOOX using isolated synthetic files.
 
-Add host modules to `Python/logisticsmobile/mobile_sources.json` and feature/service modules to their owning manifests in the same change as imports. `Mobile/tools.py` aggregates and validates these declarations.
+Add host modules to `Python/mobile/mobile_sources.json` and feature/service modules to their owning manifests in the same change as imports. `mobile_build/tools.py` aggregates and validates these declarations.
 `editor_picker.py` and `host_services.py` are explicitly staged. Do not edit
-generated `Mobile/payload/` or Briefcase projects as application source.
+generated `mobile_build/payload/` or Briefcase projects as application source.
 
 | Contract | Tests |
 | --- | --- |
-| Picker ownership, cancellation, stale results, locked-source saving | `Mobile/tests/test_editor_picker.py` |
-| Provider identity, Save As verification and reopen failures | `Mobile/tests/test_files_ui.py` |
-| Private drafts, privacy handoff and delayed opens | `Mobile/tests/test_private_sessions.py` |
-| Saved-import safety, other windows and reader retirement | `Mobile/tests/test_saved_files.py` |
-| Window ownership, layout/navigation and paired panes | `Mobile/tests/test_window_owners.py`, `test_workspace_ui.py` |
+| Picker ownership, cancellation, stale results, locked-source saving | `mobile_build/tests/test_editor_picker.py` |
+| Provider identity, Save As verification and reopen failures | `mobile_build/tests/test_files_ui.py` |
+| Private drafts, privacy handoff and delayed opens | `mobile_build/tests/test_private_sessions.py` |
+| Saved-import safety, other windows and reader retirement | `mobile_build/tests/test_saved_files.py` |
+| Window ownership, layout/navigation and paired panes | `mobile_build/tests/test_window_owners.py`, `test_workspace_ui.py` |
 | Payload completeness and portable imports | `Python/tests/test_mobile_packaging.py`, `test_mobile_portability.py` |
 
 Use the [host validation commands](mobile-launchers.md#host-validation).
 These are host contracts. Apple/Android picker layout, native Back and real
 LocalCrypt transfer behavior still need the existing native acceptance scenarios
-in `Mobile/native_tests/tests/logisticsmobile/localcrypt_checks.py`.
+in `mobile_build/native_tests/tests/logisticsmobile/localcrypt_checks.py`.
 
 ## Workflow controllers
 
-`features/lm/mobile/controller.py` owns chat state; rclone owns cloud and transfer controllers. Host navigation workflows have dedicated `*_controller.py` modules. `services/workflow_host.py` supplies explicit read/write host attributes. `host_services.composed_workflow` installs only declared compatibility names. Transfer/review cancellation is independent from file/cloud cancellation; global Cancel dispatches to both. Ownership and cancellation are exercised by `Mobile/tests/test_workflow_ownership.py`.
+`features/lm/mobile/controller.py` owns chat state; rclone owns cloud and transfer controllers. Host navigation workflows have dedicated `*_controller.py` modules. `services/workflow_host.py` supplies explicit read/write host attributes. `host_services.composed_workflow` installs only declared compatibility names. Transfer/review cancellation is independent from file/cloud cancellation; global Cancel dispatches to both. Ownership and cancellation are exercised by `mobile_build/tests/test_workflow_ownership.py`.
 
 ## Native source editor and live Markdown
 
@@ -400,7 +400,7 @@ beside the source at 720 logical units of usable width. The session's existing
 preview remains available. Local/private editable Markdown retains its source
 while previewing; remote text stays read-only.
 
-On Android 12 and newer, `logisticsmobile.android_markdown_font` obtains the
+On Android 12 and newer, `mobile.android_markdown_font` obtains the
 font selected for a native Toga label through `TextRunShaper`, then supplies its
 exact glyph tables to marked Markdown preview and formatted-editor WebViews.
 CSS `sans-serif` alone does not reliably follow OEM font customization. The
@@ -412,9 +412,9 @@ private pages retain their existing 2 MiB memory-only bound. Retired URLs return
 410, and unmarked book/transcript pages retain their own typography. Code stays
 monospace. Older Android versions, inaccessible fonts and native font buffers
 above 32 MiB retain the CSS fallback; other script fallback remains WebView-owned.
-`Mobile/tests/test_markdown_font.py` covers routing, retirement, content policy,
+`mobile_build/tests/test_markdown_font.py` covers routing, retirement, content policy,
 font collection extraction and lossless WOFF tables. The isolated
-`Mobile/native_tests/tests/logisticsmobile/markdown_font_probe.py` checks actual
+`mobile_build/native_tests/tests/logisticsmobile/markdown_font_probe.py` checks actual
 font loading and native glyph measurements across preview, formatted editing
 and large private pages, using the device font plus serif and monospace faces.
 The [2026-10-18 Note Air 5C report](mobile-evidence/2026-10-18-markdown-font.json)
@@ -553,7 +553,7 @@ The commonUtils `test_native_recycled_list_ios.py` covers detached-cell redispla
 `test_screen_privacy.py` checks repeated password restoration of the same listing.
 Tiles retain their existing shared renderer and separate scroll container.
 
-The disposable `recycled_list_probe.py` under `Mobile/native_tests/tests/logisticsmobile/`
+The disposable `recycled_list_probe.py` under `mobile_build/native_tests/tests/logisticsmobile/`
 uses 10,005 synthetic file records to validate native viewport bounds, scrolling
 to the last result, activation, search, sorting, stale callback rejection and
 clearing. It is a QA launcher only and must not replace production launchers.
@@ -566,9 +566,9 @@ separate pre-existing broad-suite failures were reproduced with the original
 browser. These synthetic checks establish bounded UI work, not real storage
 latency or full-app frame timing.
 Regression coverage lives in
-`Mobile/tests/test_browser_progressive.py`, `Mobile/tests/test_keyboard.py`,
-`Mobile/tests/test_native_browser.py`, `Mobile/tests/test_settings_ui.py`,
-`Python/tests/test_mobile_hub.py` and `Mobile/rclone_bridge/list_test.go`.
+`mobile_build/tests/test_browser_progressive.py`, `mobile_build/tests/test_keyboard.py`,
+`mobile_build/tests/test_native_browser.py`, `mobile_build/tests/test_settings_ui.py`,
+`Python/tests/test_mobile_hub.py` and `mobile_build/rclone_bridge/list_test.go`.
 
 Session-only imports retain password-protected source ZIPs using the separate
 device-encrypted `CredentialPackages` store for future password-only unlocking.
@@ -624,7 +624,7 @@ half-hour offsets, including fractional seconds that round across DST changes.
 In a macOS host microbenchmark, 1,000 timestamp conversions
 dropped from about 604 ms to 62 ms; this is not Android device timing.
 
-`Mobile/tests/test_mobile_responsiveness.py` covers deferred Settings, native tab
+`mobile_build/tests/test_mobile_responsiveness.py` covers deferred Settings, native tab
 selection without reentry, file taps bypassing metadata, and worker-only initial
 Markdown rendering. Existing browser, folder-navigation, private-session and
 Android Back tests cover lifecycle behavior. Physical Android launch, filesystem
@@ -679,15 +679,15 @@ physical E Ink refresh rate. Layout/render tracing remains necessary to diagnose
 the residual scrolling lag. Do not present the listing speedup as an overall app
 or scrolling speedup.
 
-`Mobile/native_tests/tests/logisticsmobile/boox_file_list_profile.py` is a
+`mobile_build/native_tests/tests/logisticsmobile/boox_file_list_profile.py` is a
 QA-only launcher. Stage the original browser at the report's pinned commit as
-`logisticsmobile.legacy_browser_ui`, the current browser normally, and the
+`mobile.legacy_browser_ui`, the current browser normally, and the
 QA-only `android/io/github/ispaure/logisticsmobile/FileListBenchmark.java` into
 the disposable app's Java source tree. The helper is not in the production
 source allowlist. Results and cProfile trees are written beneath that QA app's
 cache in `boox-file-list-profile/`. Local raw results, call trees and a mixed
 render-tail `gfxinfo framestats` dump are retained under
-`Mobile/build/list-recycling-qa/boox-profile/`. The published JSON omits
+`mobile_build/build/list-recycling-qa/boox-profile/`. The published JSON omits
 noncomparable backing-view counts and records this instrumentation limitation.
 
 ## Workspaces refresh
@@ -716,7 +716,7 @@ of row count. Source changes suppress the credential selector's reset callback
 to avoid a duplicate discovery/render pass. Folder discovery still checks local
 changes when switching sources; cached widgets do not authorize remote access.
 
-`Mobile/tests/test_folder_navigation_performance.py` covers row reuse, bounded
+`mobile_build/tests/test_folder_navigation_performance.py` covers row reuse, bounded
 credential reads, a single source-change render and local/lock-state invalidation.
 These host checks establish work reduction; device timing remains unmeasured.
 
@@ -771,7 +771,7 @@ at the provider root and returns to Workspaces; nested folders retain Up.
 
 ## Android Workspaces profiling — 2026-10-19
 
-The disposable [performance probe](../../Mobile/native_tests/tests/logisticsmobile/performance_probe.py)
+The disposable [performance probe](../../mobile_build/native_tests/tests/logisticsmobile/performance_probe.py)
 measures native Android navigation callbacks, the next native draw, nested workflow
 spans and cProfile call trees. It uses an isolated storage root and four synthetic
 locked LocalCrypt folders with matching retained remote metadata. Credentials are
@@ -857,7 +857,7 @@ launcher with `main().main_loop()`. It writes `performance-evidence/result.json`
 human-readable profiles and `.prof` call trees under that app's cache directory.
 Keep it out of normal launchers and signed tester releases. The draw listener is
 Android-specific. Results in this run are retained locally under
-`Mobile/build/performance-profile/android/`.
+`mobile_build/build/performance-profile/android/`.
 
 
 ### Incremental Workspaces verification — 2026-10-20
@@ -886,11 +886,11 @@ The full list still constructs all its native controls on first use; recycling
 large offscreen lists remains separate work. This incremental run did not include
 native iOS timing or screenshots. Raw profiles, source hashes and
 screenshots are retained locally in
-`Mobile/logs/workspaces-optimization-20261020/`.
+`mobile_build/logs/workspaces-optimization-20261020/`.
 
 ## App reset boundary
 
-`logisticsmobile.app_reset` owns reset operations. Android calls its own
+`mobile.app_reset` owns reset operations. Android calls its own
 `ActivityManager.clearApplicationUserData()`; no package argument can target
 another app. iOS records a schema-only durable request in private storage. The
 primary app processes it before `prepare_for_app` migration or service creation.
@@ -927,7 +927,7 @@ copy and preservation of the original files. These are host checks, not physical
 Android 9 SD-card validation.
 
 The app-only UserDefaults reset is declared with CA92.1 in
-`Mobile/privacy/App.xcprivacy`, copied as a target resource before signing and
+`mobile_build/privacy/App.xcprivacy`, copied as a target resource before signing and
 verified in exported apps. Platform API references:
 [Android clearApplicationUserData](https://developer.android.com/reference/android/app/ActivityManager#clearApplicationUserData())
 and [Apple Keychain deletion](https://developer.apple.com/documentation/security/secitemdelete(_:)).
@@ -950,8 +950,8 @@ sessions and Recent references) surface connection-busy decisions with a native
 dialog. Feature menus resolve the native activity through the reader controller's
 host and dispatch presentation commands during transfers; operation-specific
 guards still own mutations and credential requests. Regression coverage is in
-`Mobile/tests/test_transfer_feedback.py`; the physical Android acceptance probe is
-`Mobile/native_tests/tests/logisticsmobile/transfer_feedback_probe.py`.
+`mobile_build/tests/test_transfer_feedback.py`; the physical Android acceptance probe is
+`mobile_build/native_tests/tests/logisticsmobile/transfer_feedback_probe.py`.
 
 ## Unified iOS local browsing
 
@@ -976,7 +976,7 @@ is involved; Android's collection root is unchanged.
 
 ## Per-format mobile text sizing
 
-`logisticsmobile.font_scaling` binds native iOS and Android pinch gestures to
+`mobile.font_scaling` binds native iOS and Android pinch gestures to
 `markdown_font_size`, `text_font_size` and `epub_font_size` (12–32). Preferences
 seed missing category sizes from the legacy `font_size` and preserve them on the
 next save. Settings and gestures refresh registered surfaces in place, including
@@ -1058,12 +1058,12 @@ signals, a close or navigation racing recovery, and trim arriving after reveal.
 installed under `io.github.ispaure.logisticsreaderresumeqa`, run:
 
 ```sh
-python3 Mobile/reader_resume_tools.py --adb /path/to/sdk/platform-tools/adb --device emulator-5580 --output Mobile/logs/reader-resume
+python3 mobile_build/reader_resume_tools.py --adb /path/to/sdk/platform-tools/adb --device emulator-5580 --output mobile_build/logs/reader-resume
 ```
 
 The driver requires an explicit emulator and never targets a physical Boox or the
 main app. It exercises HOME/background, screen off, an injected native memory
 callback, screen on and Activity resume. The library cases additionally queue a
 trim through the normal memory subscription after wake. Reports distinguish these
-orderings; screenshots and logs stay under ignored `Mobile/logs/`. Keep simulator
+orderings; screenshots and logs stay under ignored `mobile_build/logs/`. Keep simulator
 or emulator evidence distinct from physical Boox/E Ink acceptance.

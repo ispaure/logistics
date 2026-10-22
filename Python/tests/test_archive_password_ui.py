@@ -53,7 +53,7 @@ class ArchivePasswordUITests(QtTestCase):
             sources.append(source)
         dialog = CreateZipDialog(sources)
         self.addCleanup(dialog.deleteLater)
-        with patch('ui_new.dialogs.archive_password.ask_password', side_effect=AssertionError('Unexpected prompt')):
+        with patch('desktop.dialogs.archive_password.ask_password', side_effect=AssertionError('Unexpected prompt')):
             dialog._create()
             self.wait(dialog)
         self.assertFalse(dialog.succeeded)

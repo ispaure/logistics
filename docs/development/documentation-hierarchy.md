@@ -3,7 +3,7 @@
 The [Logistics wiki](../docs.md) contains systemic desktop usage, mobile usage
 and development guides. [Feature infrastructure](feature-infrastructure.md)
 explains feature ownership; each feature keeps its own `docs/` wiki. Common UI
-and Workspaces help belong to Logistics; Bulk Rename remains under `ui_new`.
+and Workspaces help belong to Logistics; Bulk Rename remains under `desktop`.
 Shared commonUtils API guides and optional external feature internals stay in
 their own repositories. Compatibility entries contain links rather than copied guides.
 Historical migration reports do not override these current ownership rules.
@@ -26,8 +26,8 @@ maintained in commonUtils rather than duplicated here.
 
 ## Mobile packaging
 
-`Mobile/tools.py` copies root and owned feature wiki Markdown into
-`logisticsmobile/help/`, preserving repository-relative paths. It excludes linked
+`mobile_build/tools.py` copies root and owned feature wiki Markdown into
+`mobile/help/`, preserving repository-relative paths. It excludes linked
 features and never traverses the external emulation repository. The Settings
 entry opens `docs/user_mobile/user_mobile.md` with the Logistics tree. Cross-wiki
 links resolve within the mirrored payload, so users can read the scoped feature

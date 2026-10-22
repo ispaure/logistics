@@ -34,13 +34,13 @@ Run from the Logistics checkout, with tools available in the selected environmen
 Use a **fresh** disposable staging directory, not the repository itself:
 
 ```sh
-python Mobile/qt_proof/prepare.py /tmp/logistics-qt-proof
+python mobile_build/qt_proof/prepare.py /tmp/logistics-qt-proof
 pyside6-ios-deploy /tmp/logistics-qt-proof/main.py --name LogisticsQtProof \
   --bundle-id io.github.ispaure.logisticsqtproof \
   --wheel-pyside /path/to/pyside6-simulator.whl \
   --wheel-shiboken /path/to/shiboken6-simulator.whl \
   --xcframework-path /path/to/Python.xcframework
-python Mobile/qt_proof/link_ios.py /tmp/logistics-qt-proof --go /path/to/go
+python mobile_build/qt_proof/link_ios.py /tmp/logistics-qt-proof --go /path/to/go
 xcodebuild -project /tmp/logistics-qt-proof/deployment/ios_arm64_simulator/LogisticsQtProof.xcodeproj \
   -scheme LogisticsQtProof -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' \
@@ -48,7 +48,7 @@ xcodebuild -project /tmp/logistics-qt-proof/deployment/ios_arm64_simulator/Logis
   CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
 xcrun simctl install SIMULATOR_UUID /tmp/logistics-qt-build/Build/Products/Debug-iphonesimulator/LogisticsQtProof.app
 xcrun simctl launch SIMULATOR_UUID io.github.ispaure.logisticsqtproof
-python Mobile/qt_proof/collect.py SIMULATOR_UUID /tmp/logistics-qt-evidence
+python mobile_build/qt_proof/collect.py SIMULATOR_UUID /tmp/logistics-qt-evidence
 ```
 
 The app runs programmatic checks shortly after startup and writes evidence and

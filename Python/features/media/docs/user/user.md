@@ -33,5 +33,5 @@ See [Using Logistics](../../../../../docs/user/user.md) for navigation and setti
 The rename engine attempts rollback after cancellation or a handled error. If
 another process blocks recovery, the result shows staged and original paths;
 keep staged files and recover them from those reported locations. The dialog
-has no retained Undo action after success. See [Bulk Rename](../../../../ui_new/bulk_rename/docs/user/user.md)
+has no retained Undo action after success. See [Bulk Rename](../../../../desktop/bulk_rename/docs/user/user.md)
 for general filename transformations instead of CSV chapter naming.

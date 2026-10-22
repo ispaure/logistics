@@ -8,7 +8,7 @@ from shiboken6 import isValid
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.process_host import register_process_host
 from commonUtils.ui.tasks.process_progress import open_process
-from ui_new.folder_actions import FolderActionsPage
+from desktop.folder_actions import FolderActionsPage
 
 
 class FolderActionTests(QtTestCase):
@@ -87,7 +87,7 @@ class FolderActionTests(QtTestCase):
         self.assertEqual(self.page.unread_count, 1)
 
     def test_supported_system_notification_uses_the_actual_result_severity(self):
-        with patch('ui_new.notifications.qt.QSystemTrayIcon') as tray_type:
+        with patch('desktop.notifications.qt.QSystemTrayIcon') as tray_type:
             tray_type.isSystemTrayAvailable.return_value = True
             tray_type.supportsMessages.return_value = True
             FolderActionsPage.notify(self.page, 'Sync failed', 'See details', failed=True)

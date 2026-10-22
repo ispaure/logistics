@@ -20,16 +20,16 @@ python3 dev.py lint
 | Change | Start here | Guide |
 | --- | --- | --- |
 | A feature's controls or behavior | `Python/features/<feature>/`; desktop presentation in `ui/`, mobile adapters in `mobile/` | [Code and owner map](code-map.md) |
-| Desktop navigation, document tabs or browser hosting | `Python/ui_new/` (the current desktop shell name) | [Architecture](architecture.md), [browser ownership](browser-ownership.md) |
-| Mobile navigation, storage or document lifetime | `Python/logisticsmobile/` | [Mobile host owners](mobile-runtime.md) |
+| Desktop navigation, document tabs or browser hosting | `Python/desktop/` | [Architecture](architecture.md), [browser ownership](browser-ownership.md) |
+| Mobile navigation, storage or document lifetime | `Python/mobile/` | [Mobile host owners](mobile-runtime.md) |
 | Settings, registration or a new feature | Owning feature's `__init__.py` and `config.ini` | [Feature conventions](features.md), [extension points](extension-points.md) |
 | A shared Logistics policy | `Python/services/` | [Service owners](services.md) |
-| Mobile builds, deployment or native bridges | `Mobile/`; application source stays under `Python/` | [Mobile handbook](mobile-handbook.md) |
-| Tests for any of these | `Python/tests/` or `Mobile/tests/` | [Test selection and commands](testing.md#find-the-tests-for-your-change) |
+| Mobile builds, deployment or native bridges | `mobile_build/`; application source stays under `Python/` | [Mobile handbook](mobile-handbook.md) |
+| Tests for any of these | `Python/tests/` or `mobile_build/tests/` | [Test selection and commands](testing.md#find-the-tests-for-your-change) |
 
 Follow registration factories to the canonical implementation. Small modules at
 older paths may only forward compatibility imports. Edit the implementation they
-point to. Generated `Mobile/payload/`, `Mobile/build/`, caches and test reports are
+point to. Generated `mobile_build/payload/`, `mobile_build/build/`, caches and test reports are
 outputs; they are not source files to tweak.
 
 ## Current development references
@@ -80,8 +80,9 @@ validate a new change.
 These pages retain proposals and migration history. Use the current code map and
 owner guides above for today's layout. Check each page's implementation status
 before treating an old finding as remaining work. The October 21 incremental pass below adds controller boundaries and nested test
-discovery. Shell renaming and wholesale test-directory moves remain deferred;
-current contracts are in the owner maps above.
+discovery. The desktop and mobile hosts now live in `Python/desktop/` and
+`Python/mobile/`; mobile build tooling lives in `mobile_build/`. Wholesale
+test-directory moves remain deferred; current contracts are in the owner maps above.
 
 - [Restructuring assessment and migration record](restructuring.md)
 - [October 20 ownership audit and cleanup record](ownership-audit.md)
@@ -98,7 +99,7 @@ current contracts are in the owner maps above.
 Feature desktop usage belongs in `Python/features/<owner>/docs/user/`; mobile
 usage belongs in that owner's `docs/user_mobile/`, and architecture/contracts in
 its `docs/development/`. Systemic guides belong in the root wiki. Core UI and
-Folder Hub stay there; Bulk Rename retains its existing `ui_new` documentation.
+Folder Hub stay there; Bulk Rename retains its existing `desktop` documentation.
 Update the root README for setup or major capability changes.
 
 Keep package READMEs and `user_docs/index.md` as short links. Shared commonUtils

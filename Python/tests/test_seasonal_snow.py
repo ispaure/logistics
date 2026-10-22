@@ -34,11 +34,11 @@ class DesktopSnowTests(unittest.TestCase):
 
     def test_overlay_tracks_size_and_never_intercepts_input(self):
         from commonUtils.configuration.layered import LayeredSettings
-        from ui_new.snow import SnowOverlay, FIELD
+        from desktop.snow import SnowOverlay, FIELD
         with TemporaryDirectory() as directory:
             store = LayeredSettings(Path(directory) / 'defaults.ini', Path(directory) / 'personal.ini')
-            with patch('ui_new.snow.settings_store', return_value=store), \
-                    patch('ui_new.snow.snow_enabled', side_effect=lambda enabled, contrast: enabled and not contrast):
+            with patch('desktop.snow.settings_store', return_value=store), \
+                    patch('desktop.snow.snow_enabled', side_effect=lambda enabled, contrast: enabled and not contrast):
                 window = self.qt.QWidget()
                 window.resize(640, 480)
                 overlay = SnowOverlay(window)
@@ -67,11 +67,11 @@ class DesktopSnowTests(unittest.TestCase):
 
     def test_appearance_switch_saves_selected_scope(self):
         from commonUtils.configuration.layered import LayeredSettings
-        from ui_new.pages.settings import CommonUtilsPanel
-        from ui_new.snow import FIELD
+        from desktop.pages.settings import CommonUtilsPanel
+        from desktop.snow import FIELD
         with TemporaryDirectory() as directory:
             store = LayeredSettings(Path(directory) / 'defaults.ini', Path(directory) / 'personal.ini')
-            with patch('ui_new.pages.settings.settings_store', return_value=store):
+            with patch('desktop.pages.settings.settings_store', return_value=store):
                 panel = CommonUtilsPanel(layered=True)
                 self.assertTrue(panel.snow_choice.isChecked())
                 panel.set_scope('personal')

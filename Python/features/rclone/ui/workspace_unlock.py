@@ -8,7 +8,7 @@ from features.rclone import session
 
 
 def unlock_target(location, *, package=None):
-    from ui_new.file_browser import _PrivateBrowserLocation
+    from desktop.file_browser import _PrivateBrowserLocation
     from features.rclone.ui.remote_browser import RemoteLocation
     if isinstance(location, _PrivateBrowserLocation):
         config, package = Path(location.item.context), Path(location.item.package)

@@ -9,7 +9,7 @@ from features.comics.selection import normalize_targets
 from .metadata_editor import MetadataEditor
 from commonUtils.ui.tasks.operations import Operation
 from services.documents.zip_passwords import is_password_error
-from ui_new.dialogs.archive_password import ask_password
+from desktop.dialogs.archive_password import ask_password
 
 
 class ComicBrowserServices:

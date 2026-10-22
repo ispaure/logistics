@@ -9,7 +9,7 @@ from commonUtils.formats.markdown_wiki import MarkdownWiki, documentation_root
 from services.documentation import feature_guide
 
 ROOT = Path(__file__).resolve().parents[2]
-SCOPES = [ROOT / 'docs', ROOT / 'Python/ui_new/bulk_rename/docs'] + [
+SCOPES = [ROOT / 'docs', ROOT / 'Python/desktop/bulk_rename/docs'] + [
     owner / 'docs' for owner in (ROOT / 'Python/features').iterdir()
     if owner.is_dir() and not owner.is_symlink() and (owner / 'docs').is_dir()]
 
