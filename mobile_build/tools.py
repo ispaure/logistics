@@ -61,6 +61,7 @@ SHARED_REQUIRED_MODULES += ('formats/code_syntax.py', 'formats/code_spans.py', '
                             'ui/native/code_input.py',
                             'ui/native/android/io/github/ispaure/commonutils/CodeEditorSupport.java')
 
+SHARED_REQUIRED_MODULES += ('ui/native_browser/lifecycle.py', 'ui/native_browser/paginated.py')
 SHARED_REQUIRED_MODULES += ('ui/native_browser/recycled.py', 'ui/native/recycled_list.py',
                             'ui/native/recycled_list_android.py', 'ui/native/recycled_list_ios.py',
                             'ui/native/android/io/github/ispaure/commonutils/FileListView.java')
