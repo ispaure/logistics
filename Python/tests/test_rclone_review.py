@@ -376,9 +376,9 @@ class ReviewDialogTests(QtTestCase):
         dialog = ReviewDialog(ReviewRequest('Push', '/local', 'Remote:', 'account'), changing, lambda: True)
         timer = qt.QTimer()
         def drive():
-            if count == 1 and dialog.scan.snapshot().complete:
+            if count == 1 and dialog.session.scan.snapshot().complete:
                 dialog.approve(False)
-            elif count == 2 and dialog.expected is None:
+            elif count == 2 and dialog.session.expected is None:
                 self.assertIn('Files changed', dialog.notice.text())
                 timer.stop()
                 dialog.reject()

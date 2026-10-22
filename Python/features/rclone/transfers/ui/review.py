@@ -1,15 +1,13 @@
 """Qt presentation of the shared transfer review lifecycle."""
 from commonUtils.ui import pyside as qt
-from features.rclone.transfers.review import ReviewScan, unchanged
+from features.rclone.transfers.review import ReviewSession
 
 
 class ReviewDialog(qt.QDialog):
     def __init__(self, request, scanner, valid, parent=None):
         super().__init__(parent)
         self.request, self.scanner, self.valid = request, scanner, valid
-        self.scan = ReviewScan(scanner)
-        self.expected = None
-        self.decision = None
+        self.session = ReviewSession(request, scanner, valid)
         self.setWindowTitle('Review ' + request.operation)
         self.resize(760, 520)
         layout = qt.QVBoxLayout(self)
@@ -43,59 +41,41 @@ class ReviewDialog(qt.QDialog):
             self.notice.setText('Connection or target changed. Cancel and review again.')
             self.reject()
             return
-        snapshot = self.scan.snapshot()
-        if not incomplete and not snapshot.complete:
+        if not self.session.can_approve(incomplete=incomplete):
             return
         if qt.QMessageBox.question(self, 'Confirm ' + self.request.operation,
                 self.request.confirmation(incomplete=incomplete),
                 qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.Cancel,
-                qt.QMessageBox.StandardButton.Cancel) != qt.QMessageBox.StandardButton.Yes:
-            return
-        if not self.valid():
-            self.reject()
-        elif incomplete:
-            self.decision = 'proceed'
-            self.scan.stop()
-        else:
-            self.expected = snapshot
-            self.scan = ReviewScan(self.scanner)
-            self.notice.setText('Checking that the completed review is still current…')
-            self.proceed_button.setEnabled(False)
+                qt.QMessageBox.StandardButton.Cancel) == qt.QMessageBox.StandardButton.Yes:
+            self.session.approve(incomplete=incomplete)
+            self.refresh()
 
     def refresh(self):
+        state = self.session.poll()
         if not self.valid():
-            self.decision = 'cancel'
-            self.scan.stop()
             self.paths.setPlainText('Connection locked or changed.')
             self.details.clear()
-        snapshot = self.scan.snapshot()
-        text = snapshot.text()
-        if self.valid() and text != self.details.toPlainText():
-            self.details.setPlainText(text)
-        self.proceed_button.setEnabled(snapshot.complete and self.expected is None and self.decision is None)
-        if self.decision is not None:
-            self.notice.setText('Stopping comparison…')
-            if self.scan.retired.is_set() and self.isVisible():
-                self.timer.stop()
-                if self.decision == 'proceed' and self.valid():
-                    super().accept()
-                else:
-                    super().reject()
-        elif self.expected is not None and self.scan.retired.is_set():
-            if unchanged(self.expected, snapshot) and self.valid():
-                self.timer.stop()
+        else:
+            text = self.session.scan.snapshot().text()
+            if text != self.details.toPlainText():
+                self.details.setPlainText(text)
+        self.proceed_button.setEnabled(self.session.can_approve())
+        self.early_button.setEnabled(self.session.can_approve(incomplete=True))
+        notices = dict(stopping='Stopping comparison…', checking='Checking that the completed review is still current…',
+            changed='Files changed or could not be checked. Review the current results before confirming again.',
+            failed='Comparison failed. Retry later, or explicitly proceed without a full review.',
+            ready='Review complete. Confirm to check for changes and start the transfer.')
+        if state in notices:
+            self.notice.setText(notices[state])
+        if state in ('approved', 'cancelled') and self.isVisible():
+            self.timer.stop()
+            if state == 'approved':
                 super().accept()
             else:
-                self.expected = None
-                self.notice.setText('Files changed or could not be checked. Review the current results before confirming again.')
-        elif snapshot.error:
-            self.notice.setText('Comparison failed. Retry later, or explicitly proceed without a full review.')
-        elif snapshot.complete and self.expected is None:
-            self.notice.setText('Review complete. Confirm to check for changes and start the transfer.')
+                super().reject()
 
     def reject(self):
-        self.decision = 'cancel'
-        self.scan.stop()
+        self.session.cancel()
         self.refresh()
 
     def closeEvent(self, event):

@@ -116,3 +116,63 @@ def replace_changes(emit, changes):
     else:
         for kind, path in changes:
             emit(kind, path)
+
+
+class ReviewSession:
+    """One approval owner; a retired scan and current binding precede execution.
+
+    A completed approval triggers a fresh comparison. Explicit incomplete approval
+    remains a separate user decision and still waits for cancellation retirement.
+    """
+    def __init__(self, request, scanner, valid=lambda: True):
+        self.request, self.scanner, self.valid = request, scanner, valid
+        self.scan = ReviewScan(scanner)
+        self.expected = None
+        self.decision = None
+        self.state = 'scanning'
+
+    def can_approve(self, *, incomplete=False):
+        return (self.decision is None and self.expected is None and self.valid()
+                and (incomplete or self.scan.retired.is_set() and self.scan.snapshot().complete))
+
+    def approve(self, *, incomplete=False):
+        # Called only after the platform's explicit destructive-action dialog.
+        if not self.valid():
+            self.cancel()
+            return False
+        if not self.can_approve(incomplete=incomplete):
+            return False
+        if incomplete:
+            self.decision = 'proceed'
+            self.scan.stop()
+            self.state = 'stopping'
+        else:
+            self.expected = self.scan.snapshot()
+            self.scan = ReviewScan(self.scanner)
+            self.state = 'checking'
+        return True
+
+    def cancel(self):
+        self.decision = 'cancel'
+        self.scan.stop()
+        self.state = 'stopping'
+
+    def poll(self):
+        if not self.valid() or self.scan.cancelled.is_set() and self.decision is None:
+            self.cancel()
+        snapshot = self.scan.snapshot()
+        if self.decision is not None:
+            self.state = ('approved' if self.decision == 'proceed' and self.valid() else 'cancelled'
+                          ) if self.scan.retired.is_set() else 'stopping'
+        elif self.expected is not None and self.scan.retired.is_set():
+            if unchanged(self.expected, snapshot) and self.valid():
+                self.decision, self.state = 'proceed', 'approved'
+            else:
+                self.expected, self.state = None, 'changed'
+        elif self.expected is None and self.state != 'changed':
+            self.state = 'failed' if snapshot.error else 'ready' if snapshot.complete else 'scanning'
+        return self.state
+
+    @property
+    def approved(self):
+        return self.poll() == 'approved'

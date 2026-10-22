@@ -9,7 +9,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 
-from features.rclone.transfers.review import ReviewRequest, ReviewScan, unchanged, replace_changes
+from features.rclone.transfers.review import ReviewRequest, ReviewSession, replace_changes
 from features.rclone.transfers.transfer_options import TransferOptions, load_options, save_options
 
 
@@ -177,45 +177,31 @@ class TransferReviewUI:
             online if push else local, job['identity'], options)
         scanner = native_scanner(client, dict(job, _push=push), store.guard(store.target(job)), options,
                                  cleanup_plan=lambda cancelled: store.cleanup_plan(job, client, cancelled))
-        scan = ReviewScan(scanner)
+        session = ReviewSession(request, scanner, valid)
         self.transfer_busy, self.transfer_notification = True, True
         self.set_cloud_busy(True)
-        self._transfer_cancel = scan.cancelled
+        self._transfer_cancel = session.scan.cancelled
         self.transfer_message = 'Reviewing ' + request.operation + '…'
         self.refresh_transfer_status()
-        decision, expected = None, None
         box = toga.Box(style=Pack(direction=COLUMN, margin=12, flex=1))
         paths = toga.Label(f'From: {request.source}\nTo: {request.destination}', style=Pack(margin_bottom=8))
         status = toga.Label('Scanning; comparison does not change files.', style=Pack(margin_bottom=8))
         details = toga.MultilineTextInput(readonly=True, style=Pack(flex=1))
         buttons = toga.Box(style=Pack(direction=ROW))
         async def choose(incomplete):
-            nonlocal decision, expected, scan
-            if decision is not None or not valid() or (not incomplete and not scan.snapshot().complete):
+            if not session.can_approve(incomplete=incomplete):
                 return
             confirm.enabled = early.enabled = False
             try:
                 accepted = await self.main_window.dialog(toga.ConfirmDialog('Confirm ' + request.operation,
                     request.confirmation(incomplete=incomplete)))
-                if not accepted:
-                    return
-                if not valid():
-                    decision = 'cancel'
-                    scan.stop()
-                elif incomplete:
-                    decision = 'proceed'
-                    scan.stop()
-                else:
-                    expected = scan.snapshot()
-                    scan = ReviewScan(scanner)
-                    self._transfer_cancel = scan.cancelled
-                    status.text = 'Checking that the completed review is still current…'
+                if accepted:
+                    session.approve(incomplete=incomplete)
+                    self._transfer_cancel = session.scan.cancelled
             finally:
-                early.enabled = decision is None
+                early.enabled = session.can_approve(incomplete=True)
         def cancel(widget=None, **kwargs):
-            nonlocal decision
-            decision = 'cancel'
-            scan.stop()
+            session.cancel()
         async def full(widget=None, **kwargs):
             await choose(False)
         async def partial(widget=None, **kwargs):
@@ -230,38 +216,27 @@ class TransferReviewUI:
         previous = None
         try:
             while True:
-                if scan.cancelled.is_set() and decision is None:
-                    decision = 'cancel'
+                state = session.poll()
                 if not valid():
-                    cancel()
                     paths.text = 'Connection locked or changed.'
                     details.value = ''
-                    if scan.retired.is_set():
-                        break
-                    await asyncio.sleep(.05)
-                    continue
-                snapshot = scan.snapshot()
-                text = snapshot.text()
-                if text != previous:
-                    details.value, previous = text, text
-                if decision is not None:
-                    status.text = 'Stopping comparison…'
-                    if scan.retired.is_set():
-                        break
-                elif expected is not None and scan.retired.is_set():
-                    if unchanged(expected, snapshot):
-                        decision = 'proceed'
-                        break
-                    expected = None
-                    status.text = 'Files changed or could not be checked. Review the current results and confirm again.'
-                elif scan.retired.is_set():
-                    confirm.enabled = snapshot.complete and not snapshot.error
-                    if snapshot.error:
-                        status.text = 'Comparison failed. Retry later, or explicitly proceed without a full review.'
+                else:
+                    text = session.scan.snapshot().text()
+                    if text != previous:
+                        details.value, previous = text, text
+                confirm.enabled = session.can_approve()
+                early.enabled = session.can_approve(incomplete=True)
+                notices = dict(stopping='Stopping comparison…', checking='Checking that the completed review is still current…',
+                    changed='Files changed or could not be checked. Review the current results and confirm again.',
+                    failed='Comparison failed. Retry later, or explicitly proceed without a full review.')
+                if state in notices:
+                    status.text = notices[state]
+                if state in ('approved', 'cancelled'):
+                    break
                 await asyncio.sleep(.1)
         finally:
-            scan.stop()
-            while not scan.retired.is_set():
+            session.scan.stop()
+            while not session.scan.retired.is_set():
                 await asyncio.sleep(.05)
             self._transfer_review_view = None
             self._cancel_transfer_review = None
@@ -273,7 +248,7 @@ class TransferReviewUI:
             self.transfer_busy = False
             self.set_cloud_busy(False)
             self.refresh_transfer_status()
-        if decision != 'proceed' or not valid():
+        if not session.approved:
             self.transfer_message = 'Review cancelled. No transfer was started.'
             return False
         work = lambda client, cancel, progress: store.execute_review(job, client, push=push, new=key is None, options=options,
