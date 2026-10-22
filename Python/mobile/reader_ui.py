@@ -265,6 +265,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             sidebar.show_detail()
         if self.book_reader is None:
             return
+        from .reading.publication import ReadingPublication
+        publication = ReadingPublication.library(self)
         reader, record = self.book_reader, self.book_record
         epoch = self.book_epoch
         count = len(reader.spine if record['kind'] == 'epub' else reader.pages)
@@ -279,11 +281,13 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             if prepared is None:
                 return
             view, indices, publish = prepared
+        if not publication.current():
+            return
         location = dict(path=reader.spine[index], offset=prepared_epub[1]) if record['kind'] == 'epub' else None
         updated = dict(record, position=index)
         if location is not None:
             updated['location'] = location
-        from .page_animation import page_direction, begin_page_slide, finish_page_slide
+        from .page_animation import page_direction
         direction = 0
         if record['kind'] == 'comic' and self.book_content.children:
             direction = page_direction(record['position'] + self.comic_navigation.half / 2,
@@ -291,9 +295,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                 right_to_left=getattr(reader, 'right_to_left', False))
         elif record['kind'] == 'epub' and self.book_content.children:
             direction = page_direction(record['position'], index)
-        begin_page_slide(self.book_content, direction, self.preferences.values)
-        if record['kind'] == 'comic':
-            publish()
+        if not publication.begin(direction):
+            return
         if record['kind'] == 'epub':
             self.epub_text, self.epub_offset, content = prepared_epub
             self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
@@ -305,13 +308,10 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             from .font_scaling import bind
             bind(self, self.epub_view, 'epub', web=True)
             view = self.epub_view
-        for child in list(self.book_content.children):
-            if child is not view and hasattr(child, 'dispose'):
-                child.dispose()
-            self.book_content.remove(child)
         self.close_read_aloud()
-        self.book_content.add(view)
-        finish_page_slide(self.book_content, direction, self.preferences.values)
+        if not publication.mount(view, direction=direction,
+                                 publish=publish if record['kind'] == 'comic' else None):
+            return
         if record['kind'] == 'comic':
             from .magnifier import bind
             bind(self, view)
@@ -347,17 +347,12 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         position = str(index + 1) if record['kind'] == 'epub' or len(indices) == 1 else f'{indices[0] + 1}–{indices[-1] + 1}'
         self.book_status.text = (f'Page {position}/{count}{self.comic_navigation.part_label}{direction}' if record['kind'] == 'comic'
                                  else f'{title} · {position}/{count}{direction}')
-        if hasattr(self, 'page_footer'):
-            self.page_footer.sync(comic=record['kind'] == 'comic', count=count, index=index,
-                                  right_to_left=getattr(reader, 'right_to_left', False))
-            if record['kind'] == 'epub':
-                self.page_footer.chapter_progress(index, count, self.epub_offset, self.epub_text.length)
+        publication.footer(self, comic=record['kind'] == 'comic', count=count, index=index,
+                           right_to_left=getattr(reader, 'right_to_left', False),
+                           chapter=(self.epub_offset, self.epub_text.length) if record['kind'] == 'epub' else None)
         self.previous_page.enabled = (index > 0 or self.epub_offset > 0) if record['kind'] == 'epub' else self.comic_navigation.can_previous(index)
         self.next_page.enabled = index + 1 < count if record['kind'] == 'epub' else self.comic_navigation.next(index) is not None
         self.book_loading = False
-        # Initial EPUB content arrives after its reader route was presented.
-        from .reader_chrome import sync_comic_chrome
-        sync_comic_chrome(self.app, self.app.body)
         # Mount the prepared page before filesystem latency; the loop can paint
         # while the worker publishes ordinary imported-library progress.
         try:

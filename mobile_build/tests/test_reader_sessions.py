@@ -203,7 +203,8 @@ class ReaderSessionTests(unittest.TestCase):
                 restored.session_opener(reader_session)()
                 async def wait_reader():
                     for _ in range(100):
-                        if getattr(getattr(getattr(restored, 'readers', None), 'active', None), 'book_reader', None) is not None:
+                        owner = getattr(getattr(restored, 'readers', None), 'active', None)
+                        if getattr(owner, 'book_reader', None) is not None and not owner.book_busy:
                             return
                         await asyncio.sleep(.01)
                     self.fail('Explicit reader reopening did not finish')
@@ -216,6 +217,7 @@ class ReaderSessionTests(unittest.TestCase):
                     host.main_window.close()
                 for loop in {host.loop for host in hosts}:
                     if not loop.is_closed():
+                        loop.run_until_complete(loop.shutdown_default_executor())
                         loop.close()
 
     def test_cold_workspace_opens_last_epub_with_default_restart_settings(self):

@@ -427,6 +427,9 @@ class ProviderUI(FilesUI):
     def _show_crypt_content(self, kind, content, *, view=None, owner=None):
         controller = owner or self
         view = self if view is None else view
+        from .reading.publication import ReadingPublication
+        publication = ReadingPublication.provider(controller, view)
+        old_epub = getattr(view, 'provider_epub_view', None)
         prepared_spread = publish_spread = None
         if view.crypt_reader.book is None and kind == 'spread':
             from features.comics.mobile.presentation import SpreadView
@@ -466,18 +469,8 @@ class ProviderUI(FilesUI):
                 right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
         elif view.crypt_reader.kind in {'.epub', '.pdf'} and view.crypt_content.children:
             direction = page_direction(getattr(view, '_provider_displayed_index', None), index)
-        begin_page_slide(view.crypt_content, direction, self.preferences.values)
-        if publish_spread is not None:
-            publish_spread()
-        for child in list(view.crypt_content.children):
-            if hasattr(child, 'dispose') and child not in (view.crypt_image, view.crypt_text, prepared_spread):
-                child.dispose()
-            view.crypt_content.remove(child)
-        view.crypt_text.value = ''
-        view.crypt_image.image = None
-        if hasattr(view, 'provider_epub_view'):
-            view.provider_epub_view.dispose()
-            del view.provider_epub_view
+        if not publication.begin(direction):
+            return
         if view.crypt_reader.book is not None:
             from features.books.mobile.provider_reader import provider_view
             from features.books.mobile.typography import options as typography_options
@@ -530,23 +523,33 @@ class ProviderUI(FilesUI):
                     control.parent.remove(control)
                 tools.panel.add(control)
             tools.panel.add(toga.Label('Bookmarks stay in this session\nand are cleared on close.'))
-            view.crypt_content.add(view.provider_epub_view)
+            surface = view.provider_epub_view
         elif kind == 'spread':
             from features.comics.mobile.presentation import place_page
             place_page(prepared_spread, controller.format_services.page_region(view.crypt_content))
-            view.provider_spread = prepared_spread
-            view.crypt_content.add(prepared_spread)
-            view.crypt_reader.comic_navigation.commit(indices)
-            view.crypt_title.text = private_label(f'Page {index + 1}/{len(view.crypt_reader.labels)}' +
-                view.crypt_reader.comic_navigation.part_label)
+            surface = prepared_spread
         elif kind == 'image':
             view.crypt_image._external_comic_page = view.crypt_reader.kind in {'.cbz', '.zip'}
             view.crypt_image.image = toga.Image(src=content)
-            view.crypt_content.add(view.crypt_image)
+            surface = view.crypt_image
         else:
             view.crypt_text.value = content
-            view.crypt_content.add(view.crypt_text)
-        finish_page_slide(view.crypt_content, direction, self.preferences.values)
+            surface = view.crypt_text
+        if not publication.mount(surface, direction=direction, publish=publish_spread,
+                                 keep=(view.crypt_image, view.crypt_text),
+                                 retired=(old_epub,) if old_epub is not None else ()):
+            return
+        if kind == 'spread':
+            view.provider_spread = prepared_spread
+            view.crypt_reader.comic_navigation.commit(indices)
+            view.crypt_title.text = private_label(f'Page {index + 1}/{len(view.crypt_reader.labels)}' +
+                view.crypt_reader.comic_navigation.part_label)
+        if surface is not view.crypt_text:
+            view.crypt_text.value = ''
+        if surface is not view.crypt_image:
+            view.crypt_image.image = None
+        if old_epub is not None and surface is not getattr(view, 'provider_epub_view', None):
+            del view.provider_epub_view
         comic = view.crypt_reader.kind in {'.cbz', '.zip'}
         for child in view.crypt_content.children:
             if hasattr(child, 'magnifier_enabled'):
@@ -555,8 +558,7 @@ class ProviderUI(FilesUI):
         view._provider_displayed_index = view.crypt_reader.labels.index(view.crypt_page.value)
         if view.crypt_reader.kind == '.pdf' and hasattr(view, 'pdf_number'):
             view.pdf_number.value = str(view._provider_displayed_index + 1)
-        from .external_display import sync as sync_external
-        sync_external(getattr(controller, 'app', controller))
+        publication.chrome()
 
     async def read_crypt_page(self, widget=None, **kwargs):
         if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.editable:
@@ -573,10 +575,10 @@ class ProviderUI(FilesUI):
             self._provider_comic_sharing = self.format_services.comic_sharing()
             self._provider_comic_seam = self.private_comic_seam()
             reader = self.crypt_reader
-            token = self.workspace.token(self.session.id)
+            from .reading.publication import ReadingPublication
+            publication = ReadingPublication.provider(self, self)
             kind, content = await asyncio.to_thread(self.provider_page_content, reader, index)
-            if (not self.active_host or self.crypt_reader is not reader
-                    or not self.workspace.accepts(token) or self.manager.active is not self):
+            if not publication.current() or self.manager.active is not self:
                 return
             self._show_crypt_content(kind, content)
             self.page_suspended = False
@@ -586,11 +588,10 @@ class ProviderUI(FilesUI):
             self.refresh_private_bookmarks()
             self.watch_provider_layout()
             self.watch_provider_epub_width()
-            self.page_footer.sync(comic=reader.kind in {'.cbz', '.zip'}, count=len(reader.labels),
-                                  index=index, right_to_left=getattr(reader, 'right_to_left', False))
-            if reader.book is not None:
-                panel = self.provider_epub_view
-                self.page_footer.chapter_progress(index, len(reader.labels), panel.offset, panel.chapter.length)
+            panel = self.provider_epub_view if reader.book is not None else None
+            publication.footer(self, comic=reader.kind in {'.cbz', '.zip'}, count=len(reader.labels),
+                               index=index, right_to_left=getattr(reader, 'right_to_left', False),
+                               chapter=(panel.offset, panel.chapter.length) if panel is not None else None)
             self.previous_page.enabled = reader.book is not None or (reader.comic_navigation.can_previous(index) if hasattr(reader, 'comic_navigation') else index > 0)
             self.next_page.enabled = reader.book is not None or (reader.comic_navigation.next(index) is not None if hasattr(reader, 'comic_navigation') else index + 1 < len(reader.labels))
         except Exception as error:
