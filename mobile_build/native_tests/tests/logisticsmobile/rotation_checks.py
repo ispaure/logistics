@@ -134,7 +134,6 @@ def assert_visible_controls(app):
     checked = (toga.Button, toga.Selection, toga.TextInput, toga.MultilineTextInput)
     count = 0
     seen = set()
-    action_labels = set()
     from commonUtils.ui.native.keyboard import native_value
     def visit(widget):
         nonlocal count
@@ -151,9 +150,6 @@ def assert_visible_controls(app):
                 count += 1
                 label = getattr(widget, 'accessible_name', None) or getattr(widget, 'text', type(widget).__name__)
                 assert_control_bounds(rect, window, label)
-        item = getattr(widget, '_ios_action_item', None)
-        if item is not None:
-            action_labels.add(str(native_value(item.accessibilityLabel)))
         # Promoted actions retain callbacks outside the Toga content tree.
         for field in ('title_actions', '_ios_toolbar_buttons', '_ios_toolbar_leading'):
             for control in getattr(widget, field, ()):
@@ -169,6 +165,7 @@ def assert_visible_controls(app):
     if adapter is not None:
         from rubicon.objc import ObjCClass
         navigation = adapter.navigation[app.native_host.destinations.index(app.native_host.state.destination)]
+        bar = native_value(navigation.navigationBar)
         control_class = ObjCClass('UIControl')
         def visit_bar(native):
             nonlocal count
@@ -176,18 +173,26 @@ def assert_visible_controls(app):
                 return
             owner = native_value(native.window)
             label = str(native_value(native.accessibilityLabel) or '')
-            # UIKit's unnamed navigation hit regions may extend past the safe
-            # margins. Audit our explicitly labelled actions, not those regions.
-            if (native.isKindOfClass(control_class) and label in action_labels
-                    and owner is not None and owner.ptr.value == window.ptr.value):
-                rect = native.convertRect(native.bounds, toView=window)
+            # UIKit lays out its own controls in the navigation bar, outside
+            # the window's stricter content-safe inset on landscape iPhones.
+            if (native.isKindOfClass(control_class) and owner is not None
+                    and owner.ptr.value == window.ptr.value):
+                rect = native.convertRect(native.bounds, toView=bar)
                 if rect.size.width > 0 and rect.size.height > 0:
-                    assert_control_bounds(rect, window, label)
+                    assert_bar_control_bounds(rect, bar.bounds, label)
                     count += 1
             for child in native_value(native.subviews):
                 visit_bar(child)
-        visit_bar(native_value(navigation.navigationBar))
+        visit_bar(bar)
     return count
+
+
+def assert_bar_control_bounds(rect, bounds, label):
+    details = (label, str(rect), str(bounds))
+    assert rect.origin.x >= bounds.origin.x - 1, details
+    assert rect.origin.y >= bounds.origin.y - 1, details
+    assert rect.origin.x + rect.size.width <= bounds.origin.x + bounds.size.width + 1, details
+    assert rect.origin.y + rect.size.height <= bounds.origin.y + bounds.size.height + 1, details
 
 
 def assert_control_bounds(rect, window, label):
