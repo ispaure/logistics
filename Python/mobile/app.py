@@ -57,6 +57,54 @@ class LogisticsMobile(ReaderLifecycle, ReaderWorkspace, ProviderUI, toga.App):
         from commonUtils.ui.native.event_loop import bind_cooperative_loop
         bind_cooperative_loop(self.loop)
 
+    def comic_batch_controller(self) -> ComicBatchController:
+        """Return the retained owner of this workflow."""
+        if "_comic_batch_controller" not in self.__dict__:
+            self._comic_batch_controller = ComicBatchController(self)
+        return self._comic_batch_controller
+
+    def chat_controller(self) -> ChatController:
+        """Return the retained owner of this workflow."""
+        if "_chat_controller" not in self.__dict__:
+            self._chat_controller = ChatController(self)
+        return self._chat_controller
+
+    def cloud_controller(self) -> CloudController:
+        """Return the retained owner of this workflow."""
+        if "_cloud_controller" not in self.__dict__:
+            self._cloud_controller = CloudController(self)
+        return self._cloud_controller
+
+    def transfer_controller(self) -> TransferController:
+        """Return the retained owner of this workflow."""
+        if "_transfer_controller" not in self.__dict__:
+            self._transfer_controller = TransferController(self)
+        return self._transfer_controller
+
+    def folder_controller(self) -> FolderController:
+        """Return the retained owner of this workflow."""
+        if "_folder_controller" not in self.__dict__:
+            self._folder_controller = FolderController(self)
+        return self._folder_controller
+
+    def hub_controller(self) -> HubController:
+        """Return the retained owner of this workflow."""
+        if "_hub_controller" not in self.__dict__:
+            self._hub_controller = HubController(self)
+        return self._hub_controller
+
+    def locations_controller(self) -> LocationsController:
+        """Return the retained owner of this workflow."""
+        if "_locations_controller" not in self.__dict__:
+            self._locations_controller = LocationsController(self)
+        return self._locations_controller
+
+    def storage_controller(self) -> StorageController:
+        """Return the retained owner of this workflow."""
+        if "_storage_controller" not in self.__dict__:
+            self._storage_controller = StorageController(self)
+        return self._storage_controller
+
     def provider_book_controller(self):
         from features.books.mobile.provider_controller import ProviderBookController
         if not hasattr(self, '_provider_book_controller'):

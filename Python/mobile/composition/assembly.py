@@ -10,7 +10,8 @@ def composed_workflow(factory, controller):
             if key not in app.__dict__:
                 app.__dict__[key] = controller(app)
             return app.__dict__[key]
-        setattr(host, factory, get_owner)
+        if factory not in host.__dict__:
+            setattr(host, factory, get_owner)
         for name in (*controller.METHODS, *controller.FIELDS):
             if name not in host.__dict__:
                 setattr(host, name, OwnedAttribute(factory, name))

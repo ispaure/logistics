@@ -373,6 +373,13 @@ in `mobile_build/native_tests/tests/logisticsmobile/localcrypt_checks.py`.
 
 ## Workflow controllers
 
+The application declares its retained controller factories directly in `app.py`,
+so editor navigation can resolve workflow owners without evaluating decorators.
+New composition code calls these owners explicitly. The assembly decorator retains
+the enumerated app accessors for existing callbacks and tests, and respects an
+explicit factory rather than replacing it. Presentation contracts describe named
+arguments and asynchronous return values without importing either UI toolkit.
+
 `features/lm/mobile/controller.py` owns chat state; rclone owns cloud and transfer controllers. Host navigation workflows have dedicated `*_controller.py` modules. `services/workflow_host.py` supplies explicit read/write host attributes. `composition.assembly.composed_workflow` installs only declared compatibility names. Transfer/review cancellation is independent from file/cloud cancellation; global Cancel dispatches to both. Ownership and cancellation are exercised by `mobile_build/tests/test_workflow_ownership.py`.
 
 ## Native source editor and live Markdown

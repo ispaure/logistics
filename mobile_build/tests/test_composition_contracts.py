@@ -6,6 +6,18 @@ from mobile.composition.assembly import composed_workflow
 
 
 class CompositionContractTests(unittest.TestCase):
+    def test_explicit_factory_remains_authoritative_for_compatibility_access(self):
+        class Controller:
+            METHODS = ('invoke',)
+            FIELDS = ()
+
+        @composed_workflow('controller', Controller)
+        class App:
+            def controller(self):
+                return SimpleNamespace(invoke=lambda: 'explicit owner')
+
+        self.assertEqual(App().invoke(), 'explicit owner')
+
     def test_readonly_capabilities_and_writable_state_are_distinct(self):
         class Consumer:
             capability = HostService('value')
