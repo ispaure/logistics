@@ -11,18 +11,18 @@ optional tools:
 | --- | --- |
 | `contributions.py` | Logistics contribution declarations and the extended Feature contract |
 | `registry.py` | Compatible module functions forwarding to the application default registry |
-| `feature_runtime.py` | Instance-owned discovery, enablement, initialization, preferences, declaration cache and observers |
+| `feature_runtime.py` | `FeatureRegistry` facade coordinating discovery, state, runtime owners, declaration cache and observers |
+| `runtime/` | Preference persistence, dependency ordering, activation and contribution validation |
 | `discovery.py` | Direct package enumeration and isolated import failures |
 | `settings.py` | Application and feature configuration registration/store composition |
 | `preferences.py` | Feature preference paths, loading and migration |
 | `code_font.py` | Application policy for binding code view fonts |
 
 
-The infrastructure keeps its existing import paths. Moving it into a new package
-now would change discovery/import contracts across desktop, curated mobile sources
-and tests, with little immediate navigation benefit. This ownership table and
-the feature convention make the exception explicit. New feature code belongs in
-its owner, rather than expanding the registry with feature-specific behavior.
+Public registry imports remain compatible. The implementation owners under
+`features/runtime/` are infrastructure, so discovery must not treat that package
+as an optional feature. New feature behavior belongs in its own package; the
+registry coordinates the runtime owners rather than absorbing feature workflows.
 
 Use lightweight `__init__.py` registration, portable named domain modules,
 desktop `ui/`, optional `mobile/`, a `docs/docs.md` wiki with `development/development.md`,
@@ -53,18 +53,23 @@ import one another's UI. Avoid broad repository-wide controller or utility folde
 
 ## Dependency graph implementation
 
-`Python/features/feature_graph.py` owns dependency availability and initialization
+`Python/features/runtime/dependencies.py` owns dependency availability and initialization
 ordering as toolkit-independent functions. Registry wrappers inject identity and
 dependency accessors, preserving its public APIs, cached declarations and test
-patch points. Preferences/migrations, activation and contribution aggregation
-remain registry responsibilities; graph traversal does not read settings, discover
-features or run registration hooks. Existing registry regressions cover cycles,
+patch points. The registry delegates preferences/migrations to `runtime.preferences`,
+activation to `runtime.activation` and contribution validation/collection to
+`runtime.catalog`. Graph traversal does not read settings, discover features or
+run registration hooks. Existing registry regressions cover cycles,
 missing dependencies, duplicate identities and startup ordering.
 
 ## Registry runtime ownership
 
-`FeatureRegistry` owns its enabled/initialized sets, preference mode/path, weak
-registered-declaration cache and weak observers. The application uses
+`FeatureRegistry` retains a `PreferenceState`, `FeatureActivation` and
+`ContributionCatalog`. Preference state owns disabled choices, mode/path and
+migrations; activation owns the initialized set and validates startup hooks
+before invoking them. The catalog validates contribution categories before UI
+construction and wraps them with registered owner identities. The registry keeps
+the weak registered-declaration cache and weak observers. The application uses
 `registry.default_registry`; existing module functions preserve their signatures
 and delegate to that instance at call time. Independent owners can inject a
 `feature_loader`, `settings_provider` and discovery `features_path` callback.

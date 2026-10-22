@@ -209,7 +209,7 @@ closes before handlers can replace a view or navigate. Programmatic selection
 continues through Toga's existing implementation; Android keeps its native
 Spinner behavior.
 
-`mobile/settings_ui.py` owns compact label/switch rows. Each row retains
+`mobile/settings/forms.py` owns compact label/switch rows. Each row retains
 its explanation in `_settings_note`; the shared presentation places that muted
 13-point label below the rounded option group. Explanations wrap to the pane
 width and remain visible across all categories. Native accessibility names

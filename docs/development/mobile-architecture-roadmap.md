@@ -19,8 +19,9 @@ until the user authorizes commits and pushes.
 The subsequent host restructuring gives text Open/Save As a composed
 `EditorPicker` in `mobile.editor_picker`, with state and cancellation
 owned outside `FilesUI`. Saved-import inventory/deletion is now a composed
-`SavedFilesController`, rather than an application mixin. `host_services.py`
-centralizes explicit host dependencies and compatibility attribute access.
+`SavedFilesController`, rather than an application mixin. `composition/assembly.py`
+installs enumerated compatibility accessors; `services/workflow_host.py` declares
+read-only host capabilities and explicit writable state descriptors.
 See the [mobile module/test map](mobile-runtime.md) for the
 current boundaries, payload registrations and worker invalidation contract.
 These changes have host-level verification; they do not replace native evidence
@@ -35,7 +36,7 @@ report read failures and enforce their own private-content policies.
 immersive transitions; comics retain their image gesture for restoring controls.
 
 Retained import inventory/deletion lives in `mobile.saved_files_ui`,
-separate from preference rows and installed-build information in `settings_ui`.
+separate from preference rows and installed-build information in `mobile.settings`.
 The new owner is explicitly included in the curated payload list. Its existing
 multi-window, busy-reader, confirmation and original-source protections remain
 part of the deletion workflow. The Settings page remains named Saved books &

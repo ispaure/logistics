@@ -63,6 +63,15 @@ Preview and Edit are modes of one document screen. Switching between them keeps
 the same draft and does not add a Back step; Back returns directly to the screen
 that opened the document.
 
+## Save As and closing
+
+Cancelling Save As or dismissing its picker returns to the document that opened
+it, including an unsaved new draft. It does not switch to an earlier open file.
+When closing asks you to Save, Discard or Cancel, Cancel keeps the document open;
+a failed save keeps edits available for retry. If the document changes while a
+close prompt is open, its old answer is ignored rather than applied to the new
+state. Return to the document and close it again if needed.
+
 ## Show a document's folder
 
 Choose **Show in folder** from the document's **…** actions menu to browse its

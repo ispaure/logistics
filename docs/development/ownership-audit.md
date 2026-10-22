@@ -170,7 +170,7 @@ page (843). Counts describe this working-tree snapshot and are not split limits.
 For the reading work, separate library/import coordination, format presentation,
 private document lifecycle and private text editing. Reuse existing
 [reader host services](../../Python/mobile/reader_host.py) and
-[composed workflows](../../Python/mobile/host_services.py); avoid replacing
+[composed workflows](../../Python/mobile/composition/assembly.py); avoid replacing
 the remaining inheritance with controllers that still forward an unrestricted
 application object. Each controller should enumerate its dependencies and own its
 tasks, cancellation, generation and disposal state.

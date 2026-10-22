@@ -107,3 +107,19 @@ APIs and external feature internals are documented in their owning repositories.
 Follow the [hierarchy rules](documentation-hierarchy.md) and verify consequential
 claims against source and tests. The [older getting-started URL](getting-started.md)
 remains a compatibility entry to this guide.
+
+## Refactored owner contracts
+
+The current guides cover application composition and lifetimes rather than the
+former flat modules:
+
+- [Mobile composition, transitions, reading and settings](mobile-runtime.md#composition-and-explicit-host-capabilities)
+- [Detached desktop/mobile Folder Hub projection](services.md#detached-folder-hub-projection)
+- [Desktop launch catalog](architecture.md#desktop-launch-and-destination-projection)
+- [Feature runtime owners](feature-infrastructure.md#registry-runtime-ownership)
+- [LM generation lifecycle](../../Python/features/lm/docs/development/development.md#shared-desktop-and-mobile-generation)
+- [Transfer review approval](../../Python/features/rclone/docs/development/development.md#review-session-and-execution-handoff)
+- [Git captured command requests](../../Python/features/git/docs/development/development.md#captured-command-boundary)
+
+Shared provider, speech, transfer, archive, index and workspace APIs are documented
+in commonUtils; use the [integration boundary](commonutils-integration.md).

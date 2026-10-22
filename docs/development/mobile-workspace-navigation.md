@@ -1083,10 +1083,12 @@ rendering was not visually verified in this pass.
 
 ## Settings categories and responsive panes
 
-`SettingsNavigation` in `settings_ui.py` owns each window's category selection
-and retained option ScrollContainers. `show_settings` builds the existing controls
-into category-owned Boxes rather than one long scroll page. Compact category
-selection uses the existing `settings-category` native route. At 640 points/dp
+`SettingsNavigation` in `settings/navigation.py` owns each window's category
+selection and retained option ScrollContainers. `SettingsCategories` in
+`settings/categories.py` builds controls lazily through `SettingsPages`; opening
+the root does not construct every category. Shared rows and connection forms live
+in `settings/forms.py`; voice and installed-build content have their own owners.
+Compact category selection uses the existing `settings-category` native route. At 640 points/dp
 of allocated Settings width, the root keeps a category sidebar and selected
 options pane; category selection replaces only that pane. Both panes scroll
 independently. The width comes from `adaptive.content_width`, accounting for

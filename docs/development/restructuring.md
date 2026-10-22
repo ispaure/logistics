@@ -166,7 +166,7 @@ Mobile chat storage, transport and presentation now live in `features/lm/mobile/
 
 ### 2. rclone host boundary
 
-rclone mobile adapters no longer import `mobile`. Provider readers, document limits and native archive facades have neutral service owners. `MobileHostUI` declares presentation hooks; `mobile/feature_hosts.py` supplies them. The app composes provider presentation rather than inheriting it through the rclone feature.
+rclone mobile adapters no longer import `mobile`. Provider readers, document limits and native archive facades have neutral service owners. `MobileHostUI` declares presentation hooks; `mobile/composition/presentation.py` supplies them. The app composes provider presentation rather than inheriting it through the rclone feature.
 
 ### 3. Mobile workflow composition
 

@@ -311,3 +311,26 @@ picked ZIP still consumes picker access immediately and retains only memory byte
 Credential restoration, package, import, background-refresh and workflow tests
 cover this extraction. Cloud browsing, busy policy and cancellation remain cloud
 controller responsibilities.
+
+## Review session and execution handoff
+
+`transfers.review.ReviewSession` owns approval state for both desktop and mobile.
+Its immutable `ReviewRequest` captures direction, source, destination, connection
+binding and transfer options; hosts provide a `valid` predicate for that binding.
+A `ReviewScan` owns the comparison worker, cancellation and retirement. All of
+this state is memory-only; approval is not a stored authorization for later runs.
+
+After the platform's explicit confirmation, normal approval captures the complete
+snapshot and starts a fresh comparison. Execution is approved only if both
+fingerprint and change list still match and the binding remains valid. Changes
+return the session to review. Explicit incomplete approval is a separate decision:
+it stops the comparison and still waits for worker retirement before execution.
+A cancelled scan immediately rejects either approval path, even before polling.
+Invalidating credentials/bindings cancels the session; obsolete dialogs cannot
+start a transfer against a new source.
+
+UI adapters render snapshots and poll state; they do not duplicate this approval
+machine. Desktop sync and mobile jobs retain mandatory execution preflight and
+mutation/collision policy. A completed comparison is not an atomic storage lock
+or a guarantee against later remote changes. Focused coverage includes
+`test_review_session`, `test_rclone_review`, push-policy and mobile review tests.

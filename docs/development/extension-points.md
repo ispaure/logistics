@@ -139,7 +139,7 @@ Workspaces and Bulk Rename provided by the host.
 `DocumentLauncherContribution` adds a Read & edit card through `editor_id`, `name`,
 `icon`, `order`, `open_document`, optional `new_document`, and `description`.
 Only Markdown is supplied by the core. Register readers/editors here rather than
-creating a second top-area card. `desktop.launch_catalog.document_launchers()` is
+creating a second top-area card. `desktop.navigation.catalog.document_launchers()` is
 the single document catalog used by the landing page, sidebar and workspace chooser.
 
 Both catalogs consume enabled registry contributions and update through existing

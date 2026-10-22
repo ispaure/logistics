@@ -212,3 +212,25 @@ byte publication. Sparse INI settings, legacy custom-path fields and malformed
 file protection remain feature-owned. Git, IDE and Text Editor use the neutral
 `services/editors/ui/fonts.py` adapter for custom preference paths; default font
 coordination remains shared styling.
+
+## Captured command boundary
+
+`ui.commands.forms.RepositoryCommands` collects form/menu inputs and dispatches
+through the pane's existing serialized `GitJobs` worker. `ui.commands.requests.GitCommand`
+freezes repository path, backend method, arguments/options and any expected branch.
+`repository.py` keeps Git behavior; `ui/repository_view.py` keeps presentation,
+refresh and retained worker lifetime. Do not add a second mutation queue.
+
+Capture repository/branch before opening a modal form or context menu. Dispatch
+rejects a changed/closing view, and request execution rechecks the actual repository
+path and any captured branch on the worker before invoking the backend. Branch-
+sensitive operations include commit, push/pull, merge/revert/cherry-pick, switch,
+stash, staging/hunk/conflict actions and selected branch/tag creation. Other
+operations still retain captured repository identity. These checks do not freeze
+HEAD/index/worktree contents; backend conflict and checked-patch validation remain
+necessary.
+
+UI completion callbacks apply only to the still-current repository. Existing Git
+preferences, confirmations, credential handling and no-automatic-retry policy
+remain unchanged. `test_git_commands` covers captured context and stale execution;
+Git UI/backend tests cover forms, stash/index behavior and worker retirement.

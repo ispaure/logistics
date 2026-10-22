@@ -47,21 +47,23 @@ system accessibility extremes still require native layout validation.
 
 | Change | Owner |
 | --- | --- |
-| Startup, navigation composition and managed text-document lifetime | `app.py` |
+| Startup and application wiring | `app.py`, `composition/assembly.py`, `composition/presentation.py` |
 | Workspace identities, generations and sessions | `workspace.py`, `window_owners.py`, `window_scenes.py` |
 | Adaptive panes and destination drawers | `workspace_navigation.py`, `adaptive_workspace.py` |
 | Workspaces discovery task, cache and invalidation | `folder_discovery.py`, composed by `folder_controller.py`; snapshot/result building in `folder_hub.py` |
 | Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`, `folder_hub_style.py` |
-| File create/rename/move/delete coordination | `file_operations.py`, composed by `feature_hosts.file_operations`; `files_ui.py` retains forms, confirmation and forwarding methods |
+| File create/rename/move/delete coordination | `file_operations.py`, composed by `composition.presentation.file_operations`; `files_ui.py` retains forms, confirmation and forwarding methods |
 | Main and workspace browser listing requests | `folder_listing.py`; presentation in `files_ui.py` and `workspace_navigation.py` |
 | Local file management and comic batch entry points | `files_ui.py` |
 | Text Open/Save As, picker widgets and pending bytes | `editor_picker.py` |
 | Saved-import inventory and confirmed deletion | `saved_files_ui.py`: composed `SavedFilesController` |
-| Explicit host dependencies and legacy state access | `host_services.py` |
+| Explicit read-only services and writable compatibility state | `services/workflow_host.py`; lazy owner access in `composition/assembly.py` |
 | Managed text bytes, checkpoints and editing widgets | `documents.py` (host recovery), `features/text_editor/mobile/ui.py` (widgets) |
-| Provider Markdown modes, controls and preview lifecycle | `features/text_editor/mobile/provider_markdown.py`, composed by `feature_hosts.provider_markdown`; session source input remains authoritative |
+| Provider Markdown modes, controls and preview lifecycle | `features/text_editor/mobile/provider_markdown.py`, composed by `composition.presentation.provider_markdown`; session source input remains authoritative |
 | Ordinary and provider reader ownership | `reader_sessions.py`, `private_sessions.py` |
-| Main document Close, source return and shared native scroll restoration | `reader_lifecycle.py` |
+| Session Close/Back decisions and source return | `session_workflows/transitions.py`, source-specific `session_workflows/adapters.py`; facade in `reader_lifecycle.py` |
+| Reader surface publication and footer/chrome synchronization | `reading/publication.py`, validity captures in `reading/sources.py` |
+| Settings composition, category controls and connection forms | `settings/navigation.py`, `settings/categories.py`, `settings/forms.py`, `settings/speech.py`, `settings/information.py` |
 | Temporary file-opening presentation and measured read progress | `document_sources.py`, `loading_progress.py` |
 | Reader-facing host services and shared controls | `reader_host.py`, `reader_controls.py`, `reader_chrome.py` |
 | Device screen locking and sensitive-content protection | `screen_privacy.py` |
@@ -181,7 +183,7 @@ root, client, generation and remote for locations requiring resolution. Native
 encrypted destination resolution stays in the worker and rejects a changed
 credential generation before construction.
 
-The host adapter in `feature_hosts.file_operations` retains transfer/busy and
+The host adapter in `composition.presentation.file_operations` retains transfer/busy and
 unsaved-reader policy, snapshots controls/status and connects the coordinator's
 cancellation event to the existing `_crypt_cancel`/Cancel path. The coordinator
 owns its request and task until the worker retires. Cancelling an awaiting task
@@ -352,7 +354,7 @@ October 20 focused results (local artifact `test-results/mobile-evidence/2026-10
 iPhone/iPad simulators and a physical Android BOOX using isolated synthetic files.
 
 Add host modules to `Python/mobile/mobile_sources.json` and feature/service modules to their owning manifests in the same change as imports. `mobile_build/tools.py` aggregates and validates these declarations.
-`editor_picker.py` and `host_services.py` are explicitly staged. Do not edit
+`editor_picker.py` and `composition/assembly.py` are explicitly staged. Do not edit
 generated `mobile_build/payload/` or Briefcase projects as application source.
 
 | Contract | Tests |
@@ -371,7 +373,7 @@ in `mobile_build/native_tests/tests/logisticsmobile/localcrypt_checks.py`.
 
 ## Workflow controllers
 
-`features/lm/mobile/controller.py` owns chat state; rclone owns cloud and transfer controllers. Host navigation workflows have dedicated `*_controller.py` modules. `services/workflow_host.py` supplies explicit read/write host attributes. `host_services.composed_workflow` installs only declared compatibility names. Transfer/review cancellation is independent from file/cloud cancellation; global Cancel dispatches to both. Ownership and cancellation are exercised by `mobile_build/tests/test_workflow_ownership.py`.
+`features/lm/mobile/controller.py` owns chat state; rclone owns cloud and transfer controllers. Host navigation workflows have dedicated `*_controller.py` modules. `services/workflow_host.py` supplies explicit read/write host attributes. `composition.assembly.composed_workflow` installs only declared compatibility names. Transfer/review cancellation is independent from file/cloud cancellation; global Cancel dispatches to both. Ownership and cancellation are exercised by `mobile_build/tests/test_workflow_ownership.py`.
 
 ## Native source editor and live Markdown
 
@@ -997,7 +999,7 @@ discards stale switch references and rebuilds the categories lazily.
 Books and Comics now own imported/provider format controllers, and Books owns
 mixed library presentation and its portable metadata index. Text Editor owns the
 mobile Notes Library browser. The host composes explicit presentation services
-in `feature_hosts.py` and keeps storage/provider discovery, workspace identities,
+in `composition/presentation.py` and keeps storage/provider discovery, workspace identities,
 credentials and private publication. Reader and private-session compatibility
 accessors delegate format state to its owning controller; prepared view handoff
 uses setters so state cannot bypass these owners.
@@ -1067,3 +1069,75 @@ callback, screen on and Activity resume. The library cases additionally queue a
 trim through the normal memory subscription after wake. Reports distinguish these
 orderings; screenshots and logs stay under ignored `mobile_build/logs/`. Keep simulator
 or emulator evidence distinct from physical Boox/E Ink acceptance.
+
+## Composition and explicit host capabilities
+
+`composition.assembly.composed_workflow` installs only the controller's enumerated
+`METHODS` and `FIELDS` as compatibility accessors and constructs that owner lazily.
+`services.workflow_host.HostService` is a read-only application capability;
+`HostAttribute` is writable by default, and `StateAttribute` targets an explicit
+owned record. A missing attribute raises normally; there is no catch-all app
+fallback. Add a service or writable state field deliberately instead of broadening
+a feature controller's access to the host.
+
+`composition.presentation` assembles rclone, Notes, library, speech, reader and
+file-operation presentation callbacks. Feature adapters receive these ports and
+remain independent of the mobile application import. Register new source owners
+in the owning mobile manifests; generated payload copies are not implementation
+files. `test_composition_contracts`, workflow ownership and feature-boundary checks
+exercise composition, and staged startup checks catch omitted modules.
+
+## Session transition decisions
+
+`session_workflows.transitions.SessionTransitions` is the orchestration owner for
+Close, reader Back/return and host-preservation checkpoints. `prepare` captures a
+session key, provider and workspace token in `CloseDecision`; `commit` rejects a
+missing, cancelled or stale decision before invoking the source adapter. Its
+`CloseResult.committed` reports whether closure actually completed. A failed save
+or veto must stop later removal/navigation.
+
+`session_workflows.adapters` retains distinct managed-text, library, provider,
+Notes Library and credential-reference close behavior. Model persistence, private
+draft rules and writer ownership stay with their sources. Async dirty-dialog
+answers capture the workspace token before opening and revalidate it plus the
+active host before Save/Discard. A surviving session ID alone is insufficient.
+Busy-reader exits await pending operations without releasing their owner early.
+`HostLifecycle` delegates replacement/exit preservation to this coordinator;
+reader/session facade methods keep their existing host call signatures.
+
+`EditorPicker` separately captures the originating managed/provider document for
+Save As. Cancel or native dismissal restores that origin, including a new draft,
+without selecting an unrelated previously opened provider document.
+Focused coverage includes `test_session_transitions`, `test_reader_lifecycle`,
+`test_private_sessions`, `test_application_lifecycle` and `test_editor_picker`.
+
+## Reader publication boundary
+
+`reading.publication.ReadingPublication` coordinates outgoing animation capture,
+prepared-surface mount, retirement and footer/chrome refresh for library and
+provider readers. `reading.sources` captures source-specific validity: library
+reader/epoch or provider reader/workspace token, plus active-host checks.
+Formats retain decoding, page targets, reading progress and private-source policy.
+
+Use the `preparing(direction)` scope around view preparation. It releases outgoing
+animation snapshots even if construction fails or is cancelled. `mount` checks
+validity again, disposes an obsolete unmounted disposable surface, and retires
+replaced surfaces only on the accepted publication path. Failure before mounting
+retains the displayed view; later mount exceptions abort animation cleanup but
+are not a transactional rollback of arbitrary host callbacks or disposed views.
+Footer/chrome updates also reject stale ownership. Library/provider format swaps
+and forced view-preparation failure recovery require native checks in addition
+to focused host tests such as `test_reading_publication`.
+
+## Settings implementation owners
+
+`settings.navigation.SettingsNavigation` owns compact routes, retained wide panes
+and per-window selection. Its `SettingsPages` mapping builds each category only on
+first access. `SettingsCategories` constructs application controls;
+`settings.forms` owns shared rows and connection forms, `settings.speech` owns
+voice controls, and `settings.information` builds installed-version/help content.
+The old `settings_ui.py` module is removed; use canonical imports and patch targets.
+Connection adapters receive the existing `ConnectionPresentation` callbacks from
+composition. Reload discards stale widget references and recreates categories
+lazily; preference keys and storage remain unchanged. Settings navigation/UI,
+connection and isolated-payload checks cover these boundaries.

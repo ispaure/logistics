@@ -419,3 +419,14 @@ neighbor candidates explicitly match the current key's parent folder. Host tests
 exercise both gesture directions for comics and manga, missing neighbors, expiry,
 reader changes and folder isolation; the native UIKit probe exercises hint expiry
 and actual previous/next volume opening.
+
+## Mobile surface publication
+
+Format controllers prepare their own EPUB/comic surfaces and retain source-specific
+progress and metadata policy. Library and provider views publish through the
+host's `mobile.reading.publication.ReadingPublication` coordinator for generation
+validation, retirement and footer/chrome synchronization. Keep preparation inside its scope
+so failed construction releases outgoing animation snapshots. Do not replace the
+shared publication sequence with another format-specific container-clear path.
+See [mobile publication ownership](../../../../../docs/development/mobile-runtime.md#reader-publication-boundary)
+for failure boundaries and focused/native verification.

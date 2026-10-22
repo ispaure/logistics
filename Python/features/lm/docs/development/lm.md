@@ -15,7 +15,9 @@ The root `session.py` owns the conversation record, edit lease, dirty state and
 response transitions independently of widgets. See the feature's
 [module map](development.md) before changing these owners.
 Old root-level presentation imports remain compatible; registration uses the
-new package lazily. Mobile's selected portable modules are unchanged.
+new package lazily. Mobile also consumes the shared generation/session owners
+through its own execution adapter; see the
+[shared lifecycle contract](development.md#shared-desktop-and-mobile-generation).
 
 Conversation/profile data are under `preferences_path().parent / 'LM'`, outside
 personal `configuration/` reset. Version-one JSON transcripts have stable UUIDs,

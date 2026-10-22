@@ -39,3 +39,22 @@ empty destination frame. The overlay passes input through, cancels on rapid
 turns/resize/hide/close, and releases its pixmap on completion. Initial loads,
 failed loads and unchanged pages do not start a slide. EPUB restores QTextEdit's
 paginated layout after grabbing the outgoing spread and before committing a turn.
+
+## Detached Folder Hub projection
+
+`services.folders.catalog` is the pure shared desktop/mobile projection owner.
+Adapters supply `FolderCopy` descriptors with physical identity, logical name,
+credential-source identity, category, availability and lock state. `project_catalog`
+groups logically by `(source_identity, name)` or physically by copy identity,
+retains input preference order and deduplicates equal physical copies within a
+group. A projection is available if any copy is available and locked only if all
+copies are locked. This metadata projection performs no discovery, credential
+loading or storage access.
+
+`CredentialScope` retains the full supplied package identity, rather than its
+label or basename. Two equal display names do not establish a shared source.
+Desktop `services.folders.workspaces` and mobile `folder_hub` adapt their existing
+discovery results to this catalog. The host still filters visibility, owns caches,
+revokes credentials and approves operations; a projected row is not permission
+to open or mutate storage. Focused checks include `test_folder_catalog`,
+`test_folder_sources_ui`, mobile Folder Hub and credential invalidation tests.

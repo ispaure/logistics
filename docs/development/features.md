@@ -298,3 +298,13 @@ not distinguishable from untouched values, so they inherit after migration.
 Unknown differing feature IDs are preserved. Failed publication keeps the old
 selection effective and leaves the migration pending for retry. Completion stays
 outside resettable configuration alongside the existing migration ledger.
+
+## Runtime owner boundary
+
+`features.registry` remains the public application facade over `default_registry`.
+`FeatureRegistry` composes preference state, dependency functions, activation and
+contribution collection under `features.runtime`; see the
+[infrastructure owner map](feature-infrastructure.md#registry-runtime-ownership).
+Discovery, feature IDs, preference schemas and declaration identities remain
+unchanged. Enabling/disabling still uses dependency checks and rollback; splitting
+these owners does not make a disabled feature's active workers disappear.

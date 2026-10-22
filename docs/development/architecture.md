@@ -307,7 +307,7 @@ on registry notifications. Disabled entries are removed from launch cards and th
 Settings category tree, while Features still exposes enable/disable controls and
 retained editors still participate in close/reset handling.
 
-`desktop.launch_catalog` owns core Markdown plus enabled document-launcher
+`desktop.navigation.catalog` owns core Markdown plus enabled document-launcher
 registrations for all document-choice surfaces. `DocumentLauncherContribution.description`
 is displayed on cards. Chooser windows remain workspace-owned utility tabs; they
 are excluded from document entries and counts without changing their close/detach
@@ -348,3 +348,19 @@ event filter accepts unmodified F11 at ShortcutOverride and handles KeyPress onc
 avoiding ambiguity with embedded reader actions. Dialogs retain their own keys.
 The existing ReaderFullscreen controller synchronizes native window state,
 reader buttons and the host menu, including restoration of maximized state.
+
+## Desktop launch and destination projection
+
+`desktop.navigation.catalog.LaunchCatalog` builds one `LaunchSnapshot` from core
+pages and present contributed pages. Landing cards, destination targets and rail
+identity consume that snapshot; document choosers consume its document-launcher
+map. Core Markdown remains built in, with enabled feature launchers added in
+registered order. Workspace actions follow contributed destinations, preserving
+the previous landing order. Absent/disabled pages are not launch targets.
+
+Stable `git`/`ide` keys and other feature command identities remain compatible.
+The shell owns widgets, menus and activation; the catalog projects declarations
+rather than creating a second feature registry. Keep `DestinationRail.tools_menu`
+and the Misc `tools` glyph as the reserved nested-destination fallback.
+`test_document_launchers` and main-window/navigation checks
+cover visibility, order, chooser routing and disabled features.

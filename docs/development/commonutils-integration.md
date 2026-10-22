@@ -200,3 +200,19 @@ status selection, navigation routing and safe-area integration.
 
 Reader layout wakeups use the commonUtils loop-local coalesced signal. Logistics
 retains native geometry filtering, app ownership and reader-task cancellation.
+
+## Resource and lifetime migration
+
+Logistics now imports provider mechanisms from `commonUtils.runtime.resources`
+and optional Qt resource windows from `commonUtils.ui.resources`. Removed flat
+resource paths have no forwarding aliases. Native message boxes resolve through
+the ordinary `commonUtils.ui.native.dialogs` package owner. Keep deferred imports,
+mock patch targets and curated mobile source manifests aligned with the pin.
+
+The shared [resource map](https://github.com/ispaure/commonUtils/blob/main/runtime/resources/README.md)
+and [Qt resource guide](https://github.com/ispaure/commonUtils/blob/main/ui/resources/README.md)
+record those APIs. The shared reader/browser, configuration, persistence, archive,
+index and workspace guides describe the consolidated lifecycle and phase owners.
+Logistics keeps voice preferences/privacy, source/credential identity, transfer
+approval and document routing. As with the other links here, inspect the pinned
+checkout for locally committed changes before they are published upstream.

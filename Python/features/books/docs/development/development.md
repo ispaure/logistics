@@ -371,3 +371,14 @@ clearance, full-spread turns, right-page seeks, final-spread navigation, UTF-16
 selection, motion suppression and anchor retention. `test_fold_layout.py` checks
 view-local geometry delivery to imported and private bridges. Physical iOS/Android
 posture and rendering validation remains pending.
+
+## Mobile surface publication
+
+Format controllers prepare their own EPUB/comic surfaces and retain source-specific
+progress and metadata policy. Library and provider views publish through the
+host's `mobile.reading.publication.ReadingPublication` coordinator for generation
+validation, retirement and footer/chrome synchronization. Keep preparation inside its scope
+so failed construction releases outgoing animation snapshots. Do not replace the
+shared publication sequence with another format-specific container-clear path.
+See [mobile publication ownership](../../../../../docs/development/mobile-runtime.md#reader-publication-boundary)
+for failure boundaries and focused/native verification.

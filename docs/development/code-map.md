@@ -50,22 +50,24 @@ aliases; external extensions must update their host imports.
 | I want to change… | Start here | Read next |
 | --- | --- | --- |
 | Desktop startup | `Python/launch.py` | [Architecture](architecture.md) |
-| Rail, landing chooser or destination hosting | `Python/desktop/{main_window,sidebar,landing}.py` | [Architecture](architecture.md) |
+| Rail, landing chooser or destination hosting | `Python/desktop/navigation/catalog.py`, `Python/desktop/{main_window,sidebar,landing}.py` | [Architecture](architecture.md) |
 | Open document tabs or cooperative close | `Python/desktop/documents.py` | [Architecture](architecture.md#independent-text-documents) |
-| Feature discovery, enablement or dependencies | `Python/features/feature_runtime.py`; public facade in `registry.py`, declarations in `contributions.py` | [Feature lifecycle](features.md) |
+| Feature discovery, enablement or dependencies | `Python/features/feature_runtime.py`, `runtime/{preferences,dependencies,activation,catalog}.py`; public facade in `registry.py` | [Feature lifecycle](features.md) |
 | Register a feature page, settings group or launcher | The feature's `__init__.py` and any delegated contribution module | [Extension points](extension-points.md) |
 | Browser actions, previews or file activation | Feature registration and handlers; `Python/desktop/file_browser.py` for host integration | [Browser extensions](file-browser.md) |
-| Desktop Workspaces | `Python/desktop/pages/folders.py`, `Python/services/folders/sources.py` | [Feature lifecycle](features.md#remote-folder-source-context) |
-| Git commands versus Git presentation | `Python/features/git/repository.py` versus `Python/features/git/ui/` | [Git developer guide](../../Python/features/git/docs/development/development.md) |
+| Desktop Workspaces | `Python/desktop/pages/folders.py`, `Python/services/folders/{catalog,sources,workspaces}.py` | [Feature lifecycle](features.md#remote-folder-source-context) |
+| Git commands versus Git presentation | `Python/features/git/ui/commands/`, `repository.py`; presentation in `ui/repository_view.py` | [Git developer guide](../../Python/features/git/docs/development/development.md) |
 | LM transport, saved data or desktop chat | `Python/features/lm/{transport,storage,session}.py`, `Python/features/lm/ui/` | [LM integration](../../Python/features/lm/docs/development/lm.md) |
 | EPUB or comic format behavior | `Python/features/books/`, `Python/features/comics/` | The owning feature's `README.md` |
-| Mobile app composition and navigation | `Python/mobile/{app,workspace,workspace_navigation}.py` | [Mobile workspace](mobile-workspace-navigation.md) |
+| Mobile app composition and navigation | `Python/mobile/composition/`, `Python/mobile/{app,workspace,workspace_navigation}.py` | [Mobile workspace](mobile-workspace-navigation.md) |
 | Mobile Workspaces discovery and refresh state | `Python/mobile/{folder_discovery,folder_controller,folder_hub}.py` | [Discovery ownership](mobile-runtime.md#workspaces-folder-discovery) |
 | Mobile main/workspace folder listing requests | `Python/mobile/folder_listing.py`; adapters in `files_ui.py`, `workspace_navigation.py` | [Listing ownership](mobile-runtime.md#folder-listing-ownership) |
-| Mobile create, rename, move and delete | `Python/mobile/file_operations.py`, `feature_hosts.file_operations`; forms in `files_ui.py` | [File operation ownership](mobile-runtime.md#file-operation-ownership) |
+| Mobile create, rename, move and delete | `Python/mobile/file_operations.py`, `composition.presentation.file_operations`; forms in `files_ui.py` | [File operation ownership](mobile-runtime.md#file-operation-ownership) |
 | Mobile folders and file operations | `Python/mobile/{folder_hub,folder_hub_ui,files_ui}.py` | [Mobile workspace](mobile-workspace-navigation.md) |
 | Mobile text Open/Save As | `Python/mobile/editor_picker.py`; `app.editor_picker()` owns the instance | [Mobile host owners](mobile-runtime.md) |
 | Saved-import inventory/deletion | `Python/mobile/saved_files_ui.py`; `app.saved_files()` owns the instance | [Mobile host owners](mobile-runtime.md) |
+| Mobile Close/Back decisions and host replacement | `Python/mobile/session_workflows/`, `application_lifecycle.py` | [Session transitions](mobile-runtime.md#session-transition-decisions) |
+| Mobile surface publication and settings | `Python/mobile/reading/`, `Python/mobile/settings/` | [Mobile runtime](mobile-runtime.md#reader-publication-boundary) |
 | Mobile reader sessions and host access | `Python/mobile/{reader_sessions,private_sessions,reader_host}.py` | [Mobile architecture](mobile-architecture-roadmap.md) |
 | Mobile format presentation or cloud integration | `Python/features/{books,comics}/mobile/`, rclone `mobile/` and workflow-owned `*/mobile/` | [Mobile preparation](mobile-preparation.md) |
 | Which sources reach a mobile build | Owning `mobile_sources.json`; `mobile_build/tools.py` aggregates `APP_MODULES` and `DOCUMENT_MODULES` | [Mobile preparation](mobile-preparation.md) |

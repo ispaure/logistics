@@ -30,8 +30,8 @@ saved-file contracts at `storage.py`, and request construction at `domain.py`.
 Registration imports `ui/page.py` lazily. The old root-level presentation modules
 remain compatibility imports of the same classes/functions; new code should use
 `features.lm.ui`. Request/agent adapters remain at the feature root; they do not
-own widgets. Mobile continues using the selected portable domain/screenshot code,
-without importing the desktop package.
+own widgets. Mobile uses selected portable domain, session and generation modules
+plus its execution adapter, without importing desktop presentation or project tools.
 
 `ConversationSession` receives a store and owns the active record, lease, dirty
 flag and streaming response. It acquires/loads or publishes a replacement before
@@ -208,3 +208,27 @@ Conversation persistence, transport and screenshot records retain their existing
 owners. File dialogs use the page as native parent. Cancellation publishes nothing;
 project exclusions and the 64 KiB draft limit still apply. `test_lm_ui.py` exercises
 attachment selection, excluded files and persisted project choice.
+
+## Shared desktop and mobile generation
+
+Both presentations use `GenerationCoordinator` and `ConversationSession` for
+publish-before-dispatch, rollback and response transitions. Desktop project tools
+are injected through `execution.desktop.project_tools`; portable generation no
+longer imports the desktop tool implementation. Mobile wraps its client in
+`execution.mobile.MobileGenerationTransport` and drains queued fragments on the
+owning event loop. The shared session remains the record/dirty/response owner.
+
+Capture `session.response_token` for callbacks and pass it to `append_delta` and
+`complete_response`. It identifies the conversation generation and active response;
+late fragments or terminal callbacks from a replaced response are rejected.
+Mobile additionally checks the active host/conversation before queueing fragments,
+and `retire` cancels and awaits its worker before clearing pending text. Cancellation
+and failure keep their distinct terminal states. A new draft typed while an answer
+streams must survive terminal publication; callers must not clear it again.
+
+Credentials remain dispatch-only. Publication failure prevents transport start
+and restores the editable record; failed transport startup retains the published
+user turn and records failure. Preserve lease/revision checks and surface a
+secondary save failure for retry/export. Focused coverage is in
+`test_lm_session`, `test_lm_generation` and mobile chat tests; native synthetic
+stream/draft checks validate presentation without a real server account.

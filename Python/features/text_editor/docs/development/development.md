@@ -142,7 +142,7 @@ publication. Cancellation alone does not make a worker result current.
 
 `ProviderMarkdownHost` enumerates rendering, image resources, font/appearance,
 validity, busy state, speech, menu and toolbar callbacks. Composition lives in
-`mobile.feature_hosts.provider_markdown`; the feature never imports the
+`mobile.composition.presentation.provider_markdown`; the feature never imports the
 application host. `ProviderUI` retains forwarding methods and state aliases for
 existing callers, plus non-Markdown controls. Private sessions keep document
 identity, credentials, saving, Save As, conflicts, memory budgets and dirty-close
