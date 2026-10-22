@@ -67,6 +67,10 @@ class Repository:
     def run(self, args, **kwargs):
         return self.runner.run(args, cwd=self.path, **kwargs)
 
+    def checkout_tracking(self, name, remote_ref):
+        self.run(['check-ref-format', '--branch', argument(name)])
+        return self.run(['switch', '-c', name, '--track', argument('refs/remotes/' + remote_ref)])
+
     def root(self):
         result = self.run(['rev-parse', '--show-toplevel'])
         return Path(result.stdout.removesuffix(b'\n').decode('utf-8', 'surrogateescape'))

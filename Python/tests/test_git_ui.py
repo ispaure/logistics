@@ -855,7 +855,7 @@ class GitUITests(QtTestCase):
         def submitted(dialog):
             captured.extend(edit.text() for edit in dialog.findChildren(qt.QLineEdit))
             return False
-        with patch('features.git.ui.repository_view.FormDialog.submitted', submitted):
+        with patch('features.git.ui.commands.forms.FormDialog.submitted', submitted):
             self.page.remote_dialog('origin'); self.wait()
         self.assertIn('/example/remote.git', captured)
 
