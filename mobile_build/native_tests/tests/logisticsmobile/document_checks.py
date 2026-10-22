@@ -17,10 +17,13 @@ async def exercise_loading_layout(app):
             await asyncio.sleep(.3)
             panel = app.routes.body().children[0]
             content = panel.children[1]
-            width = float(app.main_window._impl.native.bounds.size.width)
+            # Native rails and split panes reduce the loading viewport;
+            # compare both positions and width in that panel's coordinates.
+            viewport = panel._impl.native
+            width = float(viewport.bounds.size.width)
             for widget in content.children:
                 native = widget._impl.native
-                rect = native.convertRect(native.bounds, toView=None)
+                rect = native.convertRect(native.bounds, toView=viewport)
                 left, size = float(rect.origin.x), float(rect.size.width)
                 assert left >= 31 and left + size <= width - 31
                 assert abs(left + size / 2 - width / 2) < 2
