@@ -263,7 +263,7 @@ class RecycledBrowserTests(unittest.TestCase):
             self.assertEqual(decode.call_count, 1)
             self.assertIs(browser.native_list.data[7].icon, image)
         browser.stop()
-        self.assertFalse(browser._decoded_thumbnails)
+        self.assertFalse(browser.work.decoded)
 
     def test_file_activation_skips_metadata_and_rechecks_navigation_after_callback(self):
         browser = self.browser

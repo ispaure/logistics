@@ -152,10 +152,11 @@ class HostLifecycle:
         for name in ('file_browser', 'remote_browser', 'editor_browser'):
             browser = getattr(host, name, None)
             if browser is not None:
-                browser.icons.clear()
-                decoded = getattr(browser, '_decoded_thumbnails', None)
-                if decoded is not None:
-                    decoded.clear()
+                work = getattr(browser, 'work', None)
+                if work is not None:
+                    work.prune(set())
+                else:
+                    browser.icons.clear()
         # Android can dispatch its queued trim callback after Activity resume.
         # Recover only the currently visible, unlocked reader; hidden sessions stay trimmed.
         privacy = getattr(host, 'screen_privacy', None)
