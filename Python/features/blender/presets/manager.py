@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 from features.preferences import preferences_path
 from commonUtils.runtime.operations import check_cancelled
@@ -155,9 +155,11 @@ class BlenderManager:
         if modules:
             command.extend(['--addons', ','.join(modules), '--python', str(Path(__file__).parents[1] / 'addons' / 'launch_addons.py')])
             env['LOGISTICS_BLENDER_ADDONS'] = json.dumps(modules)
-        process = subprocess.Popen(command, env=env,
-                                   cwd=self.preset(release, name), stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        with NamedTemporaryFile(prefix='blender-launch-', suffix='.log',
+                                dir=self.preset(release, name), delete=False) as log:
+            process = subprocess.Popen(command, env=env,
+                                       cwd=self.preset(release, name), stdin=subprocess.DEVNULL,
+                                       stdout=log, stderr=log)
         self.processes.append((process, release.version, name))
         return process.pid
 

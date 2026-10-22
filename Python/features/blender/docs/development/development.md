@@ -51,8 +51,10 @@ See the [user guide](../user/user.md) for controls and recovery.
   it stages a private copy and rejects conflicting same-version contents.
 - Applying selections copies resolved payloads into preset-owned addon locations,
   preserving unrelated addons and rejecting collisions. Config/scripts/extensions
-  are backed up before mutation; `apply_addons.py` enables/disables only managed
-  modules in bounded background Blender and saves preferences. Failure/cancellation
+  are backed up before mutation; `apply_addons.py` removes deselected managed
+  preference entries and ensures selected entries exist in bounded background
+  Blender, preserving existing preference objects without explicitly enabling
+  selected modules. GPU/UI-dependent imports belong to interactive startup. Failure/cancellation
   restores files; successful selection state publishes atomically afterward.
   Launching a preset with managed selections reapplies resolution before launch.
   External side effects of addon startup code are beyond filesystem rollback.
@@ -143,8 +145,8 @@ Conflicting duplicate versions inside one source fail explicitly. UI `add()` wri
 only the selected preset's library root. Public packaging does not include the ignored addon folder.
 
 Managed inventory stores display names/source. Apply requests sort by casefolded
-name and module; selected modules are temporarily disabled with `default_set=False`
-before enabling, preserving their preferences. Interactive launch uses sorted
+name and module. Background preparation records enabled preference entries
+without registering selected modules. Interactive launch uses sorted
 `--addons` plus `launch_addons.py`, with the module list in a child-only environment
 variable. Blender's CLI is additive and skips already-enabled modules, so the script
 rebuilds managed activation order with `default_set=False` and never saves preferences.
@@ -277,3 +279,37 @@ is independent of Logistics resolution.
 ## Workflow ownership
 
 `installation/` owns release discovery and installation. `presets/manager.py` owns preset/process policy. `addons/` owns scanning, metadata, library and embedded Blender scripts; `addons/ui/` owns catalog presentation. Feature-level `ui/` composes installation/preset controls.
+
+## GPU-dependent addon activation and diagnostics
+
+Background registration is unsuitable for GPU/UI-dependent addons: Hair Tool
+4.5.1 creates GPU shaders during import and Blender rejects that in background
+mode. Preparation saves selection entries without explicitly importing them;
+the process starts with `--factory-startup`, then reloads the real preset
+preferences while `addon_utils.enable` is temporarily suppressed. This preserves
+artist settings and saved addon ID properties without running saved selections
+(including those in the Deluxe preference payload). The original activation
+function is restored in a `finally` block. Interactive
+`launch_addons.py` performs ordered reactivation. Its error callback accepts
+Blender's exception argument and chains the original cause into the module error.
+Interactive failures do not roll back the already prepared selection.
+
+Each interactive launch writes a
+unique `blender-launch-*.log` in the preset. Failed background preparation saves
+its full output as `blender-addons-error-*.log` outside resource rollback folders.
+The bounded UI excerpt starts at the first traceback rather than showing only
+unregistration noise; it includes the exit code and full log path. Log persistence
+failure retains the excerpt and reports the storage error. These diagnostic logs
+are retained until manually removed or the preset is deleted.
+
+`test_blender_activation.py` covers preference-only preparation, preserved existing
+entries, interactive exception chaining, verbose shutdown logs and log-save errors.
+
+On October 21, 2026, the local Apple Silicon Blender 4.5.1 reproduced Hair Tool's
+background GPU import failure. After the fix, disposable presets passed background
+preparation of all 22 compatible shared addons, repeat preparation with removals,
+and all 22 plus cached Blue Hole 6.9.21 with Deluxe enabled. An interactive verifier
+confirmed Hair Tool, Angle Tool and AnyTree enabled with spaces and Unicode in the
+preset path. The verifier completed, but Blender did not finish quitting within
+45 seconds, so the test process was killed and temporary presets were removed.
+This is macOS activation evidence; Windows runtime validation remains outstanding.

@@ -289,7 +289,7 @@ class AddonLibrary:
             return self._apply(release, name, identities, bluehole=bluehole, cancelled=cancelled)
 
     def _apply(self, release, name, identities, *, bluehole=None, cancelled=lambda: False):
-        """Rollback files/preferences if Blender fails to enable the resolved selection."""
+        """Rollback files/preferences if Blender fails to prepare the resolved selection."""
         manager = self.manager
         manager._require_idle(release, name)
         executable = manager.executable(release)

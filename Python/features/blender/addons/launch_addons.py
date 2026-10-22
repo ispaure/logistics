@@ -11,6 +11,8 @@ for module in reversed(modules):
     addon_utils.disable(module, default_set=False)
 for module in modules:
     errors = []
-    addon_utils.enable(module, default_set=False, persistent=True, handle_error=lambda: errors.append(module))
-    if errors or not addon_utils.check(module)[1]:
+    addon_utils.enable(module, default_set=False, persistent=True, handle_error=errors.append)
+    if errors:
+        raise RuntimeError(f'Could not enable {module}: {errors[0]}') from errors[0]
+    if not addon_utils.check(module)[1]:
         raise RuntimeError(f'Could not enable {module}')

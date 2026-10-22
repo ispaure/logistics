@@ -139,7 +139,9 @@ rejected. Unknown versions or metadata constructed by executing Python are rejec
 Open **Settings → Blender → Presets** (or a card's **Manage** shortcut), select
 addons under **Addons**, then click **Save Addon Selection**. This saves the choices
 without installing or launching Blender. The next launch copies the resolved
-releases into that preset, enables them in background Blender and saves preferences.
+releases into that preset and saves their enabled preference entries in background
+Blender. Addons activate in the interactive Blender process so GPU/UI-dependent
+addons can initialize normally.
 Close Blender before saving or applying changes. Deselecting an addon disables
 and removes its library-managed files from that preset; the source ZIP stays in the shared folder or the preset's ZIP library.
 Existing addons installed outside the library are preserved; conflicting module
@@ -152,14 +154,21 @@ only the managed addons in that order without removing their preference objects.
 Blender's ordinary saved/default addons may initialize earlier; the controlled
 activation step orders the managed selection and leaves unrelated addons alone.
 This can call managed addon startup code again. The interactive startup step does not save preferences. Launch preparation applies
-the saved selection and saves its enabled preferences in background Blender.
+the saved selection and saves its enabled preferences in background Blender without
+importing selected or previously saved addons. Factory startup and a controlled
+preference reload keep GPU/UI-dependent addons out of this preparation process. Interactive activation failures are recorded in
+`blender-launch-*.log` in the preset folder; use **Open Preset Folder** from More
+to read them. Preparation failures retain a complete `blender-addons-error-*.log`
+there and show its path with the error. Logs can be deleted when no longer needed.
 
 Launch cards resolve saved selections again, so a newly imported compatible release
 is used on the next launch. If a selection no longer has a compatible release,
 launch reports the problem; deselect it in Manage. Importing a ZIP alone does not
 change existing presets. Copies to another Blender version retain selections and
 resolve them for that destination on launch. The manager rolls back preset files
-and saved preferences when applying addons fails or is cancelled. Addon startup
+and saved preferences when preparation fails or is cancelled. An addon that fails
+only during interactive activation remains selected; read the launch log and
+deselect or update it before launching again. Addon startup
 code can run during enabling and launch; effects outside the preset cannot be undone.
 Blender instances started outside Logistics cannot be tracked; close them yourself.
 

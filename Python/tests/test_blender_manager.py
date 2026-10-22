@@ -202,6 +202,10 @@ class BlenderManagerTests(unittest.TestCase):
                 self.manager.launch(self.release, 'Default')
             kwargs = popen.call_args.kwargs
             self.assertEqual(popen.call_args.args[0], [str(destination / 'blender.exe')])
+            log = Path(kwargs['stdout'].name)
+            self.assertEqual(log.parent, self.manager.preset(self.release, 'Default'))
+            self.assertTrue(log.is_file())
+            self.assertIs(kwargs['stdout'], kwargs['stderr'])
             for field in ('CONFIG', 'SCRIPTS', 'EXTENSIONS', 'DATAFILES', 'RESOURCES'):
                 self.assertTrue(Path(kwargs['env'][f'BLENDER_USER_{field}']).is_relative_to(self.manager.preferences))
             import os

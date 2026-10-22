@@ -2,8 +2,10 @@
 import ast
 import json
 from pathlib import Path
+import re
+import shutil
 import subprocess
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from time import monotonic
 import tomllib
 
@@ -102,7 +104,7 @@ def run_blender_script(executable, env, script, request, *, cancelled=lambda: Fa
     """Bounded saved-preference update; logs stay private and child is always reaped."""
     with TemporaryDirectory(prefix='logistics-blender-apply-') as workspace:
         with (Path(workspace) / 'apply.log').open('wb') as log:
-            process = subprocess.Popen([str(executable), '--background', '--disable-autoexec', '--offline-mode',
+            process = subprocess.Popen([str(executable), '--background', '--factory-startup', '--disable-autoexec', '--offline-mode',
                                         '--python-exit-code', '1', '--python', str(script), '--', str(request)],
                                        env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
             deadline = monotonic() + timeout
@@ -119,6 +121,28 @@ def run_blender_script(executable, env, script, request, *, cancelled=lambda: Fa
                 if process.poll() is None:
                     process.kill()
                 process.wait()
-            if process.returncode:
-                detail = (Path(workspace) / 'apply.log').read_text(encoding='utf-8', errors='replace')[-2000:]
-                raise ValueError(f'Blender could not apply addons. Previous files and preferences were restored.\n{detail}')
+        # Close the writer before reopening/copying the file on Windows.
+        if process.returncode:
+            log_path = Path(workspace) / 'apply.log'
+            # Keep the complete log outside the rolled-back resource folders.
+            # A unique file also avoids replacing an existing file or symlink.
+            config = env.get('BLENDER_USER_CONFIG')
+            directory = Path(config).parent if config else None
+            try:
+                with NamedTemporaryFile(prefix='blender-addons-error-', suffix='.log',
+                                        dir=directory, delete=False) as saved, log_path.open('rb') as source:
+                    shutil.copyfileobj(source, saved)
+                    saved_path = saved.name
+                location = f'\nFull Blender log: {saved_path}'
+            except OSError as error:
+                location = f'\nCould not preserve the full Blender log: {error}'
+            detail = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '',
+                            log_path.read_text(encoding='utf-8', errors='replace'))
+            # Shutdown/unregister chatter can easily bury the actual exception.
+            start = detail.find('Traceback (most recent call last):')
+            if start >= 0:
+                detail = detail[start:]
+            if len(detail) > 6000:
+                detail = detail[:4500] + '\n… (see full log) …\n' + detail[-1500:]
+            raise ValueError(f'Blender could not apply addons (exit {process.returncode}). '
+                             f'Previous files and preferences were restored.{location}\n{detail}')
