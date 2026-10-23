@@ -272,3 +272,83 @@ completed baseline. Remaining priorities continue to govern selection.
 - All 12 recovery tests and 18 ordinary editor tests pass. Stream source/pin
   checkpoint: Logistics `91fa93f5`; Blue Hole exact vendor `f0ac6b4`; shared stream
   implementation `8a68cdf`. Shared worker correction is `c4d3dfc`.
+
+## Resumed execution: verified cross-volume moves
+
+- Four new regressions reproduced corrupt copied bytes accepted before deleting
+  originals, a changed source published/deleted by low-level File moves, and a
+  clipboard source edit lost after destination publication. A fifth regression
+  verifies low-level late edits retain both copies with published-state metadata.
+- Added a shared copy-content inventory under the existing snapshots owner:
+  byte hashes, object kinds and raw symbolic-link targets, including empty folders.
+  It permits hard-linked file contents while the existing strict private-tree
+  inventory retains its rejection policy. Existing file_revision calls preserve
+  default behavior; an explicit follow_symlinks=False checks the link itself.
+- Cross-volume clipboard and low-level File moves now verify staging and recheck
+  source revisions before deletion. Clipboard revisions include ctime. Their
+  different collision/replacement policies, raw link meaning and between-item
+  cancellation remain intact. Publication followed by a source conflict retains
+  both copies and reports incomplete cleanup. These checks are not writer locks.
+- Validation passes: six snapshot tests, 17 clipboard-transfer tests, 11 File-move
+  tests, shared transfer-phase tests, 26 actual browser file-action tests, 58 comic
+  tests and the mobile collection consumer. Correctness lint and five documentation
+  contract tests pass. EXDEV and late-edit cases use synthetic temporary fixtures;
+  native Windows/Linux and physical-volume testing remain separate.
+
+## Resumed execution: relocation cleanup admission
+
+- Two more regressions reproduced storage relocation deleting a file edit or
+  retargeted root link after the destination had been published.
+- Directory cleanup now repeats the existing manifest validation immediately
+  before removal. Root-link relocation checks the link object's captured revision
+  before unlinking. Both use the existing published/incomplete result boundary,
+  preserving both locations on an observed conflict. Rebased link meaning and
+  migration collision policy are unchanged.
+- All nine relocation tests, 39 LocalCrypt consumer tests and correctness lint
+  pass. Cross-volume copy/source verification was committed as shared `4a6f241`.
+
+## Resumed execution: empty recovery errors
+
+- A failed Future with an empty OSError message reproduced clearing the recovery
+  failure flag and scheduling another checkpoint/automatic suspension attempt.
+- Recovery error presentation now supplies a nonempty fallback message, preserving
+  failure state and the ordinary close prompt without exposing new error details.
+- All 13 recovery tests and 18 editor tests pass. The committed filesystem cleanup
+  revision `6c20833` also passes the full unrestricted 179-file shared suite, exact
+  vendor comparison, 31 Blue Hole tests and the actual-vendor snapshot/transfer/
+  move/relocation suites.
+
+## Resumed execution: legacy object/provider boundary consistency
+
+- New fixtures reproduced File copy/move/deletion/permission methods bypassing
+  host-managed provider roots, Directory deletion bypassing protected descendants,
+  and denied rename creating a parent directory before the existing path guard.
+- Those legacy object methods now call the existing namespace-local access guard
+  before mutation. Directory preflight covers descendants before sibling deletion;
+  File rename preflights before creating parents. Existing provider-record grants
+  and unregistered-path behavior remain unchanged. This is routing policy, not
+  a new filesystem sandbox.
+- Four local-access tests (with per-operation cases), six object-operation tests,
+  11 file moves, link creation, File Tools, 58 Comics tests and 39 LocalCrypt tests
+  pass. No user storage or credentials were opened; all mutations used fixtures.
+
+## Resumed execution: literal executable permission paths
+
+- Three regressions reproduced shell-expanded filenames, use of a shell command
+  string and ignored chmod failures. The permission helper now passes an absolute
+  path through argv with shell=False, preserving native +x/umask behavior and the
+  prior idle timeout. Failed command results raise OSError.
+- Native POSIX tests use a synthetic filename containing quotes and a harmless
+  substitution expression; its literal file receives the expected permissions
+  with all non-executable bits and bytes preserved. Relative option-like names
+  are also covered. Perforce's 24 shared tests and seven Blender integration
+  test files pass. No real Perforce server or Blender runtime was used.
+
+## Guard compatibility correction
+
+- Compatibility review caught a regression introduced by the legacy-object guard:
+  resolving a cyclic directory link blocked deleting that unregistered link even
+  with no active provider policy. The guard now returns immediately when no roots
+  are registered, preserving ordinary filesystem behavior without unnecessary
+  resolution. All five access tests pass, including the reproduced loop case;
+  existing link-creation checks pass with their native Windows-only skip.
