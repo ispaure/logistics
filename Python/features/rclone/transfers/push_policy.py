@@ -33,6 +33,44 @@ def save_excludes(values):
     atomic_write_json(settings_path(), {'schema': 1, 'excludes': list(values)}, durable_directory=True)
 
 
+def _remove_plain_generated_files(item, original, cleanup, cancelled):
+    """Remove only allowlisted unencrypted regular files after the root preflight."""
+    removed = 0
+    for name, stamp in original.items():
+        check_cancelled(cancelled)
+        if Path(name).name.casefold() in CLEANUP_NAMES and stat.S_ISREG(stamp[2]):
+            path = item.data / name
+            with path.open('rb') as stream:
+                if stream.read(8) == b'RCLONE\x00\x00':
+                    continue  # Resolve encrypted names through the provider below.
+            if not cleanup:
+                raise ValueError('LocalCrypt contains generated junk. A real push will remove it before validation: ' + name)
+            info = path.lstat()
+            if (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns) != stamp:
+                raise ValueError('LocalCrypt changed during cleanup. Retry the push.')
+            path.unlink()
+            removed += 1
+    return removed
+
+
+def _authenticate_contents(provider, binary, decoded_files, cancelled, report):
+    """Authenticate every decoded file while the caller retains the provider operation."""
+    report(0, 0, 'Authenticating all encrypted file contents…')
+    environment, remote, _ = session.launch(provider.context, 'view:', '')
+    output = run_bytes([str(binary), '--config', session.NULL_CONFIG, '--log-level', 'ERROR',
+                        '--retries', '1', '--low-level-retries', '1', 'hashsum', 'SHA256', remote,
+                        '--download', '--checkers', '1'], environment=environment,
+                       max_output=64 * 1024 * 1024, timeout=24 * 60 * 60, cancelled=cancelled)
+    hashed = set()
+    for line in output.decode('utf-8').splitlines():
+        digest, separator, name = line.partition('  ')
+        if not separator or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
+            raise ValueError('LocalCrypt content verification returned an invalid result.')
+        hashed.add(name)
+    if hashed != decoded_files:
+        raise ValueError('LocalCrypt push refused: not every file could be authenticated.')
+
+
 def validate_localcrypt_push(item, binary, *, cancelled=lambda: False, report=lambda *args: None, cleanup=True):
     """Verify every physical name and decrypt/authenticate every file in memory.
 
@@ -49,21 +87,7 @@ def validate_localcrypt_push(item, binary, *, cancelled=lambda: False, report=la
         if str(unlock(item)[item.remote].get('no_data_encryption', 'false')).lower() in {'true', '1', 'yes'}:
             raise ValueError('LocalCrypt push requires content encryption; no_data_encryption is enabled.')
         original = _inventory(item.data, cancelled)
-        removed = 0
-        for name, stamp in original.items():
-            check_cancelled(cancelled)
-            if Path(name).name.casefold() in CLEANUP_NAMES and stat.S_ISREG(stamp[2]):
-                path = item.data / name
-                with path.open('rb') as stream:
-                    if stream.read(8) == b'RCLONE\x00\x00':
-                        continue  # Resolve encrypted names through the provider below.
-                if not cleanup:
-                    raise ValueError('LocalCrypt contains generated junk. A real push will remove it before validation: ' + name)
-                info = path.lstat()
-                if (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns) != stamp:
-                    raise ValueError('LocalCrypt changed during cleanup. Retry the push.')
-                path.unlink()
-                removed += 1
+        removed = _remove_plain_generated_files(item, original, cleanup, cancelled)
         before = _inventory(item.data, cancelled)
         for name, stamp in before.items():
             check_cancelled(cancelled)
@@ -99,20 +123,7 @@ def validate_localcrypt_push(item, binary, *, cancelled=lambda: False, report=la
                 if unexpected or expected - set(before):
                     names = ', '.join(sorted(unexpected or expected - set(before))[:5])
                     raise ValueError('LocalCrypt push refused: names do not match the crypt settings: ' + names)
-                report(0, 0, 'Authenticating all encrypted file contents…')
-                environment, remote, _ = session.launch(provider.context, 'view:', '')
-                output = run_bytes([str(binary), '--config', session.NULL_CONFIG, '--log-level', 'ERROR',
-                                    '--retries', '1', '--low-level-retries', '1', 'hashsum', 'SHA256', remote,
-                                    '--download', '--checkers', '1'], environment=environment,
-                                   max_output=64 * 1024 * 1024, timeout=24 * 60 * 60, cancelled=cancelled)
-                hashed = set()
-                for line in output.decode('utf-8').splitlines():
-                    digest, separator, name = line.partition('  ')
-                    if not separator or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
-                        raise ValueError('LocalCrypt content verification returned an invalid result.')
-                    hashed.add(name)
-                if hashed != decoded_files:
-                    raise ValueError('LocalCrypt push refused: not every file could be authenticated.')
+                _authenticate_contents(provider, binary, decoded_files, cancelled, report)
             if (item.data.resolve(strict=True) != resolved_root
                     or (item.data.stat().st_dev, item.data.stat().st_ino) != root_identity
                     or _inventory(item.data, cancelled) != before):

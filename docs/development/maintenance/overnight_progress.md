@@ -1,5 +1,18 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L7 push and collection policy stages
+
+Push validation names allowlisted raw-file cleanup and whole-content authentication
+inside the original mutation lock/provider operation. Collection switching names
+per-tree staging/verification and final source/destination revalidation; the entry
+point retains admission, retry/adoption and private-pointer publication. Every
+original top-level function expands to identical ordered AST/signatures. All nine
+real encrypted-push fixtures and 24 collection-switch cases pass before/after in
+identical order; storage UI 12, portable collection four, architecture, owner lint,
+wiki and whitespace pass. Limits, errors, scopes, original backups and temporary
+cleanup remain. Cloud UI is a separate remaining L7 stage. Concurrent credential
+refactoring files are excluded from this unit. No external edit or project push.
+
 ## Sequential audit implementation: L4 mobile folder sources and presentation
 
 Detached copy/account descriptor construction precedes existing catalog grouping;

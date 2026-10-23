@@ -340,6 +340,38 @@ def wipe_destination(private_root, volume, *, progress=None):
     return False
 
 
+def _stage_collection_tree(source, target, expected, destination_base, report):
+    """Copy and verify one new tree before publishing its name; always retire its stage."""
+    report.update('Copying ' + target.name, total=sum(value[0] for value in expected.values() if value is not None))
+    temporary = destination_base / ('.storage-copy-' + uuid4().hex)
+    try:
+        if source.exists():
+            # Never follow a link that appeared after preflight.
+            shutil.copytree(source, temporary, symlinks=True, copy_function=lambda src, dst: _copy_durable(src, dst, report))
+        else:
+            temporary.mkdir()
+        report.update(force=True)  # Flush the completed folder once, not every small file.
+        report.update('Verifying files')
+        if _inventory(temporary, report) != expected or _inventory(source, report) != expected:
+            raise OSError('Collection verification failed; original location retained.')
+        if target.exists():
+            target.rmdir()  # Only an empty folder may be replaced.
+        temporary.rename(target)
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+
+
+def _verify_collection_copy(sources, destinations, snapshots, report):
+    """Revalidate both destination trees and active sources before pointer publication."""
+    report.update('Final verification')
+    for target, expected in zip(destinations, snapshots):
+        if expected and _inventory(target, report) != expected:
+            raise OSError('Destination verification failed; original location retained.')
+    if [_inventory(source, report) for source in sources] != snapshots:
+        raise OSError('Collection changed during copying; original location retained.')
+
+
 def switch_location(private_root, volume, *, progress=None):
     """Copy/verify both trees, then commit the private pointer. Keep source backup.
 
@@ -389,30 +421,8 @@ def switch_location(private_root, volume, *, progress=None):
             if expected and _inventory(target, report) != expected:
                 raise OSError('Destination changed during copying; original location retained.')
             continue  # Identical backup, or adoption when the source is empty.
-        report.update('Copying ' + target.name, total=sum(value[0] for value in expected.values() if value is not None))
-        temporary = destination_base / ('.storage-copy-' + uuid4().hex)
-        try:
-            if source.exists():
-                # Never follow a link that appeared after preflight.
-                shutil.copytree(source, temporary, symlinks=True, copy_function=lambda src, dst: _copy_durable(src, dst, report))
-            else:
-                temporary.mkdir()
-            report.update(force=True)  # Flush the completed folder once, not every small file.
-            report.update('Verifying files')
-            if _inventory(temporary, report) != expected or _inventory(source, report) != expected:
-                raise OSError('Collection verification failed; original location retained.')
-            if target.exists():
-                target.rmdir()  # Only an empty folder may be replaced.
-            temporary.rename(target)
-        finally:
-            if temporary.exists():
-                shutil.rmtree(temporary)
-    report.update('Final verification')
-    for target, expected in zip(destinations, snapshots):
-        if expected and _inventory(target, report) != expected:
-            raise OSError('Destination verification failed; original location retained.')
-    if [_inventory(source, report) for source in sources] != snapshots:
-        raise OSError('Collection changed during copying; original location retained.')
+        _stage_collection_tree(source, target, expected, destination_base, report)
+    _verify_collection_copy(sources, destinations, snapshots, report)
     report.update('Saving location')
     _activate(private_root, volume, destination_base)
     report.update('Complete', force=True)

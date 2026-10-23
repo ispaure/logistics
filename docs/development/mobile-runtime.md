@@ -983,6 +983,14 @@ captures the operation's controls and width before dispatch; queued worker
 events return through the owning loop and update those captured controls.
 Copy/recover/empty/wipe still dispatch to their existing storage services.
 
+`storage_location.switch_location` retains source/destination admission, conflict
+and free-space checks, retry/adoption decisions and final private-pointer commit.
+`_stage_collection_tree` copies/verifies one new tree before publishing its name
+and always retires the temporary stage. `_verify_collection_copy` rechecks both
+destination trees and active source snapshots before `_activate` publishes the
+location. No tree merge, format or backup policy changes; recover/empty/wipe retain
+their separate existing entry points.
+
 Android collection drive discovery in `storage_ui` uses mounted `StorageVolume`
 roots and the All files access grant on API 30+. On API 24–29 it uses
 `Context.getExternalFilesDirs(None)` and `StorageManager.getStorageVolume(File)`

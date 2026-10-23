@@ -343,6 +343,13 @@ they are not UI shortcuts around provider operations.
 
 ## Push preflight
 
+`validate_localcrypt_push` retains the mutation lock, source/root identity checks,
+provider operation and final cleanup verification. `_remove_plain_generated_files`
+names only the existing allowlisted raw-file cleanup; `_authenticate_contents`
+runs the existing bounded hash/download verification inside the caller's provider
+operation. Name inventory, content authentication and encrypted-junk deletion
+retain their original order. Helpers introduce no credential or cancellation owner.
+
 `features.rclone.transfers.sync.rclone_sync` routes existing local-to-remote sources through
 `push_policy` before launch, including secondary feature callers. Personal push
 exclusions are separate from the fixed generated-junk deletion allowlist. LocalCrypt
