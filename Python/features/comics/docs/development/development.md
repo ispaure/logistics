@@ -204,7 +204,10 @@ ReadingState saves the page-list total alongside the existing index/name resume
 record and provides a compact thumbnail badge. ComicBrowserMixin seeds page names
 from its existing thumbnail worker for legacy-state resolution and reorder-safe
 labels; painting never opens the archive. Badge state is private and follows the
-existing resolved-path identity and remember_position_bool setting.
+existing resolved-path identity and remember_position_bool setting. Resume and badge
+loads enforce the 128 KiB limit while reading, even if size metadata is stale.
+Each badge uses one state snapshot for both total and position, so another reader
+saving between reads cannot mix records. Malformed/oversized files remain untouched.
 
 The portable `comic_page_names` helper supplies identical header-only page filtering
 and natural order for imports and readers. Native ordinary encrypted comics and

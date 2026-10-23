@@ -3,6 +3,7 @@
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import json
+from contextlib import contextmanager
 import time
 from io import BytesIO
 from pathlib import Path
@@ -119,6 +120,39 @@ class ComicResumeTests(QtTestCase):
             state.path.write_text(data)
             self.assertEqual(state.position(pages), 0)
         state.path.write_text('{"page": 99}')
+        self.assertEqual(state.position(pages), 3)
+
+    def test_resume_and_badge_enforce_limit_with_stale_size_metadata(self):
+        from types import SimpleNamespace
+        state = ReadingState(self.path, folder=self.folder)
+        state.path.parent.mkdir()
+        pages = ['0.png', '1.png', '2.png']
+        state.path.write_text(json.dumps({'page': 2, 'name': '2.png', 'total': 3,
+                                         'padding': 'x' * (128 * 1024)}))
+        before = state.path.read_bytes()
+        with patch.object(Path, 'stat', return_value=SimpleNamespace(st_size=0)):
+            self.assertEqual(state.position(pages), 0)
+            self.assertEqual(state.badge(pages), '')
+            self.assertEqual(state.badge(), '')
+        self.assertEqual(state.path.read_bytes(), before)
+
+    def test_badge_uses_one_snapshot_when_another_reader_saves(self):
+        state = ReadingState(self.path, folder=self.folder)
+        pages = ['0.png', '1.png', '2.png', '3.png']
+        state.save(1, pages)
+        original_open = Path.open
+        reads = []
+        @contextmanager
+        def open_and_update(path, *args, **kwargs):
+            with original_open(path, *args, **kwargs) as stream:
+                yield stream
+            if path == state.path:
+                reads.append(path)
+                if len(reads) == 1:
+                    state.save(3, pages)
+        with patch.object(Path, 'open', open_and_update):
+            self.assertEqual(state.badge(pages), '2/4')
+        self.assertEqual(len(reads), 1)
         self.assertEqual(state.position(pages), 3)
 
     def test_thumbnail_progress_tracks_resume_page_and_legacy_state(self):
