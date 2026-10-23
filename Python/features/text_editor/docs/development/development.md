@@ -259,7 +259,10 @@ serialization; a native screenshot driver must verify visible frame changes.
 ## Notes Library ownership
 
 `notes.py` provides toolkit-independent marker detection, rooted paths, bounded
-reads and immediate-child filtering. Desktop `notes_actions.py` contributes the
+reads and immediate-child filtering. Note reads complete short provider reads
+through EOF or the 2 MiB ceiling plus one using `runtime.streams.read_up_to`, then
+apply the existing size, cancellation and revision checks before decoding.
+Desktop `notes_actions.py` contributes the
 location command; `ui/notes_library.py` owns its lazy Documents window and
 cooperative workers. Mobile resolves the same location scopes in
 `mobile.notes_actions` and presents them through the retained adaptive

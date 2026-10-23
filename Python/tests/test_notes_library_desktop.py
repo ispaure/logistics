@@ -26,6 +26,32 @@ class NotesLibraryDesktopTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 
+    def test_note_reads_complete_short_chunks_and_enforce_the_total_preview_limit(self):
+        from contextlib import contextmanager
+        from io import BytesIO
+        from features.text_editor.notes import NotesLibrary, MAX_NOTE
+        class ShortReads(BytesIO):
+            def read(self, count):
+                return super().read(min(3, count))
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            data = b'# Complete note\n'
+            (root / 'Note.md').write_bytes(data)
+            provider = LocalFiles(root)
+            library = NotesLibrary(provider)
+            @contextmanager
+            def opened(path):
+                with ShortReads(data) as stream:
+                    yield stream
+            for limit in (4, MAX_NOTE):
+                with self.subTest(limit=limit), patch.object(provider, 'open', side_effect=opened), \
+                        patch('features.text_editor.notes.MAX_NOTE', limit):
+                    if limit < len(data):
+                        with self.assertRaisesRegex(ValueError, 'too large'):
+                            library.read('Note.md')
+                    else:
+                        self.assertEqual(library.read('Note.md'), data)
+
     def fixture(self, root):
         (root/'.obsidian').mkdir();(root/'Nested').mkdir()
         (root/'Home.md').write_text('# Home\n\n[Next](Nested/Next.md)')
