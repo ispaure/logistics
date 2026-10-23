@@ -1,5 +1,6 @@
 """Transactional EPUB metadata updates, preserving unrelated ZIP resources."""
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 import os
 import shutil
@@ -85,6 +86,7 @@ def save_metadata(book, changes, *, cancelled=lambda: False):
 
 def _save_metadata(book, changes, cancelled):
     from commonUtils.persistence.publication import save_transaction
+    from commonUtils.filesystem.snapshots import verified_file_snapshot
     from commonUtils.filesystem.local_access import check_local_path
     def check():
         check_local_path(book.path)
@@ -124,13 +126,21 @@ def _save_metadata(book, changes, cancelled):
                 backup = book.path.with_name(book.path.name + f'.bak.{suffix}')
                 suffix += 1
         try:
+            copied = sha256()
             with destination, book.path.open('rb') as source:
                 while chunk := source.read(1024 * 1024):
                     check()
                     destination.write(chunk)
+                    copied.update(chunk)
                 destination.flush()
                 os.fsync(destination.fileno())
             shutil.copymode(book.path, backup)
+            try:
+                _, backup_digest = verified_file_snapshot(backup, cancelled=cancelled)
+            except ValueError as error:
+                raise BookError('EPUB backup changed during verification; original preserved.') from error
+            if backup_digest != copied.digest():
+                raise BookError('EPUB backup verification failed; original preserved.')
             check()
         except BaseException:
             backup.unlink(missing_ok=True)

@@ -125,6 +125,22 @@ class EPUBTests(unittest.TestCase):
         self.assertFalse(list(self.folder.glob('book.epub.bak*')))
         self.assertFalse(list(self.folder.glob('.*.epub')))
 
+    def test_corrupted_backup_aborts_metadata_publication(self):
+        import shutil
+        original = self.path.read_bytes()
+        copy_mode = shutil.copymode
+        def corrupt_backup(source, target):
+            result = copy_mode(source, target)
+            if Path(target).name.startswith(self.path.name + '.bak'):
+                Path(target).write_bytes(b'incomplete backup')
+            return result
+        with patch('features.books.metadata.shutil.copymode', side_effect=corrupt_backup):
+            with self.assertRaisesRegex(BookError, 'backup'):
+                save_metadata(EPUBBook(self.path), {'title': ['Must not publish']})
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertFalse(list(self.folder.glob('book.epub.bak*')))
+        self.assertFalse(list(self.folder.glob('.*.epub')))
+
     def test_required_fields_and_refinement_removal(self):
         book = EPUBBook(self.path)
         with self.assertRaises(BookError):

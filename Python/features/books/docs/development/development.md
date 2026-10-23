@@ -67,7 +67,9 @@ IDs, clear outdated `file-as` refinements when values change, and update EPUB 3'
 `dcterms:modified`. OPF formatting/prefix spelling can change during serialization.
 Edited signed books may require signing again. Atomic staging stays beside the
 EPUB so replacement is on the same filesystem; the source's permissions are kept.
-The backup must complete before replacement. Failure/cancellation cleans staging
+The backup must complete and match the SHA-256 of the copied original bytes
+before replacement. Backup changes during verification or corrupted copies
+abort publication and remove the failed backup. Failure/cancellation cleans staging
 and leaves the source unchanged. External-process conflicts are checked using
 filesystem identity, size and nanosecond timestamps before replacement.
 
