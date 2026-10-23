@@ -26,7 +26,7 @@ class PlexPublicationTests(unittest.TestCase):
             self.assertEqual((destination / 'settings').read_bytes(), b'new settings')
 
     def test_each_promotion_or_journal_failure_restores_old_generation(self):
-        for fail_at in range(1, 8):
+        for fail_at in range(1, 11):
             with self.subTest(fail_at=fail_at), TemporaryDirectory() as directory:
                 destination, staging = self.fixture(Path(directory))
                 original = {p.name: p.read_bytes() for p in destination.iterdir()}
@@ -151,3 +151,39 @@ class PlexPublicationTests(unittest.TestCase):
                     PackagePublication.recover(transaction.recovery)
                 PackagePublication.recover(transaction.recovery)
                 self.assertEqual({p.name: p.read_bytes() for p in destination.iterdir()}, original)
+
+    def test_missing_original_keeps_published_file_and_recovery_journal(self):
+        with TemporaryDirectory() as directory:
+            destination, staging = self.fixture(Path(directory))
+            transaction = PackagePublication(destination, ())
+            transaction.recovery.mkdir()
+            publication.os.replace(staging / 'settings', destination / 'settings')
+            transaction.state = dict(schema=1, phase='publishing', originals=['settings'],
+                published={'settings': publication._signature(destination / 'settings')})
+            transaction._save()
+            with self.assertRaisesRegex(RuntimeError, 'original is missing'):
+                PackagePublication.recover(transaction.recovery)
+            self.assertEqual((destination / 'settings').read_bytes(), b'new settings')
+            self.assertTrue((transaction.recovery / 'journal.json').is_file())
+
+    def test_failed_final_commit_checkpoint_and_partial_rollback_can_resume(self):
+        import json
+        with TemporaryDirectory() as directory:
+            destination, staging = self.fixture(Path(directory))
+            original = {p.name: p.read_bytes() for p in destination.iterdir()}
+            transaction = PackagePublication(destination, sorted(staging.iterdir()), [destination / 'archive.002'])
+            real_replace = publication.os.replace
+            final_failed = False
+            def replace(source, target):
+                nonlocal final_failed
+                source, target = Path(source), Path(target)
+                if not final_failed and target == transaction.recovery / 'journal.json' and json.loads(source.read_text())['phase'] == 'committed':
+                    final_failed = True
+                    raise OSError('final journal publication failed')
+                if source == transaction.recovery / 'archive.002':
+                    raise OSError('restoration interrupted')
+                return real_replace(source, target)
+            with patch.object(publication.os, 'replace', side_effect=replace), self.assertRaisesRegex(RuntimeError, 'needs recovery'):
+                transaction.publish()
+            PackagePublication.recover(transaction.recovery)
+            self.assertEqual({p.name: p.read_bytes() for p in destination.iterdir()}, original)

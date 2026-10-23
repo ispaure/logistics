@@ -10,6 +10,14 @@ Manage PMS is offered on **Workspaces** when a local folder has a matching
 3. Package the current server data locally.
 4. Push the completed package to the paired remote if desired.
 
+If packaging reports a recovery folder, keep it until the previous package has
+been recovered or the newly published package has been checked. Ordinary packaging
+failures restore the previous files automatically. A conflicting edit, missing
+backup or interrupted recovery leaves the journal and remaining files in place;
+resolve that condition before retrying recovery. See the
+[package recovery contract](../development/development.md#package-and-restore-behavior)
+for the explicit recovery procedure.
+
 ## Restore
 
 1. Stop Plex Media Server and keep a backup of the existing installation.

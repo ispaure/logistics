@@ -44,8 +44,12 @@ class PackagePublication:
             if backup.is_symlink() or backup.is_junction() or (backup.exists() and not backup.is_file()):
                 raise RuntimeError(f'Package recovery member is not a regular file: {backup}')
             target = self.destination / name
+            if not backup.exists() and (name in self.state['published'] or not target.exists()):
+                raise RuntimeError(f'Package recovery original is missing: {backup}')
             if backup.exists() and (target.exists() or target.is_symlink()) and name not in self.state['published']:
                 raise RuntimeError(f'Package recovery destination is occupied: {target}')
+        self.state['phase'] = 'rolling_back'
+        self._save()
         for name, revision in list(self.state['published'].items()):
             target = self.destination / name
             self._check_published(name, revision)
@@ -127,7 +131,7 @@ class PackagePublication:
         state = json.loads(journal.read_text())
         if not isinstance(state, dict):
             raise ValueError('Invalid package recovery journal.')
-        if state.get('schema') != 1 or state.get('phase') not in {'prepared', 'publishing'}:
+        if state.get('schema') != 1 or state.get('phase') not in {'prepared', 'publishing', 'rolling_back'}:
             raise ValueError('Recovery requires an uncommitted Plex publication journal.')
         originals, published = state.get('originals'), state.get('published')
         if not isinstance(originals, list) or not isinstance(published, dict):

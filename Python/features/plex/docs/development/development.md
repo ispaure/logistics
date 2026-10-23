@@ -55,7 +55,10 @@ installations may need additional filesystem permissions and ownership handling.
   changed published files and occupied restoration targets are preserved for manual
   resolution. Recovery checks the complete generation before removing its published
   files and checkpoints their removal before restoring originals, so interrupted
-  rollback can be retried without mistaking restored originals for external edits. Multi-file visibility is not atomic, and committed cleanup failures
+  rollback can be retried without mistaking restored originals for external edits.
+  The `rolling_back` journal phase also remains recoverable if the final commit
+  checkpoint failed. A missing original backup stops recovery before published
+  files are removed; the journal remains for manual resolution. Multi-file visibility is not atomic, and committed cleanup failures
   report the retained directory without undoing the valid new generation.
 - Restores extract into a temporary sibling directory before moving the current
   data aside. ZIP entries must stay under `Plex Media Server/`; linked content
