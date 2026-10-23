@@ -1358,3 +1358,46 @@ LocalCrypt input completion commit: `395b7821`.
 The exact `a3c12c9` copy also passes the embedded 152-case suite (one filesystem
 skip), including independent canonical/add-on namespaces and no optional UI
 toolkit imports. This does not execute Qt widgets inside Blender.
+
+## Frozen complete-contract integration checkpoint
+
+- Logistics `a287c5ca`, shared `a3c12c9`, Blue Hole `156b227` stayed tracked-clean
+  and unchanged throughout the full runs. Desktop completes 179 files / 1,685
+  cases / six skips; shared 180 / 1,232 / 25 skips; mobile 162 / 1,161 / zero
+  skips with the existing Node/Chrome DOM runtime. Zero failed files; no Qt
+  deleted-object callback tracebacks. Earlier failed attempts remain above.
+- Architecture reports 24 host adapters (one fewer after reviewed unused-import
+  removal), 15 feature edges and zero violations. Lint, pin compatibility and
+  source hygiene pass. All 1,863 tracked Python files compile without bytecode.
+- The same clean source package passes all 2,219 hashes and actual offscreen
+  startup after fresh extraction. The owned-profile probe verifies Bulk Rename,
+  expanded LM controls and a temporary Blender settings preset without download
+  or Blender launch. The Blender screenshot was visually inspected. This
+  archive belongs to this checkpoint, before the later junction compatibility fix.
+
+## Python 3.11 traversal compatibility
+
+- Deeper embedded validation reproduces AttributeError in metadata scanning and
+  GUI-free wiki traversal: direct Path.is_junction calls require Python 3.12.
+  Existing desktop 3.12 tests had passed, so the narrower earlier embedded suite
+  had not established these APIs' older-runtime compatibility.
+- Metadata scanning, Windows index checks and wiki traversal now use the existing
+  filesystem.links.is_junction owner, including its documented Windows fallback.
+  No new fallback implementation, public path or version dependency. The synthetic
+  junction exclusion test patches that query boundary rather than Path internals.
+- Three existing catalog tests move unchanged into a GUI-free test owner; their
+  AST is identical. Eight viewer tests retain their Qt owner. This extra test
+  file makes real embedded catalog coverage possible without GUI dependencies.
+- Shared `288ccbb`: 51 directory cases across five files plus 15 persistent index
+  cases pass; four index and three catalog cases also pass in mobile Python.
+  All 11 wiki/catalog and five packaging/import cases pass on desktop. Lint and
+  five documentation checks pass; no new module-scope cyclic group is introduced.
+- The expanded embedded suite passes 160 cases (one filesystem skip), including
+  metadata writer/scanner, four directory snapshot/cache and three catalog cases.
+  Native Windows junction behavior remains unexecuted; this is not all-platform
+  or Blender 5.2.2 registration proof.
+
+The final expanded driver also compiles vendored production sources in Python
+3.11 without importing optional toolkits: 161 cases, 160 pass and one filesystem
+skip. Syntax acceptance is distinct from registration/runtime behavior. All 33
+consumer adapters and exact vendor checking pass.
