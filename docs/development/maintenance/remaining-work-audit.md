@@ -23,6 +23,7 @@ below describe the assessment snapshot, before this implementation.
 | C4 | Named block classification, code/image typography and authored-source conversion phases | shared `c542e92` |
 | C5 | Per-field control construction/binding and row/reset/preview assembly | shared `e37da37` |
 | C6 | Named INI validation/location/replacement and rename stem/context stages | shared `d1ba7cd` |
+| C7 (contract stage) | Paired install/retirement and late-callback contracts; native factories unchanged and platform-gated | shared `016a35d` |
 | C8 | Explicit checkout admission/actions; hook and declined-prompt contracts; legacy exports retained | shared `9aaf84d` |
 | L1 | Managed-text host workflows grouped over existing store/workspace/view owners; aggregate lifecycle stays in app | See sequential progress entry |
 | L2 | Retained drawer/listing owner separated from frame layout; import compatibility preserved | See sequential progress entry |
@@ -30,6 +31,8 @@ below describe the assessment snapshot, before this implementation.
 
 Items absent from this table remain outstanding. Native/platform acceptance limits
 are recorded with each unit; a passing host suite is not native certification.
+C7's factory extraction remains gated on native acceptance beyond its completed
+contract stage.
 
 ## Assessment
 

@@ -1,5 +1,19 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: C7 native contract stage
+
+Shared `016a35d` documents paired navigation installation/restoration, canvas gesture
+retirement and speech engine/delegate ownership. Three new required-Toga contracts
+verify reinstall/duplicate-install admission, restoration before adapter retirement,
+canvas callback/pixel detachment and queued speech suppression after idempotent
+close. The native matrix passes 111 cases across 26 files with zero skips/failures;
+its separate Qt leg passes with the existing optional-Toga skips. Shared docs,
+shared lint and whitespace pass. No production factory/class move occurred.
+Read-only availability checks found no attached Android device or booted Apple
+simulator; gesture/rotation/IME/physical speech acceptance remains required before
+native factory restructuring. No test app was installed, external repo edited or
+push performed. This completes the contract stage, not the native acceptance gate.
+
 ## Sequential audit implementation: C8 Perforce checkout phases
 
 Shared `9aaf84d` names existing server/workspace/status admission and ordered
