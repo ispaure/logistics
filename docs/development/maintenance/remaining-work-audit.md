@@ -11,6 +11,17 @@ with selection/failure regressions in the static CI job. T2's owner-specific sel
 and storage workflows, with resolution/deduplication contracts. Measurements and historical test results
 below describe the assessment snapshot, before this implementation.
 
+## Verified implementation status
+
+| Item | Completed change | Local commit |
+| --- | --- | --- |
+| T1 | Deterministic lint scope | `75395cc0` |
+| T2 | Shared matrix and specialist owner selections | `75395cc0`, `0b08ebb8` |
+| C1 | Index target/validation/retirement phases; transaction remains centralized | shared `17978f2` |
+
+Items absent from this table remain outstanding. Native/platform acceptance limits
+are recorded with each unit; a passing host suite is not native certification.
+
 ## Assessment
 
 The next substantial improvement is clearer state and dependency ownership, not

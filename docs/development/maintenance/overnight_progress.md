@@ -1,5 +1,17 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: C1 index reconciliation
+
+Shared `17978f2` names target selection, bounded descendant validation and replaced
+record retirement inside the existing module. The transaction entry point is 85
+rather than 136 lines; generation admission, active writer state, rollback/commit
+and snapshot publication retain their ownership. Expanded AST matches all original
+ordered statements and signatures. All 151 index cases across 17 files pass in
+identical before/after order, plus the Logistics index-service case, Ally's 48
+contracts and Blue Hole's two current-source namespace contracts. Shared wiki
+checks, configured lint and whitespace pass. No schema/API or external-consumer
+change, deployment or push occurred. C1 is committed before starting C3.
+
 ## Sequential audit implementation: T2 owner selections
 
 Expanded specialist selections for nine archive/reading/chat/provider/storage
