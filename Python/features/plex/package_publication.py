@@ -35,23 +35,41 @@ class PackagePublication:
         atomic_write_json(self.recovery / 'journal.json', self.state)
 
     def _rollback(self):
-        # Refuse to overwrite an unrelated edit made after our publication.
+        # Check the whole generation before removing any published file. A
+        # conflict in a later member must not discard earlier valid members.
         for name, revision in self.state['published'].items():
-            target = self.destination / name
-            if target.exists() or target.is_symlink():
-                if target.is_symlink() or _signature(target) != revision:
-                    raise RuntimeError(f'Package changed during recovery: {target}')
-                target.unlink()
+            self._check_published(name, revision)
         for name in self.state['originals']:
             backup = self.recovery / name
             if backup.is_symlink() or backup.is_junction() or (backup.exists() and not backup.is_file()):
                 raise RuntimeError(f'Package recovery member is not a regular file: {backup}')
+            target = self.destination / name
+            if backup.exists() and (target.exists() or target.is_symlink()) and name not in self.state['published']:
+                raise RuntimeError(f'Package recovery destination is occupied: {target}')
+        for name, revision in list(self.state['published'].items()):
+            target = self.destination / name
+            self._check_published(name, revision)
+            if target.exists():
+                target.unlink()
+            # Persist removal before restoring originals. Otherwise a later
+            # interrupted restore makes a retry mistake an original for an edit
+            # of our published file. Missing targets are safe to revisit if this
+            # checkpoint itself fails.
+            del self.state['published'][name]
+            self._save()
+        for name in self.state['originals']:
+            backup = self.recovery / name
             if backup.exists():
                 target = self.destination / name
                 if target.exists() or target.is_symlink():
                     raise RuntimeError(f'Package recovery destination is occupied: {target}')
                 os.replace(backup, target)
         shutil.rmtree(self.recovery)
+
+    def _check_published(self, name, revision):
+        target = self.destination / name
+        if target.is_symlink() or target.is_junction() or (target.exists() and _signature(target) != revision):
+            raise RuntimeError(f'Package changed during recovery: {target}')
 
     def publish(self):
         with mutation_lock:
@@ -101,7 +119,7 @@ class PackagePublication:
     def recover(cls, directory):
         """Explicitly roll back an interrupted, uncommitted generation."""
         directory = Path(directory)
-        if directory.is_symlink() or not directory.is_dir():
+        if directory.is_symlink() or directory.is_junction() or not directory.is_dir():
             raise ValueError('Choose an ordinary Plex recovery directory.')
         journal = directory / 'journal.json'
         if journal.is_symlink() or not journal.is_file():

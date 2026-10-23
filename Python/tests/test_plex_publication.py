@@ -88,3 +88,66 @@ class PlexPublicationTests(unittest.TestCase):
                 PackagePublication.recover(recovery)
             self.assertEqual(outside.read_bytes(), b'preserve')
             self.assertFalse((root / 'settings').exists())
+
+    def test_recovery_resumes_after_some_originals_were_restored(self):
+        with TemporaryDirectory() as directory:
+            destination, staging = self.fixture(Path(directory))
+            original = {p.name: p.read_bytes() for p in destination.iterdir()}
+            transaction = PackagePublication(destination, sorted(staging.iterdir()), [destination / 'archive.002'])
+            real_replace = publication.os.replace
+            def replace(source, target):
+                source = Path(source)
+                if source == staging / 'settings' or source == transaction.recovery / 'archive.002':
+                    raise OSError('interrupted promotion and partial rollback')
+                return real_replace(source, target)
+            with patch.object(publication.os, 'replace', side_effect=replace), self.assertRaisesRegex(RuntimeError, 'needs recovery'):
+                transaction.publish()
+            self.assertEqual((destination / 'archive.001').read_bytes(), original['archive.001'])
+            PackagePublication.recover(transaction.recovery)
+            self.assertEqual({p.name: p.read_bytes() for p in destination.iterdir()}, original)
+
+    def test_recovery_conflict_does_not_remove_other_published_members(self):
+        with TemporaryDirectory() as directory:
+            destination, staging = self.fixture(Path(directory))
+            transaction = PackagePublication(destination, ())
+            transaction.recovery.mkdir()
+            names = ['archive.001', 'settings']
+            for name in names:
+                publication.os.replace(destination / name, transaction.recovery / name)
+                publication.os.replace(staging / name, destination / name)
+            transaction.state = dict(schema=1, phase='publishing', originals=names,
+                published={name: publication._signature(destination / name) for name in names})
+            transaction._save()
+            (destination / 'settings').write_bytes(b'external edit')
+            with self.assertRaisesRegex(RuntimeError, 'changed during recovery'):
+                PackagePublication.recover(transaction.recovery)
+            self.assertEqual((destination / 'settings').read_bytes(), b'external edit')
+            self.assertEqual((destination / 'archive.001').read_bytes(), b'new archive.001')
+            self.assertTrue(all((transaction.recovery / name).is_file() for name in names))
+
+    def test_recovery_can_retry_failed_removal_checkpoints(self):
+        for fail_at in (1, 2):
+            with self.subTest(fail_at=fail_at), TemporaryDirectory() as directory:
+                destination, staging = self.fixture(Path(directory))
+                original = {p.name: p.read_bytes() for p in destination.iterdir()}
+                transaction = PackagePublication(destination, ())
+                transaction.recovery.mkdir()
+                names = ['archive.001', 'settings']
+                for name in names:
+                    publication.os.replace(destination / name, transaction.recovery / name)
+                    publication.os.replace(staging / name, destination / name)
+                transaction.state = dict(schema=1, phase='publishing', originals=names,
+                    published={name: publication._signature(destination / name) for name in names})
+                transaction._save()
+                real_write = publication.atomic_write_json
+                count = 0
+                def save(*args, **kwargs):
+                    nonlocal count
+                    count += 1
+                    if count == fail_at:
+                        raise OSError('checkpoint unavailable')
+                    return real_write(*args, **kwargs)
+                with patch.object(publication, 'atomic_write_json', side_effect=save), self.assertRaises(OSError):
+                    PackagePublication.recover(transaction.recovery)
+                PackagePublication.recover(transaction.recovery)
+                self.assertEqual({p.name: p.read_bytes() for p in destination.iterdir()}, original)

@@ -53,7 +53,9 @@ installations may need additional filesystem permissions and ownership handling.
   retain originals and `journal.json` in `.logistics-plex-recovery-<id>` and report
   that path. Inspect it before explicit `PackagePublication.recover(path)` rollback;
   changed published files and occupied restoration targets are preserved for manual
-  resolution. Multi-file visibility is not atomic, and committed cleanup failures
+  resolution. Recovery checks the complete generation before removing its published
+  files and checkpoints their removal before restoring originals, so interrupted
+  rollback can be retried without mistaking restored originals for external edits. Multi-file visibility is not atomic, and committed cleanup failures
   report the retained directory without undoing the valid new generation.
 - Restores extract into a temporary sibling directory before moving the current
   data aside. ZIP entries must stay under `Plex Media Server/`; linked content
