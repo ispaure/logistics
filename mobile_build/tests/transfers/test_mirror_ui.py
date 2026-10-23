@@ -149,7 +149,7 @@ class MirrorUITests(unittest.TestCase):
 
     def test_native_review_replaces_partial_snapshots_and_publishes_final_cleanup(self):
         from features.rclone.transfers.review import ReviewScan
-        from features.rclone.transfers.mobile.review_ui import native_scanner
+        from features.rclone.transfers.mobile.plan import native_scanner
         polled, release, retrying = Event(), Event(), Event()
         class Client:
             def request(self, action, **values):

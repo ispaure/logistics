@@ -106,3 +106,40 @@ class TransferServiceTests(unittest.TestCase):
             self.assertFalse(worker.is_alive())
         self.assertEqual(len(calls), 1)
         self.assertEqual(len(failures), 1)
+
+    def test_runtime_factory_prepares_one_captured_request(self):
+        calls = []
+        request = ReviewRequest('Pull', 'Remote:', '/local', 'fixture')
+        def factory(value):
+            calls.append(value)
+            return TransferPlan(request, lambda emit, cancelled: 'revision', lambda: True,
+                                lambda approved, context: approved)
+        service = TransferService(factory)
+        prepared = service.review('captured request')
+        self.approve(prepared)
+        self.assertIs(service.execute(prepared), request)
+        self.assertEqual(calls, ['captured request'])
+
+    def test_execution_lifetime_is_distinct_from_records_changed_by_execution(self):
+        records, active, checks = [True], [True], []
+        request = ReviewRequest('Pull', 'Remote:', '/local', 'fixture')
+        def execute(approved, context):
+            records[0] = False  # Saving transfer records is an expected mutation.
+            checks.append(context.cancelled())
+            active[0] = False
+            checks.append(context.cancelled())
+        service = TransferService()
+        prepared = service.prepare(TransferPlan(request, lambda emit, cancelled: 'revision',
+            lambda: records[0] and active[0], execute, active=lambda: active[0]))
+        self.approve(prepared)
+        service.execute(prepared)
+        self.assertEqual(checks, [False, True])
+
+    def test_invalid_request_does_not_start_comparison(self):
+        calls = []
+        service = TransferService()
+        request = ReviewRequest('Pull', 'Remote:', '/local', 'fixture')
+        with self.assertRaisesRegex(ValueError, 'changed'):
+            service.prepare(TransferPlan(request, lambda *args: calls.append(args),
+                                         lambda: False, lambda *args: None))
+        self.assertEqual(calls, [])

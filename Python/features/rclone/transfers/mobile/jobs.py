@@ -337,6 +337,12 @@ class MirrorJobs:
         done = Event()
         def monitor():
             while not done.wait(.2):
+                if cancelled():
+                    try:
+                        client.cancel()
+                    except (OSError, ValueError):
+                        pass
+                    return
                 try:
                     state = client.request('mirror_progress', run=run)
                     progress(phase=state['phase'] or 'Discovering / checking files', files=state.get('files', 0),
@@ -349,6 +355,7 @@ class MirrorJobs:
         watcher.start()
         try:
             progress(phase='Discovering / checking files', files=0, done=0, total=0)
+            self.check(client, job, cancelled)
             result = self.request(client, job, 'mirror_sync', remote=job['remote'], path=job['prefix'],
                 identity=job['identity'], local_path=str(self.guard(self.target(job)).resolve()), run=run, push=push,
                 **(options or TransferOptions(excludes=DEFAULT_EXCLUDES)).bridge_arguments(push=push))

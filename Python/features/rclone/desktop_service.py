@@ -3,6 +3,7 @@ from pathlib import Path
 from . import session
 from .service import CredentialGrant, CredentialService, LocalCryptService, RcloneService
 from .remote_access import DesktopRemoteLocation, RemoteService
+from .transfers.service import TransferService
 
 
 class DesktopCredentials:
@@ -46,5 +47,11 @@ def _open_remote(location):
     return RemoteResources(location.config, location.remote, binary=binary)
 
 
+def _transfer_plan(request):
+    from .transfers.desktop import build_plan
+    return build_plan(request, service.credentials)
+
+
 service = RcloneService(CredentialService(DesktopCredentials()),
-                        LocalCryptService(_open_localcrypt), RemoteService(_open_remote))
+                        LocalCryptService(_open_localcrypt), RemoteService(_open_remote),
+                        TransferService(_transfer_plan))

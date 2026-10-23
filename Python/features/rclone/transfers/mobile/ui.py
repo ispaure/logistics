@@ -35,6 +35,31 @@ def coalesced_progress(loop, publish):
     return progress
 
 
+async def _transfer_result(worker, cancel, client):
+    """Cancellation keeps ownership until the native writer has retired."""
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        cancel.set()
+        try:
+            client.cancel()
+        except (OSError, ValueError):
+            pass
+        while not worker.done():
+            try:
+                await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                continue
+            except Exception:
+                break
+        # Consume a late failure without replacing the caller's cancellation.
+        try:
+            worker.result()
+        except BaseException:
+            pass
+        raise
+
+
 class MirrorUI(TransferReviewUI):
     def register_transfer_status(self, view, *, visible_when=lambda: True):
         import weakref
@@ -342,8 +367,11 @@ class MirrorUI(TransferReviewUI):
         progress = coalesced_progress(self.loop, lambda values: self.publish_mirror_progress(epoch, values))
         result = None
         try:
-            result = await asyncio.to_thread(work, client, cancel.is_set, progress)
-            if not self.active_host or client.generation != generation:
+            worker = asyncio.create_task(asyncio.to_thread(work, client, cancel.is_set, progress))
+            result = await _transfer_result(worker, cancel, client)
+            if not self.active_host or self.cloud_client is not client or client.generation != generation:
+                result = None
+                self.transfer_message = 'Sync stopped because the connection changed; completed destination changes remain.'
                 return False
             if operation == 'push':
                 self.transfer_message = f'Push sync verified: {result} file(s) sent. Destination-only entries were removed.'
@@ -353,6 +381,9 @@ class MirrorUI(TransferReviewUI):
                                          if status == 'conflict' else 'Pull sync complete. The local folder now matches the remote.')
             self.transfer_message = '100% · ' + self.transfer_message
             return True
+        except asyncio.CancelledError:
+            self.transfer_message = 'Sync cancelled; completed destination changes remain.'
+            raise
         except Exception as error:
             self.transfer_message = 'Sync stopped; completed destination changes remain. ' + str(error)[:350]
             return False

@@ -55,9 +55,8 @@ class LocalCryptService:
 
 class RcloneService:
     """Retained composition root; browser navigation stays with each browser."""
-    def __init__(self, credentials, localcrypt, remotes):
-        from .transfers.service import TransferService
+    def __init__(self, credentials, localcrypt, remotes, transfers):
         self.credentials = credentials
         self.localcrypt = localcrypt
         self.remotes = remotes
-        self.transfers = TransferService()
+        self.transfers = transfers

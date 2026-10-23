@@ -47,6 +47,47 @@ class RemoteNativeBridgeTests(unittest.TestCase):
                 self.assertEqual(comic.page(0), ('image', image.getvalue()))
                 comic.source.close()
 
+    def test_shared_service_reviews_and_executes_native_regular_and_crypt_transfers(self):
+        from features.rclone.mobile.service import native_service
+        from features.rclone.transfers.mobile.jobs import MirrorJobs
+        from features.rclone.transfers.mobile.plan import NativeTransferRequest
+        from features.rclone.transfers.transfer_options import TransferOptions
+        client = CloudClient(library=os.environ['LOGISTICS_REMOTE_BRIDGE'])
+        self.addCleanup(client.clear)
+        with TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            upload = root / 'upload'
+            upload.mkdir()
+            (upload / 'note.txt').write_bytes(b'service transfer fixture')
+            package = root / 'Synthetic.zip'
+            with ZipFile(package, 'w') as archive:
+                archive.writestr('Cloud.txt', '[Cloud]\ntype=memory\n')
+                archive.writestr('Secret.txt', '[Secret]\ntype=crypt\nremote=Cloud:encrypted\n'
+                    'password=kbLdY_D-MRsrDH6_akD3SfOzlJ0VseUk2jfUrywMSTOLmTrSvFOxCkP94a-Ul-w\n')
+            client.import_package(LocalDocuments(), package, '', remember=False)
+            service = native_service(client).transfers
+            store = MirrorJobs(root)
+            for remote in ('Cloud', 'Secret'):
+                client.request('mirror_sync', remote=remote, path='folder',
+                    identity=client.connection_identity(remote), run=uuid4().hex,
+                    local_path=str(upload), push=True, decrypted=True)
+                job = store.prepare_review(client, remote, 'folder')
+                for push, new in ((False, True), (True, False)):
+                    prepared = service.review(NativeTransferRequest(store, job, push, new,
+                        TransferOptions(copy_links=not job['crypt']), client.generation))
+                    self.assertTrue(prepared.review.scan.retired.wait(10))
+                    self.assertTrue(prepared.review.approve())
+                    self.assertTrue(prepared.review.scan.retired.wait(10))
+                    self.assertTrue(prepared.review.approved)
+                    service.execute(prepared)
+                self.assertTrue(store.target(job).is_dir())
+                self.assertIn(job['id'], store.jobs)
+                reader = RemoteReaders(client, remote).open('folder/note.txt')
+                try:
+                    self.assertEqual(reader.data, b'service transfer fixture')
+                finally:
+                    reader.source.close()
+
 
 if __name__ == '__main__':
     unittest.main()

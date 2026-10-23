@@ -1,8 +1,10 @@
 """Remote service lifetimes and publication races without network access."""
 import base64
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 import unittest
+from unittest.mock import patch
 
 from features.rclone.mobile.service import native_service
 from features.rclone.mobile.remote_readers import RemoteSource
@@ -136,3 +138,13 @@ class RemoteServiceTests(unittest.TestCase):
         self.assertTrue(source.closed)
         self.assertEqual(self.client.cached, {})
         self.assertIsNone(source.cache_token)
+
+    def test_cancelled_reader_setup_closes_its_independent_resource(self):
+        readers = self.open().readers()
+        opened = readers.resource.reopen()
+        with patch.object(readers.resource, 'reopen', return_value=opened), patch(
+                'features.rclone.mobile.remote_readers.direct_kind', side_effect=asyncio.CancelledError):
+            with self.assertRaises(asyncio.CancelledError):
+                readers.open('note.txt')
+        self.assertTrue(opened.closed)
+        self.assertFalse(readers.resource.closed)

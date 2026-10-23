@@ -39,6 +39,7 @@
     "transfers/mobile/controller.py",
     "transfers/mobile/jobs.py",
     "transfers/mobile/review_ui.py",
+    "transfers/mobile/plan.py",
     "transfers/mobile/ui.py",
     "transfers/review.py",
     "transfers/scope.py",

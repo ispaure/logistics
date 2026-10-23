@@ -28,6 +28,7 @@ class TransferPlan:
     scanner: Callable = field(repr=False)
     valid: Callable[[], bool] = field(repr=False)
     execute: Callable = field(repr=False)
+    active: Callable[[], bool] | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True, eq=False)
@@ -48,11 +49,20 @@ class TransferService:
     Retrying execution, including after a failed preflight, requires a new review.
     An approval cannot be moved to a different plan, runtime or set of options.
     """
-    def __init__(self):
+    def __init__(self, plan_factory=None):
+        self._plan_factory = plan_factory
         self._prepared = WeakKeyDictionary()
         self._lock = RLock()
 
+    def review(self, request) -> PreparedTransfer:
+        """Resolve a captured platform request without presentation or execution."""
+        if self._plan_factory is None:
+            raise TypeError('This transfer service has no platform adapter.')
+        return self.prepare(self._plan_factory(request))
+
     def prepare(self, plan: TransferPlan) -> PreparedTransfer:
+        if not plan.valid():
+            raise ValueError('Connection or target changed. Review the transfer again.')
         review = ReviewSession(plan.request, plan.scanner, plan.valid)
         prepared = PreparedTransfer(plan.request, review)
         with self._lock:
@@ -71,5 +81,9 @@ class TransferService:
                     or review.valid is not plan.valid or not review.approved):
                 raise ValueError('Connection or review changed. Review the transfer again.')
             approval.used = True
-        check_cancelled(context.cancelled)
-        return plan.execute(plan.request, context)
+        # Review bindings include records which execution may legitimately save.
+        # The active binding tracks only access lifetime throughout execution.
+        active = plan.active or plan.valid
+        execution = TransferContext(lambda: context.cancelled() or not active(), context.progress)
+        check_cancelled(execution.cancelled)
+        return plan.execute(plan.request, execution)

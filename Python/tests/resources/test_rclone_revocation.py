@@ -151,6 +151,27 @@ class CredentialRevocationTests(QtTestCase):
                     window.close()
                     self.app.processEvents()
 
+    def test_gui_transfer_retains_the_callers_access_guard_until_completion(self):
+        from commonUtils.ui.tasks.process_progress import open_process
+        active = [True]
+        with TemporaryDirectory() as directory:
+            ready = Path(directory) / 'ready'
+            script = 'from pathlib import Path; import sys,time; Path(sys.argv[1]).touch(); time.sleep(30)'
+            window = open_process('guard fixture', sys.executable, ['-u', '-c', script, str(ready)])
+            sync._watch_transfer(window, Path(directory) / 'saved.conf', lambda: False,
+                                 lambda: not active[0], session_bound=False)
+            try:
+                self.wait_until(ready.exists)
+                active[0] = False
+                self.wait_until(lambda: not window.busy)
+                self.assertEqual(window.result.state, 'cancelled')
+                self.assertFalse(window._session_guard.timer.isActive())
+            finally:
+                window.runner.cancel()
+                self.wait_until(lambda: not window.busy)
+                window.close()
+                self.app.processEvents()
+
     def test_localcrypt_commands_poll_revocation_and_discard_late_plaintext(self):
         # Exercise the subprocess boundary without requiring a crypt installation.
         provider = self.provider()

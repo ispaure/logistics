@@ -178,7 +178,7 @@ class RemoteReaders:
                 reader = PrivateReader(key, source=source)
             reader.key, reader.password, reader.read_only = key, password, True
             return reader
-        except Exception:
+        except BaseException:
             source.close()
             raise
 

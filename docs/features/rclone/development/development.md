@@ -379,14 +379,19 @@ empty when they run.
 
 ## Captured transfer plans
 
-`transfers/service.py` supplies the shared `TransferService`. Both desktop
-`transfers/workflow.py` and native `transfers/mobile/review_ui.py` capture a
+`transfers/service.py` supplies the shared `TransferService`. Its runtime adapter
+turns a captured `DesktopTransferRequest` or `NativeTransferRequest` into a
 `TransferPlan` containing the immutable `ReviewRequest`, comparison adapter,
-binding check and execution adapter. `RcloneService.transfers` retains the
+approval binding, execution lifetime and execution adapter. Desktop
+`transfers/desktop.py` owns plan assembly and crypt comparison resources;
+`transfers/workflow.py` presents the review. Native `transfers/mobile/plan.py`
+owns the comparison transport, captured mapping and execution binding;
+`transfers/mobile/review_ui.py` presents the review. `RcloneService.transfers` retains the
 approval authority for its runtime. Browser/UI state and engine execution stay
 with their existing owners.
 
-`prepare(plan)` starts the existing shared review lifecycle and returns a
+`review(request)` resolves the platform plan and starts the shared review lifecycle.
+`prepare(plan)` remains the lower-level admission API for explicit adapters. Both return a
 `PreparedTransfer`. Presentation confirms that review; it cannot authorize a
 transfer by returning a boolean. `execute(prepared, context)` admits the captured
 executor once, passing the original options and operation-scoped cancellation and
@@ -400,8 +405,44 @@ LocalCrypt authentication, link, destination and connection checks. The plan doe
 not make remote Sync atomic or add rollback to partially completed transfers.
 Desktop session validity now captures a credential generation rather than
 comparing credential values, so reloading identical values invalidates old plans.
-`test_transfer_service.py`, `test_rclone_review.py` and mobile `test_mirror_ui.py`
-cover this handoff alongside the existing engine/preflight suites.
+The service checks request validity before starting comparison. Approval validity
+includes the original copy records and mapping signature. Execution lifetime is
+separate: saving those records during a valid transfer must not cancel its own
+operation. The service combines the caller's cancellation with the captured
+credential and host lifetime before invoking the adapter and throughout its
+preflight and transfer work. Native admission also binds the collection target;
+a relocated target cannot receive the approved transfer. Mapping dictionaries and
+desktop launch flags are copied into immutable request snapshots.
+
+Desktop rechecks access after its association-publication hook and before
+preflight. Each crypt comparison owns its provider until the scanner retires.
+Saved configs are read into a private credential snapshot for each comparison
+and execution, with the original file revision rechecked before use. Rclone uses
+that snapshot through its private environment and null config, so OAuth refreshes
+cannot rewrite the saved file or invalidate their own approval. Comparisons
+release snapshots when their workers retire. Synchronous execution releases its
+snapshot on return; an accepted GUI process retains it until completion or window
+destruction. An integrated process window retains a GUI-thread access/cancellation
+monitor until the process completes, including saved-config transfers. A GUI launch still
+returns acceptance rather than the process's eventual success; its progress
+window owns that result. Legacy detached-terminal calls do not gain a completion
+handle from this service. Service execution with private credentials runs
+synchronously when an integrated GUI window is unavailable.
+
+Native execution still uses `MirrorJobs.execute_review` and its mandatory path,
+record, link, LocalCrypt authentication and verification checks. Its progress
+monitor interrupts a native transfer when execution cancellation becomes active.
+Cancelling the UI coroutine signals cancellation and keeps the transfer busy
+until its worker retires, consuming late results and failures. Cancelling plan
+preparation also waits for its worker and any late comparison to retire before
+releasing the host, so late native cancellation cannot target the next transfer.
+
+`test_transfer_service.py`, `test_transfer_adapters.py`, `test_rclone_review.py`,
+`test_rclone_revocation.py`, mobile `test_native_transfer_service.py` and
+`test_mirror_ui.py` cover the handoff alongside the existing engine/preflight
+suites. `test_remote_bridge_native.py` additionally exercises reviewed native
+ordinary and crypt Pull/Push against an in-memory remote. These are host tests,
+not physical-device validation.
 
 ## Shared remote access
 

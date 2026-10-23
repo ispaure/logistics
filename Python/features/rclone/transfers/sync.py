@@ -12,8 +12,8 @@ from features.rclone import executable, session
 from features.rclone.transfers.transfer_options import TransferOptions
 
 
-def _watch_session_transfer(window, config_path, revoked):
-    """Deliver cross-thread revocation to the GUI process on its owning thread."""
+def _watch_transfer(window, config_path, revoked, cancelled, *, session_bound):
+    """Keep the captured access/cancellation binding alive with the GUI process."""
     from commonUtils.ui import pyside as qt
 
     class Guard(qt.QObject):
@@ -23,29 +23,37 @@ def _watch_session_transfer(window, config_path, revoked):
             self.stop.emit()
 
         def release(self, *_):
+            self.timer.stop()
             self.unsubscribe()
+
+        def poll(self):
+            if revoked() or cancelled():
+                self.timer.stop()
+                self.invalidate()
 
     guard = Guard(window)
     guard.stop.connect(window.runner.cancel, qt.Qt.ConnectionType.QueuedConnection)
-    guard.unsubscribe = session.on_forget(config_path, guard.invalidate)
+    guard.unsubscribe = session.on_forget(config_path, guard.invalidate) if session_bound else lambda: None
+    guard.timer = qt.QTimer(guard)
+    guard.timer.timeout.connect(guard.poll)
+    guard.timer.start(100)
     window.runner.completed.connect(guard.release)
     window.destroyed.connect(guard.release)
     window._session_guard = guard
     # A reload between launch and subscription must not attach old work to new keys.
-    if revoked():
-        guard.invalidate()
+    guard.poll()
     if not window.busy:
         guard.release()
 
 
 def rclone_sync(source_path, destination_path, *, config_path, query=False, wait_for_output=False,
                 dry_run=False, track_renames=False, bw_limit=None, integrated=True, copy_links=True,
-                cancelled=lambda: False, executable_path=None, excludes=None):
+                cancelled=lambda: False, executable_path=None, excludes=None, on_launch=None):
     """Preflight every local-to-remote push before starting a transfer."""
     options = dict(source_path=source_path, destination_path=destination_path, config_path=config_path,
                    query=query, wait_for_output=wait_for_output, dry_run=dry_run, track_renames=track_renames,
                    bw_limit=bw_limit, integrated=integrated, copy_links=copy_links, cancelled=cancelled,
-                   executable_path=executable_path)
+                   executable_path=executable_path, on_launch=on_launch)
     # Existing local paths also support synthetic/local rclone remotes in tests.
     is_push = Path(source_path).is_dir() and ':' in str(destination_path) and not Path(destination_path).is_absolute()
     if is_push:
@@ -108,7 +116,8 @@ def _run_sync(
     copy_links=True,
     cancelled=lambda: False,
     executable_path=None,
-    excludes=()
+    excludes=(),
+    on_launch=None
 ):
     """Synchronize using one explicit config.
 
@@ -179,8 +188,10 @@ def _run_sync(
                          context={'operation': 'Sync (dry run)' if dry_run else 'Sync', 'source': source_path_str,
                                   'destination': destination_path_str, 'dry_run': dry_run},
                          **({'environment': environment} if environment is not None else {}))
-            if environment is not None:
-                _watch_session_transfer(window, credential_path, revoked)
+            _watch_transfer(window, credential_path, revoked if environment is not None else lambda: False,
+                            cancelled, session_bound=environment is not None)
+            if on_launch is not None:
+                on_launch(window)
             return True
 
     if environment is not None:

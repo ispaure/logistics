@@ -1,50 +1,41 @@
 """Native presentation over the same review state and decisions as desktop."""
 import asyncio
-from hashlib import sha256
-import json
-from threading import Event, Thread
-from uuid import uuid4
 
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 
-from features.rclone.transfers.review import ReviewRequest, replace_changes
 from features.rclone.transfers.transfer_options import TransferOptions, load_options, save_options
-from features.rclone.transfers.service import TransferPlan, TransferContext
+from features.rclone.transfers.service import TransferContext
+from .plan import NativeTransferRequest
 
 
-def native_scanner(client, job, local_path, options=TransferOptions(), cleanup_plan=lambda cancelled: {}):
-    def scan(emit, cancelled):
-        run, done = uuid4().hex, Event()
-        def monitor():
-            while not done.wait(.1):
-                if cancelled():
-                    client.cancel()
-                    return
-                try:
-                    replace_changes(emit, client.request('mirror_review_progress', run=run)['changes'])
-                except (OSError, ValueError, KeyError):
-                    pass
-        watcher = Thread(target=monitor, daemon=True)
-        watcher.start()
+async def _prepare(transfers, transfer):
+    task = asyncio.create_task(asyncio.to_thread(transfers.review, transfer))
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        # Keep the host busy until late preparation and comparison retire. A
+        # late native cancellation must not interrupt the next transfer instead.
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                continue
+            except Exception:
+                break
         try:
-            if cancelled():
-                return ''
-            cleanup = cleanup_plan(cancelled) if job['_push'] else {}
-            result = client.request('mirror_review', remote=job['remote'], path=job['prefix'],
-                identity=job['identity'], local_path=str(local_path.resolve()), run=run,
-                push=job['_push'], decrypted=not job['crypt'], cleanup_paths=list(cleanup),
-                **options.bridge_arguments(push=job['_push']))
-            done.set()
-            watcher.join()
-            replace_changes(emit, [*result['changes'], *[('cleanup', label) for label, _ in cleanup.values()]])
-            return sha256((result['fingerprint'] + json.dumps(cleanup, sort_keys=True)).encode()).hexdigest()
-        finally:
-            done.set()
-            watcher.join()
-            client.request('mirror_review_clear', run=run)
-    return scan
+            review = task.result().review
+        except BaseException:
+            pass
+        else:
+            review.cancel()
+            while not review.scan.retired.is_set():
+                try:
+                    await asyncio.sleep(.05)
+                except asyncio.CancelledError:
+                    continue
+        raise
 
 
 class TransferReviewUI:
@@ -154,37 +145,15 @@ class TransferReviewUI:
         else:
             job = await asyncio.to_thread(store.prepare_review, client, remote, folder, storage=storage)
         key = job['id'] if job['id'] in store.jobs else None
-        records = store.original
-        signature = self.mirror_job_signature(job)
-        def valid():
-            return (self.active_host and self.cloud_client is client and client.generation == generation
-                    and store.original == records
-                    and (key is None or self.mirror_job_signature(store.jobs.get(key)) == signature))
-        online = job['remote'] + ':' + folder
-        prefix = folder
-        if key is not None:
-            prefix = job['prefix']
-            if job['crypt']:
-                prefix = (await asyncio.to_thread(client.request, 'crypt_path', remote=remote, path=prefix,
-                    identity=job['cipher_identity'], directory=True, decode=True))['path']
-            online = job['remote'] + ':' + prefix
-        local = ('LocalCrypt/' if job['crypt'] else 'Local/') + job['target']
-        if job['crypt'] and prefix:
-            local += '/' + prefix
         saved = self.transfer_options()
         options = TransferOptions(track_renames=saved.track_renames, bw_limit=saved.bw_limit,
             copy_links=not job['crypt'], excludes=saved.excludes if push else ())
-        request = ReviewRequest('Push' if push else 'Pull', local if push else online,
-            online if push else local, job['identity'], options)
-        scanner = native_scanner(client, dict(job, _push=push), store.guard(store.target(job)), options,
-                                 cleanup_plan=lambda cancelled: store.cleanup_plan(job, client, cancelled))
         from features.rclone.mobile.service import native_service
         transfers = native_service(client).transfers
-        def execute(approved, context):
-            return store.execute_review(job, client, push=push, new=key is None,
-                                        options=approved.options, cancelled=context.cancelled,
-                                        progress=context.progress)
-        prepared = transfers.prepare(TransferPlan(request, scanner, valid, execute))
+        transfer = NativeTransferRequest(store, job, push, key is None, options, generation,
+            host_active=lambda: self.active_host and self.cloud_client is client)
+        prepared = await _prepare(transfers, transfer)
+        request = prepared.request
         session = prepared.review
         self.transfer_busy, self.transfer_notification = True, True
         self.set_cloud_busy(True)
@@ -225,7 +194,7 @@ class TransferReviewUI:
         try:
             while True:
                 state = session.poll()
-                if not valid():
+                if not session.valid():
                     paths.text = 'Connection locked or changed.'
                     details.value = ''
                 else:

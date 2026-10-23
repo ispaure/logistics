@@ -61,9 +61,11 @@ class RcloneProgressTests(QtTestCase):
             destination = Path(temp) / 'destination'
             with patch('features.rclone.transfers.sync.executable.ensure_rclone', return_value=Path('/rclone')), \
                     patch('commonUtils.ui.tasks.process_progress.open_process') as opened, \
+                    patch('features.rclone.transfers.sync._watch_transfer') as watch, \
                     patch('features.rclone.transfers.sync.cmdShellWrapper.exec_cmd') as console:
                 self.assertTrue(rclone_sync('Remote:', destination, config_path='/selected.conf'))
                 console.assert_not_called()
+                watch.assert_called_once()
                 self.assertEqual(Path(opened.call_args.args[1]), Path('/rclone'))
                 self.assertIn('/selected.conf', opened.call_args.args[2])
                 self.assertTrue(destination.is_dir())

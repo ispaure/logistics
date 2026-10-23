@@ -57,6 +57,11 @@ def native_service(client):
                 raise TypeError('Choose a native remote location.')
             from .remote_resources import NativeRemoteResources
             return NativeRemoteResources(client, location)
+        def transfer_plan(request):
+            from features.rclone.transfers.mobile.plan import build_plan
+            return build_plan(client, request, client._rclone_service.credentials)
+        from features.rclone.transfers.service import TransferService
         client._rclone_service = RcloneService(CredentialService(NativeCredentials(client)),
-                                               LocalCryptService(open_resource), RemoteService(open_remote))
+                                               LocalCryptService(open_resource), RemoteService(open_remote),
+                                               TransferService(transfer_plan))
     return client._rclone_service
