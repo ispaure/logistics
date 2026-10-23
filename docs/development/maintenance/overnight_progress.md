@@ -1239,3 +1239,32 @@ Guarded LM move commit: `572250fe`.
 - All 18 Blender page cases and five documentation checks pass; configured lint
   passes. Mobile controller methods inspected already have cohesive owners and
   were not split merely for their line counts.
+
+Blender layout commit: `84597674`.
+
+## ZIP publication and selection contracts
+
+- ZIP editing checked source identity before staged fsync/chmod and the final
+  cancellation callback. Two deterministic fixture writers in that later window
+  replaced newer archive bytes before the fix. The identity guard now runs
+  immediately before replacement, after those callbacks. This remains optimistic
+  validation, not a lock against arbitrary concurrent writers. Shared `ba82c4a`.
+- Both late-change profiles fail on the prior implementation in desktop and
+  mobile Python, then pass with the fix. All 24 archive cases and 13 archive
+  workspace UI cases pass. A temporary candidate's first broader probe used
+  copied globals and missed an existing monkeypatch; correcting the probe to use
+  the real module globals passed all cases. The first tracked regression copy
+  omitted its local import; that fixture error was corrected before commit.
+- A one-pass removal iterator was exhausted by the first archive member, leaving
+  later selected files/directories untouched. Capture the removal selection once
+  before scanning. Tuple/list controls pass before; the iterator regression fails
+  before and passes after. All 25 archive cases and both mobile plain-ZIP profiles
+  pass. Shared `9a9ea65`; no archive schema/encryption policy changed.
+- Follow-up review binds the resize-triggered breadcrumb timer to its Qt owner
+  as well as the set-paths timer. Existing six polish cases pass; shared `84ed1c8`.
+  Configured lint passes. Blue Hole exact-copy verification and 33 adapters pass;
+  its existing embedded driver now includes the two new portable ZIP profiles.
+
+Embedded result: 145 cases on Blender 4.5.1 / Python 3.11.11, 144 passing and
+one filesystem skip. Both new ZIP methods execute there without optional
+encryption packages. Target Blender 5.2.2 registration is still not claimed.
