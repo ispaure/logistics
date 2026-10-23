@@ -17,7 +17,7 @@ Application policies and orchestration live here. Reusable mechanisms and their 
 
 Portable document preparation must import without Qt, Toga or the mobile application. Feature-specific format rules stay with Books/Comics; encrypted storage and bounded Markdown resource loading stay with rclone. Hosts retain window/navigation, publication and recovery policy.
 
-Start with `test_document_preparation.py`, `test_feature_boundaries.py`, `test_editor_resource_picker.py`, `test_folder_safety.py` and `test_folder_sources_ui.py` in `Python/tests/`, plus mobile picker/workspace/packaging checks. Tests retain their current flat discovery layout.
+Start with `test_document_preparation.py`, `test_feature_boundaries.py`, `test_editor_resource_picker.py`, `test_folder_safety.py` and `test_folder_sources_ui.py` in `Python/tests/`, plus mobile picker/workspace/packaging checks. Use the recursive runner or `dev.py` selectors; test files live under the subject folders listed in the [test map](testing.md#desktop-test-folders).
 
 ## Typed mobile presentation ports
 

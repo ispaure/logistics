@@ -55,6 +55,44 @@ def feature_edges(root):
     return host, feature
 
 
+def portable_sources(root, policy):
+    """Resolve reviewed modules/packages deterministically; never follow source links."""
+    source_root = root / 'Python'
+    found = {}
+    def linked(path):
+        current = source_root
+        for part in path.relative_to(source_root).parts:
+            current = current / part
+            if current.is_symlink():
+                return True
+        return False
+    for key, package in [('portable_modules', False), ('portable_packages', True)]:
+        for name in policy.get(key, []):
+            if not re.fullmatch(r'[A-Za-z_]\w*(\.[A-Za-z_]\w*)*', name):
+                raise ValueError(f'Invalid portable module: {name!r}')
+            relative = Path(*name.split('.'))
+            target = source_root / relative if package else (source_root / relative).with_suffix('.py')
+            if linked(target):
+                raise ValueError(f'Portable source cannot traverse links: {name}')
+            if not target.exists() or (package and not target.is_dir()) or (not package and not target.is_file()):
+                raise ValueError(f'Portable source does not exist: {name}')
+            paths = sorted(target.rglob('*.py')) if package else [target]
+            for path in paths:
+                if '__pycache__' in path.parts:
+                    continue
+                if linked(path):
+                    raise ValueError(f'Portable source cannot traverse links: {path.relative_to(source_root)}')
+                parts = path.relative_to(source_root).with_suffix('').parts
+                module = '.'.join(parts[:-1] if parts[-1] == '__init__' else parts)
+                found[module] = path
+    return dict(sorted(found.items()))
+
+
+def presentation_dependency(module):
+    return (module.split('.')[0] in {'PySide6', 'toga', 'desktop', 'mobile'}
+            or module == 'commonUtils.ui' or module.startswith('commonUtils.ui.'))
+
+
 def check(root=ROOT):
     policy = json.loads((root / 'Scripts/architecture.json').read_text())
     host, feature = feature_edges(root)
@@ -63,14 +101,18 @@ def check(root=ROOT):
                                     ('cross-feature', feature, policy['feature_dependencies'])]:
         for edge in sorted(actual - {tuple(edge) for edge in allowed}):
             errors.append(f'Unapproved {label} dependency: {edge[0]} -> {edge[1]}')
-    for name in policy['portable_modules']:
-        path = root / 'Python' / (name.replace('.', '/') + '.py')
-        for module in references(path, root / 'Python'):
-            if module.split('.')[0] in {'PySide6', 'toga', 'desktop', 'mobile'} or module.startswith('commonUtils.ui'):
+    try:
+        portable = portable_sources(root, policy)
+    except ValueError as error:
+        portable = {}
+        errors.append(str(error))
+    for name, path in portable.items():
+        for module in sorted(references(path, root / 'Python')):
+            if presentation_dependency(module):
                 errors.append(f'Portable module {name} imports presentation: {module}')
     for error in errors:
         print(error)
-    print(f'Architecture: {len(host)} host adapters, {len(feature)} feature edges; {len(errors)} violations.')
+    print(f'Architecture: {len(host)} host adapters, {len(feature)} feature edges, {len(portable)} portable modules; {len(errors)} violations.')
     return int(bool(errors))
 
 

@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from Scripts.architecture import ROOT, check, feature_edges, references
+from Scripts.architecture import ROOT, check, feature_edges, portable_sources, references
 
 
 class ArchitectureTests(unittest.TestCase):
@@ -57,6 +57,45 @@ class ArchitectureTests(unittest.TestCase):
                     with redirect_stdout(output):
                         self.assertEqual(check(root), 1)
                     self.assertIn('imports presentation', output.getvalue())
+
+    def test_portable_package_includes_new_nested_modules_and_deduplicates(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / 'Python/features/books/core'
+            folder.mkdir(parents=True)
+            (folder / '__init__.py').write_text('')
+            (folder / 'nested').mkdir()
+            module = folder / 'nested/data.py'
+            module.write_text("FACTORY = 'toga:Box'\n")
+            policy = {'portable_modules': ['features.books.core.nested.data'],
+                      'portable_packages': ['features.books.core']}
+            self.assertEqual(list(portable_sources(root, policy)),
+                             ['features.books.core', 'features.books.core.nested.data'])
+            (root / 'Scripts').mkdir()
+            import json
+            (root / 'Scripts/architecture.json').write_text(json.dumps(
+                dict(policy, host_adapters=[], feature_dependencies=[])))
+            from contextlib import redirect_stdout
+            from io import StringIO
+            with redirect_stdout(StringIO()) as output:
+                self.assertEqual(check(root), 1)
+            self.assertIn('imports presentation: toga', output.getvalue())
+
+    def test_portable_scope_rejects_missing_malformed_and_linked_sources(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ('missing.module', '../outside'):
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    portable_sources(root, {'portable_modules': [name]})
+            folder = root / 'Python/features/books'
+            folder.mkdir(parents=True)
+            outside = root / 'outside.py'
+            outside.write_text('')
+            (folder / 'linked.py').symlink_to(outside)
+            with self.assertRaisesRegex(ValueError, 'cannot traverse links'):
+                portable_sources(root, {'portable_modules': ['features.books.linked']})
+            with self.assertRaisesRegex(ValueError, 'cannot traverse links'):
+                portable_sources(root, {'portable_packages': ['features.books']})
 
     def test_external_feature_link_is_not_scanned(self):
         with TemporaryDirectory() as temporary:

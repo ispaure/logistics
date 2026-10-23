@@ -418,3 +418,15 @@ The architecture check includes module-qualified imports and literal
 also reject deferred commonUtils UI, PySide6 and Toga references. It inspects
 syntax without importing features or optional toolkits; dynamically constructed
 strings still require source review. The reviewed edge policy is unchanged.
+
+## Portable import matrix
+
+Run `python dev.py test desktop test_portable_imports.py` and
+`python dev.py test desktop test_architecture_contracts.py` after changing portable
+owners or their policy. The import matrix uses fresh child interpreters and isolated
+XDG directories per owner, actively rejecting presentation imports even when the
+application catches `ImportError`. Its probe regression demonstrates an indirect,
+caught import is still a failure. The static CI job runs both checks without
+installing a desktop toolkit. See the [portable owner policy](architecture.md#portable-owner-policy)
+for selection and limits; the document smoke suite additionally exercises real
+format operations without desktop/image packages.

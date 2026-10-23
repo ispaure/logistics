@@ -370,3 +370,23 @@ rather than creating a second feature registry. Keep `DestinationRail.tools_menu
 and the Misc `tools` glyph as the reserved nested-destination fallback.
 `test_document_launchers` and main-window/navigation checks
 cover visibility, order, chooser routing and disabled features.
+
+## Portable owner policy
+
+`Scripts/architecture.json` declares individual `portable_modules` and recursive
+`portable_packages`. Packages cover shared persistence, operation/resource and
+filesystem-index mechanisms plus Books library and Comics collection models;
+individual modules cover document/folder policies, text documents, LM domain/session
+logic and rclone credential/remote contracts. New Python files inside a declared
+package are checked automatically. Missing/malformed declarations and linked source
+paths fail rather than silently reducing coverage. Presentation adapters and
+registry-driven folder discovery/workspace composition remain outside this scope.
+
+`dev.py architecture` statically checks direct imports and deferred literal factories
+in every selected module. `test_portable_imports.py` additionally imports each owner
+in a fresh interpreter with Qt, Toga, host packages and `commonUtils.ui` blocked,
+including transitive and caught attempts. These checks establish import safety and
+reviewed dependency boundaries, not that invoking every optional operation avoids
+presentation or external dependencies. Existing `CredentialBackend`, `RemoteSession`,
+resource-provider and mobile-presentation protocols remain the narrow contracts;
+there is no parallel interface framework or blanket typing migration.

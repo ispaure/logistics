@@ -1,5 +1,23 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: T3 portable owner coverage
+
+Architecture policy expands eight direct modules to 81 reviewed modules, including
+recursive shared persistence/operations/resources/index and Books/Comics model
+packages. New package files enter automatically; malformed/missing/linked sources
+fail selection. Fresh child interpreters per owner reject direct, transitive and
+even caught Qt/Toga/host/shared-UI import attempts. A regression proves the caught
+transitive case. Initial checks caught a fixture-path bug involving macOS `/var`
+and correctly exposed registry-driven folder discovery as composition rather than
+portable core; the final scope explicitly excludes it and workspace adaptation.
+No production import behavior changed. Existing resource, credential, remote and
+presentation protocols remain canonical rather than introducing duplicate types.
+Twelve architecture cases and the two import-matrix cases pass; the matrix also
+passes in the native virtualenv. Portable document smoke, 16 developer-command
+cases, nine CI-runner cases, lint, wiki and whitespace pass. Static CI now runs the
+architecture policy regressions and import matrix without desktop packages.
+No Ally Tools/Blue Hole edit or project push.
+
 ## Sequential audit implementation: L10 smaller integrations review
 
 Reviewed aviation calculations/data, Flight Sim preference publication, Calibre
