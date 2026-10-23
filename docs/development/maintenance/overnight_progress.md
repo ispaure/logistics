@@ -1,5 +1,17 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: C2 browser policy and retirement
+
+Network/watch-set/revisit/notification callbacks move unchanged into the existing
+BrowserIndexing mixin; FileBrowser retains inherited callbacks and overall close
+coordination. Close and idle now use the same original admission expression.
+A blocked details-worker regression passes before/after and rejects publication
+after stop while retaining the running worker. All 107 browser cases across 12
+files pass in identical order; Logistics browser/controller checks pass 19/2,
+real watcher checks 12 and external compatibility 48/2. Exact method/body/signature
+comparison, lint, shared wiki and whitespace pass. No external consumer edit,
+public API/persisted change or push occurred.
+
 ## Sequential audit implementation: C3 workspace transfer
 
 Workspace adoption now captures an immutable transfer snapshot and names acceptance
