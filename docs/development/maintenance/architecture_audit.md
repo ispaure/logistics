@@ -255,3 +255,35 @@ remaining large native UI owners, deferred graph groups and unexecuted platform
 contracts prevent an evidence-based ecosystem-wide 7/10 assertion. Continue with
 cohesive layout simplification and native lifecycle contracts; retain API/data
 compatibility and focused review rather than optimizing graph or line counts.
+
+## Subsequent composition and admission checkpoint
+
+At Logistics `a4e10aba`, shared `73a8c86`, Blue Hole `53ec9cb`, tracked production/
+test lines are 89,436 / 76,450, 42,511 / 23,249 and 22,804 / 758; file counts
+remain 1,152 / 508 / 203. LM layout composition fell from 200 to 40 lines by
+using three cohesive private builders in the same module. The expanded AST is
+identical; all 115 existing LM cases pass. No page state or new layer was added.
+
+Command pipe read errors now propagate after supervised cleanup instead of
+silently becoming EOF; timeout/cancellation retain their outcomes. Both interpreters
+pass the new fault profiles and existing capture contracts. IDE search/preview,
+optional gutter markers and Git decorations recover from worker admission failure
+using their existing UI state and retry paths. Focused tests reproduce each prior
+failure and exercise successful retries. Reader writes now enforce the existing
+read limit before publication, preserving the prior readable checkpoint; Unicode
+byte bounds and last-state preservation are tested in both environments.
+
+The previous frozen `f4e35aee` checkpoint completed all 179 desktop files (1,668
+cases, six skips), 162 mobile files (1,161, two skips) and 180 shared files (1,220,
+25 skips). The subsequent `f15fdb8c` desktop integration run is ongoing; its shared
+`73a8c86` suite completes 180 files / 1,222 cases / 25 skips, and mobile completes
+162 / 1,161 / two skips, all without failed files. Later write-bound tests are
+recorded separately. Real embedded portable coverage is now 141 cases, with 140
+passing and one filesystem skip; target Blender registration remains unexecuted.
+
+The scoped optional unused-import review is not a new quality gate. Its 46
+candidates include intentional exports and consumer patch targets, so no bulk
+removal was performed. Configured correctness lint remains green. Remaining
+priorities are native target/platform validation, large mobile UI responsibilities,
+offline index identity contracts and individually reviewed import/API cleanup.
+These bounds still do not support an unqualified numeric ecosystem score.

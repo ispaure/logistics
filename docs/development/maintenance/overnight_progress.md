@@ -964,3 +964,92 @@ completed baseline. Remaining priorities continue to govern selection.
 - Lint, architecture and five documentation checks pass. Commit `b98da89a`.
   Frozen full-suite totals above predate this unit; these focused checks validate
   it separately. Writes retain their existing policy; no state migration occurs.
+
+## LM layout composition
+
+- The 200-line LM layout function mixed sidebar, session controls and message
+  construction. Three private builders in the existing layout module now own
+  those sections; top-level composition is 40 lines. Widget reference names,
+  parent/layout order, callback ownership and signal statements are unchanged.
+- Expanding helper bodies reproduces the original constructor AST exactly.
+  Existing LM tests run all nine files, including real local HTTP fixtures,
+  screenshots, appearance, generation, leases, shutdown and session behavior.
+  All 115 cases pass; lint, architecture and five documentation checks pass too.
+- The owner guide also removes an obsolete claim that deleted forwarding modules
+  still exist. No public imports, new production files or dependencies were added.
+  Commit `e75e73e3`.
+
+## Command pipe read failure propagation
+
+- Command stdout/stderr reader exceptions were silently treated as EOF. Four
+  injected OSError/ValueError profiles reproduced missing errors while real owned
+  child processes were running. Reader failures now travel to the supervising
+  caller, which retires the child/streams before propagating the original error.
+- Timeout/cancellation still return explicit outcome flags and partial output.
+  A companion test interrupts a blocked reader during stop and confirms that its
+  cleanup error does not mask the timeout. No output/argument/result format changed.
+- All 23 command/capture, 11 mobile-interpreter command, five Perforce adapter and
+  two supervisor tests pass. Exact vendor checks, all 33 Blue Hole adapters and
+  embedded 99-case checks pass (one filesystem skip). Live Perforce is unexecuted.
+- Shared commit `73a8c86`, Logistics pin `d4e52350`, Blue Hole vendor `f4cc8c0`.
+- Frozen Logistics `f4e35aee` desktop also completed: 179 files / 1,668 cases,
+  six explicit native-bridge skips and zero failed files. Together with its mobile
+  and shared runs above this is a completed full-suite checkpoint. Later reader,
+  LM and command units have their own focused validation, not these older totals.
+
+## IDE search and optional decoration startup
+
+- Find in Files search/preview submit failures escaped Qt callbacks and left
+  searching/loading feedback. Two tests (four OSError/RuntimeError profiles)
+  reproduce these errors before repair; submissions now report visible context,
+  cancel the failed request and leave no claimed future. Empty completion errors
+  also display their type. Real executor retries succeed after every profile.
+- All six Find in Files cases pass. The eight-file IDE owner run executes 62
+  cases: one real watcher case fails in restricted access; all six cases in that
+  file pass with normal access. The other seven files pass. Documentation, lint
+  and architecture checks pass. Commit `35ababf7`.
+- Optional gutter markers and project Git status had the same unhandled admission
+  failure. Their existing fallback publication now serves startup and completion
+  errors, while periodic refresh/retry and core editing/browsing remain available.
+  Each controller has one cohesive private publication method, not a new worker
+  framework or exception-swallowing service.
+- Both new tests fail before repair under both startup error profiles. All 12
+  editor baseline/autosave cases, seven IDE browser cases and 43 Text Editor
+  cases across three files pass. Source fixture bytes remain unchanged. Lint,
+  architecture and five documentation checks pass. Commit `f15fdb8c`.
+
+## Broader real embedded portable validation
+
+- Blue Hole's embedded smoke driver now reuses five more existing library test
+  modules: content snapshots, INI files, encoded text files, three-way merge and
+  format registration. No duplicated assertions, packages or runtime dependencies
+  were added. These owners do not invoke host-Python subprocess fixtures.
+- Real Blender 4.5.1/Python 3.11.11 executes 141 cases: 140 pass and one filesystem
+  case skips. The actual vendor remains `73a8c86`; the driver and owning guide are
+  committed separately as `53ec9cb`. This expands portable runtime evidence, not native add-on
+  registration/operator/UI coverage for target Blender 5.2.2.
+
+## Preserve readable checkpoints on oversized reader saves
+
+- Reader writers could replace a good checkpoint with JSON exceeding their own
+  read limit. Five long but valid bookmark labels reproduce this in Books; a
+  deliberately oversized comic page identity exercises the portable API guard.
+  Both new preservation tests fail before repair.
+- Both owners now supply their existing 128 KiB limit to atomic_write_json. Bounds
+  apply to encoded UTF-8 bytes before publication; previous bytes remain readable
+  after rejection. The existing reader save-error handling reports the failure.
+  No schema, encoding or identity changes were made.
+- All 53 book and eight comic resume tests pass. The stale-size read fixture now
+  writes an externally invalid checkpoint directly because the repaired writer
+  correctly refuses to create it. Its read-bound assertions remain unchanged.
+- Mobile-interpreter checks reproduce oversized Unicode writes for both owners
+  and confirm the prior state survives. Lint and five documentation checks pass.
+- A scoped optional F401 report found 46 candidates, many intentional package
+  exports and compatibility/patch targets. No bulk auto-fix or new lint gate was
+  applied; configured correctness lint remains green. Further import cleanup
+  requires individual interface review, not just an unused-name count.
+
+Reader write-bound commit: `a4e10aba`. The full frozen `f15fdb8c` / shared
+`73a8c86` integration run is ongoing for desktop; shared completes all 180 files /
+1,222 cases (25 skips), mobile all 162 files / 1,161 cases (two skips), zero failed
+files. The newer reader bound has its focused checks above.
