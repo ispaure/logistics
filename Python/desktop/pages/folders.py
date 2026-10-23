@@ -341,19 +341,7 @@ class FoldersPage(pyside.QWidget):
             return
         self._clear_browser('Opening workspace…')
         try:
-            if online:
-                if entry.remote_context is None:
-                    raise ValueError('Load the matching credential package in Settings, then refresh folders.')
-                from features.rclone.ui.remote_browser import RemoteLocation
-                location = RemoteLocation(Path(entry.remote_context), entry.remote_name)
-            elif getattr(entry.local, 'private', False):
-                from desktop.file_browser import _PrivateBrowserLocation
-                location = _PrivateBrowserLocation(entry.local.connection, entry.local.path)
-            elif entry.local is not None:
-                location = entry.local.path
-            else:
-                raise ValueError('This workspace has no available local copy.')
-            association = getattr(entry.remote_context, 'item', None) if online else None
+            location, association = self._entry_browser_source(entry, online=online)
             view = (self.open_browser_location(location, package=association.package) if association
                     else self.open_browser_location(location))
             if view is not None:
@@ -365,6 +353,24 @@ class FoldersPage(pyside.QWidget):
                 self.browser_notice.setText('Unlock this workspace to browse its files. Reselect the folder to try again.')
         except Exception as error:
             self.browser_notice.setText(f'Cannot browse this workspace: {error}')
+
+    @staticmethod
+    def _entry_browser_source(entry, *, online):
+        """Resolve the selected copy and retained credential association before mounting."""
+        if online:
+            if entry.remote_context is None:
+                raise ValueError('Load the matching credential package in Settings, then refresh folders.')
+            from features.rclone.ui.remote_browser import RemoteLocation
+            location = RemoteLocation(Path(entry.remote_context), entry.remote_name)
+        elif getattr(entry.local, 'private', False):
+            from desktop.file_browser import _PrivateBrowserLocation
+            location = _PrivateBrowserLocation(entry.local.connection, entry.local.path)
+        elif entry.local is not None:
+            location = entry.local.path
+        else:
+            raise ValueError('This workspace has no available local copy.')
+        association = getattr(entry.remote_context, 'item', None) if online else None
+        return location, association
 
     def open_browser_location(self, location, *, package=None):
         """Feature Browse actions stay in this page's docked browser."""
@@ -539,6 +545,10 @@ class FoldersPage(pyside.QWidget):
             layout.addStretch()
             self.detail_scroll.setWidget(widget)
             return
+        self._prepare_workspace_actions(entry)
+
+    def _prepare_workspace_actions(self, entry):
+        """Mount accepted action scope before starting/coalescing its retained detail job."""
         widget = pyside.QWidget()
         layout = pyside.QVBoxLayout(widget)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -594,6 +604,10 @@ class FoldersPage(pyside.QWidget):
             self._show_entry(entry)
             self._refresh_lock_icons()
             return
+        self._mount_action_sections(entry, found)
+
+    def _mount_action_sections(self, entry, found):
+        """Project only the detail result admitted by generation and credential guards."""
         layout = self.detail_scroll.widget().layout()
         self._tools_status.hide()
         try:

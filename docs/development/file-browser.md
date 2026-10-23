@@ -27,6 +27,15 @@ LocalCrypt and remote browsing, retaining normal document activation. See the
 [folder source contract](features.md#remote-folder-source-context) for its action
 scope, browser retirement and pane-lock policy.
 
+`FoldersPage._entry_browser_source` resolves the selected local/private/remote copy
+and retained credential association before the existing browser construction and
+mount path. `_show_entry` retains detail generation/cancellation and credential
+admission; `_prepare_workspace_actions` mounts its accepted root scope before
+submitting/coalescing the retained detail job. `_details_ready` rejects stale or
+revoked results before `_mount_action_sections` constructs contributed controls.
+Browser replacement, unlock callbacks and retirement remain with the page; the
+Qt-independent `FolderController` still captures discovery/detail worker inputs.
+
 Desktop `FoldersPage` filters `Legacy-` workspace names case-insensitively after
 source/credential selection, before building the tree. **Settings → Workspaces →
 Show Legacy (session only)** starts unchecked and uses an application-owned

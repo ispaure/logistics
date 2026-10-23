@@ -1,5 +1,18 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L6 desktop folder publication
+
+FoldersPage names selected-copy/credential resolution, accepted action-scope
+assembly and guarded detail-to-control projection. Discovery, generation and
+credential admission, browser mount/replacement, unlock callbacks and retirement
+retain their existing owners. Every original method/captured callback expands to
+identical ordered AST/signatures. After the separately committed fixture cleanup,
+all 52 original/refactored folder cases pass in identical order; workspace,
+architecture, owner lint, wiki and whitespace checks pass. This completes L6's
+folder stage alongside committed IDE/Git stages. No persisted/API/external change
+or project push occurred. The earlier baseline native crash and its validation
+limits remain recorded in the fixture-cleanup entry.
+
 ## Verification follow-up: GUI-thread Qt fixture collection
 
 Before any desktop-folder refactor, the baseline crashed intermittently while a
