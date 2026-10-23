@@ -153,7 +153,7 @@ class EditorSession(qt.QObject):
             self.writing_revision = self.revision
             self.future = self.executor.submit(self.store.write, payload)
             self.poll.start()
-        except (OSError, ValueError) as error:
+        except (OSError, ValueError, RuntimeError) as error:
             self.report(str(error))
 
     def report(self, error):
@@ -199,10 +199,14 @@ class EditorSession(qt.QObject):
             return None
         if self.persisted >= self.revision and self.future is None:
             return True
-        window._recovery_waiting = True
-        window._close_pending = True
         self.timer.stop()
         self.checkpoint()
+        if self.future is None:
+            # A synchronous capture/submit failure has no completion callback
+            # to retry closing. Use the normal unsaved-document prompts now.
+            return None
+        window._recovery_waiting = True
+        window._close_pending = True
         return False
 
     def previous(self):

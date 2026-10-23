@@ -322,3 +322,12 @@ publication succeeds. Temporary validation actions are retired even if a later
 mapping value is invalid. `test_text_editor_extensions.py` covers malformed
 values, serialization failure, locked publication, retained saved bytes and
 cross-window consistency.
+
+## Recovery failure during close
+
+Session suspension defers closing only after a checkpoint future exists. A
+synchronous capture or worker-submission failure immediately falls back to the
+ordinary Save/Discard/Cancel prompt; no nonexistent completion callback is awaited.
+Executor submission errors are reported as recovery failures, and unsaved text
+remains in the editor. Asynchronous write failures retain the existing retry and
+normal-close fallback. `test_text_editor_recovery.py` covers both failure timings.

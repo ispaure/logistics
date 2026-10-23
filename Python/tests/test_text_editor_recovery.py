@@ -174,6 +174,39 @@ class EditorRecoveryTests(QtTestCase):
                 question.assert_called_once()
         self.assertEqual(owner.current.editor.toPlainText(), "keep me")
 
+    def test_synchronous_checkpoint_failure_prompts_on_the_first_close_attempt(self):
+        service = self.service()
+        owner = service.open()
+        owner.current.editor.insertPlainText('keep this draft')
+        owner._suspend_requested = True
+        session = service.session
+        session.timer.stop()
+        with patch.object(session, 'capture', side_effect=ValueError('checkpoint too large')), \
+                patch('commonUtils.ui.pyside.QMessageBox.question',
+                      return_value=qt.QMessageBox.StandardButton.Cancel) as question:
+            self.assertFalse(owner.close())
+            question.assert_called_once()
+        self.assertIsNone(session.future)
+        self.assertFalse(getattr(owner, '_recovery_waiting', False))
+        self.assertEqual(owner.current.editor.toPlainText(), 'keep this draft')
+
+    def test_checkpoint_submission_failure_keeps_close_prompt_and_unsaved_draft(self):
+        service = self.service()
+        owner = service.open()
+        owner.current.editor.insertPlainText('keep this draft')
+        owner._suspend_requested = True
+        session = service.session
+        session.timer.stop()
+        with patch.object(session.executor, 'submit', side_effect=RuntimeError('cannot start worker')), \
+                patch('commonUtils.ui.pyside.QMessageBox.question',
+                      return_value=qt.QMessageBox.StandardButton.Cancel) as question:
+            self.assertFalse(owner.prepare_close())
+            question.assert_called_once()
+        self.assertIn('cannot start worker', session.error)
+        self.assertIsNone(session.future)
+        self.assertFalse(getattr(owner, '_recovery_waiting', False))
+        self.assertEqual(owner.current.editor.toPlainText(), 'keep this draft')
+
     def test_host_shutdown_keeps_session_without_saving_original(self):
         from desktop.documents import DocumentsPage
         from commonUtils.ui.document_host import register_document_host
