@@ -2,6 +2,7 @@
 import posixpath
 from pathlib import PurePosixPath
 from contextlib import nullcontext
+from commonUtils.runtime.streams import read_up_to
 
 MARKDOWN = {'.md', '.markdown'}
 MAX_NOTE = 2 * 1024 * 1024
@@ -67,7 +68,7 @@ class NotesLibrary:
             if before['directory'] or not 0 <= before['size'] <= MAX_NOTE + 4096:
                 raise ValueError('Note exceeds the 2 MiB preview limit.')
             with self.provider.open(path) as stream:
-                data = stream.read(MAX_NOTE + 1)
+                data = read_up_to(stream, MAX_NOTE + 1)
             if len(data) > MAX_NOTE or cancelled() or self.entry(path) != before:
                 raise ValueError('Note changed or is too large. Reopen it.')
         data.decode('utf-8-sig')
