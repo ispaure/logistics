@@ -80,6 +80,13 @@ they do not lock out external writers or attribute same-file in-place edits. Fai
 and leaves the source unchanged. External-process conflicts are checked using
 filesystem identity, size and nanosecond timestamps before replacement.
 
+`ui/reader_controls.py` keeps `build_controls(page)` as the composition entry point.
+Its private builders group menus, header, appearance, sidebar, reading area and
+footer in the same module. Controls, callbacks, speech/spread ownership and legacy
+widget handles stay on the page; construction order and external-menu embedding
+remain unchanged. Reader navigation/loading and persisted state stay in their
+existing owners.
+
 The package model, metadata writer and reader controls are independently tested
 using generated EPUB fixtures. Run from the checkout root:
 

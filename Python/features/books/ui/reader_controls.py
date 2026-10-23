@@ -21,6 +21,20 @@ def build_controls(page):
     layout = qt.QVBoxLayout(page)
     layout.setContentsMargins(*READER_MARGINS)
     layout.setSpacing(READER_SPACING)
+    _build_reader_menus(page, layout)
+    header = _build_reader_header(page, layout)
+    _build_reading_appearance(page)
+    page.splitter = qt.QSplitter()
+    page.splitter.setChildrenCollapsible(False)
+    _build_reading_sidebar(page)
+    _build_reading_area(page, header)
+    page.splitter.setStretchFactor(1, 1)
+    page.splitter.setSizes([240, 900])
+    layout.addWidget(page.splitter, 1)
+    _build_reading_footer(page, layout)
+
+
+def _build_reader_menus(page, layout):
     bar = page._external_menu_bar
     if bar is None:
         bar = qt.QMenuBar(page)
@@ -41,6 +55,9 @@ def build_controls(page):
     page.go_page_action = page.menus.action(page.menus.navigate, 'Go to page…', page.go_to_page, 'Ctrl+G')
     page.add_bookmark_action = page.menus.action(page.menus.navigate, 'Add bookmark…', page.add_bookmark, 'Ctrl+D')
     page.menus.action(page.menus.navigate, 'Show bookmarks', page.show_bookmarks)
+
+
+def _build_reader_header(page, layout):
     header = qt.QHBoxLayout()
     page.workspace_controls = header
     header.setSpacing(READER_SPACING)
@@ -62,6 +79,10 @@ def build_controls(page):
     # Retain the previous handle for callers without keeping another visible row.
     page.metadata_button = tool(page, page.menus.metadata_action, 'Edit metadata')
     page.metadata_button.hide()
+    return header
+
+
+def _build_reading_appearance(page):
     page.appearance = qt.QDialog(page, qt.Qt.WindowType.Popup)
     page.appearance.setWindowTitle('Reading appearance')
     form = qt.QFormLayout(page.appearance)
@@ -91,8 +112,9 @@ def build_controls(page):
     page.theme.setAccessibleName('Reading theme')
     page.theme.setMinimumHeight(32)
     form.addRow('Theme', page.theme)
-    page.splitter = qt.QSplitter()
-    page.splitter.setChildrenCollapsible(False)
+
+
+def _build_reading_sidebar(page):
     page.sidebar = qt.QTabWidget()
     page.sidebar.setMinimumWidth(170)
     page.sidebar.setMaximumWidth(420)
@@ -125,6 +147,9 @@ def build_controls(page):
     page.bookmarks.activated.connect(page.open_bookmark)
     page.sidebar.addTab(bookmarks_panel, 'Bookmarks')
     page.splitter.addWidget(page.sidebar)
+
+
+def _build_reading_area(page, header):
     page.reading_area = qt.QWidget()
     reading_layout = qt.QHBoxLayout(page.reading_area)
     reading_layout.setContentsMargins(0, 0, 0, 0)
@@ -170,9 +195,9 @@ def build_controls(page):
     reading_layout.addWidget(page.empty_panel, 1)
     page.text.hide()
     page.splitter.addWidget(page.reading_area)
-    page.splitter.setStretchFactor(1, 1)
-    page.splitter.setSizes([240, 900])
-    layout.addWidget(page.splitter, 1)
+
+
+def _build_reading_footer(page, layout):
     page.find_panel = qt.QWidget()
     search = qt.QHBoxLayout(page.find_panel)
     search.setContentsMargins(0, 0, 0, 0)
