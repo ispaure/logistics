@@ -27,6 +27,7 @@ records each checked unit, including caught errors and validation limits; the
 | C7 (contract stage) | Paired install/retirement and late-callback contracts; native factories unchanged and platform-gated | shared `016a35d` |
 | C7 (native-owner slice) | Android/iOS simulator/emulator lifecycle checks; navigation admission/resize/selection restoration and speech callback release | shared `3e08820` |
 | C7 (navigation construction) | Named Apple observer/controller assembly and Android bar/listener/menu stages; callback/disposal bodies unchanged | shared `0035641` |
+| C7 (canvas construction) | Named Apple gesture/magnifier assembly and Android page-listener binding; native class caches and retirement unchanged | shared `8aa81ca` |
 | C8 | Explicit checkout admission/actions; hook and declined-prompt contracts; legacy exports retained | shared `9aaf84d` |
 | L1 | Managed-text host workflows grouped over existing store/workspace/view owners; aggregate lifecycle stays in app | `380ab06e` |
 | L2 | Retained drawer/listing owner separated from frame layout; import compatibility preserved | `c2d4cc55` |
@@ -111,8 +112,15 @@ F811 gate and compatibility-export decision, not a repository-wide unused-code s
   plus Android phone/tablet/landscape layout transitions. The cold Android launcher
   missed visibility callbacks with a one-second dwell; repeating with a consistent
   three-second background dwell passes without weakening visibility assertions.
-- Canvas and speech construction extractions remain next. The broader native
-  acceptance limits above remain separate from this behavior-preserving pass.
+- Canvas (`8aa81ca`): Apple gesture wiring and lens/button allocation, plus Android
+  page-listener binding, have separate private construction stages. Expanding
+  the helpers reproduces the complete prior module AST without normalization.
+  Both shared matrix legs pass 117 cases in 26 files; the same iOS/Android native
+  matrix passes, including magnifier creation/pixel cleanup and live owner resume.
+  Ten Logistics navigation test files also pass. Android logs contain no Python
+  tracebacks in either extraction run.
+- Speech construction remains next. The broader native acceptance limits above
+  remain separate from this behavior-preserving pass.
 
 ## Find the current contract
 
