@@ -264,6 +264,8 @@ class NativeReportTests(unittest.TestCase):
             key = 'commonUtils_commit' if 'commonUtils' in args[2] else 'logistics_commit'
             return report['source'][key]
         def launch(command, *, stdout, **kwargs):
+            import sys
+            self.assertEqual(command[:3], [sys.executable, '-m', 'briefcase'])
             stdout.write(ui_tools.PREFIX + json.dumps(report) + '\n')
             stdout.flush()
             return SimpleNamespace(wait=lambda **kwargs: code)
