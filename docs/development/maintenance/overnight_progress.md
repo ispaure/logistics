@@ -849,3 +849,36 @@ completed baseline. Remaining priorities continue to govern selection.
 - Blue Hole exact vendor membership/bytes and all 31 adapters pass; its five actual
   embedded tests also exercise valid/invalid recovery writes on Blender 4.5.1 /
   Python 3.11.11. Vendor/driver commit `9d22aba`.
+
+## Active-provider cyclic links and portable test ownership
+
+- A new regression found a remaining interaction in the earlier provider guards:
+  an unrelated registered root prevented ordinary cyclic-link deletion. The guard
+  now checks an unresolvable leaf by its resolved parent/name; looping ancestors
+  still fail, protected links remain denied, and ordinary aliases keep resolution.
+- All six boundary tests pass in both environments, with 17 file-operation, 13
+  file-object, five removal and 13 resource-operation tests. The real-rclone file
+  operation suite passes three cases with one explicit missing-native-bridge skip.
+  Lint/architecture pass. Shared fix `04143cb`; Blue Hole vendor `1310200`.
+- The standard copy checker correctly refused an intermediate source HEAD newer
+  than the recorded vendor pin. Direct committed-tree comparison subsequently
+  verified all 597 regular-file modes/blob identities for that historical vendor;
+  the standard checker passes again at the final matching pin. This was a
+  checkpoint mismatch, not a claimed successful comparison against the wrong HEAD.
+- Three pure batch tests unnecessarily inherited Qt test infrastructure. Their
+  unchanged bodies now live in test_batch.py with plain unittest; the five Qt
+  worker/progress cases stay in their owner. All three portable cases pass in
+  desktop and mobile interpreters, and all five Qt cases pass. Shared `6ff379e`.
+- Blue Hole's embedded driver reuses existing portable regression modules instead
+  of duplicating their assertions. Only its namespace/lifecycle and actual Blender
+  command checks remain consumer-owned. The driver shrank from 179 to 129 lines
+  while coverage expanded to 93 cases: 92 pass and one case-sensitive-filesystem
+  case is explicitly skipped in real Blender 4.5.1 / Python 3.11.11.
+- This includes existing stream, range, batch, persistence, recovery, boundary,
+  rename, SSE, JSON/XML and selected plain ZIP extraction contracts. No optional
+  crypto/GUI dependency was installed or mocked as native coverage. Both library
+  namespaces have independent registries; diagnostics cannot open test dialogs.
+- All 31 Blue Hole adapter tests and exact current vendor checks pass. Vendor/driver
+  commit `19956ed`; Logistics pin `a4007ed6`. Native target 5.2.2 registration,
+  Windows/Linux and physical-device validation remain unexecuted. No Docker,
+  Podman or Colima CLI/standard app executable was found locally.
