@@ -54,6 +54,8 @@ That subdirectory contains download `.ini` files with a `[Youtube-DL]` section a
 Windows, macOS and Linux first look for FFmpeg on PATH. Windows/macOS fall back
 to `Software/ffmpeg_win/ffmpeg.exe` or `Software/ffmpeg_macos/ffmpeg`; Linux needs
 FFmpeg on PATH. Missing FFmpeg is reported before launching a download.
+Bundled-path lookup resolves resource paths without creating Software or unrelated
+credential directories; locating an executable does not provision resources.
 
 Commands use argument lists, without a shell or platform-specific separators.
 The URL remains one argument, including query parameters. INI interpolation is

@@ -35,9 +35,10 @@ representative fixtures and platform checks before behavior changes.
 ## Folder discovery and presentation
 
 `LogisticsConfig` creates independent resource directories at the checkout root
-by default. Read-only software metadata, document location labels and local
-connection root lookup use `create_resources=False` to resolve the same paths
-without creating Software or credential folders.
+by default. Software/FFmpeg lookup, document labels, connection roots, Plex data
+paths and mount-path calculation use `create_resources=False` to resolve paths
+without creating Software or credential folders. Folder discovery also opts out
+of those unrelated resources while retaining its existing Server/Local bootstrap.
 Optional `[Resources] software_path` and `credentials_path` entries in
 `configFile.ini` override them independently (relative to the checkout, or absolute).
 Dropbox is never selected implicitly. Public binaries/installers are pinned in

@@ -1,5 +1,6 @@
 """Local resources and lazy software provisioning without external transfers."""
 import os
+from contextlib import contextmanager
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -15,11 +16,12 @@ from services import software
 
 
 class SoftwareTests(QtTestCase):
-    def test_software_lookup_does_not_create_software_or_credential_directories(self):
+    @contextmanager
+    def resource_config(self):
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            source = root / 'Python'
-            source.mkdir()
+            source, home = root / 'Python', root / 'home'
+            source.mkdir(); home.mkdir()
             fake_module = source / 'config.py'
             fake_module.touch()
             (source / 'configFile.ini').write_text(
@@ -27,9 +29,14 @@ class SoftwareTests(QtTestCase):
                 'remote_network_mount_sub_path=Mounts\nremote_local_sub_path=Local\n')
             with patch.object(config, '__file__', str(fake_module)), \
                     patch.object(config, 'get_os', return_value=OS.MAC), \
-                    patch.object(software, 'get_os', return_value=OS.MAC), \
-                    patch.object(software, 'get_arch', return_value=Arch.ARM_64):
-                _, destination = software.get_software('rclone')
+                    patch.object(Path, 'home', return_value=home):
+                yield root, home
+
+    def test_software_lookup_does_not_create_software_or_credential_directories(self):
+        with self.resource_config() as (root, home), \
+                patch.object(software, 'get_os', return_value=OS.MAC), \
+                patch.object(software, 'get_arch', return_value=Arch.ARM_64):
+            _, destination = software.get_software('rclone')
             self.assertTrue(destination.is_relative_to(root / 'Software'))
             self.assertFalse((root / 'Software').exists())
             self.assertFalse((root / 'Credentials').exists())
@@ -40,29 +47,58 @@ class SoftwareTests(QtTestCase):
         from commonUtils.ui import pyside as qt
         self.app = qt.QApplication.instance() or qt.QApplication([])
         for lookup in ('location', 'connection'):
-            with self.subTest(lookup=lookup), TemporaryDirectory() as directory:
-                root = Path(directory).resolve()
-                source = root / 'Python'
-                source.mkdir()
-                fake_module = source / 'config.py'
-                fake_module.touch()
-                (source / 'configFile.ini').write_text(
-                    '[DirectoryStructure]\nserver_path_macos=Server\n'
-                    'remote_network_mount_sub_path=Mounts\nremote_local_sub_path=Local\n')
-                with patch.object(config, '__file__', str(fake_module)), \
-                        patch.object(config, 'get_os', return_value=OS.MAC):
-                    expected = config.LogisticsConfig(create_resources=False).path_remote_local
-                    if lookup == 'connection':
-                        self.assertEqual(storage_root(), expected.absolute())
-                    else:
-                        catalog = LocationCatalog(None)
-                        try:
-                            context = catalog.local(expected / 'Library' / 'guide.txt')
-                            self.assertEqual(context.name, 'Library')
-                        finally:
-                            catalog.deleteLater()
+            with self.subTest(lookup=lookup), self.resource_config() as (root, home):
+                expected = home / 'Server/Local'
+                if lookup == 'connection':
+                    self.assertEqual(storage_root(), expected.absolute())
+                else:
+                    catalog = LocationCatalog(None)
+                    try:
+                        context = catalog.local(expected / 'Library' / 'guide.txt')
+                        self.assertEqual(context.name, 'Library')
+                    finally:
+                        catalog.deleteLater()
                 self.assertFalse((root / 'Software').exists())
                 self.assertFalse((root / 'Credentials').exists())
+
+    def test_folder_discovery_keeps_local_bootstrap_without_creating_unrelated_resources(self):
+        from models.folder_discovery import get_local_folders
+        with self.resource_config() as (root, home):
+            self.assertEqual(get_local_folders(), [])
+            local = home / 'Server/Local'
+            self.assertTrue(local.is_dir())
+            (local / 'Example').mkdir()
+            self.assertEqual([folder.path for folder in get_local_folders()], [local / 'Example'])
+            self.assertFalse((root / 'Software').exists())
+            self.assertFalse((root / 'Credentials').exists())
+
+    def test_plex_and_mount_path_queries_create_no_resource_folders(self):
+        from features.plex.folders import get_local_pms_data_folder, get_remote_pms_data_folder, get_pms_data_name
+        from features.fuse.mounts import get_remote_mount_path
+        from models.local_folder import LocalFolder
+        with self.resource_config() as (root, home):
+            folder = LocalFolder(home / 'Example')
+            self.assertEqual(get_local_pms_data_folder(folder).path, home / 'Server/Local' / get_pms_data_name(folder))
+            self.assertEqual(get_remote_pms_data_folder(folder).path, home / 'Server/Mounts' / get_pms_data_name(folder))
+            self.assertEqual(get_remote_mount_path('Example'), home / 'Server/Mounts/Example')
+            self.assertFalse((home / 'Server').exists())
+            self.assertFalse((root / 'Software').exists())
+            self.assertFalse((root / 'Credentials').exists())
+
+    def test_ffmpeg_bundled_lookup_does_not_create_resource_folders(self):
+        from features.youtube_downloader import settings
+        with self.resource_config() as (root, home), \
+                patch.object(settings.shutil, 'which', return_value=None), \
+                patch.object(settings, 'get_os', return_value=OS.MAC):
+            with self.assertRaises(FileNotFoundError):
+                settings.find_ffmpeg()
+            self.assertFalse((root / 'Software').exists())
+            self.assertFalse((root / 'Credentials').exists())
+            executable = root / 'Software/ffmpeg_macos/ffmpeg'
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            self.assertEqual(settings.find_ffmpeg(), str(executable))
+            self.assertFalse((root / 'Credentials').exists())
 
     def test_manifest_covers_six_platforms_with_pinned_hashes(self):
         with TemporaryDirectory() as root:

@@ -14,7 +14,7 @@ from .local_folder import LocalFolder
 def get_local_folders() -> list[LocalFolder]:
     """Return all folders currently present under Server/Local."""
 
-    local_root = Path(config.LogisticsConfig().path_remote_local)
+    local_root = Path(config.LogisticsConfig(create_resources=False).path_remote_local)
     local_root.mkdir(parents=True, exist_ok=True)
 
     local_directory = dirUtils.Directory(local_root)
