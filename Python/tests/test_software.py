@@ -15,6 +15,25 @@ from services import software
 
 
 class SoftwareTests(QtTestCase):
+    def test_software_lookup_does_not_create_software_or_credential_directories(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source = root / 'Python'
+            source.mkdir()
+            fake_module = source / 'config.py'
+            fake_module.touch()
+            (source / 'configFile.ini').write_text(
+                '[DirectoryStructure]\nserver_path_macos=Server\n'
+                'remote_network_mount_sub_path=Mounts\nremote_local_sub_path=Local\n')
+            with patch.object(config, '__file__', str(fake_module)), \
+                    patch.object(config, 'get_os', return_value=OS.MAC), \
+                    patch.object(software, 'get_os', return_value=OS.MAC), \
+                    patch.object(software, 'get_arch', return_value=Arch.ARM_64):
+                _, destination = software.get_software('rclone')
+            self.assertTrue(destination.is_relative_to(root / 'Software'))
+            self.assertFalse((root / 'Software').exists())
+            self.assertFalse((root / 'Credentials').exists())
+
     def test_manifest_covers_six_platforms_with_pinned_hashes(self):
         with TemporaryDirectory() as root:
             with patch.object(software.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_software=Path(root))):

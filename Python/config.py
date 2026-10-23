@@ -17,9 +17,12 @@ class LogisticsConfig:
 
     Feature-specific settings belong in the owning feature package rather than
     in the root configFile.ini.
+
+    Resource directories are created by default. Metadata-only callers can pass
+    create_resources=False to resolve the same paths without creating them.
     """
 
-    def __init__(self):
+    def __init__(self, *, create_resources: bool = True):
         config_file_path = get_config_file_path()
         user_home_dir = fileUtils.get_user_home_dir()
         current_os = get_os()
@@ -51,7 +54,8 @@ class LogisticsConfig:
             path = Path(value).expanduser()
             if not path.is_absolute():
                 path = self.path_logistics / path
-            path.mkdir(parents=True, exist_ok=True)
+            if create_resources:
+                path.mkdir(parents=True, exist_ok=True)
             return path
 
         self.path_logistics_software = resource_path('software_path', 'Software')

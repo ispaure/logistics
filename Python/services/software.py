@@ -14,6 +14,7 @@ RCLONE_CONFIG_PATH = Path(__file__).resolve().parents[1] / 'features' / 'rclone'
 
 
 def get_software(tool):
+    """Resolve pinned metadata and a destination without creating resources."""
     manifest = json.loads(MANIFEST_PATH.read_text(encoding='utf-8'))
     if tool == 'rclone':
         platform = {OS.WIN: 'windows', OS.MAC: 'osx', OS.LINUX: 'linux'}.get(get_os())
@@ -31,7 +32,7 @@ def get_software(tool):
     else:
         entry = dict(manifest[tool])
     relative_path = Path(entry.pop('path'))
-    root = config.LogisticsConfig().path_logistics_software
+    root = config.LogisticsConfig(create_resources=False).path_logistics_software
     destination = root / relative_path
     if relative_path.is_absolute() or not destination.resolve().is_relative_to(root.resolve()):
         raise ValueError('Software destination must stay inside the configured Software folder')
