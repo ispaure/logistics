@@ -87,6 +87,7 @@ test-directory moves remain deferred; current contracts are in the owner maps ab
 - [October 22 readability and shared-mechanism validation](restructuring.md#october-22-readability-and-shared-mechanism-pass)
 - [Restructuring assessment and migration record](restructuring.md)
 - [October 20 ownership audit and cleanup record](ownership-audit.md)
+- [Ecosystem maintenance audit and progress](maintenance/maintenance.md)
 - [Maintenance priorities](maintenance.md)
 - [Mobile architecture roadmap](mobile-architecture-roadmap.md)
 - [Mobile navigation plan](mobile-navigation-plan.md)
