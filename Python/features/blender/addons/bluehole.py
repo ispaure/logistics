@@ -7,6 +7,7 @@ from urllib.request import Request, urlopen
 from urllib.parse import quote
 import zipfile
 
+from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import copy_stream
 from features.blender.addons.library import inspect_package, version_tuple
@@ -132,7 +133,7 @@ def update(manager, release, branch, *, cancelled=lambda: False):
                     if addon.identity != IDENTITY:
                         raise ValueError('Unexpected Blue Hole addon identity')
                     check_cancelled(cancelled)
-                    staged.rename(destination)
+                    rename_exclusive(staged, destination)
     addon = replace(inspect_package(package), source=f'GitHub · {remote_branch}', branch=remote_branch)
     if addon.identity != IDENTITY or not addon.compatible(release):
         raise ValueError(f'Blue Hole ({branch}) is not declared compatible with Blender {release.version}')

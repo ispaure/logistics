@@ -11,6 +11,7 @@ import tarfile
 from tempfile import TemporaryDirectory
 import zipfile
 
+from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import copy_stream
 from commonUtils.runtime.streams.downloads import provision
@@ -121,7 +122,7 @@ def install_release(release, destination, *, report=lambda *args: None, cancelle
                                                     'sha256': release.sha256, 'executable': release.executable}),
                                          encoding='utf-8')
             check_cancelled(cancelled)
-            bundle.rename(destination)
+            rename_exclusive(bundle, destination)
     return destination
 
 

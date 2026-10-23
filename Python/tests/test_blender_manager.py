@@ -86,6 +86,41 @@ class BlenderManagerTests(unittest.TestCase):
             install_release(build, destination)
             download.assert_not_called()
 
+    def test_install_refuses_destination_created_during_extraction(self):
+        from features.blender.installation import install
+        payload = self._zip()
+        build = replace(self.release, sha256=hashlib.sha256(payload).hexdigest())
+        destination = self.manager.installation(build)
+        extract = install.extract_zip
+        def extract_and_race(*args):
+            extract(*args)
+            destination.mkdir()
+        with patch('commonUtils.runtime.streams.downloads.urlopen', return_value=self._response(payload)), \
+                patch.object(install, 'extract_zip', side_effect=extract_and_race):
+            with self.assertRaises(FileExistsError):
+                install_release(build, destination)
+        self.assertEqual(list(destination.iterdir()), [])
+        self.assertEqual(list(destination.parent.iterdir()), [destination])
+
+    def test_preset_publication_refuses_a_racing_empty_directory(self):
+        original = self.manager.create_preset(self.release, 'Original')
+        (original / 'config/userpref.blend').write_bytes(b'preferences')
+        exists = Path.exists
+        for operation in ('duplicate_preset', 'rename_preset'):
+            with self.subTest(operation=operation):
+                destination = self.manager.preset(self.release, operation)
+                def exists_and_race(candidate):
+                    present = exists(candidate)
+                    if candidate == destination and not present:
+                        destination.mkdir()
+                    return present
+                with patch.object(Path, 'exists', exists_and_race):
+                    with self.assertRaises(FileExistsError):
+                        getattr(self.manager, operation)(self.release, 'Original', operation)
+                self.assertEqual(list(destination.iterdir()), [])
+                self.assertEqual((original / 'config/userpref.blend').read_bytes(), b'preferences')
+                self.assertFalse(any(p.name.startswith('.preset-') for p in destination.parent.iterdir()))
+
     def test_hash_failure_never_publishes_or_leaves_archive(self):
         destination = self.manager.installation(self.release)
         with patch('commonUtils.runtime.streams.downloads.urlopen', return_value=self._response(self._zip())):
