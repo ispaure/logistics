@@ -8,6 +8,10 @@ contracts; old proposed work and test totals retain their original date/scope.
 The sections below preserve prior progress URLs. Their detailed evidence is kept
 once in the linked historical records.
 
+## Final pinned verification
+
+[Full results and acceptance limits](history/audit-implementation-20261023.md#final-pinned-verification).
+
 ## Sequential audit implementation: T5 current contracts and history
 
 [Archived record](history/audit-implementation-20261023.md#sequential-audit-implementation-t5-current-contracts-and-history).

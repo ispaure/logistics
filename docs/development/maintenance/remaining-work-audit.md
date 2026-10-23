@@ -38,12 +38,17 @@ records each checked unit, including caught errors and validation limits; the
 | L10 | Reviewed smaller owners; named Hue validation-before-I/O boundary; cohesive backends and legacy APIs retained | `89c10808` |
 | T3 | 81 reviewed portable modules, recursive package policy, fresh-owner import blockers and static CI regressions | `7631484c` |
 | T4 | Reviewed duplicate imports and compatibility exports; F811 now enforced; F401/F841 remain deliberate owner-review diagnostics | `fc2aacb7` |
-| T5 | Current status separated from dated assessments/chronology; native timing evidence consolidated | This documentation unit |
+| T5 | Current status separated from dated assessments/chronology; native timing evidence consolidated | `7dadd7cd` |
 
 Each unit was checked before its local commit. Source-preserving extractions use
 ordered syntax-tree comparisons plus the owning regressions; tests added for real
 ownership/rollback gaps also run against original source where applicable.
 A passing host suite does not certify native widgets, Blender or live services.
+
+The [final pinned verification](history/audit-implementation-20261023.md#final-pinned-verification)
+passes all desktop, mobile and both shared matrix legs. Bridge/DOM skips pass on
+explicit replay; three shared filesystem/Windows platform skips remain. The record
+keeps exact source revisions and avoids adding overlapping replay counts.
 
 ## Remaining acceptance gate
 

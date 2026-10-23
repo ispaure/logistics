@@ -1,5 +1,46 @@
 # Sequential audit implementation — October 23, 2026
 
+## Final pinned verification
+
+Full verification pins Logistics `7dadd7cd` and commonUtils `ac1ae89` in disposable
+detached checkouts, preserving concurrent work in the primary checkout. These
+counts describe that exact committed snapshot; later concurrent edits are outside
+this evidence. Every audited unit had already passed its owning checks before
+its sequential local commit.
+
+| Run | Files | Outer unittest cases | Initial skips |
+| --- | ---: | ---: | ---: |
+| Logistics desktop | 185 | 1,749 | 8 host-bridge cases |
+| Logistics mobile host | 172 | 1,229 | 2 DOM cases |
+| Shared Qt/portable | 186 | 1,269 | 25 Toga-dependent and 3 platform cases |
+| Shared required-Toga | 26 | 111 | 0 |
+
+Every run finishes with zero failed files. Required-Toga replay covers the shared
+native contracts; it overlaps Qt selection and is not extra distinct coverage.
+An offline rebuild of the pinned host bridge succeeds with the cached Go toolchain.
+All eight desktop bridge skips pass when supplied that library: remote credential/
+reader/transfer cases, native encrypted-copy/password/listing cases and file
+operations. The targeted replay selections also run existing neighboring cases,
+without skips or failures. Both mobile DOM cases pass with bundled Node/Playwright
+and installed Chrome in disposable headless profiles, using network-blocked
+synthetic content. No production test assertion, timeout or platform skip is weakened.
+The remaining shared skips need a case-sensitive filesystem or native Windows.
+
+Doctor, full configured lint, architecture (81 portable modules), toolchain,
+indexed-source hygiene and compatibility checks pass. Ally Tools `d2c00b8` passes
+48 cases against the unchanged shared revision; Blue Hole `665c184` passes two
+current-source namespace and 15 command/Perforce workflow cases. Both consumer
+worktrees stay clean and unmodified. The test environments isolate storage and
+use pinned rclone with synthetic local/in-memory resources.
+
+Native-service availability is checked with actual service access after a
+sandbox-restricted attempt could not reach ADB/CoreSimulator. No Android device
+is connected and no iOS simulator is booted. C7's documented native factory gate
+remains: dummy/host bridge checks do not establish UIKit/Android gesture, IME,
+chrome or delegate lifetimes. No native test app was installed; no project push.
+Raw logs and the machine summary remain in ignored test results. Disposable
+verification checkouts are removed after saving that evidence.
+
 ## Sequential audit implementation: T5 current contracts and history
 
 Current status now records all 23 audit priorities, local commit references and
