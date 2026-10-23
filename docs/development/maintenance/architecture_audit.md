@@ -1,5 +1,30 @@
 # Ecosystem architecture audit
 
+## Reader composition and Git preparation follow-up
+
+At shared `cd21efe` and Logistics `bb13dcb2` / `2368b8a8`, three existing owners
+gain named, same-module phases. Markdown construction changes from 184 to 68
+lines; EPUB control composition from 191 to 15; Git execution from 115 to 59.
+Expanding the private helpers reproduces every original ordered AST statement.
+These spans measure navigability, not removed functionality or a quality score.
+
+The same 145 shared Markdown, 54 EPUB and 36 Git backend cases pass before and
+after, with identical ordered case identities and no skips/failures. Another
+576 Git request/environment/result/error profiles match without process execution.
+IDE/documentation viewer and cross-reader consumers pass three/four/five cases;
+four reading-feature and five/three Logistics/shared wiki checks also pass.
+
+This improves readability through named construction/preparation phases and
+keeps policy ownership explicit: wiki/provider admission stays in Markdown's
+constructor, EPUB state remains page-owned and Git policy remains feature-owned.
+No module, package, dependency, persisted schema or public API changes. Existing
+architecture boundaries remain 24 host adapters / 15 feature edges / zero
+violations. Ally's 48 contracts and Blue Hole's two existing contracts against
+current shared source pass; both external repositories stay unchanged because
+no compatibility migration is needed. Earlier full-suite/native results retain
+their recorded source scope; these are focused checks, not a new platform or
+ecosystem-wide certification. See the [progress log](overnight_progress.md).
+
 ## October 23 continuation: update preservation contracts
 
 The earlier audit and historical measurements remain below. This continuation

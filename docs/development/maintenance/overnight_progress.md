@@ -1,5 +1,61 @@
 # Ecosystem maintenance progress
 
+## Reader composition and Git execution readability continuation
+
+This continuation starts from clean Logistics `355daf04`, shared `a2ab228`,
+Ally Tools `d2c00b8` and Blue Hole `665c184`. Current development branches remain
+unchanged. The work is readability/ownership maintenance with no push authorized.
+
+- Shared `cd21efe`: Markdown viewer construction now names navigation, document
+  surfaces, properties and reading-control phases in its existing module. Initial
+  document admission, wiki composition, provider policy and lifetime wiring remain
+  visible in the constructor. Its span changes from 184 to 68 lines.
+- Logistics `bb13dcb2`: EPUB `build_controls(page)` composes menus, header,
+  appearance, sidebar, reading area and footer through same-module private
+  builders. The composition span changes from 191 to 15 lines. Existing page
+  fields, callbacks, external menu embedding and speech/spread ownership remain.
+- Logistics `2368b8a8`: Git runner separates argv/executable and environment
+  preparation from captured process execution. `run()` retains admission,
+  cancellation/timeout translation and result checking in 59 rather than 115
+  lines. Application-specific Git and credential policy stays with the feature.
+
+For all three units, expanding the helper calls reproduces every original ordered
+AST statement, including callback bodies, imports and control flow. Returned
+locals and helper parameters are checked explicitly. These are construction/
+preparation boundaries, not new controllers, packages or state copies. Function
+lengths describe navigation improvements, not a numeric quality target.
+
+| Executed validation | Result |
+| --- | --- |
+| Shared Markdown before/after | Same 145 ordered case identities across 13 files; zero skips/failures in both runs. |
+| EPUB before/after | Same 54 cases across three files; zero skips/failures in both runs. |
+| Git backend before/after | Same 36 cases; zero skips/failures, using temporary local repositories. |
+| Git old/new request comparison | 576 argv/environment/result/progress/error profiles match; no process started by this probe. |
+| Reader consumers | Three IDE Markdown, four real documentation viewer and five cross-reader parity cases pass. |
+| Ally Tools | All 48 existing fixture/import/signature cases pass against current shared source. |
+| Blue Hole current-source compatibility | Both existing import/call-signature and global-binding contracts pass with current shared source loaded under the add-on's private namespace. |
+
+Ally Tools and Blue Hole need no compatibility edits: no shared public method,
+import path or signature moved. Both external worktrees, including Blue Hole's
+existing vendor revision, remain untouched. The current-source namespace probe
+does not replace native Blender registration/export validation.
+
+Raw before/after source copies, comparison drivers and reports stay in ignored
+test results. Final checks pass: four reading-feature cases, five Logistics and
+three shared wiki cases, configured lint, source hygiene, toolchain consistency,
+architecture (24 host adapters / 15 feature edges / zero violations) and whitespace.
+The three edited production files compile without execution. No dependency,
+module, package, public API or persisted format changed; no production data,
+device app, remote repository or release was modified.
+
+No failing or skipped case remains in this continuation's executed scope. Full
+desktop/mobile/shared suites and native platforms were not rerun; earlier totals
+below keep their original source provenance. Remaining useful ownership reviews
+include Qt resource-browser composition, text-editor Save/Save As policy versus
+publication, and large mobile/native lifetime owners. Offline index identity and
+retention still need a defined contract before any behavioral changes. This pass
+supports specific readability gains, not a new whole-ecosystem numeric rating.
+
 ## October 23 continuation on the current development branches
 
 This continuation starts at Logistics `8c844fa2`, commonUtils `3797a25`,

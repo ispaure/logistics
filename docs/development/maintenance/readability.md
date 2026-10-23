@@ -319,3 +319,33 @@ shared index edits remain separate. No push, release retry, upload or device
 install was performed. Raw comparison and test output remain in ignored local
 test results. Native allocation/rendering, device gestures and view swapping
 still need the appropriate iOS/Android run before claiming platform acceptance.
+
+## Reader composition and Git execution follow-up
+
+Shared `cd21efe` gives Markdown viewer construction four named phases in its
+existing module: navigation, document surfaces, properties and reading controls.
+Its constructor keeps wiki/provider policy, initial document admission and lifetime
+wiring in 68 rather than 184 lines. The existing 145 Markdown cases pass both
+before and after, with identical ordered case identities. IDE embeds and real
+documentation viewer consumers pass three/four additional cases.
+
+Logistics `bb13dcb2` makes EPUB control composition a 15-line sequence instead of
+191 lines. Six private builders in the existing owner receive the page and relevant
+layouts explicitly. Page fields, menu embedding, callbacks and speech/spread
+ownership stay intact. The same 54 EPUB cases and five cross-reader parity cases
+pass. No controls or workflows are removed.
+
+Logistics `2368b8a8` separates Git argv/executable and child-environment preparation
+from the captured execution boundary. `run()` is 59 rather than 115 lines, keeping
+admission, process errors and result checks together. All 36 existing backend cases
+pass before/after; 576 additional old/new request/result/error profiles match
+without starting processes. Credential, SSH, redaction and failure-order policies
+stay in the feature and retain their original statements.
+
+Expanding all extracted helpers reproduces the original ordered AST statements.
+No production module, package, dependency, persisted schema or public API changes.
+This improves navigation and responsibility clarity without introducing another
+state owner or abstraction layer. The limits remain native rendering/focus,
+Windows/Linux execution and target Blender validation; no new numeric ecosystem
+score is inferred from these bounded improvements. The [progress log](overnight_progress.md)
+records consumer compatibility and the final validation checkpoint.
