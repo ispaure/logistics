@@ -31,6 +31,10 @@ Reveal explicitly fetches unloaded folder contents, including empty folders that
 Qt does not expand, and retries queued row insertion/layout until the selected
 row has stable visible geometry. Already-populated ancestors need not emit a
 fresh load notification. Later notifications do not reopen user-collapsed branches.
+Queued model sorting and row insertion preserve a selection that was visible
+before the model change. The deferred layout correction scrolls without expanding
+branches; a selection already outside the viewport is left alone, preserving
+manual scrolling. Hidden/closed widgets do not apply that correction.
 An embedding host should honor `widget.can_close()` (false while work is running,
 with cancellation requested) and retry closing on `widget.idle` if it initiated
 that close. Do not destroy a running widget or its worker.
