@@ -586,3 +586,19 @@ completed baseline. Remaining priorities continue to govern selection.
 - Shared `aa5bcae` is committed; Blue Hole vendor bytes match exactly and all
   31 consumer tests pass. JSON pin/vendor commits are Logistics `463b728a` and
   Blue Hole `4ba794d` respectively.
+
+## Legacy text export destination permissions
+
+- New fixtures reproduced alternate-path text exports making the source writable,
+  failing on a read-only destination, and writing through a protected destination.
+  TXTFile now prepares the selected output's permissions, preserving the source;
+  in-place saves retain subclass dispatch. TXT/CSV guards run before parent mkdir.
+- A CSV fixture also reproduced creating a nested directory before denial; that
+  empty-directory mutation is now prevented. Streaming, native newline, link and
+  existing in-place write behavior remain intact; no blanket atomic migration or
+  whole-file buffering was introduced for these legacy APIs.
+- All 12 file-object tests pass in both environments, plus five local-access,
+  string-table, three settings and nine layered-settings tests. All 58 Comics and
+  five native rclone session tests pass. Lint and docs checks pass.
+- Shared `c1eb35a` is committed, with exact Blue Hole vendor and 31 consumer tests
+  passing. XML pin/vendor commits are Logistics `53082958` and Blue Hole `30907e9`.
