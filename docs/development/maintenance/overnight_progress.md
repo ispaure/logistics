@@ -646,3 +646,16 @@ completed baseline. Remaining priorities continue to govern selection.
 - This restores the developer guide's existing local optional-tool policy; skipped
   cases are not reported as native coverage. The original immutable environment
   failures and later installed-tool reruns remain recorded above.
+
+## Batch success admission without unnecessary hashing
+
+- A fixture reproduced successful dictionary items raising TypeError for both
+  stop-on-error modes. The runner looked up every successful item in its failure
+  dictionary, contrary to its documented hashability requirement only on failure.
+- The loop now tracks the current attempt's failure directly. Result shape,
+  stop-on-error, between-item cancellation and failed-item key policy remain intact.
+- All eight batch/worker/progress tests pass, plus two Dropbox, nine File Tools
+  and 23 image-staging tests. The pure batch success profiles also pass in the
+  mobile interpreter without importing a UI toolkit. Lint and docs checks pass.
+- Shared `199309c` is committed; exact Blue Hole vendor and 31 consumer tests pass.
+  Native test availability correction is Logistics `667bc472`.
