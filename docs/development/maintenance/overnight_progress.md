@@ -1338,3 +1338,23 @@ Reviewed import cleanup: `0ac67e1c`.
   document readability. All 39 real-rclone LocalCrypt integration cases pass,
   including encrypted reads, metadata, editing and transfer/resource behavior.
   Lint and five documentation checks pass.
+
+LocalCrypt input completion commit: `395b7821`.
+
+## Native cover queue retirement
+
+- A queued cover request outlived its Qt views and accessed a deleted CoverModel.
+  A minimal real-widget regression reproduces the unhandled native-object error
+  before the fix. Both deferred enqueue and queue-advance timers now carry the
+  owning view as their Qt context, matching column selection's existing policy.
+- All ten browser presentation cases and two Bulk Rename host cases pass. The
+  broader 30-case browser file first fails two watcher/model-loading checks under
+  the sandbox, then passes all 30 with normal filesystem notification access.
+  Assertions and timeouts are unchanged; both results are retained.
+- Shared fix `a3c12c9`; `1e8f891` also lists the new write_all function in the
+  existing stream API catalog/table. Lint, exact vendor checking and all 33
+  Blue Hole adapters pass.
+
+The exact `a3c12c9` copy also passes the embedded 152-case suite (one filesystem
+skip), including independent canonical/add-on namespaces and no optional UI
+toolkit imports. This does not execute Qt widgets inside Blender.
