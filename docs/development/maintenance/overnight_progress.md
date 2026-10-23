@@ -615,3 +615,16 @@ completed baseline. Remaining priorities continue to govern selection.
 - Shared `8086ff6` is committed; exact Blue Hole vendor bytes and all 31 consumer
   tests pass. The preceding legacy export pin/vendor commits are Logistics
   `034e11ed` and Blue Hole `9f9383b`.
+
+## Complete-tree archive extraction provider boundaries
+
+- Two fixtures reproduced extracting plaintext into a managed provider root,
+  including one protected during the final copied file. Complete-tree extraction
+  now checks its recursive destination before creating parents and immediately
+  before publication, cleaning only its own stage on denial.
+- All 23 shared archive tests and 13 archive workspace UI tests pass. Lint,
+  architecture and five documentation checks pass. Shared `04a94e3` is committed;
+  exact Blue Hole vendor bytes and all 31 consumer tests pass.
+- The later text-encoding pin/vendor commits are Logistics `b2d3d768` and Blue Hole
+  `5c86f3d`. The existing provider boundary remains application routing policy,
+  not an OS sandbox or a new global restriction on arbitrary third-party I/O.
