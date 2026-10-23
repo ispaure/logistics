@@ -117,3 +117,32 @@ copy passed membership and byte comparison, 25 consumer tests and 24 vendored
 Perforce tests. Save remains permissive when checkout fails; export still obeys
 its error policy. No live Blender, Perforce server, mount-driver or mobile-device
 validation is claimed by these host checks. No temporary Boox apps were installed.
+
+## Follow-up recovery and consumer review (2026-10-22)
+
+Plex recovery now preflights the whole generation, journals rollback progress and
+can resume after partial restoration or a failed final commit checkpoint. Missing
+originals stop recovery without deleting published files or the journal. Package
+promotion, backup and restoration reuse shared atomic no-overwrite rename, preserving
+files that appear after the destination preflight. A committed cleanup failure
+retains the valid new generation and cannot be recovered as an uncommitted package.
+
+The expanded Plex suite passes 36 tests, including every publication replacement
+failure, failed rollback checkpoints, external destination races and missing
+backups. The new conflict/retry cases were also run against previous implementations
+to reproduce their failures before checking the fixes.
+
+A second complete isolated pass passed all 179 desktop, 179 shared and 162 mobile
+test files. Comics comparisons again matched 80 cleanup/error traces, 24 encoded
+outputs byte-for-byte and 32 full plain/encrypted archive runs. Lint, architecture,
+source hygiene, toolchain, compatibility, packaging and documentation checks pass.
+
+Blue Hole development and add-on metadata now target Blender 5.2.2 on
+`blender-5.2.2/alpha`; the local legacy 4.5.1 branch is unchanged. Its 26 consumer
+tests and 24 actual-vendor Perforce tests pass. Vendor verification compares pinned
+Git content with checkout line-ending normalization, rather than comparing against
+unfinished upstream edits. Missing, stale, changed and linked members still fail.
+Shared UI wording now names the host generically and labels existing character
+limits correctly. No native Blender, Perforce server, mount-driver or mobile-device
+validation is claimed. The shared audit retains the separate volume-identity and
+offline-index policy concern; this follow-up does not change that contract.
