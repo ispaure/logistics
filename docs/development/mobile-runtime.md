@@ -1179,6 +1179,18 @@ Footer/chrome updates also reject stale ownership. Library/provider format swaps
 and forced view-preparation failure recovery require native checks in addition
 to focused host tests such as `test_reading_publication`.
 
+## Managed Markdown preview construction
+
+`app.show_preview()` retains checkpoint/render failure handling, workspace-token
+capture, Edit navigation, saved scroll restoration, menu/speech policy and route
+publication. `preview.prepare_managed_preview()` builds the toolbar, search and
+native title/button bindings on the existing `TextEditorView` owner. It receives
+Edit and search-validity callbacks and has no application or workspace dependency.
+Repeated visits retain the controls; `TextEditorView.dispose()` remains their
+lifetime boundary. Titles read the current document name, and each editor session
+keeps separate preview/search/speech instances. Source-editor host tests cover
+repeat visits, cross-document Edit and checkpoint/token vetoes.
+
 ## Settings implementation owners
 
 `settings.navigation.SettingsNavigation` owns compact routes, retained wide panes

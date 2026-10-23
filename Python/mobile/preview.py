@@ -23,3 +23,33 @@ def reader_image_source(copies, reader):
     if provider is not None and key is not None:
         return folder_image_source(provider, key)
     return None
+
+
+def prepare_managed_preview(owner, *, on_edit, valid):
+    """Build retained preview controls on the existing text-editor owner.
+
+    The owner already holds its WebView and owns disposal. The host supplies Edit
+    and search-validity callbacks; checkpoint, workspace and route policy stay
+    outside construction. Repeated preview visits keep controls/search identity.
+    """
+    import toga
+    from toga.style import Pack
+    from toga.style.pack import COLUMN, ROW
+    if owner.preview_box is not None:
+        return
+    from .control_icons import icon_button
+    owner.preview_edit = icon_button('edit', 'Edit Markdown', on_press=on_edit)
+    owner.preview_actions_button = icon_button('more', 'Document actions')
+    owner.preview_toolbar = toga.Box(children=[owner.preview_edit,
+        toga.Box(style=Pack(flex=1)), owner.preview_actions_button], style=Pack(direction=ROW))
+    owner.preview_box = toga.Box(children=[
+        owner.preview_toolbar,
+        owner.preview], style=Pack(direction=COLUMN, flex=1))
+    from commonUtils.ui.native.markdown_search import MarkdownPageSearch
+    owner.preview_search = MarkdownPageSearch(owner.preview, owner.preview_box, insertion_index=1,
+        valid=valid)
+    owner.preview.on_webview_load = owner.preview_search.loaded
+    owner.preview_box._workspace_toolbar = owner.preview_toolbar
+    owner.preview_box._native_reader_toolbar = owner.preview_toolbar
+    owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.preview_actions_button]
+    owner.preview_box._native_reader_title = lambda: owner.document.name

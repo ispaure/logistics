@@ -261,7 +261,7 @@ Task; corrected asynchronous test methods await the real handler contract.
 
 After Workspaces commit `41da70d6`, provider refresh was the next mixed host
 responsibility. Its 136-line content method now exposes preparation, validity,
-mount and final state/chrome updates in 66 lines. Spread and EPUB construction
+mount and final state/chrome updates in 54 lines. Spread and EPUB construction
 live in the existing `provider_presentation.py`, with explicit controller/view
 and host inputs. There is no new package, workflow base class or state proxy.
 Decoder preparation still precedes displayed-pixel retirement; publication still
@@ -277,3 +277,16 @@ anchor/position/bookmark/fallback-motion behavior. Private session, provider
 Markdown and staged-startup consumers pass 28 cases. Native decoding/allocation
 and device presentation still need their platform checks; host tests do not
 certify device rendering. The Perforce build design remains unchanged.
+
+
+### Managed Markdown preview assembly
+
+Provider publication commit `cb63db1b` is followed by a smaller `app.py` cleanup.
+Its managed-preview method keeps session policy but delegates retained toolbar,
+search and native-control construction to the existing `preview.py` owner.
+Construction receives explicit Edit/validity callbacks and keeps state on the
+existing `TextEditorView`; there is no new controller, proxy or package.
+The main method is 57 lines instead of 71, separating a UI assembly phase from
+checkpoint, token, scroll and route decisions. Six focused source-editor cases
+pass, including two added contracts for per-document identity reuse and
+checkpoint/retired-token vetoes. Titles remain dynamic after rename.

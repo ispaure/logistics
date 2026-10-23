@@ -100,3 +100,39 @@ class SourceEditorTests(unittest.TestCase):
         with patch.object(owner.formatted, 'view', preview):
             owner.dispose()
         self.assertEqual(events, ['stop', 'dom', 'clear'])
+
+    def test_managed_preview_reuses_owner_controls_and_routes_edit_to_its_session(self):
+        first = self.open('First.md')
+        first.editor.value = '# First content'
+        self.assertTrue(self.app.show_preview())
+        retained = first.preview_box, first.preview_search, first.preview_edit, first.markdown_speech
+        previous_menu = first.preview_actions
+        self.assertTrue(self.app.show_preview())
+        self.assertTrue(previous_menu.disposed)
+        self.assertEqual((first.preview_box, first.preview_search, first.preview_edit, first.markdown_speech), retained)
+        self.assertIs(first.preview_box._native_reader_toolbar, first.preview_toolbar)
+        self.assertEqual(first.preview_box._native_reader_buttons(),
+                         [first.preview_edit, first.preview_actions_button])
+        second = self.open('Second.md')
+        self.assertTrue(self.app.show_preview())
+        self.assertIsNot(second.preview_box, first.preview_box)
+        first.document.name = 'Renamed.md'
+        self.assertEqual(first.preview_box._native_reader_title(), 'Renamed.md')
+        first.preview_edit.on_press()
+        self.assertIs(self.app.editor_view, first)
+        self.assertEqual(self.app.workspace.active, first.session.id)
+        self.assertEqual(first.session.view['markdown_mode'], 'edit')
+
+    def test_managed_preview_edit_respects_checkpoint_veto_and_retired_token(self):
+        first = self.open('First.md')
+        self.assertTrue(self.app.show_preview())
+        second = self.open('Second.md')
+        with patch.object(self.app, 'checkpoint', return_value=False) as checkpoint:
+            first.preview_edit.on_press()
+        checkpoint.assert_called_once()
+        self.assertIs(self.app.editor_view, second)
+        self.app.workspace.invalidate(first.session.id)
+        with patch.object(self.app, 'checkpoint', side_effect=AssertionError('Retired callback checkpointed')):
+            first.preview_edit.on_press()
+        self.assertIs(self.app.editor_view, second)
+        self.assertEqual(self.app.workspace.active, second.session.id)
