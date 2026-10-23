@@ -64,3 +64,9 @@ it or the legacy `docs/development/mobile-evidence/` location to Git, release
 packages or mobile offline help. Keep reusable test drivers/fixtures tracked in
 their test owners, and retain concise validation scope in developer guides.
 Public documentation must not link to local-only artifacts.
+
+## Branch workflow
+
+Work on the current development branch by default. Create a separate branch only
+when there is a concrete reason, such as isolating concurrent work or a risky
+experiment; do not create `codex/*` branches automatically.
