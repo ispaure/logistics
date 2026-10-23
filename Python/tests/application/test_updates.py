@@ -116,6 +116,24 @@ class UpdateUITests(QtTestCase):
         close.assert_not_called()
         self.assertIn('local tracked changes', notice.call_args.args)
 
+    def test_worker_admission_failure_restores_the_offer_without_closing(self):
+        controller, owner = self.controller()
+        controller.available = {'branch': 'main', 'commit': 'a' * 40}
+        with patch('commonUtils.ui.tasks.operation_progress.Operation.start',
+                   side_effect=RuntimeError('thread admission denied')), \
+                patch('desktop.updater.notify') as notice, \
+                patch.object(owner.dlg, 'close') as close:
+            controller.install()
+            self.assertFalse(controller.button.isEnabled())
+            self.wait_until(lambda: not controller.progress.busy,
+                            message='Failed update admission did not retire')
+            self.assertTrue(controller.button.isEnabled())
+            self.assertEqual(controller.button.text(), 'Update Logistics')
+            self.assertIsNone(owner.pending_update)
+            close.assert_not_called()
+            notice.assert_called_once()
+            self.assertIn('thread admission denied', notice.call_args.args)
+
     def test_disabled_updates_hide_offer_without_network(self):
         controller, owner = self.controller()
         controller.available = {'branch': 'main', 'commit': 'a' * 40}

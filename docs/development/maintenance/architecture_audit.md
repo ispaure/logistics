@@ -1,5 +1,63 @@
 # Ecosystem architecture audit
 
+## October 23 continuation: update preservation contracts
+
+The earlier audit and historical measurements remain below. This continuation
+starts from the consolidated development branches at Logistics `8c844fa2`, shared
+`3797a25`, Blue Hole `5ff4cee` and the clean Ally Tools checkout. It retains
+existing branches and limits both external consumers to shared compatibility.
+
+| Repository | Production lines before → after | Test lines before → after | Tracked Python files |
+| --- | ---: | ---: | ---: |
+| Logistics | 89,639 → 89,647 | 77,167 → 77,214 | 1,173 |
+| commonUtils | 42,771 → 42,799 | 23,787 → 23,937 | 529 |
+| Blue Hole, excluding vendor | 22,813 → 22,813 | 1,303 → 1,303 | 206 |
+
+These use the existing tracked-source exclusions and current checkpoints
+Logistics `eb2bb0b9`, shared `9d048e2`, Blue Hole `36807e7`. Changes made in earlier
+sessions between the historical audit and this baseline are not attributed to
+this continuation. Exact repeated production bodies of 20+ lines remain absent
+under the same AST comparison. All 1,908 included sources compile without
+execution. No package, public API, persisted schema or dependency changes.
+
+The next fragile owner was the standalone archive updater: unchecked recovery
+copies, target edits during staging, early manifest publication and unconditional
+rollback all lacked preservation coverage. Seven new shared test methods exercise
+the confirmed failures, including replaced/new/deleted paths. Three Logistics
+tests exercise invalid state after preparation and valid/malformed receipts.
+
+| Dimension | Change and evidence | Remaining limit |
+| --- | --- | --- |
+| Readability | Named target-validation and private-staging phases replace nested temporary-file cleanup. | Multi-file apply/rollback still needs careful review; this is a focused owner cleanup. |
+| Modularity | Standalone script retains stdlib-only operation after copying outside the installation; application preferences/notifications remain with Logistics. | No large subsystem reorganization is claimed. |
+| Testability | Reproduced corrupt/partial copies, late edits, occupied destinations, rollback conflicts and invalid receipt/settings state; all 22 updater/nine controller tests pass. | Native restart launchers and abrupt process/power loss are unexecuted in this continuation. |
+| Coupling | Public call signatures and formats remain unchanged; both consumers retain their existing integration policy. | Existing deferred dependency groups remain. |
+| Duplication | Forward and recovery publication share one private sibling-lifetime owner; target checks share one content contract. | The standalone script cannot depend on package imports after installation replacement. |
+| Consistency | Manifest publishes last; rollback enrolls completed mutations and verifies original/recovered/published bytes. | The operation remains a multi-file rollback transaction, not a crash-atomic tree switch. |
+| Reliability | External changes observed during copy or rollback survive; corrupted recovery output never replaces the installed file. Invalid UI state leaves the application open. | Content checks sample external writers without locking; same-content replacement and writes after the last check remain outside that guarantee. |
+
+Shared validation passes 184 isolated files / 1,258 cases / 25 declared skips.
+Blue Hole's exact vendor check, 44 adapter tests and all 22 actual-vendor updater
+tests pass. All 48 Ally import/signature/fixture contracts pass unchanged. Complete
+desktop/mobile validation is recorded in the [progress log](overnight_progress.md).
+Configured lint, toolchain, source hygiene and architecture policy pass, retaining
+24 host adapters / 15 feature edges / zero violations. No numeric ecosystem score
+is justified by this bounded improvement. Remaining priorities include native
+restart/target Blender validation, large UI lifecycle owners, offline index
+identity/retention policy and broader architectural review.
+
+The subsequent worker-lifetime unit at shared `a2ab228` repairs construction/start
+exceptions stranding progress owners. Error formatting has one private owner,
+and failure delivery retains asynchronous GUI ordering, control retirement and
+retry. Its 11 shared worker cases, ten Logistics updater cases, 32 archive cases
+and 22 Bulk Rename cases pass. Blue Hole `665c184` changes only the vendor and
+passes 44 adapters plus the 11 actual-vendor worker cases and exact-copy check;
+Ally remains unchanged with 48 passing contracts. This strengthens testability,
+failure consistency and lifecycle reliability without adding a package or layer.
+The full desktop/mobile totals in the progress log precede this last Qt-only
+unit; their source provenance remains explicit. Remaining native/platform and
+whole-system architecture work still prevents a numeric 7/10 conclusion.
+
 ## Current assessment after the October 23 maintenance pass
 
 This section summarizes the latest implementation; the baseline and earlier

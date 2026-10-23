@@ -22,7 +22,57 @@ are restricted to necessary shared-library compatibility work in this continuati
 - A second unit reproduces a prematurely published new manifest and corrupt or
   interrupted rollback output overwriting installed bytes. Private sibling staging
   now owns payload/manifest/recovery lifetimes, verifies restored bytes and
-  publishes the manifest last. Its verification/commit checkpoint follows.
+  publishes the manifest last. Shared commit `08a3e05`; all 20 updater cases pass.
+- A third unit reproduces rollback overwriting external changes to replaced,
+  newly created and deleted paths, plus rollback enrolling a failed atomic
+  replacement. Only completed mutations enter the in-memory recovery set;
+  restoration checks this transaction's published bytes before/after recovery
+  copying. Shared commit `9d048e2`; all 22 updater cases pass.
+- Logistics `eb2bb0b9` validates persisted receipt types and handles invalid
+  settings after worker preparation. Malformed receipts stay available without
+  preventing startup; invalid preferences discard staging without closing the
+  application. Three added cases and all six existing update cases pass. Corrected
+  baseline execution reproduces the failures; valid receipt consumption passes
+  both implementations. An intermediate fixture unnecessarily combined managed
+  window cleanup with an unconditional delete callback; receipt-only fixtures now
+  use ordinary isolated temporary files and all nine cases pass.
+- Blue Hole `36807e7` updates only its vendor's three changed shared files and
+  revision marker. Exact committed membership/bytes match shared `9d048e2`;
+  all 44 adapters and all 22 actual-vendor updater cases pass. No add-on workflow,
+  registration, preference, Perforce or export code changed.
+- Complete shared validation at `9d048e2`: 184 isolated files, 1,258 cases,
+  25 declared skips and zero failures. At Logistics `eb2bb0b9` / shared `9d048e2`,
+  desktop passes 179 files / 1,688 cases / six skips; mobile passes 164 files /
+  1,179 cases / two skips. Both mobile DOM skips separately pass using existing
+  bundled Node/Playwright and installed headless Chrome with offline fixtures.
+  Production Python remained unchanged during those full runs. All 1,908 tracked non-vendored Python
+  sources compile without execution; lint, toolchain, compatibility and source
+  hygiene pass. No type-checker result is claimed.
+
+### Worker admission continuation
+
+After the full desktop checkpoint, real progress-owner fault injection reproduces
+exceptions during worker construction/start leaving `busy=True` with no running
+worker. Shared `a2ab228` sends these failures through queued ordinary completion,
+keeping the owner busy until that event and then retiring controls/worker ownership.
+Existing worker error formatting moves unchanged into one private helper used by
+both paths; redaction failures still never expose underlying details. Busy-owner
+rejection remains synchronous. Two new shared methods cover three failure profiles,
+deferred ordering and successful retry; a real Logistics controller test verifies
+that its update offer recovers without closing or preparing a request.
+
+All 11 worker/progress cases, ten Logistics update cases, 32 archive cases across
+four files and 22 Bulk Rename cases across two files pass. Final Ally fixture tests
+still pass all 48 cases unchanged. Blue Hole's actual vendor passes all 11 worker
+cases, all 44 adapters and exact membership/bytes; only the four shared files and
+revision marker change. Final shared full-suite results and commit checkpoint
+follow. The full desktop/mobile totals above precede this shared Qt-only unit;
+they are not relabelled as runs against a later source revision.
+
+Release-tool fixtures pass 18 cases with one native-Windows launcher skip; their
+publishing calls are mocked and nothing is uploaded. Documentation layout/viewer
+checks pass five/four cases respectively. No release, device installation, Boox
+package change, reset, remote push or external-app workflow operation occurred.
 - One intermediate fixture compared macOS temporary-path aliases lexically and
   missed two injections. Canonical source-path comparisons fix the fixture; all
   corrected profiles were rerun against baseline and changed implementations.
