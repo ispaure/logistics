@@ -38,6 +38,7 @@ class CredentialRevocationTests(QtTestCase):
         provider.root = Path('/synthetic/ciphertext')
         provider._cancellation = WorkerCancellation()
         provider._encoded_paths = {}
+        provider._cache_lock = threading.RLock()
         return provider
 
     def test_unencrypted_and_mixed_packages_preserve_existing_credentials_in_both_modes(self):
