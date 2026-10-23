@@ -187,7 +187,7 @@ Staging creates a new directory and refuses to replace an existing payload. Move
 or remove your previous generated `mobile_build/payload` before staging again. For local
 development, `--allow-dirty` permits uncommitted mobile and tracked shared sources.
 The release evidence verifier still rejects dirty payloads. Explicit local runs
-use `python ui_tools.py run android --device <device> --local` (or `ios`), verify
+use `python validation/ui_tools.py run android --device <device> --local` (or `ios`), verify
 the staged source fingerprint, and retain a separate `*-native-ui-local.json` report.
 
 Briefcase needs the Android SDK/JDK or Xcode/iOS platform resources. A listed iOS
@@ -218,8 +218,8 @@ For live resize and lifecycle checks, build/install the test-mode app first and
 run from `mobile_build` with a booted validation device:
 
 ```sh
-python navigation_tools.py --adb /path/to/android-sdk/platform-tools/adb --device emulator-5554
-python navigation_tools.py --ios --device <simulator-uuid> --output logs/navigation/apple-lifecycle
+python validation/navigation_tools.py --adb /path/to/android-sdk/platform-tools/adb --device emulator-5554
+python validation/navigation_tools.py --ios --device <simulator-uuid> --output logs/navigation/apple-lifecycle
 ```
 
 These commands activate an isolated, synthetic draft under the test app's cache.

@@ -79,7 +79,7 @@ invalidates old session generations and cancels pending private file work. This
 is the single-workspace Activity-recreation contract; independent OS windows
 require a separate writer/scene ownership model before enabling them.
 
-The --workspace mode of mobile_build/navigation_tools.py drives the actual app, rather
+The --workspace mode of mobile_build/validation/navigation_tools.py drives the actual app, rather
 than the minimal foundation fixture. Local matrices passed two-draft keyboard,
 phone/tablet resize, Activity recreation and restart on Android, and rotation,
 background/resume and restart on Duo and iPad. Physical BOOX, real fold gestures,

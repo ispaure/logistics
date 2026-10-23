@@ -54,9 +54,17 @@ in the existing mobile environment. Real worker overlap and separate workspace
 contracts still run. A launcher fixture checks all six shell entry points from an
 unrelated working directory. No device install, upload or notification was run.
 
+### Native validation tools
+
+Six native evidence/fixture drivers now live in `mobile_build/validation/`.
+The build root has three Python entry points instead of 27 mixed-purpose files.
+Twenty report, workflow/gate and reader-resume tests pass; actionlint, Ruff and
+CLI help checks pass. No device validation or release rerun is claimed. Existing
+native test source and generated report locations remain unchanged.
+
 ## Next work
 
-Group validation tooling, then consolidate the wiki
+Consolidate the wiki
 under each repository's root `docs/`. Keep H1 page titles and linked same-named
 folder landing pages so the Markdown viewer presents a navigable tree. Preserve
 short compatibility entry links where applications or saved links depend on them.

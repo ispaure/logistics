@@ -43,4 +43,4 @@ def generate(destination):
 
 
 if __name__ == '__main__':
-    generate(Path(__file__).parent / 'native_tests/tests/logisticsmobile/localcrypt_fixture.json')
+    generate(Path(__file__).resolve().parents[1] / 'native_tests/tests/logisticsmobile/localcrypt_fixture.json')

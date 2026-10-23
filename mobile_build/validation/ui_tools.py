@@ -13,9 +13,9 @@ import sys
 import time
 
 PREFIX = 'LOGISTICS_NATIVE_UI_RESULT='
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('native_ui_contract',
-    Path(__file__).parent / 'native_tests/tests/logisticsmobile/__init__.py')
+    Path(__file__).resolve().parents[1] / 'native_tests/tests/logisticsmobile/__init__.py')
 contract = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(contract)
 

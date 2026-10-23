@@ -1075,7 +1075,7 @@ signals, a close or navigation racing recovery, and trim arriving after reveal.
 installed under `io.github.ispaure.logisticsreaderresumeqa`, run:
 
 ```sh
-python3 mobile_build/reader_resume_tools.py --adb /path/to/sdk/platform-tools/adb --device emulator-5580 --output mobile_build/logs/reader-resume
+python3 mobile_build/validation/reader_resume_tools.py --adb /path/to/sdk/platform-tools/adb --device emulator-5580 --output mobile_build/logs/reader-resume
 ```
 
 The driver requires an explicit emulator and never targets a physical Boox or the

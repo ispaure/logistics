@@ -129,7 +129,7 @@ jobs:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
           sudo chmod a+rw /dev/kvm
-          python ui_tools.py run android --device '{"avd":"LogisticsValidation","device_type":"pixel","skin":null,"system_image":"system-images;android-35;google_apis;x86_64"}'
+          python validation/ui_tools.py run android --device '{"avd":"LogisticsValidation","device_type":"pixel","skin":null,"system_image":"system-images;android-35;google_apis;x86_64"}'
       - name: Preserve native builds and diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -185,11 +185,11 @@ jobs:
             ipad) selector=ios-ipad; flags=(--require-independent-windows) ;;
             *) exit 1 ;;
           esac
-          device=$(python ui_tools.py "$selector")
-          python ui_tools.py run ios --device "$device" --no-update "${flags[@]}"
+          device=$(python validation/ui_tools.py "$selector")
+          python validation/ui_tools.py run ios --device "$device" --no-update "${flags[@]}"
       - name: Capture iOS startup and crash diagnostics
         if: failure()
-        run: python ui_tools.py ios-diagnostics
+        run: python validation/ui_tools.py ios-diagnostics
       - name: Preserve device reports and diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

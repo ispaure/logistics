@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 REPO = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('mobile_ui_tools', REPO / 'mobile_build/ui_tools.py')
+spec = importlib.util.spec_from_file_location('mobile_ui_tools', REPO / 'mobile_build/validation/ui_tools.py')
 ui_tools = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ui_tools)
 

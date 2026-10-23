@@ -14,13 +14,10 @@ import subprocess
 import time
 from tempfile import TemporaryDirectory
 
-if __package__:
-    from .tools import stage
-else:
-    from tools import stage
+from ..tools import stage
 
 BUNDLE = 'io.github.ispaure.logisticsduofoldqa'
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 
 
 def sim(*arguments, check=True):

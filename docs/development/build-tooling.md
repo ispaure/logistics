@@ -12,6 +12,7 @@ to do; application features stay in `Python/`.
 | Regenerate canonical navigation and folder artwork | `mobile_build/build_support/generate_navigation_icons.py`, `generate_folder_icons.py` |
 | Device install, UI batch deployment, Firebase and TestFlight | `mobile_build/deployment/` |
 | User-facing deployment commands | Existing `mobile_build/*.command` launchers |
+| Native report verification, lifecycle drivers and synthetic fixture generators | `mobile_build/validation/` |
 | Host regression contracts | `mobile_build/tests/` |
 | On-device checks and synthetic fixtures | `mobile_build/native_tests/` |
 
@@ -42,3 +43,17 @@ to guess whether it was loaded as a script.
 platform workspaces. Moving Python owners does not move `.device.json`,
 `.android-beta`, `.tools`, `.testflight-auth.json`, `build/` or `.deploy-workspaces/`.
 The launcher UI keeps its existing confirmation protocol before tester uploads.
+
+## Validation commands
+
+The device workflow keeps `mobile_build` as its working directory and runs
+`python validation/ui_tools.py ...`. Report contracts still validate the exact
+source revisions, selected device and required case set. Native test application
+sources remain in `native_tests/tests/`; host regression sources stay in `tests/`.
+Run the standalone Duo pose audit from the repository root as
+`python -m mobile_build.validation.duo_pose_tools --help`.
+
+The build root now has three Python entry points: `tools.py` for payloads,
+`cloud_build.py` for native project composition and `select_ios_sdk.py` for SDK
+selection. Credentials, manifests, native bridge sources and build products keep
+their existing paths.

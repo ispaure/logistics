@@ -12,7 +12,7 @@ from commonUtils.archives.zip_access import open_archive
 def generate(destination):
     password = 'synthetic-comic-password'
     spec = importlib.util.spec_from_file_location('native_comic_fixtures',
-        Path(__file__).parent / 'native_tests/tests/logisticsmobile/fixtures.py')
+        Path(__file__).resolve().parents[1] / 'native_tests/tests/logisticsmobile/fixtures.py')
     fixtures = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fixtures)
     image = fixtures.png_page()
@@ -33,4 +33,4 @@ def generate(destination):
 
 
 if __name__ == '__main__':
-    generate(Path(__file__).parent / 'native_tests/tests/logisticsmobile/comic_fixture.json')
+    generate(Path(__file__).resolve().parents[1] / 'native_tests/tests/logisticsmobile/comic_fixture.json')

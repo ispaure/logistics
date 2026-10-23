@@ -374,7 +374,7 @@ For a synthetic local audit without replacing the normal app, use an existing
 Logistics Simulator build (selected with Xcode 27.1):
 
 ```sh
-python mobile_build/duo_pose_tools.py --app '/absolute/path/Logistics Mobile.app' \
+python -m mobile_build.validation.duo_pose_tools --app '/absolute/path/Logistics Mobile.app' \
   --device DUO_UDID --output mobile_build/logs/duo-outer-review
 ```
 

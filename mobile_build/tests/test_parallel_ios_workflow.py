@@ -122,7 +122,8 @@ else:
 '''
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / 'ui_tools.py').write_text(fixture)
+            (root / 'validation').mkdir()
+            (root / 'validation/ui_tools.py').write_text(fixture)
             command = 'python() { ' + shlex.quote(sys.executable) + ' "$@"; }\n' + run
             for device, selector, flags in (
                     ('iphone', 'ios-device', []), ('duo', 'ios-duo', ['--require-duo']),

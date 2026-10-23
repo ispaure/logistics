@@ -1524,3 +1524,13 @@ workflow actionlint, CLI help and whitespace checks pass. Initial GUI fixtures
 used obsolete script argv and a fake script outside the new package; that owned
 run was stopped, fixtures adapted, and the corrected run passes. No upload or
 device install occurred.
+
+## Readability follow-up: native validation tooling
+
+Deployment grouping is committed as `84b4a3af`. Six native validation/fixture
+drivers now have one discoverable owner; the root has three Python entry points
+versus 27 before the grouping. Twenty report/gate/resume cases pass, plus
+actionlint, Ruff and CLI help. The initial Duo help check exposed its old
+script-versus-package import branch; replacing that with the canonical module
+import fixes the check. Device tests and generated evidence retain their paths.
+No push, release retry, native build, app install or upload.

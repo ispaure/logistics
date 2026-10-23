@@ -1242,7 +1242,7 @@ Library and Help. A settings category may move between a compact route and a wid
 pane while retaining its logical identity. Fullscreen image content intentionally
 extends beneath system chrome and is tested separately by the comic suite.
 
-These checks run through `mobile_build/ui_tools.py` in `.github/workflows/mobile-build.yml`,
+These checks run through `mobile_build/validation/ui_tools.py` in `.github/workflows/mobile-build.yml`,
 which is a required dependency of `.github/workflows/release.yml`. They belong to
 the real native app gate, not the pure-Python document-runtime smoke test. Native
 geometry samples and failures are included in the uploaded mobile diagnostics.
