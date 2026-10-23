@@ -15,7 +15,7 @@ The [user guide](../user/user.md) describes available workflows and limits.
 | `session.py` | Conversation record, edit lease, dirty state, publication and streaming response transitions; no widget dependencies |
 | `generation.py` | Request preparation and publish-before-dispatch orchestration over captured inputs; no widgets |
 | `ui/page.py` | Navigation, UI value collection, generation presentation, GUI-thread timers, save feedback and close prompts |
-| `ui/layout.py` | Widget construction and layout, without conversation state ownership |
+| `ui/layout.py` | Top-level layout composition plus private sidebar, session-control and message-area builders; no conversation state ownership |
 | `ui/composer.py`, `ui/mode_tabs.py` | Enter/Shift+Enter, screenshot paste/drop, sampling controls and Chat/Code tabs |
 | `ui/profiles.py` | Identity-preserving server profile editor |
 | `ui/ide_context.py` | Lazy project registration lookup and GUI-thread editor snapshots |
@@ -28,9 +28,10 @@ The [user guide](../user/user.md) describes available workflows and limits.
 
 Start a desktop UI change at `ui/page.py`, record/lease changes at `session.py`,
 saved-file contracts at `storage.py`, and request construction at `domain.py`.
-Registration imports `ui/page.py` lazily. The old root-level presentation modules
-remain compatibility imports of the same classes/functions; new code should use
-`features.lm.ui`. Request/agent adapters remain at the feature root; they do not
+Registration imports `ui/page.py` lazily. Import presentation from `features.lm.ui`;
+the old root-level forwarding modules have been removed. Layout builders populate
+the existing page widget references in their original order; the page keeps
+callbacks and lifecycle ownership. Request/agent adapters remain at the feature root; they do not
 own widgets. Mobile uses selected portable domain, session and generation modules
 plus its execution adapter, without importing desktop presentation or project tools.
 
