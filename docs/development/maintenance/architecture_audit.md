@@ -115,3 +115,47 @@ Perforce server, Windows/Linux desktop or mobile device validation is claimed.
 Do not assign a 7/10 outcome from these measurements. Assess readability,
 modularity, testability, coupling, duplication, consistency and reliability from
 verified changes, and retain platform limitations in the final assessment.
+
+## Follow-up import-risk inventory
+
+A conservative AST graph includes imports inside functions and conditional blocks,
+resolves relative imports and records edges to known project modules. It excludes
+tests/vendors and does not execute registration or resolve arbitrary dynamic
+strings. Its current snapshot records:
+
+| Repository | Modules | Internal edges | Potential cyclic groups | Largest group |
+| --- | ---: | ---: | ---: | ---: |
+| Logistics Python tree | 659 | 1,612 | 27 | 40 |
+| commonUtils | 325 | 931 | 7 | 91 |
+| Blue Hole | 196 | 597 | 1 | 80 |
+
+These are **potential cycles including deferred imports**, not demonstrated
+startup failures. The large shared group includes filesystem/formats plus lazily
+opened presentation; Logistics groups include desktop browser/document routing
+and mobile presentation; Blue Hole's group spans registration, actions, containers
+and preferences. The configured boundary check and consumer import tests pass.
+Changing these groups safely requires distinguishing eager initialization from
+intentional deferred cross-references; broad graph-driven moves are deferred.
+
+## Before/after assessment of this pass
+
+| Dimension | Baseline evidence | Implemented improvement / remaining limit |
+| --- | --- | --- |
+| Readability | Shortcut save reimplemented staging; installation error paths obscured recovery state | Shortcut publication delegates to its shared owner; promotion and IDE admission have explicit phases. Large UI construction/filter functions remain. |
+| Modularity | Existing feature owners and grouped shared packages already in place | Kept all production modules and entry points recognizable; no package moves or new abstraction layers. This pass does not claim a whole-repository modularity transformation. |
+| Testability | Extensive tests existed, but some used default shared storage and optional Toga failed discovery | Regression runner isolates default storage/preferences before discovery; new failure regressions and optional-backend execution cover the changed contracts. Device validation remains separate. |
+| Coupling | 25 approved host adapters, 15 cross-feature edges and deferred cyclic groups | No added feature-to-feature edges. Blue Hole and archive extraction consume the existing publication primitive. Large deferred graph groups remain. |
+| Duplication | Shortcut writer repeated shared staging/fsync/replace logic | Removed that duplicate and reused shared verified promotion in Blue Hole. No exact repeated production function bodies of 20+ lines found; near-duplicates are not exhaustively eliminated. |
+| Consistency | Similar mutation paths had different collision and cleanup behavior | Shared promotion and complete archive extraction use no-replace publication. Invalid IDE state is admitted atomically; shortcut failures restore live state. Atomic publication still is not multi-file locking. |
+| Reliability | New tests reproduced overwritten racing files, partial extraction visibility, changed shortcuts after failed save, partial IDE admission and damaged Blender preferences | The reproduced cases pass after fixes, with exact vendor verification and consumer tests. Native Blender, Windows/Linux and actual device behavior remain unverified. |
+
+Measured production/test lines now total Logistics 89,215 / 75,645,
+commonUtils 42,363 / 22,250 and Blue Hole 22,814 / 580. Python file counts are
+unchanged. Small production-line changes accompanied substantial targeted failure
+coverage; line reduction itself was not used as a quality score.
+
+No numeric 7/10 outcome is asserted. This pass provides evidence for incremental
+reliability, testability and persistence consistency gains. An ecosystem-wide
+score needs an agreed rubric, deeper review of remaining cyclic groups and native
+consumer evidence. See the [work log](overnight_progress.md) for executed checks
+and precise limits.
