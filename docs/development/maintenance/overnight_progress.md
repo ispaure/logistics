@@ -571,3 +571,18 @@ completed baseline. Remaining priorities continue to govern selection.
   owner. Lint and five documentation checks pass.
 - Shared `cfdad79` is committed; exact Blue Hole vendor bytes and all 31 consumer
   tests pass. The main worktree remains separate from the immutable test checkout.
+
+## XML publication consolidation and destination revalidation
+
+- Three fixture cases reproduced XML exports bypassing provider boundaries and
+  replacing a symlink created after the writer's initial check. XMLFile now
+  delegates publication to atomic_write_bytes and rechecks its explicit symlink
+  refusal before publication. Serialization, no-op bytes, DOM metadata, export
+  identity and existing mode policy remain owned by XMLFile.
+- All 15 XML tests pass in desktop and mobile environments, including late-link,
+  provider, malformed DOM and export identity cases. All 58 Comics tests pass;
+  lint and five documentation checks pass. Temporary cleanup assertions inspect
+  complete directory contents rather than the former stage-name pattern.
+- Shared `aa5bcae` is committed; Blue Hole vendor bytes match exactly and all
+  31 consumer tests pass. JSON pin/vendor commits are Logistics `463b728a` and
+  Blue Hole `4ba794d` respectively.
