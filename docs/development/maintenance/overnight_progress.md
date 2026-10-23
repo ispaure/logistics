@@ -1268,3 +1268,21 @@ Blender layout commit: `84597674`.
 Embedded result: 145 cases on Blender 4.5.1 / Python 3.11.11, 144 passing and
 one filesystem skip. Both new ZIP methods execute there without optional
 encryption packages. Target Blender 5.2.2 registration is still not claimed.
+
+## Reviewed UI imports and packaged startup
+
+- An optional broader F401 inventory reports 109 candidates across desktop,
+  features, services and mobile. Many are intentional exports/patch targets;
+  this is not a configured gate and no bulk fix was applied. Cross-repository
+  tracked-source import/attribute searches support removing four unused names
+  from three existing private implementation locations: Blender layout's
+  LaunchCard import, Blender page's two typography imports, and the Markdown
+  launch callback's unused local Qt import. Supported page/catalog exports stay.
+- All 18 Blender page and three document-launcher cases pass; correctness lint
+  and diff checks pass. The same-module composition remains unchanged.
+- A clean `cc5a0661` / `84ed1c8` source package passes all 2,219 manifest
+  hashes and real offscreen startup from fresh extraction with its own profile.
+  Bulk Rename opens the owned fixture without altering it; expanded LM controls
+  render, reserved Misc tools_menu is present, and cooperative shutdown exits 0.
+  This package precedes the subsequent import-only cleanup. No release was
+  published and no update download was run.
