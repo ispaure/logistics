@@ -175,8 +175,10 @@ class ReaderTests(QtTestCase):
         speech.show()
         speech.engine.engineCapabilities = lambda: QTextToSpeech.Capability.WordByWordProgress
         speech.start()
+        initial_pointer = self.page.text.read_pointer
+        self.assertIsNotNone(initial_pointer)
         speech.engine.sayingWord.emit('paragraph', 0, 1200, 9)
-        self.assertEqual(self.page.text.read_pointer, speech._utterance_offset + 1200)
+        self.assertEqual(self.page.text.read_pointer, initial_pointer + 1200)
         self.page.resize(920, 600); QTest.qWait(200)
         cursor = qt.QTextCursor(self.page.text.document()); cursor.setPosition(self.page.text.read_pointer)
         midpoint = self.page.text.cursorRect(cursor).center().y()

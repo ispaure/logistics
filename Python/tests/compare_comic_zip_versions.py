@@ -149,7 +149,7 @@ for layout, entries in layouts.items():
             (folder / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password = test-only-comic-password\n')
             output = folder / 'trace.json'
             env = dict(os.environ, PYTHONPATH=str(source / 'Python'), QT_QPA_PLATFORM='offscreen')
-            completed = subprocess.run([sys.executable, str(CHILD), str(path), str(output), password or '-', str(int(keep)), '1' if version == 'before-plain' else '0'], cwd=source, env=env, capture_output=True, text=True)
+            completed = subprocess.run([sys.executable, str(CHILD), str(path), str(output), password or '-', str(int(keep)), '1' if version == 'before-plain' and ref == '51b610ed3f0d55e94bd9b179621545fe867ccb38' else '0'], cwd=source, env=env, capture_output=True, text=True)
             (folder / 'run.log').write_text(completed.stdout + completed.stderr)
             if completed.returncode:
                 raise RuntimeError(f'Run failed: {name}, see {folder / "run.log"}\n' + completed.stdout[-3000:] + completed.stderr[-3000:])
@@ -185,7 +185,7 @@ if not args.encrypted_baseline:
     assert legacy['explicit_extraction'] == results['root-keep0-before-plain']['explicit_extraction']
     assert not legacy['compression_success'] and legacy['original_unchanged']
 windows_original_flush_failure = None
-if sys.platform == 'win32':
+if sys.platform == 'win32' and ref == '51b610ed3f0d55e94bd9b179621545fe867ccb38':
     folder = ROOT / 'runs' / 'before-plain-pristine-windows'
     folder.mkdir(parents=True)
     path, output = folder / 'comic.cbz', folder / 'trace.json'
@@ -201,7 +201,7 @@ if sys.platform == 'win32':
     assert 'Bad file descriptor' in completed.stdout + completed.stderr
     assert pristine['staged_result'] == results['root-keep0-before-plain']['staged_result']
     windows_original_flush_failure = pristine
-summary = {'windows_pristine_baseline_flush_failure': windows_original_flush_failure, 'windows_baseline_flush_adjustment': sys.platform == 'win32', 'platform': platform.platform(), 'python': sys.version, 'baseline_logistics': ref, 'baseline_commonutils': shared_ref, 'successful_full_runs': len(results), 'legacy_password_extraction_same_layout': legacy is not None, 'legacy_encrypted_full_compression_unsupported_original_preserved': legacy is not None, 'compared_stages': ['explicit extraction', 'compression extraction', 'sanitized', 'staged result', 'final archive'], 'results': results, 'legacy_encrypted': legacy}
+summary = {'windows_pristine_baseline_flush_failure': windows_original_flush_failure, 'windows_baseline_flush_adjustment': sys.platform == 'win32' and ref == '51b610ed3f0d55e94bd9b179621545fe867ccb38', 'platform': platform.platform(), 'python': sys.version, 'baseline_logistics': ref, 'baseline_commonutils': shared_ref, 'successful_full_runs': len(results), 'legacy_password_extraction_same_layout': legacy is not None, 'legacy_encrypted_full_compression_unsupported_original_preserved': legacy is not None, 'compared_stages': ['explicit extraction', 'compression extraction', 'sanitized', 'staged result', 'final archive'], 'results': results, 'legacy_encrypted': legacy}
 (ROOT / 'comparison.json').write_text(json.dumps(summary, indent=2))
 print('RESULT_ROOT=' + str(ROOT), flush=True)
 print(f'All {len(results)} full compression runs passed; encrypted baseline compared: {args.encrypted_baseline}.', flush=True)
