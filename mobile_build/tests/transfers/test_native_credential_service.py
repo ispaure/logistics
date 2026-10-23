@@ -54,6 +54,7 @@ class NativeCredentialTests(unittest.TestCase):
         result = service.unlock(prepared)
         self.assertEqual(result.remotes, ('Alias',))
         self.assertFalse(result.saved)
+        self.assertEqual(result.generation, client.generation)
         self.assertEqual(client.loaded, [('Fixture.zip', b'encrypted zip fixture', {'Original': 'Alias'}, 'correct', False)])
         with self.assertRaises(ValueError):
             service.unlock(prepared)

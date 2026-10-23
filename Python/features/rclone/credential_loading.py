@@ -18,6 +18,7 @@ class CredentialResult:
     key: object
     remotes: tuple[str, ...]
     saved: bool
+    generation: int | None = None
 
 
 @dataclass(frozen=True, eq=False)

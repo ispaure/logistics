@@ -5,18 +5,29 @@ from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 import json
+from copy import deepcopy
+from threading import RLock
+from weakref import WeakSet
 from zipfile import ZipFile, BadZipFile
 from commonUtils.persistence import atomic_write_json, atomic_write_bytes
 from features.rclone.mobile.cloud import PACKAGE_LIMIT, download_name
 
 
+_stores = WeakSet()
+_store_lock = RLock()
+
+
 class CredentialPackages:
-    def __init__(self, vault, client, *, document_cache_root=None):
+    def __init__(self, vault, client, *, document_cache_root=None, load=True):
         self.vault, self.client = vault, client
         self.root = vault.root
         self.document_cache_root = Path(document_cache_root) if document_cache_root is not None else self.root / 'document-lists'
         self.index = self.root / 'packages.json'
-        self.items = {}
+        with _store_lock:
+            self.items = self._read_items() if load else {}
+            _stores.add(self)
+
+    def _read_items(self):
         if self.index.is_symlink():
             raise ValueError('Retained package index cannot be linked.')
         if self.index.exists():
@@ -45,7 +56,15 @@ class CredentialPackages:
                                or not isinstance(alias, str) or alias not in item['remotes']
                                for name, alias in aliases.items())):
                     raise ValueError('Invalid retained credential aliases.')
-            self.items = items
+            return items
+        return {}
+
+    def _publish_items(self, items):
+        # Other scenes may already hold a read-only metadata view of this root.
+        with _store_lock:
+            for store in tuple(_stores):
+                if store.root == self.root:
+                    store.items = deepcopy(items)
 
     def path(self, key):
         if len(key) != 64 or any(c not in '0123456789abcdef' for c in key):
@@ -85,7 +104,7 @@ class CredentialPackages:
         atomic_write_bytes(self.path(key), data)
         atomic_write_json(self.index, next_items, max_bytes=128 * 1024)
         previous = self.items
-        self.items = next_items
+        self._publish_items(next_items)
         for retired in previous.keys() - next_items.keys():
             from .document_lists import forget_cache
             forget_cache(self.document_cache_root, retired)
@@ -112,7 +131,7 @@ class CredentialPackages:
             return
         updated = {**self.items, key: {**item, 'crypt_remotes': names}}
         atomic_write_json(self.index, updated, max_bytes=128 * 1024)
-        self.items = updated
+        self._publish_items(updated)
 
     @contextmanager
     def open(self, key):
@@ -136,9 +155,20 @@ class CredentialPackages:
 
     def forget(self):
         from .document_lists import forget_cache
-        forget_cache(self.document_cache_root)
-        self.vault.forget()
-        for key in self.items:
-            self.path(key).unlink(missing_ok=True)
+        # Attempt independent erasures even if a key store or a cache unlink
+        # fails. Keep the index in memory on failure so retry can finish cleanup.
+        operations = [self.vault.forget, lambda: forget_cache(self.document_cache_root)]
+        keys = set(self.items)
+        keys.update(path.stem for path in self.root.glob('*.bin')
+                    if len(path.stem) == 64 and all(c in '0123456789abcdef' for c in path.stem))
+        operations.extend(lambda key=key: self.path(key).unlink(missing_ok=True) for key in keys)
+        failure = None
+        for operation in operations:
+            try:
+                operation()
+            except Exception as error:
+                failure = failure or error
+        if failure is not None:
+            raise failure
         self.index.unlink(missing_ok=True)
-        self.items = {}
+        self._publish_items({})

@@ -187,9 +187,13 @@ class CloudClient:
         self.vault_attached = False
 
     def clear(self):
-        self.lock()
-        if getattr(self, 'vault', None) is not None:
-            self.vault.forget()
+        # Another scene must not reattach the vault between clear and erasure.
+        with self.credential_state.lock:
+            try:
+                self.lock()
+            finally:
+                if getattr(self, 'vault', None) is not None:
+                    self.vault.forget()
 
 
 def download_name(path):

@@ -14,6 +14,60 @@ from features.rclone.mobile.remote_readers import RemoteReaders
 
 @unittest.skipUnless(os.environ.get('LOGISTICS_REMOTE_BRIDGE'), 'Set LOGISTICS_REMOTE_BRIDGE to a rebuilt host bridge')
 class RemoteNativeBridgeTests(unittest.TestCase):
+    def test_service_saved_vault_and_retained_zip_forgetting(self):
+        from types import SimpleNamespace
+        from features.rclone.mobile.credential_loading import NativeCredentialLoad
+        from features.rclone.mobile.credential_retention import NativeCredentialRetention, NativeCredentialForget
+        from features.rclone.mobile.credential_packages import CredentialPackages
+        from features.rclone.mobile.credential_vault import ProtectedVault
+        from features.rclone.mobile.service import native_service
+
+        class Keys:
+            def __init__(self):
+                self.values = {}
+            def create(self, identity, key):
+                self.values[identity] = key
+                return {}
+            def load(self, identity, record):
+                return self.values[identity]
+            def delete(self, identity):
+                self.values.pop(identity, None)
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            keys = Keys()
+            vault = ProtectedVault(root / 'Saved', keys, 'fixture')
+            package_vault = ProtectedVault(root / 'Retained', keys, 'fixture')
+            client = CloudClient(library=os.environ['LOGISTICS_REMOTE_BRIDGE'], vault=vault)
+            self.addCleanup(client.clear)
+            credentials = native_service(client).credentials
+            source = Path(__file__).resolve().parents[3] / 'mobile_build/rclone_bridge/testdata/credentials-aes256.zip'
+            loaded = credentials.load(NativeCredentialLoad(LocalDocuments(), source, True), 'synthetic-fixture-password')
+            self.assertTrue(vault.ciphertext.exists())
+            credentials.lock()
+            restored = credentials.restore()
+            self.assertEqual(restored.remotes, loaded.remotes)
+            store = CredentialPackages(package_vault, client)
+            package = SimpleNamespace(name=source.name, data=source.read_bytes())
+            key = credentials.retain(NativeCredentialRetention(store, package, restored.remotes, client.generation))
+            grant = credentials.capture(loaded.key)
+            credentials.lock()
+            self.assertTrue(store.path(key).exists())
+            pending = credentials.prepare_load(NativeCredentialLoad(store, key, False), 'synthetic-fixture-password')
+            credentials.forget(NativeCredentialForget(lambda: store, store.document_cache_root))
+            self.assertEqual(store.items, {})
+            self.assertFalse(store.path(key).exists())
+            self.assertFalse(vault.ciphertext.exists())
+            self.assertFalse(vault.record.exists())
+            self.assertFalse(package_vault.record.exists())
+            self.assertEqual(keys.values, {})
+            self.assertTrue(source.exists())
+            with self.assertRaises(ValueError):
+                credentials.unlock(pending)
+            with self.assertRaises(ValueError):
+                grant.check()
+            self.assertEqual(credentials.restore().remotes, ())
+
     def test_regular_and_crypt_direct_readers(self):
         from PIL import Image
         client = CloudClient(library=os.environ['LOGISTICS_REMOTE_BRIDGE'])

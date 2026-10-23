@@ -230,6 +230,10 @@ In rclone Settings, **Lock Package** ends the selected package's unlocked sessio
 **Lock All Session Credentials** ends every unlocked session. Locking keeps the
 credential ZIP, saved config and encrypted copies. Existing dependent views retire;
 reopening a saved config can establish new access from its retained credentials.
+**Forget Credentials** removes both saved and session credentials for the selected
+package while preserving its original ZIP and encrypted copies. **Clear All Saved Configs**
+removes saved `.conf` files, including the default `rclone.conf`; session-only
+packages remain loaded. If cleanup reports a partial failure, retry the action.
 Unsaved private edits must be saved or explicitly discarded before a requested
 lock. Cancel keeps the session unlocked. Closing a browser alone leaves its open
 readers and other browsers available.

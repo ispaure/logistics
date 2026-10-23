@@ -93,6 +93,8 @@ class CredentialWorkflow:
 
     async def _load_crypt_remote_names(self):
         cloud = self.cloud
+        client = cloud.cloud_client
+        generation = getattr(client, 'generation', 0)
         # Alternate client adapters may not expose crypt support.
         kinds = getattr(cloud.cloud_client, 'crypt_remotes', lambda: ())
         records = getattr(cloud.cloud_client, 'package_records', ())
@@ -110,8 +112,11 @@ class CredentialWorkflow:
                     if record is not None and record.get('document_cache_id') != key:
                         continue
                     if record is not None or item['zip'] == getattr(cloud.cloud_client, 'package_name', ''):
-                        await asyncio.to_thread(update, key, cloud.cloud_crypt_remotes,
-                            aliases=record.get('aliases', {}) if record else {})
+                        from .credential_retention import NativeCredentialMetadata
+                        await run_credentials(native_service(client).credentials.retain,
+                            NativeCredentialMetadata(cache, key, generation, tuple(cloud.cloud_crypt_remotes),
+                                record.get('aliases', {}) if record else {}),
+                            valid=lambda: cloud.active_host and cloud.cloud_client is client)
         except (OSError, ValueError) as error:
             cloud.folder_hub_error = 'Could not save folder type metadata: ' + str(error)[:200]
         try:
@@ -120,14 +125,16 @@ class CredentialWorkflow:
             cloud.folder_hub_error = str(error)[:300]
         cloud.refresh_cloud_remote_help()
 
-    def retained_packages(self):
+    def retained_packages(self, *, for_forget=False):
         cloud = self.cloud
         if getattr(getattr(cloud, 'cloud_client', None), 'vault', None) is None:
             return None
-        if not hasattr(cloud, 'credential_packages'):
+        if (for_forget or not hasattr(cloud, 'credential_packages')
+                or cloud.credential_packages.client is not cloud.cloud_client):
             from features.rclone.mobile.credential_packages import CredentialPackages
             from features.rclone.mobile.credential_vault import ProtectedVault
-            cloud.credential_packages = CredentialPackages(ProtectedVault.for_app(cloud.app, packages=True), cloud.cloud_client, document_cache_root=cloud.app.credential_document_lists.root)
+            cloud.credential_packages = CredentialPackages(ProtectedVault.for_app(cloud.app, packages=True), cloud.cloud_client,
+                document_cache_root=cloud.app.credential_document_lists.root, load=not for_forget)
         return cloud.credential_packages
 
     def remember_credential_association(self, name, remotes, *, session_only):
@@ -476,6 +483,7 @@ class CredentialWorkflow:
             if not current():
                 return
             names = list(result.remotes)
+            loaded_generation = result.generation
             await cloud._load_crypt_remote_names()
             if not current():
                 return
@@ -486,16 +494,15 @@ class CredentialWorkflow:
                 try:
                     cache = cloud.retained_packages()
                     if cache is not None:
-                        identities = {remote: cloud.cloud_client.connection_identity(remote) for remote in cloud.visible_remote_names(cloud.package_remote_names(selected.name, names))}
-                        aliases = next((item.get('aliases', {}) for item in getattr(cloud.cloud_client, 'package_records', ()) if item['package_name'] == selected.name), {})
-                        aliases = {name: alias for name, alias in aliases.items() if alias in identities}
-                        metadata = {'aliases': aliases} if aliases else {}
-                        crypt = set(cloud.cloud_crypt_remotes) & set(identities)
-                        if crypt:
-                            metadata['crypt_remotes'] = sorted(crypt)
-                        await asyncio.to_thread(cache.remember, selected, identities, **metadata)
+                        from .credential_retention import NativeCredentialRetention
+                        remotes = tuple(cloud.visible_remote_names(cloud.package_remote_names(selected.name, names)))
+                        await run_credentials(native_service(client).credentials.retain,
+                            NativeCredentialRetention(cache, selected, remotes, loaded_generation, tuple(cloud.cloud_crypt_remotes)),
+                            valid=current)
                 except (OSError, ValueError) as error:
                     cache_error = ' ZIP not retained; select it again next time. ' + str(error)[:120]
+            if not current():
+                return
             cloud.set_loaded_remote_names(cloud.visible_remote_names(names))
             cloud.cloud_package.text = cloud.loaded_package_label()
             cloud.cloud_location.value = cloud.cloud_path = ''

@@ -56,7 +56,7 @@ class RclonePage(pyside.QWidget):
             pyside.Qt.TextInteractionFlag.TextSelectableByMouse
         )
 
-        self.clear_all_button = pyside.QPushButton('Clear All .rconf Files')
+        self.clear_all_button = pyside.QPushButton('Clear All Saved Configs')
         self.clear_sessions_button = pyside.QPushButton('Lock All Session Credentials')
 
         self.status_label = StatusLine()
@@ -512,9 +512,17 @@ class RclonePage(pyside.QWidget):
 
         if not self._prepare_lock(paths):
             return
+        from features.rclone.desktop_service import service
+        failure = None
         for path in paths:
-            configuration.delete_config_file(path)
+            try:
+                service.credentials.forget(path)
+            except Exception as error:
+                failure = failure or error
         self.refresh()
+        if failure is not None:
+            self.status_label.setText('Some credential cleanup failed. Access may already be locked; retry forgetting.')
+            return
         self.status_label.setText(
             f'Forgot credentials for "{package.path.name}". Credential ZIP was kept.'
         )
@@ -541,7 +549,13 @@ class RclonePage(pyside.QWidget):
 
         if not self._prepare_lock(config_paths):
             return
-        deleted_paths = configuration.clear_all_conf_files()
+        from features.rclone.desktop_service import service
+        try:
+            deleted_paths = service.credentials.forget()
+        except Exception:
+            self.refresh()
+            self.status_label.setText('Some saved configs could not be removed. Access may already be locked; retry clearing.')
+            return
 
         self.refresh()
         self.status_label.setText(

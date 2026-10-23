@@ -420,9 +420,9 @@ class CloudUI(LocalCryptUI):
         workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
         return await workflow._load_crypt_remote_names()
 
-    def retained_packages(self):
+    def retained_packages(self, **kwargs):
         workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.retained_packages()
+        return workflow.retained_packages(**kwargs)
 
     def remember_credential_association(self, name, remotes, *, session_only):
         workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
@@ -613,7 +613,11 @@ class CloudUI(LocalCryptUI):
             if not self.clear_private_reader():
                 return
             self.clear_private_catalog()
-            await asyncio.to_thread(self.cloud_client.clear)
+            from .service import native_service
+            from .credential_retention import NativeCredentialForget
+            from .credential_loading import run_credentials
+            await run_credentials(native_service(self.cloud_client).credentials.forget,
+                NativeCredentialForget(lambda: self.retained_packages(for_forget=True), self.app.credential_document_lists.root))
             self.cloud_crypt_remotes = set()
             self.set_loaded_remote_names([])
             self.cloud_entries.items = []
@@ -624,17 +628,12 @@ class CloudUI(LocalCryptUI):
             self.cloud_selected_zip.text = 'No ZIP selected'
             self.cloud_import_message.text = import_hint('Choose a ZIP, then enter its password and tap Load remotes.')
             self.cloud_package.text = 'Credential package: none'
-            cache = self.retained_packages()
-            if cache is not None:
-                cache.forget()
             self.preferences.save(remote_packages='[]')
             self.session_credential_packages = []
             self.app.credential_document_lists.forget_memory()
-            from .document_lists import forget_cache
-            forget_cache(self.app.credential_document_lists.root)
             self.cloud_status.value = 'Saved and session credentials and encrypted document lists forgotten. Private downloads remain available.'
         except Exception:
-            self.cloud_status.value = 'Could not forget the protected credentials. Unlock the device and retry.'
+            self.cloud_status.value = 'Some credential cleanup failed. Access may already be locked and saved data partly removed. Unlock the device and retry forgetting.'
         finally:
             self.set_cloud_busy(False)
 

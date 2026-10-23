@@ -61,7 +61,7 @@ publish. The desktop adapter copies settings into the session before clearing
 its staging dictionaries. LocalCrypt backing/password checks happen before
 publication, so invalid crypt settings preserve the old session.
 
-The service guards publication with nonblocking admission. A lock, an unlock
+The service guards publication with nonblocking admission. A lock, a forget, an unlock
 publication attempt, or saved-vault restore retires other pending loads in that
 service; the platform generation/file checks also reject stale loads. Pending
 admissions are conservatively invalidated across packages within a service,
@@ -78,8 +78,39 @@ Native `mobile/credential_loading.py` captures a bounded ZIP and alias snapshot,
 then delegates atomic import, device-vault restore, or SMB addition to the
 existing `CloudClient`/native authorities. Native ZIP passwords remain necessary
 for retained session ZIPs; this does not turn device retention into an unlock.
-`CredentialPackages` still owns ZIP retention and metadata, and UI hosts still
-resolve private edits, pick documents and present password prompts.
+`credentials.retain(NativeCredentialRetention(...))` resolves connection identities
+and package aliases through the native adapter, then asks `CredentialPackages` to
+retain only the original password-protected ZIP. Its request carries the selected
+package, storage port, remote names and loaded generation; stale generations or
+foreign stores are refused. Native load results carry the generation captured
+under the publication lock, so retention cannot silently adopt a later load.
+Folder-type metadata repairs use the same entry point
+with `NativeCredentialMetadata`, so they cannot recreate an index after forgetting. `run_credentials` guards host validity and cancellation
+before retention starts. Once storage work starts it finishes before the worker
+retires. Retention leaves loaded credentials and existing access grants unchanged;
+failure is reported separately from successful credential loading. Saving decoded
+credentials remains the `remember` choice on the original load request on both
+platforms. UI hosts resolve private edits, pick documents and present prompts.
+
+`credentials.forget(...)` serializes erasure with publication and retires staged
+loads. Desktop accepts one `.conf`/`.session` path; omitting the path removes all
+saved `.conf` files in the configured directory, preserving session-only packages.
+The selected-package action forgets both its saved and session paths. Forgetting
+revokes loaded access even if no saved file exists, removes the saved file even if
+an in-memory session also exists, and preserves the source ZIP and local copies.
+Legacy configuration deletion helpers delegate to this same service.
+
+Native `NativeCredentialForget` supplies a lazy package-store resolver and the
+credential document-cache root. The service clears live credentials and the saved
+vault, retained ZIPs and encrypted document lists. The native publication lock
+covers storage work across clients/scenes, including the vault clear/erase gap.
+Independent cleanup continues after failures, which are reported as potentially
+partial erasures. The package store's forget-only construction skips a damaged
+index and enumerates owned encrypted blobs, including orphaned writes. It keeps
+the index on failed cleanup for retry. Retained metadata updates and successful
+erasure also update already-open package stores for the same root across scenes. Forgetting does not cancel halfway when a
+view closes. Hosts clear presentation preferences and package labels after success;
+read-only retained metadata discovery stays available without unlocking.
 
 Mobile credential workers use `run_credentials`: cancellation keeps the host busy
 until the worker retires and suppresses publication if it has not started yet.
@@ -92,7 +123,8 @@ across scenes and clients.
 `test_credential_service.py`, `test_native_credential_service.py`,
 `test_archive_credentials.py`, the Settings/Workspaces unlock tests and mobile
 credential/retention/SMB suites cover these boundaries. The host native-bridge
-fixture loads credentials through the service, runs the previous remote/transfer
+fixture saves/restores and forgets a native vault and retained ZIP using synthetic
+protected keys, loads credentials through the service, and runs the remote/transfer
 slice, locks and reloads them, and verifies that old grants stay revoked.
 These checks do not constitute physical-device validation.
 

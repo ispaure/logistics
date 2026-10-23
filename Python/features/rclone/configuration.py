@@ -63,18 +63,8 @@ def get_rclone_remote_names(config_path: str | Path) -> list[str]:
 def delete_config_file(config_path: str | Path) -> bool:
     """Delete one rclone .conf file if it exists."""
 
-    config_path = Path(config_path)
-    from . import session
-    if session.forget(config_path):
-        return True
-
-    if not config_path.is_file():
-        return False
-
-    fileUtils.File(config_path).delete_file()
-    from .remote_resources import invalidate_config
-    invalidate_config(config_path)
-    return True
+    from .desktop_service import service
+    return bool(service.credentials.forget(Path(config_path)))
 
 
 def get_all_conf_paths() -> list[Path]:
@@ -103,13 +93,8 @@ def clear_all_conf_files() -> list[Path]:
     per-credential config files. Credential ZIP packages are not touched.
     """
 
-    deleted_paths = []
-
-    for config_path in get_all_conf_paths():
-        if delete_config_file(config_path):
-            deleted_paths.append(config_path)
-
-    return deleted_paths
+    from .desktop_service import service
+    return service.credentials.forget()
 
 
 def get_crypt_remote_names(config_path):

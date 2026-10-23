@@ -6,6 +6,7 @@
     "access.py",
     "credential_loading.py",
     "mobile/credential_loading.py",
+    "mobile/credential_retention.py",
     "remote_access.py",
     "mobile/remote_resources.py",
     "localcrypt/mobile/__init__.py",

@@ -64,6 +64,48 @@ class CredentialServiceTests(unittest.TestCase):
             self.service.unlock(prepared)
         self.assertIsNone(session.credentials(self.key))
 
+    def test_forget_removes_both_saved_file_and_loaded_session_and_keeps_zip(self):
+        config = self.root / 'Account.conf'
+        package = self.root / 'Account.zip'
+        package.write_bytes(b'original encrypted ZIP')
+        config.write_text('[Files]\ntype = local\n')
+        session.remember(config, {'Files': {'type': 'local'}}, package_path=package)
+        grant = self.service.capture(config)
+        prepared, values = self.prepare()
+        self.assertEqual(self.service.forget(config), [config])
+        self.assertFalse(config.exists())
+        self.assertIsNone(session.credentials(config))
+        self.assertEqual(package.read_bytes(), b'original encrypted ZIP')
+        self.assertEqual(values, {})
+        with self.assertRaises(ValueError):
+            grant.check()
+        with self.assertRaises(ValueError):
+            self.service.unlock(prepared)
+
+    def test_forget_still_deletes_saved_file_when_revocation_callback_fails(self):
+        config = self.root / 'Account.conf'
+        config.write_text('[Files]\ntype = local\n')
+        with patch.object(self.service._backend, 'lock', side_effect=OSError('Observer failed')):
+            with self.assertRaises(OSError):
+                self.service.forget(config)
+        self.assertFalse(config.exists())
+
+    def test_forget_all_saved_configs_keeps_session_only_credentials(self):
+        from features.rclone import configuration
+        config = self.root / 'Account.conf'
+        config.write_text('[Files]\ntype = local\n')
+        session.remember(self.key, {'Files': {'type': 'local'}})
+        with patch.object(configuration, 'get_rclone_config_dir', return_value=self.root):
+            self.assertEqual(self.service.forget(), [config])
+        self.assertEqual(session.names(self.key), ['Files'])
+
+    def test_forget_rejects_original_zip(self):
+        package = self.root / 'Account.zip'
+        package.write_bytes(b'original')
+        with self.assertRaises(ValueError):
+            self.service.forget(package)
+        self.assertEqual(package.read_bytes(), b'original')
+
     def test_lock_during_slow_decode_prevents_late_publication(self):
         started, release = Event(), Event()
         values = {'Files': {'type': 'local'}}

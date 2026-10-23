@@ -60,7 +60,7 @@ def prepare(client, request, password):
         else:
             names = client.add_smb(request.name, request.host, request.user, secret[0],
                                    request.domain, request.port, remember=request.remember)
-        return CredentialResult(client.package_name, tuple(names), request.remember)
+        return CredentialResult(client.package_name, tuple(names), request.remember, client.generation)
     def close():
         secret.clear()
         if package is not None:

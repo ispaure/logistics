@@ -45,6 +45,31 @@ class DesktopCredentials:
         if failure is not None:
             raise failure
 
+    def retain(self, request):
+        raise TypeError('Desktop retention is selected when loading a ZIP into a saved config.')
+
+    def forget(self, key=None):
+        from .configuration import get_all_conf_paths
+        paths = [Path(key)] if key is not None else get_all_conf_paths()
+        removed, failure = [], None
+        for path in paths:
+            if path.suffix.casefold() not in {'.conf', '.session'}:
+                raise ValueError('Choose a saved config or credential session; original ZIPs are kept.')
+        for path in paths:
+            existed = path.is_file() or session.names(path) is not None
+            try:
+                self.lock(path)
+            except Exception as error:
+                failure = failure or error
+            try:
+                path.unlink(missing_ok=True)
+                if existed:
+                    removed.append(path)
+            except Exception as error:
+                failure = failure or error
+        if failure is not None:
+            raise failure
+        return removed
 
     def prepare(self, request, password):
         if not isinstance(request, DesktopCredentialLoad):

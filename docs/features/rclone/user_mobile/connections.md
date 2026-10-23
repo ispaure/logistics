@@ -151,7 +151,8 @@ credential ZIPs do not enable password-protected list caching.
 
 **Forget saved credentials** unloads the active session and removes the saved
 ciphertext, its known protected key, retained ZIPs and encrypted open/recent list
-caches in every window, while preserving private downloads. Private
+caches in every window, while preserving private downloads. If cleanup reports a
+partial failure, unlock the device and retry forgetting. Private
 downloads follow the platform's normal app-data backup policy. Interactive OAuth
 account setup remains future work. Session-only token updates are lost on exit;
 providers that rotate refresh tokens may require a fresh credential package.

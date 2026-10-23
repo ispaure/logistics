@@ -30,6 +30,8 @@ class CredentialBackend(Protocol):
     def lock(self, key: object | None = None) -> None: ...
     def prepare(self, request, password: str): ...
     def restore(self, *, create: bool = False): ...
+    def retain(self, request): ...
+    def forget(self, key: object | None = None): ...
 
 
 class CredentialService:
@@ -136,6 +138,31 @@ class CredentialService:
                 self._retire_pending()
             finally:
                 self._backend.lock(key)
+
+    def retain(self, request, context=CredentialContext()):
+        """Retain platform-approved material without changing unlocked grants."""
+        with self._publication():
+            check_cancelled(context.cancelled)
+            if not context.valid():
+                raise ValueError('Credential retention is no longer current. Try again.')
+            return self._backend.retain(request)
+
+    def forget(self, key=None, context=CredentialContext()):
+        """Retire staged loads, revoke access and erase the selected saved material.
+
+        Forgetting is serialized with publication. Once started it finishes even
+        if the initiating view closes; failures may leave partial storage cleanup.
+        """
+        with self._lock:
+            check_cancelled(context.cancelled)
+            if not context.valid():
+                raise ValueError('Credential forgetting is no longer current. Try again.')
+            self._epoch += 1
+            try:
+                self._retire_pending()
+            finally:
+                result = self._backend.forget(key)
+            return result
 
 
 class LocalCryptService:
