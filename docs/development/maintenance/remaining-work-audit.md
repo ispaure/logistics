@@ -2,8 +2,8 @@
 
 Updated October 23, 2026. The original assessment covered eight shared-library,
 ten Logistics and five cross-cutting priorities. Their host-implementable stages
-are complete. **C7's native factory extraction remains gated on native acceptance**;
-its lifecycle contract stage is complete. This page is the current status, not a
+are complete. **C7's native factory extraction is in progress**, with native
+acceptance before each committed step; its lifecycle contract stage is complete. This page is the current status, not a
 claim that every future maintainability opportunity has been exhausted.
 
 The [assessment snapshot](history/assessment-20261023.md) retains the original
@@ -26,6 +26,7 @@ records each checked unit, including caught errors and validation limits; the
 | C6 | Named INI validation/location/replacement and rename stem/context stages | shared `d1ba7cd` |
 | C7 (contract stage) | Paired install/retirement and late-callback contracts; native factories unchanged and platform-gated | shared `016a35d` |
 | C7 (native-owner slice) | Android/iOS simulator/emulator lifecycle checks; navigation admission/resize/selection restoration and speech callback release | shared `3e08820` |
+| C7 (navigation construction) | Named Apple observer/controller assembly and Android bar/listener/menu stages; callback/disposal bodies unchanged | shared `0035641` |
 | C8 | Explicit checkout admission/actions; hook and declined-prompt contracts; legacy exports retained | shared `9aaf84d` |
 | L1 | Managed-text host workflows grouped over existing store/workspace/view owners; aggregate lifecycle stays in app | `380ab06e` |
 | L2 | Retained drawer/listing owner separated from frame layout; import compatibility preserved | `c2d4cc55` |
@@ -61,8 +62,8 @@ named classification/formatting stages; layered settings has field construction
 and row binding phases. These are implemented C2–C5 changes, not pending proposals.
 The later rclone service/adapters review through `01e8bfc9` is also complete.
 
-The next concrete shared-UI priority is C7's **native lifecycle acceptance** below,
-before extracting more navigation, canvas or speech factory code. Desktop
+The current shared-UI priority is C7's **native factory extraction** below,
+with native acceptance before each step. Desktop
 FileBrowser/indexing still shares substantial mutable state across its mixin and
 uses private index-cache fields, so it remains a reasonable bounded follow-up.
 That residual coupling does not establish a new urgent defect or justify another
@@ -77,7 +78,8 @@ limits are recorded below.
 
 ## Remaining acceptance gate
 
-C7's native adapter factories remain unchanged. Before moving them, exercise the
+C7's original contract stage left native adapter factories unchanged. Their
+construction extraction now proceeds in verified steps. Before moving them, exercise the
 relevant Android/iOS install/dispose/reinstall paths on a supported native runtime:
 reader chrome, pinch/scroll/menu callbacks, rendering-canvas retirement, queued
 speech completions, background/resume and repeated window closure. Dummy/fake
@@ -88,7 +90,7 @@ installation/retirement, chrome restoration, canvas pixel/listener cleanup,
 offline speech stop/restart and late callbacks, background/resume, and Android
 in-place phone/tablet/landscape layout changes. It fixes failed admission,
 retired layout dispatch, Android resize-wrapper/selection restoration and retained
-speech callbacks. Native factories remain unchanged. Physical gestures, IME,
+speech callbacks. That acceptance slice left factories unchanged. Physical gestures, IME,
 multi-window/recreation, system audio interruption and minimum-runtime checks
 remain outside this focused pass. Preserve the main Logistics app and its data.
 
@@ -97,6 +99,20 @@ remote/collection operations and desktop integrations remains separate from this
 readability pass. See [platform checks](../platform-checks.md) and owner guides.
 Optional F401/F841 diagnostics remain owner-review aids; T4 completes the reviewed
 F811 gate and compatibility-export decision, not a repository-wide unused-code sweep.
+
+## C7 factory extraction progress
+
+- Navigation (`0035641`): constructors now name Apple observer/controller assembly
+  and Android bar replacement, weak listener binding and menu population. Callback
+  and retirement bodies remain unchanged. Expanded ordered AST comparison matches
+  the original after normalizing lazy imports and constructor aliases. Both shared
+  matrix legs pass 117 cases in 26 files; iOS 27.0 and Android 16/API 36 isolated
+  apps pass three navigation/canvas/speech cycles and foreground/background checks,
+  plus Android phone/tablet/landscape layout transitions. The cold Android launcher
+  missed visibility callbacks with a one-second dwell; repeating with a consistent
+  three-second background dwell passes without weakening visibility assertions.
+- Canvas and speech construction extractions remain next. The broader native
+  acceptance limits above remain separate from this behavior-preserving pass.
 
 ## Find the current contract
 
