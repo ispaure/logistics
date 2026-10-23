@@ -1,5 +1,25 @@
 # Ecosystem architecture audit
 
+## Provider preparation and collection-operation follow-up
+
+Logistics `585abf2e` separates initial preview preparation and admitted-view
+publication from provider opening (99 → 72 lines). `d48b1e64` separates collection
+confirmation text and captured progress rendering from operation orchestration
+(124 → 99 lines). Existing modules retain all state and application policy;
+commonUtils requires no change. Reader acquisition remains visible before page
+preparation to preserve remote cleanup on failure. Collection orchestration
+retains partially constructed controls and confirmation-time revalidation.
+
+Ordered AST expansion preserves statements, captured arguments, callback bodies,
+public signatures and untouched methods. Five added regression methods pass
+against original/refactored source, including eight collection revalidation
+combinations. All 114 focused mobile tests pass without skips/failures; consumer
+compatibility passes with Ally Tools/Blue Hole unchanged. No new owner layer,
+module, dependency, public API or stored format is introduced. See the
+[progress record](overnight_progress.md#provider-preparationpublication-and-collection-operations-continuation)
+for validation scope. Native devices and Blender were not tested; no whole-system
+numeric rating is inferred.
+
 ## Mobile owner admission and publication follow-up
 
 Shared `2cd0516` and Logistics `e6f5c44c` keep existing lifecycle owners and name

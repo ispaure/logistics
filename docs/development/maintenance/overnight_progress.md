@@ -1,5 +1,60 @@
 # Ecosystem maintenance progress
 
+## Provider preparation/publication and collection operations continuation
+
+Started from clean Logistics `47cdc198` on `alpha`, with shared `2cd0516` on
+`main`. Current branches are retained; no push is authorized.
+
+- Logistics `585abf2e`: provider opening names initial Markdown preview preparation
+  and admitted-view publication in its existing module. `open` is 72 rather than
+  99 lines, keeping reader acquisition, cancellation checks, view veto, password
+  lifetime, remote-source cleanup and busy release visible. The acquired reader
+  remains assigned before either page or preview preparation can fail; supplied
+  prepared readers retain their existing cleanup policy. Publication still clears
+  the previous reader, adopts view fields, selects Markdown presentation, refreshes
+  privacy and installs layout observers before comic-neighbor preparation.
+- Logistics `d48b1e64`: collection operations name confirmation-text preparation
+  and captured progress rendering. `_collection_operation` is 99 rather than
+  124 lines. Selected-volume capture, pre/post-confirmation admission, partial
+  progress-control cleanup, worker dispatch and restart policy remain in that
+  entry point. No operation service or persisted storage marker changes. Progress
+  still returns through `call_soon_threadsafe` to controls captured for that job.
+- Four new provider contracts pass against original and refactored source:
+  preview-error fallback/publication ordering, cancellation during preview,
+  acquired-versus-prepared reader ownership after a view veto, and page failure
+  after remote-reader acquisition. The new collection regression passes before
+  and after across eight action/state combinations: copy/recover/empty/wipe each
+  recheck active work and checkpoint success after confirmation, restore controls
+  and never invoke the worker when revalidation fails.
+
+Expanding extracted helpers reproduces every original ordered AST statement,
+including captured arguments and callback bodies; public signatures and untouched
+methods match. No production module, package, dependency, public API or persisted
+format changed. The existing mobile runtime guide records these owner boundaries.
+
+| Executed validation | Result |
+| --- | --- |
+| Original baselines | Existing storage UI 11 cases and provider Markdown 11 cases pass. |
+| Added contracts before/after | Four provider methods and the expanded 12-case storage UI suite pass against both versions. |
+| Final focused mobile checks | 114 cases across 11 files pass, zero skips/failures: provider opening 4, storage UI 12, private sessions 17, remote readers 15, provider Markdown 11, storage service 24, Android storage 5, collection parity 1, document navigation 8, screen privacy 15, storage reader opening 2. |
+| External consumers | Ally Tools 48 tests and Blue Hole two current-source namespace/import/signature/binding checks pass unchanged. |
+| Documentation and gates | Five Logistics wiki tests, configured lint, architecture (24 host adapters / 15 feature edges / zero violations), toolchain, hygiene, syntax and whitespace pass. |
+
+commonUtils remains clean and unchanged at `2cd0516`; no library adjustment was
+needed for these application workflows. Ally Tools remains clean at `d2c00b8`,
+Blue Hole at `665c184` with its vendor unchanged. No compatibility edits were
+required. These are isolated host fixtures and synthetic providers, not native
+iOS/Android/Boox or Blender validation. No real collection was copied/erased, no
+app was installed, and no production data, release or remote branch was changed.
+Full suites were not rerun; previous totals retain their recorded source scope.
+Raw reports, original source copies and the comparison driver stay under ignored
+test results, outside the documentation wiki.
+
+Next candidates are storage-page construction and provider view assembly, after
+checking ownership of partially created controls and failure cleanup. Native
+adapter changes still need platform-specific validation. No new ecosystem score
+is claimed from this bounded pass.
+
 ## Mobile lifecycle owner continuation
 
 Started from clean Logistics `9e66f04b` and shared `b425d5d`, on the current

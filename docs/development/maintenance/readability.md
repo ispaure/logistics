@@ -397,3 +397,22 @@ Reliability is protected by preserved statement order, eight shared browser and
 126 mobile cases, rather than a claim to fix previously broken behavior. Public
 APIs, persistence and external consumers remain unchanged. Native device behavior
 and whole-system quality ratings remain outside this focused evidence.
+
+## Provider preparation and collection operations follow-up
+
+Logistics `585abf2e` makes provider opening a 72-line admission/cleanup flow rather
+than 99 lines. Preview preparation and admitted-view publication have names
+within the same owner; reader acquisition and password/source cleanup stay
+explicit. Logistics `d48b1e64` makes collection orchestration 99 rather than 124
+lines by naming confirmation-text preparation and captured progress rendering.
+Confirmation rechecks, partial-control cleanup and restart policy stay visible.
+
+Readability improves through named phases; modularity improves within existing
+modules. Testability gains four provider contracts and one collection contract
+with eight action/state combinations, all passing before/after. Coupling and
+duplication remain unchanged; application policy stays out of commonUtils.
+Consistency improves by keeping admission and cleanup around captured publication.
+Reliability remains a preservation claim supported by ordered statement expansion
+and 114 focused mobile cases, not a new behavioral guarantee. Public interfaces,
+persisted formats and external consumers stay unchanged. Native acceptance and
+whole-system quality scoring remain outside this evidence.

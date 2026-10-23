@@ -954,6 +954,12 @@ The collection UI separately previews explicit paths and selected/active state.
 `start_empty_location` refuses any nonempty tree and never copies or deletes the
 old collection. `recover_location` is presented as using existing files without
 copying. `wipe_destination` remains forbidden for the active location.
+`StorageUI._collection_operation` retains admission, confirmation-time rechecks,
+worker execution, partial-progress cleanup and restart policy. Its prompt helper
+only prepares the existing confirmation text. Its progress-renderer factory
+captures the operation's controls and width before dispatch; queued worker
+events return through the owning loop and update those captured controls.
+Copy/recover/empty/wipe still dispatch to their existing storage services.
 
 Android collection drive discovery in `storage_ui` uses mounted `StorageVolume`
 roots and the All files access grant on API 30+. On API 24–29 it uses
@@ -1079,6 +1085,13 @@ identity checks, cancellation and publication, with
 `ProviderDocumentSession` retains its opening owner. `provider_ui.py` retains
 close/save and other session commands; Books, Comics and Markdown controllers retain
 format navigation. The `compact_private_view` host callback remains compatible.
+Opening retains the acquired reader before page/preview preparation, so failure
+can release an unpublished remote source. `_prepare_initial_preview` preserves
+Markdown's source fallback after rendering errors. After cancellation checks and
+the host's view veto, `_publish_view` adopts controls, activates the initial
+Markdown surface and installs privacy/layout observers. The entry point retains
+password lifetime, remote-source cleanup and busy-state release in `finally`;
+prepared readers remain owned by their supplying workflow on a view veto.
 Private-session, provider-Markdown and reader-chrome tests cover the assembly.
 Native visual behavior still requires the relevant native acceptance scenarios.
 
