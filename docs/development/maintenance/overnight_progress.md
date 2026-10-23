@@ -539,3 +539,35 @@ completed baseline. Remaining priorities continue to govern selection.
   no dependency was added to that environment.
 - Shared `8e32471` is committed. Exact Blue Hole vendor membership/bytes and all
   31 consumer tests pass. Documentation checks and correctness lint pass.
+
+## Native tool availability in the committed verification tree
+
+- Immutable desktop verification completed 179 files: 178 passed and the rclone
+  review file failed because the new checkout lacked the already-installed native
+  binary. Several other files skipped their native rclone cases for that reason.
+- A cross-checkout tool link was rejected by the existing software containment
+  guard. That guard was preserved. An owned copy of the installed binary was
+  placed inside the verification tree and its SHA-256 compared with the original;
+  no download or user configuration change was required.
+- All 17 rclone review tests then passed. The eight other files with native rclone
+  skips were rerun and all passed: Folder Sources UI, LocalCrypt, LocalCrypt file
+  operations, rclone progress, push policy, sessions, structured UI and Remote
+  Browser. Native-bridge/platform skips remain distinct. This is a full run plus
+  repaired-environment reruns, not a claimed single all-green desktop run.
+- Broad source verification remains frozen at `96d38b79` / shared `6a9bcd4`;
+  subsequent Notes, archive and JSON changes receive their recorded focused checks.
+
+## JSON publication consolidation
+
+- Two fixtures reproduced JSON writes bypassing provider boundaries for existing
+  files and missing parents. JSONFile now serializes/encodes first and delegates
+  staging, verification, permissions, replacement and cleanup to atomic_write_bytes.
+  Native text newlines remain explicit, including Windows CRLF behavior; actual
+  Windows execution remains outside this host validation.
+- All five JSON tests pass in desktop and mobile environments, including existing
+  malformed/BOM/Unicode/serialization/failure contracts. Cleanup assertions now
+  inspect all stage-directory contents, rather than only a .tmp filename pattern.
+  All 16 comic catalog tests pass after targeting fault injection at the atomic
+  owner. Lint and five documentation checks pass.
+- Shared `cfdad79` is committed; exact Blue Hole vendor bytes and all 31 consumer
+  tests pass. The main worktree remains separate from the immutable test checkout.
