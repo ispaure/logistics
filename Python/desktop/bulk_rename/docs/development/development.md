@@ -55,6 +55,16 @@ rename or undo. It is opt-in; existing browsers keep their current actions. When
 a parent is supplied to the standalone window, its normal Close event is deferred
 until any rename worker has cancelled and rolled back safely.
 
+## Widget composition
+
+`BulkRenameWidget` initializes worker/preview state and timers, then schedules the
+initial candidate load. Its private `_build_folder_controls`, `_build_browser_area`
+and `_build_action_area` methods assemble the existing controls in the same order.
+They remain in the widget owner; there is no extra controller or package layer.
+Folder controls own address/filter construction, the browser area owns tree/table
+and rule panes, and the action area owns progress/preset/apply controls. Scanning,
+preview generations, mutation results and cooperative close stay on the widget.
+
 ## Use the engine without Qt
 
 ```python

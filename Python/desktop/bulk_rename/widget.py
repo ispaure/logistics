@@ -95,6 +95,20 @@ class BulkRenameWidget(qt.QWidget):
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 2)
         layout.setSpacing(3)
+        self._build_folder_controls(layout)
+        self._build_browser_area(layout)
+        self._build_action_area(layout)
+        self.preview_timer = qt.QTimer(self)
+        self.preview_timer.setSingleShot(True)
+        self.preview_timer.setInterval(180)
+        self.preview_timer.timeout.connect(self._preview)
+        self._update_actions()
+        if paths:
+            qt.QTimer.singleShot(0, lambda: self._load_paths(paths) if self._generation == 0 else None)
+        else:
+            qt.QTimer.singleShot(0, lambda: self.load_directory(self.directory) if self._generation == 0 else None)
+
+    def _build_folder_controls(self, layout):
         self.path_edit = qt.QLineEdit(str(self.directory))
         self.path_edit.setAccessibleName('Bulk rename folder')
         self.path_edit.returnPressed.connect(lambda: self.load_directory(self.path_edit.text()))
@@ -149,6 +163,8 @@ class BulkRenameWidget(qt.QWidget):
         filters.addWidget(self.filter_button)
         filters.addStretch()
         layout.addLayout(filters)
+
+    def _build_browser_area(self, layout):
         splitter = qt.QSplitter()
         self.folder_model = qt.QFileSystemModel(self)
         self._folder_icon_provider = _FolderIconProvider()
@@ -235,6 +251,8 @@ class BulkRenameWidget(qt.QWidget):
         self.content_splitter.setStretchFactor(1, 1)
         self.content_splitter.setSizes([360, 440])
         self.rules_toggle.toggled.connect(scroll.setVisible)
+
+    def _build_action_area(self, layout):
         self.progress = OperationProgress(self)
         self.progress.completed.connect(self._finished)
         layout.addWidget(self.progress)
@@ -293,15 +311,6 @@ class BulkRenameWidget(qt.QWidget):
         self.rename_button.setToolTip('Apply the reviewed filename changes to selected items')
         actions.addWidget(self.rename_button)
         layout.addWidget(self.action_area)
-        self.preview_timer = qt.QTimer(self)
-        self.preview_timer.setSingleShot(True)
-        self.preview_timer.setInterval(180)
-        self.preview_timer.timeout.connect(self._preview)
-        self._update_actions()
-        if paths:
-            qt.QTimer.singleShot(0, lambda: self._load_paths(paths) if self._generation == 0 else None)
-        else:
-            qt.QTimer.singleShot(0, lambda: self.load_directory(self.directory) if self._generation == 0 else None)
 
     def set_inputs(self, directory=None, *, paths=()):
         """Replace the candidates while retaining all rule/filter controls.
