@@ -178,6 +178,7 @@ jobs:
           IOS_DEVICE: ${{ matrix.device }}
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
+          mkdir -p "$BRIEFCASE_HOME"
           case "$IOS_DEVICE" in
             iphone) selector=ios-device; flags=() ;;
             duo) selector=ios-duo; flags=(--require-duo) ;;

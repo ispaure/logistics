@@ -111,8 +111,9 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('bash'), 'Workflow shell needs bash')
     def test_each_device_invokes_its_required_suite_and_propagates_failure(self):
         run = script(self.workflow['ios-ui'], 'Exercise panels, rotation and safe areas')
-        fixture = '''import json, sys
+        fixture = '''import json, os, sys
 from pathlib import Path
+assert Path(os.environ['BRIEFCASE_HOME']).is_dir(), 'Briefcase home must exist on a fresh runner'
 if sys.argv[1] != 'run':
     print('synthetic-device-' + sys.argv[1])
 else:
@@ -130,7 +131,9 @@ else:
                     with self.subTest(device=device, code=code):
                         (root / 'exit-code').write_text(str(code))
                         result = subprocess.run(['bash', '-e', '-c', command], cwd=root,
-                            env=dict(os.environ, IOS_DEVICE=device), capture_output=True)
+                            env=dict(os.environ, IOS_DEVICE=device,
+                                     BRIEFCASE_HOME=str(root / 'fresh-homes' / f'{device}-{code}')),
+                            capture_output=True)
                         self.assertEqual(result.returncode, code)
                         self.assertEqual(json.loads((root / 'invocation.json').read_text()),
                             ['run', 'ios', '--device', 'synthetic-device-' + selector, '--no-update', *flags])
