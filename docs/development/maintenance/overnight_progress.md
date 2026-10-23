@@ -1217,3 +1217,25 @@ Guarded LM move commit: `572250fe`.
   retained. No dependencies were installed, no existing simulator/device data
   was changed, and no Boox test package was installed. A newly owned iPad
   simulator is now exercising the explicit independent-window gate.
+
+## Completed frozen checkpoint and Blender layout ownership
+
+- Frozen Logistics `d52b65d8` / commonUtils `3d4ba2f` completes desktop
+  179 files / 1,684 cases / six skips and shared 180 / 1,225 / 25 skips,
+  with zero failed files and no deleted-widget traceback. Tracked trees stayed
+  clean throughout. The earlier timeout run remains recorded above.
+- The isolated iPad build of `b3031665` / `178f5da` passes all 33 native
+  cases with the required independent-window gate: drafts remain separate and
+  second-scene close/restore retains its saved state. Original launch-scene
+  closure/restoration and native system picking remain explicitly unverified.
+  Both owned simulators were deleted after saving complete reports/fixtures; the
+  disposable build/clone was removed and its verification worktree archived.
+  Existing devices, generated builds and user data were preserved.
+- Desktop Blender layout mixed configuration navigation, preset controls and
+  addon selection in a 197-line builder. Three cohesive private builders remain
+  in the same existing module; the composition entry is 39 lines. Expanding the
+  calls yields exactly the prior AST, preserving widget/signal order, text,
+  parenting and settings/standalone modes. No new file or public interface.
+- All 18 Blender page cases and five documentation checks pass; configured lint
+  passes. Mobile controller methods inspected already have cohesive owners and
+  were not split merely for their line counts.

@@ -21,6 +21,33 @@ def build_layout(page):
     layout.addWidget(description)
     page.stack = qt.QStackedWidget()
     layout.addWidget(page.stack, 1)
+    manage_layout = _build_configuration_pages(page, settings_mode, title, description)
+    controls = _build_configuration_controls(page, settings_mode, manage_layout)
+    _build_addon_selection(page, controls, manage_layout)
+    page.add_configuration.clicked.connect(page._add_configuration)
+    page.setStyleSheet("""
+        QPushButton#launchCard { background: palette(base); border: 1px solid palette(mid); border-radius: 10px; }
+        QPushButton#launchCard:hover { background: palette(midlight); border-color: palette(highlight); }
+        QPushButton#launchCard:focus { border: 2px solid palette(highlight); }
+        QLabel#launchTitle { font-size: 16px; font-weight: 600; }
+        QLabel#launchDetail { color: palette(text); }
+    """)
+    page.status = StatusLine()
+    page.status.setTextFormat(qt.Qt.TextFormat.PlainText)
+    page.status.setWordWrap(True)
+    layout.addWidget(page.status)
+    page.table = qt.QTableWidget(0, 6)
+    page.table.setHorizontalHeaderLabels(['Addon', 'Version', 'Type', 'Enabled', 'Source', 'Location'])
+    page.table.setSelectionBehavior(qt.QAbstractItemView.SelectionBehavior.SelectRows)
+    page.table.setSelectionMode(qt.QAbstractItemView.SelectionMode.SingleSelection)
+    page.table.setEditTriggers(qt.QAbstractItemView.EditTrigger.NoEditTriggers)
+    page.table.horizontalHeader().setStretchLastSection(True)
+    page.table.setSortingEnabled(True)
+    page.tabs.addTab(page.table, 'Installed files')
+    layout.addWidget(page.task)
+
+
+def _build_configuration_pages(page, settings_mode, title, description):
     page.home = qt.QWidget()
     home = qt.QVBoxLayout(page.home)
     home.setContentsMargins(0, 0, 0, 0)
@@ -79,6 +106,10 @@ def build_layout(page):
         description.hide()
     else:
         page.stack.addWidget(page.manage)
+    return manage_layout
+
+
+def _build_configuration_controls(page, settings_mode, manage_layout):
     page.controls = qt.QWidget()
     controls = qt.QVBoxLayout(page.controls)
     controls.setContentsMargins(0, 0, 0, 0)
@@ -142,6 +173,10 @@ def build_layout(page):
     primary.addStretch()
     controls.addLayout(primary)
     manage_layout.addWidget(page.controls)
+    return controls
+
+
+def _build_addon_selection(page, controls, manage_layout):
     page.choices = qt.QTableWidget(0, 6)
     page.choices.setHorizontalHeaderLabels(['Load', 'Addon', 'Installed', 'Latest compatible', 'Status', 'Library'])
     page.choices.setEditTriggers(qt.QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -182,24 +217,3 @@ def build_layout(page):
     selection_layout.addWidget(page.apply_button, 0, qt.Qt.AlignmentFlag.AlignLeft)
     page.tabs.addTab(selection_page, 'Addons')
     manage_layout.addWidget(page.tabs, 1)
-    page.add_configuration.clicked.connect(page._add_configuration)
-    page.setStyleSheet("""
-        QPushButton#launchCard { background: palette(base); border: 1px solid palette(mid); border-radius: 10px; }
-        QPushButton#launchCard:hover { background: palette(midlight); border-color: palette(highlight); }
-        QPushButton#launchCard:focus { border: 2px solid palette(highlight); }
-        QLabel#launchTitle { font-size: 16px; font-weight: 600; }
-        QLabel#launchDetail { color: palette(text); }
-    """)
-    page.status = StatusLine()
-    page.status.setTextFormat(qt.Qt.TextFormat.PlainText)
-    page.status.setWordWrap(True)
-    layout.addWidget(page.status)
-    page.table = qt.QTableWidget(0, 6)
-    page.table.setHorizontalHeaderLabels(['Addon', 'Version', 'Type', 'Enabled', 'Source', 'Location'])
-    page.table.setSelectionBehavior(qt.QAbstractItemView.SelectionBehavior.SelectRows)
-    page.table.setSelectionMode(qt.QAbstractItemView.SelectionMode.SingleSelection)
-    page.table.setEditTriggers(qt.QAbstractItemView.EditTrigger.NoEditTriggers)
-    page.table.horizontalHeader().setStretchLastSection(True)
-    page.table.setSortingEnabled(True)
-    page.tabs.addTab(page.table, 'Installed files')
-    layout.addWidget(page.task)
