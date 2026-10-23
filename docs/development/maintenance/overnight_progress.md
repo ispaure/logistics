@@ -1,5 +1,18 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: C8 Perforce checkout phases
+
+Shared `9aaf84d` names existing server/workspace/status admission and ordered
+add/sync/edit phases; the entry point retains warning and final readiness refresh.
+All original class statements/branches/signatures match after expansion. New
+original/refactored contracts verify post-sync hooks can change the Edit decision
+and declined Add/Sync prompts stop before commands/final refresh. All 53 integration
+cases across six files pass before/after; Ally 48, Blue Hole two namespace contracts
+and its existing current-source command/scene workflow suites pass without external
+edits. Shared docs, configured lint and whitespace pass. Mutable/public fields,
+extension hooks, interactive/silent semantics and compatibility exports remain.
+No live Perforce server, Blender acceptance or push is claimed.
+
 ## Sequential audit implementation: C6 preservation pipelines
 
 Shared `d1ba7cd` names INI request validation, current-text location and
