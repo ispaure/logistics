@@ -98,9 +98,53 @@ Blue Hole local commit `428f338` carries the exact shared documentation revision
 all 33 adapters and vendor membership/content checks pass. Production Python,
 including all Perforce code, remains byte-identical to its prior consumer copy.
 
+### Build declarations a reader can follow
+
+The 82 required shared mobile supplements are one explicit declaration grouped by
+domain, replacing the accumulated tuple extensions. The selected membership is
+unchanged. Native project composition calls the camera, icon, scene and privacy
+owners by module name; script/module mode is explicit rather than inferred from
+an ImportError that could hide a broken import.
+
+Real staging with the old and new declaration produces 979 byte-identical
+members, including source manifests. The final tooling subset passes all 108
+cases in 17 isolated files. Payload/wiki/developer-runner checks pass 26 cases;
+the actual TestFlight workflow's five test module targets pass 39 cases. All 25
+workflow/packaging cases run with one native Windows launcher skip (24 passes).
+All workflow actionlint, configured Ruff and whitespace checks pass.
+
+## Evidence-based assessment
+
+| Dimension | Before this follow-up | Implemented result |
+| --- | --- | --- |
+| Readability | Mixed script ownership, accumulated build declarations and duplicated import guesses | Task-oriented owners, one shared-source declaration and visible native composition |
+| Modularity | 27 root build scripts; 163 flat host tests | Three root entry points; three tooling owners and nine coherent test groups |
+| Testability | Flat sibling imports relied on sys.path; old workflow module strings | Explicit fixture imports; stable filename selection; all 163 files still execute |
+| Coupling | Existing feature/application boundaries | 24 host adapters / 15 feature edges / zero policy violations retained; no new runtime layer |
+| Duplication | Nine deployment ImportError fallback handlers; scattered substantive guides | One deployment module context and one canonical guide per topic, with short legacy links |
+| Consistency | Feature-local wiki roots and no shared docs landing | One H1-titled root wiki per repository with linked folder landings |
+| Reliability | Existing runtime contracts and release blockers | Matching full mobile-host results, exact payload bytes and consumer checks; no assertion/gate weakened |
+
+This establishes concrete navigation and maintenance improvements, not a new
+whole-ecosystem quality score. Full native builds, native device behavior and
+Blender 5.2.2 registration are not revalidated in this pass. The abandoned
+release's failures are not fixed or relabeled as successful.
+
+## Local commits and review locations
+
+Logistics uses `codex/readability-build-owners`; commonUtils uses
+`codex/readability-documentation` (`38c5d80`); Blue Hole uses
+`codex/readability-wiki` (`428f338`). The shared branch is also available in the
+canonical local shared repository, so the local Logistics pin resolves without a
+remote. Concurrent primary-checkout edits have not been merged, reset or staged.
+Nothing is pushed; the release heartbeat is paused.
+
 ## Next work
 
-Simplify the remaining opaque build-tool declarations, then finish the source
-and documentation review. Native probe grouping needs a separately validated
-Briefcase/native-device pass; its existing paths remain intact here. Keep the established
+Native probe grouping needs a separately validated Briefcase/native-device pass;
+its existing paths remain intact here. The 99-file native harness and remaining
+large host modules deserve a distinct review of real lifecycle/ownership
+boundaries rather than a filename-only split. Grouping the still-flat desktop
+and shared test suites should likewise preserve their independent consumer
+selection and embedded Blender smoke contracts. Keep the established
 Perforce build and vendor architecture unchanged.

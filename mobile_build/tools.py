@@ -8,7 +8,10 @@ from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 
-SOURCE_OWNERS = ('mobile', 'services', 'features/books', 'features/pdf', 'features/comics', 'features/images', 'features/lm', 'features/rclone', 'features/text_editor')
+SOURCE_OWNERS = (
+    'mobile', 'services', 'features/books', 'features/pdf', 'features/comics',
+    'features/images', 'features/lm', 'features/rclone', 'features/text_editor',
+)
 BASE_DOCUMENT_MODULES = ('features/__init__.py', 'configFile.ini')
 
 
@@ -43,57 +46,99 @@ def load_source_modules(repo):
 
 APP_MODULES, DOCUMENT_MODULES = load_source_modules(Path(__file__).resolve().parents[1])
 
-SHARED_REQUIRED_MODULES = ('formats/markdown/wiki.py', 'formats/markdown/images.py', 'ui/native/markdown.py', 'ui/native/adaptive.py', 'ui/native/markdown_preview.py', 'ui/native/markdown_images.py', 'runtime/resources/provider.py', 'runtime/resources/local.py', 'runtime/resources/mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resources/selection.py', 'runtime/browsing.py', 'runtime/resources/range_reader.py', 'runtime/resources/archives.py', 'search/providers.py', 'ui/native_browser/__init__.py', 'ui/native/__init__.py', 'ui/native/image_canvas.py')
-
-SHARED_REQUIRED_MODULES += ('ui/native/navigation_state.py', 'ui/native/navigation.py',
-                            'ui/native/routes.py', 'ui/native/chrome.py',
-                            'ui/native/android/io/github/ispaure/commonutils/ImageCanvasView.java',
-                            'ui/native/android/io/github/ispaure/commonutils/NavigationBack.java')
-
-SHARED_REQUIRED_MODULES += ('runtime/resources/documents.py', 'runtime/protected_keys.py',
-                            'filesystem/snapshots.py', 'archives/rebuilding.py', 'archives/callbacks.py',
-                            'ui/native/event_loop.py', 'ui/native/memory.py',
-                            'ui/native/documents.py', 'ui/native/menus.py',
-                            'ui/native/presentation.py', 'ui/native/editor_search.py', 'ui/native/markdown_search.py',
-                            'ui/native/password_input.py')
-SHARED_REQUIRED_MODULES += ('ui/appearance/formatting_glyphs.py',)
-SHARED_REQUIRED_MODULES += ('formats/code_syntax.py', 'formats/code_spans.py', 'formats/code_blade.py',
-                            'ui/native/code_input.py',
-                            'ui/native/android/io/github/ispaure/commonutils/CodeEditorSupport.java')
-
-SHARED_REQUIRED_MODULES += ('ui/native_browser/lifecycle.py', 'ui/native_browser/paginated.py',
-                            'ui/native_browser/presentation.py')
-SHARED_REQUIRED_MODULES += ('ui/native_browser/recycled.py', 'ui/native/recycled_list.py',
-                            'ui/native/recycled_list_android.py', 'ui/native/recycled_list_ios.py',
-                            'ui/native/android/io/github/ispaure/commonutils/FileListView.java')
-
-SHARED_REQUIRED_MODULES += ('runtime/speech.py', 'formats/image_headers.py',
-                            'ui/native/speech.py', 'ui/native/private_webview.py',
-                            'ui/native/android/io/github/ispaure/commonutils/SpeechListener.java')
-
-SHARED_REQUIRED_MODULES += ('ui/native/draw_ready.py', 'ui/native/android/io/github/ispaure/commonutils/DrawReady.java')
-
-SHARED_REQUIRED_MODULES += ('ui/native/keyboard.py',)
-
-SHARED_REQUIRED_MODULES += ('runtime/streams/sse.py', 'runtime/progress.py', 'runtime/streams/progress.py')
-
-SHARED_REQUIRED_MODULES += ('ui/native/text_size.py',)
-
-SHARED_REQUIRED_MODULES += ('ui/native/transitions.py', 'ui/native/sliders.py')
-
-SHARED_REQUIRED_MODULES += ('ui/native/appearance.py', 'ui/appearance/colors.py')
-
-SHARED_REQUIRED_MODULES += ('ui/native/icons.py',)
-
-SHARED_REQUIRED_MODULES += ('ui/native/forms.py',)
-
-SHARED_REQUIRED_MODULES += ('ui/native/bars.py',)
-
-SHARED_REQUIRED_MODULES += ('runtime/signals.py',)
-SHARED_REQUIRED_MODULES += ('search/names.py', 'search/indexed.py')
-SHARED_REQUIRED_MODULES += ('search/__init__.py', 'search/text.py', 'formats/markdown/properties.py',
-                            'formats/markdown/__init__.py', 'formats/markdown/file.py',
-                            'persistence/atomic.py', 'filesystem/objects.py', 'ui/features/declarations.py')
+# Explicit local-development supplements to the shared mobile allowlist.
+# Release staging still requires every member to be committed.
+SHARED_REQUIRED_MODULES = (
+    # Filesystem snapshots and local objects.
+    'filesystem/local_access.py',
+    'filesystem/objects.py',
+    'filesystem/snapshots.py',
+    # Atomic publication and persistence.
+    'persistence/atomic.py',
+    'persistence/publication.py',
+    # Portable archive operations.
+    'archives/callbacks.py',
+    'archives/rebuilding.py',
+    # Document parsing and syntax.
+    'formats/code_blade.py',
+    'formats/code_spans.py',
+    'formats/code_syntax.py',
+    'formats/image_headers.py',
+    'formats/markdown/__init__.py',
+    'formats/markdown/file.py',
+    'formats/markdown/images.py',
+    'formats/markdown/properties.py',
+    'formats/markdown/wiki.py',
+    # Portable resource, stream and lifecycle mechanisms.
+    'runtime/browsing.py',
+    'runtime/progress.py',
+    'runtime/protected_keys.py',
+    'runtime/resources/archives.py',
+    'runtime/resources/documents.py',
+    'runtime/resources/local.py',
+    'runtime/resources/mutations.py',
+    'runtime/resources/provider.py',
+    'runtime/resources/range_reader.py',
+    'runtime/resources/selection.py',
+    'runtime/signals.py',
+    'runtime/speech.py',
+    'runtime/streams/progress.py',
+    'runtime/streams/sse.py',
+    # Portable query providers.
+    'search/__init__.py',
+    'search/indexed.py',
+    'search/names.py',
+    'search/providers.py',
+    'search/text.py',
+    # Shared native presentation and browser adapters.
+    'ui/appearance/colors.py',
+    'ui/appearance/formatting_glyphs.py',
+    'ui/features/declarations.py',
+    'ui/native/__init__.py',
+    'ui/native/adaptive.py',
+    'ui/native/android/io/github/ispaure/commonutils/CodeEditorSupport.java',
+    'ui/native/android/io/github/ispaure/commonutils/DrawReady.java',
+    'ui/native/android/io/github/ispaure/commonutils/FileListView.java',
+    'ui/native/android/io/github/ispaure/commonutils/ImageCanvasView.java',
+    'ui/native/android/io/github/ispaure/commonutils/NavigationBack.java',
+    'ui/native/android/io/github/ispaure/commonutils/SpeechListener.java',
+    'ui/native/appearance.py',
+    'ui/native/bars.py',
+    'ui/native/chrome.py',
+    'ui/native/code_input.py',
+    'ui/native/documents.py',
+    'ui/native/draw_ready.py',
+    'ui/native/editor_search.py',
+    'ui/native/event_loop.py',
+    'ui/native/forms.py',
+    'ui/native/icons.py',
+    'ui/native/image_canvas.py',
+    'ui/native/keyboard.py',
+    'ui/native/markdown.py',
+    'ui/native/markdown_images.py',
+    'ui/native/markdown_preview.py',
+    'ui/native/markdown_search.py',
+    'ui/native/memory.py',
+    'ui/native/menus.py',
+    'ui/native/navigation.py',
+    'ui/native/navigation_state.py',
+    'ui/native/password_input.py',
+    'ui/native/presentation.py',
+    'ui/native/private_webview.py',
+    'ui/native/recycled_list.py',
+    'ui/native/recycled_list_android.py',
+    'ui/native/recycled_list_ios.py',
+    'ui/native/routes.py',
+    'ui/native/sliders.py',
+    'ui/native/speech.py',
+    'ui/native/text_size.py',
+    'ui/native/transitions.py',
+    'ui/native_browser/__init__.py',
+    'ui/native_browser/lifecycle.py',
+    'ui/native_browser/paginated.py',
+    'ui/native_browser/presentation.py',
+    'ui/native_browser/recycled.py',
+)
 
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):

@@ -12,17 +12,11 @@ import shutil
 import subprocess
 import tomllib
 
-try:
-    from .build_support.icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
-    from .build_support.scene_build import configure as configure_scene
-    from .build_support.privacy_build import configure as configure_privacy
-    from .build_support.camera_build import configure as configure_camera
+if __package__:
+    from .build_support import camera_build, icon_build, privacy_build, scene_build
     from .deployment.deployment_paths import output_root
-except ImportError:
-    from build_support.icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
-    from build_support.scene_build import configure as configure_scene
-    from build_support.privacy_build import configure as configure_privacy
-    from build_support.camera_build import configure as configure_camera
+else:
+    from build_support import camera_build, icon_build, privacy_build, scene_build
     from deployment.deployment_paths import output_root
 
 ROOT = Path(__file__).resolve().parent
@@ -123,7 +117,7 @@ def android():
     project = output_root(ROOT) / 'build/logisticsmobile/android/gradle'
     configure_android_sources(project)
     configure_android_appearance(project)
-    configure_android_icons(project)
+    icon_build.configure_android(project)
     for arch, abi, compiler in [('arm64', 'arm64-v8a', 'aarch64-linux-android24-clang'),
                                  ('amd64', 'x86_64', 'x86_64-linux-android24-clang')]:
         destination = project / 'app/src/main/jniLibs' / abi
@@ -142,10 +136,10 @@ def android():
 
 def ios(project=None):
     project = Path(project) if project is not None else output_root(ROOT) / 'build/logisticsmobile/ios/xcode'
-    configure_ios_icons(project)
-    configure_scene(project)
-    configure_privacy(project)
-    configure_camera(project)
+    icon_build.configure_ios(project)
+    scene_build.configure(project)
+    privacy_build.configure(project)
+    camera_build.configure(project)
     support = project / 'Support'
     support.mkdir(parents=True, exist_ok=True)
     arch = {'arm64': 'arm64', 'aarch64': 'arm64', 'x86_64': 'amd64'}[platform.machine()]

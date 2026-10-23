@@ -1557,3 +1557,22 @@ trackable (the tooling group avoids generated-build ignore rules). Configured
 lint, ownership/architecture, toolchain and hygiene checks pass. Blue Hole
 `428f338` passes all 33 adapter cases and exact shared vendor checking; production
 Python including Perforce is byte-identical to its prior copy. No push.
+
+## Readability follow-up: explicit build declarations and final review
+
+Grouped test contracts are committed as `b81979d9`. The final review fixes remaining
+README feature links and TestFlight module strings and retains both legacy and
+central-wiki mobile-evidence exclusions. Its actual five-module command passes
+39 cases; all 25 workflow/package cases run, with only the native Windows launcher
+skipped. The single shared supplement declaration preserves all 82 members.
+Old/new staging emits 979 byte-identical members including source manifests.
+Native adapter composition uses explicit modules and script/package selection.
+The final tooling group passes 108 cases in 17 isolated files; 26 payload/wiki/dev
+runner cases, all actionlint, configured Ruff and whitespace checks pass.
+
+Real offscreen previews of both wiki roots were inspected. The current assessment
+and remaining native/large-owner work are in [the readability record](readability.md).
+No new overall numeric score is claimed. Shared `38c5d80` is available as a local
+branch in the canonical shared repo without touching its dirty checkout. The
+primary app's concurrent navigation edits remain untouched. No push, release
+monitoring/retry, app deployment, upload or Perforce server operation occurred.
