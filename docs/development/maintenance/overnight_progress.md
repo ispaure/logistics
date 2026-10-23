@@ -65,14 +65,47 @@ All 11 worker/progress cases, ten Logistics update cases, 32 archive cases acros
 four files and 22 Bulk Rename cases across two files pass. Final Ally fixture tests
 still pass all 48 cases unchanged. Blue Hole's actual vendor passes all 11 worker
 cases, all 44 adapters and exact membership/bytes; only the four shared files and
-revision marker change. Final shared full-suite results and commit checkpoint
-follow. The full desktop/mobile totals above precede this shared Qt-only unit;
+revision marker change (Blue Hole `665c184`). Logistics checkpoint `239e3269`
+records the consumer regression and shared pin. The final complete shared suite
+at `a2ab228` passes 184 files / 1,260 cases / 25 skips / zero failures.
+The full desktop/mobile totals above precede this shared Qt-only unit;
 they are not relabelled as runs against a later source revision.
 
 Release-tool fixtures pass 18 cases with one native-Windows launcher skip; their
 publishing calls are mocked and nothing is uploaded. Documentation layout/viewer
 checks pass five/four cases respectively. No release, device installation, Boox
 package change, reset, remote push or external-app workflow operation occurred.
+
+### Packaged-source checkpoint and resumption
+
+The local source ZIP built at Logistics `239e3269` / shared `a2ab228` contains
+2,332 tracked members plus version metadata; all 2,333 manifest hashes pass.
+A fresh extraction starts the actual Qt application with an owned temporary
+profile, opens the fixture in Bulk Rename, displays LM and Blender preset settings,
+retains `DestinationRail.tools_menu`, and exits normally. The fixture file stays
+unchanged. This is host offscreen startup, not native device/Blender validation.
+Raw package, screenshots and reports stay in ignored test results.
+
+Final tracked-source measurements: Logistics 1,173 files / 89,647 production /
+77,232 test lines; commonUtils 529 / 42,808 / 23,981; Blue Hole excluding vendor
+206 / 22,813 / 1,303. All 1,908 sources compile without execution. Exact repeated
+production bodies of 20+ lines remain absent under the existing comparison.
+No production module/package/dependency was added. All tracked worktrees are clean
+at the implementation checkpoints; the last local documentation commit saves this
+record. Ally Tools remains at `d2c00b8`, unchanged.
+
+No unresolved failing check remains in the executed scope. Baseline fault-injection
+failures and intermediate fixture mistakes above remain distinct from passing
+post-fix checks. Native Windows/Linux, target Blender 5.2.2 registration/exports,
+real devices and crash/power-loss recovery were not exercised here. Native Toga
+cases retain the 25 shared skips in this interpreter. The historical platform
+evidence below keeps its original scope; it is not new validation of this pass.
+
+Resume with native platform/target-runtime checks, large mobile/native lifecycle
+owners, offline index identity/retention policy and individually verified ownership
+simplification. Preserve external-consumer scope: no Ally/Blue Hole refactor is
+authorized solely to improve their architecture. This bounded continuation does
+not establish the requested whole-ecosystem 7/10 outcome.
 - One intermediate fixture compared macOS temporary-path aliases lexically and
   missed two injections. Canonical source-path comparisons fix the fixture; all
   corrected profiles were rerun against baseline and changed implementations.

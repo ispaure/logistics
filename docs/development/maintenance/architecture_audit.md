@@ -58,6 +58,15 @@ The full desktop/mobile totals in the progress log precede this last Qt-only
 unit; their source provenance remains explicit. Remaining native/platform and
 whole-system architecture work still prevents a numeric 7/10 conclusion.
 
+The final shared suite at `a2ab228` passes 184 files / 1,260 cases / 25 skips /
+zero failures. The locally packaged Logistics `239e3269` passes all 2,333 manifest
+hashes and real offscreen startup/fixture views/normal exit in a fresh extraction
+with disposable storage. Final production/test line counts are Logistics
+89,647 / 77,232, shared 42,808 / 23,981, Blue Hole excluding vendor 22,813 / 1,303;
+file counts remain 1,173 / 529 / 206. All 1,908 sources compile without execution.
+These are focused maintenance and host-validation gains; native restart, target
+Blender, crash recovery and the remaining structural priorities stay unverified.
+
 ## Current assessment after the October 23 maintenance pass
 
 This section summarizes the latest implementation; the baseline and earlier
