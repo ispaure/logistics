@@ -1,5 +1,17 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L6 Git snapshot projection
+
+Repository rendering names admitted snapshot identity, action badges and retained
+changed-file preview restoration. Core history/navigation/operation/busy updates
+and their order remain in `_render`; workers, drafts, commands and refresh policy
+remain in their existing owners. Every original method/property expands to the
+same ordered AST/signature. All 142 version-control cases across eight files pass
+before/after in identical order, including live refresh, hunk sides, draft vetoes,
+repository switching and cooperative close. Architecture, owner lint, wiki and
+whitespace checks pass. No repository backend, persisted format, external consumer
+change or project push occurred. The desktop-folder stage of L6 remains.
+
 ## Sequential audit implementation: L6 IDE queued opens and restoration
 
 `_OpenTarget` captures destination intent without another state/job owner;

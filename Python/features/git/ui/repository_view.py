@@ -229,26 +229,10 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
     def _render(self, snapshot):
         self.snapshot = snapshot
         self.path = snapshot.root
-        name = snapshot.display_name or snapshot.root.name
-        self.view_title = name + " (Git)"
-        self.title_changed.emit(self.view_title)
-        self.setToolTip(str(snapshot.root))
-        status = snapshot.status
-        branch = status.branch if status.branch != '(detached)' else f'Detached HEAD {status.oid[:8]}'
-        tracking = f' · {status.upstream} · ↑{status.ahead} ↓{status.behind}' if status.upstream else ' · no upstream'
-        self.repository_label.setText(f'  {name} · {branch}{tracking}')
-        self.repository_label.setToolTip(str(snapshot.root))
+        status = self._render_repository_identity(snapshot)
         self.changes.set_changes(status.changes)
         self.changes.set_push_target(status.branch, 'origin' in snapshot.remotes and status.branch not in ('', '(detached)'))
-        from .chrome import action_icon
-        for title, icon, count, description in (
-                ('Commit', 'commit', len(status.changes), 'uncommitted files'),
-                ('Pull…', 'pull', status.behind if status.upstream else 0, 'incoming commits'),
-                ('Push…', 'push', status.ahead if status.upstream else 0, 'outgoing commits')):
-            button = self.action_buttons[title]
-            button.setProperty('badge_count', count)
-            button.defaultAction().setIcon(action_icon(icon, count))
-            button.defaultAction().setToolTip(f'{title} · {count} {description}')
+        self._render_action_badges(status)
         if not self.changes.amend.isChecked():
             self._apply_template({'template_text': snapshot.template_text if snapshot.template_configured else self.preferences.options['commit_template'] or snapshot.template_text})
         if snapshot.template_warning:
@@ -268,6 +252,35 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         self.changes.amend.setEnabled(bool(snapshot.commits) and not snapshot.operation)
         if snapshot.operation: self.changes.amend.setChecked(False)
         self._set_busy(self.busy)
+        self._restore_change_preview(status)
+
+    def _render_repository_identity(self, snapshot):
+        """Project repository/branch/tracking identity before rendering controls."""
+        name = snapshot.display_name or snapshot.root.name
+        self.view_title = name + " (Git)"
+        self.title_changed.emit(self.view_title)
+        self.setToolTip(str(snapshot.root))
+        status = snapshot.status
+        branch = status.branch if status.branch != '(detached)' else f'Detached HEAD {status.oid[:8]}'
+        tracking = f' · {status.upstream} · ↑{status.ahead} ↓{status.behind}' if status.upstream else ' · no upstream'
+        self.repository_label.setText(f'  {name} · {branch}{tracking}')
+        self.repository_label.setToolTip(str(snapshot.root))
+        return status
+
+    def _render_action_badges(self, status):
+        """Update action counts from the admitted snapshot, without querying Git."""
+        from .chrome import action_icon
+        for title, icon, count, description in (
+                ('Commit', 'commit', len(status.changes), 'uncommitted files'),
+                ('Pull…', 'pull', status.behind if status.upstream else 0, 'incoming commits'),
+                ('Push…', 'push', status.ahead if status.upstream else 0, 'outgoing commits')):
+            button = self.action_buttons[title]
+            button.setProperty('badge_count', count)
+            button.defaultAction().setIcon(action_icon(icon, count))
+            button.defaultAction().setToolTip(f'{title} · {count} {description}')
+
+    def _restore_change_preview(self, status):
+        """Restore the requested changed-file side after snapshot controls settle."""
         pending = getattr(self, '_refresh_preview_pending', None)
         if pending is not None:
             self._refresh_preview_pending = None

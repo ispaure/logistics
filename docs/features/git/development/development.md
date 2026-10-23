@@ -53,6 +53,14 @@ The main window connects contributed pages' `idle` signals to deferred closing.
 the thread remains owned until Qt's `finished` signal arrives. No thread is forcibly
 terminated. Commit-message drafts can veto closing a repository tab or the application.
 
+`RepositoryView._render` admits the snapshot before projecting controls. Named
+helpers render repository/branch identity, action badges and retained changed-file
+preview selection. History/navigation, operation state and busy publication retain
+their existing order in `_render`; preview restoration follows those controls and
+keeps its selection signal blocker. The helpers issue no Git queries and add no
+state owner. Worker sequencing, refresh coalescing, draft vetoes, mutation commands
+and repository-path capture remain in the existing view/job/backend owners.
+
 Machine stdout and diagnostics are kept separate. Temporary files prevent pipe
 deadlocks and excessive memory capture; stderr progress streams on POSIX and is
 shown at completion on Windows. Machine responses are capped at 8 MiB and fail

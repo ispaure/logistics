@@ -29,7 +29,7 @@ below describe the assessment snapshot, before this implementation.
 | L2 | Retained drawer/listing owner separated from frame layout; import compatibility preserved | See sequential progress entry |
 | L3 | Explicit unpublished-control adoption/retirement; verified failed-build cleanup; named library page preparation/projection | See sequential progress entry |
 | L5 | Named mobile control/workspace assembly and recycled rows; desktop timer/signal binding and tree projection | See sequential progress entry |
-| L6 (IDE stage) | Captured open destination and named queued recovery publication; Git/folder stages remain | See sequential progress entry |
+| L6 (IDE/Git stages) | Captured IDE opens/recovery; Git snapshot identity, badges and retained preview projection; folder stage remains | See sequential progress entry |
 
 Items absent from this table remain outstanding. Native/platform acceptance limits
 are recorded with each unit; a passing host suite is not native certification.
