@@ -1286,3 +1286,22 @@ encryption packages. Target Blender 5.2.2 registration is still not claimed.
   render, reserved Misc tools_menu is present, and cooperative shutdown exits 0.
   This package precedes the subsequent import-only cleanup. No release was
   published and no update download was run.
+
+Reviewed import cleanup: `0ac67e1c`.
+
+## Stable archive member-plan inputs
+
+- The shared open-adapter planner repeatedly tested membership in `include` and
+  `stored` inputs. One-pass iterators were exhausted by earlier members: a
+  retained-name iterator produced an empty rebuild, and a stored-name iterator
+  silently lost a later compression override. Both profiles fail before the fix;
+  tuple/list controls retain their previous behavior.
+- Capture those name sets once when lazy plan consumption begins. Existing
+  ordering, replacement append semantics, comment/attribute preservation and
+  compression defaults are unchanged. The helper remains in its current archive
+  owner with no format-specific EPUB/comic policy. Shared commit `9398118`.
+- Five rebuilding cases pass in both Python environments; 25 full archive,
+  19 EPUB and 34 comic library/editor cases pass. Existing embedded coverage now
+  includes the complete five-case rebuilding module: 150 cases on Blender
+  4.5.1 / Python 3.11.11, 149 passing and one filesystem skip. All 33 consumer
+  adapters and exact vendor checks pass; configured lint passes.
