@@ -62,14 +62,14 @@ class UpdateUITests(QtTestCase):
             panel.deleteLater()
             self.app.processEvents()
 
-    def controller(self):
+    def controller(self, *, preferences=Path('/missing-test/preferences.json')):
         dialog = qt.QMainWindow()
         surface = LaunchSurface(dialog)
         dialog.setCentralWidget(surface)
         surface.resize(850, 550)
         owner = SimpleNamespace(dlg=dialog, launch_surface=surface,
                                 _closing=False, pending_update=None, _update_offer_visibility=Mock())
-        with patch('desktop.updater.preferences_path', return_value=Path('/missing-test/preferences.json')), patch('desktop.updater.qt.QTimer.singleShot'):
+        with patch('desktop.updater.preferences_path', return_value=preferences), patch('desktop.updater.qt.QTimer.singleShot'):
             controller = UpdateController(owner)
         self.addCleanup(dialog.deleteLater)
         controller.timer.stop()
@@ -124,6 +124,53 @@ class UpdateUITests(QtTestCase):
         self.assertIsNone(controller.available)
         check.assert_not_called()
         owner._update_offer_visibility.assert_called()
+
+    def test_invalid_preferences_after_preparation_discard_staging_and_leave_app_open(self):
+        controller, owner = self.controller()
+        controller.operation = 'prepare'
+        controller.selected = updates.UpdateChoice(True, 'main')
+        controller.last_check = 123
+        with self.temporary_directory() as temp:
+            workspace = Path(temp) / 'prepared'
+            workspace.mkdir()
+            request = workspace / 'request.json'
+            request.write_text('{}')
+            with patch('services.updates.choice', side_effect=ValueError('invalid branch')), \
+                    patch.object(owner.dlg, 'close') as close:
+                controller._finished(request, '')
+            close.assert_not_called()
+            self.assertIsNone(owner.pending_update)
+            self.assertFalse(workspace.exists())
+            self.assertEqual(controller.last_check, 0)
+            self.assertTrue(controller.button.isEnabled())
+
+    def test_malformed_receipts_do_not_prevent_startup_or_get_deleted(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            receipt = root / 'state/updates/last-result.json'
+            receipt.parent.mkdir(parents=True)
+            for value in (None, [], True, {}, {'success': 'false'},
+                          {'success': False, 'message': 42}):
+                with self.subTest(receipt=value):
+                    content = json.dumps(value)
+                    receipt.write_text(content)
+                    with patch('desktop.updater.notify') as notice:
+                        self.controller(preferences=root / 'preferences.json')
+                    notice.assert_not_called()
+                    self.assertEqual(receipt.read_text(), content)
+
+    def test_valid_failure_receipt_notifies_once_and_is_consumed(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            receipt = root / 'state/updates/last-result.json'
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text(json.dumps({'success': False, 'message': 'recovery required'}))
+            with patch('desktop.updater.notify') as notice:
+                self.controller(preferences=root / 'preferences.json')
+                self.controller(preferences=root / 'preferences.json')
+            notice.assert_called_once()
+            self.assertIn('recovery required', notice.call_args.args)
+            self.assertFalse(receipt.exists())
 
 
 if __name__ == '__main__':

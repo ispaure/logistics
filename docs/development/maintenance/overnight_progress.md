@@ -1,5 +1,39 @@
 # Ecosystem maintenance progress
 
+## October 23 continuation on the current development branches
+
+This continuation starts at Logistics `8c844fa2`, commonUtils `3797a25`,
+Blue Hole's `blender-5.2.2/alpha` and Ally Tools' `alpha`. All four worktrees
+were clean. Logistics is on `alpha` and shared source on `main`; the historical
+work-branch names below describe earlier sessions. Current repository instructions
+prefer retaining these branches. No push is authorized. Blue Hole and Ally Tools
+are restricted to necessary shared-library compatibility work in this continuation.
+
+- Reused the existing audit and progress history rather than rerunning its old
+  measurements as a new baseline. Doctor, configured lint and architecture pass
+  (24 host adapters, 15 feature edges, zero violations).
+- All 48 Ally fixture/import/signature contracts pass against current shared
+  source. No Ally production edit is required by the retained updater APIs.
+- Shared updater fault injection reproduces six profiles: corrupt recovery copies
+  for the manifest/replaced/deleted files, edits during recovery/payload copies,
+  and a newly occupied destination during staging. All six fail against committed
+  baseline source, then pass after verification and final target checks. Shared
+  commit `6ef13d8`; all 18 updater and six Logistics update cases pass.
+- A second unit reproduces a prematurely published new manifest and corrupt or
+  interrupted rollback output overwriting installed bytes. Private sibling staging
+  now owns payload/manifest/recovery lifetimes, verifies restored bytes and
+  publishes the manifest last. Its verification/commit checkpoint follows.
+- One intermediate fixture compared macOS temporary-path aliases lexically and
+  missed two injections. Canonical source-path comparisons fix the fixture; all
+  corrected profiles were rerun against baseline and changed implementations.
+
+The updater is a standalone stdlib script copied outside the installation. Its
+mechanisms therefore remain in that owner rather than importing the package's
+atomic writer. Public arguments, request/manifest formats and consumer shutdown
+policy stay intact. These are optimistic content checks, not external-writer
+locking or crash-atomic whole-tree replacement. Native Windows/Linux restart and
+target Blender validation have not been rerun for this continuation.
+
 ## Session rules and recovery
 
 Started October 22, 2026 (America/Toronto). Work branches are

@@ -333,6 +333,12 @@ revalidation, application and launcher restart, recording failures for startup
 notifications. Recovery staging is retained. A rollback failure requires manual
 recovery; it never launches a partially restored installation.
 
+The controller validates receipt object/field types before consuming them.
+Malformed receipts remain available for inspection and cannot prevent startup;
+valid failure receipts notify once. If update settings become invalid or change
+during preparation, the completed staging directory is discarded and the current
+application stays open for a later check.
+
 Shared updater API contracts live in commonUtils `runtime/updates/README.md`.
 Logistics uses release discovery; Blue Hole uses branch commit discovery and owns
 its addon-specific extraction, preset resources and Deluxe overlay behavior.

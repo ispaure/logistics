@@ -34,7 +34,11 @@ class UpdateController(qt.QObject):
         if result.is_file():
             try:
                 outcome = json.loads(result.read_text(encoding='utf-8'))
+                if not isinstance(outcome, dict) or not isinstance(outcome.get('success'), bool):
+                    raise ValueError('Invalid update receipt outcome')
                 if not outcome['success']:
+                    if not isinstance(outcome.get('message'), str):
+                        raise ValueError('Invalid update receipt message')
                     notify('updates', 'Logistics update failed', outcome['message'], outcome='failure')
                 result.unlink()
             except (OSError, ValueError, KeyError):
@@ -92,7 +96,11 @@ class UpdateController(qt.QObject):
             self.available = result
             self.owner._update_offer_visibility()
         else:
-            if updates.choice() != self.selected:
+            try:
+                selected = updates.choice()
+            except ValueError:
+                selected = None
+            if selected is None or selected != self.selected:
                 shutil.rmtree(result.parent, ignore_errors=True)
                 self.last_check = 0
                 return
