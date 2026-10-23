@@ -659,3 +659,22 @@ completed baseline. Remaining priorities continue to govern selection.
   mobile interpreter without importing a UI toolkit. Lint and docs checks pass.
 - Shared `199309c` is committed; exact Blue Hole vendor and 31 consumer tests pass.
   Native test availability correction is Logistics `667bc472`.
+
+## Range reader buffer and numeric argument admission
+
+- Typed array buffers used element count rather than byte capacity and then
+  failed after consuming data. Read-only buffers likewise advanced the reader
+  before rejecting assignment. RangeReader now validates and views writable
+  buffers as bytes before reading, retaining existing strided byte-view support.
+- Separate standard-I/O comparison fixtures reproduced float offsets/counts
+  changing position, fetching data before failure or reading an entire source.
+  Integer conversion now occurs before source access or position changes.
+- All 12 browsing/range tests pass in both environments, with standard BytesIO
+  comparisons, no-fetch failure checks and explicit strided-view preservation.
+  All 12 desktop PDF and 15 mobile remote-reader tests pass. Lint and docs pass.
+- Shared `7978a28` is committed; exact Blue Hole vendor bytes and all 31 consumer
+  tests pass. The preceding batch pin/vendor commits are Logistics `403a0ac1` and
+  Blue Hole `ee710aa`.
+- Expanded read-only Blender discovery checked PATH, both application folders and
+  the OS application index; no executable/bundle was found. Native Blender 5.2.2
+  registration remains unverified. No application was downloaded or installed.
