@@ -263,6 +263,17 @@ folder grouping, copy precedence and the shared Local root. Discovery does not
 fetch remote contents or authorize access to a listed location. Native crypt
 identity discovery still happens separately when credentials load.
 
+`_folder_copy_descriptors` resolves account and copy identities from that detached
+snapshot before catalog grouping. Directory rechecks, copy precedence, display
+labels and shared-folder publication retain their existing discovery order.
+`FilesUI._build_file_browser` constructs controls before `show_files` publishes the
+route, starts the first listing and binds location changes. `show_files` retains
+cold-launch, credential/storage guards and the retained-browser path.
+`FolderHubUI._build_folder_source_tabs` captures each source in its callback;
+`_render_folder_tab` projects the filtered snapshot into the existing per-source
+tree cache under `update_folder_list`'s batching scope. `FolderListing` and
+`FileOperations` remain the request and mutation owners.
+
 Results and errors are published on the UI thread only while their epoch,
 credential-client identity/generation and refresh request remain current. Old
 errors cannot replace status for a locked or newer session. Native hosts read a

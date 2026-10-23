@@ -132,28 +132,9 @@ class FolderDiscoveryResult:
     crypt_locations: tuple
 
 
-def discover_folder_choices(snapshot):
-    """Read local directories and group known locations without mutating the snapshot."""
-    jobs = snapshot.jobs
-    # Retained metadata is a discovery index, never permission to browse.
-    # Opening any locked remote still goes through the matching ZIP guard.
-    retained = snapshot.retained_packages
-    remotes = sorted(set(snapshot.remote_names) | {
-        remote for package in retained for remote in package['remotes']}, key=str.casefold)
-    crypt = dict(snapshot.crypt_locations)
-    roots = snapshot.crypt_roots
-    if roots:
-        # The account identities were resolved at credential load. Recheck
-        # just their local directories, including copies created since then.
-        base = collection_path(snapshot.private_root, True)
-        crypt = {}
-        for label, (remote, identity) in roots.items():
-            path = base / identity
-            if path.is_dir() and not path.is_symlink() and any(path.iterdir()):
-                crypt[label] = remote
-    # Rendering and menu opening must never enter the native bridge. A
-    # credential load updates this discovery snapshot.
-    choices = {'All files': dict(source='Local', kind='local', value='', name='Browse All Files', copies=[], browser_root=True)}
+def _folder_copy_descriptors(snapshot, remotes, crypt):
+    """Resolve detached account/copy identities before catalog grouping and display."""
+    jobs, retained = snapshot.jobs, snapshot.retained_packages
     packages = [*retained, *snapshot.source_packages]
     accounts, by_identity = {}, {}
     loaded_sources = {credential_source(item['package_name']) for item in snapshot.source_packages
@@ -197,6 +178,32 @@ def discover_folder_choices(snapshot):
                                                available=source != 'Remote' or account in loaded_sources or not account and remote in snapshot.remote_names,
                                                locked=source == 'Remote' and bool(account) and account not in loaded_sources,
                                                payload=payload))
+    return descriptors
+
+
+def discover_folder_choices(snapshot):
+    """Read local directories and group known locations without mutating the snapshot."""
+    jobs = snapshot.jobs
+    # Retained metadata is a discovery index, never permission to browse.
+    # Opening any locked remote still goes through the matching ZIP guard.
+    retained = snapshot.retained_packages
+    remotes = sorted(set(snapshot.remote_names) | {
+        remote for package in retained for remote in package['remotes']}, key=str.casefold)
+    crypt = dict(snapshot.crypt_locations)
+    roots = snapshot.crypt_roots
+    if roots:
+        # The account identities were resolved at credential load. Recheck
+        # just their local directories, including copies created since then.
+        base = collection_path(snapshot.private_root, True)
+        crypt = {}
+        for label, (remote, identity) in roots.items():
+            path = base / identity
+            if path.is_dir() and not path.is_symlink() and any(path.iterdir()):
+                crypt[label] = remote
+    # Rendering and menu opening must never enter the native bridge. A
+    # credential load updates this discovery snapshot.
+    choices = {'All files': dict(source='Local', kind='local', value='', name='Browse All Files', copies=[], browser_root=True)}
+    descriptors = _folder_copy_descriptors(snapshot, remotes, crypt)
     groups = project_catalog(descriptors)
     counts = {}
     for group in groups:

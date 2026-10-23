@@ -157,6 +157,15 @@ class FilesUI:
             return opened
         if hasattr(self, 'file_browser'):
             await self.file_browser.close()
+        self._build_file_browser(location)
+        self.refresh_file_source_tabs()
+        self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser')
+        opened = await self.browse_files()
+        self.file_storage.on_change = self.change_file_storage
+        return opened
+
+    def _build_file_browser(self, location):
+        """Construct browser/command controls before route publication and first listing."""
         self.file_roots = self.ordinary_file_roots()
         if local_read_available(self, private=True):
             self.file_roots.update(self.existing_crypt_locations())
@@ -223,11 +232,6 @@ class FilesUI:
             self.file_browser.scroll_container()],
             style=Pack(direction=COLUMN, margin=12, flex=1))
         self.files_view._folder_entry_location = location or (self.local_browser_root(), '')
-        self.refresh_file_source_tabs()
-        self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser')
-        opened = await self.browse_files()
-        self.file_storage.on_change = self.change_file_storage
-        return opened
 
     def refresh_file_source_tabs(self):
         if not hasattr(self, 'file_source_tabs'):

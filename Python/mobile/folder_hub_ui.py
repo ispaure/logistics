@@ -171,20 +171,7 @@ class FolderHubUI:
         # Finish discovery before replacing references to the visible controls.
         choices = self.folder_choices() if choices is None else choices
         self.folder_source = getattr(self, 'folder_source', 'Local')
-        self.folder_source_styled = None
-        self.folder_source_buttons = {}
-        self.folder_source_tabs = surface(toga.Box(
-            style=Pack(direction=ROW, margin_bottom=12)),
-            radius=11, background='alternate', outlined=False)
-        for source in ('Local', 'rclone', 'Network shares'):
-            def select_source(widget=None, selected=source, **kwargs):
-                if self.folder_source != selected:
-                    self.change_folder_source(selected)
-            button = toga.Button(SOURCE_LABELS[source], on_press=select_source,
-                                 style=Pack(flex=1, height=TOUCH_TARGET,
-                                            font_size=toga_font_size(CONTROL_TEXT), margin=2))
-            self.folder_source_buttons[source] = button
-            self.folder_source_tabs.add(button)
+        self._build_folder_source_tabs()
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
         self.folder_tab_views = {}
         self.folder_tab_snapshot = None
@@ -283,6 +270,27 @@ class FolderHubUI:
                              for remote in package.get('crypt_remotes', ()))
         # Cache each source's native rows independently. Discovery/credential
         # metadata may change without changing anything this source displays.
+        self._render_folder_tab(visible, loaded_remotes, crypt_remotes)
+
+    def _build_folder_source_tabs(self):
+        """Build source selectors with each callback bound to its own source."""
+        self.folder_source_styled = None
+        self.folder_source_buttons = {}
+        self.folder_source_tabs = surface(toga.Box(
+            style=Pack(direction=ROW, margin_bottom=12)),
+            radius=11, background='alternate', outlined=False)
+        for source in ('Local', 'rclone', 'Network shares'):
+            def select_source(widget=None, selected=source, **kwargs):
+                if self.folder_source != selected:
+                    self.change_folder_source(selected)
+            button = toga.Button(SOURCE_LABELS[source], on_press=select_source,
+                                 style=Pack(flex=1, height=TOUCH_TARGET,
+                                            font_size=toga_font_size(CONTROL_TEXT), margin=2))
+            self.folder_source_buttons[source] = button
+            self.folder_source_tabs.add(button)
+
+    def _render_folder_tab(self, visible, loaded_remotes, crypt_remotes):
+        """Project a filtered source into its retained native tree and mount it once."""
         tab = self.folder_tab_views.get(self.folder_source)
         if tab is None:
             tab = FolderTreeView(

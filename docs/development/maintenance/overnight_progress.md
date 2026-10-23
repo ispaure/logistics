@@ -1,5 +1,19 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L4 mobile folder sources and presentation
+
+Detached copy/account descriptor construction precedes existing catalog grouping;
+browser/command construction precedes route publication, first listing and change
+binding. Source-tab construction and retained per-source tree projection are named
+inside FolderHubUI. Every original method/function expands to identical ordered
+AST/signatures. All 139 folder cases across ten files and seven file-management
+cases pass before/after in identical order, plus navigation 32, staged startup,
+architecture, owner lint, wiki and whitespace checks. Snapshot immutability,
+credential/epoch admission, copy precedence, local/shared roots, source filters,
+large-folder behavior and request/mutation ownership remain unchanged. The earlier
+overlap with concurrent rclone work is now committed and this unit contains only
+its three host owners and documentation. No external edits or project push.
+
 ## Sequential audit implementation: L6 desktop folder publication
 
 FoldersPage names selected-copy/credential resolution, accepted action-scope
