@@ -28,6 +28,9 @@ The [user guide](../user/user.md) describes available workflows and limits.
 
 Start a desktop UI change at `ui/page.py`, record/lease changes at `session.py`,
 saved-file contracts at `storage.py`, and request construction at `domain.py`.
+Storage bounds reads to 32 MiB plus one byte before decoding, even when file size
+metadata is stale. Oversized records remain untouched and cannot become a save
+baseline; catalog listing reports its existing warning for them.
 Registration imports `ui/page.py` lazily. Import presentation from `features.lm.ui`;
 the old root-level forwarding modules have been removed. Layout builders populate
 the existing page widget references in their original order; the page keeps

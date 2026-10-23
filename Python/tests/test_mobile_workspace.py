@@ -1,5 +1,6 @@
 """Workspace ownership, recovery, stale completion and privacy invariants."""
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -78,6 +79,33 @@ class WorkspaceTests(unittest.TestCase):
             self.assertTrue(workspace.accepts(token))
             self.assertTrue(workspace.forget_private(guard=lambda session: True))
             self.assertFalse(workspace.accepts(token))
+
+    def test_oversized_restore_is_rejected_even_when_size_metadata_is_stale(self):
+        from mobile.workspace import MAX_MANIFEST
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            initial = Workspace(root)
+            initial.open('managed-text', 'a' * 32, 'text')
+            initial.save()
+            payload = json.loads(initial.path.read_text())
+            payload['padding'] = 'x' * MAX_MANIFEST
+            initial.path.write_text(json.dumps(payload))
+            before = initial.path.read_bytes()
+            original_stat = Path.stat
+            def stale_stat(candidate, *args, **kwargs):
+                info = original_stat(candidate, *args, **kwargs)
+                if candidate == initial.path:
+                    fields = list(info)
+                    fields[6] = 0
+                    return os.stat_result(fields)
+                return info
+            with patch.object(Path, 'stat', stale_stat):
+                restored = Workspace(root)
+            self.assertEqual(restored.sessions, {})
+            self.assertTrue(restored.error)
+            with self.assertRaises(ValueError):
+                restored.save()
+            self.assertEqual(initial.path.read_bytes(), before)
 
     def test_invalid_manifest_is_preserved_and_session_and_view_bounds_are_enforced(self):
         with TemporaryDirectory() as directory:
