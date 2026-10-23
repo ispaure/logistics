@@ -86,3 +86,37 @@ and `PYTHONPATH=Python`. Use [the validation guide](testing.md) for environment 
 
 Both complete suites must pass; each file owns its GUI state in an isolated
 process. See `Python/tests/run_platform_checks.py` for the current orchestration.
+
+## Parallel native iOS validation
+
+`.github/workflows/mobile-build.yml` builds one iOS Simulator application in
+Briefcase test mode, then runs the complete native suite on iPhone, iPhone Duo and iPad
+in separate matrix jobs. Each device restores the same generated project and
+binary and runs with `ui_tools.py run ios --no-update`. The runner rejects a
+missing binary, a production-mode app, dirty source or a different Logistics or
+commonUtils commit before launch; the resulting report must still pass the full
+native case and source checks. The Duo job additionally requires its rotation
+matrix. Android builds and validates independently of the iOS jobs.
+
+Every iOS validation run requires all three device families, including iPad
+independent-window checks. An iPad failure blocks the run. Device jobs use
+separate runners and artifacts named
+`logistics-native-ios-iphone`, `logistics-native-ios-duo` and
+`logistics-native-ios-ipad`; their logs and reports cannot overwrite each other.
+The shared project is retained as `logistics-ios-test-project`, and
+`logistics-native-ios` contains the test-mode simulator ZIP and build diagnostics.
+
+The final native gate checks every selected build and device job. Failed,
+cancelled and required skipped jobs fail the gate; only unselected platforms may
+be skipped. Device matrix jobs use `fail-fast: false` to retain other devices'
+diagnostics after a failure. Source release packaging also requires the separate
+desktop/platform and Android/iOS document-runtime workflows to succeed.
+
+Local scheduling validation uses `test_parallel_ios_workflow.py` and
+`test_native_report.py` under `mobile_build/tests/`: actual workflow shell steps
+run against disposable fixtures, covering archive reuse, executable permissions,
+report isolation, device flags, source mismatch and all gate status combinations.
+Validate workflow syntax and expressions with actionlint, recognizing the existing
+`xcode-27` runner label. These checks do not establish hosted runner capacity,
+native test success or elapsed-time savings. Hosted execution and timings remain
+unverified until the later GitHub release validation checkpoint.

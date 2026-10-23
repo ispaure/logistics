@@ -78,6 +78,9 @@ on macOS, Windows and Linux platform checks (including Fedora), Android/iOS
 native app builds and UI checks, and actual Android/iOS document/core testbeds
 before publication. Every job uses the tagged source and pinned commonUtils
 commit. Failed, cancelled or skipped prerequisites prevent packaging/publication.
+Native iPhone, Duo and iPad suites run in parallel after one shared test-app build;
+all three are mandatory, including iPad independent-window validation. Android
+remains independent; see [native scheduling and gates](platform-checks.md#parallel-native-ios-validation).
 A manual Source release run exercises the same gates and packages without
 publishing. Mobile artifacts are development builds, not signed store releases.
 
