@@ -52,7 +52,7 @@ aliases; external extensions must update their host imports.
 | Desktop startup | `Python/launch.py` | [Architecture](architecture.md) |
 | Rail, landing chooser or destination hosting | `Python/desktop/navigation/catalog.py`, `Python/desktop/{main_window,sidebar,landing}.py` | [Architecture](architecture.md) |
 | Open document tabs or cooperative close | `Python/desktop/documents.py` | [Architecture](architecture.md#independent-text-documents) |
-| Feature discovery, enablement or dependencies | `Python/features/feature_runtime.py`, `runtime/{preferences,dependencies,activation,catalog}.py`; public facade in `registry.py` | [Feature lifecycle](features.md) |
+| Feature discovery, enablement or dependencies | `Python/features/feature_runtime.py`, `runtime/{preferences,dependencies,activation,catalog}.py`; application instance in `application.py` | [Feature lifecycle](features.md) |
 | Register a feature page, settings group or launcher | The feature's `__init__.py` and any delegated contribution module | [Extension points](extension-points.md) |
 | Browser actions, previews or file activation | Feature registration and handlers; `Python/desktop/file_browser.py` for host integration | [Browser extensions](file-browser.md) |
 | Desktop Workspaces | `Python/desktop/pages/folders.py`, `Python/services/folders/{catalog,sources,workspaces}.py` | [Feature lifecycle](features.md#remote-folder-source-context) |
@@ -68,7 +68,7 @@ aliases; external extensions must update their host imports.
 | Saved-import inventory/deletion | `Python/mobile/saved_files_ui.py`; `app.saved_files()` owns the instance | [Mobile host owners](mobile-runtime.md) |
 | Mobile Close/Back decisions and host replacement | `Python/mobile/session_workflows/`, `application_lifecycle.py` | [Session transitions](mobile-runtime.md#session-transition-decisions) |
 | Mobile surface publication and settings | `Python/mobile/reading/`, `Python/mobile/settings/` | [Mobile runtime](mobile-runtime.md#reader-publication-boundary) |
-| Mobile reader sessions and host access | `Python/mobile/{reader_sessions,private_sessions,reader_host}.py` | [Mobile architecture](mobile-architecture-roadmap.md) |
+| Mobile reader sessions and host access | `Python/mobile/{reader_sessions,private_sessions,reader_host,provider_document,provider_opening,provider_view}.py` | [Mobile architecture](mobile-architecture-roadmap.md) |
 | Mobile format presentation or cloud integration | `Python/features/{books,comics}/mobile/`, rclone `mobile/` and workflow-owned `*/mobile/` | [Mobile preparation](mobile-preparation.md) |
 | Which sources reach a mobile build | Owning `mobile_sources.json`; `mobile_build/tools.py` aggregates `APP_MODULES` and `DOCUMENT_MODULES` | [Mobile preparation](mobile-preparation.md) |
 | Defaults, private state or resource roots | Owning feature's `config.ini`, `Python/features/settings.py`, `Python/config.py` | [Configuration and data](configuration-and-data.md) |
@@ -118,12 +118,26 @@ feature sources are separately owned and may be absent from a normal clone.
 
 Supported features and host/services declare curated payload sources in `mobile_sources.json`. `mobile_build/tools.py` validates staged imports and hashes manifests with the payload. Feature manifests never start desktop discovery. Host services are grouped under `services/documents/`, `services/folders/` and `services/editors/`; platform presentation lives under `ui/` or feature `mobile/`.
 
-## Compatibility import inventory
+## Canonical imports
 
-`python3 dev.py compatibility` lists the supported forwarding modules, their
-canonical implementation modules and current production consumer counts.
-`Scripts/compatibility.json` owns the inventory. Counts come from static imports
-and literal factory references; they do not establish whether external consumers
-still rely on an import path. Keep a forwarding path until its callers and supported
-external contract are migrated; there is no automatic removal deadline.
-Do not add feature behavior to a forwarding module.
+The inventoried feature redirectors have been removed. `features.application.registry`
+is the application-owned `FeatureRegistry` instance; callers invoke it directly.
+Independent hosts/tests construct `FeatureRegistry` from `features.feature_runtime`.
+Feature-owned implementations and shared native speech use their canonical imports.
+`python3 dev.py compatibility` remains an inventory check; it currently has no
+forwarding entries. Migrate callers, patch targets and payload manifests together
+when changing owners rather than adding another redirector.
+
+## Presentation ownership after maintenance
+
+Desktop folder tree projection lives in `desktop/pages/folder_tree.py`; its page
+retains discovery, selection and browser lifetime. LM conversation/folder actions
+live in `features/lm/ui/conversation_actions.py`, coordinated with the existing
+page session. Shared browser construction and workspace headers are documented in
+commonUtils itself. Provider document preparation and publication live in
+`mobile/provider_opening.py`, with unpublished controls built by
+`mobile/provider_view.py` and lifetime retained by `ProviderDocumentSession`.
+
+The removed feature redirectors have no remaining first-party consumers. New
+callers import canonical owners, including `features.application.registry` for
+the explicit application feature runtime.

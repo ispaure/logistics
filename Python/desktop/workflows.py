@@ -2,7 +2,7 @@
 Generic dispatcher for feature-contributed UI workflows.
 """
 
-from features import registry
+from features.application import registry
 
 
 def open_workflow(workflow_id: str, data=None, parent=None):

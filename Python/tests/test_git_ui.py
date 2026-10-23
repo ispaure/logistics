@@ -728,7 +728,7 @@ class GitUITests(QtTestCase):
         from unittest.mock import Mock
         self.commit_fixture(); self.open()
         service = Mock()
-        with patch('features.registry.is_feature_enabled', return_value=True), \
+        with patch('features.application.registry.is_feature_enabled', return_value=True), \
              patch('features.text_editor.ui.service.editor_service', return_value=service):
             self.page.edit_file('file.txt')
             self.page.edit_file('file.txt')
@@ -743,7 +743,7 @@ class GitUITests(QtTestCase):
         self.open()
         opener = self.page.working_file_opener = Mock(return_value=True)
         item = self.page.changes.unstaged_files.topLevelItem(0)
-        with patch('features.registry.is_feature_enabled', return_value=False), \
+        with patch('features.application.registry.is_feature_enabled', return_value=False), \
              patch('features.text_editor.ui.service.editor_service') as service:
             self.page.changes.unstaged_files.itemDoubleClicked.emit(item, 0)
             opener.assert_called_once_with(self.repo.root() / 'file.txt')
@@ -757,7 +757,7 @@ class GitUITests(QtTestCase):
         self.commit_fixture(); self.open()
         self.page.working_file_opener = Mock(return_value=False)
         service = Mock()
-        with patch('features.registry.is_feature_enabled', return_value=True), \
+        with patch('features.application.registry.is_feature_enabled', return_value=True), \
              patch('features.text_editor.ui.service.editor_service', return_value=service):
             self.page.edit_file('file.txt')
         service.open.assert_called_once_with(self.repo.root() / 'file.txt')
@@ -791,7 +791,7 @@ class GitUITests(QtTestCase):
         self.assertTrue(self.page.history.working_copy_is_selected())
         self.page.working_file_opener = Mock(return_value=False)
         service = Mock()
-        with patch('features.registry.is_feature_enabled', return_value=True), \
+        with patch('features.application.registry.is_feature_enabled', return_value=True), \
              patch('features.text_editor.ui.service.editor_service', return_value=service):
             self.page.history.tree.itemDoubleClicked.emit(self.page.history.tree.topLevelItem(0), 0)
         service.open.assert_called_once_with(self.repo.root() / 'file.txt')

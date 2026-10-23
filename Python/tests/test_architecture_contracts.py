@@ -48,8 +48,7 @@ class OwnershipTests(unittest.TestCase):
 
 
 class CompatibilityTests(unittest.TestCase):
-    def test_forwarding_modules_and_canonical_targets_remain_available(self):
+    def test_no_legacy_forwarding_modules_remain(self):
         from Scripts.compatibility import inventory
         rows = list(inventory(ROOT))
-        self.assertTrue(rows)
-        self.assertIn('features.lm.page', {name for name, _, _ in rows})
+        self.assertEqual(rows, [])

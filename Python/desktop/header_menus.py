@@ -1,7 +1,7 @@
 """Application navigation stays available alongside the active tool's menus."""
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from features import registry
+from features.application import registry
 
 
 class HeaderMenus(qt.QObject):
@@ -87,7 +87,7 @@ class HeaderMenus(qt.QObject):
             if state.name == 'emulation':
                 continue
             from services.documentation import feature_guide
-            path, _ = feature_guide(Path(registry.__file__).parent / state.name)
+            path, _ = feature_guide(registry.feature_root / state.name)
             self.guide(self.guides, state.label, path)
 
     def context_document(self, page):

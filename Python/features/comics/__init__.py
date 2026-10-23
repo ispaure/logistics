@@ -11,5 +11,5 @@ def register():
 
 def register_file_types():
     """Compatibility helper; new integrations consume register() as a whole."""
-    from features.registry import get_feature_definition
-    return get_feature_definition('comics').register_types()
+    from features.application import registry
+    return registry.get_feature_definition('comics').register_types()

@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 
 from commonUtils.configuration.monitor import settings_monitor
-from features import registry
+from features.application import registry
 from features.settings import reset_personal_configuration
 
 

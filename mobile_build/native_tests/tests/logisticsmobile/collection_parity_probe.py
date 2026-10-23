@@ -11,7 +11,7 @@ import traceback
 from zipfile import ZipFile
 
 from commonUtils.runtime.resources.documents import LocalDocuments
-from features.comics.mobile.index import CollectionIndex
+from features.books.library.index import CollectionIndex
 from features.rclone.localcrypt.mobile.resources import CryptFiles, encrypted_document
 from mobile.app import LogisticsMobile
 from .fixtures import capture_window

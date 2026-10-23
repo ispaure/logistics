@@ -67,6 +67,11 @@ class FeatureRegistry:
         self._definitions = weakref.WeakKeyDictionary()
 
     @property
+    def feature_root(self):
+        """Physical application feature root used for discovery and owned guides."""
+        return Path(self._features_path())
+
+    @property
     def _disabled_features(self):
         return self.preferences.disabled
 

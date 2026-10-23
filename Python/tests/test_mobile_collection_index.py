@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from features.comics.mobile.index import CollectionIndex
+from features.books.library.index import CollectionIndex
 
 
 class CollectionIndexTests(unittest.TestCase):

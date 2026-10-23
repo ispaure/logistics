@@ -1,7 +1,7 @@
 """Session feature controls with dependency-aware enable/disable behavior."""
 from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui import pyside as qt
-from features import registry
+from features.application import registry
 
 
 class FeaturesPage(qt.QWidget):

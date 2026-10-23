@@ -46,7 +46,7 @@ class IDELayoutTests(QtTestCase):
         self.assertGreater(dock.tab_header.height(), 0)
         for number in (2, 3):
             self.project(page, number)
-            page.workspace._refresh_tab_headers()
+            page.workspace.header_presentation.refresh()
             self.settle()
             bar = next(b for b in page.workspace.findChildren(qt.QTabBar)
                        if b.parent() is page.workspace and b.count() == number)

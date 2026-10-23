@@ -8,7 +8,7 @@ import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import Mock, patch
 from commonUtils.ui import pyside as qt
-from features import registry
+from features.application import registry
 from features.contributions import SettingsContribution, RegisteredContribution
 from desktop.pages.settings import SettingsPage, ConfigurationPanel
 
@@ -307,7 +307,7 @@ class SettingsPageTests(QtTestCase):
             guide = root / 'test' / 'user_docs' / 'index.md'
             guide.parent.mkdir(parents=True); guide.write_text('# Test\n')
             state = self.state(); state.enabled = False
-            with patch.object(registry, '__file__', str(root / 'registry.py')), \
+            with patch.object(registry, '_features_path', return_value=root), \
                     patch.object(registry, 'get_settings', return_value=[]):
                 panel = FeatureSettingsPanel(state); self.addCleanup(panel.deleteLater)
                 panel.resize(850, 600); panel.show(); self.app.processEvents()
@@ -327,7 +327,7 @@ class SettingsPageTests(QtTestCase):
             guide = root / 'test/docs/user/user.md'
             guide.parent.mkdir(parents=True)
             guide.write_text('# Usage')
-            with patch.object(registry, '__file__', str(root / 'registry.py')), \
+            with patch.object(registry, '_features_path', return_value=root), \
                     patch.object(registry, 'get_settings', return_value=[]):
                 panel = FeatureSettingsPanel(self.state())
                 self.addCleanup(panel.deleteLater)
@@ -403,7 +403,7 @@ class SettingsPageTests(QtTestCase):
 
     def test_settings_api_rejects_duplicate_identity(self):
         contribution = RegisteredContribution('test', 'Test', SettingsContribution('Custom', 'custom', lambda parent: None))
-        with patch.object(registry.default_registry, '_collect_contributions', return_value=[contribution, contribution]):
+        with patch.object(registry, '_collect_contributions', return_value=[contribution, contribution]):
             with self.assertRaisesRegex(ValueError, 'Duplicate settings ID'):
                 registry.get_settings()
 

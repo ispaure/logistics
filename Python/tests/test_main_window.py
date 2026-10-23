@@ -336,7 +336,7 @@ class MainWindowTests(QtTestCase):
         self.assertFalse(first.close())
         workspace.request_new_view(); self.wait_browser(page)
         self.assertEqual(page.file_browser.navigation.directory, self.root)
-        workspace._refresh_tab_headers()
+        workspace.header_presentation.refresh()
         bar = next(bar for bar in workspace.findChildren(qt.QTabBar)
                    if bar.parent() is workspace and bar.count())
         index = next(i for i in range(bar.count()) if workspace._tab_dock(bar, i) is first)
@@ -487,7 +487,7 @@ class MainWindowTests(QtTestCase):
             (root/'example.txt').write_text('fixture')
             original = main_window.CORE_TABS
             core = ((0,'File Browser',lambda parent: main_window.FileBrowserPage(parent,root_path=root)),) + original[1:]
-            with patch.object(main_window.registry.default_registry,'get_enabled_features',return_value=[rclone]), \
+            with patch.object(main_window.registry,'get_enabled_features',return_value=[rclone]), \
                     patch.object(credentials,'get_loaded_credential_config_paths',return_value=[]), \
                     patch.object(folder_sources,'get_folder_entries',return_value=[]), \
                     patch.object(main_window,'CORE_TABS',core):

@@ -24,7 +24,7 @@ class BrowserPolicyTests(QtTestCase):
             main.show()
             for _ in range(8):
                 self.app.processEvents()
-            main._refresh_tab_headers()
+            main.header_presentation.refresh()
             self.assertGreater(main.active_dock.tab_header.height(), 0)
             self.assertFalse(main.active_dock.close())
             self.assertIsNone(main.detach_active())
@@ -33,7 +33,7 @@ class BrowserPolicyTests(QtTestCase):
             for _ in range(8):
                 self.app.processEvents()
             detached = window.workspace
-            detached._refresh_tab_headers()
+            detached.header_presentation.refresh()
             self.assertEqual(detached.active_dock.tab_header.height(), 0)
             detached.active_dock.local_new_button.click()
             for _ in range(8):

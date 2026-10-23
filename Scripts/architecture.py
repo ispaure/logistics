@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-INFRASTRUCTURE = {'registry', 'feature_runtime', 'contributions', 'preferences', 'settings', 'discovery', 'code_font'}
+INFRASTRUCTURE = {'application', 'feature_runtime', 'contributions', 'preferences', 'settings', 'discovery'}
 
 
 def references(path, source_root):

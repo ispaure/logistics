@@ -239,10 +239,11 @@ class TextEditorTests(QtTestCase):
         self.assertEqual(self.window.current.editor.toPlainText(), "a\0b")
 
     def test_feature_has_no_dependencies_and_preserves_markdown_activation(self):
-        from features import registry, text_editor
+        from features.application import registry
+        from features import text_editor
         from features.text_editor.contributions import activate_text
         from commonUtils.ui.features import ActionContext
-        from commonUtils.formats.markdownType import MarkdownFile
+        from commonUtils.formats.markdown.file import MarkdownFile
         from commonUtils.filesystem.files import File
 
         self.assertEqual(registry.get_feature_dependencies(text_editor), ())
@@ -253,9 +254,9 @@ class TextEditorTests(QtTestCase):
         )
         self.assertTrue(activate_text(ActionContext(None, None, None, (File(path),))))
         with (
-            patch.object(registry.default_registry, "load_features", return_value=[text_editor]),
-            patch.object(registry.default_registry, "_disabled_features", set()),
-            patch.object(registry.default_registry, "_initialized_features", set()),
+            patch.object(registry, "load_features", return_value=[text_editor]),
+            patch.object(registry, "_disabled_features", set()),
+            patch.object(registry, "_initialized_features", set()),
         ):
             registry.set_feature_enabled("text_editor", False)
             self.assertFalse(registry.is_feature_enabled("text_editor"))
@@ -344,9 +345,9 @@ class TextEditorTests(QtTestCase):
         from features.text_editor import register
         from features.text_editor.ui.service import EditorService
         from commonUtils.filesystem.files import File
-        from commonUtils.formats.markdownType import MarkdownFile
+        from commonUtils.formats.markdown.file import MarkdownFile
         from desktop.file_browser import FileBrowserWindow
-        from features import registry
+        from features.application import registry
 
         service = self.window.service
         with patch.object(registry, "get_browser_extensions", return_value=[]):

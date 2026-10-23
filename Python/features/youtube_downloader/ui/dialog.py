@@ -9,7 +9,7 @@ from commonUtils import ui
 from commonUtils.ui import pyside
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 
-from features import registry
+from features.application import registry
 from features.youtube_downloader import detection, downloader
 from models.folder_entry import FolderEntry
 

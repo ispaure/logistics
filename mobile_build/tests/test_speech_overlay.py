@@ -181,7 +181,7 @@ class SpeechOverlayTests(unittest.TestCase):
         class Voices(Engine):
             voices = {'Offline': None, 'Another voice': None}
         engine = Voices(self.app.loop)
-        with patch('features.books.mobile.speech_native.NativeSpeech', return_value=engine):
+        with patch('commonUtils.ui.native.speech.NativeSpeech', return_value=engine):
             box = speech_voice_setting(self.app)
             button = box.children[2]
             button.on_press()

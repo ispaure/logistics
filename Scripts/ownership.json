@@ -318,7 +318,7 @@
     },
     "feature-infrastructure": {
       "sources": [
-        "Python/features/registry.py",
+        "Python/features/application.py",
         "Python/features/feature_runtime.py",
         "Python/features/settings.py"
       ],

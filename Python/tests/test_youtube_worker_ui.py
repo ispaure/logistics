@@ -31,7 +31,7 @@ class DownloaderWorkerTests(QtTestCase):
         root = Path(temp.name)
         (root/'Configs').mkdir()
         (root/'remoteConfig.ini').write_text('[Youtube-Download]\nconfig_sub_path=Configs\n')
-        with patch('features.registry.is_feature_enabled', return_value=False):
+        with patch('features.application.registry.is_feature_enabled', return_value=False):
             self.dialog = YouTubeDownloaderDialog(FolderEntry('Videos', local=LocalFolder(root)))
         self.dialog.show()
         self.addCleanup(self.dialog.deleteLater)

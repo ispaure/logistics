@@ -6,7 +6,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from .speech import PlaybackTimer, SpeechSession
-from .speech_native import NativeSpeech
+from commonUtils.ui.native.speech import NativeSpeech
 from .speech_host import SpeechPresentation
 
 

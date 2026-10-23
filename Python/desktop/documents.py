@@ -85,7 +85,7 @@ class DocumentsPage(qt.QWidget):
         layout = qt.QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
         self.workspace = DocumentWorkspace(self)
         layout.addWidget(self.workspace)
-        from features import registry
+        from features.application import registry
         self._unsubscribe = registry.subscribe(self._features_changed)
         self.destroyed.connect(self._unsubscribe)
 

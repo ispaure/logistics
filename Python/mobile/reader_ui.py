@@ -502,7 +502,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.show_view(self.book_metadata_view, reader_route='metadata', title='Edit metadata')
             return
         if self.book_record['kind'] == 'epub':
-            from features.books.mobile.metadata import values
+            from features.books.library.metadata import values
             self.book_metadata_initial, self.book_metadata_original = values(self.book_reader)
         else:
             from features.comics.mobile.metadata import values
@@ -536,7 +536,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             return
         edited = {key: field.value for key, field in self.book_metadata_fields.items()}
         if self.book_record['kind'] == 'epub':
-            from features.books.mobile.metadata import patch
+            from features.books.library.metadata import patch
             changes = patch(self.book_metadata_initial, edited, self.book_metadata_original)
         else:
             from features.comics.mobile.metadata import patch
@@ -555,7 +555,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.book_reader, self.book_record = updated, record
             self.book_metadata_initial = edited
             if record['kind'] == 'epub':
-                from features.books.mobile.metadata import values
+                from features.books.library.metadata import values
                 self.book_metadata_initial, self.book_metadata_original = values(updated)
             for key, field in self.book_metadata_fields.items():
                 field.value = self.book_metadata_initial[key]

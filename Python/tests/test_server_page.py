@@ -16,7 +16,7 @@ class ServerPageTests(QtTestCase):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.servers = []
         self.providers = []
-        patcher = patch('features.registry.get_server_providers',
+        patcher = patch('features.application.registry.get_server_providers',
                         side_effect=lambda: self.providers)
         patcher.start()
         self.addCleanup(patcher.stop)

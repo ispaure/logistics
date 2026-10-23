@@ -5,7 +5,7 @@ Generic server discovery, selection, and feature actions.
 from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui import pyside
 
-from features import registry
+from features.application import registry
 from features.contributions import UIAction
 from desktop.actions import execute_action
 

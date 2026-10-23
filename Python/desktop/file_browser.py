@@ -8,7 +8,7 @@ import time
 import sys
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.file_browser import FileBrowser
-from features import registry
+from features.application import registry
 from commonUtils.ui.workspaces.workspace import Workspace
 from commonUtils.ui.workspaces.workspace_policy import WorkspacePolicy
 from commonUtils.ui.file_browser.status import WorkspaceIndexStatus

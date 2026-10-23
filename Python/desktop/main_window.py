@@ -4,7 +4,7 @@ Main window for Logistics.
 
 from commonUtils.ui import pyside
 from commonUtils.configuration.settings import get_setting
-from features import registry
+from features.application import registry
 from desktop.pages.debug import DebugPage
 from desktop.pages.folders import FoldersPage
 from desktop.pages.settings import SettingsPage

@@ -1,5 +1,5 @@
 """Logistics-owned document launch catalog, shared by all chooser surfaces."""
-from features import registry
+from features.application import registry
 from features.contributions import DocumentLauncherContribution
 
 

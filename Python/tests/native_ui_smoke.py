@@ -32,7 +32,7 @@ def main():
             from commonUtils.ui.appearance.theme import apply_theme
             from commonUtils.ui.appearance.styling import apply_styling
             from features.settings import initialize_settings
-            from features import registry
+            from features.application import registry
             from desktop import main_window
             phase('create QApplication')
             app = qt.initialize_q_app()

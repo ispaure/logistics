@@ -13,7 +13,7 @@ from unittest.mock import patch
 import zipfile
 from PIL import Image
 from commonUtils.ui import pyside as qt
-from features import registry
+from features.application import registry
 from features.contributions import BrowserExtensionContribution, FeatureContributions, RegisteredContribution
 from desktop.file_browser import FileBrowserWindow, open_file_browser
 from desktop.pages.debug import DebugPage

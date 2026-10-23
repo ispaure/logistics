@@ -43,17 +43,17 @@ class ComicFileTypeTests(unittest.TestCase):
             # a plain commonUtils browser can use CBZ panels without UI handlers.
             self.assertFalse(comic.browser_actions(None))
             self.assertFalse(comic.browser_activate(None))
-            from features.registry import get_feature_definition
-            definition = get_feature_definition('comics')
+            from features.application import registry
+            definition = registry.get_feature_definition('comics')
             self.assertEqual([action.id for action in definition.browser.actions], ['edit_metadata', 'compress', 'encrypt'])
             self.assertEqual(len(definition.browser.activation), 1)
 
     def test_feature_file_registration_precedes_all_initializers(self):
-        from features import registry
+        from features.application import registry
         events = []
         features = [SimpleNamespace(__name__='early', initialize=lambda: events.append('initialize early')),
                     SimpleNamespace(__name__='later', register_file_types=lambda: events.append('register later'),
                                     initialize=lambda: events.append('initialize later'))]
-        with patch.object(registry.default_registry, '_log_unavailable_features'), patch.object(registry.default_registry, 'get_available_features', return_value=features):
+        with patch.object(registry, '_log_unavailable_features'), patch.object(registry, 'get_available_features', return_value=features):
             registry.initialize_features()
         self.assertEqual(events, ['register later', 'initialize early', 'initialize later'])

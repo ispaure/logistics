@@ -25,7 +25,7 @@ def callbacks(provider, client, password=''):
             from features.images.validation import image_dimensions
             member_data = None
             if suffix in {'.zip', '.cbz'}:
-                from features.comics.mobile.pages import page_names
+                from features.comics.collection.pages import page_names
                 with provider.open(row['path']) as stream, ZipFile(stream) as archive:
                     pages = page_names(archive)
                     if archive.getinfo(pages[0]).file_size <= 8 * 1024 * 1024:

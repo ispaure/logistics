@@ -10,7 +10,7 @@ optional tools:
 | Module | Responsibility |
 | --- | --- |
 | `contributions.py` | Logistics contribution declarations and the extended Feature contract |
-| `registry.py` | Compatible module functions forwarding to the application default registry |
+| `application.py` | Explicit application-owned `FeatureRegistry` instance |
 | `feature_runtime.py` | `FeatureRegistry` facade coordinating discovery, state, runtime owners, declaration cache and observers |
 | `runtime/` | Preference persistence, dependency ordering, activation and contribution validation |
 | `discovery.py` | Direct package enumeration and isolated import failures |
@@ -70,16 +70,14 @@ migrations; activation owns the initialized set and validates startup hooks
 before invoking them. The catalog validates contribution categories before UI
 construction and wraps them with registered owner identities. The registry keeps
 the weak registered-declaration cache and weak observers. The application uses
-`registry.default_registry`; existing module functions preserve their signatures
-and delegate to that instance at call time. Independent owners can inject a
+`features.application.registry` directly; the former module forwarding functions
+and compatibility imports have been removed. Independent owners can inject a
 `feature_loader`, `settings_provider` and discovery `features_path` callback.
 Preferences, dependency ordering, activation rollback and contribution validation
 keep their existing behavior. Shared commonUtils file-type machinery remains
 process-owned and is shared by independent registries.
 
-Tests that replace internal registry dependencies target `default_registry`, or
-construct their own instance. Public caller mocks can still replace the module
-facade functions. `test_feature_runtime.py` verifies independent preferences,
-declaration caches, once-per-owner initialization and observer retirement;
-`test_feature_registry.py` and `test_feature_preferences.py` retain behavioral
-contracts through the module facade.
+Tests patch the application registry instance or construct an independent registry.
+`test_feature_runtime.py` verifies independent preferences, declaration caches,
+once-per-owner initialization and observer retirement. `test_feature_registry.py`
+and `test_feature_preferences.py` exercise the application instance contracts.

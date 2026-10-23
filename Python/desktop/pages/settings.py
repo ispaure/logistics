@@ -6,7 +6,7 @@ from commonUtils.ui.text_editor import TextFileEditor
 from commonUtils.ui.markdown import open_markdown
 from commonUtils.ui.settings.ini_editor import INISettingsEditor
 from commonUtils.configuration.settings import settings_path
-from features import registry
+from features.application import registry
 from .features import FeaturesPage
 from desktop.settings.indexing import IndexSettingsPanel
 from desktop.settings.workspaces import WorkspaceSettingsPanel
@@ -156,7 +156,7 @@ class FeatureSettingsPanel(qt.QWidget):
         header = qt.QHBoxLayout()
         header.addWidget(self.title, 1)
         from services.documentation import feature_guide
-        self.guide, self.guide_directory = feature_guide(Path(registry.__file__).parent / state.name)
+        self.guide, self.guide_directory = feature_guide(registry.feature_root / state.name)
         self.guide_button = qt.QPushButton('User Guide')
         self.guide_button.setAccessibleName(f'{state.label} user guide')
         self.guide_button.setEnabled(self.guide.is_file())
@@ -198,7 +198,7 @@ class FeatureSettingsPanel(qt.QWidget):
             if callable(refresh):
                 refresh()
         for member in members:
-            conventional = Path(registry.__file__).parent / member / 'config.ini'
+            conventional = registry.feature_root / member / 'config.ini'
             if conventional.is_file():
                 paths['application'].append(conventional)
         for scope, files in paths.items():

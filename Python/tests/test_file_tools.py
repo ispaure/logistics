@@ -12,7 +12,7 @@ from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.ui import pyside as qt
 from features.file_tools import filesystem
 from features.file_tools.ui.dialogs import WeirdCharactersDialog, DeletePycDialog
-from features import registry
+from features.application import registry
 from desktop.file_browser import FileBrowserWindow
 
 

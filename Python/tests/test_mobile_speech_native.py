@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
 
-from features.books.mobile.speech_native import NativeSpeech
+from commonUtils.ui.native.speech import NativeSpeech
 
 
 def voice(name, *, network=False, installed=True, null_features=False):

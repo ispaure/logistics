@@ -5,7 +5,10 @@ from commonUtils.ui import pyside
 from commonUtils.ui.appearance.theme import apply_theme
 from commonUtils.ui.appearance.styling import apply_styling
 from features.settings import initialize_settings
-from features import registry
+from features.application import registry
+from commonUtils.runtime.diagnostics import configure
+from commonUtils.ui.diagnostics import present_diagnostic
+
 from desktop.main_window import MainWindow
 from services.folders.ui.indexing import IndexService
 
@@ -16,6 +19,7 @@ def main() -> int:
     # Startup errors may show a dialog, so Qt must exist before feature hooks run.
     log(Severity.DEBUG, 'PySide6', 'Create QApplication')
     app = pyside.initialize_q_app()
+    configure(presenter=present_diagnostic)
     initialize_settings()
     indexing = IndexService()
     try:

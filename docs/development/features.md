@@ -301,7 +301,7 @@ outside resettable configuration alongside the existing migration ledger.
 
 ## Runtime owner boundary
 
-`features.registry` remains the public application facade over `default_registry`.
+`features.application` remains the public application facade over `default_registry`.
 `FeatureRegistry` composes preference state, dependency functions, activation and
 contribution collection under `features.runtime`; see the
 [infrastructure owner map](feature-infrastructure.md#registry-runtime-ownership).

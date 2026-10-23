@@ -613,7 +613,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
             return
         if self.working_file_opener and self.working_file_opener(path):
             return
-        from features import registry
+        from features.application import registry
         if not registry.is_feature_enabled('text_editor'):
             self._message('Enable the Text Editor feature in Settings to edit files outside registered IDE projects.', error=True)
             return

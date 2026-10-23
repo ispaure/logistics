@@ -172,7 +172,7 @@ class LibraryStore(LibraryEdits):
             if kind == 'epub' and protected:
                 raise ValueError('Standalone password-protected EPUB imports are not supported.')
             if kind == 'comic':
-                from features.comics.mobile.pages import page_names
+                from features.comics.collection.pages import page_names
                 page_names(archive)
             return protected
 
@@ -206,7 +206,7 @@ class LibraryStore(LibraryEdits):
                     raise ValueError('Mobile EPUB reading order is limited to 5,000 chapters.')
             elif not protected:
                 pages = self.comic_reader(temporary)
-                from features.comics.mobile.pages import validate_page_names
+                from features.comics.collection.pages import validate_page_names
                 validate_page_names(pages.pages)
             destination = self.path(key, '.epub' if kind == 'epub' else '.cbz')
             if destination.exists():
@@ -248,7 +248,7 @@ class LibraryStore(LibraryEdits):
                 raise ValueError('Mobile EPUB reading order is limited to 5,000 chapters.')
         else:
             reader = self.comic_reader(path, password=password, protected=protected)
-            from features.comics.mobile.pages import validate_page_names
+            from features.comics.collection.pages import validate_page_names
             validate_page_names(reader.pages)
         return record, reader
 

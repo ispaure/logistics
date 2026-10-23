@@ -17,7 +17,7 @@ from commonUtils.ui.native.forms import wrap_text, FittedLabel as SettingsLabel
 def speech_voice_setting(app):
     """Load offline voice names on demand, without retaining a speech engine."""
     import asyncio
-    from features.books.mobile.speech_native import NativeSpeech
+    from commonUtils.ui.native.speech import NativeSpeech
     system = 'System default'
     saved = app.preferences.values['speech_voice']
     choice = toga.Selection(items=[system] + ([saved] if saved else []),

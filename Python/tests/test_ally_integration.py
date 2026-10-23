@@ -47,10 +47,10 @@ class AllyIntegrationTests(unittest.TestCase):
             activate(self.logistics, self.ally)
 
     def test_discovery_requires_active_matching_sibling(self):
-        from features import registry
+        from features.application import registry
         (self.logistics / 'Python/features/public').mkdir()
         (self.logistics / 'Python/features/public/__init__.py').write_text('')
-        with patch.object(registry, '__file__', str(self.logistics / 'Python/features/registry.py')):
+        with patch.object(registry, '_features_path', lambda: self.logistics / 'Python/features'):
             activate(self.logistics, self.ally)
             self.assertEqual(registry.get_feature_names(), ['emulation', 'public'])
             os.environ.pop('LOGISTICS_ALLY_ROOT')

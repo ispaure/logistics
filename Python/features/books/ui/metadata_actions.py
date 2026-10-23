@@ -22,7 +22,7 @@ def edit_metadata(context):
         if not hasattr(controller, '_open_editor'):
             # Reuse the host's existing comic controller, including its password,
             # batch edit and lifetime handling; no second comic editor service.
-            from features.registry import get_feature_definition
-            controller = get_feature_definition('comics').install_browser(context.browser, host=context.host).controller
+            from features.application import registry
+            controller = registry.get_feature_definition('comics').install_browser(context.browser, host=context.host).controller
         results.append(controller._open_editor(tuple(comics)))
     return results

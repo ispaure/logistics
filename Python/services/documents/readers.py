@@ -58,7 +58,7 @@ class PrivateReader:
                 if any(m.flag_bits & 1 for m in members):
                     raise ValueError('Unlock the inner ZIP through the native reader before parsing its contents.')
                 if self.kind != '.epub':
-                    from features.comics.mobile.pages import page_names
+                    from features.comics.collection.pages import page_names
                     self.pages = page_names(archive)
                     self.labels = [f'Page {i + 1}' for i in range(len(self.pages))]
                     try:

@@ -37,7 +37,7 @@ The navigation proposed at the time was:
 | Feature help resolves `index.md` explicitly | `Python/desktop/pages/settings.py` | Keep a small compatibility entry; do not change the loader |
 | Git guide calls implemented hunk actions, external tools and fetch/watch preferences future work | `git/ui/hunks.py`, `git/ui/application_preferences.py`, `git/patches.py` | Describe current capability and remaining limits |
 | FUSE guide describes both shared and isolated mount paths | `fuse/mounts.py:get_remote_mount_path` | Explain credential-path hashing for mounts; local sync folders still share names |
-| Aviation guide says toggles last only for a session | `features/registry.py`, `features/preferences.py` | Document persisted feature choices |
+| Aviation guide says toggles last only for a session | `features/application.py`, `features/preferences.py` | Document persisted feature choices |
 | rclone transfer description does not clearly explain mirror deletion | `rclone/sync.py`, `rclone/ui/push_dialog.py` | Explain source/destination, deletion, subfolder scope, cancellation and no rollback |
 | Archive guide assumes a persistent feature page | `archives/__init__.py`, `archives/ui/window.py` | Use Documents launcher/browser activation and retained per-document sessions |
 | General developer material is scattered across root and feature-root documents | `docs/development/getting-started.md`, `UI_ARCHITECTURE.md`, `FILE_BROWSER.md` | Consolidate application-wide guidance under `docs/development/`, retain entry links |

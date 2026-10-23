@@ -337,7 +337,7 @@ class DocumentWorkspaceTests(QtTestCase):
         self.assertTrue(dock.tab_header.new_button.isVisible())
 
     def test_detached_plus_launches_document_in_its_own_container(self):
-        from features import registry
+        from features.application import registry
         from features.contributions import DocumentLauncherContribution, RegisteredContribution
         first = qt.QMainWindow(); first.setWindowTitle('First')
         show_document(first); self.settle()
@@ -514,7 +514,7 @@ class DocumentWorkspaceTests(QtTestCase):
             self.settle()
 
     def test_empty_workspace_shows_cards_and_cancel_keeps_chooser_tab(self):
-        from features import registry
+        from features.application import registry
         from features.contributions import DocumentLauncherContribution, RegisteredContribution
         callback = Mock(return_value=None)
         entry = RegisteredContribution('test', 'Test', DocumentLauncherContribution(

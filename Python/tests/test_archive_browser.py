@@ -12,7 +12,7 @@ from commonUtils import archives
 from features.archives import register
 from features.archives.ui.page import ArchivePage
 from features.archives.ui.window import _windows
-from features import registry
+from features.application import registry
 from features.contributions import BrowserExtensionContribution, RegisteredContribution
 from desktop.file_browser import BrowserView
 

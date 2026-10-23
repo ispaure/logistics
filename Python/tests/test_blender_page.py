@@ -10,7 +10,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.blender import register
 from features.blender.presets.manager import BlenderManager
-from features.blender.page import BlenderPage
+from features.blender.ui.page import BlenderPage
 from features.blender.installation.releases import load_releases
 
 

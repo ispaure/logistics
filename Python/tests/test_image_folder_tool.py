@@ -11,7 +11,7 @@ from PIL import Image
 from commonUtils.ui import pyside as qt
 from features.images import actions
 from features.images.ui.dialogs import ImageCompressDialog
-from features import registry
+from features.application import registry
 
 
 class ImageFolderToolTests(QtTestCase):

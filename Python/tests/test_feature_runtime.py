@@ -1,13 +1,13 @@
-"""Independent registry owners isolate state while the module facade stays stable."""
+"""Independent registry owners isolate state while the application has an explicit runtime."""
 import gc
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import ModuleType
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-from features import registry
-from features.registry import FeatureRegistry
+from features.application import registry
+from features.feature_runtime import FeatureRegistry
 from features.contributions import Feature
 from features.preferences import load_disabled
 
@@ -63,14 +63,12 @@ class FeatureRuntimeTests(unittest.TestCase):
         left._notify_changed()
         self.assertEqual(left._listeners, [])
 
-    def test_settings_provider_is_owned_and_facade_resolves_current_default(self):
+    def test_settings_provider_and_application_runtime_have_explicit_owners(self):
         first, second = Mock(), Mock()
         left = FeatureRegistry(feature_loader=lambda: [], settings_provider=lambda: first)
         right = FeatureRegistry(feature_loader=lambda: [], settings_provider=lambda: second)
         self.assertIs(left.feature_settings_store(), first)
         self.assertIs(right.feature_settings_store(), second)
-        with patch.object(registry, 'default_registry', left):
-            self.assertIs(registry.feature_settings_store(), first)
-            self.assertEqual(registry.get_feature_states(), [])
-        with patch.object(registry, 'default_registry', right):
-            self.assertIs(registry.feature_settings_store(), second)
+        from features import application
+        self.assertIs(application.registry, registry)
+        self.assertIsInstance(registry, FeatureRegistry)

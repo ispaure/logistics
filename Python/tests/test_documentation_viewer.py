@@ -7,8 +7,8 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.markdown import MarkdownViewer
 from commonUtils.ui.markdown.window import _windows
-from commonUtils.formats.markdown_wiki import MarkdownWiki
-from features import registry
+from commonUtils.formats.markdown.wiki import MarkdownWiki
+from features.application import registry
 from desktop.pages.settings import FeatureSettingsPanel
 
 ROOT = Path(__file__).resolve().parents[2]

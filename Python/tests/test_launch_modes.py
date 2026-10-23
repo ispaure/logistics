@@ -310,7 +310,7 @@ class LaunchModeTests(QtTestCase):
         self.assertGreater(scrollbar.value(), 0)
 
     def test_tool_settings_menu_contains_only_enabled_features(self):
-        from features.registry import FeatureState
+        from features.feature_runtime import FeatureState
         states = [FeatureState('on', 'Enabled Tool', True, True, (), ()),
                   FeatureState('off', 'Disabled Tool', True, False, (), ())]
         with patch.object(main_window.registry, 'get_feature_states', return_value=states):

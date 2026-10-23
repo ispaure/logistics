@@ -3,7 +3,7 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.file_browser import FileBrowser
-from features import registry
+from features.application import registry
 from features.comics.catalog import LibraryCatalog
 from features.comics.library_config import configured_libraries
 from commonUtils.ui.tasks.operations import Operation
