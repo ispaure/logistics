@@ -77,9 +77,14 @@ search span folders; duplicate IDs are preserved and excluded with a warning.
 Relative folder components are validated for portable names and links are not
 traversed. Moves publish a new JSON without replacing a destination, then retire
 the old file, advancing the revision only after success. Publication failure
-preserves the source. Source retirement failure removes the new copy; if rollback
-also fails, both copies remain recoverable and duplicate detection blocks editing
-until resolved. The publication lock covers saves, moves and deletes.
+preserves the source. Before retiring the source, moves verify the published bytes and recheck both
+file revisions. Source retirement failure removes the new copy only while its
+verified content and file revision still match, and the source remains unchanged.
+A changed or missing source stops cleanup and retains the surviving copy for
+recovery; it cannot cause rollback to delete the only remaining conversation. Replaced/changed copies survive
+with both paths named in the conflict. If rollback also fails, remaining copies
+are recoverable and duplicate detection blocks editing until resolved. These are
+optimistic checks, not locks against arbitrary external filesystem writers. The publication lock covers saves, moves and deletes.
 
 QLockFile leases stay at the conversation root by stable ID, so moves cannot
 bypass another window's edit ownership. Leases prevent simultaneous UI editing

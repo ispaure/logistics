@@ -172,6 +172,9 @@ class Store:
             data.update(revision=saved['revision'], updated=saved['updated'], folder=name)
 
     def move(self, data, name, *, lease=None):
+        """Move a versioned record; retire or roll back only verified unchanged paths."""
+        from hashlib import sha256
+        from commonUtils.filesystem.snapshots import file_revision, verified_file_snapshot
         name = folder_name(name)
         owned_lease = self.lease(data['id']) if lease is None else None
         if lease is not None and not lease.isLocked():
@@ -179,7 +182,12 @@ class Store:
         try:
             with self._publication():
                 source = self.path(data['id'])
+                source_revision = file_revision(source, follow_symlinks=False)
+                if source.is_symlink():
+                    raise ConflictError('Conversation path became a link; reopen before moving.')
                 current = self._load_path(source)
+                if file_revision(source, follow_symlinks=False) != source_revision:
+                    raise ConflictError('Conversation changed while loading; reopen before moving.')
                 if current['revision'] != data['revision'] or current['folder'] != data.get('folder', ''):
                     raise ConflictError('Conversation changed on disk; reopen before moving.')
                 if name == current['folder']:
@@ -192,9 +200,39 @@ class Store:
                     raise ValueError('Conversation exceeds the file size limit.')
                 # Publish without replacing a racing destination; keep source until publication succeeds.
                 atomic_write_bytes(destination, content, overwrite=False)
+                expected_digest = sha256(content).digest()
+                conflict = (f'Move copy changed or cannot be verified. Inspect {source} and '
+                            f'{destination} before retrying; automatic cleanup was stopped.')
+                def verify_copy():
+                    if destination.is_symlink():
+                        raise ConflictError(conflict)
+                    try:
+                        revision, digest = verified_file_snapshot(destination, max_bytes=len(content))
+                        current_revision = file_revision(destination, follow_symlinks=False)
+                    except (OSError, ValueError) as error:
+                        raise ConflictError(conflict) from error
+                    if digest != expected_digest or current_revision != revision:
+                        raise ConflictError(conflict)
+                    return revision
+                def verify_source():
+                    message = (f'Move source changed or became unavailable. Inspect {source} and '
+                               f'{destination} before retrying; automatic cleanup was stopped.')
+                    try:
+                        revision = file_revision(source, follow_symlinks=False)
+                    except OSError as error:
+                        raise ConflictError(message) from error
+                    if revision != source_revision:
+                        raise ConflictError(message)
+                published_revision = verify_copy()
+                verify_source()
                 try:
+                    if file_revision(destination, follow_symlinks=False) != published_revision:
+                        raise ConflictError(conflict)
                     source.unlink()
-                except OSError:
+                except (OSError, ValueError):
+                    verify_source()
+                    if verify_copy() != published_revision:
+                        raise ConflictError(conflict)
                     destination.unlink()
                     raise
                 data.update(folder=name, revision=saved['revision'], updated=saved['updated'])

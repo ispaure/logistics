@@ -267,6 +267,78 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(data, original)
         self.assertEqual(self.store.load(data['id']), original)
 
+    def test_failed_move_preserves_changed_rollback_destinations(self):
+        unlink = Path.unlink
+        for kind in ('new-file', 'in-place', 'same-bytes', 'link'):
+            with self.subTest(replacement=kind):
+                data = conversation(settings())
+                self.store.save(data)
+                original = deepcopy(data)
+                source = self.store.path(data['id'])
+                source_bytes = source.read_bytes()
+                destination = self.store.folder / 'Destination' / source.name
+                observed = {}
+                def fail_source(path, *args, **kwargs):
+                    if path != source:
+                        return unlink(path, *args, **kwargs)
+                    written = destination.read_bytes()
+                    replacement = json.loads(written)
+                    replacement.update(title='Newer external edit', revision=replacement['revision'] + 1)
+                    content = written if kind == 'same-bytes' else json.dumps(replacement).encode()
+                    if kind != 'in-place':
+                        destination.rename(destination.with_suffix('.owned'))
+                    if kind == 'link':
+                        target = Path(self.temp.name) / 'external.json'
+                        target.write_bytes(content)
+                        destination.symlink_to(target)
+                    else:
+                        destination.write_bytes(content)
+                    observed['content'] = content
+                    raise OSError('Cannot retire source')
+                with patch.object(Path, 'unlink', fail_source):
+                    with self.assertRaises((OSError, ConflictError)) as error:
+                        self.store.move(data, 'Destination')
+                self.assertEqual(source.read_bytes(), source_bytes)
+                self.assertTrue(destination.exists())
+                self.assertEqual(destination.read_bytes(), observed['content'])
+                self.assertEqual(destination.is_symlink(), kind == 'link')
+                self.assertEqual(data, original)
+                self.assertIn(str(destination), str(error.exception))
+
+    def test_late_changes_before_move_cleanup_preserve_the_changed_file(self):
+        from features.lm.storage import atomic_write_bytes
+        for changed in ('source', 'destination', 'missing-source'):
+            with self.subTest(changed=changed):
+                data = conversation(settings())
+                self.store.save(data)
+                original = deepcopy(data)
+                source = self.store.path(data['id'])
+                before = source.read_bytes()
+                destination = self.store.folder / 'Destination' / source.name
+                observed = {}
+                def publish(path, content, **kwargs):
+                    result = atomic_write_bytes(path, content, **kwargs)
+                    observed['published'] = content
+                    if changed == 'missing-source':
+                        source.unlink()
+                    else:
+                        target = source if changed == 'source' else destination
+                        newer = json.loads(target.read_bytes())
+                        newer.update(title='Newer external edit', revision=newer['revision'] + 1)
+                        observed['content'] = json.dumps(newer).encode()
+                        target.write_bytes(observed['content'])
+                    return result
+                with patch('features.lm.storage.atomic_write_bytes', side_effect=publish):
+                    with self.assertRaises(ConflictError):
+                        self.store.move(data, 'Destination')
+                if changed == 'missing-source':
+                    self.assertFalse(source.exists())
+                else:
+                    self.assertEqual(source.read_bytes(), observed['content'] if changed == 'source' else before)
+                self.assertEqual(destination.read_bytes(), observed['content'] if changed == 'destination'
+                                 else observed['published'])
+                self.assertEqual(data, original)
+
     def test_move_cannot_bypass_another_window_edit_lease(self):
         data = conversation(settings())
         self.store.save(data)
