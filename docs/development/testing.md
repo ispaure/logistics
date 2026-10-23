@@ -95,6 +95,12 @@ running it. Mobile tests use `TOGA_BACKEND=toga_dummy`; desktop tests use offscr
 Qt. These checks do not certify native appearance or interactions. See the
 [mobile handbook](mobile-handbook.md) when you need an actual device build.
 
+The regression runner isolates application storage and cache directories. When
+using Playwright's downloaded browsers for DOM tests, set
+`PLAYWRIGHT_BROWSERS_PATH` to the same explicit directory during browser installation
+and test execution. The platform workflow supplies this path at job scope so
+fixture subprocesses can find browser tooling after application caches are isolated.
+
 ## Make your first change
 
 1. Find your workflow in the [code map](code-map.md), then read its owning user

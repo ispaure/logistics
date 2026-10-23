@@ -25,6 +25,10 @@ concurrency:
 jobs:
   static:
     runs-on: ubuntu-latest
+    env:
+      # Test storage isolation changes XDG_CACHE_HOME; keep browser tooling at
+      # the same explicit path for installation and fixture subprocesses.
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/mobile-dom-browsers
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
