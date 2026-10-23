@@ -183,18 +183,7 @@ class StorageUI:
         if not self.checkpoint():
             self.collection_storage_status.text = 'Save your current document before changing storage.'
             return
-        destination = str(volume / 'Logistics') if volume else 'app internal storage'
-        prompts = {
-            'copy': ('Change collection drive?', 'Copy Local and LocalCrypt to ' + destination +
-                     '? Different destination files stop the copy. Original copies remain as a backup.'),
-            'empty': ('Start empty at this location?', 'Create and use empty Local and LocalCrypt folders in ' + destination + '? No files are copied or erased. Current files stay at their old location. The destination must be empty.'),
-            'recover': ('Use existing files here without copying?', 'Use the existing Local and LocalCrypt collections in ' + destination +
-                        '? This does not copy or merge your current collection. A retained backup may be older and omit recent changes. LocalCrypt still needs its original credentials.'),
-            'wipe': ('Permanently erase these collection folders?', 'Delete ' + str(volume / 'Logistics/Local' if volume else self.private_root / 'LocalFiles') + ' and ' + str(volume / 'Logistics/LocalCrypt' if volume else self.private_root / 'LocalCryptFolders') + ', plus interrupted .storage-copy-* folders at ' + destination + '? The files cannot be recovered by Logistics. Other folders, private credentials, settings and metadata are kept. The location currently in use cannot be erased.'),
-        }
-        title, message = prompts[action]
-        if action != 'wipe':
-            message += ' The app will close when finished; reopen it to use this location.'
+        title, message, destination = self._collection_prompt(action, volume)
         self._storage_changing = True
         self.collection_drive.enabled = False
         if widget is not None:
@@ -240,22 +229,8 @@ class StorageUI:
             loop = asyncio.get_running_loop()
             status_label = self.collection_storage_status
 
-            def render(event):
-                status_label.text = event['phase']
-                total = event['total']
-                if total is None:
-                    progress_bar.max = None
-                    progress_bar.start()
-                    details.text = f"{event['files']} files checked · {event['bytes'] / 1048576:.1f} MiB read"
-                else:
-                    progress_bar.stop()
-                    progress_bar.max = 100
-                    percent = min(100, event['bytes'] * 100 / total) if total else 100
-                    progress_bar.value = percent
-                    details.text = f"Current folder: {percent:.0f}% · {event['bytes'] / 1048576:.1f} / {total / 1048576:.1f} MiB · {event['files']} files copied"
-                current_file.text = event['path']
-                for label in (status_label, details, current_file):
-                    fit_text(label, width - 32)
+            render = self._collection_progress_renderer(status_label, progress_bar, details,
+                                                        current_file, width, fit_text=fit_text)
 
             operation = {'copy': switch_location, 'recover': recover_location, 'wipe': wipe_destination, 'empty': start_empty_location}[action]
             changed = await asyncio.to_thread(operation, self.private_root, volume,
@@ -288,3 +263,39 @@ class StorageUI:
         if changed:
             await self.main_window.dialog(toga.InfoDialog('Collection location saved', 'Reopen Logistics to use the new drive. The app will close now.'))
             self.exit()
+
+    def _collection_prompt(self, action, volume):
+        destination = str(volume / 'Logistics') if volume else 'app internal storage'
+        prompts = {
+            'copy': ('Change collection drive?', 'Copy Local and LocalCrypt to ' + destination +
+                     '? Different destination files stop the copy. Original copies remain as a backup.'),
+            'empty': ('Start empty at this location?', 'Create and use empty Local and LocalCrypt folders in ' + destination + '? No files are copied or erased. Current files stay at their old location. The destination must be empty.'),
+            'recover': ('Use existing files here without copying?', 'Use the existing Local and LocalCrypt collections in ' + destination +
+                        '? This does not copy or merge your current collection. A retained backup may be older and omit recent changes. LocalCrypt still needs its original credentials.'),
+            'wipe': ('Permanently erase these collection folders?', 'Delete ' + str(volume / 'Logistics/Local' if volume else self.private_root / 'LocalFiles') + ' and ' + str(volume / 'Logistics/LocalCrypt' if volume else self.private_root / 'LocalCryptFolders') + ', plus interrupted .storage-copy-* folders at ' + destination + '? The files cannot be recovered by Logistics. Other folders, private credentials, settings and metadata are kept. The location currently in use cannot be erased.'),
+        }
+        title, message = prompts[action]
+        if action != 'wipe':
+            message += ' The app will close when finished; reopen it to use this location.'
+        return title, message, destination
+
+    def _collection_progress_renderer(self, status_label, progress_bar, details, current_file, width, *, fit_text):
+        """Keep queued progress bound to the controls captured for this operation."""
+        def render(event):
+            status_label.text = event['phase']
+            total = event['total']
+            if total is None:
+                progress_bar.max = None
+                progress_bar.start()
+                details.text = f"{event['files']} files checked · {event['bytes'] / 1048576:.1f} MiB read"
+            else:
+                progress_bar.stop()
+                progress_bar.max = 100
+                percent = min(100, event['bytes'] * 100 / total) if total else 100
+                progress_bar.value = percent
+                details.text = f"Current folder: {percent:.0f}% · {event['bytes'] / 1048576:.1f} / {total / 1048576:.1f} MiB · {event['files']} files copied"
+            current_file.text = event['path']
+            for label in (status_label, details, current_file):
+                fit_text(label, width - 32)
+
+        return render

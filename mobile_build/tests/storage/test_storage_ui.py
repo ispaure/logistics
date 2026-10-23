@@ -65,6 +65,37 @@ class StorageUITests(unittest.TestCase):
             self.app.loop.run_until_complete(self.app.change_collection_storage())
         self.assertFalse((self.card / 'Logistics').exists())
 
+    def test_confirmation_rechecks_work_and_restores_controls_without_running_storage(self):
+        for action in ('copy', 'recover', 'empty', 'wipe'):
+            for changed_state in ('busy', 'checkpoint'):
+                with self.subTest(action=action, changed_state=changed_state):
+                    async def confirm(dialog):
+                        self.assertTrue(self.app._storage_changing)
+                        self.assertFalse(self.app.collection_drive.enabled)
+                        self.assertFalse(self.app.collection_copy.enabled)
+                        if changed_state == 'busy':
+                            self.app.transfer_busy = True
+                        else:
+                            checkpoint.return_value = False
+                        return True
+
+                    with patch('mobile.storage_ui.all_files_allowed', return_value=True), \
+                            patch.object(self.app, 'checkpoint', return_value=True) as checkpoint, \
+                            patch.object(self.app.main_window, 'dialog', new=AsyncMock(side_effect=confirm)), \
+                            patch('mobile.storage_ui.asyncio.to_thread', new_callable=AsyncMock) as worker:
+                        operation = {'copy': self.app.change_collection_storage,
+                                     'recover': self.app.recover_collection_storage,
+                                     'empty': self.app.start_empty_collection,
+                                     'wipe': self.app.wipe_collection_storage}[action]
+                        self.app.loop.run_until_complete(operation(self.app.collection_copy))
+                    worker.assert_not_awaited()
+                    self.assertFalse(self.app._storage_changing)
+                    self.assertTrue(self.app.collection_drive.enabled)
+                    self.assertTrue(self.app.collection_copy.enabled)
+                    self.assertFalse(self.app.cloud_busy)
+                    self.assertFalse((self.card / 'Logistics').exists())
+                    self.app.transfer_busy = False
+
     def test_switch_verifies_data_and_closes_app_for_restart(self):
         source = collection_path(self.app.private_root)
         source.mkdir(exist_ok=True)
