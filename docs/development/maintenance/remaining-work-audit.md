@@ -65,10 +65,10 @@ and row binding phases. These are implemented C2–C5 changes, not pending propo
 The later rclone service/adapters review through `01e8bfc9` is also complete.
 
 C7's **native factory extraction** is now complete below, with native acceptance
-before each step. Desktop FileBrowser/indexing still shares substantial mutable state across its mixin and
-uses private index-cache fields, so it remains a reasonable bounded follow-up.
-That residual coupling does not establish a new urgent defect or justify another
-whole-UI rewrite. Live integration/platform acceptance remains a separate risk.
+before each step. Shared `593a289` subsequently encapsulates browser source
+mapping/session bookkeeping through cache methods; direct private-cache access is
+no longer an open item. Browser GUI scheduling still has shared mutable fields,
+but that does not justify another whole-UI rewrite. Live integration/platform acceptance remains a separate risk.
 
 Fresh focused shared checks pass: six browser-index-policy, 25 workspace,
 14 Markdown-presentation, one layered-settings-editor and three required-Toga
@@ -143,6 +143,29 @@ F811 gate and compatibility-export decision, not a repository-wide unused-code s
 
 All three scoped construction steps are complete. Evidence is retained outside
 public documentation; broader platform coverage remains as listed above.
+
+## Post-C7 readability recheck
+
+A source recheck at Logistics `f025ce01` / commonUtils `ea4dfdd` confirms that
+native factories and browser private-cache bookkeeping are already addressed.
+The next bounded gap was `refresh_folder_totals`: GUI admission and worker-side
+cache/follow/reconcile policy were interleaved in one method.
+
+Shared `38af2fd` captures that worker policy in an immutable private request in
+`index_worker`, including the cache, policy, pause/read flags and changed paths.
+The worker holds no browser/widget reference; the GUI retains admission,
+subscription, presentation and retargeting. Original and extracted scan bodies
+match after captured-field expansion. Seven new contracts also pass against the
+original closure, covering cache-only/paused behavior, coordinator following,
+reconciliation arguments, cancellation, snapshot closure and propagated errors.
+Browser and index selections pass with native filesystem event delivery. Two
+sandbox-only watcher timeouts were reproduced on unchanged source and pass with
+native events enabled; they are not refactor regressions.
+
+The next consumer step is the desktop Folder Hub tree: source/category filtering,
+copy-label disambiguation, Qt item construction and selection restoration are still
+interleaved. The source and rendering phases can be named without moving public
+interfaces or changing the folder discovery model.
 
 ## Find the current contract
 
