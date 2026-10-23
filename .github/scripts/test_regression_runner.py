@@ -89,3 +89,28 @@ class NestedRegressionRunnerTests(unittest.TestCase):
                                     capture_output=True, text=True, timeout=15)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('Ran 1 test in', result.stderr)
+
+
+class StorageIsolationTests(unittest.TestCase):
+    def test_discovery_and_test_body_use_disposable_default_storage(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixture = root / 'test_storage.py'
+            fixture.write_text(
+                'import os, unittest\nfrom pathlib import Path\n'
+                'home = Path.home()\n'
+                'storage = Path(os.environ["COMMONUTILS_STORAGE_ROOT"])\n'
+                '(home / "discovered").write_text("fixture")\n'
+                'class Test(unittest.TestCase):\n'
+                '    def test_isolated(self):\n'
+                '        self.assertTrue((home / "discovered").is_file())\n'
+                '        self.assertEqual(home.parent, storage.parent)\n'
+                '        print("PRIVATE_ROOT=" + str(home.parent))\n')
+            for flags in ([], ['--isolate-modules']):
+                with self.subTest(flags=flags):
+                    result = subprocess.run([sys.executable, str(RUNNER), str(root), *flags],
+                                            capture_output=True, text=True, timeout=15)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    private = next(line.split('=', 1)[1] for line in result.stdout.splitlines()
+                                   if line.startswith('PRIVATE_ROOT='))
+                    self.assertFalse(Path(private).exists(), 'Private storage was not cleaned')

@@ -1,6 +1,7 @@
 """Run a suite with safe periodic progress and native-crash tracebacks."""
 import argparse
 import faulthandler
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -8,6 +9,7 @@ from tempfile import TemporaryDirectory
 from threading import Event, Thread
 from time import monotonic
 import unittest
+from unittest.mock import patch
 
 
 def run_isolated(directory, pattern, interval):
@@ -58,6 +60,25 @@ def main():
         parser.error('--traceback-after must be positive')
     if args.isolate_modules:
         return run_isolated(args.directory.resolve(), args.pattern, args.traceback_after)
+    # Keep default storage and preferences away from the contributor's live data,
+    # including during test discovery. Children running isolated modules create
+    # their own scope; ordinary helper subprocesses inherit private cache roots.
+    with TemporaryDirectory(prefix='logistics-test-storage-') as temporary:
+        root = Path(temporary)
+        home = root / 'home'
+        home.mkdir()
+        environment = {
+            'COMMONUTILS_STORAGE_ROOT': str(root / 'shared'),
+            'XDG_CONFIG_HOME': str(home / '.config'),
+            'XDG_CACHE_HOME': str(home / '.cache'),
+            'APPDATA': str(home / 'AppData' / 'Roaming'),
+            'LOCALAPPDATA': str(home / 'AppData' / 'Local'),
+        }
+        with patch.dict(os.environ, environment), patch.object(Path, 'home', return_value=home):
+            return run_suite(args)
+
+
+def run_suite(args):
     # The runner itself lives in Python/tests. A mobile suite can contain the
     # same module name (e.g. test_pdf_reader); discovery must import its own file
     # even when its directory already appears later in PYTHONPATH.

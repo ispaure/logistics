@@ -252,8 +252,14 @@ an unavailable submodule revision fails checkout before any test runs.
 
 The platform runner isolates both shared and Logistics test modules in separate
 processes to prevent native Qt state from leaking between suites. Each regression
-process uses a private temporary directory index, so browser tests do not compete
-with the running application’s cache or leave test paths in its persistent index.
+process uses a private temporary directory index and shared storage root. During
+discovery and execution, `Path.home()` and platform config/cache environment
+variables point into disposable test storage, so default preferences and shared
+workspaces do not use the contributor's live data. Helper subprocesses inherit
+the private storage/config environment; tests spawning other processes must still
+supply explicit private fixtures for APIs that resolve the OS home independently.
+Both single-process and isolated-module modes clean their private storage.
+The runner does not replace `HOME` or disable filesystem errors.
 
 Platform release checks with `--install` provision the platform’s pinned rclone
 using archive and executable SHA-256 verification, then require the real synthetic
