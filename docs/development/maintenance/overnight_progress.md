@@ -1501,3 +1501,13 @@ This review did not repeat native device UI, Windows/Linux validation, target-ve
 Blender registration/operators/exports or a fresh Go build. Earlier evidence keeps
 its recorded source/platform scope. The prior packaged source archive was not
 rebuilt for these documentation/whitespace corrections. No push or release occurred.
+
+## Readability follow-up: generated-project adapters
+
+Six related build/artwork adapters move into `mobile_build/build_support/` with
+explicit bridge-builder composition. Assets, signing inputs, workspaces and
+Perforce architecture are preserved. All 13 non-camera adapter cases, camera
+cases in the mobile host environment, five wiki cases, lint and CLI import
+checks pass. Earlier camera invocations lacked the sibling import path and then
+Toga; neither was a product failure. See [current readability work](readability.md).
+No push or release retry; this work is on an isolated local branch.

@@ -88,7 +88,7 @@ document and navigation state.
 
 `navigation.py` installs the desktop destination artwork on Android bottom bars
 and rails and iOS tabs: Home, Workspaces, stacked Documents, the Chat bubble and
-Settings sliders. `mobile_build/generate_navigation_icons.py` renders the canonical
+Settings sliders. `mobile_build/build_support/generate_navigation_icons.py` renders the canonical
 `desktop.sidebar.DestinationIcon` drawings into bundled transparent 3x PNGs in
 `hub_icons.py`; run it with the desktop interpreter, or use `--check` to verify
 the generated assets. Mobile has no Qt runtime dependency. Material and UIKit

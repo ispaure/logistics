@@ -13,7 +13,7 @@ DESTINATION_ITEMS = (
 )
 
 # Generated directly from desktop.sidebar.DestinationIcon; both platforms tint
-# the same transparent artwork. Regenerate with mobile_build/generate_navigation_icons.py.
+# the same transparent artwork. Regenerate with mobile_build/build_support/generate_navigation_icons.py.
 DESTINATION_ICON_NAMES = {key: 'nav_' + key for key in DESTINATIONS}
 
 

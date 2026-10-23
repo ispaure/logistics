@@ -4,7 +4,7 @@ import plistlib
 import shutil
 import subprocess
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / 'privacy/OpenSSL.xcprivacy'
 APP_MANIFEST = ROOT / 'privacy/App.xcprivacy'
 MODULES = ('_hashlib', '_ssl')

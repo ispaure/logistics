@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 import xml.etree.ElementTree as ET
 
-from mobile_build import icon_build
+from mobile_build.build_support import icon_build
 
 
 def png_header(path):

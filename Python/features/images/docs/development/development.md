@@ -69,7 +69,7 @@ Use disposable copies when testing behavioral changes to these operations.
 
 `mobile/burst_camera.py` presents `LGBurstCameraController` from
 `mobile/ios/BurstCamera.m` through Rubicon. The iOS-only entry is appended to
-Home, after documents and status. `mobile_build/camera_build.py` refreshes the native
+Home, after documents and status. `mobile_build/build_support/camera_build.py` refreshes the native
 source included by the generated launcher's existing compilation unit and adds
 the two purpose strings. `mobile_build/cloud_build.py` invokes it and links AVFoundation
 and Photos. Do not edit generated launcher copies.

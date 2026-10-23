@@ -5,7 +5,7 @@ import plistlib
 from tempfile import TemporaryDirectory
 import unittest
 
-from mobile_build import privacy_build
+from mobile_build.build_support import privacy_build
 from mobile_build.testflight_tools import BUNDLE, inspect_app
 
 

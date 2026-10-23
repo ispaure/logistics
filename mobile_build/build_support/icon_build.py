@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import shutil
 
-ROOT = Path(__file__).resolve().parent / 'resources/icons'
+ROOT = Path(__file__).resolve().parents[1] / 'resources/icons'
 DENSITIES = {'mdpi': 1, 'hdpi': 1.5, 'xhdpi': 2, 'xxhdpi': 3, 'xxxhdpi': 4}
 
 

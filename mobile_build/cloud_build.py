@@ -13,10 +13,16 @@ import subprocess
 import tomllib
 
 try:
-    from .icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
+    from .build_support.icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
+    from .build_support.scene_build import configure as configure_scene
+    from .build_support.privacy_build import configure as configure_privacy
+    from .build_support.camera_build import configure as configure_camera
     from .deployment_paths import output_root
 except ImportError:
-    from icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
+    from build_support.icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
+    from build_support.scene_build import configure as configure_scene
+    from build_support.privacy_build import configure as configure_privacy
+    from build_support.camera_build import configure as configure_camera
     from deployment_paths import output_root
 
 ROOT = Path(__file__).resolve().parent
@@ -137,11 +143,8 @@ def android():
 def ios(project=None):
     project = Path(project) if project is not None else output_root(ROOT) / 'build/logisticsmobile/ios/xcode'
     configure_ios_icons(project)
-    from scene_build import configure
-    configure(project)
-    from privacy_build import configure as configure_privacy
+    configure_scene(project)
     configure_privacy(project)
-    from camera_build import configure as configure_camera
     configure_camera(project)
     support = project / 'Support'
     support.mkdir(parents=True, exist_ok=True)

@@ -39,7 +39,7 @@ The following code/artwork is local only and not backed up by a commit/push:
 | Path | Status / purpose |
 | --- | --- |
 | `mobile_build/cloud_build.py` | Modified: imports the new helper and installs icons in generated projects |
-| `mobile_build/icon_build.py` | Untracked: icon installation and optional artwork resizing |
+| `mobile_build/build_support/icon_build.py` | Untracked: icon installation and optional artwork resizing |
 | `mobile_build/resources/icons/ios/` | Untracked: iOS PNG artwork and asset catalog |
 | `mobile_build/resources/icons/android/` | Untracked: Android PNG artwork and XML resources |
 | `mobile_build/tests/test_icon_build.py` | Untracked: artwork/catalog and repeated-installation checks |

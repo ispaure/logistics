@@ -6,7 +6,7 @@ import plistlib
 
 def configure(project):
     project = Path(project)
-    source = Path(__file__).resolve().parents[1] / 'Python/features/images/mobile/ios/BurstCamera.m'
+    source = Path(__file__).resolve().parents[2] / 'Python/features/images/mobile/ios/BurstCamera.m'
     support = project / 'Support'
     support.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, support / 'BurstCamera.m')

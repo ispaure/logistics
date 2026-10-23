@@ -24,6 +24,7 @@ python3 dev.py lint
 | Mobile navigation, storage or document lifetime | `Python/mobile/` | [Mobile host owners](mobile-runtime.md) |
 | Settings, registration or a new feature | Owning feature's `__init__.py` and `config.ini` | [Feature conventions](features.md), [extension points](extension-points.md) |
 | A shared Logistics policy | `Python/services/` | [Service owners](services.md) |
+| Mobile build tooling ownership | `mobile_build/` | [Build tooling map](build-tooling.md) |
 | Mobile builds, deployment or native bridges | `mobile_build/`; application source stays under `Python/` | [Mobile handbook](mobile-handbook.md) |
 | Tests for any of these | `Python/tests/` or `mobile_build/tests/` | [Test selection and commands](testing.md#find-the-tests-for-your-change) |
 

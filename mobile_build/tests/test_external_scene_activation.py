@@ -7,7 +7,7 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 
-from mobile_build.scene_build import configure
+from mobile_build.build_support.scene_build import configure
 from mobile.external_display import ExternalComicDisplay
 
 

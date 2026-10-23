@@ -392,7 +392,7 @@ Native tests now assert `isHidden()` directly. Physical page-turn synchronizatio
 Android casting and OS snapshot timing remain outside these checks.
 
 External-display activation is part of the iOS scene contract, not just image
-painting. `mobile_build.scene_build.configure` explicitly declares application, legacy
+painting. `mobile_build.build_support.scene_build.configure` explicitly declares application, legacy
 external-display and noninteractive external-display configurations using the
 tracked scene delegate. iOS 26 and earlier discover those configurations on
 connection. iOS 27 additionally requires `UISceneAccessory` registration on the

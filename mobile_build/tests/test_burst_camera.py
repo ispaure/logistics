@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from mobile_build.camera_build import configure
+from mobile_build.build_support.camera_build import configure
 import test_hub_documents as home_fixture
 from test_hub_documents import widgets
 

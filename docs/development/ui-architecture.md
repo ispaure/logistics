@@ -47,8 +47,8 @@ artwork source. After changing geometry, fills or stroke width, regenerate and c
 them from the repository root (Pillow is needed only by this development tool):
 
 ```sh
-.venv/bin/python mobile_build/generate_folder_icons.py
-.venv/bin/python mobile_build/generate_folder_icons.py --check
+.venv/bin/python mobile_build/build_support/generate_folder_icons.py
+.venv/bin/python mobile_build/build_support/generate_folder_icons.py --check
 ```
 
 Commit the updated embedded PNGs with the source change; mobile does not need

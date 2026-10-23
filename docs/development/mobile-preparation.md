@@ -9,13 +9,13 @@ adaptive layers, with night-qualified artwork and API 33 monochrome resources.
 Adaptive foregrounds include padding to retain the complete supplied tile within
 the launcher mask. Android launchers control whether night/themed icons refresh.
 
-`mobile_build/icon_build.py` installs these resources from `cloud_build.py` after
+`mobile_build/build_support/icon_build.py` installs these resources from `cloud_build.py` after
 Briefcase create/update, including device deployments and isolated TestFlight
 archives. It also replaces the template launch artwork. Build-time installation
 uses only the standard library; Pillow is needed only for asset regeneration:
 
 ```sh
-mobile_build/.venv/bin/python mobile_build/icon_build.py /path/to/light.png /path/to/dark.png /path/to/monochrome.png
+mobile_build/.venv/bin/python mobile_build/build_support/icon_build.py /path/to/light.png /path/to/dark.png /path/to/monochrome.png
 ```
 
 Regeneration downsamples the complete square images with Lanczos filtering,
@@ -840,7 +840,7 @@ then activates the original scene. A forced original-scene disconnect retains
 its checkpointed owner until process restoration; it does not grant a competing
 writer. No independent Android activity capability is enabled.
 
-`mobile_build/scene_build.py` applies scene support reproducibly to the generated plist
+`mobile_build/build_support/scene_build.py` applies scene support reproducibly to the generated plist
 because the pinned template otherwise forces it off. It does not modify Toga
 packages. The iOS release job runs both iPhone and iPad tests, requiring explicit
 `independent_windows_tested` evidence on iPad rather than accepting resize as a
