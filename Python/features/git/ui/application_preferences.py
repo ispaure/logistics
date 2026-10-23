@@ -3,7 +3,6 @@ from copy import deepcopy
 from fnmatch import fnmatch
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from ..runner import GitError
 
 
 class ApplicationPreferences:

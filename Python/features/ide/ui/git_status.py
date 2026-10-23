@@ -1,6 +1,5 @@
 """Read-only Git status snapshots for the project tree, without Git UI ownership."""
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from threading import Event
 from time import monotonic
 from commonUtils.ui import pyside as qt

@@ -1,7 +1,6 @@
 """Metadata dialog controller: loading, saving and protected navigation."""
 
 from commonUtils.ui.appearance.typography import point_size
-from pathlib import Path
 from commonUtils.ui import pyside as qt
 from features.comics.selection import ComicSelection, normalize_targets
 from .metadata_form import MetadataForm
