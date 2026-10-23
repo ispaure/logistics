@@ -1184,3 +1184,36 @@ Guarded LM move commit: `572250fe`.
   connected Android device. Existing simulators are all shut down. Native iOS
   evidence is being prepared in an owned simulator/build, preserving existing
   simulator data and generated builds. No Boox app was installed or changed.
+
+## Breadcrumb teardown and integration checkpoint
+
+- Full runs held Logistics `b3031665` / commonUtils `178f5da` unchanged: shared
+  1,224 cases (25 skips), mobile 1,161 cases (zero skips with the existing
+  Node/Chrome runtime), and optional native Toga 108 cases all passed.
+- Desktop ran 1,684 cases (six skips), with three eight-second worker setup
+  timeouts in the Bulk Rename UI file while native compilation was also running.
+  The same 20-case file passed alone in 10.85 seconds. Resource contention is a
+  possible explanation, not established causation; the full run remains failed.
+- The passing Bulk Rename host file also emitted a real Qt callback traceback:
+  deferred breadcrumb scrolling accessed a retired native scroll area. A focused
+  regression reproduced two unhandled errors before the fix. Binding the timer
+  to its Qt owner and checking the child's native lifetime removes both errors.
+  Six browser polish, nine presentation and two affected host cases pass; lint
+  and five documentation checks pass. No test timeout was relaxed.
+- Shared fix `3d4ba2f`; exact Blue Hole sync `adb20b6`. All 33 adapters and
+  143 embedded shared cases (one filesystem skip) pass on Blender 4.5.1 /
+  Python 3.11.11. Target Blender 5.2.2 registration remains unverified.
+- Native runner `b3031665` selects Briefcase through the active Python module,
+  repairing an existing stale console-script interpreter path. Its 14 report
+  contract cases pass, including the added interpreter-prefix assertion.
+- An isolated clean native build of `b3031665` / `178f5da` completed all 33
+  iPhone acceptance cases on iOS 27.0 / embedded Python 3.12.10. Exact staged
+  source verification passed. Independent windows and native system picking were
+  not exercised on this phone. Rotation/light-dark and synthetic private-file
+  fixtures were saved locally before cleanup. Existing bridge archives were
+  reused with recorded hashes; Go bridge compilation was not repeated.
+- The first copied Xcode project omitted a required framework build helper;
+  restoring that exact existing helper resolved the build. Both build logs are
+  retained. No dependencies were installed, no existing simulator/device data
+  was changed, and no Boox test package was installed. A newly owned iPad
+  simulator is now exercising the explicit independent-window gate.
