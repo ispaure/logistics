@@ -352,3 +352,20 @@ completed baseline. Remaining priorities continue to govern selection.
   are registered, preserving ordinary filesystem behavior without unnecessary
   resolution. All five access tests pass, including the reproduced loop case;
   existing link-creation checks pass with their native Windows-only skip.
+
+## Resumed execution: Git settings lost-update protection
+
+- Three new tests reproduced stale bookmark overwrite, clobbering preferences
+  created after an initially missing file, and silently recreating an externally
+  deleted file. The writer now checks its loaded bytes before independent INI
+  changes and during JSON publication, advancing the baseline only on success.
+- A compatibility test caught stale baselines in the existing settings fanout.
+  Saved-state adoption now belongs to Preferences and moves the existing fields
+  and byte baseline together; UI fanout no longer duplicates field assignments.
+- All 16 Git preference/backend/UI tests pass, including retained views saving
+  after a settings update. Existing JSON shape, newline behavior, malformed-file
+  protection and credential rules remain intact. INI/JSON are still independent
+  writes, and external writers can race after the last optimistic check.
+- The latest shared boundary/permission revision `9c2f420` passes all 179 shared
+  files in one unrestricted run and exact vendor comparison; 31 Blue Hole consumer
+  tests pass. No remote push or release has occurred.
