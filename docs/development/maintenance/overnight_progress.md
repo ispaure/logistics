@@ -1,5 +1,18 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: C6 preservation pipelines
+
+Shared `d1ba7cd` names INI request validation, current-text location and
+continuation/comment-preserving replacement, plus rename stem and context-affix
+stages. Every original method expands to identical ordered AST/signatures. The
+class parser override path, independent final INI semantic oracle, persisted rule
+fields and rename transaction owner remain unchanged. Original/refactored checks
+pass 17 INI and 19 rename cases; full configuration 40, Logistics rename UI/host 22,
+integration rename two, INI consumer three and external compatibility 48/2 pass.
+Deterministic differential checks also match 1,500 mixed Unicode/rule/date/folder
+transforms and 500 layout/update combinations exactly, including errors. Shared
+wiki, lint and whitespace pass. No external source change or push occurred.
+
 ## Sequential audit implementation: C5 layered settings fields
 
 Shared `e37da37` names schema-control construction/binding and row/reset/preview
