@@ -164,9 +164,9 @@ and precise limits.
 
 The first checkpoint was followed by further implemented, committed repairs.
 The original measurements above remain the baseline. At committed checkpoint
-Logistics `96d38b79`, commonUtils `6a9bcd4` and Blue Hole `e81bd7b`, tracked Python
-counts are Logistics 1,152 files (89,342 production / 76,005 test lines),
-commonUtils 507 (42,496 / 22,848) and Blue Hole 201 (22,814 / 580), using the
+Logistics `544116f1`, commonUtils `7978a28` and Blue Hole `f50fa424`, tracked Python
+counts are Logistics 1,152 files (89,375 production / 76,255 test lines),
+commonUtils 507 (42,494 / 23,093) and Blue Hole 201 (22,814 / 580), using the
 same exclusions. Exact repeated production function bodies of 20+ lines remain
 absent under the same AST comparison; this does not establish no near-duplication.
 
@@ -178,7 +178,7 @@ absent under the same AST comparison; this does not establish no near-duplicatio
 | Coupling | The architecture policy still reports 25 approved host adapters, 15 feature edges and zero violations. Portable lifecycle imports no longer require a toolkit. Deferred import groups and live consumer coupling remain. |
 | Duplication | Local provider copying/verification and bounded text reads use shared stream mechanisms. INI delegates staging, verification, permissions and replacement to the atomic writer; saved preference adoption sits in Preferences. Application-specific credential and cleanup policy stays with consumers. |
 | Consistency | Legacy File/Directory operations and local document exports respect existing provider guards. Cross-volume moves verify copied content and revalidate sources before cleanup; settings writers retain their own published bytes. These remain optimistic checks, not filesystem isolation or cross-process locks. |
-| Reliability | Reproduced data-preservation failures have focused regression coverage. Shared revision 6a9bcd4 passes all 179 files; both consumers track it exactly, with verified Blue Hole membership/bytes and 31 passing consumer tests. Late folder layouts, short reads and post-save bounds have dedicated regressions. Windows/Linux, real Android/iOS pickers, Blender and live Perforce remain unverified. |
+| Reliability | Reproduced data-preservation failures have focused regression coverage. Shared revision 7978a28 passes all 179 files; both consumers track it exactly, with verified Blue Hole membership/bytes and 31 passing consumer tests. Late folder layouts, short reads and post-save bounds have dedicated regressions. Windows/Linux, real Android/iOS pickers, Blender and live Perforce remain unverified. |
 
 Reliability and testability have stronger evidence than whole-system structural
 simplification. A numeric 7/10 remains unsubstantiated: the remaining large UI
@@ -186,3 +186,20 @@ owners, intentional deferred cycles, platform contracts and native runtime
 evidence still need deeper review. No dependencies, storage formats, release or
 remote history were changed. The work log records each completed unit and its
 validation; generated reports and package artifacts remain ignored.
+
+A later immutable Logistics `07e76ab2` / shared `7978a28` checkpoint passes all
+179 desktop, 162 mobile and 179 shared isolated test files, with platform/toolkit
+skips recorded separately in the work log. Another 106 tests in 25 native Toga
+files pass in the mobile dummy backend. Subsequent IDE bounds, metadata lookup,
+PDF startup, Blender publication and settings-reset repairs have their focused
+regressions recorded independently; the immutable totals exclude those later fixes.
+
+Further publication cleanup makes JSON and XML use the existing atomic writer,
+retaining format-specific policies; legacy text exports retain streaming/in-place
+semantics while validating encoding and destination access before mutation.
+The new range-buffer, batch-success and archive-preview tests exercise ordinary
+portable contracts alongside fault injection. Blender installation/presets/cache
+now share no-replace publication. Settings reset retains the old backup when an
+external directory occupies its path, rather than treating arbitrary current
+contents as its owned rollback output. These changes improve consistency without
+adding production packages or cross-feature policy layers.
