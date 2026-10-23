@@ -217,6 +217,42 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual((self.preset / '.logistics-addons.json').read_bytes(), state)
         self.assertNotIn('updated=True', (self.preset / 'scripts/addons/tool/__init__.py').read_text())
 
+    def test_cancel_during_extraction_restores_resources_and_selection(self):
+        from commonUtils.runtime.operations import OperationCancelled
+        from features.blender.addons import library as module
+        self.library.add(self.package('old.zip'))
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.scanning.run_blender_script'):
+            self.library.apply(self.release, 'Art', ['legacy:tool'])
+        (self.preset / 'config/userpref.blend').write_bytes(b'artist preferences')
+        data = self.preset / 'addon-data/bluehole/envFiles/artist/settings.ini'
+        data.parent.mkdir(parents=True)
+        data.write_bytes(b'artist environment')
+        resources = ('config', 'scripts', 'extensions', 'addon-data')
+        def snapshot():
+            return {path.relative_to(self.preset): path.read_bytes()
+                    for folder in resources for path in (self.preset / folder).rglob('*') if path.is_file()}
+        before = snapshot()
+        selection = (self.preset / '.logistics-addons.json').read_bytes()
+        self.library.add(self.package('new.zip', (2, 0, 0), body='updated=True'))
+        cancelled = False
+        copy = module.copy_stream
+        def cancel_after_extract(source, output, **kwargs):
+            nonlocal cancelled
+            copy(source, output, **kwargs)
+            if Path(output.name) == self.preset / 'scripts/addons/tool/__init__.py':
+                cancelled = True
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(module, 'copy_stream', side_effect=cancel_after_extract), \
+                patch('features.blender.addons.scanning.run_blender_script') as run:
+            with self.assertRaises(OperationCancelled):
+                self.library.apply(self.release, 'Art', ['legacy:tool'], cancelled=lambda: cancelled)
+        self.assertTrue(cancelled)
+        run.assert_not_called()
+        self.assertEqual(snapshot(), before)
+        self.assertEqual((self.preset / '.logistics-addons.json').read_bytes(), selection)
+        self.assertEqual(list(self.preset.parent.glob('.addon-update-*')), [])
+
     def test_zip_replaced_after_resolution_aborts_before_mutating_preset(self):
         package = self.package('tool.zip')
         self.library.add(package)

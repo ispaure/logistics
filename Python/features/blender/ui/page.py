@@ -465,6 +465,16 @@ class BlenderPage(qt.QWidget):
         actual = {('extension:' + row['module'].split('.')[-1] if row['kind'] == 'Extension' else 'legacy:' + row['module']): row for row in found.values()}
         identities = sorted(set(identities) | set(selected) | set(state['installed']) | set(actual),
                             key=lambda identity: (next((a.name for a in entries if a.identity == identity), identity).casefold(), identity))
+        self._project_bluehole_choice(state, found)
+        identities = [identity for identity in identities if identity != bluehole.IDENTITY]
+        self._project_addon_choices(identities, entries, selected, state, found, actual)
+        if root is not None:
+            self._choices_context = (self.release.version, self.preset.currentText())
+            self.bluehole_group.setEnabled(True)
+            self.apply_button.setEnabled(True)
+
+    def _project_bluehole_choice(self, state, found):
+        """Show requested channel settings beside the separately recorded installation."""
         config = state.get('bluehole', bluehole.DEFAULT)
         config = bluehole.validate(config)
         self.bluehole_enabled.setChecked(config['enabled'])
@@ -479,7 +489,9 @@ class BlenderPage(qt.QWidget):
         else:
             self.bluehole_installed.setText('Not installed')
             self.bluehole_installed.setToolTip('The selected branch will be checked on launch')
-        identities = [identity for identity in identities if identity != bluehole.IDENTITY]
+
+    def _project_addon_choices(self, identities, entries, selected, state, found, actual):
+        """Render one admitted catalog/selection/filesystem snapshot into retained rows."""
         self.choices.setRowCount(len(identities))
         for row, identity in enumerate(identities):
             releases = [a for a in entries if a.identity == identity]
@@ -530,10 +542,6 @@ class BlenderPage(qt.QWidget):
             if installed:
                 self.choices.item(row, 2).setToolTip(f"{source_label(installed.get('source', 'Managed'))}\n{installed['path']}\n{installed.get('package_name', '')}")
         self.choices.resizeColumnsToContents()
-        if root is not None:
-            self._choices_context = (self.release.version, self.preset.currentText())
-            self.bluehole_group.setEnabled(True)
-            self.apply_button.setEnabled(True)
 
     def _apply_addons(self):
         if not self.release or self._choices_context != (self.release.version, self.preset.currentText()):

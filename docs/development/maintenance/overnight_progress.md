@@ -1,5 +1,20 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L9 Blender library preparation
+
+The Logistics add-on library names regular selection resolution, managed-path and
+unchanged-package admission, and verified ZIP snapshots. Lock, Blue Hole fallback,
+backup, mutation, preferences, rollback and selection publication remain centralized.
+The page separates requested/installed Blue Hole projection and regular catalog
+rows. Original methods match expanded AST after normalizing the earlier capture
+of unchanged selection state and associative Boolean grouping. All 94 original
+Blender cases in seven files pass before/after in identical order. A new cancellation
+during actual extraction case passes against original and refactored code, verifying
+resource/preference/environment/selection rollback and transaction cleanup; the final
+library file passes all 28 cases. Architecture, owner lint, wiki and whitespace pass.
+Real Blender/platform runtime acceptance remains separate. No Blue Hole repository
+or Ally Tools changes; no push.
+
 ## Sequential audit implementation: L8 Bulk Rename presentation
 
 Bulk Rename names rule/preview controls, preset-menu construction and admitted

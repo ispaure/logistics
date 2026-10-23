@@ -298,13 +298,7 @@ class AddonLibrary:
         state = self.selection(root)
         from features.blender.addons.bluehole import IDENTITY
         identities = [identity for identity in identities if identity != IDENTITY]
-        resolved = []
-        entries = self.for_preset(root).entries(legacy_identities=identities)
-        for identity in sorted(set(identities)):
-            addon = self.resolve(identity, release, entries=entries)
-            if addon is None:
-                raise ValueError(f'No declared-compatible release is available for {identity}')
-            resolved.append(addon)
+        resolved = self._resolve_addons(release, root, identities)
         from features.blender.addons import bluehole as bluehole_source
         bluehole = bluehole_source.validate(bluehole if bluehole is not None else state.get('bluehole', {'enabled': False, 'branch': 'main'}))
         commit = None
@@ -322,46 +316,16 @@ class AddonLibrary:
             resolved = [item for item in resolved if item.identity != bluehole_source.IDENTITY]
             resolved.append(addon)
         resolved.sort(key=lambda a: (a.name.casefold(), a.module.casefold(), a.identity))
-        new = {}
-        payloads = []
-        for addon in resolved:
-            module = f'bl_ext.logistics.{addon.module}' if addon.kind == 'Extension' else addon.module
-            relative = (f'extensions/logistics/{addon.module}' if addon.kind == 'Extension' else
-                        f'scripts/addons/{addon.module}' + ('.py' if not addon.prefix else ''))
-            new[addon.identity] = {'module': module, 'path': relative, 'digest': addon.digest, 'name': addon.name, 'source': addon.source, 'version': addon.version, 'published': addon.published, 'package_name': addon.package_name}
-            payloads.append((addon, relative))
         old = state['installed']
-        # Only paths published by this library may be replaced/removed.
-        for entry in list(old.values()) + list(new.values()):
-            rel = relative_path(entry['path'])
-            if (len(rel.parts) != 3 or rel.parts[:2] not in [('scripts', 'addons'), ('extensions', 'logistics')]):
-                raise ValueError('Invalid managed addon destination')
-            manager._contained(root, *rel.parts)
-        for key, entry in new.items():
-            target = root / entry['path']
-            if target.exists() and not any(e['path'] == entry['path'] for e in old.values()):
-                raise ValueError(f'{target.name} already exists outside the addon library; move it before selecting this addon')
-        retained = {key for key, entry in new.items() if key in old
-                    and all(entry[field] == old[key][field] for field in ('module', 'path', 'digest'))
-                    and ((root / entry['path']).is_file() if entry['path'].endswith('.py') else
-                         (root / entry['path'] / '__init__.py').is_file())}
+        new, payloads, retained = self._plan_managed_payloads(root, resolved, old)
         manager.environment(release, name)  # Validate all resource folders before copying.
         environments = manager._contained(root, 'addon-data', 'bluehole')
         with TemporaryDirectory(prefix='.addon-update-', dir=root.parent) as temp:
             backup = Path(temp)
             packages = backup / 'packages'
             packages.mkdir()
-            snapshots = {}
-            for index, addon in enumerate(resolved):
-                if addon.identity in retained and not (addon.identity == bluehole_source.IDENTITY and bluehole['deluxe'] and not fallback):
-                    snapshots[addon.identity] = addon
-                    continue
-                staged_package = packages / f'{index}.zip'
-                with addon.package.open('rb') as source, staged_package.open('wb') as output:
-                    copy_stream(source, output, cancelled=cancelled)
-                if inspect_package(staged_package).digest != addon.digest:
-                    raise ValueError(f'{addon.name} ZIP changed before installation; refresh and try again')
-                snapshots[addon.identity] = replace(addon, package=staged_package)
+            snapshots = self._snapshot_packages(resolved, retained, packages,
+                                                deluxe=bluehole['deluxe'] and not fallback, cancelled=cancelled)
             resolved = [snapshots[addon.identity] for addon in resolved]
             payloads = [(snapshots[addon.identity], relative) for addon, relative in payloads]
             folders = ('config', 'scripts', 'extensions', 'addon-data')
@@ -427,3 +391,56 @@ class AddonLibrary:
                         shutil.copytree(backup / folder, root / folder, symlinks=True)
                 raise
         return root
+
+    def _resolve_addons(self, release, root, identities):
+        """Resolve regular selections from one preset catalog before any mutation."""
+        resolved = []
+        entries = self.for_preset(root).entries(legacy_identities=identities)
+        for identity in sorted(set(identities)):
+            addon = self.resolve(identity, release, entries=entries)
+            if addon is None:
+                raise ValueError(f'No declared-compatible release is available for {identity}')
+            resolved.append(addon)
+        return resolved
+
+    def _plan_managed_payloads(self, root, resolved, old):
+        """Describe destinations and unchanged packages, rejecting unmanaged collisions."""
+        new = {}
+        payloads = []
+        for addon in resolved:
+            module = f'bl_ext.logistics.{addon.module}' if addon.kind == 'Extension' else addon.module
+            relative = (f'extensions/logistics/{addon.module}' if addon.kind == 'Extension' else
+                        f'scripts/addons/{addon.module}' + ('.py' if not addon.prefix else ''))
+            new[addon.identity] = {'module': module, 'path': relative, 'digest': addon.digest, 'name': addon.name, 'source': addon.source, 'version': addon.version, 'published': addon.published, 'package_name': addon.package_name}
+            payloads.append((addon, relative))
+        # Only paths published by this library may be replaced/removed.
+        for entry in list(old.values()) + list(new.values()):
+            rel = relative_path(entry['path'])
+            if (len(rel.parts) != 3 or rel.parts[:2] not in [('scripts', 'addons'), ('extensions', 'logistics')]):
+                raise ValueError('Invalid managed addon destination')
+            self.manager._contained(root, *rel.parts)
+        for key, entry in new.items():
+            target = root / entry['path']
+            if target.exists() and not any(e['path'] == entry['path'] for e in old.values()):
+                raise ValueError(f'{target.name} already exists outside the addon library; move it before selecting this addon')
+        retained = {key for key, entry in new.items() if key in old
+                    and all(entry[field] == old[key][field] for field in ('module', 'path', 'digest'))
+                    and ((root / entry['path']).is_file() if entry['path'].endswith('.py') else
+                         (root / entry['path'] / '__init__.py').is_file())}
+        return new, payloads, retained
+
+    def _snapshot_packages(self, resolved, retained, packages, *, deluxe, cancelled):
+        """Copy changed payloads and verify digests before the rollback-owned mutation."""
+        from features.blender.addons import bluehole as bluehole_source
+        snapshots = {}
+        for index, addon in enumerate(resolved):
+            if addon.identity in retained and not (addon.identity == bluehole_source.IDENTITY and deluxe):
+                snapshots[addon.identity] = addon
+                continue
+            staged_package = packages / f'{index}.zip'
+            with addon.package.open('rb') as source, staged_package.open('wb') as output:
+                copy_stream(source, output, cancelled=cancelled)
+            if inspect_package(staged_package).digest != addon.digest:
+                raise ValueError(f'{addon.name} ZIP changed before installation; refresh and try again')
+            snapshots[addon.identity] = replace(addon, package=staged_package)
+        return snapshots

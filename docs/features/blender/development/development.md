@@ -81,6 +81,18 @@ download manifests remain deferred; no URLs or credentials are distributed. Abso
 catalog is extensible; missing official platform builds remain unsupported rather
 than inventing archives or selecting a different architecture silently.
 
+## Apply preparation and publication
+
+`AddonLibrary._resolve_addons` selects regular packages from one preset catalog;
+`_plan_managed_payloads` admits managed destinations and identifies unchanged
+entrypoints. `_snapshot_packages` copies changed ZIPs into the transaction workspace
+and verifies digests before mutation. `_apply` retains Blue Hole fallback policy,
+resource backup, mutation, preference preparation, rollback and final selection
+publication under the existing `apply` installation lock. No second transaction
+owner or persisted format is introduced. The page separately projects requested
+Blue Hole settings/installed state and regular catalog rows; only a successful
+current-preset refresh enables saving.
+
 ## Validation
 
 `Python/tests/blender/test_blender_manager.py` covers verified full-bundle installation,

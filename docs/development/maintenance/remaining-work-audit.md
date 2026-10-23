@@ -33,6 +33,7 @@ below describe the assessment snapshot, before this implementation.
 | L6 | Captured IDE opens/recovery; Git snapshot projection; desktop source resolution and guarded action publication | See sequential progress entries |
 | L7 | Cloud controls/views separated from credential publication; named encrypted push and collection staging/verification | See sequential progress entries |
 | L8 | Named editor command groups, retained settings projection and Bulk Rename action/plan-row presentation | See sequential progress entries |
+| L9 | Named add-on resolution, managed destination admission, verified ZIP staging and page projection; one rollback owner | See sequential progress entry |
 
 Items absent from this table remain outstanding. Native/platform acceptance limits
 are recorded with each unit; a passing host suite is not native certification.
