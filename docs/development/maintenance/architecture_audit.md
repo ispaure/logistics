@@ -1,5 +1,23 @@
 # Ecosystem architecture audit
 
+## Mobile owner admission and publication follow-up
+
+Shared `2cd0516` and Logistics `e6f5c44c` keep existing lifecycle owners and name
+cohesive phases inside their modules. Recycled-browser construction changes from
+61 to 27 lines and list rendering from 41 to 23; private-session opening changes
+from 127 to 92. Generation invalidation precedes guarded native row replacement.
+Private-session admission retains token/budget checks, rollback and remote busy
+cleanup while passing captured identities into publication and position recovery.
+
+Ordered statement expansion and all existing method signatures match the original
+code. A new three-scenario rollback regression passes before/after. Eight shared
+browser and 126 focused mobile cases pass without skips/failures, with unchanged
+Ally Tools/Blue Hole compatibility. No new module, state owner, dependency or
+persisted contract is introduced. Host tests do not establish native adapter or
+Blender correctness; those adapters remain unchanged. See the
+[progress log](overnight_progress.md#mobile-lifecycle-owner-continuation) for exact
+validation scope and remaining priorities. No whole-system score is inferred.
+
 ## Resource construction and editor save admission follow-up
 
 Shared `b425d5d` and Logistics `1e6c644b` clarify two existing owners without

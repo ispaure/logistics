@@ -1,5 +1,56 @@
 # Ecosystem maintenance progress
 
+## Mobile lifecycle owner continuation
+
+Started from clean Logistics `9e66f04b` and shared `b425d5d`, on the current
+`alpha` / `main` branches. No push is authorized.
+
+- Shared `2cd0516` separates recycled-browser navigation/list construction from
+  callback, event-loop and renderer-state admission. Construction is 27 rather
+  than 61 lines. List rendering is 23 rather than 41 lines, retaining generation
+  invalidation and thumbnail-request reset before a named native row-publication
+  phase. Its `updating` guard still encloses records, identity/index maps and
+  selection highlighting and is released in `finally`.
+- Logistics `e6f5c44c` separates private-controller registration and successful
+  document publication from `PrivateSessions.open`. The admission/rollback flow
+  is 92 rather than 127 lines. Capacity, checkpoint, workspace token, memory
+  budget and remote busy cleanup stay in that entry point; credentials and
+  privacy are registered before reading. Publication receives the original
+  captured session, reader and identity, restores reading position, records
+  permitted history and respects navigation during the asynchronous read.
+- A new regression passes on the original and refactored implementations. Its
+  rejected-result, exception and invalidated-token scenarios each retire only
+  the new owner, release opening state and restore the previous unsaved draft.
+  Existing tests also exercise navigation while opening, memory/capacity limits,
+  privacy, credential retirement and independent reader/session ownership.
+
+Expanding the private phases reproduces every original ordered AST statement,
+including captured arguments, public signatures and all untouched methods. No
+production package/module, dependency, public API or persisted format changed.
+The shared and Logistics owner guides describe the internal boundaries.
+
+| Executed validation | Result |
+| --- | --- |
+| Shared browser before/after | Eight cases across two files pass with Toga dummy installed; zero skips/failures. Includes independent consumer, stale rows, bounded tiles/caches and cooperative worker retirement. |
+| Private sessions original/new | Original 16-case baseline passes; all 17 cases including the new three-scenario regression pass before/after. |
+| Final focused mobile run | 126 cases across 12 files pass; zero skips/failures. Sessions 28, application/reader lifecycle 17, native browser 2, screen privacy 15, credential lists 14, transitions 2, remote readers 15, document navigation 8, provider Markdown 11 and progressive browser 14. |
+| Consumer compatibility | Ally Tools 48 tests and Blue Hole two current-source namespace/import/signature/binding checks pass. |
+| Documentation | Five Logistics and three shared wiki cases pass. |
+| Repository gates | Configured lint, toolchain consistency, source hygiene, architecture (24 host adapters / 15 feature edges / zero violations), syntax compilation and whitespace checks pass. |
+
+Ally Tools remains clean at `d2c00b8`; Blue Hole remains clean at `665c184`, with
+its vendor unchanged. Both require no compatibility edits. No UIKit/Java adapter
+was modified. These are host regressions using disposable fixtures, not native
+iOS/Android/Boox or Blender validation. No app installation, production-data
+mutation, release or push occurred. Earlier full-suite totals retain their
+recorded source scope; they were not rerun. Raw copies, comparison driver and
+reports are local-only under ignored test results.
+
+Next priorities: review provider-document preparation/publication and collection
+operations with the same captured-owner and failure-path discipline. Native
+navigation and appearance construction remain candidates only with relevant
+platform validation. This bounded pass does not establish a new ecosystem score.
+
 ## Qt resource browser and editor Save/Save As continuation
 
 Started from clean Logistics `9ee21663` / shared `cd21efe` on the current

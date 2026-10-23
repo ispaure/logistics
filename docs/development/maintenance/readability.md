@@ -377,3 +377,23 @@ Ally Tools and Blue Hole require no compatibility edits and remain unchanged.
 No new package, dependency, public API, persisted schema or numeric ecosystem
 rating is introduced. Native platform behavior and earlier full-suite provenance
 remain separate from this focused continuation.
+
+## Mobile lifecycle owner follow-up
+
+Shared `2cd0516` keeps recycled-browser state admission in its 27-line constructor
+(previously 61), followed by navigation/list construction phases. Its 23-line
+list renderer (previously 41) makes generation/request reset and mounting visible;
+native row replacement retains its exception-safe callback suppression guard.
+Logistics `e6f5c44c` keeps private-session admission, token/budget checks, rollback
+and busy cleanup visible in a 92-line entry point (previously 127). Registration
+and publication remain in the same owner, with explicit captured arguments.
+
+Readability improves through phase names and shorter orchestration; modularity
+improves within existing cohesive modules. Testability gains a rollback regression
+for rejected, exceptional and stale opens, passing against both implementations.
+Coupling and duplication are unchanged; no new owner/wrapper layer is introduced.
+Consistency improves by separating admission from publication in both hosts.
+Reliability is protected by preserved statement order, eight shared browser and
+126 mobile cases, rather than a claim to fix previously broken behavior. Public
+APIs, persistence and external consumers remain unchanged. Native device behavior
+and whole-system quality ratings remain outside this focused evidence.
