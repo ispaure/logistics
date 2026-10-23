@@ -56,7 +56,7 @@ system accessibility extremes still require native layout validation.
 | Workspace identities, generations and sessions | `workspace.py`, `window_owners.py`, `window_scenes.py` |
 | Adaptive panes and destination drawers | `workspace_navigation.py`, `adaptive_workspace.py` |
 | Workspaces discovery task, cache and invalidation | `folder_discovery.py`, composed by `folder_controller.py`; snapshot/result building in `folder_hub.py` |
-| Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`, `folder_hub_style.py` |
+| Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`; retained tree controls in `folder_tree_view.py`, styling in `folder_hub_style.py` |
 | File create/rename/move/delete coordination | `file_operations.py`, composed by `composition.presentation.file_operations`; `files_ui.py` retains forms, confirmation and forwarding methods |
 | Main and workspace browser listing requests | `folder_listing.py`; presentation in `files_ui.py` and `workspace_navigation.py` |
 | Local file management and comic batch entry points | `files_ui.py` |
@@ -67,6 +67,7 @@ system accessibility extremes still require native layout validation.
 | Provider Markdown modes, controls and preview lifecycle | `features/text_editor/mobile/provider_markdown.py`, composed by `composition.presentation.provider_markdown`; session source input remains authoritative |
 | Ordinary and provider reader ownership | `reader_sessions.py`, `private_sessions.py` |
 | Session Close/Back decisions and source return | `session_workflows/transitions.py`, source-specific `session_workflows/adapters.py`; facade in `reader_lifecycle.py` |
+| Provider content preparation and chrome assembly | `provider_presentation.py`; session and publication orchestration in `provider_ui.py` |
 | Reader surface publication and footer/chrome synchronization | `reading/publication.py`, validity captures in `reading/sources.py` |
 | Settings composition, category controls and connection forms | `settings/navigation.py`, `settings/categories.py`, `settings/forms.py`, `settings/speech.py`, `settings/information.py` |
 | Temporary file-opening presentation and measured read progress | `document_sources.py`, `loading_progress.py` |

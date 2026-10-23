@@ -290,3 +290,32 @@ The main method is 57 lines instead of 71, separating a UI assembly phase from
 checkpoint, token, scroll and route decisions. Six focused source-editor cases
 pass, including two added contracts for per-document identity reuse and
 checkpoint/retired-token vetoes. Titles remain dynamic after rename.
+
+
+### Combined mobile host validation
+
+The three runtime commits are `41da70d6` (retained folder tree owner), `cb63db1b`
+(provider preparation/publication) and `aa9d1ce9` (managed preview assembly).
+The complete final mobile host suite passes 164 isolated files and 1,179 cases,
+with zero failed files. Comparison with the previous full 1,169-case suite finds
+no lost case identities and exactly ten new lifecycle/ownership cases. The same
+two optional browser cases skip without Node; both separately pass using the
+existing offline Node/Playwright/Chrome tools. The editor subset passes 66 cases
+versus its 64-case baseline; no original folder, reader or editor case is lost.
+Fourteen desktop documentation, mobile payload-closure and feature-boundary
+contracts pass. Configured Ruff, architecture (24 host adapters/15 feature edges),
+toolchain consistency, whitespace and indexed-source hygiene checks pass.
+
+| Host area | Original responsibility mix | Resulting boundary |
+| --- | --- | --- |
+| Workspaces | Credential/discovery policy and nested native row reconciliation in one 819-line owner | 657-line host delegates retained rows/menus to a 216-line presentation owner with explicit callbacks |
+| Provider readers | 136-line content method combines format preparation and publication | 54-line publication sequence uses the existing presentation owner for spread/EPUB construction |
+| Managed preview | Application method constructs controls among session/route decisions | Existing preview module builds controls; application keeps policy and the text view keeps lifetime |
+
+These are source-level readability and ownership improvements, not a wholesale
+mobile rewrite. Native platform adapters, saved formats, session admission and
+Perforce consumer/build design remain intact. Primary-checkout navigation and
+shared index edits remain separate. No push, release retry, upload or device
+install was performed. Raw comparison and test output remain in ignored local
+test results. Native allocation/rendering, device gestures and view swapping
+still need the appropriate iOS/Android run before claiming platform acceptance.
