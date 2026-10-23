@@ -1234,6 +1234,11 @@ process-wide installation guards and the existing backend hooks.
   workspace/navigation identity. The session owns bytes and format resources;
   presentation assembly runs after admission, and a stale completion cannot take
   over a newer route.
+  Its same-module registration phase captures credentials, privacy and operation
+  independence before reading. The publication phase receives the captured
+  session, reader and resource identity, restores position and records history.
+  `open` retains capacity/budget checks, token validation, rollback to the previous
+  owner and remote busy-state cleanup across both phases.
 - **Navigate during a listing:** `FolderListing.begin` cancels the previous read
   and captures context/credential identity. `capture` retains provider, folder and
   location. `read` checks `accepts` before and after worker I/O; invalid results are

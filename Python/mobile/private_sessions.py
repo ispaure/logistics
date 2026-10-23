@@ -329,16 +329,8 @@ class PrivateSessions:
         except ValueError as error:
             return await self.opening_rejected(str(error) + '\n\nGo to Documents → Open documents to manage open items.')
         self.app.workspace.active = selection
-        owner = PrivateController(self, session)
-        if getattr(copies, 'encrypted', True) or getattr(copies, 'remote_storage', False):
-            owner.privacy_gate = getattr(self.app.cloud_client, 'session_privacy', None)
-        if privacy_gate is not None:
-            owner.privacy_gate = privacy_gate
-        owner.credential_client = self.app.cloud_client
-        owner.credential_generation = getattr(self.app.cloud_client, 'generation', None)
-        owner.presentation_destination = destination
-        owner._independent_operation = independent
-        self.controllers[session.id] = owner
+        owner = self._register_opening_owner(session, copies, destination=destination,
+                                             privacy_gate=privacy_gate, independent=independent)
         token = self.app.workspace.token(session.id)
         owner._opening_origin, owner._opening_token, owner._open_presented = origin, token, False
         def retire_open():
@@ -363,35 +355,8 @@ class PrivateSessions:
                     'This document would exceed the shared 32 MiB file content memory budget. '
                     'Go to Documents → Open documents and close an item, then try again. '
                     'A document that exceeds the budget by itself cannot be opened. Existing documents and unsaved edits were kept.')
-            position = self.positions.get(identity)
-            if position is not None and not reader.editable:
-                index, offset = position.get('index', 0), position.get('offset', 0)
-                index = min(index, len(reader.labels) - 1)
-                if reader.book is not None:
-                    owner._provider_epub_locations = {reader.book.spine[index]: offset}
-                await owner.move_private_page(index)
-            session.kind = ('pdf' if reader.kind == '.pdf' else 'epub' if reader.kind == '.epub' else 'comic' if not reader.editable
-                            else 'markdown' if reader.kind in {'.md', '.markdown'} else 'text')
-            session.title = Path(reader.name).name
-            from .document_sources import file_source
-            try:
-                session.history_source = file_source(self.app, copies, key) if privacy_gate is None else None
-            except (OSError, ValueError, AttributeError, KeyError):
-                session.history_source = None
-            if privacy_gate is None:
-                try:
-                    source = file_source(self.app, copies, key, session_only=True)
-                    self.app.credential_document_lists.remember(session, source)
-                except (OSError, ValueError, AttributeError, KeyError):
-                    self.app.credential_document_lists.notice()
-            if owner._open_presented:
-                self.bind(owner)
-            else:
-                self.suspend(except_owner=self.active)
-            self.app.save_workspace()
-            if position is not None and reader.editable:
-                await self.restore_text_position(owner, position)
-            return True
+            return await self._publish_opened_session(owner, session, reader, copies, key,
+                                                      identity=identity, privacy_gate=privacy_gate)
         except Exception:
             retire_open()
             raise
@@ -401,6 +366,50 @@ class PrivateSessions:
             if remote_open:
                 self.app.set_cloud_busy(False)
                 self.app.remote_read_busy = False
+
+    def _register_opening_owner(self, session, copies, *, destination, privacy_gate, independent):
+        owner = PrivateController(self, session)
+        if getattr(copies, 'encrypted', True) or getattr(copies, 'remote_storage', False):
+            owner.privacy_gate = getattr(self.app.cloud_client, 'session_privacy', None)
+        if privacy_gate is not None:
+            owner.privacy_gate = privacy_gate
+        owner.credential_client = self.app.cloud_client
+        owner.credential_generation = getattr(self.app.cloud_client, 'generation', None)
+        owner.presentation_destination = destination
+        owner._independent_operation = independent
+        self.controllers[session.id] = owner
+        return owner
+
+    async def _publish_opened_session(self, owner, session, reader, copies, key, *, identity, privacy_gate):
+        position = self.positions.get(identity)
+        if position is not None and not reader.editable:
+            index, offset = position.get('index', 0), position.get('offset', 0)
+            index = min(index, len(reader.labels) - 1)
+            if reader.book is not None:
+                owner._provider_epub_locations = {reader.book.spine[index]: offset}
+            await owner.move_private_page(index)
+        session.kind = ('pdf' if reader.kind == '.pdf' else 'epub' if reader.kind == '.epub' else 'comic' if not reader.editable
+                        else 'markdown' if reader.kind in {'.md', '.markdown'} else 'text')
+        session.title = Path(reader.name).name
+        from .document_sources import file_source
+        try:
+            session.history_source = file_source(self.app, copies, key) if privacy_gate is None else None
+        except (OSError, ValueError, AttributeError, KeyError):
+            session.history_source = None
+        if privacy_gate is None:
+            try:
+                source = file_source(self.app, copies, key, session_only=True)
+                self.app.credential_document_lists.remember(session, source)
+            except (OSError, ValueError, AttributeError, KeyError):
+                self.app.credential_document_lists.notice()
+        if owner._open_presented:
+            self.bind(owner)
+        else:
+            self.suspend(except_owner=self.active)
+        self.app.save_workspace()
+        if position is not None and reader.editable:
+            await self.restore_text_position(owner, position)
+        return True
 
     @staticmethod
     def offline_owner(owner):

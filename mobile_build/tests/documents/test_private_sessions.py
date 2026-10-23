@@ -438,3 +438,43 @@ class PrivateSessionTests(unittest.TestCase):
         self.assertFalse(hasattr(owner, 'undefined_host_service'))
         owner._crypt_cancel = None
         owner.set_cloud_busy(False)
+
+    def test_rejected_or_failed_open_retires_only_the_new_owner(self):
+        from mobile.provider_opening import ProviderDocumentOpening
+        prior = self.open('retained.txt')
+        prior.crypt_text.value = 'Retained draft'
+        manager = self.app.private_sessions
+        original = ProviderDocumentOpening.open
+        for outcome in ('rejected', 'exception', 'stale'):
+            with self.subTest(outcome=outcome):
+                captured = []
+                name = outcome + '.txt'
+                (self.local / name).write_text('New document')
+
+                async def opening(operation, **kwargs):
+                    self.assertTrue(await original(operation, **kwargs))
+                    owner = operation.owner
+                    captured.append(owner)
+                    self.assertIs(manager.active, owner)
+                    if outcome == 'exception':
+                        raise RuntimeError('Synthetic publication failure')
+                    if outcome == 'stale':
+                        self.app.workspace.invalidate(owner.session.id)
+                        return True
+                    return False
+
+                with patch.object(ProviderDocumentOpening, 'open', opening):
+                    if outcome == 'exception':
+                        with self.assertRaisesRegex(RuntimeError, 'Synthetic publication failure'):
+                            self.run_async(self.app.open_crypt(copies=self.copies, key=name))
+                    else:
+                        self.assertFalse(self.run_async(self.app.open_crypt(copies=self.copies, key=name)))
+                self.assertEqual(list(manager.controllers), [prior.session.id])
+                self.assertIs(manager.active, prior)
+                self.assertEqual(prior.crypt_text.value, 'Retained draft')
+                retired = captured[0]
+                self.assertNotIn(retired.session.id, self.app.workspace.sessions)
+                self.assertIsNone(retired.crypt_reader)
+                self.assertIsNone(retired._opening_origin)
+                self.assertIsNone(retired._opening_token)
+                self.assertFalse(retired._independent_operation)
