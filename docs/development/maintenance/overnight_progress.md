@@ -524,3 +524,18 @@ completed baseline. Remaining priorities continue to govern selection.
   has the focused coverage above. Immutable desktop verification is still running.
 - The source package rebuilt at `13ce06fb`; all 2,218 manifest content hashes and
   its root revision verify, with external emulator and local evidence exclusions.
+
+## UTF-8 archive preview boundaries
+
+- Six fixtures reproduced valid multibyte text being rejected when the 256 KiB
+  preview ceiling split a character. Incremental strict UTF-8/BOM decoding now
+  retains the complete prefix and truncation notice, omitting only a pending
+  boundary character. Invalid bytes within the preview and incomplete complete
+  files still receive the existing unsupported-text fallback; a BOM case is covered.
+- All 21 shared archive tests and 13 Logistics archive UI tests pass in the
+  desktop environment. The mobile interpreter passes 17 archive cases, including
+  the new regressions; four encryption cases error because its environment lacks
+  optional pyzipper. This is not reported as a green 21-test mobile result, and
+  no dependency was added to that environment.
+- Shared `8e32471` is committed. Exact Blue Hole vendor membership/bytes and all
+  31 consumer tests pass. Documentation checks and correctness lint pass.
