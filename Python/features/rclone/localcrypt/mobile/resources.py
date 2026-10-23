@@ -13,6 +13,7 @@ from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.provider import ResourceCapabilities
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
+from commonUtils.runtime.streams import read_up_to
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 
 
@@ -204,7 +205,7 @@ class CryptFiles(LocalFiles):
                 with temporary.open('xb') as output:
                     owned = True
                     if fd is None:
-                        data = stream.read(1024 * 1024 + 1)
+                        data = read_up_to(stream, 1024 * 1024 + 1, cancelled=cancelled)
                         if len(data) > 1024 * 1024:
                             raise ValueError('Text saves are limited to 1 MiB.')
                         self.client.request('crypt_encode', remote=self.remote, identity=self.identity,

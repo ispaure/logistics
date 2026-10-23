@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from io import BytesIO
+import base64
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -20,6 +21,48 @@ class LocalCryptConfigurationTests(unittest.TestCase):
             self.assertEqual(action, 'crypt_paths')
             return [entry['path'] for entry in values['entries']]
         return CryptFiles(root, SimpleNamespace(request=request), 'Secret')
+
+    def capture_encodes(self, provider):
+        calls = []
+        request = provider.client.request
+        def encode(action, **values):
+            if action != 'crypt_encode':
+                return request(action, **values)
+            calls.append(base64.b64decode(values['data']))
+            os.write(values['fd'], b'opaque ciphertext fixture')
+            return True
+        provider.client.request = encode
+        return calls
+
+    def test_create_file_consumes_short_reads_before_native_encoding(self):
+        class ShortReader(BytesIO):
+            def read(self, size=-1):
+                return super().read(min(size, 3))
+        with TemporaryDirectory() as directory:
+            provider = self.listing_provider(directory)
+            encoded = self.capture_encodes(provider)
+            content = b'Complete short-read input including trailing bytes.'
+            provider.create_file('note.md', ShortReader(content))
+            self.assertEqual(encoded, [content])
+            self.assertEqual(provider._locate('note.md').read_bytes(), b'opaque ciphertext fixture')
+            self.assertFalse(list(provider.root.glob('.create-*')))
+
+    def test_create_file_rejects_incomplete_or_oversize_input_before_encoding(self):
+        class WouldBlock:
+            def read(self, size):
+                return None
+        class ShortReader(BytesIO):
+            def read(self, size=-1):
+                return super().read(min(size, 65536))
+        for source, error in ((WouldBlock(), BlockingIOError),
+                              (ShortReader(b'x' * (1024 * 1024 + 1)), ValueError)):
+            with self.subTest(error=error.__name__), TemporaryDirectory() as directory:
+                provider = self.listing_provider(directory)
+                encoded = self.capture_encodes(provider)
+                with self.assertRaises(error):
+                    provider.create_file('note.md', source)
+                self.assertEqual(encoded, [])
+                self.assertEqual(list(provider.root.iterdir()), [])
 
     def test_listing_rejects_links_shared_files_and_special_files(self):
         from commonUtils.runtime.operations import OperationCancelled
