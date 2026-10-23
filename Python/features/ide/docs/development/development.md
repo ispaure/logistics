@@ -19,3 +19,13 @@ and left/center/right snapping.
 ## Desktop presentation
 
 Desktop widgets and controllers live in feature-owned `ui/`. Registration stays lazy; portable domain modules do not import this package. IDE/Text Editor change-marker and hunk integration is shared through `services/editors/ui/`.
+
+## Workspace checkpoint admission
+
+`ProjectStore` reads at most 4 MiB plus one byte before parsing. It validates
+project records, unique identifiers, the open-project list and active identifier
+before publishing any loaded state. A malformed checkpoint leaves an empty store
+with a visible error and prevents saving over the original. Duplicate open IDs
+remain deduplicated and stale string IDs remain filtered as before. The schema
+version, project fields and JSON layout are unchanged. `test_ide.py` covers
+malformed structures, partial admission, conflicting writers and round trips.

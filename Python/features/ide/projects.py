@@ -62,17 +62,30 @@ class ProjectStore:
         self.original = None
         try:
             if self.path.exists():
-                if self.path.stat().st_size > 4 * 1024 * 1024:
+                with self.path.open('rb') as stream:
+                    self.original = stream.read(4 * 1024 * 1024 + 1)
+                if len(self.original) > 4 * 1024 * 1024:
                     raise ValueError('IDE workspace exceeds 4 MiB')
-                self.original = self.path.read_bytes()
             if self.original is not None:
                 data = json.loads(self.original)
-                if data.get('version') != 1:
+                if not isinstance(data, dict) or data.get('version') != 1:
                     raise ValueError('Unsupported IDE workspace version')
+                if not isinstance(data['projects'], list):
+                    raise ValueError('Invalid IDE project list')
                 projects = [Project.from_dict(p) for p in data['projects']]
-                self.projects = {p.id: p for p in projects}
-                self.open_ids = list(dict.fromkeys(p for p in data['open_ids'] if p in self.projects))
-                self.active_id = data.get('active_id')
+                by_id = {p.id: p for p in projects}
+                if len(by_id) != len(projects):
+                    raise ValueError('Duplicate IDE project identifiers')
+                open_ids = data['open_ids']
+                if not isinstance(open_ids, list) or not all(isinstance(p, str) for p in open_ids):
+                    raise ValueError('Invalid open project identifiers')
+                active_id = data.get('active_id')
+                if active_id is not None and not isinstance(active_id, str):
+                    raise ValueError('Invalid active project identifier')
+                # Publish only after the complete checkpoint has been validated.
+                self.projects = by_id
+                self.open_ids = list(dict.fromkeys(p for p in open_ids if p in by_id))
+                self.active_id = active_id
         except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
             self.error = str(error)
 

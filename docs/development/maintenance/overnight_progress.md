@@ -68,3 +68,16 @@ Raw reports remain ignored; tracked guides contain concise results only.
 - All 19 shared archive tests pass, including format/encryption round trips,
   cancellation, complete-tree publication and racing destination preservation.
   Shared commit identifier follows at the next checkpoint.
+
+## Commit checkpoint and IDE admission
+
+- Shared archive publication: `988cfa2`; optional Toga test correction: `b3e0b9f`.
+- Logistics runner isolation: `3d985a4e`; editor shortcuts: `1dfcb214`.
+- All 11 shared browser test files pass outside the restricted sandbox with private
+  storage. This distinguishes native watcher restrictions from publication changes.
+- IDE regression reproduced partial project admission and accepted malformed
+  `open_ids` / `active_id` / duplicate project IDs. The store now validates complete
+  state before publishing it and bounds the actual read instead of relying on an
+  earlier stat size. Invalid checkpoints remain untouched and cannot be saved over.
+- All 26 IDE tests pass. Existing version-1 files, deduplication of open IDs,
+  stale string-ID filtering and concurrent-writer protection remain covered.

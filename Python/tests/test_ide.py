@@ -99,6 +99,32 @@ class ProjectTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 store.save()
 
+    def test_invalid_workspace_never_publishes_partially_loaded_projects(self):
+        import json
+        from features.ide.projects import ProjectStore
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'workspace.json'
+            project = {'name': 'Example', 'root_path': directory, 'id': 'project'}
+            malformed = [
+                {'version': 1, 'projects': [project]},
+                {'version': 1, 'projects': [project], 'open_ids': [['project']]},
+                {'version': 1, 'projects': [project], 'open_ids': 'project'},
+                {'version': 1, 'projects': [project], 'open_ids': [], 'active_id': []},
+                {'version': 1, 'projects': [project, project], 'open_ids': []},
+            ]
+            for payload in malformed:
+                with self.subTest(payload=payload):
+                    original = json.dumps(payload).encode()
+                    path.write_bytes(original)
+                    store = ProjectStore(path)
+                    self.assertTrue(store.error)
+                    self.assertEqual(store.projects, {})
+                    self.assertEqual(store.open_ids, [])
+                    self.assertIsNone(store.active_id)
+                    with self.assertRaises(ValueError):
+                        store.save()
+                    self.assertEqual(path.read_bytes(), original)
+
     def test_malformed_store_is_not_overwritten(self):
         from features.ide.projects import ProjectStore
         with tempfile.TemporaryDirectory() as directory:
