@@ -95,7 +95,11 @@ Its global personal-reset action calls `services.preferences.reset_personal_pref
 That service coordinates `features.settings.reset_personal_configuration()`, feature
 activation, shared notifications and host-supplied view reload callbacks. The Settings
 widget owns confirmation, its dirty-editor policy and result text. Only
-`configuration/` is replaced. Completion is recorded through
+`configuration/` is replaced. Publication and recovery use atomic no-replace
+renaming. Rollback deletes only the directory identity published by this reset;
+an externally replaced directory is preserved with the original settings backup
+retained and its path reported. This detects directory replacement, not concurrent
+edits inside that directory or a cross-process lock. Completion is recorded through
 commonUtils' MigrationLedger in `state/settings-migrations.ini`, outside resettable
 overrides. Existing legacy completion markers are adopted once; pending imports
 retry idempotently after partial failures. Reset deliberately completes the legacy
