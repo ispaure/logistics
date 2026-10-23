@@ -9,7 +9,7 @@ import re
 import os
 
 from .models import Status, Commit, Ref, parse_status, parse_log, parse_refs, parse_tree, TreeEntry
-from .runner import GitError, GitRunner, redact
+from .runner import GitError, GitRunner, GitCancelled, redact
 
 
 def argument(value, label='Value'):
@@ -500,21 +500,57 @@ class Repository:
             raise GitError('A submodule has uncommitted changes. Commit or discard them in the submodule before committing or pushing the parent.')
 
     def backup_files(self, paths):
-        if not self.runner.keep_backups: return
+        if not self.runner.keep_backups:
+            return
         from uuid import uuid4
         import json
         import shutil
+        from commonUtils.filesystem.snapshots import verified_file_snapshot, file_revision
+        from commonUtils.persistence import atomic_write_bytes
+        from commonUtils.runtime.operations import OperationCancelled
         root = self.root().resolve()
         metadata = self.run(['rev-parse', '--path-format=absolute', '--git-path', 'logistics-backups']).stdout.decode().strip()
         folder = Path(metadata) / uuid4().hex
         folder.mkdir(parents=True, exist_ok=False, mode=0o700)
-        manifest = {}
-        for index, relative in enumerate(paths):
-            path = root / relative
-            if path.is_symlink() or not path.resolve().is_relative_to(root): raise GitError('Backups require files inside this repository.')
-            if path.is_file():
-                name = f'{index}.backup'; shutil.copy2(path, folder / name); (folder / name).chmod(0o600); manifest[name] = relative
-        (folder / 'paths.json').write_text(json.dumps(manifest, ensure_ascii=True, indent=2), encoding='utf-8')
+        manifest, revisions = {}, {}
+
+        def validate():
+            for path, expected in revisions.items():
+                if path.is_symlink() or not path.resolve().is_relative_to(root):
+                    raise GitError('Backup source became a link or left this repository. Files were kept.')
+                current = file_revision(path) if path.exists() else None
+                if current != expected:
+                    raise GitError('A file changed while preparing discard backups. Refresh before discarding.')
+
+        try:
+            for index, relative in enumerate(paths):
+                path = root / relative
+                if path.is_symlink() or not path.resolve().is_relative_to(root):
+                    raise GitError('Backups require files inside this repository.')
+                if not path.exists():
+                    revisions[path] = None
+                    continue
+                if not path.is_file():
+                    raise GitError('Backups require regular files inside this repository.')
+                before, digest = verified_file_snapshot(path, cancelled=self.runner.cancel.is_set)
+                revisions[path] = before
+                name = f'{index}.backup'
+                target = folder / name
+                shutil.copy2(path, target)
+                target.chmod(0o600)
+                with target.open('r+b') as stream:
+                    os.fsync(stream.fileno())
+                if verified_file_snapshot(target, cancelled=self.runner.cancel.is_set)[1] != digest:
+                    raise GitError(f'Discard backup verification failed for {relative}. Files were kept.')
+                manifest[name] = relative
+            # Validate the entire selection, including missing files and earlier
+            # copies, before admitting the backup manifest and destructive command.
+            atomic_write_bytes(folder / 'paths.json', json.dumps(manifest, ensure_ascii=True, indent=2).encode('utf-8'),
+                               validate=validate)
+        except OperationCancelled:
+            raise GitCancelled('Operation cancelled while preparing discard backups.') from None
+        except ValueError as error:
+            raise GitError(f'Could not verify discard backups. Files were kept. Backup folder: {folder}') from error
 
     def cherry_pick(self, oid):
         return self.run(['cherry-pick', self.object_id(oid)], timeout=600)

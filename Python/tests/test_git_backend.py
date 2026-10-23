@@ -190,6 +190,81 @@ class GitBackendTests(unittest.TestCase):
         self.repo.unstage([change.path, change.original_path])
         self.assertTrue((self.repo.path / 'new name.txt').exists())
 
+    def test_corrupt_discard_backup_never_replaces_working_file(self):
+        from unittest.mock import patch
+        self.commit()
+        file = self.write(content='uncommitted work\n')
+        self.repo.runner.keep_backups = True
+        def corrupt(source, target):
+            Path(target).write_bytes(b'incomplete backup')
+        with patch('shutil.copy2', side_effect=corrupt), self.assertRaises(GitError):
+            self.repo.discard(['file.txt'])
+        self.assertEqual(file.read_text(), 'uncommitted work\n')
+
+    def test_change_during_discard_backup_never_replaces_newer_work(self):
+        from unittest.mock import patch
+        self.commit()
+        file = self.write(content='uncommitted work\n')
+        self.repo.runner.keep_backups = True
+        copy = shutil.copy2
+        def changed(source, target):
+            result = copy(source, target)
+            file.write_text('newer external work\n')
+            return result
+        with patch('shutil.copy2', side_effect=changed), self.assertRaises(GitError):
+            self.repo.discard(['file.txt'])
+        self.assertEqual(file.read_text(), 'newer external work\n')
+
+    def test_change_to_earlier_file_while_backing_up_selection_aborts_discard(self):
+        from unittest.mock import patch
+        self.commit()
+        self.commit('second.txt', 'base second\n', 'Second file')
+        first = self.write(content='first draft\n')
+        second = self.write('second.txt', 'second draft\n')
+        self.repo.runner.keep_backups = True
+        copy = shutil.copy2
+        def changed(source, target):
+            result = copy(source, target)
+            if Path(source).resolve() == second.resolve():
+                first.write_text('newer first draft\n')
+            return result
+        with patch('shutil.copy2', side_effect=changed), self.assertRaises(GitError):
+            self.repo.discard(['file.txt', 'second.txt'])
+        self.assertEqual(first.read_text(), 'newer first draft\n')
+        self.assertEqual(second.read_text(), 'second draft\n')
+
+    def test_file_created_during_backup_is_not_silently_discarded(self):
+        from unittest.mock import patch
+        self.commit()
+        self.commit('second.txt', 'base second\n', 'Second file')
+        first = self.repo.path / 'file.txt'
+        first.unlink()
+        second = self.write('second.txt', 'second draft\n')
+        self.repo.runner.keep_backups = True
+        copy = shutil.copy2
+        def appeared(source, target):
+            result = copy(source, target)
+            first.write_text('new external file\n')
+            return result
+        with patch('shutil.copy2', side_effect=appeared), self.assertRaises(GitError):
+            self.repo.discard(['file.txt', 'second.txt'])
+        self.assertEqual(first.read_text(), 'new external file\n')
+        self.assertEqual(second.read_text(), 'second draft\n')
+
+    def test_cancellation_during_backup_keeps_work_and_uses_git_cancellation(self):
+        from unittest.mock import patch
+        self.commit()
+        file = self.write(content='uncommitted work\n')
+        self.repo.runner.keep_backups = True
+        copy = shutil.copy2
+        def cancelled(source, target):
+            result = copy(source, target)
+            self.repo.runner.cancel.set()
+            return result
+        with patch('shutil.copy2', side_effect=cancelled), self.assertRaises(GitCancelled):
+            self.repo.discard(['file.txt'])
+        self.assertEqual(file.read_text(), 'uncommitted work\n')
+
     def test_branch_stash_discard_and_amend(self):
         self.commit()
         self.repo.create_branch('feature/test')

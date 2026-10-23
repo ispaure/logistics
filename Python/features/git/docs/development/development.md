@@ -249,3 +249,16 @@ cannot hold up deadline or cancellation checks. Credential input remains in a pi
 it is not added to disk spools. Writer retirement, early child pipe closure and
 callback failure are covered by shared tests, with Git consumers retaining their
 existing input-size and sensitive-output policy.
+
+## Verified discard backups
+
+When **Keep backups** is enabled, `Repository.backup_files` captures each selected
+file's revision and SHA-256, copies and flushes the private backup, and verifies
+its content before allowing whole-file or hunk discard. It checks every selected
+path again before publishing the existing `paths.json` mapping, including files
+that were initially absent. An observed external edit, new file, corrupt copy or
+cancellation aborts discard. Existing backups are retained in Git metadata.
+This preparation does not lock out other editors; Git still owns the subsequent
+mutation and a concurrent change after the final check remains possible.
+`test_git_backend.py` covers corrupt copies and changes during multi-file backup;
+`test_git_preferences.py` covers the actual enabled UI and backup mapping.
