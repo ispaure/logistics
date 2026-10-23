@@ -43,17 +43,8 @@ class ProviderDocumentOpening:
                 kind, content = await asyncio.to_thread(owner.provider_page_content, reader, 0)
             else:
                 reader, kind, content = prepared
-            initial_preview = None
-            initial_preview_error = None
-            if (not edit and reader.editable and not getattr(reader, 'read_only', False)
-                    and reader.kind in {'.md', '.markdown'}):
-                from .preview import markdown_preview, reader_image_source
-                try:
-                    initial_preview = await asyncio.to_thread(markdown_preview, content,
-                        int(owner.preferences.values['markdown_font_size']), image_source=reader_image_source(copies, reader))
-                except ValueError as error:
-                    # Keep the established source fallback and error feedback.
-                    initial_preview_error = str(error)
+            initial_preview, initial_preview_error = await self._prepare_initial_preview(
+                owner, reader, copies, content, edit=edit)
             check_cancelled(owner._crypt_cancel.is_set)
             view = self.view.build(reader, copies, kind, content)
             if password:
@@ -66,27 +57,9 @@ class ProviderDocumentOpening:
             if not owner.show_view(view.crypt_view, checkpoint=not handoff, title=Path(reader.name).name):
                 return False
             owner._crypt_cancel = None
-            owner.clear_private_reader(discard=True)
-            owner._provider_markdown = getattr(view, '_provider_markdown', None)
-            for name, value in vars(view).items():
-                if owner._provider_markdown is not None and isinstance(getattr(type(owner), name, None), _MarkdownState):
-                    continue
-                setattr(owner, name, value)
-            if reader.editable and not getattr(reader, 'read_only', False) and reader.kind in {'.md', '.markdown'}:
-                if edit:
-                    owner.show_private_markdown_editor()
-                elif initial_preview_error is not None:
-                    owner.crypt_title.text = private_label(initial_preview_error)
-                else:
-                    owner.toggle_private_preview(initial=True, rendered=initial_preview)
-            privacy = getattr(getattr(owner, 'app', owner), 'screen_privacy', None)
-            if privacy is not None:
-                privacy.refresh()
-            owner.watch_provider_layout()
-            owner.watch_provider_epub_width()
-            if view.crypt_reader.kind in {'.cbz', '.zip'}:
-                await owner.refresh_provider_comic_neighbors()
-            return True
+            return await self._publish_view(owner, view, reader, edit=edit,
+                                            initial_preview=initial_preview,
+                                            initial_preview_error=initial_preview_error)
         except Exception as error:
             if owner._crypt_cancel is not None and owner._crypt_cancel.is_set():
                 owner.cloud_status.value = 'Remote opening cancelled.' if getattr(copies, 'remote_storage', False) else 'Private reading cancelled.'
@@ -113,3 +86,39 @@ class ProviderDocumentOpening:
             if not independent:
                 owner.set_cloud_busy(False)
 
+    async def _prepare_initial_preview(self, owner, reader, copies, content, *, edit):
+        initial_preview = None
+        initial_preview_error = None
+        if (not edit and reader.editable and not getattr(reader, 'read_only', False)
+                and reader.kind in {'.md', '.markdown'}):
+            from .preview import markdown_preview, reader_image_source
+            try:
+                initial_preview = await asyncio.to_thread(markdown_preview, content,
+                    int(owner.preferences.values['markdown_font_size']), image_source=reader_image_source(copies, reader))
+            except ValueError as error:
+                # Keep the established source fallback and error feedback.
+                initial_preview_error = str(error)
+        return initial_preview, initial_preview_error
+
+    async def _publish_view(self, owner, view, reader, *, edit, initial_preview, initial_preview_error):
+        owner.clear_private_reader(discard=True)
+        owner._provider_markdown = getattr(view, '_provider_markdown', None)
+        for name, value in vars(view).items():
+            if owner._provider_markdown is not None and isinstance(getattr(type(owner), name, None), _MarkdownState):
+                continue
+            setattr(owner, name, value)
+        if reader.editable and not getattr(reader, 'read_only', False) and reader.kind in {'.md', '.markdown'}:
+            if edit:
+                owner.show_private_markdown_editor()
+            elif initial_preview_error is not None:
+                owner.crypt_title.text = private_label(initial_preview_error)
+            else:
+                owner.toggle_private_preview(initial=True, rendered=initial_preview)
+        privacy = getattr(getattr(owner, 'app', owner), 'screen_privacy', None)
+        if privacy is not None:
+            privacy.refresh()
+        owner.watch_provider_layout()
+        owner.watch_provider_epub_width()
+        if view.crypt_reader.kind in {'.cbz', '.zip'}:
+            await owner.refresh_provider_comic_neighbors()
+        return True
