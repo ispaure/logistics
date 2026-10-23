@@ -143,6 +143,15 @@ class MobileFileOperationsTests(unittest.TestCase):
             (folder / 'data').write_bytes(base64.b64decode(sample['ciphertext']))
             source = DownloadedCryptFile(copies, sample['key'])
             crypt = CryptFiles(root / 'trees', client, sample['record']['remote'])
+            from io import BytesIO
+            class ShortReader(BytesIO):
+                def read(self, size=-1):
+                    return super().read(min(size, 3))
+            content = b'# Complete native short-read fixture'
+            crypt.create_file('short.md', ShortReader(content))
+            with crypt.open('short.md') as stream:
+                self.assertEqual(stream.read(), content)
+            delete_resource(crypt, 'short.md')
             crypt.mkdir('books')
             move_resource(source, source.name, crypt, 'books/comic.cbz')
             self.assertFalse(folder.exists())

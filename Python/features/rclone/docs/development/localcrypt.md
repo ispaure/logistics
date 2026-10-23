@@ -834,3 +834,8 @@ Would-block reads are errors rather than EOF; failed input cannot publish an
 empty/prefix ciphertext file. The existing command error and owned-stage cleanup
 paths remain responsible for reporting and retirement. No plaintext staging is
 introduced.
+
+Mobile inputs without a file descriptor use bounded complete reads before native
+encoding: short reads continue, would-block input fails, and the existing 1 MiB
+limit is checked after reading at most one extra byte. Failure removes only the
+owned encrypted staging file and never publishes a truncated prefix.

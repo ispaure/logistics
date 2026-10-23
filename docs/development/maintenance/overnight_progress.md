@@ -1401,3 +1401,31 @@ The final expanded driver also compiles vendored production sources in Python
 3.11 without importing optional toolkits: 161 cases, 160 pass and one filesystem
 skip. Syntax acceptance is distinct from registration/runtime behavior. All 33
 consumer adapters and exact vendor checking pass.
+
+## Cached native bridge and bounded mobile input
+
+- Further inventory found an existing arm64 host dylib, SHA-256
+  `6bba37af1852f7c318afe31d1ca72a1b52f0c78afd876681f30b29ade5320f67`.
+  Embedded build info reports Go 1.26.9, revision `f5e4ea39377f12a8ef5f59e5170cff3446d1f06f`
+  and vcs.modified=true. Its exact source provenance is unknown; no fresh Go
+  build or matching-current-source claim is made. The cached binary is unchanged.
+- Six previously skipped native scenarios execute against that binary using
+  synthetic local/in-memory remotes: batched listing, two encrypted round trips,
+  comic password/lifecycle, direct remote readers and mobile file operations.
+  All pass; earlier full-run skip counts remain accurate for their environment.
+- The mobile provider read no-descriptor input once. A three-byte reader sent
+  only that prefix to native encoding; an oversize short-reader bypassed the
+  existing 1 MiB limit, and would-block input raised TypeError. Two assertion
+  profiles plus that TypeError reproduce before the fix. The actual cached
+  native bridge separately confirms the three-byte truncation.
+- Reuse shared read_up_to with the existing maximum-plus-one bound and
+  cancellation. Full input is encoded, invalid input never reaches the native
+  encoder, and owned staging is removed. Nine configuration, three UI and all
+  five desktop/native file-operation cases pass, with no skips in that targeted
+  native-enabled run. No input cap, ciphertext format or credential policy changes.
+- The first native post-fix run retained the new test file before an existing
+  empty-tree assertion. Removing that owned fixture after its verification
+  restores the original assertion unchanged; the corrected full file passes.
+- The complete post-junction shared suite also finishes: 181 files / 1,232 cases /
+  25 skips, zero failed files. The extra file contains the three unchanged
+  portable wiki cases; it did not inflate the case count.
