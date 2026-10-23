@@ -690,3 +690,53 @@ completed baseline. Remaining priorities continue to govern selection.
 - Frozen Logistics `07e76ab2` with shared `7978a28` passes all 162 mobile and
   all 179 shared isolated test files. Desktop validation is still in progress.
   The source tree being validated was not edited during either completed suite.
+
+## Read-only location lookup and PDF worker admission
+
+- Location labels and local-connection root lookup reproduced the same unrelated
+  Software/Credentials directory creation as software metadata lookup. Both now
+  select the existing no-creation configuration mode. The default constructor and
+  folder initialization workflows retain their behavior. Committed as `e0a56193`.
+- Both new lookup profiles failed before the change. All 13 software, five location
+  and 39 real-rclone local-crypt tests pass after it, with lint/architecture/docs.
+- PDF search worker submission failure escaped into the GUI callback and left
+  navigation controls disabled. Busy state is now published only after submission;
+  expected startup errors remain visible and retryable, including empty messages.
+- The two startup-error profiles failed before repair and retry real extraction
+  afterward. All 13 desktop PDF and two mobile PDF tests pass, plus lint,
+  architecture and documentation checks. Committed as `3f197f23`.
+
+## Immutable full-suite checkpoint
+
+- Unedited Logistics `07e76ab2` and pinned shared `7978a28` pass all 179 desktop,
+  162 mobile and 179 shared isolated test files. Test totals include skipped cases:
+  desktop 1,654 with six skipped; mobile 1,161 with two skipped; shared 1,212 with
+  25 skipped. Zero failing files in all three suites.
+- Desktop skips require rebuilt optional native mobile/cloud bridges. Mobile skips
+  require Node/Playwright. Shared skips cover unavailable desktop Toga, Windows
+  readers/junctions and a case-sensitive filesystem. These are not passing native
+  platform coverage. Real rclone is present in the frozen checkout and its review
+  suite executes rather than skipping for missing software.
+- Subsequent IDE bounds, location lookup and PDF startup fixes have the focused
+  validation above; these full-suite totals do not include those later changes.
+- A narrower static import inventory excludes function bodies and TYPE_CHECKING
+  branches: Logistics has zero module-scope candidate groups, shared has two and
+  Blue Hole three. Package-facade bootstrap references are still included. Shared
+  candidates are its intentional Qt facade and command package submodule imports;
+  Blue Hole candidates span pie/action declarations and environment/file helpers.
+  This is not proof of eager initialization failure. Native Blender registration
+  remains unavailable, so no speculative registration/import rewrite was made.
+
+## Blender publication collision consistency
+
+- Five isolated macOS profiles reproduced replacing an empty destination created
+  after preflight: whole-bundle install, preset duplication, preset rename, addon
+  import and Blue Hole commit-cache publication. All use the existing shared
+  atomic no-replace rename now; cooperative locks and owned staging remain intact.
+- All 94 tests across seven Blender files pass, including preservation/cleanup in
+  each race. Network responses, DMG calls and Blender launch are fixtures; no real
+  Blender was downloaded, installed, launched or removed. Lint, architecture and
+  all five documentation checks pass. Committed as `b4550300`.
+- Latest shared `7978a28` also passes all 106 tests in 25 native Toga test files
+  through the mobile interpreter/dummy backend. This covers the optional toolkit
+  profiles skipped in the desktop shared suite, not real-device UI behavior.
