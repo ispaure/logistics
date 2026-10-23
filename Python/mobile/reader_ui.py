@@ -299,16 +299,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             if not current:
                 return
             if record['kind'] == 'epub':
-                self.epub_text, self.epub_offset, content = prepared_epub
-                self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
-                    on_event=lambda action, value: self.epub_event(reader, epoch, index, action, value),
-                    on_link=lambda href: self.epub_link(reader, epoch, index, href),
-                    motion_enabled=self.preferences.values.get('android_eink') != 'true')
-                from .fold_layout import bind_epub_geometry
-                bind_epub_geometry(self.epub_view)
-                from .font_scaling import bind
-                bind(self, self.epub_view, 'epub', web=True)
-                view = self.epub_view
+                view = self._prepare_library_epub_view(reader, epoch, index, prepared_epub)
             self.close_read_aloud()
             if not publication.mount(view, direction=direction,
                                      publish=publish if record['kind'] == 'comic' else None):
@@ -328,21 +319,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.set_reading_mode(True, present=False)
         self.book_record = updated
         self.book_loading = True
-        self.chapter_selector.value = next((label for label, entry in self.contents_choices.items()
-            if entry.index == index), self.chapter_labels[index]) if self.contents_choices else self.chapter_labels[index]
-        self.bookmark_selector.items = ['Bookmarks…'] + [self.chapter_labels[i] for i in updated['bookmarks'] if i < count]
-        self.epub_bookmark_choices = {}
-        if record['kind'] == 'epub':
-            for number, location in enumerate(updated.get('epub_bookmarks', [])):
-                if location['path'] in reader.spine:
-                    chapter = reader.spine.index(location['path'])
-                    label = f'{number + 1}. {self.chapter_labels[chapter]} · text {location["offset"]}'
-                    self.epub_bookmark_choices[label] = location
-            self.bookmark_selector.items = ['Bookmarks…'] + [self.chapter_labels[i] for i in updated['bookmarks'] if i < count] + list(self.epub_bookmark_choices)
-        self.bookmark_selector.value = 'Bookmarks…'
-        marked = ((dict(path=reader.spine[index], offset=self.epub_offset) in updated.get('epub_bookmarks', []))
-                  or (self.epub_offset == 0 and index in updated['bookmarks'])) if record['kind'] == 'epub' else index in updated['bookmarks']
-        self.bookmark_button.text = 'Unbookmark' if marked else 'Bookmark'
+        self._project_book_navigation(reader, record, updated, count, index)
         title = reader.title if record['kind'] == 'epub' else record['name']
         direction = ' · Right-to-left manga' if getattr(reader, 'right_to_left', False) else ''
         position = str(index + 1) if record['kind'] == 'epub' or len(indices) == 1 else f'{indices[0] + 1}–{indices[-1] + 1}'
@@ -364,6 +341,38 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         except (OSError, ValueError) as error:
             if self.book_reader is reader and self.book_epoch == epoch:
                 self.book_status.text = 'Cannot save reading position: ' + str(error)[:300]
+
+    def _prepare_library_epub_view(self, reader, epoch, index, prepared_epub):
+        """Bind chapter events to the captured reader and epoch before mounting."""
+        self.epub_text, self.epub_offset, content = prepared_epub
+        self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
+            on_event=lambda action, value: self.epub_event(reader, epoch, index, action, value),
+            on_link=lambda href: self.epub_link(reader, epoch, index, href),
+            motion_enabled=self.preferences.values.get('android_eink') != 'true')
+        from .fold_layout import bind_epub_geometry
+        bind_epub_geometry(self.epub_view)
+        from .font_scaling import bind
+        bind(self, self.epub_view, 'epub', web=True)
+        view = self.epub_view
+        return view
+
+    def _project_book_navigation(self, reader, record, updated, count, index):
+        """Project chapter and bookmark controls while the caller suppresses selection."""
+        self.chapter_selector.value = next((label for label, entry in self.contents_choices.items()
+            if entry.index == index), self.chapter_labels[index]) if self.contents_choices else self.chapter_labels[index]
+        self.bookmark_selector.items = ['Bookmarks…'] + [self.chapter_labels[i] for i in updated['bookmarks'] if i < count]
+        self.epub_bookmark_choices = {}
+        if record['kind'] == 'epub':
+            for number, location in enumerate(updated.get('epub_bookmarks', [])):
+                if location['path'] in reader.spine:
+                    chapter = reader.spine.index(location['path'])
+                    label = f'{number + 1}. {self.chapter_labels[chapter]} · text {location["offset"]}'
+                    self.epub_bookmark_choices[label] = location
+            self.bookmark_selector.items = ['Bookmarks…'] + [self.chapter_labels[i] for i in updated['bookmarks'] if i < count] + list(self.epub_bookmark_choices)
+        self.bookmark_selector.value = 'Bookmarks…'
+        marked = ((dict(path=reader.spine[index], offset=self.epub_offset) in updated.get('epub_bookmarks', []))
+                  or (self.epub_offset == 0 and index in updated['bookmarks'])) if record['kind'] == 'epub' else index in updated['bookmarks']
+        self.bookmark_button.text = 'Unbookmark' if marked else 'Bookmark'
 
     async def move_book_page(self, index):
         pending = getattr(self, '_epub_location_task', None)

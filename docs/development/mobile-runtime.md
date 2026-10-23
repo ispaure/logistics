@@ -1103,6 +1103,16 @@ the host's view veto, `_publish_view` adopts controls, activates the initial
 Markdown surface and installs privacy/layout observers. The entry point retains
 password lifetime, remote-source cleanup and busy-state release in `finally`;
 prepared readers remain owned by their supplying workflow on a view veto.
+`provider_view.ProviderView` is the named unpublished-control draft. Construction
+failure or route veto discards its disposable editor, image, Markdown, EPUB, PDF
+and menu controls; cleanup continues and logs errors if one control fails to
+dispose. Adoption copies the established presentation fields and preserves the
+Markdown descriptor exceptions, then transfers disposal to the session. The
+draft never closes reader sources. Failure after adoption retains session ownership
+rather than disposing controls underneath a published view. Construction/admission
+tests cover these boundaries, including an editor left active by the old failed
+construction path. Adoption is not a rollback transaction for arbitrary failing
+host attribute setters.
 Private-session, provider-Markdown and reader-chrome tests cover the assembly.
 Native visual behavior still requires the relevant native acceptance scenarios.
 
@@ -1201,6 +1211,12 @@ credentials, persistence or source admission. `test_reading_publication` exercis
 the real host entry point on decoder failure and reader retirement during placement,
 plus EPUB fallback motion, anchor offsets and bookmark reparenting.
 
+Library `ReaderUI.display_book_page` retains preparation/admission, animation,
+mount and progress-write order. `_prepare_library_epub_view` captures the reader,
+epoch and chapter in its event handlers; `_project_book_navigation` updates chapter
+and bookmark controls while the caller holds the existing selection-suppression
+flag. These helpers add no format state or persistence owner.
+
 Use the `preparing(direction)` scope around view preparation. It releases outgoing
 animation snapshots even if construction fails or is cancelled. `mount` checks
 validity again, disposes an obsolete unmounted disposable surface, and retires
@@ -1213,7 +1229,7 @@ to focused host tests such as `test_reading_publication`.
 
 ## Managed Markdown preview construction
 
-`app.show_preview()` retains checkpoint/render failure handling, workspace-token
+`managed_documents.ManagedDocumentWorkflows.show_preview()` retains checkpoint/render failure handling, workspace-token
 capture, Edit navigation, saved scroll restoration, menu/speech policy and route
 publication. `preview.prepare_managed_preview()` builds the toolbar, search and
 native title/button bindings on the existing `TextEditorView` owner. It receives

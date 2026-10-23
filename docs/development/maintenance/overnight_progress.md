@@ -1,5 +1,20 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L3 provider draft and library publication
+
+`ProviderView` replaces the anonymous construction namespace with explicit
+adopt/discard ownership. A real failed-build regression first reproduced an active
+unpublished CodeInput, then passes with partial construction and veto cleanup.
+Reader-source ownership remains with the opener/supplying workflow. Tests cover
+acquired versus prepared sources, preserved current readers, cleanup failure and
+idempotence, successful adoption and a post-adoption neighbor failure. Library
+EPUB preparation and chapter/bookmark projection are named inside ReaderUI;
+expanded AST matches every original ordered page-publication statement/signature.
+All 71 reader cases across 12 files pass before/after with identical selection;
+private sessions, remote readers, PDF, publication, EPUB/comics, provider contracts,
+staged startup, architecture, lint and wiki checks pass. Native rendering remains
+separate acceptance. No external consumer changes, persisted format changes or push.
+
 ## Sequential audit implementation: L2 frame and drawer ownership
 
 `file_drawer.py` now owns the existing retained browser implementation and widget

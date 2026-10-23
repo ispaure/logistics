@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from mobile.provider_opening import ProviderDocumentOpening
+from mobile.provider_view import ProviderView
 
 
 class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
@@ -24,7 +25,10 @@ class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
                    screen_privacy=NS(refresh=Mock()), watch_provider_layout=Mock(),
                    watch_provider_epub_width=Mock())
         operation = ProviderDocumentOpening(owner)
-        operation.view.build = Mock(return_value=NS(crypt_view=object(), crypt_reader=reader))
+        view = ProviderView()
+        view.crypt_view, view.crypt_reader = object(), reader
+        view.crypt_text, view.crypt_image = Mock(), Mock()
+        operation.view.build = Mock(return_value=view)
         return operation, owner, reader, copies
 
     async def test_preview_failure_keeps_source_fallback_and_publishes_before_watching(self):
@@ -42,6 +46,8 @@ class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
         owner.toggle_private_preview.assert_not_called()
         owner.screen_privacy.refresh.assert_called_once()
         reader.source.close.assert_not_called()
+        owner.crypt_text.dispose.assert_not_called()
+        owner.crypt_image.dispose.assert_not_called()
         self.assertIsNone(owner._crypt_cancel)
         self.assertEqual(owner.set_cloud_busy.call_args_list, [unittest.mock.call(True), unittest.mock.call(False)])
 
@@ -78,6 +84,9 @@ class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
                     copies.open.assert_called_once()
                     reader.source.close.assert_called_once()
                 owner.clear_private_reader.assert_not_called()
+                view = operation.view.build.return_value
+                view.crypt_text.dispose.assert_called_once()
+                view.crypt_image.dispose.assert_called_once()
                 owner.watch_provider_layout.assert_not_called()
                 self.assertIsNone(owner._crypt_cancel)
                 owner.set_cloud_busy.assert_called_with(False)
@@ -94,3 +103,29 @@ class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Synthetic page failure', owner.cloud_status.value)
         self.assertIsNone(owner._crypt_cancel)
         owner.set_cloud_busy.assert_called_with(False)
+
+    async def test_neighbor_failure_after_adoption_keeps_session_controls_and_reader_owned(self):
+        operation, owner, reader, copies = self.fixture(remote=True)
+        reader.kind, reader.editable = '.cbz', False
+        owner.refresh_provider_comic_neighbors = AsyncMock(side_effect=ValueError('Synthetic neighbor failure'))
+        with patch('mobile.loading_progress.opening_options', return_value={}):
+            await operation.open(copies=copies, key='comic')
+        self.assertIs(owner.crypt_reader, reader)
+        owner.crypt_text.dispose.assert_not_called()
+        owner.crypt_image.dispose.assert_not_called()
+        reader.source.close.assert_not_called()
+        owner.main_window.dialog.assert_awaited_once()
+        self.assertIn('Synthetic neighbor failure', owner.cloud_status.value)
+
+    async def test_failed_build_preserves_current_reader_and_releases_only_acquired_source(self):
+        operation, owner, reader, copies = self.fixture(remote=True)
+        previous = owner.crypt_reader = NS(source=Mock())
+        operation.view.build.side_effect = ValueError('Synthetic build failure')
+        with patch('mobile.loading_progress.opening_options', return_value={}):
+            await operation.open(copies=copies, key='note', edit=True)
+        self.assertIs(owner.crypt_reader, previous)
+        previous.source.close.assert_not_called()
+        reader.source.close.assert_called_once()
+        owner.clear_private_reader.assert_not_called()
+        owner.show_view.assert_not_called()
+        owner.watch_provider_layout.assert_not_called()

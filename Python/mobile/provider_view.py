@@ -1,9 +1,46 @@
 """Construct provider controls after the opening workflow has prepared document content."""
 from pathlib import Path
+import logging
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
-from .provider_ui import private_label
+from .provider_ui import private_label, _MarkdownState
+
+
+class ProviderView:
+    """Unpublished controls until route admission transfers them to the session.
+
+    Reader sources stay with the opening workflow, not this control draft.
+    Presentation builders add format-specific fields before adoption.
+    """
+    _adopted = False
+    _discarded = False
+
+    def adopt(self, owner):
+        if self._discarded or self._adopted:
+            raise RuntimeError('Provider view ownership was already transferred or discarded.')
+        owner._provider_markdown = getattr(self, '_provider_markdown', None)
+        for name, value in vars(self).items():
+            if owner._provider_markdown is not None and isinstance(getattr(type(owner), name, None), _MarkdownState):
+                continue
+            setattr(owner, name, value)
+        self._adopted = True
+
+    def discard(self):
+        """Retire only unpublished controls; never close an acquired/prepared reader."""
+        if self._adopted or self._discarded:
+            return
+        self._discarded = True
+        for name in ('_provider_markdown', 'provider_epub_view', 'pdf_search',
+                     'pdf_contents', 'provider_spread', 'crypt_text', 'crypt_image',
+                     'crypt_actions_menu'):
+            control = getattr(self, name, None)
+            if control is not None:
+                try:
+                    control.dispose()
+                except Exception:
+                    # Retire the remaining controls without masking the opening failure.
+                    logging.getLogger(__name__).exception('Could not retire unpublished %s', name)
 
 
 class ProviderDocumentView:
@@ -11,9 +48,15 @@ class ProviderDocumentView:
         self.owner = owner
 
     def build(self, reader, copies, kind, content):
+        view = ProviderView()
+        try:
+            return self._build(view, reader, copies, kind, content)
+        except BaseException:
+            view.discard()
+            raise
+
+    def _build(self, view, reader, copies, kind, content):
         owner = self.owner
-        from types import SimpleNamespace
-        view = SimpleNamespace()
         view.crypt_reader = reader
         view._crypt_reader_store = copies
         view.crypt_title = toga.Label(private_label(Path(reader.name).name), style=Pack(font_size=18))

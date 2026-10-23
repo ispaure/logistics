@@ -4,7 +4,7 @@ import threading
 from pathlib import Path
 import toga
 from commonUtils.runtime.operations import check_cancelled
-from .provider_ui import private_label, _MarkdownState
+from .provider_ui import private_label
 from .provider_view import ProviderDocumentView
 
 
@@ -31,6 +31,7 @@ class ProviderDocumentOpening:
             owner.set_cloud_busy(True)
         owner._crypt_cancel = threading.Event()
         reader = None
+        view = None
         try:
             if prepared is None:
                 from .loading_progress import opening_options
@@ -78,6 +79,8 @@ class ProviderDocumentOpening:
             else:
                 await owner.main_window.dialog(toga.InfoDialog('Could not open document', str(error)[:300]))
         finally:
+            if view is not None:
+                view.discard()
             if (prepared is None and getattr(copies, 'remote_storage', False) and reader is not None
                     and getattr(owner, 'crypt_reader', None) is not reader):
                 reader.source.close()
@@ -102,11 +105,7 @@ class ProviderDocumentOpening:
 
     async def _publish_view(self, owner, view, reader, *, edit, initial_preview, initial_preview_error):
         owner.clear_private_reader(discard=True)
-        owner._provider_markdown = getattr(view, '_provider_markdown', None)
-        for name, value in vars(view).items():
-            if owner._provider_markdown is not None and isinstance(getattr(type(owner), name, None), _MarkdownState):
-                continue
-            setattr(owner, name, value)
+        view.adopt(owner)
         if reader.editable and not getattr(reader, 'read_only', False) and reader.kind in {'.md', '.markdown'}:
             if edit:
                 owner.show_private_markdown_editor()
