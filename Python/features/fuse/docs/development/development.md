@@ -51,7 +51,8 @@ Readiness probes use the remaining wait budget. The explicit bulk-mount helper
 returns success/failure and has a shared bounded readiness wait rather than an
 unlimited loop. Command timeouts are separate from that readiness budget.
 
-An unresponsive Unix mount is unmounted before retrying. A failed unmount stops
+An unresponsive Unix mount with a matching process-owned credential binding is
+unmounted before retrying. A failed unmount stops
 recovery; failed startup reports failure and removes only an ordinary empty mount
 directory. Automatic recovery of an unresponsive Windows mount remains unsupported.
 Linux dependency/installer checks do not require private Software resources.
@@ -64,3 +65,16 @@ remotes or validate macFUSE/WinFsp/Linux drivers.
 Mount locations include a stable identity derived from the configuration path,
 so same-named remotes in different credential files stay separate. Mount readiness
 runs in a retained progress dialog after dependency prompts on the GUI thread.
+
+## Credential binding
+
+`MountBindings` retains the remote, canonical configuration path and credential
+identity that launched each mount. Reuse and readiness require that binding to
+still match. File credentials include file identity and content digest; session
+credentials also retain the session generation's revocation predicate. Replacing
+credentials with identical values cannot reactivate a revoked session mount.
+
+Bindings stay in memory. A mount inherited after application restart, or a mount
+whose credentials changed during startup, requires explicit unmounting before it
+can be opened again. Unknown mounts are not automatically unmounted or browsed.
+Tests simulate these policies; native driver validation remains outstanding.

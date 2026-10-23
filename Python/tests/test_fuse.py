@@ -12,7 +12,7 @@ from features.fuse import mounts, commands, detection, actions, ui_contributions
 from models.folder_entry import FolderEntry
 
 
-class MountIdentityTests(unittest.TestCase):
+class MountCredentialBindingTests(unittest.TestCase):
     def test_same_named_remotes_use_distinct_credential_paths(self):
         settings = SimpleNamespace(path_remote_network_mount=Path('/mounts'))
         with patch.object(mounts.config, 'LogisticsConfig', return_value=settings):
@@ -33,6 +33,8 @@ class FuseTests(unittest.TestCase):
         self.executable.touch()
         self.config_path = self.root / 'profile.conf'
         self.config_path.touch()
+        mounts.bindings.remember(self.mount_path, mounts.MountBinding.capture(self.config_path, 'Mount'))
+        self.addCleanup(mounts.bindings.forget, self.mount_path)
         for target, value in ((mounts, OS.MAC),):
             patcher = patch.object(target, 'get_os', return_value=value)
             patcher.start()
@@ -245,3 +247,32 @@ class FuseTests(unittest.TestCase):
                 actions.ui, 'display_msg_box_ok') as message:
             self.assertFalse(actions.launch_installer())
         self.assertIn('launch failed', message.call_args.args[1])
+
+
+class MountIdentityTests(unittest.TestCase):
+    def test_same_path_changed_credentials_and_unknown_mount_are_refused(self):
+        from features.fuse.bindings import MountBindings, MountBinding
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / 'account.conf'
+            config.write_text('[A]\ntype=local\n')
+            store = MountBindings()
+            self.assertFalse(store.matches(root / 'mount', config, 'A'))
+            store.remember(root / 'mount', MountBinding.capture(config, 'A'))
+            self.assertTrue(store.matches(root / 'mount', config, 'A'))
+            self.assertFalse(store.matches(root / 'mount', config, 'B'))
+            config.write_text('[A]\ntype=local\nchanged=true\n')
+            self.assertFalse(store.matches(root / 'mount', config, 'A'))
+
+    def test_same_session_values_do_not_reactivate_an_old_generation(self):
+        from features.fuse.bindings import MountBinding
+        from features.rclone import session
+        with TemporaryDirectory() as directory:
+            context = Path(directory) / 'account.session'
+            values = {'A': {'type': 'local'}}
+            session.remember(context, values)
+            self.addCleanup(session.forget, context)
+            binding = MountBinding.capture(context, 'A')
+            self.assertTrue(binding.matches(context, 'A'))
+            session.remember(context, values)
+            self.assertFalse(binding.matches(context, 'A'))

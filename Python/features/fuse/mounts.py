@@ -15,6 +15,9 @@ from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.runtime.platform import OS, get_os
 
 from features.rclone import configuration, executable
+from .bindings import MountBinding, MountBindings
+
+bindings = MountBindings()
 from .commands import (
     READY_MARKER, mount_arguments, probe_arguments, timeout_seconds, validate_remote_name,
 )
@@ -127,6 +130,9 @@ def mount_remote(
     if get_os() not in (OS.WIN, OS.MAC, OS.LINUX):
         return False
     if is_mount_path_mounted(mount_path):
+        if not bindings.matches(mount_path, config_path, remote_name):
+            log(Severity.ERROR, 'mount_remote', 'Existing mount credentials are unknown or changed. Unmount it explicitly before reopening.')
+            return False
         if is_mount_path_ready(mount_path):
             log(
                 Severity.DEBUG,
@@ -168,6 +174,7 @@ def mount_remote(
     if get_os() in (OS.MAC, OS.LINUX):
         mount_path.mkdir(parents=True, exist_ok=True)
     try:
+        binding = MountBinding.capture(config_path, remote_name)
         if get_os() in (OS.MAC, OS.LINUX):
             result = subprocess.run(arguments, capture_output=True, text=True, timeout=15)
             if result.returncode:
@@ -177,10 +184,14 @@ def mount_remote(
         else:
             subprocess.Popen(arguments, stdin=subprocess.DEVNULL,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         log(Severity.ERROR, 'mount_remote', str(error))
         _remove_empty_mount_path(mount_path)
         return False
+    if not binding.matches(config_path, remote_name):
+        log(Severity.ERROR, 'mount_remote', 'Credentials changed during mounting. Unmount the path explicitly before retrying.')
+        return False
+    bindings.remember(mount_path, binding)
     return True
 
 
@@ -196,6 +207,7 @@ def unmount_remote(remote_name: str, wait_timeout: float = 5, *, config_path=Non
     mount_path = get_remote_mount_path(remote_name, config_path)
 
     if not is_mount_path_mounted(mount_path):
+        bindings.forget(mount_path)
         _remove_empty_mount_path(mount_path)
         return True
 
@@ -234,7 +246,7 @@ def unmount_remote(remote_name: str, wait_timeout: float = 5, *, config_path=Non
     deadline = time.monotonic() + wait_timeout
     try:
         result = subprocess.run(arguments, capture_output=True, text=True, timeout=wait_timeout)
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         log(Severity.ERROR, 'unmount_remote', str(error))
         return False
     if result.returncode:
@@ -242,6 +254,7 @@ def unmount_remote(remote_name: str, wait_timeout: float = 5, *, config_path=Non
         return False
     while True:
         if not is_mount_path_mounted(mount_path):
+            bindings.forget(mount_path)
             _remove_empty_mount_path(mount_path)
             return True
         remaining = deadline - time.monotonic()
@@ -278,9 +291,15 @@ def ensure_remote_mounted(
     mount_path = get_remote_mount_path(remote_name, config_path)
 
     if is_remote_ready(remote_name, config_path=config_path):
-        return mount_path
+        if bindings.matches(mount_path, config_path, remote_name):
+            return mount_path
+        log(Severity.ERROR, 'ensure_remote_mounted', 'Existing mount credentials are unknown or changed. Unmount it explicitly before reopening.')
+        return None
 
     if is_remote_mounted(remote_name, config_path=config_path):
+        if not bindings.matches(mount_path, config_path, remote_name):
+            log(Severity.ERROR, 'ensure_remote_mounted', 'Refusing automatic recovery of an unowned mount. Unmount it explicitly.')
+            return None
         log(
             Severity.WARNING,
             'ensure_remote_mounted',
@@ -300,7 +319,10 @@ def ensure_remote_mounted(
         return None
 
     if wait_until_remote_ready(remote_name, timeout=wait_timeout, config_path=config_path):
-        return mount_path
+        if bindings.matches(mount_path, config_path, remote_name):
+            return mount_path
+        log(Severity.ERROR, 'ensure_remote_mounted', 'Credentials changed while waiting. Unmount the path explicitly before retrying.')
+        return None
 
     if is_remote_mounted(remote_name, config_path=config_path):
         unmount_remote(remote_name, config_path=config_path)
@@ -366,6 +388,9 @@ def mount_all_rclone_conf_remotes(
     for path in mount_paths:
         if not wait_until_remote_ready(Path(path).name, timeout=max(0, deadline - time.monotonic()), config_path=config_path):
             return False
+    if not all(bindings.matches(Path(path), config_path, Path(path).name) for path in mount_paths):
+        log(Severity.ERROR, 'mount_all_rclone_conf_remotes', 'Credentials changed while waiting for mounts.')
+        return False
     log(Severity.INFO, 'mount_all_rclone_conf_remotes', 'All rclone remotes successfully mounted')
     return True
 
