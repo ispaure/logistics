@@ -208,8 +208,8 @@ adding production packages or cross-feature policy layers.
 
 At Logistics `b98da89a`, shared `86a5d51`, Blue Hole `5c63af4`, the same tracked-file
 measurement gives 1,152 / 508 / 203 Python files, respectively; production/test
-lines are 89,399 / 76,342, 42,502 / 23,201 and 22,804 / 757. Added files are test
-owners, including portable batch coverage and consumer smoke tests. No new
+lines are 89,399 / 76,342, 42,502 / 23,201 and 22,804 / 757. The added shared files are the native-browser presentation owner and portable
+batch-test owner; Blue Hole adds consumer test drivers. No new
 production package or dependency was introduced. Exact repeated production bodies
 of at least 20 lines are still absent under the same comparison.
 
@@ -287,3 +287,37 @@ removal was performed. Configured correctness lint remains green. Remaining
 priorities are native target/platform validation, large mobile UI responsibilities,
 offline index identity contracts and individually reviewed import/API cleanup.
 These bounds still do not support an unqualified numeric ecosystem score.
+
+## Further persistence and rollback validation
+
+At Logistics `572250fe`, shared `178f5da`, Blue Hole `3b679c3`, production/test
+lines are 89,498 / 76,633, 42,521 / 23,278 and 22,804 / 758; Python file counts
+remain 1,152 / 508 / 203. No exact repeated production bodies of 20+ lines are
+found. The potential all-import groups remain 27 / seven / two; module-scope
+candidate groups remain zero / two / two. Private UI import review removes five
+proven unused leaf imports while retaining intentional exports and patch targets.
+
+Comic metadata preparation now enforces its existing read limit on encoded edited
+XML before any batch write. EPUB failure cleanup verifies the created backup's
+identity before trusting/removing its pathname. LM and workspace restoration read
+within their existing limits. LM moves verify destination content, recheck path
+revisions and preserve recovery copies when source/copy state changes. Seven
+fault profiles reproduce prior lost-copy/newer-edit failures; all 118 LM cases pass.
+Optional bounded hashing remains in the existing stream/snapshot owners, with
+unchanged default behavior. No application policy moved into commonUtils.
+
+The complete frozen `f15fdb8c` / `73a8c86` checkpoint passes desktop 179 files /
+1,675 cases / six skips, shared 180 / 1,222 / 25 skips and mobile 162 / 1,161 /
+two skips. Later units have focused evidence in the work log. The two browser DOM
+cases subsequently pass in actual headless Chrome using the existing bundled
+Node/Playwright runtime and temporary profiles, without installing dependencies.
+The raw full-run skip counts remain accurate for their original environment.
+Embedded Blender portable coverage is now 143 cases (142 pass, one filesystem
+skip); all 33 adapters and exact vendor membership/content checks pass.
+
+A later native-tool inventory found installed iOS 26.5/27.0/27.1 simulator runtimes,
+all existing devices shut down, and no connected Android device. Native iOS
+validation is therefore being prepared with an owned simulator/build. This is
+not yet a passing native result. Target Blender 5.2.2 registration and native
+Windows/Linux remain unexecuted. The 7/10 target still needs broader structural
+review and platform evidence; line counts or added tests alone do not certify it.
