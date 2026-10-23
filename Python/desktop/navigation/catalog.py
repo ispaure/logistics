@@ -4,7 +4,6 @@ from features.contributions import DocumentLauncherContribution
 
 
 def _open_markdown(parent):
-    from commonUtils.ui import pyside as qt
     from services.local_storage import install_local_storage_policy
     install_local_storage_policy()
     from services.documents.ui.editors import install_editor_dialogs

@@ -1,5 +1,4 @@
 """Feature-owned Blender manager page; all lengthy work uses shared workers."""
-from commonUtils.ui.appearance.typography import point_size, setting_size
 from pathlib import Path
 from configparser import Error as ConfigError
 
