@@ -110,6 +110,25 @@ class AutoSaveTests(QtTestCase):
         # futures and stop browser workers before deleting the folder. Native
         # Windows handles can outlive deleteLater while an executor task ends.
 
+    def test_marker_worker_start_failure_falls_back_and_can_retry(self):
+        from services.editors.ui import changes
+        markers = self.doc.buffer.markers
+        self.until(lambda: markers.future is None)
+        markers.timer.stop()
+        markers.refresh_timer.stop()
+        for error in (OSError('synthetic start failure'), RuntimeError()):
+            with self.subTest(error=type(error).__name__):
+                with patch.object(changes._executor, 'submit', side_effect=error):
+                    markers.refresh()
+                self.assertEqual(markers.baseline, ('', 'Change markers unavailable'))
+                self.assertEqual(self.doc.line_changes, ())
+                self.assertIsNone(markers.future)
+                self.assertEqual(markers.pending, [])
+                markers.refresh()
+                self.until(lambda: markers.future is None)
+                self.assertIn('Last saved file', markers.baseline[1])
+        self.assertEqual(self.path.read_bytes(), b'original\r\n')
+
     def test_saved_git_changes_keep_markers_until_staged(self):
         root = str(self.path.parent)
         def git(*args):

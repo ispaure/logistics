@@ -98,6 +98,30 @@ class ProjectBrowserTests(QtTestCase):
             self.wait_until(lambda: root / 'edited.py' not in browser.proxy.git_changes)
             self.assertIsNone(data(root / 'edited.py', foreground))
 
+    def test_git_status_worker_start_failure_clears_stale_colors_and_retries(self):
+        from unittest.mock import patch
+        from features.ide.ui import git_status
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            path = root / 'file.py'
+            path.write_text('fixture')
+            subprocess.run(['git', '-C', str(root), 'init'], check=True, capture_output=True)
+            owner = qt.QWidget()
+            browser = ProjectBrowser(Project('test', str(root)), owner)
+            self.wait_until(lambda: path in browser.proxy.git_changes and browser.git_status.future is None)
+            for error in (OSError('synthetic start failure'), RuntimeError()):
+                with self.subTest(error=type(error).__name__):
+                    with patch.object(git_status._executor, 'submit', side_effect=error):
+                        browser.git_status.refresh()
+                    self.assertEqual(browser.proxy.git_changes, {})
+                    self.assertIsNone(browser.git_status.future)
+                    self.assertEqual(browser.git_status.pending, [])
+                    self.assertTrue(browser.git_status.timer.isActive())
+                    browser.git_status.refresh()
+                    self.wait_until(lambda: path in browser.proxy.git_changes
+                                    and browser.git_status.future is None)
+            self.assertEqual(path.read_text(), 'fixture')
+
     def test_non_git_project_has_no_status_colors(self):
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()

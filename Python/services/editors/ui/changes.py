@@ -69,7 +69,11 @@ class ChangeMarkers(qt.QObject):
         if self.future is not None:
             return
         self.request = (self.snapshot(), self.document.revision())
-        self.future = _executor.submit(compare, self.request[0], self.document.toPlainText(), True, self.cancel)
+        try:
+            self.future = _executor.submit(compare, self.request[0], self.document.toPlainText(), True, self.cancel)
+        except (OSError, RuntimeError):
+            self._publish((), 'Change markers unavailable', '')
+            return
         self.pending[:] = [self.future]
         self.poll.start()
 
@@ -86,6 +90,9 @@ class ChangeMarkers(qt.QObject):
         if self.request != (self.snapshot(), self.document.revision()):
             self.timer.start(250)
             return
+        self._publish(changes, label, before)
+
+    def _publish(self, changes, label, before):
         self.baseline = before, label
         for view in self.views():
             if hasattr(view, 'set_line_changes'):
