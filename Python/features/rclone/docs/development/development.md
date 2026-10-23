@@ -352,3 +352,11 @@ Focused validation covers concurrent/duplicate releases, rejected acquisition,
 nested scopes, exception restoration and thread isolation in commonUtils, plus
 real rclone LocalCrypt reading, encrypted saves, cancellation, revocation and
 remote browser workflows in Logistics.
+
+`credential_sessions.CredentialSessions` owns desktop credential generations,
+parent/child revocation, private-reader visibility, package associations and
+process-private rclone environments. `session.registry` is the one application
+instance; the existing module operations bind to that instance. ZIP decoding stays
+in `session.read_package`, separate from lifetime state. Independent registries
+can be created without touching the application's credentials. No credentials or
+package contents are written by the registry.

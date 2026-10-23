@@ -152,7 +152,7 @@ class LocalCryptTests(QtTestCase):
             self.assertEqual(set(json.loads(item.record.read_text())), {'schema', 'package', 'remote'})
             self.assertNotIn(item.record, list(item.data.rglob('*')))
             session.forget(f.context)
-            with patch.dict(session._known_packages, {}, clear=True), \
+            with patch.dict(session.registry._known_packages, {}, clear=True), \
                  patch.object(ui_contributions.credentials, 'get_loaded_credential_config_paths', return_value=[]):
                 sources = ui_contributions._get_remote_sources()
                 source, = [source for source in sources if source.name.endswith('— Local')]

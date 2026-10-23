@@ -1,57 +1,27 @@
-"""Application-lifetime credential sets; no configs/extracted TXT files on disk."""
+"""Application-lifetime credential access and bounded ZIP decoding."""
 from configparser import ConfigParser
 import io
 import os
 from pathlib import Path
 import re
-import threading
-import weakref
-from uuid import uuid4
+
+from .credential_sessions import CredentialSessions
 
 # rclone compares Go's Windows null-device spelling case-sensitively.
 NULL_CONFIG = 'NUL' if os.name == 'nt' else os.devnull
 
-_lock = threading.RLock()
-_sets = {}
-_private = set()
-_known_packages = {}
-_parents = {}
-_revocations = {}
-
-
-def on_forget(config_path, callback):
-    """Observe one credential generation without keeping its owner alive."""
-    path, token = Path(config_path), uuid4().hex
-    reference = weakref.WeakMethod(callback)
-    with _lock:
-        active = path in _sets
-        if active:
-            _revocations.setdefault(path, {})[token] = reference
-    if not active:
-        callback()
-    def unsubscribe(*_):
-        with _lock:
-            _revocations.get(path, {}).pop(token, None)
-    return unsubscribe
-
-
-def _forget_locked(path):
-    callbacks = []
-    for child, parent in tuple(_parents.items()):
-        if parent == path:
-            callbacks.extend(_forget_locked(child)[1])
-    _parents.pop(path, None)
-    _private.discard(path)
-    removed = _sets.pop(path, None) is not None
-    callbacks.extend(_revocations.pop(path, {}).values())
-    return removed, callbacks
-
-
-def _notify(callbacks):
-    for reference in callbacks:
-        callback = reference()
-        if callback is not None:
-            callback()
+# All application providers share this registry; isolated registries are available
+# for tests or independent hosts without changing process credentials.
+registry = CredentialSessions()
+on_forget = registry.on_forget
+remember = registry.remember
+names = registry.names
+paths = registry.paths
+forget = registry.forget
+revocation_check = registry.revocation_check
+launch = registry.launch
+credentials = registry.credentials
+package_path = registry.package_path
 
 
 def read_package(path, password):
@@ -92,86 +62,3 @@ def read_package(path, password):
         raise ValueError('No credential TXT files found.')
     return pending
 
-
-def remember(config_path, values, *, package_path=None, private=False, parent=None):
-    with _lock:
-        config_path = Path(config_path)
-        if parent is not None and Path(parent) not in _sets:
-            raise ValueError('The credential session is locked.')
-        _, callbacks = _forget_locked(config_path)
-        if parent is not None:
-            _parents[config_path] = Path(parent)
-        _sets[Path(config_path)] = (uuid4().hex, values, Path(package_path) if package_path else None)
-        if package_path:
-            _known_packages[Path(config_path)] = Path(package_path)
-        if private:
-            _private.add(Path(config_path))
-    _notify(callbacks)
-
-
-def names(config_path):
-    with _lock:
-        entry = _sets.get(Path(config_path))
-        return sorted(entry[1]) if entry else None
-
-
-def paths():
-    with _lock:
-        return [path for path in _sets if path not in _private]
-
-
-def forget(config_path):
-    with _lock:
-        removed, callbacks = _forget_locked(Path(config_path))
-    _notify(callbacks)
-    return removed
-
-
-def revocation_check(config_path):
-    """Capture a generation; forgetting/reloading it permanently cancels its work."""
-    path = Path(config_path)
-    with _lock:
-        entry = _sets.get(path)
-        identity = entry[0] if entry else None
-    def revoked():
-        with _lock:
-            current = _sets.get(path)
-            return identity is None or current is None or current[0] != identity
-    return revoked
-
-
-def launch(config_path, source, destination):
-    """Return process-private env and alias paths. Human names remain in UI."""
-    with _lock:
-        item = _sets.get(Path(config_path))
-        if item is None:
-            return None
-        identity, values, _package = item
-        aliases = {name: f'logistics_{identity}_{index}' for index, name in enumerate(values)}
-        environment = {key: value for key, value in os.environ.items()
-                       if not key.upper().startswith('RCLONE_CONFIG')}
-        for name, options in values.items():
-            for key, value in options.items():
-                if key == 'remote':
-                    remote, colon, suffix = value.partition(':')
-                    if colon and remote in aliases:
-                        value = aliases[remote] + ':' + suffix
-                environment[f'RCLONE_CONFIG_{aliases[name].upper()}_{key.upper()}'] = value
-        def translate(value):
-            text = str(value)
-            name, colon, suffix = text.partition(':')
-            return aliases[name] + ':' + suffix if colon and name in aliases else value
-        return environment, translate(source), translate(destination)
-
-
-def credentials(config_path):
-    from copy import deepcopy
-    with _lock:
-        item = _sets.get(Path(config_path))
-        return deepcopy(item[1]) if item else None
-
-
-def package_path(config_path):
-    with _lock:
-        item = _sets.get(Path(config_path))
-        return item[2] if item else _known_packages.get(Path(config_path))

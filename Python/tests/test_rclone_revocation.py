@@ -12,6 +12,7 @@ from zipfile import ZipFile
 from commonUtils.archives.zip_access import open_archive
 from commonUtils.integrations.wrappers.cmdShellWrapper import CommandResult
 from commonUtils.runtime.operations import OperationCancelled
+from commonUtils.runtime.resources.lifetime import WorkerCancellation
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.rclone import credentials, session
@@ -35,7 +36,7 @@ class CredentialRevocationTests(QtTestCase):
         provider = CryptResources.__new__(CryptResources)
         provider.context, provider.binary, provider.closed = self.context, Path('synthetic-rclone'), False
         provider.root = Path('/synthetic/ciphertext')
-        provider._operation = threading.local()
+        provider._cancellation = WorkerCancellation()
         provider._encoded_paths = {}
         return provider
 
