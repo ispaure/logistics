@@ -1305,3 +1305,20 @@ Reviewed import cleanup: `0ac67e1c`.
   includes the complete five-case rebuilding module: 150 cases on Blender
   4.5.1 / Python 3.11.11, 149 passing and one filesystem skip. All 33 consumer
   adapters and exact vendor checks pass; configured lint passes.
+
+## Complete archive output buffers
+
+- A short-writing archive output adapter accepted only three bytes per call.
+  Rebuilding ignored each write count and returned full-content hashes despite
+  truncated output. Zero/None writer returns also produced a success manifest.
+  Three fault profiles fail before the fix.
+- Extract the already-tested complete-buffer loop from `copy_stream` as
+  `write_all` in the same stream owner; both copying and retained ZIP members
+  use it. Partial writes retry with cancellation checks; invalid/would-block
+  returns raise before any manifest is returned. No new dependency or package.
+- Seven rebuilding and 11 stream cases pass, rebuilding also in mobile Python;
+  25 archive, 19 EPUB and 19 encrypted-comic cases pass. Existing progress units
+  and stream cancellation tests remain unchanged. Shared `43838b0`.
+- Embedded Blender runs 152 cases (151 pass, one filesystem skip); 33 adapters,
+  exact vendor checking and configured lint pass. Native iOS reports remain tied
+  to their earlier clean source snapshot, not relabeled to this portable change.
