@@ -167,3 +167,33 @@ there is no scheduled background continuation.
   Hole consumer tests. Follow-up commit: `9e4914f`. Native Windows permission/ACL
   behavior still requires its platform check; POSIX mode assertions are explicitly
   skipped on Windows.
+
+## Resumed execution: Git discard backup verification
+
+The earlier final checkpoint was an unjustified stopping point, not an execution
+limit or hard blocker. Work resumed from clean branches without repeating the
+completed baseline. Remaining priorities continue to govern selection.
+
+- Four new Git backend regressions reproduced unverified corrupt backup data,
+  newer edits overwritten after a copy, earlier selection changes during later
+  copies, and a new file appearing where the initial selection was missing.
+- Backup preparation now uses shared verified snapshots, flushes copies, compares
+  their SHA-256, and validates the entire selection while atomically publishing
+  the unchanged backup manifest. Cancellation is translated to Git's existing
+  cancellation result; no new dependency or shared API is introduced.
+- This detects observed preparation races, not a lock against external editors
+  after the final validation. Raw evidence stays in ignored maintenance results.
+
+- Git validation: all 36 backend tests (including cancellation during backup),
+  12 actual preferences/UI tests and 6 merge tests pass; correctness lint passes.
+
+## Resumed execution: EPUB backup verification
+
+- A new EPUB regression reproduced successful metadata replacement despite a
+  corrupted recovery backup. The writer now hashes bytes read from the original
+  and verifies the complete backup before replacing the book, using the existing
+  shared stable-snapshot API. Failed verification preserves the original and
+  removes only failed backup/staging paths. Existing names, metadata schema,
+  source conflict checks and private-provider behavior remain unchanged.
+- All 16 EPUB model/metadata tests pass, including corruption, backup permission
+  failure, cancellation, duplicate backup naming and retained resource content.
