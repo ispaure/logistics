@@ -628,3 +628,21 @@ completed baseline. Remaining priorities continue to govern selection.
 - The later text-encoding pin/vendor commits are Logistics `b2d3d768` and Blue Hole
   `5c86f3d`. The existing provider boundary remains application routing policy,
   not an OS sandbox or a new global restriction on arbitrary third-party I/O.
+
+## Read-only software metadata and explicit native test availability
+
+- A fixture reproduced executable metadata lookup creating both Software and
+  Credentials directories in an otherwise untouched checkout. LogisticsConfig
+  now supports create_resources=False; software lookup uses it, while existing
+  no-argument callers retain default directory creation. No path or INI schema
+  changed. Committed as `eee80a80`.
+- All 12 software tests, five credential-discovery tests and 17 native review
+  tests pass, plus lint, architecture and five documentation checks.
+- Four real-CLI review cases lacked the file's existing optional-tool guards,
+  producing errors instead of declared skips in a fresh checkout. Installed-tool
+  validation still runs all 17 cases successfully. A separate missing-tool profile
+  runs eight non-CLI cases and explicitly skips nine native cases, without moving
+  or disabling the user's installed binary.
+- This restores the developer guide's existing local optional-tool policy; skipped
+  cases are not reported as native coverage. The original immutable environment
+  failures and later installed-tool reruns remain recorded above.
