@@ -1,5 +1,17 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L2 frame and drawer ownership
+
+`file_drawer.py` now owns the existing retained browser implementation and widget
+detach helper; navigation retains routes, drawer references/open state, paired
+selection and frame layout. Existing imports remain available through navigation.
+All classes/functions/signatures match their original AST, with no new state or
+native toolbar changes. The curated mobile manifest includes the new module.
+All 32 navigation and ten delayed-listing cases pass before/after, including
+rotation, retained widgets, private credentials and stale results. Fold, route,
+Android chrome, staged startup, packaging, architecture, lint and wiki checks pass.
+Native pose validation remains separate. No external consumer edits or push.
+
 ## Sequential audit implementation: L1 managed-document workflows
 
 `ManagedDocumentWorkflows` groups 15 existing create/open/save/inventory/preview

@@ -1,5 +1,24 @@
 # Mobile workspace drawers and paired documents
 
+## Frame and drawer ownership
+
+`workspace_navigation.WorkspaceNavigation` owns destination routes, open/closed
+drawer state, retained drawer references and paired-session selection.
+`WorkspaceFrame` mounts and restores existing widgets for compact, split and
+fold-aware layouts. It does not own browser requests or rebuild editor buffers.
+
+`file_drawer.FileDrawer` owns the destination browser controls, selected folder,
+provider, refresh task and captured credential generation. Its `FolderListing`
+rejects superseded location, credential and host results. Frame restoration only
+unmounts its widget; it preserves the listing and selected folder. Full-page picker
+scopes keep their own return edges, and nested pickers retain independent drawers.
+`workspace_navigation` continues to expose `FileDrawer` and the same widget-detach
+helper for existing imports. Native toolbar/menu helpers remain there.
+
+The rotation/pairing/credential contracts in `test_workspace_navigation.py` and
+the real delayed-worker contracts in `test_folder_listing.py` cover this boundary.
+Native pose and chrome acceptance remain separate from dummy-backend results.
+
 ## Persistent local filename search
 
 `mobile.local_search.LocalSearch` adapts the desktop SQLite directory cache for

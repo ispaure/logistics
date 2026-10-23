@@ -55,10 +55,11 @@ system accessibility extremes still require native layout validation.
 | Startup and application wiring | `app.py`, `composition/assembly.py`, `composition/presentation.py` |
 | Workspace identities, generations and sessions | `workspace.py`, `window_owners.py`, `window_scenes.py` |
 | Adaptive panes and destination drawers | `workspace_navigation.py`, `adaptive_workspace.py` |
+| Retained destination browser, provider and listing lifetime | `file_drawer.py`; pane placement remains in `workspace_navigation.py` |
 | Workspaces discovery task, cache and invalidation | `folder_discovery.py`, composed by `folder_controller.py`; snapshot/result building in `folder_hub.py` |
 | Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`; retained tree controls in `folder_tree_view.py`, styling in `folder_hub_style.py` |
 | File create/rename/move/delete coordination | `file_operations.py`, composed by `composition.presentation.file_operations`; `files_ui.py` retains forms, confirmation and forwarding methods |
-| Main and workspace browser listing requests | `folder_listing.py`; presentation in `files_ui.py` and `workspace_navigation.py` |
+| Main and workspace browser listing requests | `folder_listing.py`; presentation in `files_ui.py` and `file_drawer.py` |
 | Local file management and comic batch entry points | `files_ui.py` |
 | Text Open/Save As, picker widgets and pending bytes | `editor_picker.py` |
 | Saved-import inventory and confirmed deletion | `saved_files_ui.py`: composed `SavedFilesController` |

@@ -32,6 +32,7 @@
     "documents.py",
     "editor_picker.py",
     "external_display.py",
+    "file_drawer.py",
     "file_operations.py",
     "files_ui.py",
     "fold_layout.py",
