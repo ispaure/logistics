@@ -758,3 +758,43 @@ completed baseline. Remaining priorities continue to govern selection.
 - This is optimistic directory-identity validation, not cross-process locking or
   attribution of concurrent writes inside the same published directory. Backup
   naming, data/configuration ownership, schemas and normal reset behavior remain.
+
+## One native exclusive-rename owner
+
+- Filesystem rename duplicated the persistence owner's platform FFI setup, with
+  different missing-symbol and diagnostic behavior. Its provider guards and
+  private batch hook remain; the native call delegates to publication now.
+- Eight platform/entry-point profiles reproduced AttributeError when a native
+  symbol was missing. Both owners now raise OSError(ENOTSUP) before mutation,
+  retain destination diagnostics and explicitly declare the C result type.
+- All ten persistence tests pass in both environments, plus bulk rename (one
+  case-sensitive-filesystem skip), five access, 17 file-operation, nine relocation,
+  13 resource-operation and 23 archive tests. Three host rename files and all 94
+  Blender manager/library tests pass. Lint and architecture checks pass.
+- Shared `eb757e5` passes all 179 isolated test files from a separate immutable
+  export. Blue Hole's exact vendor membership/bytes and all 31 consumer tests pass.
+  Pin/vendor commits are Logistics `a0234886` and Blue Hole `5c5b522`.
+- Android's official libc header introduces renameat2 at API 30. Missing support
+  already prevents guaranteed no-replace operations on older runtimes; no unsafe
+  fallback or raw syscall guess was added. The separate legacy mobile collection
+  copy publication was not migrated without native older-Android evidence. Shared
+  API limitations are documented in their owning reference, not copied here.
+
+## Available older Blender and reusable embedded checks
+
+- Expanded discovery of Logistics-managed software found Blender 4.5.1 LTS;
+  --version confirms that release. Earlier application-folder/PATH checks did not
+  find it. No compatible 5.2.2 executable has been found.
+- Added a reusable Blue Hole smoke-test launcher with temporary user resources,
+  background factory startup, blend autoexecution disabled and isolated shared
+  storage. It imports the real vendor under an independent namespace, without
+  registering the target add-on or opening/saving user projects/preferences.
+- All five smoke tests pass in actual Blender 4.5.1 / embedded Python 3.11.11:
+  portable imports, short streams/typed range buffers/batch success, native rename
+  preservation, ZIP/JSON publication and captured Blender version subprocess.
+- These are portable embedded-runtime checks, not target 5.2.2 registration,
+  operator/UI/export validation or a new claimed Python support range. The driver
+  and guide are committed in Blue Hole as `2108b3f`.
+- Frozen Logistics `bdb7c28d` / shared `7978a28` now passes all 162 mobile files;
+  all 179 desktop files pass too. This checkpoint includes the later settings
+  and Blender repairs but precedes the shared rename-owner consolidation.
