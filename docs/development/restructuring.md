@@ -371,3 +371,63 @@ QA package is removed after evidence capture. This follow-up does not change
 commonUtils. Commit timestamp rewriting is limited to commits absent from refreshed
 remote references; it changes author/committer times and IDs, preserving file trees,
 messages, identities, time-zone offsets and parent order. No push is performed.
+
+## October 22 readability and shared-mechanism pass
+
+The application now declares retained mobile controller factories directly, with
+expanded controller inventories and typed presentation callback contracts. Existing
+app accessors remain for internal callers; composition can navigate directly to the
+owner. Startup has eight named phases, with unchanged yields, asynchronous model
+preparation and document restoration order. Reader actions, PDF tools and reader/
+editor mounting have separate assembly functions; platform appearance installation
+has separate iOS/Android owners. Folder row labels/lock state are projected before
+native reconciliation. Desktop LM menu assembly has its own module.
+
+The commonUtils extraction adds explicitly admitted indexed local resource search,
+disk-spooled command capture, best-effort diagnostic redaction, data-only SSE
+framing, callback-backed archive views, optional Pillow encoding/classification,
+and exclusive link/copy publication. Logistics keeps provider eligibility,
+credentials, session validity, Git options/environment, LM response semantics and
+all image/comic retention policy. The copy fallback remains non-atomic; it does
+not replace the distinct atomic exclusive-rename contract. Shared API documentation
+stays in commonUtils; Logistics' integration guide records only these boundaries.
+
+Comic sanitization now names the existing sequential phases. No eager whole-cleanup
+plan changes which earlier deletions/moves remain after a later failure. Quality
+60/35, the 2,400-pixel comic height cap, the strict 75-percent retention threshold,
+forced retention, animation/multipage exceptions, alpha handling, padding thresholds,
+ComicInfo rebuilding and archive publication remain unchanged. The compression
+orchestrator, ComicInfo implementation, statistics and archive publication modules
+were not rewritten. The code diff and extracted statement bodies were reviewed,
+then generated fixtures compared against baseline `f55417a556f8a328ce6a91c029758b4c204e9c22`.
+
+Validation performed on the macOS host:
+
+- Desktop: all 175 isolated files covered, 1,602 tests with six platform skips.
+  The full run exposed one retired private speech-field assertion; its corrected
+  file reran with all 28 tests passing. No desktop production regression remained.
+- Mobile host: all 162 isolated files passed, 1,159 tests with two platform skips.
+- commonUtils: a final complete run passed all 173 isolated files, 1,110 tests
+  with three platform skips. Existing desktop and mobile dependencies were made
+  available to the test process without changing either environment. Follow-ups
+  updated stale speech/index test-owner references, isolated default-storage
+  fixtures from host overrides and retained optional dependencies in child tests.
+- Comics: 80 cleanup/failure cases matched outcomes, remaining paths/bytes,
+  operation order and application diagnostics; 24 oriented/color/grayscale/alpha/
+  ICC JPEG/WebP cases produced identical encoded bytes; 32 complete plain/AES
+  compression runs matched extraction, sanitized, staged and final member manifests.
+- Clean committed-source payload staging and packaged startup passed, including
+  document restoration, provider Markdown and file operations. Lint, architecture,
+  toolchain, documentation layout, indexed-source hygiene and diff checks passed.
+
+The broad mobile run also exposed missing hidden-file metadata in the existing
+optimized collection listing. The listing now matches the base provider without
+extra filesystem reads; parity/performance coverage includes an actual hidden file.
+The README's mobile overview is shorter, and current developer guides include
+workflow ownership traces and repeatable comparison commands.
+
+Raw comparison reports and suite logs remain under ignored `test-results/`.
+No native build, simulator/device interaction, deployment or push is claimed by
+these host results. No test app was installed. Root ignore rules, private resources,
+external feature ownership, the reserved Misc destination and the single Ally Tools
+acknowledgement were preserved. Changes were committed locally in reviewable steps.
