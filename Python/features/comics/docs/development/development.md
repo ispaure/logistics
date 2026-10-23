@@ -108,6 +108,9 @@ Native device appearance and gestures still require device/simulator validation.
 ## Reader and catalog contracts
 
 Readers sort pages and sibling comics naturally and load without extraction.
+`pages.natural_key` retains its tagged key contract and delegates filename parsing
+to commonUtils search rules. Decimal runs sort numerically; superscript and
+circled numerals remain text without preventing archive enumeration.
 Qt decoding falls back to Pillow; display transforms must not modify archive bytes.
 iOS sampled decoding reads ImageIO's actual CFString option values and converts
 them to Python strings before building the options dictionary. Rubicon's native
