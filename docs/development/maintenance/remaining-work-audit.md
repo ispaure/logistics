@@ -16,7 +16,7 @@ below describe the assessment snapshot, before this implementation.
 | Item | Completed change | Local commit |
 | --- | --- | --- |
 | T1 | Deterministic lint scope | `75395cc0` |
-| T2 | Shared matrix and specialist owner selections | `75395cc0`, `0b08ebb8` |
+| T2 | Shared matrix, specialist owner selections and GUI-thread fixture cycle retirement | `75395cc0`, `0b08ebb8`; shared `ac1ae89` |
 | C1 | Index target/validation/retirement phases; transaction remains centralized | shared `17978f2` |
 | C2 | Indexing owns network/watch policy; shared close/idle admission | shared `9ac9121` |
 | C3 | Captured dock transfer/rollback and separate header reconciliation | shared `e8ac643` |

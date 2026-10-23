@@ -1,5 +1,17 @@
 # Ecosystem maintenance progress
 
+## Verification follow-up: GUI-thread Qt fixture collection
+
+Before any desktop-folder refactor, the baseline crashed intermittently while a
+worker ran cyclic GC and the GUI replaced an Info panel. An unchanged recheck
+passed. A deterministic real-widget-cycle test then proved fixture cleanup left
+retired cycles uncollected at its GUI-thread boundary. Shared `ac1ae89` collects
+eligible cycles after widget destruction and owned worker/future retirement.
+All 11 fixture cases, all 52 original folder cases and a repeated affected 39-case
+file pass; shared lint, wiki and whitespace pass. This establishes the cleanup
+contract, not proof of every possible native crash cause. Production folder code
+and application GC policy remain unchanged. No external edit or project push.
+
 ## Sequential audit implementation: L6 Git snapshot projection
 
 Repository rendering names admitted snapshot identity, action badges and retained
