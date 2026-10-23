@@ -1,5 +1,20 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: C4 Markdown presentation and conversion
+
+Shared `c542e92` separates fragment classification, inline/fenced-code typography
+and image leading from the existing quote-depth traversal. Authored-source
+conversion names inline planning and fence materialization while retaining reverse
+replacement order. Expanded AST matches every original ordered statement and
+signature in both entry points. All 148 Markdown cases across 14 files pass
+before/after in identical order; Notes six, IDE Markdown three, Ally 48 and Blue
+Hole two current-source contracts pass. Shared wiki, configured lint and whitespace
+pass. No source/undo/persisted/API change, external consumer edit or push occurred.
+L4 source work was not started: concurrent rclone/LocalCrypt changes also touch
+`files_ui.py`; its initial folder baseline failure was in the concurrent adapter's
+missing fixture generation, subsequently being updated by that work. It remains
+outstanding until that editing boundary is stable.
+
 ## Sequential audit implementation: L3 provider draft and library publication
 
 `ProviderView` replaces the anonymous construction namespace with explicit
