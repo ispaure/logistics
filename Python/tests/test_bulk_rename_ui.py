@@ -219,22 +219,32 @@ class BulkRenameWidgetTests(QtTestCase):
         self.assertFalse(self.widget.folder_tree.isExpanded(index.parent()))
 
     def test_late_model_layout_preserves_visible_selection_but_respects_manual_scroll(self):
-        target = self.root / 'zzzz-current'
-        for number in range(40):
-            (self.root / f'row{number:03}').mkdir()
-        target.mkdir()
-        self.widget.load_directory(target)
-        self.wait_idle()
-        self.wait_folder_visible(target)
-        model, tree = self.widget.folder_model, self.widget.folder_tree
-        self.wait_until(lambda: model.index(str(target)).row() >= 40,
-                        message='Folder model did not finish sorting fixture siblings')
-        index = model.index(str(target))
+        from desktop.bulk_rename.widget import _FolderTree
+        model = qt.QStandardItemModel()
+        parent = qt.QStandardItem('Parent')
+        model.appendRow(parent)
+        for number in range(80):
+            parent.appendRow(qt.QStandardItem(f'Folder {number}'))
+        tree = _FolderTree(model)
+        self.addCleanup(tree.deleteLater)
+        self.addCleanup(tree.close)
+        tree.resize(300, 200)
+        tree.show()
+        parent_index = model.index(0, 0)
+        tree.expand(parent_index)
+        index = model.index(60, 0, parent_index)
+        tree.setCurrentIndex(index)
+        tree.scrollTo(index)
+        self.app.processEvents()
+        def visible():
+            rectangle = tree.visualRect(tree.currentIndex())
+            return not rectangle.isEmpty() and tree.viewport().rect().intersects(rectangle)
+        self.assertTrue(visible())
         # Model sorting can adjust scrolling after the reveal request finishes.
         model.layoutAboutToBeChanged.emit()
         tree.verticalScrollBar().setValue(0)
         model.layoutChanged.emit()
-        self.wait_folder_visible(target)
+        self.wait_until(visible, message='Late model layout hid the selected folder')
         # A user who already scrolled away should keep their chosen position.
         tree.verticalScrollBar().setValue(0)
         self.assertFalse(tree.viewport().rect().intersects(tree.visualRect(index)))
@@ -242,6 +252,13 @@ class BulkRenameWidgetTests(QtTestCase):
         model.layoutChanged.emit()
         self.app.processEvents()
         self.assertEqual(tree.verticalScrollBar().value(), 0)
+        tree.scrollTo(index)
+        self.assertTrue(visible())
+        model.layoutAboutToBeChanged.emit()
+        tree.collapse(parent_index)
+        model.layoutChanged.emit()
+        self.app.processEvents()
+        self.assertFalse(tree.isExpanded(parent_index))
 
     def test_preview_apply_and_undo_use_background_work_and_preserve_data(self):
         self.assertEqual(len(self.widget.selected_paths()), 2)

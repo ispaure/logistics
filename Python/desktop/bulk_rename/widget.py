@@ -28,6 +28,48 @@ class _FolderIconProvider(qt.QFileIconProvider):
         return super().icon(value)
 
 
+class _FolderTree(qt.QTreeView):
+    """Preserve a visible selection across deferred model layout changes."""
+
+    def __init__(self, model):
+        super().__init__()
+        self.setModel(model)
+        self._was_visible = False
+        self._layout_timer = qt.QTimer(self)
+        self._layout_timer.setSingleShot(True)
+        self._layout_timer.timeout.connect(self._restore_visibility)
+        model.layoutAboutToBeChanged.connect(self._remember_visibility)
+        model.rowsAboutToBeInserted.connect(self._remember_visibility)
+        model.layoutChanged.connect(self._layout_changed)
+        model.rowsInserted.connect(self._layout_changed)
+
+    def _remember_visibility(self, *_):
+        if not self.isVisible():
+            return
+        rectangle = self.visualRect(self.currentIndex())
+        self._was_visible |= not rectangle.isEmpty() and self.viewport().rect().intersects(rectangle)
+
+    def _layout_changed(self, *_):
+        if self._was_visible:
+            self._layout_timer.start(0)
+
+    def _restore_visibility(self):
+        self._was_visible = False
+        if not self.isVisible():
+            return
+        self.doItemsLayout()
+        index = self.currentIndex()
+        # Preserve selection visibility across queued sorting/insertion, without
+        # reopening collapsed branches or following a user who scrolled away.
+        if not self.visualRect(index).isEmpty():
+            self.scrollTo(index, qt.QAbstractItemView.ScrollHint.EnsureVisible)
+
+    def hideEvent(self, event):
+        self._layout_timer.stop()
+        self._was_visible = False
+        super().hideEvent(event)
+
+
 class BulkRenameWidget(qt.QWidget):
     """Embed a folder browser or supply explicit paths. Only selected rows are renamed."""
     renamed = qt.Signal(object)
@@ -119,8 +161,7 @@ class BulkRenameWidget(qt.QWidget):
         # must never become the tree's view root, hiding that folder and its peers.
         self.folder_model.directoryLoaded.connect(self._folder_directory_loaded)
         self.folder_model.setRootPath(self._tree_anchor)
-        self.folder_tree = qt.QTreeView()
-        self.folder_tree.setModel(self.folder_model)
+        self.folder_tree = _FolderTree(self.folder_model)
         self.folder_tree.setUniformRowHeights(True)
         self.folder_tree.setAccessibleName('Folders')
         self.folder_tree.setHeaderHidden(True)
@@ -130,14 +171,6 @@ class BulkRenameWidget(qt.QWidget):
         self._folder_reveal_timer = qt.QTimer(self)
         self._folder_reveal_timer.setSingleShot(True)
         self._folder_reveal_timer.timeout.connect(self._reveal_current_folder)
-        self._folder_was_visible = False
-        self._folder_layout_timer = qt.QTimer(self)
-        self._folder_layout_timer.setSingleShot(True)
-        self._folder_layout_timer.timeout.connect(self._restore_folder_visibility)
-        self.folder_model.layoutAboutToBeChanged.connect(self._remember_folder_visibility)
-        self.folder_model.rowsAboutToBeInserted.connect(self._remember_folder_visibility)
-        self.folder_model.layoutChanged.connect(self._folder_layout_changed)
-        self.folder_model.rowsInserted.connect(self._folder_layout_changed)
         for column in range(1, self.folder_model.columnCount()):
             self.folder_tree.hideColumn(column)
         self.folder_tree.clicked.connect(lambda index: self.load_directory(self.folder_model.filePath(index)))
@@ -327,27 +360,6 @@ class BulkRenameWidget(qt.QWidget):
         if pending is not None and Path(path) in (pending, *pending.parents):
             # Let Qt apply its queued directory sorting/layout before scrolling.
             self._folder_reveal_timer.start(0)
-
-    def _remember_folder_visibility(self, *_):
-        if not self.isVisible():
-            return
-        rectangle = self.folder_tree.visualRect(self.folder_tree.currentIndex())
-        self._folder_was_visible |= not rectangle.isEmpty() and self.folder_tree.viewport().rect().intersects(rectangle)
-
-    def _folder_layout_changed(self, *_):
-        if self._folder_was_visible:
-            self._folder_layout_timer.start(0)
-
-    def _restore_folder_visibility(self):
-        self._folder_was_visible = False
-        if not self.isVisible():
-            return
-        self.folder_tree.doItemsLayout()
-        index = self.folder_tree.currentIndex()
-        # Preserve selection visibility across queued sorting/insertion, without
-        # reopening collapsed branches or following a user who scrolled away.
-        if not self.folder_tree.visualRect(index).isEmpty():
-            self.folder_tree.scrollTo(index, qt.QAbstractItemView.ScrollHint.EnsureVisible)
 
     def _reveal_current_folder(self):
         path = self._folder_reveal_pending
@@ -645,8 +657,6 @@ class BulkRenameWidget(qt.QWidget):
             self.preview_timer.stop()
             self._folder_reveal_timer.stop()
             self._folder_reveal_pending = None
-            self._folder_layout_timer.stop()
-            self._folder_was_visible = False
             super().closeEvent(event)
         else:
             self._closing = True

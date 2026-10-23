@@ -31,7 +31,9 @@ Reveal explicitly fetches unloaded folder contents, including empty folders that
 Qt does not expand, and retries queued row insertion/layout until the selected
 row has stable visible geometry. Already-populated ancestors need not emit a
 fresh load notification. Later notifications do not reopen user-collapsed branches.
-Queued model sorting and row insertion preserve a selection that was visible
+The private `_FolderTree` view owns deferred layout correction, independently of
+filesystem scans and rename workers. Queued model sorting and row insertion
+preserve a selection that was visible
 before the model change. The deferred layout correction scrolls without expanding
 branches; a selection already outside the viewport is left alone, preserving
 manual scrolling. Hidden/closed widgets do not apply that correction.
