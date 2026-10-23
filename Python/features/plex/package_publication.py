@@ -1,11 +1,10 @@
 """Recoverable promotion of one Plex archive/settings generation."""
 import json
-import os
 from pathlib import Path
 import shutil
 from uuid import uuid4
 from commonUtils.persistence import atomic_write_json
-from commonUtils.persistence.publication import mutation_lock
+from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 
 
 def _signature(path):
@@ -67,7 +66,7 @@ class PackagePublication:
                 target = self.destination / name
                 if target.exists() or target.is_symlink():
                     raise RuntimeError(f'Package recovery destination is occupied: {target}')
-                os.replace(backup, target)
+                rename_exclusive(backup, target)
         shutil.rmtree(self.recovery)
 
     def _check_published(self, name, revision):
@@ -91,7 +90,7 @@ class PackagePublication:
                     target = self.destination / name
                     if _signature(target) != revision:
                         raise RuntimeError(f'Package changed before publication: {target}')
-                    os.replace(target, self.recovery / name)
+                    rename_exclusive(target, self.recovery / name)
                 self.state['phase'] = 'publishing'
                 self._save()
                 for source in self.outputs:
@@ -101,7 +100,7 @@ class PackagePublication:
                     # Record the staged inode before promotion, so rollback still
                     # knows ownership if a journal write fails after the rename.
                     revision = _signature(source)
-                    os.replace(source, target)
+                    rename_exclusive(source, target)
                     revision[-1] = target.stat().st_ctime_ns
                     self.state['published'][source.name] = revision
                     self._save()

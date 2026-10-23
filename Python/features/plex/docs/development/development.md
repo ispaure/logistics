@@ -58,8 +58,11 @@ installations may need additional filesystem permissions and ownership handling.
   rollback can be retried without mistaking restored originals for external edits.
   The `rolling_back` journal phase also remains recoverable if the final commit
   checkpoint failed. A missing original backup stops recovery before published
-  files are removed; the journal remains for manual resolution. Multi-file visibility is not atomic, and committed cleanup failures
-  report the retained directory without undoing the valid new generation.
+  files are removed; the journal remains for manual resolution. Member moves use
+  shared atomic no-overwrite rename, so a destination created after preflight is
+  preserved rather than replaced. Multi-file visibility is not atomic. Committed
+  cleanup failures report the retained directory without undoing the valid new
+  generation.
 - Restores extract into a temporary sibling directory before moving the current
   data aside. ZIP entries must stay under `Plex Media Server/`; linked content
   and overlapping data/package locations are rejected. Legacy macOS ZIP archives
