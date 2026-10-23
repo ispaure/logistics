@@ -23,7 +23,7 @@ Run from the repository root:
 ```sh
 PYTHONPATH=Python:Python/tests QT_QPA_PLATFORM=offscreen .venv/bin/python -m unittest \
   test_documentation_layout test_settings_page test_documentation_viewer \
-  commonUtils.tests.test_markdown_wiki -q
+  commonUtils.tests.test_wiki_catalog commonUtils.tests.test_markdown_wiki -q
 ```
 
 Use `QT_QPA_PLATFORM=cocoa` to exercise the four viewer integration tests on macOS.
@@ -75,3 +75,7 @@ reported to its owning chat. A native end-to-end Settings check remains pending;
 the independent viewer success must not be interpreted as a full-app startup pass.
 Android device/emulator and physical iOS device behavior were not validated in
 this pass.
+
+The October 16 full-app limitation above retains its original snapshot scope.
+Later full-app simulator and portable-catalog evidence is recorded in the
+[maintenance assessment](maintenance/architecture_audit.md#current-assessment-after-the-october-23-maintenance-pass).
