@@ -93,7 +93,12 @@ class RecycledBrowserTests(unittest.TestCase):
         provider.list = lambda folder, cancelled: matches if folder == 'sub' else [dict(path='sub', name='sub', directory=True)]
         browser.set_entries(provider, '', provider.list('', cancelled=lambda: False))
         browser.search.value = 'match'
-        self.app.loop.run_until_complete(browser._search_subfolders(browser.search_epoch, browser.search_cancelled))
+        async def finish_search():
+            # Let the actual debounced query finish. Starting another search here
+            # can invalidate captured rows when the queued query publishes later.
+            while pending := tuple(task for task in browser.tasks if not task.done()):
+                await asyncio.gather(*pending)
+        self.app.loop.run_until_complete(asyncio.wait_for(finish_search(), 5))
         self.assertEqual(len(browser.native_list.data), 10005)
         row = browser.native_list.data[-1]
         self.assertEqual(row.title, 'match-10004.md')
