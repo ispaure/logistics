@@ -311,6 +311,8 @@ class LogisticsBrowserPresentation(BrowserPresentation):
 
 class FileBrowser(RecycledBrowser):
     def __init__(self, *, folder_visible=None, local_search=None, **kwargs):
+        self._resource_provider = None
+        self._release_resource = lambda: None
         from .recycled_file_list import RecycledFileList
         self.folder_visible = folder_visible
         if local_search is None and getattr(toga.App.app, 'private_root', None) is not None:
@@ -327,11 +329,22 @@ class FileBrowser(RecycledBrowser):
         self.native_list.menu_provider = self._native_row_menu
 
     def set_entries(self, provider, directory, rows, *, location=None):
+        changed = provider is not self._resource_provider
+        release = (provider.acquire() if hasattr(provider, 'acquire') else lambda: None) if changed else None
         self._index_cancel.set()
         self._index_cancel = Event()
         self._index_error = None
         self._index_started = False
-        super().set_entries(provider, directory, rows, location=location)
+        try:
+            super().set_entries(provider, directory, rows, location=location)
+        except BaseException:
+            if release is not None:
+                release()
+            raise
+        if changed:
+            previous = self._release_resource
+            self._resource_provider, self._release_resource = provider, release
+            previous()
         if self.search_open:
             self._start_local_index()
 
@@ -366,6 +379,9 @@ class FileBrowser(RecycledBrowser):
     def stop(self):
         self.stop_local_search()
         super().stop()
+        self._release_resource()
+        self._resource_provider = None
+        self._release_resource = lambda: None
 
     def stop_local_search(self):
         self._index_cancel.set()

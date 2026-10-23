@@ -7,6 +7,8 @@ from features.rclone.transfers import sync
 from features.rclone.transfers.review import ReviewRequest
 from features.rclone.transfers.review_cli import scanner
 from features.rclone.transfers.transfer_options import TransferOptions
+from features.rclone.desktop_service import service
+from features.rclone.transfers.service import TransferPlan
 
 
 def reviewed_sync(source, destination, *, operation, config_path, crypt_item=None, before_start=lambda: None, **kwargs):
@@ -19,14 +21,16 @@ def reviewed_sync(source, destination, *, operation, config_path, crypt_item=Non
         excludes=load_excludes() if operation == 'Push' else ())
     path = Path(config_path)
     def stamp():
-        if path.suffix == '.session':
-            return session.credentials(path)
         info = path.stat()
-        return info.st_ino, info.st_size, info.st_mtime_ns
-    original = stamp()
+        return info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+    grant = service.credentials.capture(path) if path.suffix == '.session' else None
+    original = None if grant is not None else stamp()
     def valid():
         try:
-            return original is not None and stamp() == original
+            if grant is not None:
+                grant.check()
+                return True
+            return stamp() == original
         except (OSError, ValueError):
             return False
     from features.rclone.localcrypt.backend import for_path, CryptResources
@@ -76,18 +80,29 @@ def reviewed_sync(source, destination, *, operation, config_path, crypt_item=Non
             return {}
         from features.rclone.transfers.local_policy import cleanup_candidates
         return cleanup_candidates(item.data, display, cancelled)
+    prepared = None
     try:
         request = ReviewRequest(operation, str(source), str(destination), str(config_path), options)
+        def execute(approved, context):
+            before_start()
+            stopping = kwargs.get('cancelled', lambda: False)
+            execution = dict(kwargs, track_renames=approved.options.track_renames,
+                             bw_limit=approved.options.bw_limit, copy_links=approved.options.copy_links,
+                             excludes=approved.options.excludes,
+                             cancelled=lambda: stopping() or context.cancelled())
+            return sync.rclone_sync(source, destination, config_path=config_path,
+                                    executable_path=binary, **execution)
+        compare = scanner(binary, source, destination, config_path, options,
+                          display_path=display,
+                          display_directory=lambda path, cancelled: display(path, cancelled, directory=True),
+                          cleanup_plan=cleanup_plan)
+        prepared = service.transfers.prepare(TransferPlan(request, compare, valid, execute))
         from features.rclone.transfers.ui.review import confirm_review
-        if not confirm_review(request, scanner(binary, source, destination, config_path, options,
-                                              display_path=display, display_directory=lambda path, cancelled: display(path, cancelled, directory=True),
-                                              cleanup_plan=cleanup_plan), valid):
+        if not confirm_review(prepared):
             return False
-        if not valid():
-            raise ValueError('Connection changed. Review the transfer again.')
-        before_start()
-        return sync.rclone_sync(source, destination, config_path=config_path, executable_path=binary,
-                                excludes=options.excludes, **kwargs)
+        return service.transfers.execute(prepared)
     finally:
+        if prepared is not None:
+            prepared.review.scan.stop()
         if provider is not None:
             provider.close()

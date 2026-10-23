@@ -420,6 +420,8 @@ class FilesUI:
         from .file_operations import FileDestination
         location = roots[label]
         if isinstance(location, LocalFiles):
+            if getattr(location, 'closed', False) and hasattr(location, 'reopen'):
+                location = roots[label] = location.reopen()
             return location
         client = self.cloud_client if location is not None else None
         return FileDestination(self.private_root, client, location, getattr(client, 'generation', None)).resolve()

@@ -1,0 +1,56 @@
+"""Native composition; credential authority remains process-wide across scenes."""
+from dataclasses import dataclass
+from pathlib import Path
+from features.rclone.service import CredentialGrant, CredentialService, LocalCryptService, RcloneService
+
+
+@dataclass(frozen=True)
+class LocalCryptLocation:
+    """Physical copy binding, constructed by the feature rather than its host."""
+    root: Path
+    remote: str
+    namespace: str | None = None
+    storage_root: Path | None = None
+    create: bool = True
+
+
+@dataclass(frozen=True)
+class OfflineCryptLocation:
+    copies: object
+    key: str
+
+
+class NativeCredentials:
+    # The native clear operation locks all loaded packages, not one named remote.
+    lock_scope = 'all'
+
+    def __init__(self, client):
+        self.client = client
+
+    def capture(self, key):
+        generation = self.client.generation
+        return CredentialGrant(key, lambda: self.client.generation != generation)
+
+    def lock(self, key=None):
+        if key is not None:
+            raise ValueError('This runtime locks all loaded packages together.')
+        self.client.lock()
+
+
+def native_service(client):
+    """One composition per client; grants follow the shared native generation."""
+    if '_rclone_service' not in client.__dict__:
+        def open_resource(location):
+            from features.rclone.localcrypt.mobile.resources import CryptFiles, DownloadedCryptFile
+            if isinstance(location, OfflineCryptLocation):
+                if location.copies.client is not client:
+                    raise ValueError('This encrypted copy belongs to another credential client.')
+                return DownloadedCryptFile(location.copies, location.key)
+            if not isinstance(location, LocalCryptLocation):
+                raise TypeError('Choose a managed LocalCrypt location or an existing offline copy.')
+            return CryptFiles(location.root, client, location.remote,
+                              namespace=location.namespace, storage_root=location.storage_root,
+                              create=location.create)
+        client._rclone_service = RcloneService(CredentialService(NativeCredentials(client)),
+                                               LocalCryptService(open_resource))
+    return client._rclone_service

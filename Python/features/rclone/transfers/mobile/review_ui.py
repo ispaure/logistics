@@ -9,8 +9,9 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 
-from features.rclone.transfers.review import ReviewRequest, ReviewSession, replace_changes
+from features.rclone.transfers.review import ReviewRequest, replace_changes
 from features.rclone.transfers.transfer_options import TransferOptions, load_options, save_options
+from features.rclone.transfers.service import TransferPlan, TransferContext
 
 
 def native_scanner(client, job, local_path, options=TransferOptions(), cleanup_plan=lambda cancelled: {}):
@@ -177,7 +178,14 @@ class TransferReviewUI:
             online if push else local, job['identity'], options)
         scanner = native_scanner(client, dict(job, _push=push), store.guard(store.target(job)), options,
                                  cleanup_plan=lambda cancelled: store.cleanup_plan(job, client, cancelled))
-        session = ReviewSession(request, scanner, valid)
+        from features.rclone.mobile.service import native_service
+        transfers = native_service(client).transfers
+        def execute(approved, context):
+            return store.execute_review(job, client, push=push, new=key is None,
+                                        options=approved.options, cancelled=context.cancelled,
+                                        progress=context.progress)
+        prepared = transfers.prepare(TransferPlan(request, scanner, valid, execute))
+        session = prepared.review
         self.transfer_busy, self.transfer_notification = True, True
         self.set_cloud_busy(True)
         self._transfer_cancel = session.scan.cancelled
@@ -251,7 +259,7 @@ class TransferReviewUI:
         if not session.approved:
             self.transfer_message = 'Review cancelled. No transfer was started.'
             return False
-        work = lambda client, cancel, progress: store.execute_review(job, client, push=push, new=key is None, options=options,
-            cancelled=cancel, progress=progress)
+        def work(client, cancel, progress):
+            return transfers.execute(prepared, TransferContext(cancel, progress))
         operation = 'push' if push else 'pull'
         return await self.run_mirror_work(work, operation, source=request.source, destination=request.destination)

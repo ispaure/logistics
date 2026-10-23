@@ -207,6 +207,13 @@ class ReviewDialogTests(QtTestCase):
         super().setUpClass()
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
+    def approve_prepared(self, prepared):
+        review = prepared.review
+        self.assertTrue(review.approve(incomplete=True))
+        self.assertTrue(review.scan.retired.wait(15))
+        self.assertTrue(review.approved)
+        return prepared
+
     def test_crypt_directory_review_decodes_each_supported_name_mode(self):
         from unittest.mock import patch
         from features.rclone import executable
@@ -223,7 +230,8 @@ class ReviewDialogTests(QtTestCase):
                     directory, binary, crypt_settings=settings) as f:
                 f.provider.mkdir('New empty')
                 f.provider.mkdir('New empty/Nested')
-                def confirm(request, compare, valid):
+                def confirm(prepared):
+                    request, compare, valid = prepared.request, prepared.review.scanner, prepared.review.valid
                     first = self.finish_scan(compare)
                     self.assertIn(('add', 'New empty/'), first.changes)
                     self.assertIn(('add', 'New empty/Nested/'), first.changes)
@@ -272,11 +280,32 @@ class ReviewDialogTests(QtTestCase):
         with self.temporary_directory() as directory, crypt_fixture(directory, binary) as f:
             (f.item.data / 'rogue.txt').write_bytes(b'plaintext must never push')
             with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
-                    'features.rclone.transfers.ui.review.confirm_review', return_value=True), patch.object(
+                    'features.rclone.transfers.ui.review.confirm_review', side_effect=self.approve_prepared), patch.object(
                     sync, 'rclone_sync', side_effect=execute), patch.object(sync, '_run_sync') as run:
                 with self.assertRaisesRegex(ValueError, 'push refused'):
                     workflow.reviewed_sync(f.item.data, local_crypt.backing_target(local_crypt.unlock(f.item), 'Secret'),
                         operation='Push', config_path=f.context, copy_links=False)
+                run.assert_not_called()
+
+    def test_identical_credential_reload_invalidates_prepared_transfer(self):
+        from unittest.mock import patch
+        from features.rclone import executable, session
+        from features.rclone.transfers import workflow, sync
+        from tests.local_crypt_fixture import crypt_fixture
+        binary = executable.get_rclone_path()
+        if not binary.is_file():
+            self.skipTest('Pinned rclone is not installed')
+        with self.temporary_directory() as directory, crypt_fixture(directory, binary) as f:
+            def confirm(prepared):
+                self.approve_prepared(prepared)
+                values = session.credentials(f.context)
+                session.remember(f.context, values, package_path=f.package)
+                return prepared
+            with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
+                    'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm), patch.object(
+                    sync, 'rclone_sync') as run:
+                with self.assertRaisesRegex(ValueError, 'Connection or review changed'):
+                    workflow.reviewed_sync(f.plain, 'Secret:', operation='Push', config_path=f.context)
                 run.assert_not_called()
 
     def test_crypt_push_review_includes_cleanup_and_its_remote_deletion(self):
@@ -294,7 +323,8 @@ class ReviewDialogTests(QtTestCase):
             f.provider.create_file('.DS_Store', BytesIO(b'synthetic generated junk'))
             raw = f.provider._physical('.DS_Store', False)
             (f.cloud / raw.name).write_bytes(raw.read_bytes())
-            def confirm(request, compare, valid):
+            def confirm(prepared):
+                request, compare, valid = prepared.request, prepared.review.scanner, prepared.review.valid
                 snapshot = self.finish_scan(compare)
                 self.assertIn(('cleanup', '.DS_Store'), snapshot.changes)
                 self.assertIn(('delete', '.DS_Store'), snapshot.changes)
@@ -321,9 +351,9 @@ class ReviewDialogTests(QtTestCase):
             self.skipTest('Pinned rclone is not installed')
         with self.temporary_directory() as directory, crypt_fixture(directory, binary) as f:
             root = Path(directory) / 'Server/Local'
-            def confirm(*args):
+            def confirm(prepared):
                 local_connections.LocalConnection(Path(directory) / 'Other.zip', 'Cloud', root).publish()
-                return True
+                return self.approve_prepared(prepared)
             with patch('features.rclone.localcrypt.ui.views.ensure_session', return_value=True), patch.object(
                     executable, 'ensure_rclone', return_value=binary), patch(
                     'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm), patch.object(sync, '_run_sync') as run:
@@ -356,13 +386,14 @@ class ReviewDialogTests(QtTestCase):
         with self.temporary_directory() as directory, crypt_fixture(directory, binary) as f:
             f.provider.close()
             shutil.rmtree(f.item.data)
-            def confirm(request, scan, valid):
+            def confirm(prepared):
+                request, scan, valid = prepared.request, prepared.review.scanner, prepared.review.valid
                 changes = []
                 self.assertTrue(scan(lambda kind, path: changes.append((kind, path)), lambda: False))
                 self.assertIn(('add', 'note.md'), changes)
                 self.assertFalse(f.item.data.exists())
                 self.assertTrue(valid())
-                return True
+                return self.approve_prepared(prepared)
             with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
                     'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm), patch.object(
                     sync, 'rclone_sync', side_effect=execute):

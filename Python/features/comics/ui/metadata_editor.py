@@ -239,6 +239,14 @@ class MetadataEditor(qt.QDialog):
         accepted = close_document(self)
         return CloseOutcome.ACCEPTED if accepted or not document_is_open(self) else CloseOutcome.VETOED
 
+    def prepare_credential_lock(self):
+        if self.busy:
+            return False
+        if not self._changes():
+            return True
+        from services.documents.ui.private_views import resolve_private_edits_before_lock
+        return resolve_private_edits_before_lock(self, self._save)
+
     def closeEvent(self, event):
         event.ignore()
         self.reject()

@@ -839,3 +839,45 @@ Mobile inputs without a file descriptor use bounded complete reads before native
 encoding: short reads continue, would-block input fails, and the existing 1 MiB
 limit is checked after reading at most one extra byte. Failure removes only the
 owned encrypted staging file and never publishes a truncated prefix.
+
+## Service composition and resource sessions
+
+`features.rclone.service.RcloneService` retains credential, LocalCrypt and transfer services.
+The desktop composition is `desktop_service.service`; native clients retain their
+composition through `mobile.service.native_service(client)`. The services do not
+own widgets or browser navigation. Existing desktop password prompts and native
+credential import/vault workflows still publish through their platform authorities.
+They do not create a second credential registry.
+
+`CredentialService.capture` returns a grant tied to the currently unlocked
+generation, without exposing credential values. Locking revokes that generation;
+reloading identical keys never revives the old grant. Desktop locking addresses a
+package session; native locking explicitly reports its current all-package scope.
+Locking retains saved credentials, credential ZIPs and ciphertext. Explicitly
+reopening a saved desktop config can create new access using its saved credentials.
+
+`LocalCryptService.open` creates an independent provider session. Desktop
+`CryptResources` retains its existing child credential context, private caches and
+resource leases. Native `CryptFiles` composes `LocalCryptAccess`, which owns its
+closed state, grant validation, worker cancellation scopes and leases. Native
+listings validate the grant before publishing rows, including empty folders.
+Fallback buffered streams validate access on reads and seeks; native streaming
+sources retain their existing generation checks.
+
+Browser navigation and selection remain with the existing Qt resource browser and
+mobile browser/listing owners. A mobile browser retains a provider lease until it
+changes providers or stops. Reader/editor stores open independent access to the
+same copy, so closing the browser does not close an already-open document.
+Reopening a closed provider is permitted only within its original credential
+generation; credential replacement requires a fresh explicit open.
+
+Desktop Settings exposes **Lock Package** and **Lock All Session Credentials**.
+The presentation host checks affected private editors and busy operations before
+requested locking. Save must complete before retrying a lock; Cancel preserves
+access. Unexpected credential revocation still retires views immediately. Mobile
+retains its existing all-private-reader busy/dirty guard before locking connections.
+
+Focused regression owners are `Python/tests/resources/test_rclone_services.py`,
+`test_local_crypt.py`, and `mobile_build/tests/transfers/test_localcrypt_access.py`.
+They cover unrelated packages, independent browser/reader lifetime, replacement
+with identical keys, revocation during listing and requested-lock edit vetoes.

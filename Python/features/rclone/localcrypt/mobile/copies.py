@@ -102,11 +102,15 @@ class LocalCryptCopies:
     def open(self, key, *, password='', cancelled=lambda: False):
         check_cancelled(cancelled)
         revision = self._snapshot(key)
+        from features.rclone.mobile.service import native_service
+        grant = native_service(self.client).credentials.capture(revision[0]['remote'])
         if getattr(self.client, 'supports_streaming', False):
             reader = self._stream_reader(revision[0], self._data(key), password, cancelled)
             if self._snapshot(key) != revision:
                 raise ValueError('The encrypted copy changed while opening; reopen it.')
             reader.key, reader.revision, reader.password = key, revision, password
+            grant.check()
+            reader.credential_grant = grant
             return reader
         result = self._request('crypt_decode', revision[0], self._data(key), password=password)
         check_cancelled(cancelled)
@@ -114,6 +118,8 @@ class LocalCryptCopies:
             raise ValueError('The encrypted copy changed while opening; reopen it.')
         reader = PrivateReader(*self._decoded(result))
         reader.key, reader.revision, reader.password = key, revision, password
+        grant.check()
+        reader.credential_grant = grant
         return reader
 
     def _stream_reader(self, record, path, password='', cancelled=lambda: False):
@@ -181,7 +187,10 @@ class LocalCryptCopies:
         target = self._data(reader.key)
         temporary = self._temporary(reader.key)
         password = getattr(reader, 'password', '')
+        grant = getattr(reader, 'credential_grant', None)
         def validate():
+            if grant is not None:
+                grant.check()
             if self._snapshot(reader.key) != reader.revision:
                 raise ValueError('The encrypted copy changed; original preserved. Reopen it before saving.')
         staged_revision = None
@@ -222,4 +231,5 @@ class LocalCryptCopies:
                 raise MutationIncomplete('The encrypted file was saved, but its new revision could not be read. Reopen it before editing.',
                                          MutationResult(destination_published=True)) from error
             updated.key, updated.revision, updated.password = reader.key, revision, password
+            updated.credential_grant = grant
             return updated

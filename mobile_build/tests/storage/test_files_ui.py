@@ -101,6 +101,7 @@ class FileUITests(unittest.TestCase):
                 app.loop.run_until_complete(app.show_files())
                 provider = object.__new__(CryptFiles)
                 provider.root, provider.client = Path(directory), object()
+                provider.reopen = lambda: provider
                 app.file_provider = provider
                 app.file_rows = {'note': {'path': 'note.md', 'name': 'note.md', 'directory': False}}
                 app.file_selection.items = ['note']

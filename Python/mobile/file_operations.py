@@ -24,6 +24,8 @@ class FileDestination:
 
     def resolve(self):
         if isinstance(self.location, LocalFiles):
+            if getattr(self.location, 'closed', False) and hasattr(self.location, 'reopen'):
+                return self.location.reopen()
             return self.location
         if self.location is None:
             return CollectionFiles(self.root)

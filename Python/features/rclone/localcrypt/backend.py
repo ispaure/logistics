@@ -248,6 +248,8 @@ class CryptResources(LocalFiles):
         self._cancellation = WorkerCancellation()
         self._leases = ResourceLeases(validate=self._check_active, close=self.close)
         self._unsubscribe = session.on_forget(self.context, self.close)
+        from features.rclone.desktop_service import service
+        self.credential_grant = service.credentials.capture(self.context)
 
     def acquire(self):
         return self._leases.acquire()
@@ -263,6 +265,8 @@ class CryptResources(LocalFiles):
         check_cancelled(self._cancellation.current)
         if self.closed or session.credentials(self.context) is None:
             raise ValueError('The credential session is locked. Reopen the document after unlocking its ZIP.')
+        if hasattr(self, 'credential_grant'):
+            self.credential_grant.check()
 
 
     def relative(self, path):

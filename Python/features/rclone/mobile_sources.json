@@ -3,6 +3,7 @@
   "modules": [
     "__init__.py",
     "localcrypt/__init__.py",
+    "localcrypt/access.py",
     "localcrypt/mobile/__init__.py",
     "localcrypt/mobile/archive_source.py",
     "localcrypt/mobile/copies.py",
@@ -24,10 +25,12 @@
     "mobile/messages.py",
     "mobile/previews.py",
     "mobile/remote_readers.py",
+    "mobile/service.py",
     "mobile/session_privacy.py",
     "mobile/smb_connection.py",
     "mobile/storage_location.py",
     "remote_policy.py",
+    "service.py",
     "transfers/__init__.py",
     "transfers/local_policy.py",
     "transfers/mobile/__init__.py",
@@ -37,6 +40,7 @@
     "transfers/mobile/ui.py",
     "transfers/review.py",
     "transfers/scope.py",
+    "transfers/service.py",
     "transfers/transfer_options.py"
   ]
 }

@@ -226,6 +226,14 @@ See [Rclone mobile workflows](../user_mobile/workflows.md#android-and-ios-protot
 
 ## Read and edit a LocalCrypt copy on desktop
 
+In rclone Settings, **Lock Package** ends the selected package's unlocked session;
+**Lock All Session Credentials** ends every unlocked session. Locking keeps the
+credential ZIP, saved config and encrypted copies. Existing dependent views retire;
+reopening a saved config can establish new access from its retained credentials.
+Unsaved private edits must be saved or explicitly discarded before a requested
+lock. Cancel keeps the session unlocked. Closing a browser alone leaves its open
+readers and other browsers available.
+
 **Creating a LocalCrypt copy requires credentials loaded with Load for Session**,
 including both the crypt remote and its backing remote. LocalCrypt describes the
 encrypted copy on disk; session-only describes how its credentials are held.

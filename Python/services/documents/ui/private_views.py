@@ -1,6 +1,35 @@
 """Retire displayed private views when their credential generation is revoked."""
 from commonUtils.ui import pyside as qt
 from features.rclone import session
+from weakref import WeakSet
+
+_guards = WeakSet()
+
+
+def resolve_private_edits_before_lock(window, save):
+    buttons = qt.QMessageBox.StandardButton
+    answer = qt.QMessageBox.question(window, 'Lock credentials',
+        'Save changes before locking this credential package?',
+        buttons.Save | buttons.Discard | buttons.Cancel, buttons.Cancel)
+    if answer == buttons.Save:
+        save()
+        return False  # A save worker must retire before locking.
+    return answer == buttons.Discard
+
+
+def prepare_credential_lock(paths):
+    """Resolve private edits before a requested lock; revocation itself never waits."""
+    paths = tuple(paths)
+    for guard in tuple(_guards):
+        guard.follow_provider()
+        context = getattr(guard.provider, 'context', None)
+        config = getattr(guard.provider, 'config_path', None)
+        affected = (context is not None and any(session.registry.depends_on(context, path) for path in paths))
+        affected = affected or (config is not None and any(config == path.with_suffix('.conf') for path in paths))
+        if affected:
+            if not guard.prepare_lock():
+                return False
+    return True
 
 
 class PrivateViewGuard(qt.QObject):
@@ -13,6 +42,8 @@ class PrivateViewGuard(qt.QObject):
         self.revoked.connect(self.check_revocation)
         window.installEventFilter(self)
         self.bind(provider)
+        _guards.add(self)
+        window.destroyed.connect(lambda: _guards.discard(self))
         window.destroyed.connect(lambda: self.unsubscribe())
         idle = getattr(window, 'idle', None)
         if idle is not None:
@@ -44,6 +75,23 @@ class PrivateViewGuard(qt.QObject):
 
     def invalidate(self):
         self.revoked.emit()
+
+    def prepare_lock(self):
+        if self.locked:
+            return True
+        prepare = getattr(self.window, 'prepare_credential_lock', None)
+        if prepare is not None:
+            return prepare()
+        for name in ('operation', 'open_operation'):
+            if getattr(getattr(self.window, name, None), 'busy', False):
+                return False
+        viewer = getattr(self.window, 'viewer', None)
+        if viewer is not None and hasattr(viewer, 'can_close'):
+            return viewer.can_close()
+        editor = getattr(self.window, 'editor', None)
+        if isinstance(editor, qt.QPlainTextEdit) and editor.document().isModified():
+            return resolve_private_edits_before_lock(self.window, self.window.save)
+        return True
 
     def retire(self):
         self.locked = True

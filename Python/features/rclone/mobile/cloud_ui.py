@@ -306,7 +306,8 @@ class CloudUI(LocalCryptUI):
         self.set_cloud_busy(True)
         try:
             self.clear_private_catalog()
-            await asyncio.to_thread(self.cloud_client.lock)
+            from .service import native_service
+            await asyncio.to_thread(native_service(self.cloud_client).credentials.lock)
             self.set_loaded_remote_names([])
             self.cloud_crypt_remotes = set()
             self.session_credential_packages = []

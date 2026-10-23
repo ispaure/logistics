@@ -91,6 +91,16 @@ class CredentialSessions:
                 return identity is None or current is None or current[0] != identity
         return revoked
 
+    def depends_on(self, context, parent):
+        """Whether locking parent would retire this context, including itself."""
+        context, parent = Path(context), Path(parent)
+        with self._lock:
+            while context is not None:
+                if context == parent:
+                    return True
+                context = self._parents.get(context)
+        return False
+
     def launch(self, config_path, source, destination):
         """Return process-private env and alias paths. Human names remain in UI."""
         with self._lock:

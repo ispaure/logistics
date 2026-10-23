@@ -46,6 +46,7 @@ class RclonePage(pyside.QWidget):
         self.load_button.setToolTip('Save a same-named rclone config on disk.')
         self.load_session_button.setToolTip('Keep credentials in memory until Logistics exits. Enables Cloud browsing and LocalCrypt creation.')
         self.remove_button = pyside.QPushButton('Forget Credentials')
+        self.lock_button = pyside.QPushButton('Lock Package')
 
         self.remote_list = pyside.QListWidget()
 
@@ -56,7 +57,7 @@ class RclonePage(pyside.QWidget):
         )
 
         self.clear_all_button = pyside.QPushButton('Clear All .rconf Files')
-        self.clear_sessions_button = pyside.QPushButton('Forget All Session Credentials')
+        self.clear_sessions_button = pyside.QPushButton('Lock All Session Credentials')
 
         self.status_label = StatusLine()
         self.status_label.setWordWrap(True)
@@ -154,6 +155,7 @@ class RclonePage(pyside.QWidget):
         package_buttons = pyside.QHBoxLayout()
         package_buttons.addWidget(self.load_button)
         package_buttons.addWidget(self.load_session_button)
+        package_buttons.addWidget(self.lock_button)
 
         package_layout.addWidget(self.package_name)
         package_layout.addLayout(package_form)
@@ -201,6 +203,7 @@ class RclonePage(pyside.QWidget):
         self.remove_button.clicked.connect(self._remove_selected_config)
         self.clear_all_button.clicked.connect(self._clear_all_configs)
         self.clear_sessions_button.clicked.connect(self._clear_sessions)
+        self.lock_button.clicked.connect(self._lock_selected)
 
     def refresh(self):
         """Refresh credential packages and generated config state."""
@@ -284,6 +287,7 @@ class RclonePage(pyside.QWidget):
 
     def _credential_selection_changed(self, _current, _previous):
         self._refresh_selected_package()
+        self._refresh_clear_all_state()
 
     def _refresh_selected_package(self, *_):
         package = self._get_selected_package()
@@ -325,14 +329,37 @@ class RclonePage(pyside.QWidget):
 
     def _clear_sessions(self):
         from features.rclone import session
-        for path in session.paths():
-            session.forget(path)
+        if not self._prepare_lock(session.paths()):
+            return
+        from features.rclone.desktop_service import service
+        service.credentials.lock()
         self.refresh()
-        self.status_label.setText('Session credentials forgotten. Saved .conf files were kept.')
+        self.status_label.setText('Session credentials locked. Saved .conf files were kept.')
+
+    def _prepare_lock(self, paths):
+        from services.documents.ui.private_views import prepare_credential_lock
+        if not prepare_credential_lock(paths):
+            self.status_label.setText('Finish the private operation or save/discard your edits, then lock again.')
+            return False
+        return True
+
+    def _lock_selected(self):
+        package = self._get_selected_package()
+        if package is None:
+            return
+        from features.rclone.desktop_service import service
+        path = configuration.get_credential_config_path(package.path).with_suffix('.session')
+        if self._prepare_lock([path]):
+            service.credentials.lock(path)
+            self.refresh()
+            self.status_label.setText('Package session locked. Saved credentials and ZIP were kept.')
 
     def _refresh_clear_all_state(self):
         from features.rclone import session
         self.clear_sessions_button.setEnabled(bool(session.paths()))
+        package = self._get_selected_package()
+        self.lock_button.setEnabled(package is not None and session.names(
+            configuration.get_credential_config_path(package.path).with_suffix('.session')) is not None)
         self.clear_all_button.setEnabled(
             bool(configuration.get_all_conf_paths())
         )
@@ -378,6 +405,8 @@ class RclonePage(pyside.QWidget):
         from features.rclone import session
         from commonUtils.persistence import atomic_write_bytes
         config_path = configuration.get_credential_config_path(package.path)
+        if not self._prepare_lock([config_path, config_path.with_suffix('.session')]):
+            return
         self._loading_package = package, remember, config_path
         for widget in self._credential_controls():
             widget.setEnabled(False)
@@ -403,7 +432,7 @@ class RclonePage(pyside.QWidget):
     def _credential_controls(self):
         return (self.credential_list, self.password_input, self.load_button,
                 self.load_session_button, self.remove_button, self.clear_all_button,
-                self.clear_sessions_button)
+                self.clear_sessions_button, self.lock_button)
 
     def _credentials_loaded(self, values, error):
         from features.rclone import session
@@ -477,6 +506,8 @@ class RclonePage(pyside.QWidget):
         if not confirmed:
             return
 
+        if not self._prepare_lock(paths):
+            return
         for path in paths:
             configuration.delete_config_file(path)
         self.refresh()
@@ -504,6 +535,8 @@ class RclonePage(pyside.QWidget):
         if not confirmed:
             return
 
+        if not self._prepare_lock(config_paths):
+            return
         deleted_paths = configuration.clear_all_conf_files()
 
         self.refresh()

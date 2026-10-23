@@ -181,6 +181,8 @@ class FolderNavigationTests(unittest.TestCase):
 
     def test_localcrypt_names_cross_native_boundary_in_bounded_batches(self):
         class Client:
+            generation = 0
+
             def __init__(self):
                 self.batches = []
             def request(self, action, **values):

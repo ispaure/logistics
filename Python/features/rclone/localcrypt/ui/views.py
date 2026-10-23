@@ -6,7 +6,7 @@ from commonUtils.ui.resources.browser import ResourceBrowser
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.ui.document_host import show_document
 from features.rclone import session, executable
-from features.rclone.localcrypt.backend import CryptResources
+from features.rclone.desktop_service import service
 
 _windows = []
 
@@ -207,7 +207,7 @@ class CryptBrowserView(qt.QMainWindow):
         self.setCentralWidget(content)
         self.open_operation = OperationProgress(self)
         self.open_operation.completed.connect(self._opened)
-        self.provider = CryptResources(item) if ensure_session(item.context, package=item.package, parent=self) else None
+        self.provider = service.localcrypt.open(item) if ensure_session(item.context, package=item.package, parent=self) else None
         # Cancellation leaves a locked browser with an explicit retry button.
         if self.provider is None:
             self.retry = qt.QPushButton('Unlock credential ZIP', self)
@@ -222,7 +222,7 @@ class CryptBrowserView(qt.QMainWindow):
     def _unlock(self):
         if ensure_session(self.item.context, package=self.item.package, parent=self):
             try:
-                self.provider = CryptResources(self.item)
+                self.provider = service.localcrypt.open(self.item)
                 self.retry.hide()
                 self._install_browser(None)
                 self.title_changed.emit(self.view_title)

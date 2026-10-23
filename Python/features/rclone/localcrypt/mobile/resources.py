@@ -1,7 +1,6 @@
 """Local mobile folder providers; crypt naming/bytes stay in the native bridge."""
 from features.rclone.mobile.storage_location import collection_path, _modified_time
 from contextlib import contextmanager
-from io import BytesIO
 import base64
 import os
 import re
@@ -10,25 +9,35 @@ from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
 from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.range_reader import RangeReader
 from commonUtils.runtime.resources.provider import ResourceCapabilities
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import read_up_to
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
+from features.rclone.localcrypt.access import LocalCryptAccess
+from features.rclone.mobile.service import LocalCryptLocation, OfflineCryptLocation, native_service
 
 
-class CryptTransferStream(BytesIO):
+class CryptTransferStream(RangeReader):
     """Logical bytes plus a scoped native rewrap source, owned by Logistics.
 
     The provider keeps the encrypted file open for this stream's context. No
     descriptor is retained after closure and generic consumers only read bytes.
     """
-    def __init__(self, data, record, encrypted):
-        super().__init__(data)
+    def __init__(self, data, record, encrypted, *, validate=lambda: None):
+        super().__init__(len(data), lambda offset, count: data[offset:offset + count],
+                         cache_blocks=1, validate=validate)
+        self._validate_access = validate
         self._record = dict(record)
         self._encrypted = encrypted
 
+    def close(self):
+        super().close()
+        self.read_range = lambda offset, count: b''
+
     def transfer_source(self):
+        self._validate_access()
         if self.closed or self._encrypted.closed:
             raise ValueError('The encrypted transfer source is closed.')
         if self.tell() != 0:
@@ -60,7 +69,9 @@ class CryptFiles(LocalFiles):
     def __init__(self, root, client, remote, *, namespace=None, storage_root=None, create=True):
         self.collection_storage_root = storage_root
         self.client, self.remote = client, remote
+        self._access = LocalCryptAccess(native_service(client).credentials.capture(remote))
         self.identity = client.request('crypt_path', remote=remote, path='', directory=True)['identity']
+        self._access.check()
         if namespace is not None and (not isinstance(namespace, str) or len(namespace) != 64
                                       or any(c not in '0123456789abcdef' for c in namespace)):
             raise ValueError('Invalid encrypted storage namespace.')
@@ -72,8 +83,35 @@ class CryptFiles(LocalFiles):
             root.mkdir(parents=True, exist_ok=True, mode=0o700)
         super().__init__(root)
         self.storage_namespace = namespace
+        self.location = LocalCryptLocation(Path(root).parent, remote, namespace,
+                                           storage_root, create=False)
+
+    @property
+    def closed(self):
+        return self._access.closed
+
+    def reopen(self):
+        """Create a separate view in the same generation, never revive revoked access."""
+        self._access.grant.check()
+        provider = native_service(self.client).localcrypt.open(self.location)
+        try:
+            self._access.grant.check()
+        except BaseException:
+            provider.close()
+            raise
+        return provider
+
+    def acquire(self):
+        return self._access.acquire()
+
+    def close(self):
+        self._access.close()
+
+    def operation(self, cancelled):
+        return self._access.operation(cancelled)
 
     def _guard(self, path):
+        self._access.check()
         if self.collection_storage_root is not None:
             expected = collection_path(self.collection_storage_root, True) / self.storage_namespace
             if expected != self.root:
@@ -81,8 +119,11 @@ class CryptFiles(LocalFiles):
         return super()._guard(path)
 
     def mapping(self, path, directory=False, decode=False):
-        return self.client.request('crypt_path', remote=self.remote, identity=self.identity,
-                                   path=self.relative(path), directory=directory, decode=decode)['path']
+        self._access.check()
+        result = self.client.request('crypt_path', remote=self.remote, identity=self.identity,
+                                     path=self.relative(path), directory=directory, decode=decode)['path']
+        self._access.check()
+        return result
 
     def _physical(self, path, directory=False):
         path = self.relative(path)
@@ -158,11 +199,13 @@ class CryptFiles(LocalFiles):
         with self._locate(path).open('rb') as encrypted:
             if getattr(self.client, 'supports_streaming', False):
                 with native_transfer(self.client, record, self._locate(path), encrypted) as stream:
+                    self._access.check()
                     yield stream
                 return
             result = self.client.request('crypt_raw_read', remote=self.remote, identity=self.identity,
                                          path=record['encrypted_path'], fd=encrypted.fileno())
-            with CryptTransferStream(base64.b64decode(result['data'], validate=True), record, encrypted) as stream:
+            with CryptTransferStream(base64.b64decode(result['data'], validate=True), record, encrypted,
+                                     validate=self._access.check) as stream:
                 yield stream
 
     def archive_password(self, path, *, cancelled=lambda: False):
@@ -259,11 +302,37 @@ class DownloadedCryptFile(LocalFiles):
     def __init__(self, copies, key):
         self.copies, self.key = copies, key
         record = copies.record(key)
+        self._access = LocalCryptAccess(native_service(copies.client).credentials.capture(record['remote']))
         name = copies.client.request('crypt_describe', remote=record['remote'], identity=record['identity'], path=record['encrypted_path'])
+        self._access.check()
         self.name = Path(name).name
         super().__init__(copies._folder(key))
 
+    @property
+    def closed(self):
+        return self._access.closed
+
+    def acquire(self):
+        return self._access.acquire()
+
+    def close(self):
+        self._access.close()
+
+    def operation(self, cancelled):
+        return self._access.operation(cancelled)
+
+    def reopen(self):
+        self._access.grant.check()
+        provider = native_service(self.copies.client).localcrypt.open(OfflineCryptLocation(self.copies, self.key))
+        try:
+            self._access.grant.check()
+        except BaseException:
+            provider.close()
+            raise
+        return provider
+
     def _physical(self, path, directory=False):
+        self._access.check()
         if self.relative(path) != self.name:
             raise ValueError('Choose the downloaded file.')
         return self.copies._data(self.key)
@@ -279,11 +348,13 @@ class DownloadedCryptFile(LocalFiles):
         with self.copies._data(self.key).open('rb') as encrypted:
             if getattr(self.copies.client, 'supports_streaming', False):
                 with native_transfer(self.copies.client, record, self.copies._data(self.key), encrypted) as stream:
+                    self._access.check()
                     yield stream
                 return
             result = self.copies.client.request('crypt_raw_read', remote=record['remote'], identity=record['identity'],
                                                 path=record['encrypted_path'], fd=encrypted.fileno())
-            with CryptTransferStream(base64.b64decode(result['data'], validate=True), record, encrypted) as stream:
+            with CryptTransferStream(base64.b64decode(result['data'], validate=True), record, encrypted,
+                                     validate=self._access.check) as stream:
                 yield stream
 
     def rename(self, source, destination):
@@ -296,6 +367,7 @@ class DownloadedCryptFile(LocalFiles):
             record = self.copies.record(self.key)
             result = self.copies.client.request('crypt_path', remote=record['remote'], identity=record['identity'], path=destination)
             record['encrypted_path'] = result['path']
+            self._access.check()
             atomic_write_json(self.copies._folder(self.key) / 'record.json', record)
             self.name = Path(destination).name
 
@@ -313,11 +385,14 @@ class DownloadedCryptFile(LocalFiles):
 
 def encrypted_storage(root, client, remote, *, create=True):
     """Resolve an unscoped encrypted location without leaking its layout to hosts."""
-    return CryptFiles(collection_path(Path(root), True), client, remote, storage_root=root, create=create)
+    return native_service(client).localcrypt.open(LocalCryptLocation(
+        collection_path(Path(root), True), remote, storage_root=root, create=create))
 
 
 def encrypted_copies(provider):
-    return ManagedCopies(provider)
+    # Reader/editor access outlives the browser independently. Both remain bound
+    # to the original generation and are revoked together by package locking.
+    return ManagedCopies(provider.reopen())
 
 
 def encrypted_document(provider, path):
@@ -349,7 +424,8 @@ def encrypted_library_sources(root, jobs, client, remotes):
                 physical = copy_target(root, job)
                 if not physical.is_dir() or physical.is_symlink():
                     continue
-                provider = CryptFiles(collection_path(root, True), client, remote, namespace=job['identity'], storage_root=root)
+                provider = native_service(client).localcrypt.open(LocalCryptLocation(
+                    collection_path(root, True), remote, namespace=job['identity'], storage_root=root))
                 folder = provider.mapping(job['prefix'], directory=True, decode=True)
                 sources.append((provider, folder, 'LocalCrypt: ' + remote))
         except (OSError, ValueError):

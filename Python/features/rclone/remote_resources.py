@@ -57,9 +57,15 @@ def invalidate_config(config_path):
     """Credential-manager writes/removal immediately retire disk-config views."""
     with _providers_lock:
         providers = tuple(_providers)
+    failure = None
     for provider in providers:
         if provider.config_path == Path(config_path):
-            provider.close()
+            try:
+                provider.close()
+            except Exception as error:
+                failure = failure or error
+    if failure is not None:
+        raise failure
 
 
 class RemoteResources:

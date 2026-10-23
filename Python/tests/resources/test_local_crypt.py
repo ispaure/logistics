@@ -19,6 +19,27 @@ from tests.local_crypt_fixture import crypt_fixture
 
 
 class LocalCryptTests(QtTestCase):
+    def test_service_open_views_close_independently_and_lock_together(self):
+        from features.rclone.desktop_service import service
+        with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, patch.object(
+                executable, 'get_rclone_path', return_value=self.binary):
+            first = service.localcrypt.open(f.item)
+            second = service.localcrypt.open(f.item)
+            self.addCleanup(first.close)
+            self.addCleanup(second.close)
+            browser_release = first.acquire()
+            reader_release = first.acquire()
+            browser_release()
+            self.assertFalse(first.closed)
+            self.assertEqual(first.read_bytes('note.md'), f.original)
+            reader_release()
+            self.assertTrue(first.closed)
+            self.assertEqual(second.read_bytes('note.md'), f.original)
+            service.credentials.lock(f.context)
+            self.assertTrue(second.closed)
+            with self.assertRaisesRegex(ValueError, 'locked'):
+                second.read_bytes('note.md')
+
     def test_recursive_search_uses_one_listing_and_opens_nested_results(self):
         from commonUtils.search.providers import search_resources
         from io import BytesIO
@@ -995,6 +1016,8 @@ class LocalCryptTests(QtTestCase):
             self.assertIs(window.book.source, f.provider)
             self.assertEqual(window.windowTitle(), '🕵️ Private - Edit EPUB metadata')
             window.editor.fields['title'].setText('Edited through private EPUB UI')
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel):
+                self.assertFalse(window.prepare_credential_lock())
             window.editor._accept()
             self.wait(lambda: window.worker is None)
             book = EPUBBook(f.item.data / 'book.epub', source=f.provider)

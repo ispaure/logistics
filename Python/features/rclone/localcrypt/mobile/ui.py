@@ -4,7 +4,7 @@ import asyncio
 import toga
 from toga.style import Pack
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
-from features.rclone.localcrypt.mobile.resources import DownloadedCryptFile
+from features.rclone.mobile.service import OfflineCryptLocation, native_service
 
 
 class LocalCryptUI:
@@ -39,7 +39,7 @@ class LocalCryptUI:
         def work(cancelled):
             if not key:
                 raise ValueError('Select an offline encrypted copy on the remote-files screen first.')
-            provider = DownloadedCryptFile(self.crypt_copies, key)
+            provider = native_service(self.cloud_client).localcrypt.open(OfflineCryptLocation(self.crypt_copies, key))
             result.extend((provider, provider.entry(provider.name)))
         if await self.file_work(work):
             self.file_provider, row = result

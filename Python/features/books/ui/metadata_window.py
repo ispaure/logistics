@@ -101,6 +101,14 @@ class MetadataWindow(qt.QDialog):
             return False
         return True
 
+    def prepare_credential_lock(self):
+        if self.worker:
+            return False
+        if self.editor is None or not self.editor.changes():
+            return True
+        from services.documents.ui.private_views import resolve_private_edits_before_lock
+        return resolve_private_edits_before_lock(self, lambda: self._save(self.editor.changes()))
+
     def closeEvent(self, event):
         if self.prepare_close():
             event.accept()

@@ -74,6 +74,8 @@ class LocalCryptUITests(unittest.TestCase):
 
     def test_existing_offline_copy_read_close_and_forget_without_plaintext_documents(self):
         class Client:
+            generation = 0
+
             def request(self, action, **values):
                 if action == 'crypt_path':
                     return dict(identity='b' * 64, path=values.get('path', ''))
@@ -156,6 +158,8 @@ class LocalCryptUITests(unittest.TestCase):
                 archive.writestr('ComicInfo.xml', f'<ComicInfo><Title>{title}</Title></ComicInfo>')
             return PrivateReader('comic.cbz', data.getvalue())
         class Client:
+            generation = 0
+
             def cancel(self): pass
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory).resolve()

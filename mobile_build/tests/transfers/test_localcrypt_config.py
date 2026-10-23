@@ -20,7 +20,7 @@ class LocalCryptConfigurationTests(unittest.TestCase):
                 return dict(identity='a' * 64, path=values['path'])
             self.assertEqual(action, 'crypt_paths')
             return [entry['path'] for entry in values['entries']]
-        return CryptFiles(root, SimpleNamespace(request=request), 'Secret')
+        return CryptFiles(root, SimpleNamespace(request=request, generation=0), 'Secret')
 
     def capture_encodes(self, provider):
         calls = []
@@ -108,6 +108,9 @@ class LocalCryptConfigurationTests(unittest.TestCase):
             (folder / 'encoded-file').write_bytes(b'ciphertext fixture')
             provider = object.__new__(CryptFiles)
             LocalFiles.__init__(provider, root)
+            from features.rclone.localcrypt.access import LocalCryptAccess
+            from features.rclone.service import CredentialGrant
+            provider._access = LocalCryptAccess(CredentialGrant('fixture', lambda: False))
             provider.collection_storage_root = None
             provider.mapping = lambda path, directory=False, decode=False: path
             provider.remote, provider.identity = 'Secret', 'a' * 64
@@ -115,7 +118,7 @@ class LocalCryptConfigurationTests(unittest.TestCase):
                 self.assertEqual(action, 'crypt_paths')
                 self.assertEqual(values['entries'], [dict(path='encoded-file', directory=False)])
                 return ['Book.epub']
-            provider.client = SimpleNamespace(request=request)
+            provider.client = SimpleNamespace(request=request, generation=0)
             with patch.object(provider, 'open', side_effect=AssertionError('Content read')):
                 rows = provider.list('parent/nested')
             self.assertEqual(rows[0]['name'], 'Book.epub')
@@ -135,6 +138,9 @@ class LocalCryptConfigurationTests(unittest.TestCase):
             vanished.write_bytes(b'old ciphertext')
             provider = object.__new__(CryptFiles)
             LocalFiles.__init__(provider, root)
+            from features.rclone.localcrypt.access import LocalCryptAccess
+            from features.rclone.service import CredentialGrant
+            provider._access = LocalCryptAccess(CredentialGrant('fixture', lambda: False))
             provider.collection_storage_root = None
             def mapping(path, directory=False, decode=False):
                 self.assertNotEqual(path, partial.name)
@@ -146,7 +152,7 @@ class LocalCryptConfigurationTests(unittest.TestCase):
             def request(action, **values):
                 self.assertEqual(action, 'crypt_paths')
                 return [mapping(item['path'], item['directory'], decode=True) for item in values['entries']]
-            provider.client = SimpleNamespace(request=request)
+            provider.client = SimpleNamespace(request=request, generation=0)
             self.assertEqual([row['name'] for row in provider.list()], ['finished.md'])
             self.assertTrue(partial.exists())
 

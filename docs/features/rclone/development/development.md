@@ -376,3 +376,29 @@ before notifying other revocation observers. The session notification runs after
 releasing the cache lock. Paused-worker regressions cover closure between path
 validation and publication, and observers verify that private caches are already
 empty when they run.
+
+## Captured transfer plans
+
+`transfers/service.py` supplies the shared `TransferService`. Both desktop
+`transfers/workflow.py` and native `transfers/mobile/review_ui.py` capture a
+`TransferPlan` containing the immutable `ReviewRequest`, comparison adapter,
+binding check and execution adapter. `RcloneService.transfers` retains the
+approval authority for its runtime. Browser/UI state and engine execution stay
+with their existing owners.
+
+`prepare(plan)` starts the existing shared review lifecycle and returns a
+`PreparedTransfer`. Presentation confirms that review; it cannot authorize a
+transfer by returning a boolean. `execute(prepared, context)` admits the captured
+executor once, passing the original options and operation-scoped cancellation and
+progress. A plan from another service, a modified review, a changed connection,
+an unretired comparison or a reused approval is refused before execution.
+Execution failure or cancellation consumes approval; retry requires a new review.
+
+Completed review still performs a fresh matching comparison. Explicit incomplete
+approval still waits for the comparison worker to retire and retains mandatory
+LocalCrypt authentication, link, destination and connection checks. The plan does
+not make remote Sync atomic or add rollback to partially completed transfers.
+Desktop session validity now captures a credential generation rather than
+comparing credential values, so reloading identical values invalidates old plans.
+`test_transfer_service.py`, `test_rclone_review.py` and mobile `test_mirror_ui.py`
+cover this handoff alongside the existing engine/preflight suites.

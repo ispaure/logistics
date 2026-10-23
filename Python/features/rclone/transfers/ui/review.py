@@ -4,10 +4,10 @@ from features.rclone.transfers.review import ReviewSession
 
 
 class ReviewDialog(qt.QDialog):
-    def __init__(self, request, scanner, valid, parent=None):
+    def __init__(self, request, scanner, valid, parent=None, *, session=None):
         super().__init__(parent)
         self.request, self.scanner, self.valid = request, scanner, valid
-        self.session = ReviewSession(request, scanner, valid)
+        self.session = session or ReviewSession(request, scanner, valid)
         self.setWindowTitle('Review ' + request.operation)
         self.resize(760, 520)
         layout = qt.QVBoxLayout(self)
@@ -83,11 +83,13 @@ class ReviewDialog(qt.QDialog):
         self.reject()
 
 
-def confirm_review(request, scanner, valid=lambda: True, parent=None):
-    if not valid():
-        return False
-    dialog = ReviewDialog(request, scanner, valid, parent)
+def confirm_review(prepared, parent=None):
+    review = prepared.review
+    if not review.valid():
+        review.cancel()
+        return None
+    dialog = ReviewDialog(prepared.request, review.scanner, review.valid, parent, session=review)
     try:
-        return dialog.exec() == qt.QDialog.DialogCode.Accepted
+        return prepared if dialog.exec() == qt.QDialog.DialogCode.Accepted else None
     finally:
         dialog.deleteLater()

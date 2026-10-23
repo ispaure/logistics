@@ -70,6 +70,7 @@ class MobileLocalCryptTests(unittest.TestCase):
         import os
         record = dict(remote='Secret', encrypted_path='encrypted-name', identity='a' * 64)
         class Client:
+            generation = 0
             locked = False
             failed = False
             def request(self, action, **values):
@@ -101,6 +102,7 @@ class MobileLocalCryptTests(unittest.TestCase):
         import os
         from commonUtils.runtime.operations import OperationCancelled
         class Client:
+            generation = 0
             cancel_after_encode = False
             fail = False
             def request(self, action, **values):
@@ -155,6 +157,7 @@ class MobileLocalCryptTests(unittest.TestCase):
             archive.writestr('page.png', PNG)
             archive.writestr('ComicInfo.xml', b'<ComicInfo><Title>Before</Title><Pages><Page Image="0" Bookmark="keep"/></Pages></ComicInfo>')
         class Client:
+            generation = 0
             corrupt = False
             data = original.getvalue()
             def request(self, action, **values):
