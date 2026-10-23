@@ -1,5 +1,60 @@
 # Ecosystem maintenance progress
 
+## Qt resource browser and editor Save/Save As continuation
+
+Started from clean Logistics `9ee21663` / shared `cd21efe` on the current
+development branches. Ally Tools remains at `d2c00b8`; Blue Hole at `665c184`.
+No push is authorized and no external consumer change is required.
+
+- Shared `b425d5d` names navigation, search, provider-view, optional-preview and
+  operation-control construction in the existing resource-browser module. The
+  constructor retains provider binding, navigation/keyboard connections,
+  cooperative owner registration and initial navigation, in 42 rather than 136
+  lines. Widget fields, subclass hooks and provider/lifecycle owners stay intact.
+- Logistics `1e6c644b` separates overwrite confirmation and captured local
+  publication from `save_document()` admission. The 45-line entry point retains
+  destination choice/release and private handoff policy; the previous 124-line
+  body also held the local worker and completion/failure callbacks. A typed
+  optional revision tuple distinguishes confirmed overwrite from cancellation.
+  Source snapshots, read limits, conflicts, encoding, callback order and recovery
+  policy retain their existing implementations.
+- Five new editor contract methods pass against the original code before the
+  refactor and after it. They cover two read-only states, picker/overwrite
+  cancellation, late destination edits, private handoff ordering and two private
+  preparation failures. This is regression protection for preserved behavior,
+  not a claim to repair a previously failing Save As implementation.
+
+Resource construction expands to every original ordered AST statement. Expanding
+the local-save helper and normalizing the overwrite helper's `None` cancellation
+back to the entry point's `False` reproduces the complete original save statement
+tree. Existing public signatures and all other methods in both owners match.
+No production module was added or moved; no package, dependency, public API or
+persisted format changed.
+
+| Executed validation | Result |
+| --- | --- |
+| Resource browser before/after | Same 10 ordered cases; zero failures/skips. |
+| Text editor before/after/final | All 23 cases, including five added contracts; zero failures/skips. |
+| Resource lifecycle/lifetime/operations/selection | 24 cases across four files pass. |
+| Resource picker consumers | Seven cases pass, including release, Save As and private-document paths. |
+| Editor recovery | All 13 cases pass, including actual recovery scrubbing. |
+| Remote browser consumers | All 10 cases pass with installed rclone and synthetic local/crypt backends; no real remote account used. |
+| Editor change review | All 12 cases pass. |
+| Ally Tools | All 48 existing fixture/import/signature cases pass unchanged. |
+| Blue Hole current-source compatibility | Both existing static import/call-signature/global-binding contracts pass against current shared source in its private namespace. |
+
+Both external worktrees and Blue Hole's vendor revision remain untouched. The
+namespace probe is not native Blender registration/export validation. No device
+testing, app installation, production-data mutation, release or push occurred.
+Raw source copies, comparison drivers and reports stay under ignored test results.
+Final checks pass: five Logistics/three shared wiki cases, configured lint,
+toolchain consistency, source hygiene, architecture (24 host adapters / 15 feature
+edges / zero violations) and whitespace. The two edited production modules and
+regression module compile without execution. All 99 focused browser/resource/
+editor/consumer cases pass, with no failures/skips; documentation and compatibility
+checks are recorded separately above. Full suites and native platforms were not
+rerun; earlier totals below keep their recorded source scope.
+
 ## Reader composition and Git execution readability continuation
 
 This continuation starts from clean Logistics `355daf04`, shared `a2ab228`,

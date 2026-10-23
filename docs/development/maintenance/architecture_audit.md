@@ -1,5 +1,26 @@
 # Ecosystem architecture audit
 
+## Resource construction and editor save admission follow-up
+
+Shared `b425d5d` and Logistics `1e6c644b` clarify two existing owners without
+moving packages or introducing another state/lifecycle layer. Resource-browser
+construction is a 42-line composition rather than 136 lines, with provider binding
+and cooperative ownership still preceding initial navigation. Save/Save As is a
+45-line admission flow rather than 124 lines; typed overwrite confirmation and
+captured local publication remain in `ui/file_operations.py`.
+
+Statement expansion preserves original resource construction and local save flow;
+the comparison explicitly translates the helper's `None` cancellation to the
+public entry point's existing `False`. Five new Save As methods pass before and
+after the refactor. They protect callback/retarget ordering, read-only restoration,
+cancellation, late destination changes and private handoff/preparation failures.
+All 23 editor, ten browser, 24 shared resource, seven picker, 13 recovery, ten
+synthetic-remote and 12 change-review cases pass in the focused checks. No public
+signature, persisted format or dependency changes. Consumer compatibility passes
+with Ally Tools/Blue Hole unchanged. The [progress log](overnight_progress.md)
+records commits and validation boundaries; native platforms and full-suite totals
+remain scoped to their original runs. No new whole-system numeric score is claimed.
+
 ## Reader composition and Git preparation follow-up
 
 At shared `cd21efe` and Logistics `bb13dcb2` / `2368b8a8`, three existing owners

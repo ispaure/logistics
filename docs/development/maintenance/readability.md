@@ -349,3 +349,31 @@ state owner or abstraction layer. The limits remain native rendering/focus,
 Windows/Linux execution and target Blender validation; no new numeric ecosystem
 score is inferred from these bounded improvements. The [progress log](overnight_progress.md)
 records consumer compatibility and the final validation checkpoint.
+
+## Qt resource browser and editor save follow-up
+
+Shared `b425d5d` makes resource-browser construction a 42-line composition instead
+of 136 lines. Five private builders stay in `ui/resources/browser.py`; provider
+binding, owner registration and first navigation remain explicit in the constructor.
+The same ten provider-browser cases pass before/after, including recursive search,
+preview placement, thumbnail concurrency and picker retirement. Another 24 shared
+resource-lifecycle/operation cases and seven picker consumers pass.
+
+Logistics `1e6c644b` separates Save/Save As admission from overwrite confirmation
+and captured local publication in the existing `FileOperations` owner. The public
+entry point is 45 rather than 124 lines; it retains private handoff and choice
+release policy. Local callbacks retain the captured read-only state, saved-byte
+baseline and completion order. No plan object, manager or additional state owner
+is introduced. Five new Save As contracts pass on both original/refactored code;
+all 23 editor, 13 recovery and 12 change-review cases pass.
+
+Resource construction reproduces the original ordered statements after expansion.
+The save comparison additionally accounts for the overwrite helper returning
+`None` and the public entry point returning `False` on cancelled/failed admission.
+All remaining statements, signatures and other existing methods match. These are
+readability boundaries with regression protection, not new file-operation policy.
+Ten actual CLI remote-browser cases with synthetic local/crypt backends pass.
+Ally Tools and Blue Hole require no compatibility edits and remain unchanged.
+No new package, dependency, public API, persisted schema or numeric ecosystem
+rating is introduced. Native platform behavior and earlier full-suite provenance
+remain separate from this focused continuation.
