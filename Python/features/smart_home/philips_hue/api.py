@@ -47,7 +47,8 @@ def _integer(value, minimum, maximum, name):
     return value
 
 
-def set_group_prop_from_arg_dict(arguments):
+def _group_properties(arguments):
+    """Validate the complete requested change before acquiring a bridge or group."""
     properties = {}
     if 'State' in arguments:
         if type(arguments['State']) is not bool:
@@ -67,6 +68,11 @@ def set_group_prop_from_arg_dict(arguments):
             raise ValueError(f"Unknown color: {arguments['Color']}") from None
     if not properties:
         raise ValueError('Choose a light property to change.')
+    return properties
+
+
+def set_group_prop_from_arg_dict(arguments):
+    properties = _group_properties(arguments)
     bridge = get_bridge()
     group = _group_id(bridge, arguments['Room'])
     responses = bridge.set_group(group, properties)

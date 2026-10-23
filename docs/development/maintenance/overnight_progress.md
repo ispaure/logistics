@@ -1,5 +1,21 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L10 smaller integrations review
+
+Reviewed aviation calculations/data, Flight Sim preference publication, Calibre
+export planning, FUSE commands/mounts, Minecraft launch detection, Plex comparison/
+publication, Hue commands and downloader execution/sync. Existing structured results,
+bounded command wrappers, publication owners and cohesive Git/LocalCrypt backends
+are retained. Hue names complete property validation before bridge acquisition;
+all original function/validation/command/error AST matches after expansion and
+all four bridge cases pass before/after. The integrations selection passes all 12
+files; Calibre's focused selection also passes. Optional diagnostics found three
+intentional downloader compatibility re-exports and an aviation no-output legacy
+method's unused formatting binding; those are reserved for T4's explicit policy
+review rather than silently changing APIs/output. Owner lint, architecture, wiki
+and whitespace pass. Live services/hardware remain separate acceptance. No external
+repository edit or project push.
+
 ## Sequential audit implementation: L9 Blender library preparation
 
 The Logistics add-on library names regular selection resolution, managed-path and

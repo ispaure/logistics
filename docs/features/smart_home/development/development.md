@@ -14,7 +14,11 @@ This feature provides tools and integrations for interacting with smart home dev
 ### Philips Hue
 
 `philips_hue/api.py` connects to the bridge, resolves groups by name and applies
-on/off, brightness, hue/saturation and preset changes.
+on/off, brightness, hue/saturation and preset changes. `_group_properties` validates
+the complete property request before bridge acquisition; the public command retains
+group lookup, one `set_group` call and response-error handling. Invalid values do
+not contact the bridge; ambiguous/missing groups cannot fall back to a different
+room. Device/network acceptance is separate from the mocked bridge contracts.
 
 The Hue Bridge address is read from this feature's `config.ini`, under `[PhilipsHue]` / `bridge_address_str` (legacy `bridge_address` is still accepted).
 
