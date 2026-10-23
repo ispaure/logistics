@@ -150,7 +150,8 @@ class TransferReviewUI:
             copy_links=not job['crypt'], excludes=saved.excludes if push else ())
         from features.rclone.mobile.service import native_service
         transfers = native_service(client).transfers
-        transfer = NativeTransferRequest(store, job, push, key is None, options, generation,
+        transfer = NativeTransferRequest(store=store, job=job, push=push, new=key is None,
+            options=options, generation=generation,
             host_active=lambda: self.active_host and self.cloud_client is client)
         prepared = await _prepare(transfers, transfer)
         request = prepared.request

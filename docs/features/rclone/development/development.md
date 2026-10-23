@@ -8,11 +8,12 @@ encoding. Desktop and mobile both consume it; importing portable modules does no
 initialize either UI, desktop configuration or credential state.
 `transfers/review.py` owns the shared memory-only review state, partial/completed results,
 comparison cancellation and stale-review comparison. `transfers/review_cli.py` is the
-desktop read-only rclone adapter; `ui/review.py` presents it, and `transfers/workflow.py`
+desktop read-only rclone adapter; `transfers/ui/review.py` presents it, and `transfers/workflow.py`
 keeps approved execution routed through the existing mandatory sync preflight.
 Mobile uses the same review state with `transfers/mobile/review_ui.py`
 and the embedded `mirror_review` adapter. Programmatic synchronization APIs retain
-their explicit low-level execution behavior; user-facing Push/Pull always reviews.
+their explicit noninteractive behavior through captured service plans; user-facing
+Push/Pull always reviews.
 The mobile review entry initializes cloud controls without navigation before
 credential checks, so mapped Workspaces Pull/Push also works on a cold launch.
 `test_workspace_popup_menus.py` covers both cold command paths.
@@ -21,6 +22,28 @@ Downloader uses it optionally. See the [user guide](../user/user.md) for control
 [resource setup](../../../user/configuration.md) for paths/provisioning, and
 [UI architecture](../../../development/features.md#remote-folder-source-context) for source wiring.
 
+## Service ownership
+
+Composition modules wire adapters together; they do not publish credentials or
+own navigation. Read these owners when changing a particular responsibility:
+
+| Responsibility | Owner |
+| --- | --- |
+| Shared credential admissions, grants and service composition | `service.py`, `credential_loading.py` |
+| Desktop wiring / credential publication and revocation | `desktop_service.py` / `desktop_credentials.py` |
+| Native wiring / process-wide credential adapter | `mobile/service.py` / `mobile/credentials.py` |
+| Native ZIP/SMB preparation and cancellable workers | `mobile/credential_loading.py` |
+| Native retained ZIPs and association metadata | `mobile/credential_retention.py`, `mobile/credential_packages.py` |
+| Managed LocalCrypt and offline-copy references | `localcrypt/mobile/locations.py` |
+| Remote and LocalCrypt session lifetime / transport | `remote_resources.py`, `mobile/remote_resources.py`, `localcrypt/backend.py`, `localcrypt/mobile/resources.py` |
+| Shared transfer admission and execution lifetime | `transfers/service.py` |
+| Platform transfer plans | `transfers/desktop.py`, `transfers/mobile/plan.py` |
+
+Both compositions capture their credential adapter directly when constructing the
+transfer service. Plans do not reach back through a partially constructed global
+service or client attribute. Desktop and native transfer request construction uses
+named fields for direction, options, mapping state and launch hooks.
+
 ## Credential contract
 
 With **Save credentials locally** enabled, loading `Credentials/rclone/Personal.zip`
@@ -28,9 +51,9 @@ creates `~/.config/rclone/Personal.conf` without changing the ZIP. With it disab
 credentials remain in a process-local session identified by a virtual `.session`
 path; no plaintext config or extracted TXT is written. Forgetting or replacing a
 parent session also revokes private LocalCrypt reader sessions. Entries are `.txt` files starting with a rclone section
-header such as `[Media]`, followed by configuration lines. Removing a loaded
-credential deletes only its `.conf`; Clear All deletes every directly contained
-`.conf`, including a legacy `rclone.conf`, never credential packages.
+header such as `[Media]`, followed by configuration lines. Forgetting a selected
+package removes its saved config and session credentials; Clear All removes every
+directly contained `.conf`, including a legacy `rclone.conf`. Both preserve the ZIP.
 
 All `.conf` files in that directory are sources, including configs without a
 corresponding ZIP. Initialization only creates the config directory; it never
@@ -64,7 +87,9 @@ publication, so invalid crypt settings preserve the old session.
 The service guards publication with nonblocking admission. A lock, a forget, an unlock
 publication attempt, or saved-vault restore retires other pending loads in that
 service; the platform generation/file checks also reject stale loads. Pending
-admissions are conservatively invalidated across packages within a service,
+loads have named stage, context, epoch and cleanup fields; one invalidation method
+advances the epoch and retires staging for every publication/revocation path.
+Admissions are conservatively invalidated across packages within a service,
 while existing desktop access grants retain their package-specific revocation.
 Cancellation and host validity are checked before publication, including the
 atomic saved-file commit. A completed publication remains committed if a caller
@@ -74,6 +99,9 @@ failures after publication can likewise leave the new credentials active.
 Desktop Workspaces and the standalone unlock prompt prepare on a worker and
 publish on the GUI thread through this same authority. `DesktopCredentials` in
 `desktop_credentials.py` owns publication; `desktop_service.py` only composes it.
+The native equivalent is `mobile/credentials.py`, with `mobile/service.py` limited
+to wiring. A native prepared stage is wrapped without mutating the stage supplied
+by the loading adapter.
 Native `mobile/credential_loading.py` captures a bounded ZIP and alias snapshot,
 then delegates atomic import, device-vault restore, or SMB addition to the
 existing `CloudClient`/native authorities. Native ZIP passwords remain necessary
@@ -496,6 +524,8 @@ executor once, passing the original options and operation-scoped cancellation an
 progress. A plan from another service, a modified review, a changed connection,
 an unretired comparison or a reused approval is refused before execution.
 Execution failure or cancellation consumes approval; retry requires a new review.
+Reviewed and programmatic execution share one execution-lifetime method, which
+combines host cancellation and captured access before invoking the platform plan.
 
 `run(request, context)` retains the existing explicitly noninteractive transfer
 API for automation. It constructs the same platform plan, checks its binding and
@@ -510,6 +540,8 @@ Completed review still performs a fresh matching comparison. Explicit incomplete
 approval still waits for the comparison worker to retire and retains mandatory
 LocalCrypt authentication, link, destination and connection checks. The plan does
 not make remote Sync atomic or add rollback to partially completed transfers.
+Saved-config revision checks belong to the credential adapter. Remote providers
+validate that same grant rather than maintaining a second file-stamp policy.
 Desktop session validity captures a credential generation rather than comparing
 credential values, so reloading identical values invalidates old plans. Saved-config
 grants capture both a file revision and a process-wide lock generation. Locking a
@@ -524,7 +556,10 @@ operation. The service combines the caller's cancellation with the captured
 credential and host lifetime before invoking the adapter and throughout its
 preflight and transfer work. Native admission also binds the collection target;
 a relocated target cannot receive the approved transfer. Mapping dictionaries and
-desktop launch flags are copied into immutable request snapshots.
+desktop launch flags are copied into immutable request snapshots. Desktop
+comparison consumes that effective request instead of forwarding its fields
+individually. The native scanner accepts direction explicitly; transient review
+flags are not added to the persisted job's mapping shape.
 
 Desktop rechecks access after its association-publication hook and before
 preflight. Each crypt comparison owns its provider until the scanner retires.

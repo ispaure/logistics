@@ -6,7 +6,8 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 
-from features.rclone.mobile.service import LocalCryptLocation, native_service
+from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
+from features.rclone.mobile.service import native_service
 from features.rclone.localcrypt.mobile.resources import encrypted_copies
 
 

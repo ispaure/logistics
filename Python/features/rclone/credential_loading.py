@@ -5,6 +5,8 @@ from typing import Callable
 
 class CredentialBusyError(ValueError):
     """Publication was refused without waiting for another credential change."""
+    def __init__(self, message=None):
+        super().__init__(message or 'Credentials are in use. Stop the active operation, then retry.')
 
 
 @dataclass(frozen=True)

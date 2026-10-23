@@ -9,7 +9,7 @@ from threading import RLock
 from contextlib import contextmanager
 from weakref import WeakKeyDictionary, finalize
 from commonUtils.runtime.operations import check_cancelled
-from .credential_loading import CredentialBusyError, CredentialContext, PreparedCredentials
+from .credential_loading import CredentialBusyError, CredentialContext, CredentialStage, PreparedCredentials
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,14 @@ class CredentialBackend(Protocol):
     def forget(self, key: object | None = None): ...
 
 
+@dataclass(frozen=True)
+class _PendingLoad:
+    stage: CredentialStage
+    context: CredentialContext
+    epoch: int
+    cleanup: Callable[[], None]
+
+
 class CredentialService:
     """Own staged loading, single-use unlock publication and access revocation."""
     def __init__(self, backend: CredentialBackend):
@@ -54,18 +62,20 @@ class CredentialService:
     @contextmanager
     def _publication(self):
         if not self._lock.acquire(blocking=False):
-            raise CredentialBusyError('Credentials are in use. Stop the active operation, then retry loading the credential ZIP.')
+            raise CredentialBusyError()
         try:
             yield
         finally:
             self._lock.release()
 
-    def _retire_pending(self):
+    def _invalidate_pending(self):
+        """Reject in-flight preparation and erase every registered staged load."""
+        self._epoch += 1
         pending, self._pending = self._pending, WeakKeyDictionary()
         failure = None
-        for _, _, _, cleanup in list(pending.values()):
+        for load in list(pending.values()):
             try:
-                cleanup()
+                load.cleanup()
             except Exception as error:
                 failure = failure or error
         if failure is not None:
@@ -86,7 +96,7 @@ class CredentialService:
                     raise ValueError('Credentials changed while loading. Try again.')
                 prepared = PreparedCredentials(request)
                 cleanup = finalize(prepared, stage.close)
-                self._pending[prepared] = stage, context, epoch, cleanup
+                self._pending[prepared] = _PendingLoad(stage, context, epoch, cleanup)
                 return prepared
         except BaseException:
             stage.close()
@@ -97,22 +107,21 @@ class CredentialService:
         with self._publication():
             if not isinstance(prepared, PreparedCredentials) or prepared not in self._pending:
                 raise ValueError('This credential load is closed or belongs to another runtime.')
-            stage, context, epoch, cleanup = self._pending.pop(prepared)
+            load = self._pending.pop(prepared)
             try:
-                check_cancelled(context.cancelled)
-                if epoch != self._epoch or not context.valid() or not stage.valid():
+                check_cancelled(load.context.cancelled)
+                if load.epoch != self._epoch or not load.context.valid() or not load.stage.valid():
                     raise ValueError('Credentials changed while loading. Try again.')
-                self._epoch += 1
-                self._retire_pending()
-                return stage.publish(context)
+                self._invalidate_pending()
+                return load.stage.publish(load.context)
             finally:
-                cleanup()
+                load.cleanup()
 
     def discard(self, prepared):
         with self._lock:
             pending = self._pending.pop(prepared, None)
             if pending is not None:
-                pending[-1]()
+                pending.cleanup()
 
     def load(self, request, password, context=CredentialContext()):
         prepared = self.prepare_load(request, password, context)
@@ -126,16 +135,14 @@ class CredentialService:
             check_cancelled(context.cancelled)
             if not context.valid():
                 raise ValueError('Credential restoration is no longer current. Try again.')
-            self._epoch += 1
-            self._retire_pending()
+            self._invalidate_pending()
             return self._backend.restore(create=create)
 
     def lock(self, key=None):
         """Revoke access and pending loads after the host resolves unsaved edits."""
         with self._lock:
-            self._epoch += 1
             try:
-                self._retire_pending()
+                self._invalidate_pending()
             finally:
                 self._backend.lock(key)
 
@@ -157,9 +164,8 @@ class CredentialService:
             check_cancelled(context.cancelled)
             if not context.valid():
                 raise ValueError('Credential forgetting is no longer current. Try again.')
-            self._epoch += 1
             try:
-                self._retire_pending()
+                self._invalidate_pending()
             finally:
                 result = self._backend.forget(key)
             return result

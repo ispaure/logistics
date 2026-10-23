@@ -164,7 +164,8 @@ class MirrorUI(TransferReviewUI):
         client = getattr(self, 'cloud_client', None)
         if client is None or not hasattr(client, 'request'):
             return result
-        from features.rclone.mobile.service import LocalCryptLocation, native_service
+        from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
+        from features.rclone.mobile.service import native_service
         store = self.mirror_store()
         from features.rclone.transfers.mobile.jobs import resolved_job
         for job in store.jobs.values():
@@ -503,7 +504,8 @@ class MirrorUI(TransferReviewUI):
             origin = self.navigation_generation
             def resolve():
                 from features.rclone.transfers.mobile.jobs import remote_location
-                from features.rclone.mobile.service import LocalCryptLocation, native_service
+                from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
+                from features.rclone.mobile.service import native_service
                 _, folder = remote_location(client, dict(job))
                 provider = native_service(client).localcrypt.open(LocalCryptLocation(
                     collection_path(self.private_root, True), job['remote'], namespace=job['identity'], storage_root=self.private_root))

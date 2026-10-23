@@ -22,8 +22,9 @@ def sync_transfer(source, destination, *, operation, config_path, crypt_item=Non
         bw_limit=kwargs.pop('bw_limit', None), copy_links=kwargs.pop('copy_links', True),
         excludes=load_excludes() if operation == 'Push' else ())
     cancelled = kwargs.pop('cancelled', lambda: False)
-    transfer = DesktopTransferRequest(str(source), str(destination), operation, Path(config_path), Path(binary),
-        options, crypt_item, before_start, kwargs)
+    transfer = DesktopTransferRequest(source=str(source), destination=str(destination), operation=operation,
+        config=Path(config_path), binary=Path(binary), options=options, crypt_item=crypt_item,
+        before_start=before_start, launch=kwargs)
     if not review:
         return service.transfers.run(transfer, TransferContext(cancelled=cancelled))
     prepared = service.transfers.review(transfer)

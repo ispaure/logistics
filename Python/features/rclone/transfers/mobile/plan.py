@@ -13,7 +13,7 @@ from features.rclone.transfers.service import TransferPlan
 from features.rclone.transfers.transfer_options import TransferOptions
 
 
-def native_scanner(client, job, local_path, options=TransferOptions(), cleanup_plan=lambda cancelled: {}):
+def native_scanner(client, job, local_path, *, push, options=TransferOptions(), cleanup_plan=lambda cancelled: {}):
     def scan(emit, cancelled):
         run, done = uuid4().hex, Event()
         def monitor():
@@ -30,12 +30,12 @@ def native_scanner(client, job, local_path, options=TransferOptions(), cleanup_p
         try:
             if cancelled():
                 return ''
-            cleanup = cleanup_plan(cancelled) if job['_push'] else {}
+            cleanup = cleanup_plan(cancelled) if push else {}
             check_cancelled(cancelled)
             result = client.request('mirror_review', remote=job['remote'], path=job['prefix'],
                 identity=job['identity'], local_path=str(local_path.resolve()), run=run,
-                push=job['_push'], decrypted=not job['crypt'], cleanup_paths=list(cleanup),
-                **options.bridge_arguments(push=job['_push']))
+                push=push, decrypted=not job['crypt'], cleanup_paths=list(cleanup),
+                **options.bridge_arguments(push=push))
             done.set()
             watcher.join()
             replace_changes(emit, [*result['changes'], *[('cleanup', label) for label, _ in cleanup.values()]])
@@ -99,8 +99,8 @@ def build_plan(client, transfer, credentials):
         local += '/' + prefix
     request = ReviewRequest('Push' if transfer.push else 'Pull', local if transfer.push else online,
                             online if transfer.push else local, job['identity'], transfer.options)
-    scan = native_scanner(client, dict(job, _push=transfer.push), target,
-        transfer.options, cleanup_plan=lambda cancelled: store.cleanup_plan(dict(job), client, cancelled))
+    scan = native_scanner(client, job, target, push=transfer.push,
+        options=transfer.options, cleanup_plan=lambda cancelled: store.cleanup_plan(dict(job), client, cancelled))
     def compare(emit, cancelled):
         stopping = lambda: cancelled() or not active()
         check_cancelled(stopping)

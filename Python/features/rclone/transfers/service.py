@@ -56,9 +56,13 @@ class TransferService:
 
     def review(self, request) -> PreparedTransfer:
         """Resolve a captured platform request without presentation or execution."""
+        return self.prepare(self._build_plan(request))
+
+    def _build_plan(self, request, *, cancelled=_not_cancelled):
         if self._plan_factory is None:
             raise TypeError('This transfer service has no platform adapter.')
-        return self.prepare(self._plan_factory(request))
+        check_cancelled(cancelled)
+        return self._plan_factory(request)
 
     def run(self, request, context=TransferContext()):
         """Run an explicitly requested programmatic transfer without a review UI.
@@ -66,16 +70,10 @@ class TransferService:
         Interactive commands use review/execute. Automation retains its existing
         noninteractive API, with the same captured access and platform preflight.
         """
-        if self._plan_factory is None:
-            raise TypeError('This transfer service has no platform adapter.')
-        check_cancelled(context.cancelled)
-        plan = self._plan_factory(request)
+        plan = self._build_plan(request, cancelled=context.cancelled)
         if not plan.valid():
             raise ValueError('Connection or target changed. Start the transfer again.')
-        active = plan.active or plan.valid
-        execution = TransferContext(lambda: context.cancelled() or not active(), context.progress)
-        check_cancelled(execution.cancelled)
-        return plan.execute(plan.request, execution)
+        return self._execute_plan(plan, context)
 
     def prepare(self, plan: TransferPlan) -> PreparedTransfer:
         if not plan.valid():
@@ -98,6 +96,10 @@ class TransferService:
                     or review.valid is not plan.valid or not review.approved):
                 raise ValueError('Connection or review changed. Review the transfer again.')
             approval.used = True
+        return self._execute_plan(plan, context)
+
+    @staticmethod
+    def _execute_plan(plan, context):
         # Review bindings include records which execution may legitimately save.
         # The active binding tracks only access lifetime throughout execution.
         active = plan.active or plan.valid

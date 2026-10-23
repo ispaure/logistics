@@ -8,6 +8,19 @@ from commonUtils.runtime.operations import check_cancelled
 from .credential_loading import CredentialStage, CredentialResult
 
 
+def _config_revision(path):
+    """Missing files have a stable sentinel; other storage errors stay visible."""
+    try:
+        info = path.stat()
+    except FileNotFoundError:
+        return None
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def _saved_config(path):
+    return path.with_suffix('.conf') if path.suffix == '.session' else path
+
+
 @dataclass(frozen=True)
 class DesktopCredentialLoad:
     package: Path
@@ -24,35 +37,37 @@ class DesktopCredentialLoad:
 
 class DesktopCredentials:
     lock_scope = 'package'
+    # Shared across service instances and windows, like the session registry.
     _saved_lock = RLock()
-    _saved_generations = {}
+    _saved_generations: dict[Path, int] = {}
 
     def capture(self, key):
         key = Path(key)
         if key.suffix == '.session' or session.names(key) is not None:
             return CredentialGrant(key, session.revocation_check(key))
-        def revision():
-            try:
-                info = key.stat()
-                return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
-            except OSError:
-                return None
-        original = revision()
+        try:
+            original = _config_revision(key)
+        except OSError:
+            original = None
         if original is None:
             raise ValueError('This saved credential config is unavailable.')
         saved = key.absolute()
         with self._saved_lock:
             generation = self._saved_generations.setdefault(saved, 0)
         def revoked():
+            try:
+                current = _config_revision(key)
+            except OSError:
+                return True
             with self._saved_lock:
-                return self._saved_generations.get(saved) != generation or revision() != original
+                return self._saved_generations.get(saved) != generation or current != original
         return CredentialGrant(key, revoked)
 
     def lock(self, key=None):
         with self._saved_lock:
             paths = [Path(key)] if key is not None else list(set(session.paths()) | set(self._saved_generations))
             for path in paths:
-                saved = (path.with_suffix('.conf') if path.suffix == '.session' else path).absolute()
+                saved = _saved_config(path).absolute()
                 self._saved_generations[saved] = self._saved_generations.get(saved, 0) + 1
         # Attempt every revocation even if a view's cleanup callback fails.
         failure = None
@@ -61,7 +76,7 @@ class DesktopCredentials:
             # Saved config bytes are retained; existing views must still
             # retire. Explicitly reopening a saved config creates new access.
             for revoke in (lambda: session.forget(path),
-                           lambda: invalidate_config(path.with_suffix('.conf') if path.suffix == '.session' else path)):
+                           lambda: invalidate_config(_saved_config(path))):
                 try:
                     revoke()
                 except Exception as error:
@@ -100,15 +115,9 @@ class DesktopCredentials:
             raise TypeError('Choose a desktop credential package.')
         existing = session.names(request.config) is not None
         revoked = session.revocation_check(request.config)
-        def revision():
-            try:
-                info = request.config.stat()
-                return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
-            except FileNotFoundError:
-                return None
-        original = revision() if request.remember else None
+        original = _config_revision(request.config) if request.remember else None
         def valid():
-            return (revision() == original if request.remember else
+            return (_config_revision(request.config) == original if request.remember else
                     not revoked() if existing else session.names(request.config) is None)
         values = session.read_package(request.package, password)
         def close():

@@ -5,8 +5,6 @@ from .remote_access import DesktopRemoteLocation, RemoteService
 from .transfers.service import TransferService
 
 
-
-
 def _open_localcrypt(connection):
     from .localcrypt.backend import CryptResources
     return CryptResources(connection)
@@ -23,11 +21,18 @@ def _open_remote(location):
     return RemoteResources(location.config, location.remote, binary=binary)
 
 
-def _transfer_plan(request):
-    from .transfers.desktop import build_plan
-    return build_plan(request, service.credentials)
+def _create_service():
+    credentials = CredentialService(DesktopCredentials())
+
+    def transfer_plan(request):
+        from .transfers.desktop import build_plan
+        return build_plan(request, credentials)
+
+    return RcloneService(
+        credentials=credentials,
+        localcrypt=LocalCryptService(_open_localcrypt),
+        remotes=RemoteService(_open_remote),
+        transfers=TransferService(transfer_plan))
 
 
-service = RcloneService(CredentialService(DesktopCredentials()),
-                        LocalCryptService(_open_localcrypt), RemoteService(_open_remote),
-                        TransferService(_transfer_plan))
+service = _create_service()

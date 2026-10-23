@@ -16,7 +16,8 @@ from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import read_up_to
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
 from features.rclone.access import ResourceAccess
-from features.rclone.mobile.service import LocalCryptLocation, OfflineCryptLocation, native_service
+from features.rclone.localcrypt.mobile.locations import LocalCryptLocation, OfflineCryptLocation
+from features.rclone.mobile.service import native_service
 
 
 class CryptTransferStream(RangeReader):

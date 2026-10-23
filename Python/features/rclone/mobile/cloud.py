@@ -76,7 +76,7 @@ class CloudClient:
             # local reads and transfers keep their independent native scopes.
             blocking = action == 'clear'
             if not self.credential_state.lock.acquire(blocking=blocking):
-                raise CredentialBusyError('Credentials are in use. Stop the active operation, then retry loading the credential ZIP.')
+                raise CredentialBusyError()
             try:
                 return self._request(action, **values)
             finally:
@@ -102,7 +102,7 @@ class CloudClient:
             self.free(pointer)
         if not reply.get('ok'):
             if reply.get('error_code') == 'credentials_busy':
-                raise CredentialBusyError(reply.get('error', 'Credentials are in use. Stop the active operation, then retry.'))
+                raise CredentialBusyError(reply.get('error'))
             if reply.get('error_code') == 'archive_password':
                 from commonUtils.archives.zip_access import ArchivePasswordError
                 raise ArchivePasswordError(reply.get('error', 'Inner ZIP password required.'))

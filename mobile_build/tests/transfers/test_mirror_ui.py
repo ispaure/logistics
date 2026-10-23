@@ -165,7 +165,7 @@ class MirrorUITests(unittest.TestCase):
                 raise ValueError(action)
         with TemporaryDirectory() as folder:
             scan = ReviewScan(native_scanner(Client(), dict(remote='Cloud', prefix='', identity='bound',
-                crypt=False, _push=True), Path(folder), cleanup_plan=lambda cancelled: {'junk': ('junk', 'v1')}))
+                crypt=False), Path(folder), push=True, cleanup_plan=lambda cancelled: {'junk': ('junk', 'v1')}))
             try:
                 self.assertTrue(polled.wait(2))
                 for _ in range(100):

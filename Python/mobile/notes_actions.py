@@ -50,7 +50,8 @@ def resolve_source(app, entry):
     from features.rclone.mobile.storage_location import collection_path
     from commonUtils.runtime.resources.local import LocalFiles
     from features.rclone.localcrypt.mobile.resources import encrypted_storage
-    from features.rclone.mobile.service import native_service, LocalCryptLocation
+    from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
+    from features.rclone.mobile.service import native_service
     kind, value = entry['kind'], entry['value']
     client = getattr(app, 'cloud_client', None)
     job = app.mirror_store().jobs.get(value) if kind in ('job', 'job-remote') else None

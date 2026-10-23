@@ -244,7 +244,8 @@ async def _reopen_file(app, source):
             raise
     elif source['type'] == 'crypt':
         from features.rclone.localcrypt.mobile.resources import ManagedCopies
-        from features.rclone.mobile.service import native_service, LocalCryptLocation
+        from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
+        from features.rclone.mobile.service import native_service
         from features.rclone.mobile.storage_location import collection_path
         provider = native_service(client).localcrypt.open(LocalCryptLocation(
             collection_path(app.private_root, True), remote,

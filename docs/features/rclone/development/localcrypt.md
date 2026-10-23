@@ -849,12 +849,14 @@ owned encrypted staging file and never publishes a truncated prefix.
 
 ## Service composition and resource sessions
 
-`features.rclone.service.RcloneService` retains credential, LocalCrypt and transfer services.
-The desktop composition is `desktop_service.service`; native clients retain their
-composition through `mobile.service.native_service(client)`. The services do not
-own widgets or browser navigation. Existing desktop password prompts and native
-credential import/vault workflows still publish through their platform authorities.
-They do not create a second credential registry.
+`features.rclone.service.RcloneService` retains credential, remote, LocalCrypt and
+transfer services. The desktop composition is `desktop_service.service`; native
+clients retain theirs through `mobile.service.native_service(client)`. Native
+credential policy is in `mobile/credentials.py`; `mobile/service.py` only wires the
+adapters. Managed-tree and offline-copy references belong to
+`localcrypt/mobile/locations.py`. The services do not own widgets or navigation.
+Desktop password prompts and native credential import/vault workflows publish
+through their platform authorities, sharing the existing credential registry.
 
 `CredentialService.capture` returns a grant tied to the currently unlocked
 generation, without exposing credential values. Locking revokes that generation;

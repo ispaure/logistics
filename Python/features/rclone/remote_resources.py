@@ -79,13 +79,11 @@ class RemoteResources:
         self.config_path, self.remote, self.binary = Path(config_path), remote, Path(binary)
         from .desktop_service import service
         self._credential_grant = service.credentials.capture(self.config_path)
-        revoked = session.revocation_check(self.config_path)
         values = session.credentials(self.config_path)
-        self._disk_revision = None
+        session_backed = values is not None
         if values is None:
             if self.config_path.suffix == '.session':
                 raise ValueError('Unlock this credential package first.')
-            self._disk_revision = self._config_revision()
             parser = ConfigParser(interpolation=None)
             parser.read(self.config_path, encoding='utf-8')
             values = {name: dict(parser[name]) for name in parser.sections()}
@@ -98,14 +96,10 @@ class RemoteResources:
         install_local_storage_policy()
         self.context = self.config_path.with_name('remote-' + uuid4().hex + '.session')
         session.remember(self.context, values, private=True,
-                         parent=self.config_path if self._disk_revision is None else None)
+                         parent=self.config_path if session_backed else None)
         self._revoked = session.revocation_check(self.context)
         try:
             self._credential_grant.check()
-            if self._disk_revision is None and revoked():
-                raise ValueError('Credentials changed. Reopen this remote.')
-            if self._disk_revision is not None and self._disk_revision != self._config_revision():
-                raise ValueError('Credentials changed. Reopen this remote.')
         except BaseException:
             session.forget(self.context)
             raise
@@ -115,10 +109,6 @@ class RemoteResources:
         self._leases = ResourceLeases(validate=self._check_active, close=self.close)
         with _providers_lock:
             _providers.add(self)
-
-    def _config_revision(self):
-        info = self.config_path.stat()
-        return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
 
     def relative(self, path):
         if isinstance(path, Path):
@@ -134,14 +124,6 @@ class RemoteResources:
         except ValueError:
             self.close()
             raise
-        if self._disk_revision is not None:
-            try:
-                current = self._config_revision()
-            except OSError:
-                current = None
-            if current != self._disk_revision:
-                self.close()
-                raise ValueError('Credentials changed. Reopen this remote.')
 
     @contextmanager
     def operation(self, cancelled):

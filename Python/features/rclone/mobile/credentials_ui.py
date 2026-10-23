@@ -8,7 +8,8 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 from commonUtils.ui.native.password_input import PasswordInput
-from .cloud import CredentialBusyError, PACKAGE_LIMIT, download_name
+from .cloud import PACKAGE_LIMIT, download_name
+from features.rclone.credential_loading import CredentialBusyError
 from .messages import import_hint
 from .service import native_service
 from .credential_loading import NativeCredentialLoad, run_credentials

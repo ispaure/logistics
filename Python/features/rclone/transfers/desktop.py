@@ -55,8 +55,9 @@ def _snapshot_config(path):
     return context, lambda: session.forget(context)
 
 
-def _compare(emit, cancelled, binary, source, destination, config_path, options, item, operation):
+def _compare(transfer, config_path, emit, cancelled):
     from features.rclone.localcrypt.backend import CryptResources
+    binary, item = transfer.binary, transfer.crypt_item
     provider = CryptResources(item, binary=binary) if item is not None and item.data.exists() else None
     decoded = {}
     directory_probe = '.logistics-review-directory'
@@ -98,12 +99,12 @@ def _compare(emit, cancelled, binary, source, destination, config_path, options,
             decoded[key] = path if plain is None else plain
         return decoded[key]
     def cleanup_plan(cancelled):
-        if item is None or operation != 'Push':
+        if item is None or transfer.operation != 'Push':
             return {}
         from features.rclone.transfers.local_policy import cleanup_candidates
         return cleanup_candidates(item.data, display, cancelled)
     try:
-        return scanner(binary, source, destination, config_path, options,
+        return scanner(binary, transfer.source, transfer.destination, config_path, transfer.options,
             display_path=display,
             display_directory=lambda path, cancelled: display(path, cancelled, directory=True),
             cleanup_plan=cleanup_plan)(emit, cancelled)
@@ -117,9 +118,10 @@ def build_plan(transfer, credentials):
         raise TypeError('Choose a desktop transfer request.')
     from features.rclone.localcrypt.backend import for_path
     item = transfer.crypt_item or for_path(transfer.source if transfer.operation == 'Push' else transfer.destination)
-    options = replace(transfer.options, copy_links=False) if item is not None else transfer.options
+    transfer = replace(transfer, crypt_item=item,
+        options=replace(transfer.options, copy_links=False) if item is not None else transfer.options)
     request = ReviewRequest(transfer.operation, transfer.source, transfer.destination,
-                            str(transfer.config), options)
+                            str(transfer.config), transfer.options)
     path = transfer.config
     grant = credentials.capture(path)
     def active():
@@ -134,8 +136,7 @@ def build_plan(transfer, credentials):
         config, release = _snapshot_config(path)
         try:
             check_cancelled(stopping)
-            return _compare(emit, stopping, transfer.binary, transfer.source, transfer.destination,
-                            config, options, item, transfer.operation)
+            return _compare(transfer, config, emit, stopping)
         finally:
             release()
     def execute(approved, context):

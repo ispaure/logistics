@@ -4,7 +4,8 @@ import asyncio
 import toga
 from toga.style import Pack
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
-from features.rclone.mobile.service import OfflineCryptLocation, native_service
+from features.rclone.localcrypt.mobile.locations import OfflineCryptLocation
+from features.rclone.mobile.service import native_service
 
 
 class LocalCryptUI:
