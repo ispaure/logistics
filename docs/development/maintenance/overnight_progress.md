@@ -740,3 +740,21 @@ completed baseline. Remaining priorities continue to govern selection.
 - Latest shared `7978a28` also passes all 106 tests in 25 native Toga test files
   through the mobile interpreter/dummy backend. This covers the optional toolkit
   profiles skipped in the desktop shared suite, not real-device UI behavior.
+
+## Personal configuration reset recovery ownership
+
+- Two fixtures reproduced reset cleanup deleting an externally published
+  configuration directory: after publication failure, and after replacement of
+  the reset's directory during runtime activation. Reset now uses no-replace
+  backup/publication/recovery and records the identity of its own published tree.
+- Rollback removes only that identity. A different directory is retained and the
+  original settings stay in the existing named recovery backup. Success also
+  verifies directory identity before discarding that backup. Migration metadata
+  is not rewritten when publication never succeeded. Junctions join symlinks in
+  the existing admission guard; native Windows junction execution is unverified.
+- Both failure regressions failed before repair. All ten reset tests, three service,
+  28 settings UI and three migration tests pass, plus lint, architecture and five
+  documentation checks. Committed as `544116f1`.
+- This is optimistic directory-identity validation, not cross-process locking or
+  attribution of concurrent writes inside the same published directory. Backup
+  naming, data/configuration ownership, schemas and normal reset behavior remain.
