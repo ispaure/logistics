@@ -66,6 +66,41 @@ class DocumentTests(IDEQtTests):
 
 
 class ProjectTests(unittest.TestCase):
+    def test_conflict_validation_bounds_an_enlarged_external_checkpoint(self):
+        from contextlib import contextmanager
+        from unittest.mock import patch
+        from features.ide.projects import ProjectStore, MAX_WORKSPACE_BYTES
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'workspace.json'
+            store = ProjectStore(path)
+            store.save()
+            original = store.original
+            external = b'x' * (MAX_WORKSPACE_BYTES + 1024)
+            path.write_bytes(external)
+            reads = []
+            open_path = Path.open
+            @contextmanager
+            def observed_open(candidate, mode='r', *args, **kwargs):
+                with open_path(candidate, mode, *args, **kwargs) as stream:
+                    if candidate == path and mode == 'rb':
+                        class ObservedRead:
+                            def read(self, count=-1):
+                                data = stream.read(count)
+                                reads.append((count, len(data)))
+                                return data
+                        yield ObservedRead()
+                    else:
+                        yield stream
+            with patch.object(Path, 'open', observed_open):
+                with self.assertRaisesRegex(OSError, 'changed in another instance'):
+                    store.save()
+            self.assertTrue(reads)
+            self.assertTrue(all(0 <= count <= MAX_WORKSPACE_BYTES + 1 for count, _ in reads))
+            self.assertLessEqual(sum(size for _, size in reads), MAX_WORKSPACE_BYTES + 1)
+            self.assertEqual(store.original, original)
+            self.assertEqual(path.read_bytes(), external)
+            self.assertEqual(list(path.parent.iterdir()), [path])
+
     def test_save_baseline_does_not_adopt_another_writer_after_publication(self):
         from unittest.mock import patch
         from features.ide.projects import ProjectStore

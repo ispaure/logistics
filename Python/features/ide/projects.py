@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from uuid import uuid4
 from commonUtils.persistence import atomic_write_bytes
+from commonUtils.runtime.streams import read_up_to
 from features.preferences import preferences_path
 
 MAX_WORKSPACE_BYTES = 4 * 1024 * 1024
@@ -65,7 +66,7 @@ class ProjectStore:
         try:
             if self.path.exists():
                 with self.path.open('rb') as stream:
-                    self.original = stream.read(MAX_WORKSPACE_BYTES + 1)
+                    self.original = read_up_to(stream, MAX_WORKSPACE_BYTES + 1)
                 if len(self.original) > MAX_WORKSPACE_BYTES:
                     raise ValueError('IDE workspace exceeds 4 MiB')
             if self.original is not None:
@@ -95,7 +96,10 @@ class ProjectStore:
         if self.error:
             raise ValueError(f'Workspace preserved at {self.path}: {self.error}')
         def validate():
-            current = self.path.read_bytes() if self.path.exists() else None
+            current = None
+            if self.path.exists():
+                with self.path.open('rb') as stream:
+                    current = read_up_to(stream, MAX_WORKSPACE_BYTES + 1)
             if current != self.original:
                 raise OSError('IDE workspace changed in another instance. Restart to load it.')
         content = json.dumps(dict(version=1, projects=[asdict(p) for p in self.projects.values()],
