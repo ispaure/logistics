@@ -172,6 +172,26 @@ class PDFReaderTests(QtTestCase):
         with self.assertRaises(OperationCancelled):
             search_pdf(pdf_bytes(), 'needle', cancelled=lambda: True)
 
+    def test_search_worker_start_failure_retains_retryable_controls(self):
+        from features.pdf.ui.search import PDFSearchBar
+        for error in (RuntimeError('thread unavailable'), RuntimeError()):
+            with self.subTest(error=str(error)):
+                search = PDFSearchBar(pdf_bytes(), lambda page: None)
+                self.addCleanup(search.deleteLater)
+                self.addCleanup(search.dispose)
+                search.input.setText('needle')
+                with patch.object(search.executor, 'submit', side_effect=error):
+                    search.find(1)
+                self.assertIsNone(search.future)
+                self.assertIsNone(search.query)
+                self.assertTrue(search.previous.isEnabled())
+                self.assertTrue(search.following.isEnabled())
+                self.assertFalse(search.timer.isActive())
+                self.assertIn(str(error) or 'RuntimeError', search.status.text())
+                search.find(1)
+                self.wait_until(lambda: search.future is None)
+                self.assertIn('Match 1 of 3', search.status.text())
+
     def test_desktop_search_navigates_wraps_and_clears(self):
         from features.pdf.ui.reader import PDFWindow
         window = PDFWindow('search.pdf', pdf_bytes())
