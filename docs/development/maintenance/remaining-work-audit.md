@@ -18,6 +18,7 @@ below describe the assessment snapshot, before this implementation.
 | T1 | Deterministic lint scope | `75395cc0` |
 | T2 | Shared matrix and specialist owner selections | `75395cc0`, `0b08ebb8` |
 | C1 | Index target/validation/retirement phases; transaction remains centralized | shared `17978f2` |
+| C3 | Captured dock transfer/rollback and separate header reconciliation | shared `e8ac643` |
 
 Items absent from this table remain outstanding. Native/platform acceptance limits
 are recorded with each unit; a passing host suite is not native certification.

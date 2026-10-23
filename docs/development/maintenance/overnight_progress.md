@@ -1,5 +1,17 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: C3 workspace transfer
+
+Workspace adoption now captures an immutable transfer snapshot and names acceptance
+and rollback, with guards/flags/signals/cleanup retained in `adopt` (85 → 55 lines).
+Header refresh separates dock and tab-bar projection (87 → 9 orchestration lines).
+Capture evaluation order and every original statement/signature match after
+expansion. A new original/refactored regression covers failures after arrangement
+and lost destination registration, checking order, active views, signals and flags.
+All 67 workspace cases pass before/after; Logistics document/main-window consumers
+pass 28/34 cases, Ally 48 and Blue Hole two compatibility cases. Lint, shared wiki
+and whitespace pass. No external edits, persisted layout/API changes or push.
+
 ## Sequential audit implementation: C1 index reconciliation
 
 Shared `17978f2` names target selection, bounded descendant validation and replaced
