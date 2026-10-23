@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from mobile_build.testflight_tools import BUNDLE, build_number, export_options, export_release, keychain_groups_match, release_identity, validate_profile
+from mobile_build.deployment.testflight_tools import BUNDLE, build_number, export_options, export_release, keychain_groups_match, release_identity, validate_profile
 
 
 class TestFlightWorkflowTests(unittest.TestCase):
@@ -10,14 +10,14 @@ class TestFlightWorkflowTests(unittest.TestCase):
                     keychain_access_groups=[])
 
     def test_xcode_uses_saved_api_key_and_rejects_partial_environment_override(self):
-        from mobile_build.testflight_tools import auth_args
+        from mobile_build.deployment.testflight_tools import auth_args
         from pathlib import Path
         from tempfile import TemporaryDirectory
         with TemporaryDirectory() as directory:
             key = Path(directory) / 'key.p8'; key.touch()
             saved = dict(key_path=str(key), key_id='ABCDEFGHIJ', issuer_id='issuer')
-            with patch.dict('os.environ', {}, clear=True), patch('mobile_build.testflight_tools.EXTERNAL_AUTH') as local, \
-                    patch('mobile_build.testflight_tools.external_credentials', return_value=saved):
+            with patch.dict('os.environ', {}, clear=True), patch('mobile_build.deployment.testflight_tools.EXTERNAL_AUTH') as local, \
+                    patch('mobile_build.deployment.testflight_tools.external_credentials', return_value=saved):
                 local.exists.return_value = True
                 self.assertEqual(auth_args(), ['-authenticationKeyPath', str(key), '-authenticationKeyID',
                                                'ABCDEFGHIJ', '-authenticationKeyIssuerID', 'issuer'])
@@ -37,7 +37,7 @@ class TestFlightWorkflowTests(unittest.TestCase):
 
     def test_baseline_rejects_changed_team_bundle_or_prefix(self):
         baseline = dict(bundle_id=BUNDLE, team_id='ABCDEFGHIJ', signing_identity=self.identity)
-        with patch('mobile_build.testflight_tools.CONFIG') as config:
+        with patch('mobile_build.deployment.testflight_tools.CONFIG') as config:
             config.exists.return_value = True
             import json
             config.read_text.return_value = json.dumps(baseline)
@@ -79,7 +79,7 @@ class TestFlightWorkflowTests(unittest.TestCase):
         import json
         from pathlib import Path
         from tempfile import TemporaryDirectory
-        with TemporaryDirectory() as directory, patch('mobile_build.testflight_tools.run') as run:
+        with TemporaryDirectory() as directory, patch('mobile_build.deployment.testflight_tools.run') as run:
             workspace = Path(directory)
             for dirty, signed in ((True, True), (False, False), (True, False)):
                 (workspace / 'release.json').write_text(json.dumps({'source': {'dirty': dirty}, 'build': {'signed': signed}}))
@@ -93,7 +93,7 @@ class TestFlightWorkflowTests(unittest.TestCase):
         from pathlib import Path
         from tempfile import TemporaryDirectory
         from hashlib import sha256
-        from mobile_build.testflight_tools import archive_fingerprint
+        from mobile_build.deployment.testflight_tools import archive_fingerprint
 
         with TemporaryDirectory() as directory:
             workspace = Path(directory)
@@ -109,11 +109,11 @@ class TestFlightWorkflowTests(unittest.TestCase):
             (workspace / 'release.json').write_text(json.dumps(record))
             verified = dict(archive_sha256=archive_fingerprint(app),
                             ipa_sha256=sha256(ipa.read_bytes()).hexdigest())
-            with patch('mobile_build.testflight_tools.release_identity', return_value=self.identity), \
-                    patch('mobile_build.testflight_tools.inspect_app'), \
-                    patch('mobile_build.testflight_tools.auth_args', return_value=[]), \
-                    patch('mobile_build.testflight_tools.prepare_external', return_value=None) as prepare, \
-                    patch('mobile_build.testflight_tools.run') as run, \
+            with patch('mobile_build.deployment.testflight_tools.release_identity', return_value=self.identity), \
+                    patch('mobile_build.deployment.testflight_tools.inspect_app'), \
+                    patch('mobile_build.deployment.testflight_tools.auth_args', return_value=[]), \
+                    patch('mobile_build.deployment.testflight_tools.prepare_external', return_value=None) as prepare, \
+                    patch('mobile_build.deployment.testflight_tools.run') as run, \
                     patch.dict('os.environ', {'TESTFLIGHT_UPLOAD': ''}):
                 with self.assertRaisesRegex(ValueError, 'Export and verify'):
                     export_release(workspace, {}, upload=True)
@@ -146,14 +146,14 @@ class TestFlightWorkflowTests(unittest.TestCase):
                     prepare.return_value = prepared
                     events = []
                     run.side_effect = lambda *a, **kw: events.append('upload')
-                    with patch('mobile_build.testflight_tools.distribute_external',
+                    with patch('mobile_build.deployment.testflight_tools.distribute_external',
                                side_effect=lambda *a: events.append('distribute')) as distribute:
                         export_release(workspace, {}, upload=True)
                         distribute.assert_called_once_with(workspace, prepared)
                     self.assertEqual(events, ['upload', 'distribute'])
                     run.reset_mock()
                     run.side_effect = RuntimeError('Upload failed')
-                    with patch('mobile_build.testflight_tools.distribute_external') as distribute:
+                    with patch('mobile_build.deployment.testflight_tools.distribute_external') as distribute:
                         with self.assertRaisesRegex(RuntimeError, 'Upload failed'):
                             export_release(workspace, {}, upload=True)
                         distribute.assert_not_called()

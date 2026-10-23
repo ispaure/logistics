@@ -9,15 +9,10 @@ import subprocess
 import sys
 import tempfile
 
-try:
-    from . import android_deploy as android, device_tools as ios
-    from .deployment_paths import WORKSPACE_ENV
-except ImportError:
-    import android_deploy as android
-    import device_tools as ios
-    from deployment_paths import WORKSPACE_ENV
+from . import android_deploy as android, device_tools as ios
+from .deployment_paths import WORKSPACE_ENV
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / '.tools/test-devices.json'
 WORKSPACES = ROOT / '.deploy-workspaces'
 
@@ -111,8 +106,8 @@ def deploy_platform(available):
     for device in available:
         if device['platform'] == 'iOS':
             try:
-                subprocess.run([sys.executable, str(ROOT / 'device_tools.py'), 'deploy',
-                                '--device', device['id'], '--allow-wired'], cwd=ROOT, check=True)
+                subprocess.run([sys.executable, '-m', 'mobile_build.deployment.device_tools', 'deploy',
+                                '--device', device['id'], '--allow-wired'], cwd=ROOT.parent, check=True)
             except (OSError, subprocess.SubprocessError) as error:
                 failed.append(device['name'])
                 print(str(error), file=sys.stderr, flush=True)
@@ -132,10 +127,10 @@ def run_platform(platform, devices):
     log = logs / 'deployment.log'
     print('Starting ' + platform + '; log: ' + str(log), flush=True)
     env = dict(os.environ, **{WORKSPACE_ENV: str(workspace)}, PYTHONUNBUFFERED='1')
-    command = [sys.executable, str(ROOT / 'test_devices.py'), '--worker-platform', platform,
+    command = [sys.executable, '-m', 'mobile_build.deployment.test_devices', '--worker-platform', platform,
                '--targets-file', str(targets)]
     with log.open('w') as stream, subprocess.Popen(
-            command, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            command, cwd=ROOT.parent, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, errors='replace') as process:
         for line in process.stdout:
             stream.write(line)

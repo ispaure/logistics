@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
-from mobile_build import testflight_deploy as launcher
+from mobile_build.deployment import testflight_deploy as launcher
 
 
 class TestFlightLauncherTests(unittest.TestCase):
@@ -15,7 +15,7 @@ class TestFlightLauncherTests(unittest.TestCase):
     def test_upload_only_after_successful_export_and_explicit_yes(self):
         with patch.object(launcher.subprocess, 'run') as run:
             launcher.deploy('202610151', ask=lambda prompt: 'y')
-        self.assertEqual([call.args[0][2] for call in run.call_args_list], ['plan', 'archive', 'export', 'upload'])
+        self.assertEqual([call.args[0][3] for call in run.call_args_list], ['plan', 'archive', 'export', 'upload'])
         self.assertEqual(run.call_args.kwargs['env']['TESTFLIGHT_UPLOAD'], '1')
 
     def test_default_answer_does_not_upload(self):

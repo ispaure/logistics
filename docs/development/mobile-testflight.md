@@ -3,7 +3,7 @@
 For first-time setup and step-by-step operating instructions, start with the
 [mobile handbook](mobile-handbook.md). This page is the detailed release reference.
 
-The release entry point is `mobile_build/testflight_tools.py`. A manual GitHub workflow
+The release entry point is `mobile_build/deployment/testflight_tools.py`. A manual GitHub workflow
 in `.github/workflows/testflight.yml` invokes the same commands after the existing
 iOS native UI and CPython runtime workflows pass. Upload is disabled by default.
 Explicit uploads now invoke `testflight_external.py` to distribute the resulting
@@ -63,11 +63,11 @@ deployment and Go 1.26.9. For example, from the repository root:
 
 ```sh
 export PATH="$PWD/mobile_build/.tools/go/bin:$PATH"
-mobile_build/.venv/bin/python mobile_build/testflight_tools.py plan --build-number 202610132
-mobile_build/.venv/bin/python mobile_build/testflight_tools.py archive --build-number 202610132
-mobile_build/.venv/bin/python mobile_build/testflight_tools.py export --build-number 202610132
+mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_tools plan --build-number 202610132
+mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_tools archive --build-number 202610132
+mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_tools export --build-number 202610132
 # After reviewing the verified IPA and choosing to upload:
-TESTFLIGHT_UPLOAD=1 mobile_build/.venv/bin/python mobile_build/testflight_tools.py upload --build-number 202610132
+TESTFLIGHT_UPLOAD=1 mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_tools upload --build-number 202610132
 ```
 
 `plan` prints the pinned identity, version, build number and export options without
@@ -138,10 +138,10 @@ One-time local setup:
 
    ```sh
    mobile_build/.venv/bin/python -m pip install -r mobile_build/requirements-testflight.txt
-   mobile_build/.venv/bin/python mobile_build/testflight_external.py configure \
+   mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_external configure \
      --key-path /absolute/private/path/AuthKey_KEYID.p8 \
      --key-id YOUR_KEY_ID --issuer-id YOUR_ISSUER_ID
-   mobile_build/.venv/bin/python mobile_build/testflight_external.py check
+   mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_external check
    ```
 
    The key reference is saved in ignored `mobile_build/.testflight-auth.json` with mode
@@ -171,7 +171,7 @@ exemption, private session-cookie authentication, or implicit retry of a failed
 upload. Once the issue is resolved, retry distribution for the existing upload:
 
 ```sh
-mobile_build/.venv/bin/python mobile_build/testflight_tools.py distribute --build-number 202610144
+mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_tools distribute --build-number 202610144
 ```
 
 This command does not rebuild or re-upload. It finds the exact app/version/build
@@ -203,7 +203,7 @@ current approval status. Check App Store Connect for live processing/review stat
 An unsigned packaging check is available while enrollment is pending:
 
 ```sh
-mobile_build/.venv/bin/python mobile_build/testflight_tools.py archive --build-number 202610133 --unsigned-check
+mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_tools archive --build-number 202610133 --unsigned-check
 ```
 
 It allows dirty local sources and ad-hoc signing of Python framework modules

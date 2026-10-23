@@ -1511,3 +1511,16 @@ cases in the mobile host environment, five wiki cases, lint and CLI import
 checks pass. Earlier camera invocations lacked the sibling import path and then
 Toga; neither was a product failure. See [current readability work](readability.md).
 No push or release retry; this work is on an isolated local branch.
+
+## Readability follow-up: deployment owner
+
+Build-adapter grouping is committed as `3456c489`. Twelve deployment/distribution
+modules now share one explicit package import context. Six existing Finder
+launchers are exercised from an unrelated directory. Real workers still overlap
+and isolate output; the real Qt subprocess fixture still tests split confirmation
+markers and both user answers. Fifty-three deployment cases, ten external JWT
+cases and thirteen launcher/UI/wiki cases pass (some overlap). Lint, TestFlight
+workflow actionlint, CLI help and whitespace checks pass. Initial GUI fixtures
+used obsolete script argv and a fake script outside the new package; that owned
+run was stopped, fixtures adapted, and the corrected run passes. No upload or
+device install occurred.

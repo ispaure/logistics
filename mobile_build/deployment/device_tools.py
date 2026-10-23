@@ -11,16 +11,11 @@ import sys
 import tempfile
 import tomllib
 
-try:
-    from .select_ios_sdk import choose, installed
-    from .tools import stage
-    from .deployment_paths import output_root, prepare_workspace
-except ImportError:
-    from select_ios_sdk import choose, installed
-    from tools import stage
-    from deployment_paths import output_root, prepare_workspace
+from ..select_ios_sdk import choose, installed
+from ..tools import stage
+from .deployment_paths import output_root, prepare_workspace
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 PROJECT = output_root(ROOT) / 'build/logisticsmobile/ios/xcode'
 PBX = PROJECT / 'Logistics Mobile.xcodeproj/project.pbxproj'
 INFO = PROJECT / 'LogisticsMobile/LogisticsMobile-Info.plist'

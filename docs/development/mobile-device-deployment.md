@@ -9,7 +9,7 @@ the saved iOS devices remain sequential. Its iOS build and deployment logs live
 under `mobile_build/.deploy-workspaces/ios/logs/`. Standalone `device_tools.py` keeps
 the paths described below.
 
-`mobile_build/device_tools.py` owns the local physical-device workflow; the executable
+`mobile_build/deployment/device_tools.py` owns the local physical-device workflow; the executable
 `mobile_build/deploy_ios.command` anchors paths to its own directory and uses the
 ignored `mobile_build/.venv` and optional `mobile_build/.tools/go` installation. See the
 [operator guide](mobile-launchers.md#build-and-deploy-to-a-paired-iphone-over-wi-fi)

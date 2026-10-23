@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
 
-from mobile_build import testflight_external as external
+from mobile_build.deployment import testflight_external as external
 
 
 class ExternalDistributionTests(unittest.TestCase):

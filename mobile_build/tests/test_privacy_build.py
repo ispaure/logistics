@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from mobile_build.build_support import privacy_build
-from mobile_build.testflight_tools import BUNDLE, inspect_app
+from mobile_build.deployment.testflight_tools import BUNDLE, inspect_app
 
 
 class PrivacyBuildTests(unittest.TestCase):

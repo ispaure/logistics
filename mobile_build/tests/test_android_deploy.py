@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
-from mobile_build import android_deploy as deploy
+from mobile_build.deployment import android_deploy as deploy
 
 
 class AndroidDeployTests(unittest.TestCase):

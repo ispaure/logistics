@@ -6,12 +6,9 @@ from pathlib import Path
 import subprocess
 import sys
 
-try:
-    from .deployment_confirmation import gui_input
-except ImportError:
-    from deployment_confirmation import gui_input
+from .deployment_confirmation import gui_input
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def next_build(root=ROOT):
@@ -26,18 +23,18 @@ def next_build(root=ROOT):
 def deploy(build, *, ask=input):
     if not build.isdigit() or not 0 < int(build) <= 999999999:
         raise ValueError('Use a positive build number of at most nine digits.')
-    command = [sys.executable, str(ROOT / 'testflight_tools.py')]
+    command = [sys.executable, '-m', 'mobile_build.deployment.testflight_tools']
     for step in ('plan', 'archive', 'export'):
-        subprocess.run([*command, step, '--build-number', build], check=True)
+        subprocess.run([*command, step, '--build-number', build], cwd=ROOT.parent, check=True)
     print('\nVerified build ' + build + ': ' + str(ROOT / 'build/testflight' / build / 'export'))
     try:
         answer = ask('Upload this verified build to TestFlight and the configured tester group? [y/N] ')
     except EOFError:
         answer = ''
     if answer.strip().lower() not in ('y', 'yes'):
-        print('Build prepared. Nothing uploaded. You can upload this build later with testflight_tools.py.')
+        print('Build prepared. Nothing uploaded. You can upload this build later with python -m mobile_build.deployment.testflight_tools.')
         return
-    subprocess.run([*command, 'upload', '--build-number', build], check=True,
+    subprocess.run([*command, 'upload', '--build-number', build], cwd=ROOT.parent, check=True,
                    env=dict(os.environ, TESTFLIGHT_UPLOAD='1'))
 
 

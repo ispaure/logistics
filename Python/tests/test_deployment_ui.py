@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from PySide6.QtWidgets import QMessageBox
 from commonUtils.tests.qt_test_case import QtTestCase
-from mobile_build import deploy_ui as ui
+from mobile_build.deployment import deploy_ui as ui
 
 
 class DeploymentUITests(QtTestCase):
@@ -31,7 +31,7 @@ class DeploymentUITests(QtTestCase):
         ]:
             with patch.object(window.process, 'start') as start:
                 window.start(script, arguments)
-                self.assertEqual(start.call_args.args[1][2:], expected)
+                self.assertEqual(start.call_args.args[1][3:], expected)
                 self.assertFalse(window.target.isEnabled())
                 window.set_busy(False)
         window.close()
@@ -39,15 +39,18 @@ class DeploymentUITests(QtTestCase):
     def test_process_reads_split_confirmation_and_only_sends_users_answer(self):
         for answer, expected in [(QMessageBox.StandardButton.Yes, 'y'), (QMessageBox.StandardButton.No, 'n')]:
             with self.subTest(expected=expected), self.temporary_directory() as directory:
-                root = Path(directory)
-                (root / 'fake.py').write_text(
+                root = Path(directory) / 'mobile_build'
+                (root / 'deployment').mkdir(parents=True)
+                (root / '__init__.py').touch()
+                (root / 'deployment/__init__.py').touch()
+                (root / 'deployment/fake.py').write_text(
                     'import sys, time\n'
                     'print("Verified build", flush=True)\n'
                     f'sys.stdout.write({ui.MARKER[:10]!r}); sys.stdout.flush()\n'
                     'time.sleep(0.03)\n'
                     f'print({(ui.MARKER[10:] + json.dumps("Upload prepared build?"))!r}, flush=True)\n'
                     'print("answer=" + input(), flush=True)\n')
-                with patch.object(ui.QTimer, 'singleShot'):
+                with patch.object(ui.QTimer, 'singleShot'), patch.object(ui, 'ROOT', root):
                     window = ui.DeploymentWindow()
                 with patch.object(ui, 'ROOT', root), patch.object(ui, 'PYTHON', Path(sys.executable)), \
                         patch.object(ui.QMessageBox, 'question', return_value=answer) as question:

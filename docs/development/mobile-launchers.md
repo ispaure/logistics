@@ -305,9 +305,9 @@ Xcode's Apple Accounts settings and obtain your existing development team ID
 from Signing & Capabilities. Configure once from the repository root:
 
 ```sh
-python mobile_build/device_tools.py configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
-python mobile_build/device_tools.py status
-python mobile_build/device_tools.py deploy
+python -m mobile_build.deployment.device_tools configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
+python -m mobile_build.deployment.device_tools status
+python -m mobile_build.deployment.device_tools deploy
 ```
 
 The device can be omitted during configuration if exactly one paired physical

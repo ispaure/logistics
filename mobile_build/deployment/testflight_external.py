@@ -12,7 +12,7 @@ from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from uuid import UUID
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = ROOT / 'testflight-distribution.json'
 AUTH = ROOT / '.testflight-auth.json'
 API = 'https://api.appstoreconnect.apple.com'
@@ -36,7 +36,7 @@ def credentials():
              for name, env in [('key_path', 'ASC_KEY_PATH'), ('key_id', 'ASC_KEY_ID'), ('issuer_id', 'ASC_ISSUER_ID')]}
     if not all(value.values()):
         raise ValueError('External TestFlight distribution needs an App Store Connect team API key. '
-                         'Configure mobile_build/testflight_external.py or set ASC_KEY_PATH, ASC_KEY_ID and ASC_ISSUER_ID.')
+                         'Configure mobile_build/deployment/testflight_external.py or set ASC_KEY_PATH, ASC_KEY_ID and ASC_ISSUER_ID.')
     if not re.fullmatch(r'[A-Z0-9]{10}', value['key_id']):
         raise ValueError('Invalid App Store Connect key ID.')
     UUID(value['issuer_id'])

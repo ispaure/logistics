@@ -12,12 +12,9 @@ from PySide6.QtWidgets import (
     QPushButton, QVBoxLayout, QWidget,
 )
 
-try:
-    from .deployment_confirmation import MARKER
-except ImportError:
-    from deployment_confirmation import MARKER
+from .deployment_confirmation import MARKER
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / '.venv/bin/python'
 
 
@@ -27,7 +24,7 @@ class DeploymentWindow(QWidget):
         self.setWindowTitle('Logistics · Deploy')
         self.resize(760, 530)
         self.process = QProcess(self)
-        self.process.setWorkingDirectory(str(ROOT))
+        self.process.setWorkingDirectory(str(ROOT.parent))
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert('PYTHONUNBUFFERED', '1')
         environment.insert('PATH', os.pathsep.join((str(ROOT / '.tools/go/bin'), '/opt/homebrew/bin',
@@ -109,7 +106,7 @@ class DeploymentWindow(QWidget):
         self.status.setText('Checking devices…' if self.mode == 'list' else 'Running…')
         if self.mode != 'list':
             self.output.clear()
-        self.process.start(str(PYTHON), ['-u', str(ROOT / script), *arguments])
+        self.process.start(str(PYTHON), ['-u', '-m', 'mobile_build.deployment.' + Path(script).stem, *arguments])
 
     def update_targets(self, devices):
         previous = self.target.currentData()

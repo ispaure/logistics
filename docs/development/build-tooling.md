@@ -10,6 +10,7 @@ to do; application features stay in `Python/`.
 | Build and link the native bridge; compose generated-project adapters | `mobile_build/cloud_build.py` |
 | Configure camera, scenes, privacy manifests and app artwork | `mobile_build/build_support/` |
 | Regenerate canonical navigation and folder artwork | `mobile_build/build_support/generate_navigation_icons.py`, `generate_folder_icons.py` |
+| Device install, UI batch deployment, Firebase and TestFlight | `mobile_build/deployment/` |
 | User-facing deployment commands | Existing `mobile_build/*.command` launchers |
 | Host regression contracts | `mobile_build/tests/` |
 | On-device checks and synthetic fixtures | `mobile_build/native_tests/` |
@@ -22,3 +23,22 @@ same generated workspaces and native resource sources as before.
 For normal build commands and platform prerequisites, see the
 [mobile handbook](mobile-handbook.md). For signing and distribution, see
 [TestFlight](mobile-testflight.md) and [device deployment](mobile-device-deployment.md).
+
+## Deployment commands and paths
+
+Run deployment modules from the repository root, for example:
+
+```sh
+mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools --help
+mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_tools --help
+```
+
+The existing `.command` files work from any directory and select that import
+context themselves. Deployment child workers and the Qt deployment window use
+the same module commands. No deployment module catches an arbitrary ImportError
+to guess whether it was loaded as a script.
+
+`deployment_paths` still separates canonical settings/signing files from generated
+platform workspaces. Moving Python owners does not move `.device.json`,
+`.android-beta`, `.tools`, `.testflight-auth.json`, `build/` or `.deploy-workspaces/`.
+The launcher UI keeps its existing confirmation protocol before tester uploads.

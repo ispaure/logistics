@@ -13,24 +13,15 @@ import sys
 import tempfile
 import tomllib
 
-try:
-    from . import cloud_build
-    from .device_tools import BUNDLE, CONFIG, normal_launcher, signing_settings
-    from .select_ios_sdk import choose, installed
-    from .tools import stage
-    from .testflight_external import prepare as prepare_external, distribute as distribute_external
-    from .testflight_external import credentials as external_credentials, AUTH as EXTERNAL_AUTH
-    from .build_support.privacy_build import verify_app as verify_privacy
-except ImportError:
-    import cloud_build
-    from device_tools import BUNDLE, CONFIG, normal_launcher, signing_settings
-    from select_ios_sdk import choose, installed
-    from tools import stage
-    from testflight_external import prepare as prepare_external, distribute as distribute_external
-    from testflight_external import credentials as external_credentials, AUTH as EXTERNAL_AUTH
-    from build_support.privacy_build import verify_app as verify_privacy
+from .. import cloud_build
+from .device_tools import BUNDLE, CONFIG, normal_launcher, signing_settings
+from ..select_ios_sdk import choose, installed
+from ..tools import stage
+from .testflight_external import prepare as prepare_external, distribute as distribute_external
+from .testflight_external import credentials as external_credentials, AUTH as EXTERNAL_AUTH
+from ..build_support.privacy_build import verify_app as verify_privacy
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def release_identity(team=None, expected=None):

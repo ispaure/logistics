@@ -12,14 +12,10 @@ import sys
 import tempfile
 import tomllib
 
-try:
-    from .tools import stage
-    from .deployment_paths import output_root, prepare_workspace
-except ImportError:
-    from tools import stage
-    from deployment_paths import output_root, prepare_workspace
+from ..tools import stage
+from .deployment_paths import output_root, prepare_workspace
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 BUNDLE = 'io.github.ispaure.logisticsmobile'
 PROJECT = output_root(ROOT) / 'build/logisticsmobile/android/gradle'
 

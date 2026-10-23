@@ -40,9 +40,23 @@ so the camera fixture could not import its sibling; the next desktop-environment
 the existing mobile host environment. All 13 other focused adapter cases and
 five wiki-layout cases pass. CLI import/help smoke checks pass. No native SDK build is claimed by these host fixtures.
 
+### Local deployment and distribution
+
+Twelve related modules now live in `mobile_build/deployment/`. Their package
+imports replace duplicated script/module import fallbacks. The existing six
+Finder launchers, canonical credentials and generated workspaces retain their
+locations. Module subprocesses start from the repository root, including the
+parallel platform workers and deployment window.
+
+All 63 deployment cases pass across the existing desktop/mobile host environments;
+the desktop environment lacks cryptography, so the ten JWT/distribution cases run
+in the existing mobile environment. Real worker overlap and separate workspace
+contracts still run. A launcher fixture checks all six shell entry points from an
+unrelated working directory. No device install, upload or notification was run.
+
 ## Next work
 
-Group deployment/distribution and validation tooling, then consolidate the wiki
+Group validation tooling, then consolidate the wiki
 under each repository's root `docs/`. Keep H1 page titles and linked same-named
 folder landing pages so the Markdown viewer presents a navigable tree. Preserve
 short compatibility entry links where applications or saved links depend on them.

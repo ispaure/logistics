@@ -161,7 +161,7 @@ explains that process.
 
 1. Follow [one-time API setup](mobile-testflight.md#api-setup-and-distribution) to
    save an App Store Connect team API key reference on this Mac. Install the
-   requirements from the Mac setup above. `python mobile_build/testflight_external.py check`
+   requirements from the Mac setup above. `python -m mobile_build.deployment.testflight_external check`
    verifies account/app/group access without uploading.
 2. Make sure the intended source and commonUtils revision are committed and
    pushed. A local commit alone is not a GitHub backup. Review `git status` and
@@ -175,9 +175,9 @@ explains that process.
 
    ```sh
    MOBILE_RELEASE_NUMBER=202610151
-   python mobile_build/testflight_tools.py plan --build-number "$MOBILE_RELEASE_NUMBER"
-   python mobile_build/testflight_tools.py archive --build-number "$MOBILE_RELEASE_NUMBER"
-   python mobile_build/testflight_tools.py export --build-number "$MOBILE_RELEASE_NUMBER"
+   python -m mobile_build.deployment.testflight_tools plan --build-number "$MOBILE_RELEASE_NUMBER"
+   python -m mobile_build.deployment.testflight_tools archive --build-number "$MOBILE_RELEASE_NUMBER"
+   python -m mobile_build.deployment.testflight_tools export --build-number "$MOBILE_RELEASE_NUMBER"
    ```
 
    `plan` previews identity and settings. `archive` compiles the release.
@@ -189,7 +189,7 @@ explains that process.
 5. When you intend to send it to Apple and the configured testers, run:
 
    ```sh
-   TESTFLIGHT_UPLOAD=1 python mobile_build/testflight_tools.py upload --build-number "$MOBILE_RELEASE_NUMBER"
+   TESTFLIGHT_UPLOAD=1 python -m mobile_build.deployment.testflight_tools upload --build-number "$MOBILE_RELEASE_NUMBER"
    ```
 
    The upload also attempts Friends assignment, beta-review submission when
@@ -203,7 +203,7 @@ If upload succeeded but processing/distribution stopped, resolve the reported
 issue, then resume the existing build with:
 
 ```sh
-python mobile_build/testflight_tools.py distribute --build-number "$MOBILE_RELEASE_NUMBER"
+python -m mobile_build.deployment.testflight_tools distribute --build-number "$MOBILE_RELEASE_NUMBER"
 ```
 
 This does not upload again. An invalid binary needs a fixed build and a new

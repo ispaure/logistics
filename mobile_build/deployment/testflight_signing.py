@@ -10,10 +10,7 @@ import shlex
 import shutil
 import subprocess
 
-try:
-    from .testflight_tools import release_identity, validate_profile
-except ImportError:
-    from testflight_tools import release_identity, validate_profile
+from .testflight_tools import release_identity, validate_profile
 
 
 def private_file(path, data):

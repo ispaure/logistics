@@ -17,13 +17,13 @@ try:
     from .build_support.scene_build import configure as configure_scene
     from .build_support.privacy_build import configure as configure_privacy
     from .build_support.camera_build import configure as configure_camera
-    from .deployment_paths import output_root
+    from .deployment.deployment_paths import output_root
 except ImportError:
     from build_support.icon_build import configure_android as configure_android_icons, configure_ios as configure_ios_icons
     from build_support.scene_build import configure as configure_scene
     from build_support.privacy_build import configure as configure_privacy
     from build_support.camera_build import configure as configure_camera
-    from deployment_paths import output_root
+    from deployment.deployment_paths import output_root
 
 ROOT = Path(__file__).resolve().parent
 FLAGS = '-s -w -X github.com/rclone/rclone/fs.Version=v1.74.1'

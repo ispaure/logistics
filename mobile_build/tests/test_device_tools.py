@@ -9,9 +9,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mobile_build import device_tools
+from mobile_build.deployment import device_tools
 from mobile_build.cloud_build import ios_compiler
-from mobile_build.device_tools import BUNDLE, normal_launcher, select_device, signing_settings
+from mobile_build.deployment.device_tools import BUNDLE, normal_launcher, select_device, signing_settings
 
 
 class DeviceDeploymentTests(unittest.TestCase):

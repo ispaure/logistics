@@ -14,14 +14,10 @@ import tempfile
 import tomllib
 from urllib.request import urlopen
 
-try:
-    from . import android_deploy as android
-    from .deployment_confirmation import gui_input
-except ImportError:
-    import android_deploy as android
-    from deployment_confirmation import gui_input
+from . import android_deploy as android
+from .deployment_confirmation import gui_input
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 PRIVATE = ROOT / '.android-beta'
 
 

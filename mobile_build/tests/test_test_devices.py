@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mobile_build import test_devices as devices
-from mobile_build import firebase_deploy as firebase, testflight_deploy as testflight
+from mobile_build.deployment import test_devices as devices
+from mobile_build.deployment import firebase_deploy as firebase, testflight_deploy as testflight
 
 
 class TestDeviceDeployment(unittest.TestCase):
@@ -45,7 +45,7 @@ class TestDeviceDeployment(unittest.TestCase):
                 patch.object(testflight.subprocess, 'run') as run:
             testflight.main()
         ask.assert_called_once()
-        self.assertEqual([call.args[0][2] for call in run.call_args_list], ['plan', 'archive', 'export'])
+        self.assertEqual([call.args[0][3] for call in run.call_args_list], ['plan', 'archive', 'export'])
 
     def test_firebase_gui_decline_does_not_distribute(self):
         with tempfile.TemporaryDirectory() as directory, \

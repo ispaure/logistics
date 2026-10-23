@@ -13,4 +13,5 @@ fi
 if [ "$#" -eq 0 ]; then
     set -- deploy-all --allow-wired
 fi
-exec "$MOBILE_DIR/.venv/bin/python" "$MOBILE_DIR/device_tools.py" "$@"
+cd "$MOBILE_DIR/.."
+exec "$MOBILE_DIR/.venv/bin/python" -m mobile_build.deployment.device_tools "$@"

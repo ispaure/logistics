@@ -2,6 +2,8 @@
 import fcntl
 import json
 import os
+import shlex
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -9,8 +11,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from mobile_build import test_devices as devices
-from mobile_build.deployment_paths import WORKSPACE_ENV, prepare_workspace
+from mobile_build.deployment import test_devices as devices
+from mobile_build.deployment.deployment_paths import WORKSPACE_ENV, prepare_workspace
 
 
 class ParallelDeploymentTests(unittest.TestCase):
@@ -19,8 +21,11 @@ class ParallelDeploymentTests(unittest.TestCase):
 
     def test_actual_workers_overlap_and_use_separate_workspaces(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'test_devices.py').write_text(
+            root = Path(directory) / 'mobile_build'
+            (root / 'deployment').mkdir(parents=True)
+            (root / '__init__.py').touch()
+            (root / 'deployment/__init__.py').touch()
+            (root / 'deployment/test_devices.py').write_text(
                 'import json, os, pathlib, sys, time\n'
                 'platform = sys.argv[sys.argv.index("--worker-platform") + 1]\n'
                 f'workspace = pathlib.Path(os.environ[{WORKSPACE_ENV!r}])\n'
@@ -41,6 +46,36 @@ class ParallelDeploymentTests(unittest.TestCase):
                 self.assertIn(platform + ' finished', (workspace / 'logs/deployment.log').read_text())
                 self.assertEqual(json.loads((workspace / 'targets.json').read_text())[0]['platform'], platform)
             self.assertFalse((root / 'payload').exists())
+
+    def test_double_click_launchers_keep_names_and_run_modules_from_any_directory(self):
+        repo = Path(__file__).resolve().parents[2]
+        launchers = {
+            'deploy_ios': 'device_tools', 'deploy_android': 'android_deploy',
+            'deploy_test_devices': 'deploy_ui', 'deploy_all': 'deploy_all',
+            'deploy_ios_testflight': 'testflight_deploy',
+            'deploy_android_firebase': 'firebase_deploy',
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mobile = root / 'mobile_build'
+            mobile.mkdir()
+            record = root / 'record.py'
+            record.write_text("import json, os, sys; print(json.dumps([os.getcwd(), sys.argv[1:]]))")
+            for environment in (root / '.venv', mobile / '.venv'):
+                interpreter = environment / 'bin/python'
+                interpreter.parent.mkdir(parents=True)
+                interpreter.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' '
+                                       + shlex.quote(str(record)) + ' "$@"\n')
+                interpreter.chmod(0o755)
+            for launcher, module in launchers.items():
+                with self.subTest(launcher=launcher):
+                    path = mobile / (launcher + '.command')
+                    shutil.copyfile(repo / 'mobile_build' / path.name, path)
+                    result = subprocess.run(['sh', str(path), '--help'], cwd=root.parent,
+                                            capture_output=True, text=True, check=True)
+                    working_directory, arguments = json.loads(result.stdout)
+                    self.assertEqual(Path(working_directory).resolve(), root.resolve())
+                    self.assertEqual(arguments, ['-m', 'mobile_build.deployment.' + module, '--help'])
 
     def test_platform_failure_waits_for_other_worker_and_reports_failure(self):
         completed = []
@@ -85,7 +120,7 @@ class ParallelDeploymentTests(unittest.TestCase):
         repo = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as directory:
             workspace = Path(directory) / 'isolated'
-            code = ('import json; from mobile_build import android_deploy as a, device_tools as i, cloud_build as c; '
+            code = ('import json; from mobile_build.deployment import android_deploy as a, device_tools as i; from mobile_build import cloud_build as c; '
                     'print(json.dumps([str(a.PROJECT), str(i.PROJECT), str(i.DERIVED), str(i.CONFIG), '
                     'str(c.output_root(c.ROOT))]))')
             result = subprocess.run([sys.executable, '-c', code], cwd=repo,

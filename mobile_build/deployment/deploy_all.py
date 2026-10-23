@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 STEPS = (
     ('iOS device install', 'deploy_ios.command'),
     ('Android device install', 'deploy_android.command'),

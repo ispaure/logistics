@@ -4,8 +4,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from mobile_build import firebase_deploy as beta
-from mobile_build import deploy_all as all_deploy
+from mobile_build.deployment import firebase_deploy as beta
+from mobile_build.deployment import deploy_all as all_deploy
 
 
 class FirebaseDeployTests(unittest.TestCase):
