@@ -586,6 +586,43 @@ class WorkspaceTests(WorkspaceFixture):
             view.prepare_close()
             view.close()
 
+    def test_queued_open_uses_surviving_group_and_places_cursor_before_callback(self):
+        from threading import Event
+        from unittest.mock import patch
+        from features.ide.projects import Project
+        from features.ide.ui.workspace import ProjectWorkspace
+        with self.temporary_directory() as directory:
+            path = Path(directory).resolve() / 'queued.py'
+            path.write_text('value = 1\n')
+            view = ProjectWorkspace(Project('test', directory))
+            self.wait(view)
+            survivor = view.active_group
+            destination = view.add_group()
+            entered, release = Event(), Event()
+            opened = []
+            def delayed(path, *, encoding=None):
+                entered.set()
+                if not release.wait(5):
+                    raise RuntimeError('Queued-open fixture was not released')
+                return read_text_file(path, encoding=encoding)
+            with patch('features.ide.ui.workspace.read_text_file', side_effect=delayed):
+                try:
+                    view.open_path(path, group=destination, position=4,
+                                   on_open=lambda doc: opened.append((doc, doc.textCursor().position())))
+                    self.wait_until(entered.is_set)
+                    view.close_group()
+                    self.assertNotIn(destination, view.groups)
+                finally:
+                    release.set()
+                    self.wait(view)
+            self.assertFalse(view.pending_opens)
+            self.assertEqual(len(opened), 1)
+            document, position = opened[0]
+            self.assertIs(view.group_for(document), survivor)
+            self.assertIs(view.current, document)
+            self.assertEqual(position, 4)
+            self.assertEqual(document.path, path)
+
     def test_navigation_branch_replaces_forward_history(self):
         from features.ide.projects import Project
         from features.ide.ui.workspace import ProjectWorkspace

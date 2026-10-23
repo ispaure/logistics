@@ -54,6 +54,17 @@ line separator even when the current final line has no trailing newline.
 
 ## Audit and ownership
 
+`ProjectWorkspace.open_path` captures normalized path, requested group, explicit
+split intent, UTF-16 cursor position and completion callback in `_OpenTarget`.
+`_publish_open` revalidates that group after the read, falling back to the active
+surviving group, and reuses the canonical buffer before selecting/placing the view
+and invoking the callback. Pending-open counts, decoding retry and unavailable
+records stay in the existing worker queue. `_finish_restore` applies saved scroll,
+selection and splitter geometry only at the queued restoration boundary. The
+capture record adds no persistence format or separate job owner. Tests cover a
+destination group closing during a real delayed read, cursor-before-callback
+ordering, retargeting, shared views, unavailable recovery and cooperative close.
+
 The existing TextEditor already consumes commonUtils CodeEdit, EditorViews,
 SyntaxHighlighter (Pygments), SearchPanel and persistence.text. These supply line
 numbers, undo, indentation, pairing, folding, line commands, encoding/BOM/newline

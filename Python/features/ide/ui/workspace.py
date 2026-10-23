@@ -1,6 +1,7 @@
 """Project-scoped documents, non-detachable groups and cooperative workers."""
 from collections import Counter, deque
 from dataclasses import replace
+from typing import Callable, NamedTuple
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.status_line import StatusLine
@@ -11,6 +12,15 @@ from features.ide.ui.documents import EditorDocument
 from features.ide.ui.browser import ProjectBrowser
 from features.ide.ui.navigation import Navigation
 from features.ide.ui.autosave import pause_autosave
+
+
+class _OpenTarget(NamedTuple):
+    """Captured destination intent; groups are revalidated when a read completes."""
+    path: Path
+    group: qt.QTabWidget | None
+    explicit_group: bool
+    position: int | None
+    on_open: Callable[[qt.QWidget], object] | None
 
 
 class ProjectWorkspace(Navigation, qt.QMainWindow):
@@ -182,41 +192,9 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 continue
         explicit_group = group in self.groups
         group = group if explicit_group else self.active_group
+        request = _OpenTarget(path, group, explicit_group, position, on_open)
         def loaded(snapshot):
-            representative = self.documents.get(path)
-            target = group if group in self.groups else self.active_group
-            doc = self.view_for(path, target)
-            if doc is None and representative is not None and not explicit_group:
-                doc = representative
-                target = self.group_for(doc)
-            if doc is None:
-                from features.ide.ui.markdown_document import MarkdownDocument
-                document_type = MarkdownDocument if path.suffix.lower() in ('.md', '.markdown') else EditorDocument
-                document_type = type(representative) if representative else document_type
-                doc = document_type(snapshot, self, buffer=representative.buffer if representative else None)
-                getattr(doc, 'editor', doc).set_column_guide(self.project.column_guide)
-                if representative is None:
-                    self.documents[path] = doc
-                    buffer = doc.buffer
-                    from features.ide.ui.autosave import AutoSave
-                    buffer.autosave = AutoSave(self, buffer)
-                    buffer.markers.run = self.run
-                    buffer.text.modificationChanged.connect(lambda _: self.update_buffer_titles(buffer))
-                    self.watch.addPath(str(path))
-                if isinstance(doc, EditorDocument):
-                    doc.link_requested.connect(lambda request, doc=doc: self.query_link(doc, request))
-                    doc.viewport().installEventFilter(self)
-                target.addTab(doc, self.document_icon(doc), doc.title)
-                doc.focused.connect(lambda: self.activate(self.group_for(doc)))
-                doc.cursorPositionChanged.connect(self.changed)
-                doc.verticalScrollBar().valueChanged.connect(self.changed)
-            target.setCurrentWidget(doc)
-            self.activate(target)
-            doc.setFocus()
-            self.place_view(doc, position=position)
-            if on_open is not None:
-                on_open(doc)
-            self.changed.emit()
+            self._publish_open(request, snapshot)
         if path in self.documents:
             loaded(None)
         else:
@@ -241,6 +219,44 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                     self.unavailable.append(restored_record)
                 self.error(error)
             self.run(lambda: read_text_file(path, encoding=encoding), opened, failed)
+
+    def _publish_open(self, request, snapshot):
+        """Mount a captured open into its surviving group and existing shared buffer."""
+        path, group, explicit_group, position, on_open = request
+        representative = self.documents.get(path)
+        target = group if group in self.groups else self.active_group
+        doc = self.view_for(path, target)
+        if doc is None and representative is not None and not explicit_group:
+            doc = representative
+            target = self.group_for(doc)
+        if doc is None:
+            from features.ide.ui.markdown_document import MarkdownDocument
+            document_type = MarkdownDocument if path.suffix.lower() in ('.md', '.markdown') else EditorDocument
+            document_type = type(representative) if representative else document_type
+            doc = document_type(snapshot, self, buffer=representative.buffer if representative else None)
+            getattr(doc, 'editor', doc).set_column_guide(self.project.column_guide)
+            if representative is None:
+                self.documents[path] = doc
+                buffer = doc.buffer
+                from features.ide.ui.autosave import AutoSave
+                buffer.autosave = AutoSave(self, buffer)
+                buffer.markers.run = self.run
+                buffer.text.modificationChanged.connect(lambda _: self.update_buffer_titles(buffer))
+                self.watch.addPath(str(path))
+            if isinstance(doc, EditorDocument):
+                doc.link_requested.connect(lambda request, doc=doc: self.query_link(doc, request))
+                doc.viewport().installEventFilter(self)
+            target.addTab(doc, self.document_icon(doc), doc.title)
+            doc.focused.connect(lambda: self.activate(self.group_for(doc)))
+            doc.cursorPositionChanged.connect(self.changed)
+            doc.verticalScrollBar().valueChanged.connect(self.changed)
+        target.setCurrentWidget(doc)
+        self.activate(target)
+        doc.setFocus()
+        self.place_view(doc, position=position)
+        if on_open is not None:
+            on_open(doc)
+        self.changed.emit()
 
     def views(self):
         return [g.widget(i) for g in self.groups for i in range(g.count())]
@@ -598,36 +614,40 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 else:
                     self.unavailable.append(record)
         def restored(_):
-            self.restoring = False
-            for record in returned:
-                index = record.get('group', 0)
-                group = self.groups[index] if isinstance(index, int) and 0 <= index < len(self.groups) else self.groups[0]
-                doc = self.view_for(Path(record['path']).resolve(), group)
-                if doc and isinstance(record.get('scroll', 0), int):
-                    self.place_view(doc, scroll=record.get('scroll', 0))
-            for group, entry in zip(self.groups, groups):
-                if not isinstance(entry, dict):
-                    continue
-                active_path = entry.get('active')
-                doc = self.view_for(Path(active_path).resolve(), group) if isinstance(active_path, str) else None
-                for record in entry.get('files', []) if isinstance(entry.get('files', []), list) else []:
-                    if isinstance(record, dict) and isinstance(record.get('path'), str) and isinstance(record.get('scroll', 0), int):
-                        opened = self.view_for(Path(record['path']).resolve(), group)
-                        if opened:
-                            self.place_view(opened, scroll=record.get('scroll', 0))
-                if doc and self.group_for(doc) is group:
-                    group.setCurrentWidget(doc)
-            active = state.get('active_group', 0)
-            self.activate(self.groups[active] if isinstance(active, int) and 0 <= active < len(self.groups) else self.groups[0])
-            for key, splitter in [('splitter', self.splitter), ('editors', self.editors)]:
-                sizes = state.get(key)
-                if isinstance(sizes, list) and all(isinstance(n, int) and n >= 0 for n in sizes) and any(sizes):
-                    # Earlier drag previews were accidentally QSplitter children.
-                    # Recover the real widths from those alternating hidden panes.
-                    if key == 'editors' and len(sizes) == 2 * splitter.count() and not any(sizes[::2]):
-                        sizes = sizes[1::2]
-                    splitter.setSizes(sizes)
+            self._finish_restore(state, groups, returned)
         self.run(lambda: None, restored)
+
+    def _finish_restore(self, state, groups, returned):
+        """Restore positions/selection/splitters after the queued reads have retired."""
+        self.restoring = False
+        for record in returned:
+            index = record.get('group', 0)
+            group = self.groups[index] if isinstance(index, int) and 0 <= index < len(self.groups) else self.groups[0]
+            doc = self.view_for(Path(record['path']).resolve(), group)
+            if doc and isinstance(record.get('scroll', 0), int):
+                self.place_view(doc, scroll=record.get('scroll', 0))
+        for group, entry in zip(self.groups, groups):
+            if not isinstance(entry, dict):
+                continue
+            active_path = entry.get('active')
+            doc = self.view_for(Path(active_path).resolve(), group) if isinstance(active_path, str) else None
+            for record in entry.get('files', []) if isinstance(entry.get('files', []), list) else []:
+                if isinstance(record, dict) and isinstance(record.get('path'), str) and isinstance(record.get('scroll', 0), int):
+                    opened = self.view_for(Path(record['path']).resolve(), group)
+                    if opened:
+                        self.place_view(opened, scroll=record.get('scroll', 0))
+            if doc and self.group_for(doc) is group:
+                group.setCurrentWidget(doc)
+        active = state.get('active_group', 0)
+        self.activate(self.groups[active] if isinstance(active, int) and 0 <= active < len(self.groups) else self.groups[0])
+        for key, splitter in [('splitter', self.splitter), ('editors', self.editors)]:
+            sizes = state.get(key)
+            if isinstance(sizes, list) and all(isinstance(n, int) and n >= 0 for n in sizes) and any(sizes):
+                # Earlier drag previews were accidentally QSplitter children.
+                # Recover the real widths from those alternating hidden panes.
+                if key == 'editors' and len(sizes) == 2 * splitter.count() and not any(sizes[::2]):
+                    sizes = sizes[1::2]
+                splitter.setSizes(sizes)
 
     @pause_autosave
     def can_close(self):

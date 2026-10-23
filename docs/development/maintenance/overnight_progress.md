@@ -1,5 +1,19 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L6 IDE queued opens and restoration
+
+`_OpenTarget` captures destination intent without another state/job owner;
+`_publish_open` retains canonical-buffer reuse, surviving-group fallback and
+cursor-before-callback order. `_finish_restore` names the existing queued layout
+publication. Expanded AST matches every original method/signature. A new real
+delayed-read regression passes on original/refactored code when its requested
+group closes before publication. All 64 IDE cases across eight files pass, with
+the original 63 in unchanged order, plus document workspace 28, architecture,
+owner lint and wiki checks. Persisted layouts, decoding retry, pending counts,
+retargeting, unavailable records and worker/close ownership remain unchanged.
+This commits the IDE stage of L6; Git and desktop-folder stages remain. No
+external consumer changes or push occurred.
+
 ## Sequential audit implementation: L5 chat assembly and projection
 
 Mobile `show_chat` names input/transcript, configuration and retained workspace
