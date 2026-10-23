@@ -825,7 +825,7 @@ completed baseline. Remaining priorities continue to govern selection.
   progress/preset/apply controls. Three private builders now name those sections
   within the same widget/module, without new files, public APIs or state layers.
 - An AST comparison expands the builders back into initialization and verifies
-  the exact original statement order. The constructor is 31 lines instead of 226;
+  the exact original statement order. The constructor is 31 lines instead of 227 (inclusive spans);
   this reduction reflects named responsibilities, not deleted controls or behavior.
 - All 24 tests across three host rename files pass, including 20 Bulk Rename UI
   cases, plus lint, architecture and all five documentation checks. Existing
@@ -1429,3 +1429,40 @@ consumer adapters and exact vendor checking pass.
 - The complete post-junction shared suite also finishes: 181 files / 1,232 cases /
   25 skips, zero failed files. The extra file contains the three unchanged
   portable wiki cases; it did not inflate the case count.
+
+Mobile bounded-input commit: `e755287d`; shared `288ccbb`; Blue Hole `098f3f1`.
+
+## Current-source native-enabled verification
+
+- Desktop/mobile held all three tracked trees clean at `e755287d` / `288ccbb` /
+  `098f3f1` throughout their runs. Desktop: 179 files / 1,685 cases / zero skips
+  and failures, including all six
+  cached-host native scenarios. Mobile: 162 / 1,163 / zero skips and failures,
+  including both existing Chromium DOM cases and the new bounded-input profiles.
+  Shared `288ccbb`: 181 / 1,232 / 25 skips / zero failed files, completed with
+  root `fc6438b8` before the subsequent mobile-only input change.
+- The cached host dylib is byte-identical after validation. Its unknown modified
+  build provenance remains separate from the source snapshot, which is proven
+  only for the Python code. No current Go build claim.
+- All 1,864 tracked Python sources compile. Configured lint, doctor, toolchain,
+  compatibility, hygiene and architecture pass. The source package contains
+  2,219 tracked members plus version metadata; all 2,220 manifest hashes pass,
+  followed by actual owned-profile startup/Blender settings rendering and exit 0.
+- Fresh graph inventory: Logistics 659 modules / 1,610 edges / 27 all-import
+  candidate groups; commonUtils 326 / 956 / six; Blue Hole 196 / 586 / two.
+  Module-scope edges/groups are 859/zero, 780/two and 569/two. Shared junction
+  query reuse merges conservative candidate groups and grows the largest from
+  91 to 105 modules; the smaller group count is not cycle elimination. No new
+  module-scope group appears. This coupling tradeoff is explicit in the audit.
+- The audit now leads with all seven assessment dimensions, current measurements,
+  exact validation scope and remaining platform/architecture work. Documentation
+  verification commands include the extracted portable catalog cases and retain
+  the earlier October 16 evidence's original scope.
+- Both created simulators are verified deleted; the owned verification worktree
+  is archived after saving evidence. No Boox package was installed/changed, no
+  existing device/app data was cleared, and no remote was pushed or published.
+
+Final guide validation: all five documentation-layout and four real viewer
+integration cases pass. Inclusive AST spans confirm constructor/composition
+changes of 227→31, 200→40 and 197→39; the earlier 226 count excluded the
+definition line and is corrected above.

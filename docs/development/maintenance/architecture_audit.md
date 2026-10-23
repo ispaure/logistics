@@ -1,5 +1,110 @@
 # Ecosystem architecture audit
 
+## Current assessment after the October 23 maintenance pass
+
+This section summarizes the latest implementation; the baseline and earlier
+checkpoints below retain their original scope. Source snapshot: Logistics
+`e755287d`, commonUtils `288ccbb`, Blue Hole `098f3f1`, all on dedicated local
+maintenance branches. Both consumers pin the exact same shared content. No
+remote push, release, dependency installation or persisted-format migration.
+
+| Repository | Baseline → current production lines | Baseline → current test lines | Python files |
+| --- | ---: | ---: | ---: |
+| Logistics | 89,213 → 89,510 | 75,541 → 76,703 | 1,152 → 1,152 |
+| commonUtils | 42,360 → 42,533 | 22,128 → 23,426 | 506 → 509 |
+| Blue Hole | 22,806 → 22,804 | 525 → 771 | 201 → 203 |
+
+Composition spans (including the definition line) are Bulk Rename 227 → 31,
+LM 200 → 40 and Blender 197 → 39. Their private builders remain in existing
+modules; the composition-only transformations preserve expanded statement trees.
+These figures show clearer responsibility boundaries, not deleted functionality.
+
+Counts use the original tracked-source exclusions. New shared files are the
+optional presentation owner and portable batch/wiki test owners; Blue Hole adds test
+drivers. File count and line count are not quality scores.
+
+| Dimension | Implemented evidence | Remaining limit |
+| --- | --- | --- |
+| Readability | Bulk Rename, LM and Blender construction now have named, cohesive builders in their existing modules; expanded statement trees preserve construction order. Failure paths name their publication/cleanup phases. | Large mobile composition, index and Blender UI owners still need domain review; length alone does not justify splitting them. |
+| Modularity | Native browser lifecycle/package imports stay portable; optional presentation has a separate owner with preserved public exports. Stream completion, bounded reads/hashing and publication mechanisms stay in existing reusable owners; application policy stays in consumers. | Framework-specific composition and callback ownership remain substantial. |
+| Testability | New fault profiles reproduce late edits, replaced backups, short/nonblocking I/O, empty worker failures, oversize state and stale widgets. Real rclone, embedded Blender, Chromium DOM and owned iPhone/iPad fixtures complement isolated host suites. | Device/runtime coverage is bounded; skipped tests and earlier failed attempts remain recorded. |
+| Coupling | The real Blue Hole pie presentation cycle was removed with descriptors/bindings preserved. Reviewed unused imports reduce the configured host adapter count from 25 to 24; policy reports 15 feature edges and zero violations. | All-import candidate groups are 27 / six / two; shared query reuse merges candidate groups, growing the largest from 91 to 105 modules. Module-scope groups remain zero / two / two. A merger is not cycle elimination, and deferred groups are not proven runtime failures. |
+| Duplication | Atomic JSON/XML/INI publication, provider copies and complete byte writes use existing shared owners. Only stable mechanics move into commonUtils. | Exact repeated production bodies of 20+ lines were absent both before and after; near-duplicate workflows are not exhaustively eliminated. |
+| Consistency | Both applications track the same verified shared revision. Error/cancellation contracts, read/write size bounds, name selection and content manifests are explicit and regression tested. | Platform-specific filesystem semantics still require native validation. |
+| Reliability | Verified moves/rollback preserve changed or surviving copies; archive publication checks late source identity; LocalCrypt rejects incomplete input; queued Qt work retires with native owners. | Filesystem revision checks are optimistic samples, not arbitrary-writer isolation. Native pickers, original iPad scene closure and some target platforms remain unverified. |
+
+The conservative graph inventory is Logistics 659 modules / 1,610 edges,
+commonUtils 326 / 956 and Blue Hole 196 / 586. Module-scope edges are 859 / 780 /
+569. The module-scope shared groups are the Qt facade and command package; Blue
+Hole retains environment and project-filter groups. The command group includes
+parent-package export/submodule edges. No broad cycle
+rewrite was attempted without matching runtime evidence. Shared junction reuse
+adds three explicit import edges and merges conservative all-import groups; this
+is a recorded coupling tradeoff, not an improvement inferred from the lower count.
+
+The same source package passes all 2,220 manifest hashes and real offscreen
+startup after fresh extraction. Owned fixtures exercise Bulk Rename, expanded
+LM controls and Blender preset settings without provisioning or launching Blender.
+All 1,864 tracked Python sources compile without writing bytecode. Configured
+lint, compatibility, hygiene and architecture checks pass; no type checker is
+configured.
+
+Desktop/mobile retain `e755287d` / `288ccbb` unchanged throughout their full
+runs. The shared full suite completed at the same shared revision, before the
+later mobile-only change:
+
+| Validation | Executed result | Scope |
+| --- | --- | --- |
+| Desktop | 179 files, 1,685 cases, zero skips/failures | Includes all six native bridge scenarios using the separately recorded cached dylib. |
+| Mobile host | 162 files, 1,163 cases, zero skips/failures | Toga dummy plus both real headless Chromium DOM fixtures, using existing runtimes. |
+| Shared | 181 files, 1,232 cases, 25 skips, zero failures | Shared `288ccbb`, with root `fc6438b8`; later changes affect only mobile input. |
+| Blue Hole adapters | 33 cases pass | Exact shared membership/bytes and recorded revision also match. |
+| Embedded Blender | 161 cases, one filesystem skip, zero failures | Blender 4.5.1 / Python 3.11.11; syntax and selected portable contracts only. |
+| Native iOS | 33 acceptance cases on each owned simulator | Earlier source snapshot below; independent-window gate required on iPad. |
+
+Counts are per suite, include skipped cases, and are not unique-case totals across
+runtimes. Earlier sandbox watcher failures, resource-sensitive setup timeouts and
+fixture mistakes remain in the work log with their subsequent scoped reruns.
+Assertions/timeouts were not weakened. The initial baseline failed five shared,
+eleven desktop and two mobile files, including environmental/harness issues;
+those raw failures must not be conflated with later deliberately failing regressions.
+
+Native iPhone and iPad reports belong specifically to `b3031665` / `178f5da`:
+33 acceptance cases pass on each, with actual independent-window/draft and
+second-scene close/restore coverage on iPad. Original launch-scene closure and
+native system picking are explicitly unverified. Embedded Python is 3.12.10 on
+iOS 27.0; existing bridge archives were reused with recorded hashes. Both owned
+simulators were deleted and their disposable worktree archived after evidence
+preservation. No Boox test app was installed or changed.
+
+Blue Hole's exact current copy passes 33 consumer adapters and 161 embedded
+portable/syntax cases (160 pass, one filesystem skip) on Blender 4.5.1 / Python 3.11.11.
+The driver also compiles vendored production sources without importing optional
+toolkits. Metadata scanning and wiki traversal now reuse the existing junction
+query after both APIs reproduced Python 3.11 pathlib failures. Three unchanged
+wiki tests have a portable test owner. These results do not validate registration/
+export on target Blender 5.2.2.
+Windows/Linux native checks, a connected Android/Boox run, live Perforce and
+original-scene/system-picker behavior remain outside the executed evidence.
+
+Six host bridge scenarios also execute against an existing cached macOS dylib:
+listing, encrypted text/metadata/large-file round trips, comic passwords, remote
+readers and mobile file operations. Its recorded build info has vcs.modified=true;
+exact source provenance is unknown and no fresh Go build was performed. A native
+short-read fixture reproduced three-byte-only encoding before the mobile bounded
+read fix, then preserved full input afterward. Oversize/would-block inputs are
+rejected before encoding; their staging cleanup is checked independently.
+
+Reliability, consistency and testability have stronger evidence than whole-system
+structural simplification. The original approximate 5/10 was not independently
+measured, and an unqualified 7/10 is not supported by an agreed rubric. The
+specific changes and limits above are the defensible before/after assessment.
+
+Next priorities are target Blender 5.2.2 registration/export; native Windows/Linux
+filesystem and process contracts; physical device picker/scene lifecycle checks;
+and deeper responsibility/identity review of mobile composition and offline index
+generations. Preserve existing APIs and establish regressions before further moves.
+
 ## Scope and baseline (October 22, 2026)
 
 This is a fresh assessment of already substantially refactored repositories, not

@@ -6,3 +6,5 @@ commonUtils; application behavior remains in its owning feature guides.
 
 - [Architecture audit and baseline](architecture_audit.md)
 - [Work log, validation and next priorities](overnight_progress.md)
+
+The audit starts with the [current assessment and validation scope](architecture_audit.md#current-assessment-after-the-october-23-maintenance-pass).
