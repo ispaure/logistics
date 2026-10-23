@@ -1,5 +1,40 @@
 # Ecosystem maintenance progress
 
+## Deterministic lint scope and shared test matrix
+
+Logistics `75395cc0` implements audit T1 and the shared-matrix part of T2 on the
+current branch. Ruff retains its default exclusions and explicitly omits mobile
+build/payload/log/deployment/toolchain trees and the optional feature link. In the
+build-heavy local checkout, lint selection falls from 4,028 to 1,705 files: exactly
+all 1,703 tracked Python files plus two project TOMLs. A disposable fixture proves
+that generated invalid Python is excluded while new untracked source is selected
+and fails lint when invalid. CI and local lint keep the same roots and rules.
+
+`dev.py test shared [filename/glob]` runs shared Qt/portable tests in the desktop
+environment, then matching `test_native*.py` contracts in the Toga environment.
+Both retain file/profile isolation, explicit import paths and exit failures;
+missing required toolkit modules fail before discovery. Custom Qt/native
+interpreters, dry-run, filename intersection and both-leg failure propagation are
+covered. Existing desktop/mobile commands retain their environments and behavior.
+The static CI job runs the selection contracts with its pinned Ruff installed;
+the lint-specific fixture is explicitly optional in nondeveloper environments
+without Ruff. No application dependency or installation flow changed.
+
+The complete new command passes in one permitted invocation: Qt/portable 184
+files / 1,260 cases / 25 optional or platform skips; native 25 files / 108 cases /
+zero skips. Counts overlap and are not distinct coverage to add together. All 16
+command/scope, nine runner and eight architecture-contract cases pass. An actual
+wrong native interpreter returns failure for absent Toga as intended. Configured
+lint, doctor, architecture, toolchain, documentation and whitespace checks pass.
+Hosted CI, Windows/Linux and native-device acceptance were not run; actionlint
+was unavailable locally. Real watcher tests used permitted notifications and
+isolated storage, without weakening assertions or extending timeouts.
+
+commonUtils remains unchanged at `2cd0516`; Ally Tools and Blue Hole remain clean
+and untouched. No push or deployment occurred. Raw reports remain ignored. T2's
+broader owner-test selection is still open; C1/C3 transaction clarity and mobile
+owner contracts remain subsequent audit priorities.
+
 ## Complete remaining-work audit
 
 Assessed clean Logistics `4f78de7d` / commonUtils `2cd0516`, retaining the current

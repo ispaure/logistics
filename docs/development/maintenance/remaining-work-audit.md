@@ -5,6 +5,12 @@ commonUtils `2cd0516`. This is the current remaining-work assessment; the
 [architecture audit](architecture_audit.md), [readability history](readability.md)
 and [progress log](overnight_progress.md) retain earlier implementation evidence.
 
+Implementation update: Logistics `75395cc0` completes T1's lint scope and T2's
+[shared Qt/native matrix entry point](../testing.md#shared-library-test-matrix),
+with selection/failure regressions in the static CI job. T2's owner-specific test
+selection expansion remains outstanding. Measurements and historical test results
+below describe the assessment snapshot, before this implementation.
+
 ## Assessment
 
 The next substantial improvement is clearer state and dependency ownership, not
