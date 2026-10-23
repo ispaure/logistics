@@ -14,6 +14,7 @@ from tempfile import TemporaryDirectory
 import tomllib
 import zipfile
 
+from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import copy_stream
 from features.blender.installation.releases import relative_path
@@ -259,7 +260,7 @@ class AddonLibrary:
                 raise ValueError('Addon ZIP changed during import')
             (staged / 'origin.json').write_text(json.dumps({'published': addon.published, 'package_name': addon.package_name}), encoding='utf-8')
             check_cancelled(cancelled)
-            staged.rename(destination)
+            rename_exclusive(staged, destination)
         return replace(inspect_package(destination / 'addon.zip'), published=addon.published, package_name=addon.package_name, source='Preset' if self.preset_root is not None else 'Personal')
 
     def resolve(self, identity, release, *, entries=None):

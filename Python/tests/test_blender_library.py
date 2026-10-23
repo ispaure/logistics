@@ -30,6 +30,22 @@ class BlenderLibraryTests(unittest.TestCase):
             archive.writestr(f'{module}/helper.py', '# companion module')
         return path
 
+    def test_import_refuses_destination_created_during_copy(self):
+        from features.blender.addons import library
+        package = self.package('racing.zip')
+        addon = inspect_package(package)
+        destination = self.library.root / addon.identity.replace(':', '-') / addon.version
+        copy = library.copy_stream
+        def copy_and_race(*args, **kwargs):
+            copy(*args, **kwargs)
+            destination.mkdir()
+        with patch.object(library, 'copy_stream', side_effect=copy_and_race):
+            with self.assertRaises(FileExistsError):
+                self.library.add(package)
+        self.assertEqual(list(destination.iterdir()), [])
+        self.assertEqual(list(destination.parent.iterdir()), [destination])
+        self.assertEqual(inspect_package(package).digest, addon.digest)
+
     def test_grouping_and_numeric_latest_compatible_resolution(self):
         self.library.add(self.package('old.zip', (1, 9, 0)))
         self.library.add(self.package('new.zip', (1, 10, 0)))

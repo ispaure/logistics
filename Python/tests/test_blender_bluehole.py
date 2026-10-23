@@ -24,6 +24,19 @@ class BlueHoleTests(unittest.TestCase):
             archive.writestr(f'BlueHole-{commit}/__init__.py', 'bl_info={"name":"Blue Hole","version":(1,0,0),"blender":(4,2,0)}\n')
             archive.writestr(f'BlueHole-{commit}/Lib/module.py', commit)
 
+    def test_cache_publication_refuses_a_racing_empty_directory(self):
+        commit = 'a' * 40
+        destination = self.manager.root / 'addons/bluehole/blender-4.5.1/main' / commit
+        def download_and_race(*args):
+            self.download(*args)
+            destination.mkdir()
+        with patch.object(bluehole, 'branch_commit', return_value=commit), \
+                patch.object(bluehole, 'download', side_effect=download_and_race):
+            with self.assertRaises(FileExistsError):
+                bluehole.update(self.manager, self.release, 'main')
+        self.assertEqual(list(destination.iterdir()), [])
+        self.assertEqual(list(destination.parent.iterdir()), [destination])
+
     def test_rechecks_head_but_downloads_same_commit_only_once(self):
         with patch.object(bluehole, 'branch_commit', return_value='a' * 40) as head, patch.object(bluehole, 'download', side_effect=self.download) as download:
             first, commit = bluehole.update(self.manager, self.release, 'main')

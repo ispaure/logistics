@@ -19,7 +19,8 @@ See the [user guide](../user/user.md) for controls and recovery.
   read-only mounting and `ditto` to retain signed app metadata and symlinks.
   Shared APIs and the existing helper are unchanged.
 - A same-parent temporary workspace holds the archive and extracted tree. Publication
-  renames the verified complete bundle into an absent destination. A directory lock
+  uses shared atomic no-replace renaming for the verified complete bundle.
+  A destination created after preflight is preserved. A directory lock
   serializes installation/removal per version. The completion marker records version,
   platform, archive hash and executable path. Readiness checks that marker and the
   executable's existence; it does not rehash the full installation on every launch.
@@ -29,7 +30,8 @@ See the [user guide](../user/user.md) for controls and recovery.
   Native DMG operations have finite timeouts and cleanup runs before retirement.
 - `presets/manager.py` derives the per-user root from Logistics' existing preference path
   helper, without changing global resource defaults. Installations and presets are
-  version-separated. Preset duplication stages independent copies; environment
+  version-separated. Preset duplication stages independent copies; both duplication
+  and renaming reject destinations created after preflight. Environment
   overrides explicitly select config, scripts, extensions and datafiles in the child.
   Launched instances are tracked for local mutation guards and continue independently
   after Logistics closes. Instances started elsewhere are not tracked.
@@ -48,7 +50,8 @@ See the [user guide](../user/user.md) for controls and recovery.
   metadata supplies release versions, inclusive minima, exclusive extension maxima
   and platform limits. Resolution selects the highest numeric compatible version.
   Import validates paths, duplicate names, symlinks and bounded metadata/archive size;
-  it stages a private copy and rejects conflicting same-version contents.
+  it stages a private copy and rejects conflicting same-version contents. Library
+  imports and Blue Hole commit-cache publication use the same no-replace primitive.
 - Applying selections copies resolved payloads into preset-owned addon locations,
   preserving unrelated addons and rejecting collisions. Config/scripts/extensions
   are backed up before mutation; `apply_addons.py` removes deselected managed

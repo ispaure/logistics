@@ -8,6 +8,7 @@ import subprocess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 from features.preferences import preferences_path
+from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import copy_stream
 from features.blender.installation.install import installed, install_release, remove_installation
@@ -105,7 +106,7 @@ class BlenderManager:
             staged = Path(workspace) / 'preset'
             shutil.copytree(source, staged, symlinks=True, copy_function=copy)
             check_cancelled(cancelled)
-            staged.rename(destination)
+            rename_exclusive(staged, destination)
         return destination
 
     def rename_preset(self, release, source_name, name):
@@ -113,7 +114,7 @@ class BlenderManager:
         source, destination = self.preset(release, source_name), self.preset(release, name)
         if destination.exists():
             raise ValueError('A preset with that name already exists')
-        source.rename(destination)
+        rename_exclusive(source, destination)
         return destination
 
     def remove_preset(self, release, name):
