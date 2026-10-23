@@ -1,6 +1,6 @@
-from commonUtils.formats import spreadsheets as shUtils
+from commonUtils.formats import tables as shUtils
 from commonUtils.formats.csvType import CSVFile
-from commonUtils.runtime import logging as logUtils
+from commonUtils.runtime.diagnostics import log, Severity
 from features.aviation_tools.mathUtils import weatherUtils
 from features.aviation_tools.mathUtils import mathStuff
 
@@ -83,16 +83,16 @@ class CruisePerformanceChart:
             # Pressure Altitude
             pressure_altitude_lst = self.get_entry_pressure_altitude_lst()
             closest_pressure_altitude = min(pressure_altitude_lst, key=lambda x: abs(x - pressure_altitude))
-            logUtils.log_msg(f'Closest Pressure Altitude: {closest_pressure_altitude}')
+            log(Severity.DEBUG, 'Aviation', f'Closest Pressure Altitude: {closest_pressure_altitude}')
             # Temperature
             temp_at_altitude = weatherUtils.get_temperature_at_altitude(ground_temp, closest_pressure_altitude)
             temp_lst = self.get_entry_temperature_lst()
             closest_temp = min(temp_lst, key=lambda x: abs(x-temp_at_altitude))
-            logUtils.log_msg(f'Closest Ground Temperature: {closest_temp}')
+            log(Severity.DEBUG, 'Aviation', f'Closest Ground Temperature: {closest_temp}')
             # RPM
             rpm_lst = self.get_rpm_lst()
             closest_rpm = min(rpm_lst, key=lambda x: abs(x-rpm))
-            logUtils.log_msg(f'Closest RPM: {closest_rpm}')
+            log(Severity.DEBUG, 'Aviation', f'Closest RPM: {closest_rpm}')
 
             # FIND ENTRY
             for entry in self.entries_lst:

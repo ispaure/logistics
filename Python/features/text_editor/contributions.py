@@ -32,7 +32,7 @@ def text_selection(context):
 
 
 def activate_text(context):
-    from commonUtils.formats.markdownType import MarkdownFile
+    from commonUtils.formats.markdown.file import MarkdownFile
     from commonUtils.formats.txtType import TXTFile
 
     item = context.item

@@ -1,5 +1,5 @@
 """Logistics admission policy for shared cache-backed local search."""
-from commonUtils.runtime.resources.indexed_search import IndexedLocalSearch
+from commonUtils.search.indexed import IndexedLocalSearch
 
 
 class LocalSearch(IndexedLocalSearch):

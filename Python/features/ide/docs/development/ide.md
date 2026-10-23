@@ -5,10 +5,10 @@ Usages. Its bounded executor searches immutable root/options/buffer snapshots;
 debounced changes cancel earlier requests and generations reject stale results.
 Search and preview futures are separately retained and polled on the GUI thread.
 Closing/dismissing cancels work, and project shutdown waits for jobs to retire.
-Shared CodeEdit/search supplies bounded PCRE matching, UTF-16 positions, syntax
+Shared search supplies bounded PCRE matching and UTF-16 positions; CodeEdit supplies syntax
 preview and selections; navigation converts to code-point columns through the
-existing placement API. Result masks, exclusions and traversal limits remain
-application-owned. Preview reads are off the GUI thread.
+existing placement API. Result masks, exclusions and traversal limits are supplied by the application
+to commonUtils search; the dialog owns project selection and result navigation. Preview reads are off the GUI thread.
 
 Editor baseline reads and reviewed hunk staging use the executable configured in
 Git settings, independently of Git page activation or repository registration.

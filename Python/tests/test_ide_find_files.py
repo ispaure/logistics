@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from features.ide.ui.project_search import search_files
+from commonUtils.search.files import search_files
 
 
 class SearchFilesTests(unittest.TestCase):
@@ -81,7 +81,7 @@ class FindFilesTests(QtTestCase):
         self.workspace.current.document().setModified(False)
 
     def test_stale_job_is_discarded_and_close_cancels_search(self):
-        from features.ide.ui.project_search import SearchResult
+        from commonUtils.search.files import SearchResult
         started, release = Event(), Event()
         def delayed(*args, **kwargs):
             started.set()

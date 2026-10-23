@@ -4,11 +4,26 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
-from commonUtils.runtime import helpers as marcUtils
+from services import personal_paths as marcUtils
 from features.rclone import credentials
 
 
 class CredentialDiscoveryTests(unittest.TestCase):
+    def test_personal_dropbox_defaults_preserve_windows_probe_and_home_fallback(self):
+        from services import personal_paths
+        from commonUtils.runtime.platform import OS
+        with patch.object(personal_paths, 'get_os', return_value=OS.WIN), \
+                patch.object(personal_paths.os.path, 'isdir', return_value=True):
+            self.assertEqual(personal_paths.get_marc_dropbox_root(),
+                             Path(r'B:\Yagi Dropbox\Marc-Andre Voyer'))
+        for system in (OS.WIN, OS.MAC, OS.LINUX):
+            with self.subTest(system=system), \
+                    patch.object(personal_paths, 'get_os', return_value=system), \
+                    patch.object(personal_paths.os.path, 'isdir', return_value=False), \
+                    patch.object(personal_paths.fileUtils, 'get_user_home_dir', return_value=Path('/fixture')):
+                self.assertEqual(personal_paths.get_marc_dropbox_root(),
+                                 Path('/fixture/Yagi Dropbox/Marc-Andre Voyer'))
+
     def test_checkout_and_existing_dropbox_packages_are_aggregated(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

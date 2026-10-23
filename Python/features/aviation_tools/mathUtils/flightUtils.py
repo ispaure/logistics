@@ -1,5 +1,5 @@
 import math
-from commonUtils.runtime.logging import log_msg
+from commonUtils.runtime.diagnostics import log, Severity
 from features.aviation_tools.mathUtils.mathStuff import (Vector2D, calculate_net_vector_2d_direction, calculate_net_vector2d_magnitude, invert_direction)
 
 
@@ -50,7 +50,7 @@ def distance_from_coords(coordinate_a: Coordinate, coordinate_b: Coordinate) -> 
     :return: Distance (in nautical miles)
     """
     msg = f'Calculate coordinates between: ({coordinate_a.latitude}, {coordinate_a.longitude}) and ({coordinate_b.latitude}, {coordinate_b.longitude})'
-    log_msg(msg)
+    log(Severity.DEBUG, 'Aviation', msg)
     cosine = (math.cos(math.radians(90 - coordinate_b.latitude)) * math.cos(math.radians(90 - coordinate_a.latitude)) +
                                   math.sin(math.radians(90 - coordinate_b.latitude)) * math.sin(math.radians(90 - coordinate_a.latitude))
                                   * math.cos(math.radians(coordinate_b.longitude - coordinate_a.longitude)))
@@ -66,7 +66,7 @@ def true_course_from_coords(coordinate_a: Coordinate, coordinate_b: Coordinate) 
     :return: True Course (in degrees)
     """
     msg = f'Calculate true course between: ({coordinate_a.latitude}, {coordinate_a.longitude}) and ({coordinate_b.latitude}, {coordinate_b.longitude})'
-    log_msg(msg)
+    log(Severity.DEBUG, 'Aviation', msg)
 
     # Convert latitude and longitude from degrees to radians
     lat1 = math.radians(coordinate_a.latitude)

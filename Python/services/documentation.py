@@ -15,6 +15,6 @@ def feature_guide(owner):
 
 
 def open_guide(path, *, directory=None, **kwargs):
-    from commonUtils.formats.markdown_wiki import documentation_root
+    from commonUtils.formats.markdown.wiki import documentation_root
     from commonUtils.ui.markdown import open_markdown
     return open_markdown(path, directory=directory or documentation_root(path), **kwargs)

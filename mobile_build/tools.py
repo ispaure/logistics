@@ -43,7 +43,7 @@ def load_source_modules(repo):
 
 APP_MODULES, DOCUMENT_MODULES = load_source_modules(Path(__file__).resolve().parents[1])
 
-SHARED_REQUIRED_MODULES = ('formats/markdown_wiki.py', 'formats/markdown_images.py', 'ui/native/markdown.py', 'ui/native/adaptive.py', 'ui/native/markdown_preview.py', 'ui/native/markdown_images.py', 'runtime/resources/provider.py', 'runtime/resources/local.py', 'runtime/resources/mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resources/selection.py', 'runtime/browsing.py', 'runtime/resources/range_reader.py', 'runtime/resources/archives.py', 'runtime/resources/search.py', 'ui/native_browser/__init__.py', 'ui/native/__init__.py', 'ui/native/image_canvas.py')
+SHARED_REQUIRED_MODULES = ('formats/markdown/wiki.py', 'formats/markdown/images.py', 'ui/native/markdown.py', 'ui/native/adaptive.py', 'ui/native/markdown_preview.py', 'ui/native/markdown_images.py', 'runtime/resources/provider.py', 'runtime/resources/local.py', 'runtime/resources/mutations.py', 'persistence/publication.py', 'filesystem/local_access.py', 'runtime/resources/selection.py', 'runtime/browsing.py', 'runtime/resources/range_reader.py', 'runtime/resources/archives.py', 'search/providers.py', 'ui/native_browser/__init__.py', 'ui/native/__init__.py', 'ui/native/image_canvas.py')
 
 SHARED_REQUIRED_MODULES += ('ui/native/navigation_state.py', 'ui/native/navigation.py',
                             'ui/native/routes.py', 'ui/native/chrome.py',
@@ -89,7 +89,10 @@ SHARED_REQUIRED_MODULES += ('ui/native/forms.py',)
 SHARED_REQUIRED_MODULES += ('ui/native/bars.py',)
 
 SHARED_REQUIRED_MODULES += ('runtime/signals.py',)
-SHARED_REQUIRED_MODULES += ('runtime/name_search.py', 'runtime/resources/indexed_search.py')
+SHARED_REQUIRED_MODULES += ('search/names.py', 'search/indexed.py')
+SHARED_REQUIRED_MODULES += ('search/__init__.py', 'search/text.py', 'formats/markdown/properties.py',
+                            'formats/markdown/__init__.py', 'formats/markdown/file.py',
+                            'persistence/atomic.py', 'filesystem/objects.py', 'ui/features/declarations.py')
 
 
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):

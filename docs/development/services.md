@@ -58,3 +58,7 @@ discovery results to this catalog. The host still filters visibility, owns cache
 revokes credentials and approves operations; a projected row is not permission
 to open or mutate storage. Focused checks include `test_folder_catalog`,
 `test_folder_sources_ui`, mobile Folder Hub and credential invalidation tests.
+
+## Personal path defaults
+
+`services.personal_paths.get_marc_dropbox_root()` owns the historical personal Dropbox default used for rclone credential discovery. It preserves the Windows B-drive probe and the home-directory fallback. The shared library has no personal Dropbox configuration.

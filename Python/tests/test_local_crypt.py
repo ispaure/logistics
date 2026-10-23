@@ -20,7 +20,7 @@ from local_crypt_fixture import crypt_fixture
 
 class LocalCryptTests(QtTestCase):
     def test_recursive_search_uses_one_listing_and_opens_nested_results(self):
-        from commonUtils.runtime.resources.search import search_resources
+        from commonUtils.search.providers import search_resources
         from io import BytesIO
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             f.provider.mkdir('nested')
@@ -472,7 +472,7 @@ class LocalCryptTests(QtTestCase):
         from desktop.file_browser import FileBrowserPage, _browser_view, _new_browser_tab
         from features.rclone.localcrypt.ui.views import CryptBrowserView
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
-             patch('features.registry.get_browser_extensions', return_value=[]), \
+             patch('features.application.registry.get_browser_extensions', return_value=[]), \
              patch('features.rclone.localcrypt.ui.views.executable.get_rclone_path', return_value=self.binary):
             page = FileBrowserPage(root_path=f.root)
             original = page.workspace.active_view

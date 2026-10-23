@@ -46,7 +46,7 @@ def get_credential_package_directories() -> tuple[Path, ...]:
     The optional Dropbox location is read-only discovery: never create it, copy
     packages, or use it as a software source.
     """
-    from commonUtils.runtime.helpers import get_marc_dropbox_root
+    from services.personal_paths import get_marc_dropbox_root
     local = config.LogisticsConfig().path_logistics_remote_cred
     dropbox = get_marc_dropbox_root() / 'Software/GIT/logistics/Credentials/rclone'
     roots = [local]

@@ -1,10 +1,10 @@
 from typing import *
 from pathlib import Path
-from commonUtils.formats import spreadsheets as shUtils
+from commonUtils.formats import tables as shUtils
 from commonUtils.formats.csvType import CSVFile
 from features.aviation_tools.mathUtils.flightUtils import *
 from features.aviation_tools.resources import DATA_DIR
-from commonUtils.runtime import logging as logUtils
+from commonUtils.runtime.diagnostics import log, Severity
 
 
 class Airport:
@@ -33,7 +33,7 @@ def get_airport_dict() -> Dict[str, Airport]:
     """
     Get a dictionary of all airports as classes
     """
-    logUtils.log_msg('Getting Airports Dictionary')
+    log(Severity.DEBUG, 'Aviation', 'Getting Airports Dictionary')
 
     airports_csv_path = Path(DATA_DIR, 'airports.csv')
     airports_sh = shUtils.Spreadsheet('Airports Datasheet')

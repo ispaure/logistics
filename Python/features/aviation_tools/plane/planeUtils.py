@@ -1,9 +1,9 @@
 from typing import *
 from pathlib import Path
-from commonUtils.formats import spreadsheets as shUtils
+from commonUtils.formats import tables as shUtils
 from commonUtils.formats.csvType import CSVFile
 from features.aviation_tools.resources import DATA_DIR
-from commonUtils.runtime import logging as logUtils
+from commonUtils.runtime.diagnostics import log, Severity
 from features.aviation_tools.plane import planeCruisePerformance
 from features.aviation_tools.plane import planeAirspeedCalibration
 
@@ -71,7 +71,7 @@ def get_aircraft_dict() -> Dict[str, Aircraft]:
     """
     Get a dictionary of all aircraft as classes
     """
-    logUtils.log_msg('Getting Aircraft Dictionary')
+    log(Severity.DEBUG, 'Aviation', 'Getting Aircraft Dictionary')
 
     aircraft_file_lst = sorted((DATA_DIR / 'aircraft').glob('*.csv'))
 

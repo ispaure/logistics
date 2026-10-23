@@ -25,7 +25,7 @@ class RegistryWrites(unittest.TestCase):
         with TemporaryDirectory() as directory:
             path = Path(directory) / 'obsidian.json'
             path.write_bytes(b'{}\n')
-            with patch('commonUtils.persistence.os.replace', side_effect=PermissionError('denied')):
+            with patch('commonUtils.persistence.atomic.os.replace', side_effect=PermissionError('denied')):
                 with self.assertRaisesRegex(RuntimeError, 'Could not write Obsidian registry'):
                     _write_registry(path, {'vaults': {}})
             self.assertEqual(path.read_bytes(), b'{}\n')

@@ -1,4 +1,4 @@
-from commonUtils.formats import spreadsheets as shUtils
+from commonUtils.formats import tables as shUtils
 from commonUtils.formats.csvType import CSVFile
 
 

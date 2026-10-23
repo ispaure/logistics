@@ -5,7 +5,7 @@ import unittest
 from urllib.parse import unquote, urlsplit
 
 from commonUtils.formats.markdown import split_frontmatter
-from commonUtils.formats.markdown_wiki import MarkdownWiki, documentation_root
+from commonUtils.formats.markdown.wiki import MarkdownWiki, documentation_root
 from services.documentation import feature_guide
 
 ROOT = Path(__file__).resolve().parents[2]

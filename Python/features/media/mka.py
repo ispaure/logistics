@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List
 
 from commonUtils.filesystem import directories as dirUtils, files as fileUtils
-from commonUtils.formats import spreadsheets as spreadsheetUtils
+from commonUtils.formats import tables as spreadsheetUtils
 from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.formats import csvType
 from commonUtils.filesystem.rename import RenamePlan, plan_named_renames, apply_renames

@@ -215,7 +215,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(app.file_browser.location_bar.parent_button.control_icon, 'back')
         with self.assertRaises(ValueError):
             app.file_provider.entry('Local')
-        from commonUtils.runtime.resources.search import search_resources
+        from commonUtils.search.providers import search_resources
         (documents / 'Local' / 'Managed' / 'find-me.txt').write_text('collection content')
         result = search_resources(app.file_provider, '', 'find-me')
         self.assertTrue(result.complete)
