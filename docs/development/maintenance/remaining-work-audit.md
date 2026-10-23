@@ -98,6 +98,15 @@ IME/audio interruption and minimum-runtime coverage remain separate platform
 checks; this construction refactor does not certify them. Preserve the main
 Logistics app and its data.
 
+The following [full-host lifecycle pass](../mobile-navigation-proof.md#full-host-ime-scenes-and-activity-recreation)
+adds iPad IME ownership transfer and independent-window close/reopen checks, plus
+Android portrait/short-landscape IME restoration and three actual same-process
+Activity recreations. Shared `ea4dfdd` clears stale keyboard geometry when a scene
+becomes inactive; the Logistics replacement owner retires old native presentation
+callbacks after preserving drafts. Inactive-session destruction was retained by
+the iOS simulator without an error and remains unverified, as do original-scene
+destruction, process-death recovery, physical devices and minimum OS versions.
+
 Existing platform/service acceptance for Blender activation, FUSE drivers, real
 remote/collection operations and desktop integrations remains separate from this
 readability pass. See [platform checks](../platform-checks.md) and owner guides.

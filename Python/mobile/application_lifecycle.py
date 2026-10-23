@@ -64,6 +64,22 @@ class HostLifecycle:
             client = getattr(host, 'cloud_client', None)
             if client is not None:
                 client.cancel()
+        # Activity recreation keeps the Python process alive. Retire the old
+        # presentation explicitly; native destruction alone leaves Python
+        # callbacks, Back delegates and scheduled effects attached to it.
+        for view in tuple(getattr(host, 'text_views', {}).values()):
+            view.dispose()
+        for name in ('_keyboard_dismissal', 'seasonal_snow'):
+            resource = getattr(host, name, None)
+            if resource is not None:
+                resource.dispose()
+        for name in ('adaptive', 'routes'):
+            resource = getattr(host, name, None)
+            if resource is not None:
+                resource.uninstall()
+        navigation = getattr(host, 'native_host', None)
+        if navigation is not None:
+            navigation.dispose()
         self.replaced = True
 
     def request_exit(self):

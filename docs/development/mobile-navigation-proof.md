@@ -68,6 +68,67 @@ system audio interruption, IME restoration, iPad independent windows, Activity
 recreation or minimum-version OS behavior. Keep those acceptance gates separate;
 the fixture's UIKit selector/Java listener calls are not finger-driven gestures.
 
+### Full-host IME, scenes and Activity recreation
+
+The follow-up `native_host_lifecycle_probe.py` uses the actual Logistics startup,
+document editors, scene manager and replacement workflow. It runs under the
+separate bundle `io.github.ispaure.logisticslifecyclecontinuation` with synthetic
+drafts in that package's cache. Stage current sources and native Java using the
+normal mobile source manifests, copy the tracked native fixtures into the app's
+`tests` package, and set its launcher to:
+
+```python
+from tests.logisticsmobile.native_host_lifecycle_probe import main
+main().main_loop()
+```
+
+Keep the normal Android Activity configuration flags; this probe calls actual
+`Activity.recreate()` rather than simulating replacement. Keep the normal iOS
+scene configuration and native `LogisticsSceneAppDelegate` launcher. Use an iPad
+simulator for the independent-window cases. After installing the separate QA app:
+
+```sh
+python3 mobile_build/validation/native_host_lifecycle_tools.py ios \
+  --device IPAD_SIMULATOR_UUID --output test-results/native-host-ios
+python3 mobile_build/validation/native_host_lifecycle_tools.py android \
+  --device emulator-PORT --output test-results/native-host-android
+```
+
+The driver preserves success/failure reports, progress, recreation history and
+fault diagnostics before uninstalling only that QA package. It rejects physical
+Android serials and restores the temporary software-keyboard preference in
+`finally`. The main app and its data remain separate. Reports fingerprint the
+loaded shared navigation and application-lifecycle code.
+Acceptance also requires the probe's direct Python-stderr capture marker and no
+swallowed handler/task errors; Android's process log is checked as well. The
+separate `host-validation.json` records driver acceptance without rewriting the
+native report, so a malformed or error-bearing native success cannot pass.
+
+Native iOS 27.0 / iPad Pro 11-inch checks cover three IME cycles per editor,
+restored insets and Home/document tab visibility, and three independent secondary
+window close/reopen cycles. Each cycle verifies separate editors/routes, duplicate
+writer exclusion, saved text/destination restoration, keyboard ownership transfer
+from primary to child and back, and suppression of retired key/scene callbacks.
+The baseline retained a 320-point inset on the inactive primary scene. Shared
+navigation now reconciles scene activation in addition to per-scene key windows.
+
+Native Android 15 / API 35 checks cover portrait and short-landscape IME/chrome
+restoration, then three real Activity recreations in one process. Four distinct
+Activity/probe identities preserve draft identity and text. Deliberately retained
+old hosts must have inactive navigation adapters and removed selection/Back
+callbacks; late resize delivery is replayed after retirement. The baseline left
+old navigation installed. `HostLifecycle` now retires native presentation owners
+after preserving durable state, and retired hosts ignore late window-resize
+callbacks even when Toga already queued them. Host regression/driver tests cover preservation
+vetoes, ordered/idempotent retirement, failed evidence capture and QA cleanup.
+
+The simulator retained an inactive secondary scene in UIKit's `openSessions`
+without reporting an error after a destruction request. Successful close/reopen
+coverage uses the app's active-window closure path; inactive-session destruction
+and original-launch-scene destruction remain unverified. This pass also does not
+certify process-death restoration, floating/hardware keyboards, physical devices
+or minimum-version OS behavior. Raw evidence stays in ignored test results.
+
 ### Normal startup and saved-workspace audit
 
 The iOS startup audit uses the normal app storage paths rather than overriding

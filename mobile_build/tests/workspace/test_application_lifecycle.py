@@ -70,3 +70,37 @@ class HostLifecycleTests(unittest.TestCase):
             self.assertTrue(owner.request_exit())
         host.checkpoint.assert_called_once_with()
         host.screen_privacy.dispose.assert_called_once_with()
+
+    def test_replacement_retires_native_views_after_preservation_and_before_host_reuse(self):
+        host = self.host()
+        host.text_views = {'doc': Mock()}
+        host._keyboard_dismissal, host.seasonal_snow = Mock(), Mock()
+        host.adaptive, host.routes, host.native_host = Mock(), Mock(), Mock()
+        order = []
+        host.store.flush_checkpoints.side_effect = lambda: order.append('preserve')
+        host.routes.uninstall.side_effect = lambda: order.append('routes')
+        host.native_host.dispose.side_effect = lambda: order.append('navigation')
+        with patch('mobile.markdown_speech.stop_markdown_speech'), \
+                patch('features.books.mobile.media_controls.stop_media'):
+            lifecycle(host).retire_for_replacement()
+            lifecycle(host).retire_for_replacement()
+        self.assertEqual(order, ['preserve', 'routes', 'navigation'])
+        host.text_views['doc'].dispose.assert_called_once_with()
+        host._keyboard_dismissal.dispose.assert_called_once_with()
+        host.seasonal_snow.dispose.assert_called_once_with()
+        host.adaptive.uninstall.assert_called_once_with()
+        self.assertFalse(host.active_host)
+
+    def test_replaced_host_ignores_late_native_window_resize(self):
+        from mobile.app import LogisticsMobile
+        LogisticsMobile.resize_workspace(NS(active_host=False), object())
+
+    def test_scheduled_reset_notice_can_still_reflow_its_live_window(self):
+        from mobile.app import LogisticsMobile
+        content = object()
+        host = NS(active_host=False, _reset_scheduled=True,
+                  main_window=NS(content=content, size=NS(width=640)))
+        with patch('mobile.layout_events.native_resize_changed', return_value=True), \
+                patch('mobile.keyboard.fit_editors'), patch('mobile.settings.forms.fit_section') as fit:
+            LogisticsMobile.resize_workspace(host)
+        fit.assert_called_once_with(content, 640)

@@ -979,9 +979,20 @@ and memory-pressure resource release. Replacement preparation flushes documents,
 credential lists and chat before retiring callbacks; async model loading and final
 retirement share that preparation once. Failed chat preservation leaves the old
 host active for retry. Replacement disposal and successful exit are idempotent;
-memory trimming remains repeatable and preserves the current speech owner. `LogisticsMobile` delegates its
-existing callbacks to this module, so startup cancellation, active transfers,
-private documents and native callback signatures keep their existing behavior.
+memory trimming remains repeatable and preserves the current speech owner.
+`LogisticsMobile` delegates its existing callbacks to this module, so startup
+cancellation, active transfers, private documents and native callback signatures
+keep their existing behavior.
+
+Android Activity replacement also disposes old text views, keyboard dismissal
+and seasonal effects, then uninstalls adaptive navigation and native Back before
+disposing the old navigation host. This happens after durable preservation and
+before the new host reuses its workspace; a destroyed Activity alone does not
+retire Python listeners. `resize_workspace` ignores retired hosts before accessing
+native layout, including callbacks Toga queued before disposal. The
+[full-host native lifecycle checks](mobile-navigation-proof.md#full-host-ime-scenes-and-activity-recreation)
+exercise three real same-process replacements and inspect deliberately retained
+old hosts for retired callbacks.
 `reader_lifecycle.py` still owns individual document exit/Back behavior. Host tests
 include `test_application_lifecycle.py`, startup progress, reset, private sessions,
 LocalCrypt and speech media.
