@@ -12,11 +12,18 @@ on:
         type: choice
         default: both
         options: [android, ios, both]
+      include_ipad:
+        description: Also require iPad independent-window validation
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       target:
         type: string
         default: both
+      include_ipad:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,14 +33,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
-  build:
-    name: Native ${{ matrix.target }} prototype
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(inputs.target == 'android' && '[{"target":"android","os":"ubuntu-24.04"}]' || inputs.target == 'ios' && '[{"target":"ios","os":"xcode-27"}]' || '[{"target":"android","os":"ubuntu-24.04"},{"target":"ios","os":"xcode-27"}]') }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.target == 'ios' && 110 || 60 }}
+  ios-build:
+    name: Build shared iOS test app
+    if: github.event_name == 'push' || inputs.target == 'ios' || inputs.target == 'both'
+    runs-on: xcode-27
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -42,37 +46,18 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12.2'
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
-        if: matrix.target == 'android'
-        with:
-          distribution: temurin
-          java-version: '17'
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version: '1.26.9'
           cache-dependency-path: mobile_build/rclone_bridge/go.sum
       - name: Prepare the SDK and simulator required for native Duo adaptation
-        if: matrix.target == 'ios'
         timeout-minutes: 30
         run: python mobile_build/select_ios_sdk.py --github-env "$GITHUB_ENV" --prepare-duo
       - name: Prepare a clean, curated mobile payload
         run: |
           python -m pip install briefcase==0.4.5
           python mobile_build/tools.py stage mobile_build/payload
-      - name: Generate and build the Android application
-        if: matrix.target == 'android'
-        working-directory: mobile_build
-        env:
-          BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
-        run: |
-          mkdir -p "$BRIEFCASE_HOME"
-          python cloud_build.py licenses
-          briefcase create android --no-input
-          python cloud_build.py android
-          briefcase build android --no-input
-          cp build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/Logistics-android-debug.apk"
       - name: Generate and build the iOS Simulator application
-        if: matrix.target == 'ios'
         working-directory: mobile_build
         env:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
@@ -83,47 +68,165 @@ jobs:
           python cloud_build.py licenses
           briefcase create iOS --no-input
           python cloud_build.py ios
-          briefcase build iOS --no-input
+          briefcase build iOS --test --no-input
           app=$(find build/logisticsmobile/ios -type d -name 'Logistics Mobile.app' -print -quit)
           test -n "$app"
           ditto -c -k --sequesterRsrc --keepParent "$app" "$RUNNER_TEMP/Logistics-ios-simulator.zip"
+          # Keep Briefcase's metadata and generated project so device jobs can
+          # run this exact test binary with --no-update, without rebuilding.
+          tar -czf "$RUNNER_TEMP/Logistics-ios-test-project.tar.gz" build/logisticsmobile/ios payload/source.json
+      - name: Share the built iOS test application
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: logistics-ios-test-project
+          path: ${{ runner.temp }}/Logistics-ios-test-project.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Preserve native builds and diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: logistics-native-ios
+          path: |
+            mobile_build/payload/source.json
+            mobile_build/logs/
+            ${{ runner.temp }}/Logistics-ios-simulator.zip
+          retention-days: 14
+
+  android:
+    name: Build and validate Android
+    if: github.event_name == 'push' || inputs.target == 'android' || inputs.target == 'both'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.2'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.26.9'
+          cache-dependency-path: mobile_build/rclone_bridge/go.sum
+      - name: Prepare a clean, curated mobile payload
+        run: |
+          python -m pip install briefcase==0.4.5
+          python mobile_build/tools.py stage mobile_build/payload
+      - name: Generate and build the Android application
+        working-directory: mobile_build
+        env:
+          BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
+        run: |
+          mkdir -p "$BRIEFCASE_HOME"
+          python cloud_build.py licenses
+          briefcase create android --no-input
+          python cloud_build.py android
+          briefcase build android --no-input
+          cp build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/Logistics-android-debug.apk"
       - name: Exercise Android panels, rotation and safe areas
-        if: matrix.target == 'android'
         working-directory: mobile_build
         env:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
           sudo chmod a+rw /dev/kvm
           python ui_tools.py run android --device '{"avd":"LogisticsValidation","device_type":"pixel","skin":null,"system_image":"system-images;android-35;google_apis;x86_64"}'
-      - name: Exercise iPhone, iPad and Duo panels, rotation and safe areas
-        if: matrix.target == 'ios'
-        working-directory: mobile_build
-        env:
-          BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
-        run: |
-          device=$(python ui_tools.py ios-device)
-          python ui_tools.py run ios --device "$device"
-          cp logs/ios-native-ui.json logs/iphone-native-ui.json
-          xcrun simctl shutdown "$device"
-          device=$(python ui_tools.py ios-ipad)
-          python ui_tools.py run ios --device "$device" --require-independent-windows
-          cp logs/ios-native-ui.json logs/ipad-native-ui.json
-          xcrun simctl shutdown "$device"
-          device=$(python ui_tools.py ios-duo)
-          python ui_tools.py run ios --device "$device" --require-duo
-          cp logs/ios-native-ui.json logs/duo-native-ui.json
-      - name: Capture iOS startup and crash diagnostics
-        if: failure() && matrix.target == 'ios'
-        working-directory: mobile_build
-        run: python ui_tools.py ios-diagnostics
       - name: Preserve native builds and diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: logistics-native-${{ matrix.target }}
+          name: logistics-native-android
           path: |
             mobile_build/payload/source.json
             mobile_build/logs/
             ${{ runner.temp }}/Logistics-android-debug.apk
-            ${{ runner.temp }}/Logistics-ios-simulator.zip
           retention-days: 14
+
+  ios-ui:
+    name: Validate iOS ${{ matrix.device }}
+    needs: ios-build
+    if: github.event_name == 'push' || inputs.target == 'ios' || inputs.target == 'both'
+    runs-on: xcode-27
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      matrix:
+        device: ${{ fromJSON(inputs.include_ipad && '["iphone","duo","ipad"]' || '["iphone","duo"]') }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: mobile_build
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.2'
+      - name: Prepare the same SDK and simulator family as the build
+        timeout-minutes: 30
+        run: python select_ios_sdk.py --github-env "$GITHUB_ENV" --prepare-duo
+      - run: python -m pip install briefcase==0.4.5
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: logistics-ios-test-project
+          path: ${{ runner.temp }}/ios-test-project
+      - name: Restore the shared test application
+        run: tar -xzf "$RUNNER_TEMP/ios-test-project/Logistics-ios-test-project.tar.gz"
+      - name: Exercise panels, rotation and safe areas
+        env:
+          IOS_DEVICE: ${{ matrix.device }}
+          BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
+        run: |
+          case "$IOS_DEVICE" in
+            iphone) selector=ios-device; flags=() ;;
+            duo) selector=ios-duo; flags=(--require-duo) ;;
+            ipad) selector=ios-ipad; flags=(--require-independent-windows) ;;
+            *) exit 1 ;;
+          esac
+          device=$(python ui_tools.py "$selector")
+          python ui_tools.py run ios --device "$device" --no-update "${flags[@]}"
+      - name: Capture iOS startup and crash diagnostics
+        if: failure()
+        run: python ui_tools.py ios-diagnostics
+      - name: Preserve device reports and diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: logistics-native-ios-${{ matrix.device }}
+          path: |
+            mobile_build/payload/source.json
+            mobile_build/logs/
+          retention-days: 14
+
+  native-gate:
+    name: Require every selected native check
+    needs: [ios-build, ios-ui, android]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject failed, cancelled or required skipped checks
+        env:
+          TARGET: ${{ github.event_name == 'push' && 'both' || inputs.target }}
+          IOS_BUILD_RESULT: ${{ needs.ios-build.result }}
+          ANDROID_RESULT: ${{ needs.android.result }}
+          IOS_RESULT: ${{ needs.ios-ui.result }}
+        run: |
+          case "$TARGET" in
+            ios|both) expected_ios=success ;;
+            android) expected_ios=skipped ;;
+            *) exit 1 ;;
+          esac
+          test "$IOS_BUILD_RESULT" = "$expected_ios"
+          test "$IOS_RESULT" = "$expected_ios"
+          case "$TARGET" in
+            android|both) test "$ANDROID_RESULT" = success ;;
+            ios) test "$ANDROID_RESULT" = skipped ;;
+          esac
