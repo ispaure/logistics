@@ -27,7 +27,18 @@ dev = ["ruff==0.14.0"]
 
 [tool.ruff]
 target-version = "py312"
-exclude = ["features/emulation"]
+# Retain Ruff's default cache/environment exclusions. These additional trees are
+# generated or external, even in a checkout without Git ignore discovery.
+extend-exclude = [
+    "**/features/emulation",
+    "**/mobile_build/build",
+    "**/mobile_build/payload",
+    "**/mobile_build/logs",
+    "**/mobile_build/.deploy-workspaces",
+    "**/mobile_build/.tools",
+    "**/mobile_build/.briefcase",
+    "**/mobile_build/.android-beta",
+]
 
 [tool.ruff.lint]
 # Start with correctness checks; formatting and legacy import cleanup are separate.

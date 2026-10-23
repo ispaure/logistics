@@ -1,6 +1,8 @@
 """Run a suite with safe periodic progress and native-crash tracebacks."""
 import argparse
 import faulthandler
+from fnmatch import fnmatchcase
+import importlib.util
 import os
 from pathlib import Path
 import subprocess
@@ -12,9 +14,10 @@ import unittest
 from unittest.mock import patch
 
 
-def run_isolated(directory, pattern, interval):
+def run_isolated(directory, pattern, interval, include_patterns=()):
     """Give independent GUI test files their own QApplication and native state."""
-    modules = sorted(directory.rglob(pattern))
+    modules = sorted(path for path in directory.rglob(pattern)
+                     if path.is_file() and all(fnmatchcase(path.name, extra) for extra in include_patterns))
     if not modules:
         print('Module isolation requires at least one matching test file.', file=sys.stderr)
         return 1
@@ -50,6 +53,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
     parser.add_argument('--pattern', default='test*.py', help='unittest discovery filename pattern')
+    parser.add_argument('--include-pattern', action='append', default=[],
+                        help='Require this additional filename glob (isolated mode only)')
+    parser.add_argument('--require-module', action='append', default=[],
+                        help='Fail before discovery if this dependency is unavailable')
     parser.add_argument('--single-file', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--isolate-modules', action='store_true',
                         help='Run each matching test file in a fresh process, including nested directories')
@@ -58,8 +65,17 @@ def main():
     args = parser.parse_args()
     if args.traceback_after <= 0:
         parser.error('--traceback-after must be positive')
+    if args.include_pattern and not args.isolate_modules:
+        parser.error('--include-pattern requires --isolate-modules')
+    for name in args.require_module:
+        try:
+            available = importlib.util.find_spec(name) is not None
+        except (ImportError, ValueError):
+            available = False
+        if not available:
+            parser.error(f'Required test dependency is unavailable: {name}. Use the owning suite environment.')
     if args.isolate_modules:
-        return run_isolated(args.directory.resolve(), args.pattern, args.traceback_after)
+        return run_isolated(args.directory.resolve(), args.pattern, args.traceback_after, args.include_pattern)
     # Keep default storage and preferences away from the contributor's live data,
     # including during test discovery. Children running isolated modules create
     # their own scope; ordinary helper subprocesses inherit private cache roots.

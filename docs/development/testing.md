@@ -78,6 +78,10 @@ not expand them. Omit the filename/pattern to run the whole selected suite.
 No matching files is an error. Each test file runs in a fresh process; failing
 files or timeouts fail the command. The helper returns the check's exit status.
 Lint covers `dev.py`, `Python`, `mobile_build`, `Scripts` and `.github/scripts`, matching CI's scope.
+The Ruff configuration retains its default environment/cache exclusions and
+explicitly excludes mobile build, payload, log, deployment-workspace and downloaded
+toolchain trees, plus the external feature link. New, untracked application and
+test source is still checked; lint selection does not depend on the Git index.
 
 For **mobile host tests**, use a separate environment, without installing a
 native SDK or Briefcase just to run dummy-backend checks:
@@ -94,6 +98,41 @@ append `--python /path/to/python`. Append `--dry-run` to inspect the command wit
 running it. Mobile tests use `TOGA_BACKEND=toga_dummy`; desktop tests use offscreen
 Qt. These checks do not certify native appearance or interactions. See the
 [mobile handbook](mobile-handbook.md) when you need an actual device build.
+
+### Shared-library test matrix
+
+Use the same entry point for commonUtils:
+
+```sh
+python3 dev.py test shared
+python3 dev.py test shared test_streams.py
+python3 dev.py test shared 'test_native*browser*.py' --dry-run
+```
+
+The full command runs the Qt/portable shared suite in `.venv`, then replays
+`tests/native/test_native*.py` in `mobile_build/.venv` with Toga dummy. Each file
+still runs in an isolated process with disposable storage. Native replay uses
+the intersection of that native filename family and the requested filename/glob;
+a portable-only selection needs no mobile environment. The Qt host-admission
+fixture `test_qt_mobile_host.py` stays in the Qt leg. The two legs overlap and
+their case counts are not distinct coverage to add together.
+
+For custom environments, `--python PATH` selects the shared Qt interpreter and
+`--native-python PATH` selects its native interpreter. Both selected interpreter
+paths are checked before starting either leg. Missing PySide6, Toga or Toga dummy
+fails its required leg before discovery, rather than silently accepting skipped
+toolkit tests. Both legs run after a test failure; the command preserves the
+first nonzero result. No environment is installed or modified by this command.
+Use the existing desktop/mobile setup commands if either environment is absent.
+
+Native filesystem notification access is required for real watcher tests.
+Localhost fixture servers and Qt WebEngine also need the host's socket and
+process capabilities. A restricted sandbox can cause permission failures or
+watcher timeouts; recheck with those capabilities and disposable profiles before
+classifying them as source regressions. Do not remove watcher assertions, extend
+timeouts or turn unavailable required dependencies into successful skips.
+Platform-specific Windows/case-sensitive-filesystem skips remain explicit, and
+Toga dummy results do not certify device appearance or native interactions.
 
 The regression runner isolates application storage and cache directories. When
 using Playwright's downloaded browsers for DOM tests, set

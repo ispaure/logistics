@@ -114,3 +114,34 @@ class StorageIsolationTests(unittest.TestCase):
                     private = next(line.split('=', 1)[1] for line in result.stdout.splitlines()
                                    if line.startswith('PRIVATE_ROOT='))
                     self.assertFalse(Path(private).exists(), 'Private storage was not cleaned')
+
+
+class MatrixSelectionTests(unittest.TestCase):
+    def test_intersection_filters_out_qt_only_and_unselected_native_modules(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ('test_qt_mobile_host.py', 'test_native_other.py'):
+                (root / name).write_text('raise AssertionError("Must not be imported")\n')
+            (root / 'test_native_selected.py').write_text(
+                'import unittest\nclass Test(unittest.TestCase):\n'
+                '    def test_value(self): self.assertTrue(True)\n')
+            command = [sys.executable, str(RUNNER), temporary, '--isolate-modules',
+                       '--pattern', 'test_native*.py', '--include-pattern', '*selected.py']
+            result = subprocess.run(command, capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Isolated test files: 1; failures: 0', result.stdout)
+            self.assertNotIn('test_qt_mobile_host.py', result.stdout)
+            self.assertNotIn('test_native_other.py', result.stdout)
+            result = subprocess.run([*command[:-1], '*missing.py'], capture_output=True, text=True, timeout=15)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('requires at least one matching', result.stderr)
+
+    def test_missing_toolkit_is_an_error_before_discovery(self):
+        with TemporaryDirectory() as temporary:
+            (Path(temporary) / 'test_import.py').write_text('raise AssertionError("Must not discover")\n')
+            result = subprocess.run([sys.executable, str(RUNNER), temporary, '--isolate-modules',
+                                     '--require-module', '_logistics_missing_test_dependency_'],
+                                    capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn('Required test dependency is unavailable', result.stderr)
+            self.assertNotIn('Must not discover', result.stderr)

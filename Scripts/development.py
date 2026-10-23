@@ -1,9 +1,50 @@
-"""Standard-library-only diagnostics for contributor environments."""
+"""Standard-library-only check planning, execution and contributor setup."""
 import json
+from fnmatch import fnmatchcase
 import os
 from pathlib import Path
 import shutil
 import subprocess
+
+
+def shared_test_groups(root, pattern):
+    """Keep Qt in the desktop environment and replay native contracts with Toga."""
+    directory = root / 'Python/commonUtils/tests'
+    groups = [('shared Qt/portable', False, directory, pattern,
+               ['--require-module', 'PySide6'])]
+    native = directory / 'native'
+    if any(path.is_file() and fnmatchcase(path.name, pattern)
+           for path in native.rglob('test_native*.py')):
+        groups.append(('shared native', True, native, 'test_native*.py',
+                       ['--include-pattern', pattern, '--require-module', 'toga',
+                        '--require-module', 'toga_dummy']))
+    return groups
+
+
+def run_checks(root, checks, *, dry_run=False):
+    """Validate all interpreters before running; retain failures across matrix legs."""
+    import shlex
+    if not dry_run:
+        for label, interpreter, command, environment in checks:
+            if not interpreter.is_file():
+                raise ValueError(f'Environment Python is missing: {interpreter}. '
+                                 'See docs/development/testing.md for setup, or pass --python / --native-python PATH.')
+        if not (root / 'Python/commonUtils/__init__.py').is_file():
+            raise ValueError('commonUtils is missing. Run git submodule update --init --recursive '
+                             'in a fresh checkout; preserve any existing submodule edits first.')
+    result = 0
+    for label, interpreter, command, environment in checks:
+        print(f'Check: {label}', flush=True)
+        print(f'Working directory: {root}', flush=True)
+        for name in ('PYTHONPATH', 'QT_QPA_PLATFORM', 'TOGA_BACKEND'):
+            if name in environment:
+                print(f'{name}={environment[name]}', flush=True)
+        print(subprocess.list2cmdline(command) if os.name == 'nt' else shlex.join(command), flush=True)
+        if not dry_run:
+            code = subprocess.run(command, cwd=root, env=environment).returncode
+            if code and not result:
+                result = code
+    return result
 
 
 def find_uv():

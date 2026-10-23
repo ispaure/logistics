@@ -2,8 +2,6 @@
 import argparse
 import os
 from pathlib import Path
-import shlex
-import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent
@@ -29,10 +27,12 @@ def main(argv=None):
     commands.add_parser('toolchain', help='Check dependency pin consistency across host and app manifests')
     commands.add_parser('architecture', help='Check reviewed import boundaries without loading features')
     commands.add_parser('doctor', help='Inspect contributor environments without changing them')
-    tests = commands.add_parser('test', help='Run desktop or mobile host tests in isolated processes')
-    tests.add_argument('suite', choices=('desktop', 'mobile'))
+    tests = commands.add_parser('test', help='Run desktop, mobile or shared host tests in isolated processes')
+    tests.add_argument('suite', choices=('desktop', 'mobile', 'shared'))
     tests.add_argument('pattern', nargs='?', default='test*.py',
                        help='Test filename or quoted glob (default: all test files)')
+    tests.add_argument('--native-python', type=Path,
+                       help='Override the shared matrix Toga interpreter; --python overrides its Qt interpreter')
     lint = commands.add_parser('lint', help='Run the CI correctness lint scope')
     for command in (tests, lint):
         command.add_argument('--python', type=Path, help='Use a specific environment Python executable')
@@ -65,44 +65,47 @@ def main(argv=None):
     if args.command == 'doctor':
         from Scripts.development import doctor
         return doctor(ROOT, environment_python)
-    mobile = args.command == 'test' and args.suite == 'mobile'
-    # Resolving the interpreter symlink escapes a virtual environment.
-    interpreter = Path(os.path.abspath(args.python.expanduser())) if args.python else environment_python(mobile)
-    environment = os.environ.copy()
-    # Include the repository for tests importing mobile_build tooling. Do not inherit
-    # unrelated PYTHONPATH entries that can shadow this checkout's packages.
-    environment['PYTHONPATH'] = os.pathsep.join((str(ROOT / 'Python'), str(ROOT)))
-    environment['QT_QPA_PLATFORM'] = 'offscreen'
+    from Scripts.development import run_checks, shared_test_groups
     if args.command == 'test':
+        if args.native_python and args.suite != 'shared':
+            parser.error('--native-python is only available for the shared suite.')
         if not args.pattern.endswith('.py') or any(c in args.pattern for c in '/\\'):
             parser.error('Use a test filename or quoted filename glob, not a path.')
-        suite = ROOT / ('mobile_build/tests' if mobile else 'Python/tests')
+        if args.suite == 'shared':
+            groups = shared_test_groups(ROOT, args.pattern)
+        else:
+            mobile = args.suite == 'mobile'
+            suite = ROOT / ('mobile_build/tests' if mobile else 'Python/tests')
+            groups = [(args.suite, mobile, suite, args.pattern, [])]
+        suite = groups[0][2]
         if not any(path.is_file() for path in suite.rglob(args.pattern)):
             parser.error(f'No test files match {args.pattern!r} in {suite.relative_to(ROOT)}.')
+    else:
+        groups = [('lint', False, None, None, [])]
+    checks = []
+    for label, mobile, suite, pattern, extra in groups:
+        override = args.native_python if args.command == 'test' and args.suite == 'shared' and mobile else args.python
+        # Resolving the interpreter symlink escapes a virtual environment.
+        interpreter = Path(os.path.abspath(override.expanduser())) if override else environment_python(mobile)
+        environment = os.environ.copy()
+        # Unrelated PYTHONPATH entries can shadow this checkout's packages.
+        environment['PYTHONPATH'] = os.pathsep.join((str(ROOT / 'Python'), str(ROOT)))
+        environment['QT_QPA_PLATFORM'] = 'offscreen'
         if mobile:
             environment['TOGA_BACKEND'] = 'toga_dummy'
-        command = [str(interpreter), str(ROOT / 'Python/tests/run_regressions.py'),
-                   str(suite), '--pattern', args.pattern, '--isolate-modules']
-    else:
-        command = [str(interpreter), '-m', 'ruff', 'check', '--config',
-                   'Python/pyproject.toml', 'dev.py', 'Python', 'mobile_build', 'Scripts', '.github/scripts']
-    print(f'Working directory: {ROOT}', flush=True)
-    for name in ('PYTHONPATH', 'QT_QPA_PLATFORM', 'TOGA_BACKEND'):
-        if name in environment:
-            print(f'{name}={environment[name]}', flush=True)
-    print(subprocess.list2cmdline(command) if os.name == 'nt' else shlex.join(command), flush=True)
-    if args.dry_run:
-        return 0
-    if not interpreter.is_file():
-        parser.error(f'Environment Python is missing: {interpreter}. '
-                     'See docs/development/testing.md for setup, or pass --python PATH.')
-    if not (ROOT / 'Python/commonUtils/__init__.py').is_file():
-        parser.error('commonUtils is missing. Run git submodule update --init --recursive '
-                     'in a fresh checkout; preserve any existing submodule edits first.')
+        elif args.command == 'test' and args.suite == 'shared':
+            environment.pop('TOGA_BACKEND', None)
+        if args.command == 'test':
+            command = [str(interpreter), str(ROOT / 'Python/tests/run_regressions.py'),
+                       str(suite), '--pattern', pattern, '--isolate-modules', *extra]
+        else:
+            command = [str(interpreter), '-m', 'ruff', 'check', '--config',
+                       'Python/pyproject.toml', 'dev.py', 'Python', 'mobile_build', 'Scripts', '.github/scripts']
+        checks.append((label, interpreter, command, environment))
     try:
-        return subprocess.run(command, cwd=ROOT, env=environment).returncode
-    except OSError as error:
-        parser.error(f'Could not start the check: {error}')
+        return run_checks(ROOT, checks, dry_run=args.dry_run)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
 
 
 if __name__ == '__main__':
