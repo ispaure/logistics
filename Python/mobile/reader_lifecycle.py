@@ -135,6 +135,34 @@ class ReaderLifecycle:
                     return tools.close
         return None
 
+    def reader_back_action(self, view):
+        """Choose a system-Back tool action for the active reader."""
+        from .routes import contains
+        readers = getattr(self, 'readers', None)
+        reader = readers.active if readers is not None else None
+        if reader is not None and contains(view, getattr(reader, 'library_view', None)):
+            chapters = getattr(reader, 'chapter_sidebar', None)
+            if chapters is not None and not chapters.expanded and chapters.sidebar_open:
+                return chapters.show_detail
+
+        private = getattr(self, 'private_sessions', None)
+        reader = private.active if private is not None else None
+        if reader is not None and contains(view, getattr(reader, 'crypt_view', None)):
+            epub = getattr(reader, 'provider_epub_view', None)
+            if epub is not None and contains(view, getattr(epub, 'find_box', None)):
+                return epub.close_find
+            chapters = getattr(epub, 'sidebar', None)
+            if chapters is not None and not chapters.expanded and chapters.sidebar_open:
+                return chapters.show_detail
+            tools = getattr(epub, 'tools', None)
+            if chapters is None and tools is not None and contains(view, tools.panel):
+                return tools.close
+            tools = getattr(reader, 'pdf_tools', None)
+            if tools is not None and contains(view, tools.panel):
+                return tools.close
+
+        return None
+
     def refresh_reader_exit(self, view):
         button = getattr(view, '_reader_close_button', None)
         if button is not None:

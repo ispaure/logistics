@@ -237,29 +237,15 @@ class MobileRoutes(Routes):
             owner = getattr(app, name, None)
             if owner is None or not contains(body, owner.view):
                 continue
-            sidebar = owner.sidebar
-            if not sidebar.expanded and sidebar.sidebar_open and owner.path is not None:
-                def close_sidebar():
-                    sidebar.show_detail()
-                    if name == 'documentation':
-                        owner.reading = True
-                return self.invoke_back(close_sidebar)
-            if owner.history_index > 0:
-                return self.invoke_back(lambda: owner.navigate_history(-1))
+            action = owner.back_action()
+            if action is not None:
+                return self.invoke_back(action)
 
         drawer = adaptive.browsers.get(destination)
         if drawer is not None and contains(body, drawer.browser_widget):
-            browser = drawer.browser
-            if browser.search.value:
-                return self.invoke_back(lambda: setattr(browser.search, 'value', ''))
-            if browser.search_open:
-                return self.invoke_back(browser.close_search)
-            if browser.history.previous() is not None:
-                return self.invoke_back(browser.go_back)
-            if drawer.folder:
-                return self.invoke_back(drawer.up)
-            if drawer.main_browser_visible():
-                return self.invoke_back(drawer.cancel_browser)
+            action = drawer.back_action()
+            if action is not None:
+                return self.invoke_back(action)
 
         for browser_name, path_name, parent in (
                 ('file_browser', 'file_path', app.parent_file_folder),
@@ -267,38 +253,16 @@ class MobileRoutes(Routes):
             browser = getattr(app, browser_name, None)
             if browser is None or not contains(body, browser.widget):
                 continue
-            if browser.search.value:
-                return self.invoke_back(lambda: setattr(browser.search, 'value', ''))
-            if browser.search_open:
-                return self.invoke_back(browser.close_search)
-            if browser.history.previous() is not None:
-                return self.invoke_back(browser.go_back)
+            action = browser.back_action()
+            if action is not None:
+                return self.invoke_back(action)
             # A direct Workspaces shortcut may have no earlier folder visit.
             if getattr(app, path_name, ''):
                 return self.invoke_back(parent)
 
-        readers = getattr(app, 'readers', None)
-        reader = readers.active if readers is not None else None
-        if reader is not None and contains(body, getattr(reader, 'library_view', None)):
-            chapters = getattr(reader, 'chapter_sidebar', None)
-            if chapters is not None and not chapters.expanded and chapters.sidebar_open:
-                return self.invoke_back(chapters.show_detail)
-
-        private = getattr(app, 'private_sessions', None)
-        reader = private.active if private is not None else None
-        if reader is not None and contains(body, getattr(reader, 'crypt_view', None)):
-            epub = getattr(reader, 'provider_epub_view', None)
-            if epub is not None and contains(body, getattr(epub, 'find_box', None)):
-                return self.invoke_back(epub.close_find)
-            chapters = getattr(epub, 'sidebar', None)
-            if chapters is not None and not chapters.expanded and chapters.sidebar_open:
-                return self.invoke_back(chapters.show_detail)
-            tools = getattr(epub, 'tools', None)
-            if chapters is None and tools is not None and contains(body, tools.panel):
-                return self.invoke_back(tools.close)
-            tools = getattr(reader, 'pdf_tools', None)
-            if tools is not None and contains(body, tools.panel):
-                return self.invoke_back(tools.close)
+        action = app.reader_back_action(body)
+        if action is not None:
+            return self.invoke_back(action)
 
         key = app.visible_reader()
         if key is not None:

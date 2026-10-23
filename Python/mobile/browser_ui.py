@@ -328,6 +328,16 @@ class FileBrowser(RecycledBrowser):
                          list_factory=RecycledFileList, inline_details=False, **kwargs)
         self.native_list.menu_provider = self._native_row_menu
 
+    def back_action(self):
+        """Choose one browser-local Back step; the route owns invoking it."""
+        if self.search.value:
+            return lambda: setattr(self.search, 'value', '')
+        if self.search_open:
+            return self.close_search
+        if self.history.previous() is not None:
+            return self.go_back
+        return None
+
     def set_entries(self, provider, directory, rows, *, location=None):
         changed = provider is not self._resource_provider
         release = (provider.acquire() if hasattr(provider, 'acquire') else lambda: None) if changed else None

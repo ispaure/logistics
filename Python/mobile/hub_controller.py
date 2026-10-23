@@ -1,6 +1,6 @@
 """Owned workflow state and explicit application services."""
 
-from services.workflow_host import HostAttribute
+from services.workflow_host import HostAttribute, HostService
 from mobile.hub_ui import HubUI
 
 
@@ -44,10 +44,10 @@ class HubController(HubUI):
         self.app = app
 
     adaptive = HostAttribute("adaptive")
-    checkpoint = HostAttribute("checkpoint")
+    checkpoint = HostService("checkpoint")
     choose_document_type = HostAttribute("choose_document_type")
     cloud_restore_task = HostAttribute("cloud_restore_task")
-    folder_picker_or_error = HostAttribute("folder_picker_or_error")
+    folder_picker_or_error = HostService("folder_picker_or_error")
     main_window = HostAttribute("main_window")
     open_book = HostAttribute("open_book")
     open_document = HostAttribute("open_document")
@@ -58,12 +58,12 @@ class HubController(HubUI):
     refresh_documents = HostAttribute("refresh_documents")
     register_transfer_status = HostAttribute("register_transfer_status")
     routes = HostAttribute("routes")
-    session_closer = HostAttribute("session_closer")
-    session_opener = HostAttribute("session_opener")
-    show_cloud = HostAttribute("show_cloud")
+    session_closer = HostService("session_closer")
+    session_opener = HostService("session_opener")
+    show_cloud = HostService("show_cloud")
     start_cloud_restore = HostAttribute("start_cloud_restore")
-    show_documents = HostAttribute("show_documents")
-    show_home_files = HostAttribute("show_home_files")
+    show_documents = HostService("show_documents")
+    show_home_files = HostService("show_home_files")
     show_library = HostAttribute("show_library")
     store = HostAttribute("store")
     text_views = HostAttribute("text_views")

@@ -18,6 +18,60 @@ class CompositionContractTests(unittest.TestCase):
 
         self.assertEqual(App().invoke(), 'explicit owner')
 
+    def test_two_controllers_cannot_claim_the_same_compatibility_name(self):
+        class First:
+            METHODS = ('invoke',)
+            FIELDS = ()
+
+        class Second:
+            METHODS = ()
+            FIELDS = ('invoke',)
+
+        @composed_workflow('first', First)
+        class App:
+            pass
+
+        with self.assertRaisesRegex(ValueError, "already belongs to 'first'"):
+            composed_workflow('second', Second)(App)
+        self.assertNotIn('second', App.__dict__)
+        self.assertEqual(App.__dict__['invoke'].factory, 'first')
+
+    def test_inherited_ownership_and_factory_names_cannot_be_reassigned(self):
+        class First:
+            METHODS = ('invoke',)
+            FIELDS = ()
+
+        class Second:
+            METHODS = ('another',)
+            FIELDS = ()
+
+        @composed_workflow('first', First)
+        class Parent:
+            pass
+
+        class Child(Parent):
+            pass
+
+        with self.assertRaisesRegex(ValueError, 'Workflow factory'):
+            composed_workflow('first', Second)(Child)
+        self.assertNotIn('another', Child.__dict__)
+        with self.assertRaisesRegex(ValueError, "already belongs to 'first'"):
+            composed_workflow('second', First)(Child)
+        self.assertNotIn('second', Child.__dict__)
+
+    def test_duplicate_names_are_rejected_before_modifying_the_host(self):
+        class Controller:
+            METHODS = ('invoke',)
+            FIELDS = ('invoke',)
+
+        class App:
+            pass
+
+        with self.assertRaisesRegex(ValueError, 'Duplicate workflow'):
+            composed_workflow('controller', Controller)(App)
+        self.assertNotIn('controller', App.__dict__)
+        self.assertNotIn('invoke', App.__dict__)
+
     def test_readonly_capabilities_and_writable_state_are_distinct(self):
         class Consumer:
             capability = HostService('value')

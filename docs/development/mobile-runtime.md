@@ -1055,6 +1055,10 @@ or emulator evidence distinct from physical Boox/E Ink acceptance.
 
 `composition.assembly.composed_workflow` installs only the controller's enumerated
 `METHODS` and `FIELDS` as compatibility accessors and constructs that owner lazily.
+Duplicate declarations and claims by different controllers fail before registration
+mutates the host; explicit host entry points remain authoritative. Read-only
+`HostService` accessors protect controller callbacks; mutable compatibility state
+keeps `HostAttribute` or `StateAttribute`.
 `services.workflow_host.HostService` is a read-only application capability;
 `HostAttribute` is writable by default, and `StateAttribute` targets an explicit
 owned record. A missing attribute raises normally; there is no catch-all app
@@ -1067,6 +1071,19 @@ remain independent of the mobile application import. Register new source owners
 in the owning mobile manifests; generated payload copies are not implementation
 files. `test_composition_contracts`, workflow ownership and feature-boundary checks
 exercise composition, and staged startup checks catch omitted modules.
+
+Browser and document owners expose `back_action()` to select one local dismissal
+or history callback without invoking it. `MobileRoutes.system_back()` keeps the
+priority order explicit: overlays/drawers, text search, documentation/Notes,
+folder browsers, reader tools, reader close, then route/tab fallback. The route
+invokes returned actions through `invoke_back()` to retain navigation marking and
+async serialization. Reader tool selection stays on `ReaderLifecycle`; toolbar
+Back/Cancel keeps its separate existing policy. Android Back tests cover search,
+folder history, root return, reader tools and cancellation.
+
+The new-document form exposes named input, selector, error and action controls.
+Its workflow tests use those controls rather than numeric child positions, so
+adding or moving presentation rows does not change the test's interaction target.
 
 ## Session transition decisions
 

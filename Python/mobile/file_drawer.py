@@ -98,6 +98,17 @@ class FileDrawer:
         self.app.show_view(page, destination=self.destination, route=route, title=title)
         return await self.refresh()
 
+    def back_action(self):
+        """Retrace browser state before leaving this retained picker."""
+        action = self.browser.back_action()
+        if action is not None:
+            return action
+        if self.folder:
+            return self.up
+        if self.main_browser_visible():
+            return self.cancel_browser
+        return None
+
     def main_browser_visible(self):
         from .routes import contains
         return (self.destination != 'files' and hasattr(self, 'page')

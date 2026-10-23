@@ -1,6 +1,6 @@
 """Owned workflow state and explicit application services."""
 
-from services.workflow_host import HostAttribute
+from services.workflow_host import HostAttribute, HostService
 from features.lm.mobile.ui import ChatUI
 
 
@@ -115,5 +115,5 @@ class ChatController(ChatUI):
     preferences = HostAttribute("preferences")
     private_root = HostAttribute("private_root")
     routes = HostAttribute("routes")
-    show_view = HostAttribute("show_view")
-    presentation = HostAttribute("presentation")
+    show_view = HostService("show_view")
+    presentation = HostService("presentation")

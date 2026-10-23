@@ -1,6 +1,6 @@
 """Owned workflow state and explicit application services."""
 
-from services.workflow_host import HostAttribute
+from services.workflow_host import HostAttribute, HostService
 from mobile.storage_ui import StorageUI
 from mobile.reset_ui import ResetUI
 
@@ -41,13 +41,13 @@ class StorageController(StorageUI, ResetUI):
         self.app = app
 
     _impl = HostAttribute("_impl")
-    checkpoint = HostAttribute("checkpoint")
+    checkpoint = HostService("checkpoint")
     cloud_busy = HostAttribute("cloud_busy")
     exit = HostAttribute("exit")
     main_window = HostAttribute("main_window")
     private_root = HostAttribute("private_root")
-    set_cloud_busy = HostAttribute("set_cloud_busy")
-    show_cloud = HostAttribute("show_cloud")
-    show_view = HostAttribute("show_view")
+    set_cloud_busy = HostService("set_cloud_busy")
+    show_cloud = HostService("show_cloud")
+    show_view = HostService("show_view")
     transfer_busy = HostAttribute("transfer_busy")
     workspace = HostAttribute("workspace")

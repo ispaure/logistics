@@ -31,10 +31,12 @@ def choose_document_type(app):
         if not app.create_chosen_document(extension, name=filename, content=''):
             error.text = app.status.text
 
-    box.add(toga.Label('File name'), name, toga.Label('File type'), kind,
-            error,
-            toga.Button('Create document', on_press=create, style=Pack(height=48)),
-            toga.Button('Cancel', on_press=lambda widget, **kw: app.routes.back(), style=Pack(height=48)))
+    box.name_input, box.type_selector, box.error_label = name, kind, error
+    box.create_button = toga.Button('Create document', on_press=create, style=Pack(height=48))
+    box.cancel_button = toga.Button('Cancel', on_press=lambda widget, **kw: app.routes.back(),
+                                    style=Pack(height=48))
+    box.add(toga.Label('File name'), name, toga.Label('File type'), kind, error,
+            box.create_button, box.cancel_button)
     app.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)),
                   route='new-document', title='New document')
     name.focus()

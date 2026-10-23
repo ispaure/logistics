@@ -3,7 +3,7 @@
 import asyncio
 import threading
 from commonUtils.runtime.resources.local import LocalFiles
-from services.workflow_host import HostAttribute
+from services.workflow_host import HostAttribute, HostService
 
 
 class ComicBatchController:
@@ -32,9 +32,9 @@ class ComicBatchController:
     navigation_generation = HostAttribute("navigation_generation")
     scene_manager = HostAttribute("scene_manager")
     screen_privacy = HostAttribute("screen_privacy")
-    set_cloud_busy = HostAttribute("set_cloud_busy")
+    set_cloud_busy = HostService("set_cloud_busy")
     show_files = HostAttribute("show_files")
-    show_view = HostAttribute("show_view")
+    show_view = HostService("show_view")
 
     async def edit_local_comic_folder(self, widget=None, **kwargs):
         if self.cloud_busy:

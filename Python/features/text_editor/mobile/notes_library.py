@@ -454,6 +454,14 @@ class VaultBrowser:
             fragment, self.pending_fragment = self.pending_fragment, ""
             self.scroll_fragment(fragment)
 
+    def back_action(self):
+        """Close compact browsing before retracing note links."""
+        if not self.sidebar.expanded and self.sidebar.sidebar_open and self.path is not None:
+            return self.sidebar.show_detail
+        if self.history_index > 0:
+            return lambda: self.navigate_history(-1)
+        return None
+
     async def navigate_history(self, offset):
         index = self.history_index + offset
         if 0 <= index < len(self.history) and await self.open_note(

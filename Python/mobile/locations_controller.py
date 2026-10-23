@@ -1,6 +1,6 @@
 """Owned workflow state and explicit application services."""
 
-from services.workflow_host import HostAttribute
+from services.workflow_host import HostAttribute, HostService
 from mobile.locations_ui import LocationsUI
 
 
@@ -18,7 +18,7 @@ class LocationsController(LocationsUI):
         self.app = app
 
     active_host = HostAttribute("active_host")
-    browser_cloud_location = HostAttribute("browser_cloud_location")
+    browser_cloud_location = HostService("browser_cloud_location")
     browser_file_location = HostAttribute("browser_file_location")
     cloud_busy = HostAttribute("cloud_busy")
     cloud_client = HostAttribute("cloud_client")
@@ -32,6 +32,6 @@ class LocationsController(LocationsUI):
     file_status = HostAttribute("file_status")
     file_storage = HostAttribute("file_storage")
     private_root = HostAttribute("private_root")
-    show_cloud = HostAttribute("show_cloud")
-    show_local_location = HostAttribute("show_local_location")
-    show_locations = HostAttribute("show_locations")
+    show_cloud = HostService("show_cloud")
+    show_local_location = HostService("show_local_location")
+    show_locations = HostService("show_locations")

@@ -37,6 +37,17 @@ class DocumentationReader(MarkdownWikiView):
         self.view._native_reader_hidden = [self.title]
         self.refresh_reader_actions()
 
+    def back_action(self):
+        """Close compact browsing before retracing documentation links."""
+        if not self.sidebar.expanded and self.sidebar.sidebar_open and self.path is not None:
+            def close_sidebar():
+                self.sidebar.show_detail()
+                self.reading = True
+            return close_sidebar
+        if self.history_index > 0:
+            return lambda: self.navigate_history(-1)
+        return None
+
     def reflow(self, width):
         super().reflow(width)
         parent = self.article if self.wide else self.view
