@@ -510,3 +510,17 @@ completed baseline. Remaining priorities continue to govern selection.
 - Only the verification checkout's two environment symlinks are untracked; its
   tracked source and shared clone are clean. Logs remain with ignored main-checkout
   evidence. Retire this owned checkout and clone after its validation is saved.
+
+## Notes Library complete preview reads
+
+- Short provider chunks reproduced both a truncated Markdown preview and admission
+  of a note exceeding the total preview limit. NotesLibrary now uses read_up_to
+  with its existing maximum plus one, retaining its post-read size, revision,
+  cancellation and UTF-8 checks. No extra cache or discovery was introduced.
+- Six desktop Notes Library tests and five mobile Notes Library tests pass, along
+  with lint, architecture and five documentation checks. Committed as `13ce06fb`.
+- Immutable mobile verification at Logistics `96d38b79` / shared `6a9bcd4` completed
+  all 162 files with zero failures in one unrestricted run. The later Notes change
+  has the focused coverage above. Immutable desktop verification is still running.
+- The source package rebuilt at `13ce06fb`; all 2,218 manifest content hashes and
+  its root revision verify, with external emulator and local evidence exclusions.
