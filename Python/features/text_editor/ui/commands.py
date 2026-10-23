@@ -1,8 +1,6 @@
 """Editor command discovery and globally shared shortcut preferences."""
 import json
-from pathlib import Path
-from tempfile import NamedTemporaryFile
-import os
+from commonUtils.persistence import atomic_write_json
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.command_palette import CommandPalette, ShortcutDialog, validate_shortcut, shortcut_text
 
@@ -25,13 +23,13 @@ class CommandControls:
         proposed = {key: overrides.get(key, value) for key, value in self.shortcut_defaults.items()}
         # Validate the complete mapping, including swaps, before changing live actions.
         temporary = {}
-        for key, value in proposed.items():
-            if not isinstance(value, str):
-                raise ValueError("Invalid shortcut preferences.")
-            action = qt.QAction(self)
-            action.setShortcut(qt.QKeySequence(value))
-            temporary[key] = action
         try:
+            for key, value in proposed.items():
+                if not isinstance(value, str):
+                    raise ValueError("Invalid shortcut preferences.")
+                action = qt.QAction(self)
+                action.setShortcut(qt.QKeySequence(value))
+                temporary[key] = action
             for key, value in proposed.items():
                 validate_shortcut(temporary, key, value)
         finally:
@@ -44,21 +42,12 @@ class CommandControls:
         # Validate first; persistence failure leaves current bindings intact.
         before = {key: shortcut_text(action) for key, action in self.actions.items()}
         self._apply_shortcuts(overrides)
-        staging = None
         try:
             self.shortcut_path.parent.mkdir(parents=True, exist_ok=True)
-            with NamedTemporaryFile("w", encoding="utf-8", dir=self.shortcut_path.parent, delete=False) as stream:
-                staging = Path(stream.name)
-                json.dump(overrides, stream)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(staging, self.shortcut_path)
-        except OSError:
+            atomic_write_json(self.shortcut_path, overrides, ensure_ascii=True, allow_nan=True)
+        except (OSError, ValueError, TypeError):
             self._apply_shortcuts(before)
             raise
-        finally:
-            if staging and staging.exists():
-                staging.unlink()
         for window in tuple(self.service.windows):
             if window is not self and hasattr(window, "shortcut_defaults"):
                 window._apply_shortcuts(overrides)

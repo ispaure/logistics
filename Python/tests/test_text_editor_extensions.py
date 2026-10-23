@@ -176,6 +176,38 @@ class EditorExtensionTests(QtTestCase):
         self.assertEqual(self.window.current.editor.toPlainText(),'local\n')
         dialog.close()
 
+    def test_shortcut_serialization_failure_restores_live_actions_and_saved_bytes(self):
+        from commonUtils.ui.command_palette import shortcut_text
+        self.window._save_shortcuts({"transform_trim": "Ctrl+Alt+T"})
+        saved = self.window.shortcut_path.read_bytes()
+        before = {key: shortcut_text(action) for key, action in self.window.actions.items()}
+        with self.assertRaises(TypeError):
+            self.window._save_shortcuts({"transform_trim": "Ctrl+Alt+Y", "unknown": object()})
+        self.assertEqual({key: shortcut_text(action) for key, action in self.window.actions.items()}, before)
+        self.assertEqual(self.window.shortcut_path.read_bytes(), saved)
+        self.assertEqual(list(self.window.shortcut_path.parent.glob('tmp*')), [])
+
+    def test_shortcut_publication_failure_preserves_every_window_and_saved_bytes(self):
+        from commonUtils.ui.command_palette import shortcut_text
+        self.window._save_shortcuts({"transform_trim": "Ctrl+Alt+T"})
+        saved = self.window.shortcut_path.read_bytes()
+        other = self.service.open()
+        with patch('commonUtils.persistence.atomic.os.replace', side_effect=PermissionError('locked')):
+            with self.assertRaisesRegex(PermissionError, 'locked'):
+                self.window._save_shortcuts({"transform_trim": "Ctrl+Alt+Y"})
+        for window in (self.window, other):
+            self.assertEqual(shortcut_text(window.actions["transform_trim"]), "Ctrl+Alt+T")
+        self.assertEqual(self.window.shortcut_path.read_bytes(), saved)
+        self.assertEqual(list(self.window.shortcut_path.parent.glob('tmp*')), [])
+
+    def test_invalid_shortcut_value_retires_temporary_actions(self):
+        before = len(self.window.findChildren(qt.QAction))
+        key = list(self.window.shortcut_defaults)[-1]
+        with self.assertRaises(ValueError):
+            self.window._apply_shortcuts({key: 12})
+        self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+        self.assertEqual(len(self.window.findChildren(qt.QAction)), before)
+
     def test_shortcuts_persist_propagate_conflicts_and_palette(self):
         from commonUtils.ui.command_palette import CommandPalette, shortcut_text
         self.window._save_shortcuts({"transform_trim": "Ctrl+Alt+T"})

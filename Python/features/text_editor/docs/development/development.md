@@ -312,3 +312,13 @@ replacement of the live DOM before navigating to the closed-document page.
 WKWebView may defer navigation while a compact sidebar hides the article; the
 old note must already be cleared independently of that navigation. Native Notes
 Library checks retire a hidden article and verify that its previous text is gone.
+
+## Shortcut save failures
+
+Shortcut overrides retain their existing JSON mapping and global window fanout.
+The editor uses shared atomic JSON publication; it restores current bindings on
+filesystem, serialization or value failures and only updates other windows after
+publication succeeds. Temporary validation actions are retired even if a later
+mapping value is invalid. `test_text_editor_extensions.py` covers malformed
+values, serialization failure, locked publication, retained saved bytes and
+cross-window consistency.
