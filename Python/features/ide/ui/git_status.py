@@ -92,7 +92,11 @@ class ProjectGitStatus(qt.QObject):
                 or getattr(self.browser.workspace, 'closing', False)):
             return
         self.root = self.browser.project.root
-        self.future = _executor.submit(read_status, self.root, self.cancel)
+        try:
+            self.future = _executor.submit(read_status, self.root, self.cancel)
+        except (OSError, RuntimeError):
+            self._publish({})
+            return
         self.pending[:] = [self.future]
         self.poll.start()
 
@@ -116,6 +120,9 @@ class ProjectGitStatus(qt.QObject):
         if self.root != self.browser.project.root:
             self.refresh()
             return
+        self._publish(changes)
+
+    def _publish(self, changes):
         if changes != self.browser.proxy.git_changes:
             self.browser.proxy.git_changes = changes
             self.browser.tree.viewport().update()

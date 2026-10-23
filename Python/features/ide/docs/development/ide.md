@@ -21,7 +21,8 @@ ProjectFilter supplies filename foreground colors and status tooltips from those
 snapshots without changing names, filtering or ordering. Status is confined to
 the project subtree of its containing repository; folder colors aggregate child
 changes. Closing the workspace cancels status reads. Non-Git/unavailable status
-clears the decorations without interrupting browsing.
+clears the decorations without interrupting browsing. Worker submission failures
+also clear stale decorations and leave the periodic refresh available for retry.
 Dirty submodule statuses are read from their own indexes, bounded to 16 repositories
 and a five-second snapshot budget. Live modified-buffer paths overlay saved Git
 status, including for non-Git projects, and clear on undo, save or close. The tree
@@ -427,7 +428,9 @@ Text Editor. It lazily uses Git's read-only `editor_baseline` provider, independ
 of page activation and repository registrations, and falls back to the document's
 saved snapshot when unavailable. Jobs retain Python values only; Qt owners may
 close while reads finish. One pending job per controller and two worker threads
-bound concurrency. Shared gutter APIs are documented in commonUtils.
+bound concurrency. Failed worker submission publishes the existing unavailable
+marker state and preserves later refresh/retry; it does not escape the GUI callback.
+Shared gutter APIs are documented in commonUtils.
 
 IDE owns one AutoSave per DocumentBuffer, including Markdown buffers. Project
 metadata stores off/after_delay/focus_change (default after_delay, 1000 ms). Only
