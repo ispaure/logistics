@@ -148,3 +148,26 @@ boundaries rather than a filename-only split. Grouping the still-flat desktop
 and shared test suites should likewise preserve their independent consumer
 selection and embedded Blender smoke contracts. Keep the established
 Perforce build and vendor architecture unchanged.
+
+## Continued code readability pass
+
+The next pass makes existing operation phases visible without adding packages
+or changing public entry points. Shared image encoding (`f872be7`) separates pixel
+preparation, sizing and metadata; eight contracts and 48 old/new real-image
+profiles preserve bytes, failure/allocation order and source files. The affected
+Logistics image/comic checks pass 120 cases.
+
+Comic compression keeps one owning file and exposes sanitized-page collection,
+collision validation, encoding and retention selection. All 194 comic cases in
+11 isolated files pass. The existing version-comparison driver passes 32 complete
+plain/AES runs across four layouts and two retention modes: extraction, sanitized
+trees, staged results and final member hashes match `0d14ec7b`. Public settings,
+statistics, logs, passwords, source checks and atomic replacement are unchanged.
+
+Blue Hole `f5849bb` repairs a diagnostic NameError exposed by eight new preflight
+contracts; `6dcc730` then separates message construction from ordered checks.
+All 1,078 old/new profiles preserve outcomes, dependency order and exact diagnostic
+text/popup flags relative to the repaired baseline. All 41 adapters pass. The
+[consumer guide](../../features/blender/development/blue-hole-maintenance.md)
+records the boundary and runtime validation limits. No Perforce build, environment
+schema or source-control operation has been redesigned.

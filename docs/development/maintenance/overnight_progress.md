@@ -1576,3 +1576,14 @@ No new overall numeric score is claimed. Shared `38c5d80` is available as a loca
 branch in the canonical shared repo without touching its dirty checkout. The
 primary app's concurrent navigation edits remain untouched. No push, release
 monitoring/retry, app deployment, upload or Perforce server operation occurred.
+
+## Continued readability: shared image and comic workflows, Blue Hole gates
+
+Shared `f872be7` exposes three private image phases. Eight public contracts,
+48 byte-exact old/new profiles and 120 consumer cases pass. Comic compression
+exposes explicit page/path inputs and preserves the publication owner: 194 comic
+cases and 32 full plain/AES parity runs pass. Blue Hole `f5849bb` repairs the
+existing outside-source diagnostic NameError; `6dcc730` separates diagnostics
+from checks. Eight preflight contracts, 1,078 parity profiles and all 41 adapters
+pass. Perforce predicates/order and all build/consumer architecture remain intact.
+No push, release monitoring/retry, user-data operation or server submission.

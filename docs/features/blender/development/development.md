@@ -318,3 +318,5 @@ confirmed Hair Tool, Angle Tool and AnyTree enabled with spaces and Unicode in t
 preset path. The verifier completed, but Blender did not finish quitting within
 45 seconds, so the test process was killed and temporary presets were removed.
 This is macOS activation evidence; Windows runtime validation remains outstanding.
+
+- [Blue Hole consumer maintenance and validation](blue-hole-maintenance.md)

@@ -98,6 +98,19 @@ and repair padding. A failure stops later phases; earlier deletions/moves remain
 applied to the extracted workspace. This is intentionally not a whole-cleanup
 transaction or an eager plan that changes failure ordering.
 
+`CBZFile._compress_to_webp` now exposes extraction/authentication, sanitization,
+page collection, output collision validation, encoding, retention and publication
+in execution order. Private collection/encoding/selection methods remain in the
+same owner and receive their page/path inputs explicitly. The file instance owns
+statistics and verdict logs; shared encoding owns only image mechanics.
+
+Collection validates all sanitized members before encoding. Collision validation
+runs before any page encoder; preserved multiframe pages still receive progress
+notifications without being encoded. Retention uses the original strict size
+threshold. XML and logs are built before the same verified atomic replacement
+boundary, with the original source fingerprint and password. Failures keep the
+source archive intact. This does not introduce a second pipeline or new module.
+
 The strict compression threshold, quality values, animation/multipage exceptions,
 alpha rules, naming, metadata rebuilding and archive publication remain owned by
 Comics. Shared image encoding does not choose which originals to delete or retain.

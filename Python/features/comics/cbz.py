@@ -91,6 +91,21 @@ class CBZImageFile(imageUtils.ImageFile):
             return f'    <Page Image="{page_num}" ImageSize="{self.size}" ImageWidth="{self.width}" ImageHeight="{self.height}" />'
 
 
+def _validate_compression_outputs(pages: list[CBZImageFile], preserved_paths: set[Path], source_dir: Path):
+    """Reject empty archives and case-insensitive output collisions before encoding."""
+    if not pages:
+        raise ValueError('Archive contains no image pages')
+    output_paths = set()
+    for page in pages:
+        relative = page.path.relative_to(source_dir)
+        if page.path not in preserved_paths:
+            relative = relative.with_suffix('.webp')
+        key = relative.as_posix().casefold()
+        if key in output_paths:
+            raise ValueError(f'Pages would overwrite the same WebP file: {relative}')
+        output_paths.add(key)
+
+
 class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
     def __init__(self, path: Path):
         super().__init__(path)
@@ -154,172 +169,124 @@ class CBZFile(ComicBrowserMixin, CBZSanitizationMixin, zipType.ZIPFile):
             log(Severity.ERROR, tool_name, f'Compression failed for "{self.path}": {error}')
             return False
 
+    def _collect_compression_pages(self, source_dir: Path, preserve_originals: bool) -> tuple[list[CBZImageFile], set[Path]]:
+        """Validate sanitized members and capture pages that must retain every frame."""
+        pages: list[CBZImageFile] = []
+        preserved_paths: set[Path] = set()
+        directory = dirUtils.Directory(source_dir)
+        for member in directory.list_files(recursive=True):
+            if member.file_name == 'ComicInfo.xml' and member.path.parent != source_dir:
+                raise ValueError(f'Nested ComicInfo.xml would be omitted: {member.path}')
+            if member.ext in imageUtils.image_file_cls_supported_ext_lst:
+                # Reject unreadable pages before ImageFile's interactive dimension error.
+                with Image.open(member.path) as image:
+                    if preserve_originals and getattr(image, 'n_frames', 1) > 1:
+                        preserved_paths.add(member.path)
+                    image.verify()
+                page = CBZImageFile(member.path)
+                self.compression_stats.original_images_size += page.size
+                pages.append(page)
+            elif member.file_name not in ['ComicInfo.xml', 'CompressionLog.txt']:
+                raise ValueError(
+                    f'Unexpected File within "{self.path}" NOT CAUGHT OR '
+                    f'CLEANED DURING SANITIZE: "{member.file_name}"')
+        return pages, preserved_paths
+
+    def _encode_compression_pages(self, pages: list[CBZImageFile], preserved_paths: set[Path],
+                                  source_dir: Path, compressed_dir: Path, progress: Callable[[str], None]) -> bool:
+        """Encode static pages; preserved originals are neither decoded again nor counted as encoded."""
+        for page_index, page in enumerate(pages, 1):
+            progress(f'Compressing page {page_index}/{len(pages)}: {self.path}')
+            if page.path in preserved_paths:
+                continue
+            output = compressed_dir / page.path.relative_to(source_dir).with_suffix('.webp')
+            if not page.compress(dest_path=output,
+                                 quality_grayscale=cbz_img_quality_grayscale,
+                                 quality_color=cbz_img_quality_color,
+                                 max_long_edge=cbz_img_max_long_edge,
+                                 max_height=cbz_img_max_height,
+                                 preserve_alpha=False):
+                message = f'An error occurred whilst compressing {page.file_name}!'
+                self.last_error = message
+                log(Severity.ERROR, 'cbzUtils.CBZFile.compress_to_webp', message)
+                return False
+            self.compression_stats.compressed_images_size += page.compressed_image.size
+        return True
+
+    def _select_compression_pages(self, pages: list[CBZImageFile], preserved_paths: set[Path],
+                                  always_keep_compressed: bool) -> list[CBZImageFile]:
+        """Apply the existing strict size threshold and record each retained-page verdict."""
+        kept_pages: list[CBZImageFile] = []
+        for page_number, page in enumerate(pages, 1):
+            if page.path in preserved_paths:
+                kept = page
+                self.compression_log.append(
+                    f'Page #{page_number:04d}: {kept.get_description()}, Verdict: Preserved animated/multipage original')
+                self.compression_stats.kept_images_original_cnt += 1
+            elif always_keep_compressed or page.compressed_image.size < page.size * cbz_img_min_allowed_compression_percentage / 100:
+                verdict = 'ALWAYS Compressed Image' if always_keep_compressed else 'Compressed Image'
+                kept = page.compressed_image
+                self.compression_log.append(f'Page #{page_number:04d}: "{kept.get_description()}, Verdict: {verdict}')
+                self.compression_stats.kept_images_compressed_cnt += 1
+            else:
+                kept = page
+                self.compression_log.append(f'Page #{page_number:04d}: {kept.get_description()}, Verdict: Original Image')
+                self.compression_stats.kept_images_original_cnt += 1
+            self.compression_stats.kept_images_size += kept.size
+            kept_pages.append(kept)
+        return kept_pages
+
     def _compress_to_webp(self, workspace: Path, always_keep_compressed: bool, original_stat,
                           preserve_animated_and_multipage_originals: bool, progress=lambda message: None):
-        func_name = 'compress_to_webp'
-        temp_dir_extracted_cbz = workspace / '1_Extracted_CBZ'
-        temp_dir_compressed_imgs = workspace / '2_Compressed_Images'
-        temp_dir_result = workspace / '3_Result'
-
-        # START LOGS
+        """Extract and validate, encode and choose pages, then publish one verified archive."""
+        source_dir = workspace / '1_Extracted_CBZ'
+        compressed_dir = workspace / '2_Compressed_Images'
+        result_dir = workspace / '3_Result'
         log(Severity.INFO, tool_name, f'Compressing "{self.file_name}"!')
         self.compression_log.append_msg_start(cbz_img_quality_grayscale, cbz_img_quality_color, always_keep_compressed)
         if preserve_animated_and_multipage_originals:
             self.compression_log.append('Parameter: Preserve animated and multipage originals')
 
-        # --------------------------------------------------------------------------------------------------------------
-        # STEP ONE : EXTRACTION OF .CBZ IN TEMP DIRECTORY
         progress(f'Extracting {self.path}')
-        temp_dir_extracted_cbz.mkdir()
-
+        source_dir.mkdir()
         validate_archive_members(self.path)
         password = resolve_password(self.path, configured_only=True)
         if password is not None:
             authenticate(self.path, password, all_members=True, for_rewrite=True)
-        result = self.extract(temp_dir_extracted_cbz, password=password)
-        if not result:
-            msg = f'Unable to extract "{self.path}" properly!'
-            self.last_error = msg
-            log(Severity.ERROR, tool_name, msg)
+        if not self.extract(source_dir, password=password):
+            message = f'Unable to extract "{self.path}" properly!'
+            self.last_error = message
+            log(Severity.ERROR, tool_name, message)
             return False
-
-        # --------------------------------------------------------------------------------------------------------------
-        # STEP TWO: SANITIZE EXTRACTED DIRECTORY
         progress(f'Sanitizing {self.path}')
-        result = self.sanitize_extracted_cbz(temp_dir_extracted_cbz)
-        if not result:
-            msg = f'Unable to sanitize extracted archive "{self.path}" properly!'
-            self.last_error = msg
-            log(Severity.ERROR, tool_name, msg)
+        if not self.sanitize_extracted_cbz(source_dir):
+            message = f'Unable to sanitize extracted archive "{self.path}" properly!'
+            self.last_error = message
+            log(Severity.ERROR, tool_name, message)
             return False
+        pages, preserved_paths = self._collect_compression_pages(
+            source_dir, preserve_animated_and_multipage_originals)
 
-        # --------------------------------------------------------------------------------------------------------------
-        # STEP THREE: GATHER LIST OF IMAGE FILES FROM EXTRACTED DIRECTORY
-        img_file_cls_lst: List[CBZImageFile] = []
-        preserved_paths = set()
-        extracted_dir = dirUtils.Directory(temp_dir_extracted_cbz)
-        extracted_file_lst: List[fileUtils.File] = extracted_dir.list_files(recursive=True)
-        for extracted_file in extracted_file_lst:
-            if (extracted_file.file_name == 'ComicInfo.xml'
-                    and extracted_file.path.parent != temp_dir_extracted_cbz):
-                raise ValueError(f'Nested ComicInfo.xml would be omitted: {extracted_file.path}')
-            if extracted_file.ext in imageUtils.image_file_cls_supported_ext_lst:
-                # Reject unreadable pages before ImageFile's interactive dimension error.
-                with Image.open(extracted_file.path) as image:
-                    if preserve_animated_and_multipage_originals and getattr(image, 'n_frames', 1) > 1:
-                        preserved_paths.add(extracted_file.path)
-                    image.verify()
-                image_file_cls = CBZImageFile(extracted_file.path)
-                self.compression_stats.original_images_size += image_file_cls.size  # Log Size in Stats
-                img_file_cls_lst.append(image_file_cls)
-            elif extracted_file.file_name not in ['ComicInfo.xml', 'CompressionLog.txt']:
-                msg = (f'Unexpected File within "{self.path}" NOT CAUGHT OR '
-                       f'CLEANED DURING SANITIZE: "{extracted_file.file_name}"')
-                raise ValueError(msg)
+        compressed_dir.mkdir()
+        _validate_compression_outputs(pages, preserved_paths, source_dir)
+        if not self._encode_compression_pages(pages, preserved_paths, source_dir, compressed_dir, progress):
+            return False
+        kept_pages = self._select_compression_pages(pages, preserved_paths, always_keep_compressed)
+        result_dir.mkdir()
+        for page in kept_pages:
+            source_root = compressed_dir if page.path.is_relative_to(compressed_dir) else source_dir
+            page.copy_file(result_dir / page.path.relative_to(source_root))
 
-        # --------------------------------------------------------------------------------------------------------------
-        # STEP FOUR: COMPRESS LIST OF IMAGES TO .WEBP
-        temp_dir_compressed_imgs.mkdir()
-
-        if not img_file_cls_lst:
-            raise ValueError('Archive contains no image pages')
-        output_paths = set()
-        for image in img_file_cls_lst:
-            relative = image.path.relative_to(temp_dir_extracted_cbz)
-            if image.path not in preserved_paths:
-                relative = relative.with_suffix('.webp')
-            key = relative.as_posix().casefold()
-            if key in output_paths:
-                raise ValueError(f'Pages would overwrite the same WebP file: {relative}')
-            output_paths.add(key)
-
-        # Compress to WEBP
-        for page_index, img_file_cls in enumerate(img_file_cls_lst, 1):
-            progress(f'Compressing page {page_index}/{len(img_file_cls_lst)}: {self.path}')
-            if img_file_cls.path in preserved_paths:
-                continue
-
-            # Get output path
-            # Doing this to account for potential sub folders.
-            img_compress_file_path = temp_dir_compressed_imgs / img_file_cls.path.relative_to(
-                temp_dir_extracted_cbz).with_suffix('.webp')
-
-            result = img_file_cls.compress(dest_path=img_compress_file_path,
-                                           quality_grayscale=cbz_img_quality_grayscale,
-                                           quality_color=cbz_img_quality_color,
-                                           max_long_edge=cbz_img_max_long_edge,
-                                           max_height=cbz_img_max_height,
-                                           preserve_alpha=False)
-            if not result:
-                msg = f'An error occurred whilst compressing {img_file_cls.file_name}!'
-                self.last_error = msg
-                log(Severity.ERROR, f'cbzUtils.CBZFile.{func_name}', msg)
-                return False
-            self.compression_stats.compressed_images_size += img_file_cls.compressed_image.size  # Log Size in Stats
-
-        # --------------------------------------------------------------------------------------------------------------
-        # STEP FIVE: SELECT IMAGES TO KEEP
-        page_count = 0
-        kept_image_cls_lst: List[CBZImageFile] = []
-        for img_file_cls in img_file_cls_lst:
-            page_count += 1
-            # Select compressed image if at least smaller by specified amount, else keep original
-            if img_file_cls.path in preserved_paths:
-                kept_image_cls = img_file_cls
-                self.compression_log.append(
-                    f'Page #{page_count:04d}: {kept_image_cls.get_description()}, Verdict: Preserved animated/multipage original')
-                self.compression_stats.kept_images_original_cnt += 1
-            elif always_keep_compressed or img_file_cls.compressed_image.size < img_file_cls.size * cbz_img_min_allowed_compression_percentage / 100:
-                if always_keep_compressed:
-                    verdict = 'ALWAYS Compressed Image'
-                else:
-                    verdict = 'Compressed Image'
-                kept_image_cls = img_file_cls.compressed_image
-                self.compression_log.append(f'Page #{page_count:04d}: "{kept_image_cls.get_description()}, Verdict: {verdict}')
-                self.compression_stats.kept_images_compressed_cnt += 1
-            else:
-                kept_image_cls = img_file_cls
-                self.compression_log.append(f'Page #{page_count:04d}: {kept_image_cls.get_description()}, Verdict: Original Image')
-                self.compression_stats.kept_images_original_cnt += 1
-            self.compression_stats.kept_images_size += kept_image_cls.size
-            kept_image_cls_lst.append(kept_image_cls)
-
-        # --------------------------------------------------------------------------------------------------------------
-        # STEP SIX: MOVE KEPT IMAGES TO RESULT DIRECTORY
-        temp_dir_result.mkdir()
-
-        # Move kept images to result folder
-        for kept_image_cls in kept_image_cls_lst:
-            source_root = (temp_dir_compressed_imgs if kept_image_cls.path.is_relative_to(
-                temp_dir_compressed_imgs) else temp_dir_extracted_cbz)
-            kept_img_result_file_path = temp_dir_result / kept_image_cls.path.relative_to(source_root)
-
-            # Copy image in Result folder
-            kept_image_cls.copy_file(kept_img_result_file_path)
-
-        # --------------------------------------------------------------------------------------------------------------
-        # STEP SEVEN: WRAP-UP OTHER FILES
-        # Export ComicInfo.xml (With Updated Pages List!) to Result Directory
         if not self.export_comicinfo_xml_with_updated_pages(
-                cbz_img_cls_lst=kept_image_cls_lst,
-                export_path=Path(temp_dir_result, 'ComicInfo.xml'),
-                extracted_dir=temp_dir_extracted_cbz):
+                cbz_img_cls_lst=kept_pages, export_path=result_dir / 'ComicInfo.xml', extracted_dir=source_dir):
             raise ValueError('ComicInfo.xml page update failed')
-        # Add summary to compression log
         self.compression_log.append_msg_end(self.compression_stats)
-        # Dump Compression Log File on Disk
-        self.compression_log.export(Path(temp_dir_result, 'CompressionLog.txt'))
-
-        # --------------------------------------------------------------------------------------------------------------
-        # STEP EIGHT: FROM CONTENTS OF THE RESULT DIRECTORY, BUILD ARCHIVE OVERWRITING THE ORIGINAL .CBZ
+        self.compression_log.export(result_dir / 'CompressionLog.txt')
         progress(f'Building and verifying {self.path}')
-        replace_archive(temp_dir_result, self.path, expected_stat=original_stat, password=password)
-
-        # --------------------------------------------------------------------------------------------------------------
-        # END LOGS
-        msg = (f'Completed Compression of "{self.file_name}" ({self.compression_stats.get_original_size_mb():.2f} MB '
-               f'> {self.compression_stats.get_new_size_mb():.2f} MB)!')
-        log(Severity.INFO, tool_name, msg)
+        replace_archive(result_dir, self.path, expected_stat=original_stat, password=password)
+        message = (f'Completed Compression of "{self.file_name}" ({self.compression_stats.get_original_size_mb():.2f} MB '
+                   f'> {self.compression_stats.get_new_size_mb():.2f} MB)!')
+        log(Severity.INFO, tool_name, message)
         return True
 
 
