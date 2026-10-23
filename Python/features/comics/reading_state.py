@@ -49,7 +49,8 @@ class ReadingState:
 
     def save(self, index, pages):
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        atomic_write_json(self.path, dict(page=index, name=pages[index], total=len(pages)))
+        atomic_write_json(self.path, dict(page=index, name=pages[index], total=len(pages)),
+                          max_bytes=MAX_STATE_BYTES)
 
     def badge(self, pages=None):
         try:

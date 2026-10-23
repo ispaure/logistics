@@ -65,7 +65,7 @@ class ReadingState:
 
     def save(self, data):
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        atomic_write_json(self.path, data)
+        atomic_write_json(self.path, data, max_bytes=MAX_STATE_BYTES)
 
     def badge(self, spine=None):
         state = self.load()

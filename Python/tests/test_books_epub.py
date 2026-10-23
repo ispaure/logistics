@@ -1,5 +1,6 @@
 """Navigation, resource boundaries and transactional EPUB metadata preservation."""
 from pathlib import Path
+import json
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -169,10 +170,22 @@ class EPUBTests(unittest.TestCase):
         first.path.write_text('invalid')
         self.assertEqual(first.load(), {})
 
+    def test_oversized_bookmarks_preserve_the_last_readable_state(self):
+        state = ReadingState(self.path, folder=self.folder / 'state')
+        state.save({'position': .5})
+        before = state.path.read_bytes()
+        bookmarks = [dict(label='😀' * 8192, path='OPS/Text/one.xhtml', position=.5)
+                     for _ in range(5)]
+        with self.assertRaisesRegex(ValueError, 'exceeds'):
+            state.save({'position': .75, 'bookmarks': bookmarks})
+        self.assertEqual(state.path.read_bytes(), before)
+        self.assertEqual(state.load(), {'position': .5})
+
     def test_reading_state_enforces_limit_when_size_metadata_is_stale(self):
         from types import SimpleNamespace
         state = ReadingState(self.path, folder=self.folder / 'state')
-        state.save({'position': .5, 'padding': 'x' * (128 * 1024)})
+        state.path.parent.mkdir()
+        state.path.write_text(json.dumps({'position': .5, 'padding': 'x' * (128 * 1024)}))
         before = state.path.read_bytes()
         with patch.object(Path, 'stat', return_value=SimpleNamespace(st_size=0)):
             self.assertEqual(state.load(), {})

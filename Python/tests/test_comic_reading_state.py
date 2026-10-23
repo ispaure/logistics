@@ -122,6 +122,16 @@ class ComicResumeTests(QtTestCase):
         state.path.write_text('{"page": 99}')
         self.assertEqual(state.position(pages), 3)
 
+    def test_oversized_page_identity_preserves_the_last_readable_state(self):
+        state = ReadingState(self.path, folder=self.folder)
+        pages = ['0.png', '1.png']
+        state.save(1, pages)
+        before = state.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'exceeds'):
+            state.save(0, ['😀' * (32 * 1024)])
+        self.assertEqual(state.path.read_bytes(), before)
+        self.assertEqual(state.position(pages), 1)
+
     def test_resume_and_badge_enforce_limit_with_stale_size_metadata(self):
         from types import SimpleNamespace
         state = ReadingState(self.path, folder=self.folder)
