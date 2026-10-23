@@ -496,3 +496,50 @@ AST and staging reports remain under ignored `test-results/`.
 This is host validation; no native binary was rebuilt and no simulator/device test
 or deployment was performed. No temporary Boox app was installed. No commits were
 pushed.
+
+
+## Further adversarial review of the October 22 changes
+
+A second review examined the complete readability/class refactor range, shared
+extractions and test changes, concentrating on stale workers, cleanup ordering,
+locks, command input, cancellation, packaging and file preservation. Two additional
+issues were reproduced before correction:
+
+- A LocalCrypt encoder, listing or recursive-search worker could restore decrypted
+  path names after a concurrent close cleared the caches. A late size publication
+  could do the same. Cache publication/hits now revalidate under the retirement
+  lock, and close clears private data before calling external observers. This also
+  avoids a cached-directory lookup racing a cache clear. Registry notification
+  happens outside the cache lock to preserve lock ordering.
+- Shared captured commands wrote stdin synchronously before checking deadlines.
+  A non-reading child therefore delayed a 50-ms timeout until its one-second sleep
+  ended. A supervised input writer now permits cancellation/deadline checks while
+  input is blocked. Input remains in a pipe, including sensitive Git input. The
+  worker retires before return; writer and progress-callback errors stop the child.
+  Already-cancelled calls do not launch a child. Early pipe closure includes the
+  Windows `EINVAL` convention used by Python's subprocess implementation.
+
+The LocalCrypt reproduction failed before the correction for encoding, listing,
+recursive search, late sizes and observer ordering. After correction, those tests,
+all 39 existing LocalCrypt tests, four encrypted file-operation tests (one native
+host skip), credential tests and all 58 rclone tests passed. The rclone run exposed
+one deliberately partial test constructor missing the newly required cache lock;
+its fixture was completed and all six revocation tests passed again. All 132 Git
+tests passed against the capture fix. Its 12 focused cases cover blocked input,
+large binary input, early EOF, cancellation, timeout, writer failure, callback
+failure and an inherited stdin pipe held by a POSIX descendant after parent exit.
+
+Stress validation repeated the three retirement tests 100 times and the twelve
+capture tests five times: 360 successful test runs with worker retirement checked.
+The original-baseline comic comparisons again matched 80 cleanup/failure traces,
+24 byte-identical encodings and all 32 full plain/AES compression runs. Fresh
+packaging (including the independent Qt proof) and packaged startup passed.
+Lint, architecture, toolchain, source hygiene and diff checks passed; ignore rules,
+external sources, the README acknowledgement and reserved navigation were retained.
+Raw reproduction and validation logs remain in ignored `test-results/`.
+
+The complete commonUtils sweep passed all 174 isolated files and
+1,121 tests, including 3 platform skips. This pass does not claim native Windows process-tree execution, a native app rebuild,
+or simulator/device validation; the Windows closed-pipe error convention has
+synthetic coverage. Fixes and their shared-library pin were committed locally,
+without pushing.

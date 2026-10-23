@@ -243,3 +243,9 @@ capture backend spools stdout/stderr separately, preserving binary stdout, stder
 progress/tail, timeout/cancellation and completion-before-truncation behavior.
 Sensitive requests discard both outputs. Diagnostic redaction is best effort;
 Git does not use it as a substitute for discarding sensitive output.
+
+The capture helper supervises stdin independently, so a child which stops reading
+cannot hold up deadline or cancellation checks. Credential input remains in a pipe;
+it is not added to disk spools. Writer retirement, early child pipe closure and
+callback failure are covered by shared tests, with Git consumers retaining their
+existing input-size and sensitive-output policy.
