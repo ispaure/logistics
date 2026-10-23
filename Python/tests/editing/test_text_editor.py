@@ -4,12 +4,15 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from pathlib import Path
+from threading import Event
 from time import monotonic, sleep
 import unittest
 from commonUtils.tests.qt_test_case import QtTestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from commonUtils.ui import pyside as qt
 from features.text_editor.ui.window import EditorWindow
+from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.selection import ResourceChoice
 
 
 class TextEditorTests(QtTestCase):
@@ -76,6 +79,150 @@ class TextEditorTests(QtTestCase):
             self.window.save_document()
             self.wait()
             self.assertTrue(path.read_bytes().endswith(b" more"))
+
+    def test_save_as_retargets_after_publication_and_restores_readonly_state(self):
+        from features.text_editor.ui import file_operations
+        for readonly in (False, True):
+            with self.subTest(readonly=readonly):
+                original = b'\xef\xbb\xbforiginal\r\n'
+                source, document = self.open(f'source-{readonly}.txt', original)
+                document.editor.moveCursor(qt.QTextCursor.MoveOperation.End)
+                document.editor.insertPlainText('draft')
+                document.editor.setReadOnly(readonly)
+                expected = document.contents()
+                provider = LocalFiles(self.root)
+                target = provider.root / f'copy-{readonly}.txt'
+                released, events = [], []
+                choice = ResourceChoice(provider, target.name, lambda: released.append(True))
+                entered, release = Event(), Event()
+                writer = file_operations.write_text_file
+
+                def write(*args, **kwargs):
+                    entered.set()
+                    if not release.wait(5):
+                        raise TimeoutError('Save As fixture was not released')
+                    return writer(*args, **kwargs)
+
+                self.window.saved.connect(lambda path: events.append(('saved', path)))
+                with patch('services.documents.ui.editors.choose_editor_resource', return_value=choice), \
+                        patch.object(file_operations, 'write_text_file', side_effect=write), \
+                        patch.object(self.window, 'show_error') as error:
+                    try:
+                        self.assertTrue(self.window.save_document(save_as=True,
+                            after=lambda: events.append(('after', document.path))))
+                        self.assertTrue(entered.wait(2))
+                        self.assertEqual(document.path, source.resolve())
+                        self.assertTrue(document.editor.isReadOnly())
+                        self.assertFalse(target.exists())
+                        self.assertEqual(released, [True])
+                        self.assertEqual(events, [])
+                    finally:
+                        release.set()
+                        self.wait()
+                    error.assert_not_called()
+                self.assertEqual(source.read_bytes(), original)
+                self.assertEqual(target.read_bytes(), expected)
+                self.assertEqual(document.path, target)
+                self.assertFalse(document.modified)
+                self.assertEqual(document.editor.isReadOnly(), readonly)
+                self.assertEqual(events, [('saved', target), ('after', target)])
+
+    def test_save_as_cancellation_keeps_source_destination_and_draft(self):
+        source, document = self.open('original.txt', b'original')
+        document.editor.insertPlainText('draft ')
+        target = self.root / 'existing.txt'
+        target.write_bytes(b'keep destination')
+        for selected in (False, True):
+            with self.subTest(destination_selected=selected):
+                released = []
+                choice = ResourceChoice(LocalFiles(self.root), target.name, lambda: released.append(True))
+                with patch('services.documents.ui.editors.choose_editor_resource', return_value=choice if selected else None), \
+                        patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel), \
+                        patch.object(self.window, '_run') as run:
+                    self.assertFalse(self.window.save_document(save_as=True))
+                run.assert_not_called()
+                self.assertEqual(released, [True] if selected else [])
+                self.assertEqual(source.read_bytes(), b'original')
+                self.assertEqual(target.read_bytes(), b'keep destination')
+                self.assertEqual(document.editor.toPlainText(), 'draft original')
+                self.assertTrue(document.modified)
+                self.assertFalse(document.editor.isReadOnly())
+
+    def test_save_as_destination_changed_after_confirmation_keeps_the_draft(self):
+        source, document = self.open('original.txt', b'original')
+        document.editor.insertPlainText('draft ')
+        target = self.root / 'existing.txt'
+        target.write_bytes(b'confirmed destination')
+        choice = ResourceChoice(LocalFiles(self.root), target.name)
+        run = self.window._run
+        after = Mock()
+
+        def changed_before_work(*args, **kwargs):
+            target.write_bytes(b'newer destination bytes')
+            return run(*args, **kwargs)
+
+        with patch('services.documents.ui.editors.choose_editor_resource', return_value=choice), \
+                patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes), \
+                patch.object(self.window, '_run', side_effect=changed_before_work), \
+                patch.object(self.window, 'show_error') as error:
+            self.assertTrue(self.window.save_document(save_as=True, after=after))
+            self.wait()
+            self.assertIn('changed after confirmation', error.call_args.args[0])
+        after.assert_not_called()
+        self.assertEqual(document.path, source.resolve())
+        self.assertEqual(source.read_bytes(), b'original')
+        self.assertEqual(target.read_bytes(), b'newer destination bytes')
+        self.assertEqual(document.editor.toPlainText(), 'draft original')
+        self.assertTrue(document.modified)
+        self.assertFalse(document.editor.isReadOnly())
+
+    def test_private_save_as_defers_recovery_gate_and_retires_only_on_completion(self):
+        source, document = self.open('original.txt', b'original')
+        document.editor.insertPlainText('private ')
+        provider = LocalFiles(self.root)
+        provider.private = True
+        released, events = [], []
+        choice = ResourceChoice(provider, 'private.txt', lambda: released.append(True))
+        scrub = Mock()
+        with patch('services.documents.ui.editors.choose_editor_resource', return_value=choice), \
+                patch.object(self.service.session, 'privatize', return_value=scrub), \
+                patch('services.documents.ui.editors.publish_handoff', return_value=True) as publish, \
+                patch('commonUtils.ui.document_host.close_document', side_effect=lambda owner: events.append('closed')):
+            self.assertTrue(self.window.save_document(save_as=True, after=lambda: events.append('after')))
+            self.assertEqual(publish.call_args.args, (choice, b'private original', self.window))
+            self.assertIs(publish.call_args.kwargs['before'], scrub)
+            scrub.assert_not_called()
+            self.assertEqual(document.editor.toPlainText(), 'private original')
+            self.assertTrue(document.modified)
+            self.assertEqual(released, [])
+            publish.call_args.kwargs['completed']()
+        self.assertEqual(events, ['closed', 'after'])
+        self.assertEqual(document.editor.toPlainText(), 'original')
+        self.assertFalse(document.modified)
+        self.assertEqual(source.read_bytes(), b'original')
+
+    def test_private_save_as_preparation_errors_release_choice_and_preserve_draft(self):
+        _, document = self.open('original.txt', b'original')
+        document.editor.insertPlainText('private ')
+        provider = LocalFiles(self.root)
+        provider.private = True
+        for phase in ('encode', 'recovery'):
+            with self.subTest(phase=phase):
+                release = Mock()
+                choice = ResourceChoice(provider, 'private.txt', release)
+                if phase == 'encode':
+                    failure = patch.object(document, 'contents', side_effect=ValueError('encoding failed'))
+                else:
+                    failure = patch.object(self.service.session, 'privatize', side_effect=OSError('recovery failed'))
+                with failure, patch('services.documents.ui.editors.choose_editor_resource', return_value=choice), \
+                        patch('services.documents.ui.editors.publish_handoff') as publish, \
+                        patch.object(self.window, 'show_error') as error:
+                    self.assertFalse(self.window.save_document(save_as=True))
+                release.assert_called_once()
+                publish.assert_not_called()
+                error.assert_called_once()
+                self.assertEqual(document.editor.toPlainText(), 'private original')
+                self.assertTrue(document.modified)
 
     def test_open_file_replaces_blank_and_new_keeps_existing_dirty_document(self):
         path, document = self.open('only.txt', b'Only file')

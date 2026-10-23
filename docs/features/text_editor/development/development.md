@@ -65,6 +65,14 @@ code. Unsupported definitions fall back to plain text.
 
 ## File safety and limits
 
+`FileOperations.save_document()` owns destination selection, choice release and
+private handoff policy. `_confirm_save_overwrite()` returns the confirmed file
+revision or `None` after cancellation/error. `_save_local_document()` captures the
+snapshot, text and encoding options before queuing the existing local write; its
+completion/failure callbacks restore the captured read-only state. These helpers
+remain in `ui/file_operations.py`. The private handoff still defers its recovery
+gate to publication and retires the original draft only after successful transfer.
+
 - Reads and encoded writes run in owned workers; widget updates remain on Qt's GUI thread.
 - Strict UTF decoding recognizes BOMs. Legacy encodings require explicit selection;
   byte replacement is never automatic. Forced binary opening is explicit.

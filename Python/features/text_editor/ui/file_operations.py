@@ -192,34 +192,46 @@ class FileOperations:
                 return False
             expected = document.snapshot.original if path == document.path else None
             if path.exists() and expected is None:
-                choice = qt.QMessageBox.question(
-                    self,
-                    "Replace existing file?",
-                    str(path),
-                    qt.QMessageBox.StandardButton.Yes
-                    | qt.QMessageBox.StandardButton.Cancel,
-                    qt.QMessageBox.StandardButton.Cancel,
-                )
-                if choice != qt.QMessageBox.StandardButton.Yes:
+                destination_stamp = self._confirm_save_overwrite(path)
+                if destination_stamp is None:
                     return False
-                # Save As also protects changes occurring after confirmation.
-                try:
-                    info = path.stat()
-                except OSError as error:
-                    self.show_error(str(error))
-                    return False
-                if info.st_size > MAX_BYTES:
-                    self.show_error(
-                        "The destination exceeds the 16 MiB limit. Choose another file."
-                    )
-                    return False
-                destination_stamp = (
-                    info.st_mtime_ns,
-                    info.st_ctime_ns,
-                    info.st_size,
-                    info.st_ino,
-                )
                 overwrite = True
+        return self._save_local_document(
+            document, path, expected=expected, overwrite=overwrite,
+            destination_stamp=destination_stamp, after=after,
+        )
+
+    def _confirm_save_overwrite(self, path: Path) -> tuple[int, int, int, int] | None:
+        choice = qt.QMessageBox.question(
+            self,
+            "Replace existing file?",
+            str(path),
+            qt.QMessageBox.StandardButton.Yes
+            | qt.QMessageBox.StandardButton.Cancel,
+            qt.QMessageBox.StandardButton.Cancel,
+        )
+        if choice != qt.QMessageBox.StandardButton.Yes:
+            return None
+        # Save As also protects changes occurring after confirmation.
+        try:
+            info = path.stat()
+        except OSError as error:
+            self.show_error(str(error))
+            return None
+        if info.st_size > MAX_BYTES:
+            self.show_error(
+                "The destination exceeds the 16 MiB limit. Choose another file."
+            )
+            return None
+        destination_stamp = (
+            info.st_mtime_ns,
+            info.st_ctime_ns,
+            info.st_size,
+            info.st_ino,
+        )
+        return destination_stamp
+
+    def _save_local_document(self, document, path, *, expected, overwrite, destination_stamp, after):
         snapshot = document.snapshot
         text = document.editor.toPlainText()
         encoding = document.encoding
