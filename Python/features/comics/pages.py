@@ -2,12 +2,12 @@
 
 from io import BytesIO
 from pathlib import Path
-import re
 import zipfile
 
 from .archive_io import archive_unchanged
 from .library import ComicDocument
 from commonUtils.archives.zip_access import open_archive
+from commonUtils.search.names import natural_name_key
 
 IMAGE_TYPES = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
                '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp',
@@ -31,8 +31,7 @@ def __getattr__(name):
 
 
 def natural_key(name):
-    return tuple((1, int(part)) if part.isdigit() else (0, part.casefold())
-                 for part in re.split(r'(\d+)', name))
+    return natural_name_key(name)
 
 
 def comic_page_names(archive):

@@ -65,6 +65,14 @@ class ComicsTests(unittest.TestCase):
         self.assertFalse(cbz.CBZFile(path).compress_to_webp(True))
         self.assertEqual(path.read_bytes(), before)
 
+    def test_nondecimal_numeric_symbols_keep_comic_page_ordering_available(self):
+        from features.comics.pages import comic_page_names
+        path = self.archive({name: image_bytes() for name in ('page10.png', 'page1²2.png', 'page2.png')})
+        before = path.read_bytes()
+        with zipfile.ZipFile(path) as archive:
+            self.assertEqual(comic_page_names(archive), ['page1²2.png', 'page2.png', 'page10.png'])
+        self.assertEqual(path.read_bytes(), before)
+
     def test_real_compression_updates_pages_in_existing_order(self):
         path = self.archive({'2.png': image_bytes('L', color=120),
                              '1.png': image_bytes(size=(120, 2500)),
