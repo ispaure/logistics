@@ -154,6 +154,27 @@ host's `appearance.py` adapter ignores refresh/scroll callbacks after their weak
 Python interface has been released. Editor preview shutdown remains with the
 Text Editor feature, which retires WebKit delegates before releasing its view.
 
+## Workspaces tree presentation ownership
+
+`FolderController` owns discovery, source/credential filtering and folder actions.
+`FolderHubUI.update_folder_list()` captures those display inputs once and passes
+one source snapshot to a retained `folder_tree_view.FolderTreeView`. Each source
+keeps its own view; changing credentials does not replace unrelated Local rows.
+
+The tree view owns row, panel, guide and menu identities. It receives only browse,
+choose, command-loading, command-invocation and native-context callbacks; it does
+not read application credentials, start discovery or choose navigation policy.
+Rows have explicit fields instead of an open-ended namespace. A render reconciles
+existing widgets, publishes its new maps and disposes menus for removed or
+replaced rows. A group becoming selectable replaces that row while keeping
+unchanged descendants. Commands are resolved when invoked, so current busy and
+credential guards remain authoritative.
+
+`test_folder_tree_view.py` checks retained identity, child removal, group changes,
+callback identity and menu retirement. Existing folder navigation/source,
+responsiveness and popup-menu cases exercise the real host wiring. Native styles,
+touch targets, ordering and layout formulas stay in `folder_hub_style.py`.
+
 ## Folder listing ownership
 
 Each main file browser and workspace drawer owns a separate `FolderListing`.

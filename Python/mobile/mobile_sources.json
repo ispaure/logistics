@@ -43,6 +43,7 @@
     "folder_listing.py",
     "folder_navigation.py",
     "folder_title.py",
+    "folder_tree_view.py",
     "font_scaling.py",
     "hub_controller.py",
     "hub_icons.py",

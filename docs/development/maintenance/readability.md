@@ -234,3 +234,24 @@ whole-ecosystem score or certify unavailable Blender/native runtime behavior.
 Remaining high-value work is lifecycle ownership in the large mobile host and
 native probe harness; moving those files requires appropriate platform validation,
 not a filename-only reorganization. The abandoned release remains abandoned.
+
+
+## Mobile application host continuation
+
+### Workspaces tree ownership
+
+The 165-line nested tree renderer mixed retained widget state with the folder
+controller's discovery and credential policy. `FolderTreeView` now owns one
+source tab's explicit row records, native identities and menu retirement. Its
+callbacks declare the five host capabilities; the renderer has no application,
+provider or credential reference. The host captures display inputs and mounts the
+result. This is a runtime responsibility boundary, not another forwarding mixin.
+
+The existing folder baseline passes 134 cases; after extraction, all 139 cases
+pass including five new lifecycle/identity contracts. Seventeen responsiveness,
+workspace-menu and staged-startup checks pass. Across 720 deterministic old/new
+snapshots, hierarchy, styles, accessibility, icons, ordering, geometry, row reuse
+and retired-menu states match the original renderer at `a66162df`. Native backend
+styling implementation is unchanged; no new native device run is claimed.
+The first new fixture incorrectly used `asyncio.run` on Toga's already-created
+Task; corrected asynchronous test methods await the real handler contract.

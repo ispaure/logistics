@@ -2,22 +2,21 @@
 from features.rclone.mobile.storage_location import collection_path
 import asyncio
 import inspect
-from types import SimpleNamespace
 from contextlib import nullcontext
 import toga
-from .control_icons import icon_button
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
-from .folder_hub import folder_row_presentation, folder_tree, credential_choices, source_choices, folder_storage_label, folder_browse_copy
+from .folder_hub import credential_choices, source_choices, folder_storage_label, folder_browse_copy
 from features.rclone.mobile.messages import import_hint
 from textwrap import fill
-from .appearance import list_button, batch_surfaces
+from .folder_tree_view import FolderTreeView
+from .appearance import batch_surfaces
 from .appearance import action_button, accessible_name
-from .ui_metrics import TOUCH_TARGET, BODY_TEXT, CONTROL_TEXT, CAPTION_TEXT, toga_font_size
+from .ui_metrics import TOUCH_TARGET, CONTROL_TEXT, CAPTION_TEXT, toga_font_size
 from .folder_hub_style import (
-    surface, source_tab, compact_icon, toolbar_button, folder_row, folder_name,
-    source_actions, SOURCE_LABELS, ROW_HEIGHT, ROW_GAP, ENTRY_ICON_SLOT, ENTRY_ICON_SIZE,
-    tree_anchor, tree_guide, TREE_LABEL_GAP, align_group_label, folder_scroll,
+    surface, source_tab, toolbar_button,
+    source_actions, SOURCE_LABELS,
+    folder_scroll,
 )
 
 
@@ -286,178 +285,17 @@ class FolderHubUI:
         # metadata may change without changing anything this source displays.
         tab = self.folder_tab_views.get(self.folder_source)
         if tab is None:
-            tab = SimpleNamespace(content=toga.Box(style=Pack(direction=COLUMN)),
-                                  nodes={}, panels={}, extras={})
+            tab = FolderTreeView(
+                browse=lambda name: self.browse_hub_folder(name),
+                choose=lambda name: self.choose_folder(name),
+                actions=lambda name: self.workspace_menu_actions(name),
+                invoke=self.invoke_workspace_action,
+                native_context=lambda: self.app._impl.native,
+            )
             self.folder_tab_views[self.folder_source] = tab
-        self._render_folder_tab(tab, visible, loaded_remotes, crypt_remotes)
+        tab.render(visible, self.folder_source, loaded_remotes, crypt_remotes)
         self.folder_buttons, self.folder_tree_buttons = tab.buttons, tab.tree_buttons
         self.mount_folder_tab(tab.content)
-
-    def _render_folder_tab(self, tab, visible, loaded_remotes, crypt_remotes):
-        """Reconcile controls and hierarchy; unchanged rows keep native identity."""
-        nodes, panels, buttons, tree_buttons = {}, {}, {}, {}
-
-        def sync(parent, children):
-            # Native remove/add triggers layout. Touch only changed positions.
-            for child in list(parent.children):
-                if child not in children:
-                    parent.remove(child)
-            for index, child in enumerate(children):
-                if index < len(parent.children) and parent.children[index] is child:
-                    continue
-                if child.parent is not None:
-                    child.parent.remove(child)
-                parent.insert(index, child)
-
-        def divider():
-            return surface(toga.Box(style=Pack(height=1, margin_left=34)),
-                           radius=0, background='transparent', outlined=False)
-
-        def branch_height(branch):
-            return sum(ROW_HEIGHT + ROW_GAP
-                       + (branch_height(node['children']) if node['children'] else 0)
-                       for node in branch.values()) + max(0, len(branch) - 1)
-
-        def child_midpoints(branch):
-            offset = 0
-            for _, node in sorted(branch.items(), key=lambda item: item[0].casefold()):
-                yield offset + ROW_HEIGHT / 2
-                offset += ROW_HEIGHT + ROW_GAP + 1
-                if node['children']:
-                    offset += branch_height(node['children'])
-
-        def row_for(path, title, node):
-            name = node['names'][0] if node['names'] else None
-            if name is not None:
-                projected = folder_row_presentation(title, visible[name], self.folder_source,
-                                                    loaded_remotes, crypt_remotes)
-                icon, description, state = projected.icon, projected.description, projected.state
-                presentation = (projected.title, icon, description)
-            record = tab.nodes.get(path)
-            if record is None or record.name != name:
-                row = toga.Box(style=Pack(direction=ROW, align_items=CENTER,
-                                         height=ROW_HEIGHT, margin_bottom=ROW_GAP))
-                record = SimpleNamespace(name=name, row=row, presentation=None,
-                                         group=None, child_box=None, divider=None, geometry=None)
-                if name is not None:
-                    async def select(widget=None, selected=name, **kwargs):
-                        return await self.browse_hub_folder(selected)
-                    record.indicator = icon_button(icon, name + ', ' + description, on_press=select)
-                    record.button = folder_name(list_button(toga.Button(title, on_press=select,
-                        style=Pack(height=ROW_HEIGHT, flex=1))))
-                    def options(widget=None, selected=name, **kwargs):
-                        self.choose_folder(selected)
-                    record.menu = icon_button('more', 'Workspace actions for ' + name, on_press=options)
-                    compact_icon(record.menu, width=TOUCH_TARGET, size=18)
-                    from .action_menu import WorkspaceMenu
-                    record.commands = WorkspaceMenu(record.menu,
-                        lambda selected=name: self.workspace_menu_actions(selected),
-                        invoke=self.invoke_workspace_action,
-                        context=lambda: self.app._impl.native,
-                        fallback=lambda selected=name: self.choose_folder(selected))
-                    row.add(record.indicator, record.button, record.menu)
-                    folder_row(row)
-                else:
-                    record.group = surface(toga.Label(title,
-                        style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=toga_font_size(BODY_TEXT),
-                                   margin_left=TREE_LABEL_GAP if len(path) > 1 else 0,
-                                   font_weight='bold', flex=1)), radius=0,
-                        background='transparent', foreground='text', outlined=False)
-                    align_group_label(record.group)
-                    accessible_name(record.group, title + ', group')
-                    row.add(record.group)
-            if name is not None:
-                if record.presentation != presentation:
-                    if record.indicator.control_icon != icon:
-                        from .control_icons import apply_icon
-                        apply_icon(record.indicator, icon, name + ', ' + description, preserve_layout=True)
-                    if record.button.text != title:
-                        record.button.text = title
-                    accessible_name(record.indicator, name + ', ' + description)
-                    accessible_name(record.button, name + ', ' + description)
-                    color = 'folder_' + state if state else 'folder'
-                    if record.presentation is None:
-                        compact_icon(record.indicator, width=ENTRY_ICON_SLOT, size=ENTRY_ICON_SIZE, foreground=color)
-                    else:
-                        surface(record.indicator, radius=0, background='transparent', foreground=color, outlined=False)
-                    record.presentation = presentation
-                buttons[name] = record.button
-            else:
-                tree_buttons[path] = record.group
-            nodes[path] = record
-            return record
-
-        def add_branch(branch, parent, ancestors=()):
-            children = []
-            for index, (title, node) in enumerate(sorted(branch.items(), key=lambda item: item[0].casefold())):
-                path = (*ancestors, title)
-                record = row_for(path, title, node)
-                children.append(record.row)
-                if node['children']:
-                    if record.child_box is None:
-                        record.child_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
-                        record.child_box = toga.Box(style=Pack(direction=ROW))
-                    add_branch(node['children'], record.child_content, path)
-                    geometry = (branch_height(node['children']), tuple(child_midpoints(node['children'])),
-                                tree_anchor(record.group))
-                    if record.geometry != geometry:
-                        record.guide = tree_guide(*geometry)
-                        record.geometry = geometry
-                    sync(record.child_box, [record.guide, record.child_content])
-                    children.append(record.child_box)
-                elif record.child_box is not None:
-                    # Drop removed descendants even when their parent remains.
-                    sync(record.child_content, [])
-                if index < len(branch) - 1:
-                    if record.divider is None:
-                        record.divider = divider()
-                    children.append(record.divider)
-            sync(parent, children)
-
-        content = []
-        folders = {name: entry for name, entry in visible.items() if not entry.get('browser_root')}
-        for title, node in sorted(folder_tree(folders).items(), key=lambda item: item[0].casefold()):
-            panel = tab.panels.get(title)
-            if panel is None:
-                branch_content = toga.Box(style=Pack(direction=COLUMN))
-                panel = surface(toga.Box(children=[branch_content], style=Pack(direction=COLUMN)),
-                                radius=0, background='transparent', outlined=False)
-                panel.style.margin_bottom = 12
-            add_branch({title: node}, panel.children[0])
-            panels[title] = panel
-            content.append(panel)
-        if not folders:
-            if 'empty' not in tab.extras:
-                tab.extras['empty'] = toga.Label('No folders available for this source.')
-            content.append(tab.extras['empty'])
-        browse = {}
-        for name, entry in visible.items():
-            if entry.get('browser_root'):
-                button = getattr(tab, 'browse', {}).get(name)
-                if button is None:
-                    async def browse_all(widget=None, selected=name, **kwargs):
-                        return await self.browse_hub_folder(selected)
-                    button = list_button(toga.Button('Browse All Files', on_press=browse_all,
-                        style=Pack(height=ROW_HEIGHT, margin_top=12)))
-                browse[name] = buttons[name] = button
-                content.append(button)
-        if 'legend' not in tab.extras:
-            legend = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
-            for label, icon, color in (('Locked', 'folder_locked', 'folder_locked'),
-                                       ('Unlocked', 'folder_unlocked', 'folder_unlocked')):
-                mark = icon_button(icon, label + ' folder')
-                compact_icon(mark, width=28, height=32, size=22, background='window', foreground=color)
-                legend.add(mark)
-                legend.add(surface(toga.Label(label, style=Pack(font_size=11, margin_right=16)),
-                                   background='window', foreground='muted', outlined=False))
-            tab.extras['legend'] = legend
-        content.append(tab.extras['legend'])
-        sync(tab.content, content)
-        for path, old in tab.nodes.items():
-            if nodes.get(path) is not old and getattr(old, 'commands', None) is not None:
-                old.commands.dispose()
-        tab.nodes, tab.panels, tab.browse = nodes, panels, browse
-        tab.buttons, tab.tree_buttons = buttons, tree_buttons
 
     def mount_folder_tab(self, content):
         if list(self.folder_list.children) != [content]:
