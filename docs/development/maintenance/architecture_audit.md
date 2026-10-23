@@ -126,7 +126,7 @@ strings. Its current snapshot records:
 | Repository | Modules | Internal edges | Potential cyclic groups | Largest group |
 | --- | ---: | ---: | ---: | ---: |
 | Logistics Python tree | 659 | 1,612 | 27 | 40 |
-| commonUtils | 325 | 931 | 7 | 91 |
+| commonUtils | 326 | 941 | 7 | 91 |
 | Blue Hole | 196 | 597 | 1 | 80 |
 
 These are **potential cycles including deferred imports**, not demonstrated
@@ -137,7 +137,7 @@ and preferences. The configured boundary check and consumer import tests pass.
 Changing these groups safely requires distinguishing eager initialization from
 intentional deferred cross-references; broad graph-driven moves are deferred.
 
-## Before/after assessment of this pass
+## Before/after assessment at the first checkpoint
 
 | Dimension | Baseline evidence | Implemented improvement / remaining limit |
 | --- | --- | --- |
@@ -149,7 +149,7 @@ intentional deferred cross-references; broad graph-driven moves are deferred.
 | Consistency | Similar mutation paths had different collision and cleanup behavior | Shared promotion and complete archive extraction use no-replace publication. Invalid IDE state is admitted atomically; shortcut failures restore live state. Atomic publication still is not multi-file locking. |
 | Reliability | New tests reproduced overwritten racing files, partial extraction visibility, changed shortcuts after failed save, partial IDE admission and damaged Blender preferences | The reproduced cases pass after fixes, with exact vendor verification and consumer tests. Native Blender, Windows/Linux and actual device behavior remain unverified. |
 
-Measured production/test lines now total Logistics 89,215 / 75,645,
+At that checkpoint, measured production/test lines totaled Logistics 89,215 / 75,645,
 commonUtils 42,363 / 22,250 and Blue Hole 22,814 / 580. Python file counts are
 unchanged. Small production-line changes accompanied substantial targeted failure
 coverage; line reduction itself was not used as a quality score.
@@ -159,3 +159,29 @@ reliability, testability and persistence consistency gains. An ecosystem-wide
 score needs an agreed rubric, deeper review of remaining cyclic groups and native
 consumer evidence. See the [work log](overnight_progress.md) for executed checks
 and precise limits.
+
+## Continued work assessment (October 23, 2026)
+
+The first checkpoint was followed by further implemented, committed repairs.
+The original measurements above remain the baseline. Current tracked Python
+counts are Logistics 1,152 files (89,292 production / 75,910 test lines),
+commonUtils 507 (42,483 / 22,725) and Blue Hole 201 (22,814 / 580), using the
+same exclusions. Exact repeated production function bodies of 20+ lines remain
+absent under the same AST comparison; this does not establish no near-duplication.
+
+| Dimension | Additional evidence and limits |
+| --- | --- |
+| Readability | Git preference adoption now owns both saved fields and their conflict baseline, replacing repeated UI assignments. Provider stream loops use the shared stream contracts. Large UI construction methods remain. |
+| Modularity | Native browser presentation moved intact into its owner module; package and lifecycle imports work without importing Toga or Qt. Existing public exports retain identity. No broad feature moves were justified. |
+| Testability | New regressions exercise damaged backups, late source changes, short/nonblocking streams, empty worker failures, stale settings and checkpoint size conflicts. Native Toga fixtures run in the mobile environment rather than treating missing desktop dependencies as coverage. |
+| Coupling | The architecture policy still reports 25 approved host adapters, 15 feature edges and zero violations. Portable lifecycle imports no longer require a toolkit. Deferred import groups and live consumer coupling remain. |
+| Duplication | Local provider copying and verification now use shared stream iteration/copying; saved preference adoption sits in Preferences. Application-specific overwrite, credential and cleanup policy stays with consumers. |
+| Consistency | Legacy File/Directory operations and local document exports respect existing provider guards. Cross-volume moves verify copied content and revalidate sources before cleanup; settings writers retain their own published bytes. These remain optimistic checks, not filesystem isolation or cross-process locks. |
+| Reliability | Reproduced data-preservation failures now have focused regression coverage. Both consumers track exact committed shared revisions, and Blue Hole vendor membership/bytes are verified. Windows/Linux, real Android/iOS pickers, Blender and live Perforce remain unverified. |
+
+Reliability and testability have stronger evidence than whole-system structural
+simplification. A numeric 7/10 remains unsubstantiated: the remaining large UI
+owners, intentional deferred cycles, platform contracts and native runtime
+evidence still need deeper review. No dependencies, storage formats, release or
+remote history were changed. The work log records each completed unit and its
+validation; generated reports and package artifacts remain ignored.
