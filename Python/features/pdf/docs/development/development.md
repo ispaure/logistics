@@ -46,6 +46,10 @@ validation; dummy backend tests do not establish that coverage.
 
 ## Text search
 
+Desktop search publishes its busy state only after its worker is submitted.
+Worker startup errors remain visible with enabled retry controls; empty error
+messages use the exception type. Closing still cancels and retires the worker.
+
 `search.py` extracts embedded text with the pinned pure-Python pypdf dependency
 from an in-memory BytesIO stream on every platform. It performs literal,
 case-insensitive matching after normalizing whitespace. Results contain only

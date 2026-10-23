@@ -56,11 +56,16 @@ class PDFSearchBar(qt.QWidget):
             self.show_match(direction)
             return
         self.cancelled = Event()
+        try:
+            self.future = self.executor.submit(search_pdf, self.data, query, cancelled=self.cancelled.is_set)
+        except (OSError, RuntimeError) as error:
+            self.query = None
+            self.status.setText('Cannot search PDF: ' + (str(error)[:200] or type(error).__name__))
+            return
         self.query, self.direction = query, direction
         self.previous.setEnabled(False)
         self.following.setEnabled(False)
         self.status.setText('Searching PDF…')
-        self.future = self.executor.submit(search_pdf, self.data, query, cancelled=self.cancelled.is_set)
         self.timer.start()
 
     def poll(self):
@@ -78,7 +83,7 @@ class PDFSearchBar(qt.QWidget):
             self.show_match(self.direction)
         except Exception as error:
             self.query = None
-            self.status.setText('Cannot search PDF: ' + str(error)[:200])
+            self.status.setText('Cannot search PDF: ' + (str(error)[:200] or type(error).__name__))
 
     def show_match(self, direction):
         if self.results.matches:
