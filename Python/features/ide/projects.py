@@ -6,6 +6,8 @@ from uuid import uuid4
 from commonUtils.persistence import atomic_write_bytes
 from features.preferences import preferences_path
 
+MAX_WORKSPACE_BYTES = 4 * 1024 * 1024
+
 
 @dataclass
 class Project:
@@ -63,8 +65,8 @@ class ProjectStore:
         try:
             if self.path.exists():
                 with self.path.open('rb') as stream:
-                    self.original = stream.read(4 * 1024 * 1024 + 1)
-                if len(self.original) > 4 * 1024 * 1024:
+                    self.original = stream.read(MAX_WORKSPACE_BYTES + 1)
+                if len(self.original) > MAX_WORKSPACE_BYTES:
                     raise ValueError('IDE workspace exceeds 4 MiB')
             if self.original is not None:
                 data = json.loads(self.original)
@@ -96,7 +98,10 @@ class ProjectStore:
             current = self.path.read_bytes() if self.path.exists() else None
             if current != self.original:
                 raise OSError('IDE workspace changed in another instance. Restart to load it.')
+        content = json.dumps(dict(version=1, projects=[asdict(p) for p in self.projects.values()],
+                                  open_ids=self.open_ids, active_id=self.active_id), indent=2).encode()
+        if len(content) > MAX_WORKSPACE_BYTES:
+            raise ValueError('IDE workspace exceeds 4 MiB')
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_bytes(self.path, json.dumps(dict(version=1, projects=[asdict(p) for p in self.projects.values()],
-                                        open_ids=self.open_ids, active_id=self.active_id), indent=2).encode(), validate=validate)
-        self.original = self.path.read_bytes()
+        atomic_write_bytes(self.path, content, validate=validate)
+        self.original = content
