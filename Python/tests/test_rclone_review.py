@@ -61,6 +61,9 @@ class ReviewTests(unittest.TestCase):
 
     def test_directory_membership_type_conflicts_and_stable_revisions(self):
         from features.rclone.executable import get_rclone_path
+        binary = get_rclone_path()
+        if not binary.is_file():
+            self.skipTest('Pinned rclone is not installed')
         with TemporaryDirectory() as directory:
             root = Path(directory)
             src, dst = root / 'source', root / 'destination'
@@ -70,7 +73,7 @@ class ReviewTests(unittest.TestCase):
             (dst / 'Shared').mkdir()
             (src / 'Conflict').mkdir()
             (dst / 'Conflict').write_text('destination file')
-            compare = scanner(get_rclone_path(), src, dst, NULL_CONFIG)
+            compare = scanner(binary, src, dst, NULL_CONFIG)
             first = self.finish(ReviewScan(compare))
             self.assertIn(('add', 'New/Nested/'), first.changes)
             self.assertIn(('delete', 'Gone/'), first.changes)
@@ -212,6 +215,8 @@ class ReviewDialogTests(QtTestCase):
         from features.rclone.transfers import workflow
         from local_crypt_fixture import crypt_fixture
         binary = executable.get_rclone_path()
+        if not binary.is_file():
+            self.skipTest('Pinned rclone is not installed')
         for settings in ({}, {'filename_encryption': 'off'},
                          {'directory_name_encryption': 'false'}, {'filename_encryption': 'obfuscate'}):
             with self.subTest(settings=settings), self.temporary_directory() as directory, crypt_fixture(
@@ -283,6 +288,8 @@ class ReviewDialogTests(QtTestCase):
         from features.rclone.transfers import workflow
         from local_crypt_fixture import crypt_fixture
         binary = executable.get_rclone_path()
+        if not binary.is_file():
+            self.skipTest('Pinned rclone is not installed')
         with self.temporary_directory() as directory, crypt_fixture(directory, binary) as f:
             f.provider.create_file('.DS_Store', BytesIO(b'synthetic generated junk'))
             raw = f.provider._physical('.DS_Store', False)
@@ -310,6 +317,8 @@ class ReviewDialogTests(QtTestCase):
         from features.rclone.transfers import sync
         from local_crypt_fixture import crypt_fixture
         binary = executable.get_rclone_path()
+        if not binary.is_file():
+            self.skipTest('Pinned rclone is not installed')
         with self.temporary_directory() as directory, crypt_fixture(directory, binary) as f:
             root = Path(directory) / 'Server/Local'
             def confirm(*args):
