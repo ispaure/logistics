@@ -98,6 +98,11 @@ class FileDrawer:
         self.app.show_view(page, destination=self.destination, route=route, title=title)
         return await self.refresh()
 
+    def main_browser_visible(self):
+        from .routes import contains
+        return (self.destination != 'files' and hasattr(self, 'page')
+                and contains(self.page, self.browser_widget))
+
     def cancel_browser(self, widget=None, **kwargs):
         if not self.app.checkpoint():
             return
@@ -226,7 +231,11 @@ class FileDrawer:
                 self.provider_generation = getattr(self.provider_client, 'generation', None)
                 self.browser.set_entries(model, folder, rows, location=(selected, folder))
                 self.browser.location_bar.update_provider(folder, provider)
-                self.parent_button.enabled = bool(folder)
+                main_browser = self.main_browser_visible()
+                self.parent_button.enabled = bool(folder) or main_browser
+                if main_browser and not folder:
+                    from .control_icons import apply_icon
+                    apply_icon(self.parent_button, 'back', 'Back')
                 if hasattr(self, 'page'):
                     from .folder_navigation import record
                     record(self.app, self.page, self.browser, 'workspace-browser', selected, folder, self.navigate)
@@ -268,6 +277,9 @@ class FileDrawer:
         return await self.refresh()
 
     async def up(self, widget=None, **kwargs):
+        if not self.folder and self.main_browser_visible():
+            self.cancel_browser()
+            return True
         self.folder = self.folder.rpartition('/')[0]
         return await self.refresh()
 

@@ -247,6 +247,20 @@ class MobileRoutes(Routes):
             if owner.history_index > 0:
                 return self.invoke_back(lambda: owner.navigate_history(-1))
 
+        drawer = adaptive.browsers.get(destination)
+        if drawer is not None and contains(body, drawer.browser_widget):
+            browser = drawer.browser
+            if browser.search.value:
+                return self.invoke_back(lambda: setattr(browser.search, 'value', ''))
+            if browser.search_open:
+                return self.invoke_back(browser.close_search)
+            if browser.history.previous() is not None:
+                return self.invoke_back(browser.go_back)
+            if drawer.folder:
+                return self.invoke_back(drawer.up)
+            if drawer.main_browser_visible():
+                return self.invoke_back(drawer.cancel_browser)
+
         for browser_name, path_name, parent in (
                 ('file_browser', 'file_path', app.parent_file_folder),
                 ('remote_browser', 'cloud_path', app.parent_cloud)):

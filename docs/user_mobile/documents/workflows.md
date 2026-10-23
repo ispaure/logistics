@@ -13,10 +13,13 @@ beside a folder opens its Browse Local/LocalCrypt/Remote, Pull, Push and managem
 actions. The main Browse action is prominent; Delete local folder is separated
 and uses destructive styling. Pull/Push direction is shown for mapped copies.
 Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
-the entire device filesystem. Choose **New document** from Home. Enter a document
+the entire device filesystem. Choose **New document** from Home. Enter a file
 name and select **Plain text (.txt)** or **Markdown (.md)**, then tap
-**Create document**. The selected extension is added when needed. Markdown also
-offers an optional title, inserted as the first heading. **Cancel** creates nothing.
+**Create document**. The selected extension is added when needed. New documents start
+empty. **Cancel** creates nothing.
+**Open file** from Home or Documents opens a browser. Use the folder arrow to go
+up; at the root, Back returns to the hub. Android Back first clears search or
+retraces visited folders, then returns to the hub.
 Books and comics are available through Workspaces or Documents’ **Open Books & Comics library**;
 Chat has its own bottom navigation button between Documents and Settings. Native tab
 controls adapt to the Apple layout; Android uses bottom navigation in compact

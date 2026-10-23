@@ -30,6 +30,49 @@ class AndroidBackTests(unittest.TestCase):
             await asyncio.sleep(0)
         self.app.loop.run_until_complete(wait())
 
+    def test_hub_open_file_back_retraces_folders_and_returns_to_origin(self):
+        app = self.app
+        (app.private_root / 'LocalFiles' / 'Parent' / 'Child').mkdir(parents=True)
+        for destination in ('home', 'documents'):
+            with self.subTest(destination=destination):
+                app.show_home() if destination == 'home' else app.show_documents_hub()
+                origin = app.body
+                self.assertTrue(app.loop.run_until_complete(app.open_hub_file()))
+                drawer = app.adaptive.browser(destination)
+                panel = app.body
+                app.loop.run_until_complete(drawer.open_folder({'path': 'Parent'}))
+                app.loop.run_until_complete(drawer.open_folder({'path': 'Parent/Child'}))
+                drawer.browser.search.value = 'missing'
+                self.assertTrue(self.routes.system_back())
+                self.assertEqual(drawer.browser.search.value, '')
+                self.assertEqual(drawer.folder, 'Parent/Child')
+                if drawer.browser.search_open:
+                    self.assertTrue(self.routes.system_back())
+                    self.assertFalse(drawer.browser.search_open)
+                for expected in ('Parent', ''):
+                    self.assertTrue(self.routes.system_back())
+                    self.settle()
+                    self.assertEqual(drawer.folder, expected)
+                    self.assertIs(app.body, panel)
+                self.assertTrue(self.routes.system_back())
+                self.settle()
+                self.assertIs(app.body, origin)
+                self.assertEqual(app.native_host.state.destination, destination)
+
+    def test_hub_browser_root_arrow_returns_to_origin(self):
+        app = self.app
+        for destination in ('home', 'documents'):
+            with self.subTest(destination=destination):
+                app.show_home() if destination == 'home' else app.show_documents_hub()
+                origin = app.body
+                self.assertTrue(app.loop.run_until_complete(app.open_hub_file()))
+                drawer = app.adaptive.browser(destination)
+                self.assertTrue(drawer.parent_button.enabled)
+                self.assertEqual(drawer.parent_button.control_icon, 'back')
+                app.loop.run_until_complete(drawer.parent_button.on_press())
+                self.assertIs(app.body, origin)
+                self.assertEqual(app.native_host.state.destination, destination)
+
     def test_each_tab_root_returns_home_then_defers_to_android(self):
         self.app.show_documents_hub()
         callback = Mock()

@@ -180,7 +180,7 @@ class HubDocumentTests(unittest.TestCase):
         app.new_hub_document()
         form = app.body.children[0].content
         form.children[1].value = 'My notes'
-        form.children[7].on_press()
+        form.children[5].on_press()
         self.assertEqual(app.current.name, 'My notes.txt')
         self.assertNotEqual(app.current.id, first)
         self.assertEqual(app.native_host.state.destination, 'home')
@@ -477,7 +477,7 @@ class HubDocumentTests(unittest.TestCase):
         app.new_hub_document()
         form = app.body.children[0].content
         form.children[1].value = 'Second'
-        form.children[7].on_press()
+        form.children[5].on_press()
         app.editor.value = 'second'
         second = app.editor_view
         second.search.query.value = 'second'
@@ -742,7 +742,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIs(app.body, app.routes.roots['chat'])
         self.assertEqual(app.native_host.state.destination, 'home')
 
-    def test_new_document_validation_cancel_and_plain_text_title(self):
+    def test_new_document_validation_cancel_and_plain_text(self):
         app = self.app
         previous = app.current
         count = len(app.store.documents()[0])
@@ -750,20 +750,18 @@ class HubDocumentTests(unittest.TestCase):
         form = app.body.children[0].content
         for invalid in ('', '../bad'):
             form.children[1].value = invalid
-            form.children[7].on_press()
+            form.children[5].on_press()
             self.assertIs(app.current, previous)
-            self.assertTrue(form.children[6].text)
+            self.assertTrue(form.children[4].text)
             self.assertEqual(len(app.store.documents()[0]), count)
-        form.children[8].on_press()
+        form.children[6].on_press()
         self.assertIs(app.current, previous)
         app.new_hub_document()
         form = app.body.children[0].content
         form.children[1].value = 'Notes.txt'
         form.children[3].value = 'Markdown (.md)'
-        form.children[5].value = 'Unused title'
         form.children[3].value = 'Plain text (.txt)'
-        self.assertFalse(form.children[5].enabled)
-        form.children[7].on_press()
+        form.children[5].on_press()
         self.assertEqual(app.current.name, 'Notes.txt')
         self.assertEqual(app.current.text, '')
 
@@ -771,12 +769,14 @@ class HubDocumentTests(unittest.TestCase):
         app = self.app
         app.new_hub_document()
         form = app.body.children[0].content
+        import toga
+        self.assertEqual([widget.placeholder for widget in widgets(form)
+                          if isinstance(widget, toga.TextInput)], ['File name'])
         form.children[1].value = 'Trip.markdown'
         form.children[3].value = 'Markdown (.md)'
-        form.children[5].value = 'Trip plans'
-        form.children[7].on_press()
+        form.children[5].on_press()
         self.assertEqual(app.current.name, 'Trip.markdown')
-        self.assertEqual(app.current.text, '# Trip plans\n\n')
+        self.assertEqual(app.current.text, '')
         self.assertEqual(app.editor_view.session.kind, 'markdown')
         document_routes = list(app.routes.screens['documents'])
         app.native_host.root.current_tab = 'Chat'
