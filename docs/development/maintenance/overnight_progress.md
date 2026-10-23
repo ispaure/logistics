@@ -818,3 +818,34 @@ completed baseline. Remaining priorities continue to govern selection.
   across 179/162 files with zero failures. Shared `eb757e5` has 1,213 tests across
   179 files, zero failures, 25 declared platform/toolkit skips. The later lifecycle
   guard has the focused/native validation above, not a claimed new full run.
+
+## Cohesive Bulk Rename widget construction
+
+- Constructor construction mixed folder/filter controls, browser/rule panes and
+  progress/preset/apply controls. Three private builders now name those sections
+  within the same widget/module, without new files, public APIs or state layers.
+- An AST comparison expands the builders back into initialization and verifies
+  the exact original statement order. The constructor is 31 lines instead of 226;
+  this reduction reflects named responsibilities, not deleted controls or behavior.
+- All 24 tests across three host rename files pass, including 20 Bulk Rename UI
+  cases, plus lint, architecture and all five documentation checks. Existing
+  selection/reveal, preview, apply/undo, presets and cooperative-close checks remain.
+- Committed as `656347ae`; the focused suite covers this later refactor,
+  not the earlier frozen full-suite checkpoint. No extra mirror tests were added
+  for this reversible organizational change.
+
+## Recovery envelope admission before mutation
+
+- Six invalid-envelope profiles reproduced overwriting a readable checkpoint with
+  data that SessionStore's existing reader rejects, or creating a new directory
+  for such a save. The version/documents/count admission now has one private
+  owner shared by read and write, before write-side directory creation.
+- Nested document fields remain host-owned. JSON escaping, NaN policy, bytes,
+  64 MiB bounds, durable publication, private permissions and formats are intact.
+  The API map now distinguishes the store's existing envelope from host schema.
+- All four store tests pass in both environments; all 13 editor recovery and 28
+  document workspace tests pass. Lint, architecture and five documentation checks
+  pass. Shared `3ba394b` is committed, Logistics pin `386c79c5`.
+- Blue Hole exact vendor membership/bytes and all 31 adapters pass; its five actual
+  embedded tests also exercise valid/invalid recovery writes on Blender 4.5.1 /
+  Python 3.11.11. Vendor/driver commit `9d22aba`.
