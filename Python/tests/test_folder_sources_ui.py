@@ -65,7 +65,7 @@ class FolderSourceTests(QtTestCase):
             return True
         self.local_folders = [self.folder('Local')]
         contribution = FolderFeatureContribution('Slow', available, get_actions=lambda entry: [])
-        with patch('features.registry.get_folder_features', return_value=[RegisteredContribution('slow', 'Slow', contribution)]):
+        with patch('features.application.registry.get_folder_features', return_value=[RegisteredContribution('slow', 'Slow', contribution)]):
             page = FoldersPage()
             self.addCleanup(self.close_page, page); self.addCleanup(release.set)
             self.until(lambda: not page.discovery.busy)
@@ -98,9 +98,9 @@ class FolderSourceTests(QtTestCase):
         for target, options in (
             ('services.folders.entries.folder_discovery.get_local_folders', {'side_effect': lambda: self.local_folders}),
             ('services.folders.entries._get_configured_name_values', {'side_effect': lambda key: self.settings.get(key, [])}),
-            ('features.registry.get_local_folder_sources', {'side_effect': lambda: self.locals}),
-            ('features.registry.get_remote_folder_sources', {'side_effect': lambda: self.remotes}),
-            ('features.registry.get_folder_features', {'return_value': []}),
+            ('features.application.registry.get_local_folder_sources', {'side_effect': lambda: self.locals}),
+            ('features.application.registry.get_remote_folder_sources', {'side_effect': lambda: self.remotes}),
+            ('features.application.registry.get_folder_features', {'return_value': []}),
         ):
             patcher = patch(target, **options)
             patcher.start()
@@ -342,7 +342,7 @@ class FolderSourceTests(QtTestCase):
         available = Mock(return_value=True)
         page._folder_features = [RegisteredContribution('test', 'Test', FolderFeatureContribution(
             'Test', available, get_actions=lambda entry: [], supports_private_folders=True))]
-        with patch('features.registry.get_folder_features', return_value=page._folder_features), patch(
+        with patch('features.application.registry.get_folder_features', return_value=page._folder_features), patch(
                 'desktop.file_browser._browser_view', return_value=opened) as factory, patch(
                 'features.rclone.localcrypt.ui.views.ensure_session', side_effect=AssertionError('Popup requested')), patch(
                 'features.rclone.session.read_package', side_effect=[ValueError('bad password'), {'Private': {'type': 'crypt'}}]):
@@ -397,7 +397,7 @@ class FolderSourceTests(QtTestCase):
         tool = FolderFeatureContribution('Fixture', lambda entry: True,
             get_actions=lambda entry: [UIAction('Fixture action', callback=lambda: None)],
             supports_private_folders=True)
-        with patch('features.registry.get_folder_features', return_value=[RegisteredContribution('test', 'Test', tool)]), patch(
+        with patch('features.application.registry.get_folder_features', return_value=[RegisteredContribution('test', 'Test', tool)]), patch(
                 'desktop.file_browser._browser_view', side_effect=OSError('synthetic browser failure')), patch(
                 'features.rclone.session.read_package', return_value={name: {'type': 'crypt'} for name in ('One', 'Two')}):
             page = self.page()
@@ -890,7 +890,7 @@ class FolderSourceTests(QtTestCase):
         connection = SimpleNamespace(data=self.root / 'ciphertext', remote='Legacy', package=package, context=config)
         entry = FolderEntry('Legacy', local=LocalCryptFolder(connection), remote_name='Legacy',
                             remote_source='rclone', remote_context=self.root / 'keys.session')
-        with patch('features.registry.get_folder_features', return_value=tools):
+        with patch('features.application.registry.get_folder_features', return_value=tools):
             page = self.page()
             page._show_entry(entry)
             self.wait(page)
@@ -959,8 +959,8 @@ class FolderSourceTests(QtTestCase):
 
     def test_main_window_first_display_reads_sources_once_and_returning_refreshes(self):
         read_names = self.remote(['Remote'], 'profile')
-        with patch('features.registry.get_pages', return_value=[]), patch(
-                'features.registry.get_debug_actions', return_value=[]):
+        with patch('features.application.registry.get_pages', return_value=[]), patch(
+                'features.application.registry.get_debug_actions', return_value=[]):
             window = MainWindow()
             self.addCleanup(window.dlg.deleteLater)
             self.addCleanup(window.tabs.widget(0).file_browser.shutdown)

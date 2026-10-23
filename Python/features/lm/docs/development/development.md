@@ -19,6 +19,7 @@ The [user guide](../user/user.md) describes available workflows and limits.
 | `ui/composer.py`, `ui/mode_tabs.py` | Enter/Shift+Enter, screenshot paste/drop, sampling controls and Chat/Code tabs |
 | `ui/profiles.py` | Identity-preserving server profile editor |
 | `ui/ide_context.py` | Lazy project registration lookup and GUI-thread editor snapshots |
+| `ui/conversation_actions.py` | Conversation creation, moves, forks, menus and export coordinated with the page |
 | `ui/conversation_tree.py` | Tree drag requests; storage operations stay outside the widget |
 | `ui/conversation_view.py` | Incremental native Markdown bubbles and bounded message sizing |
 | `screenshots.py` | Bounded inline PNG records and image context reserve |

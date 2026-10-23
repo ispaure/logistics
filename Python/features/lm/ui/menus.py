@@ -7,8 +7,8 @@ def build_menus(page, layout):
     page.menu_bar.setNativeMenuBar(False)
     layout.insertWidget(0, page.menu_bar)
     file = page.menu_bar.addMenu('File')
-    page.idle_menu_actions = [file.addAction('New conversation', page.new_conversation),
-                              file.addAction('New folder…', page.new_folder)]
+    page.idle_menu_actions = [file.addAction('New conversation', page.conversations.new_conversation),
+                              file.addAction('New folder…', page.conversations.new_folder)]
     file.addSeparator()
     for action in (page.rename_button, page.move_button, page.export_button, page.delete_button):
         file.addAction(action)

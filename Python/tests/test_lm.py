@@ -181,7 +181,7 @@ class StorageTests(unittest.TestCase):
         original = self.store.path(data['id']).read_bytes()
         revision = data['revision']
         data['title'] = 'Pending'
-        with patch('commonUtils.persistence.os.replace', side_effect=OSError('Disk full')):
+        with patch('commonUtils.persistence.atomic.os.replace', side_effect=OSError('Disk full')):
             with self.assertRaises(OSError):
                 self.store.save(data)
         self.assertEqual(self.store.path(data['id']).read_bytes(), original)

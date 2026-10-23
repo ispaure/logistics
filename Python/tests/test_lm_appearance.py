@@ -14,7 +14,7 @@ class LMAppearanceTests(QtTestCase):
 
     def test_chat_surfaces_and_code_follow_theme_and_short_bubbles_fit_text(self):
         from commonUtils.ui.appearance.theme import apply_theme
-        from features.lm.page import LMPage
+        from features.lm.ui.page import LMPage
         from features.lm.storage import Store
         from features.lm.domain import conversation, message
         theme = apply_theme(self.app, mode='dark')

@@ -3,17 +3,15 @@ Generic folder sources, selection, and feature actions.
 """
 
 from commonUtils.ui.appearance.typography import point_size, setting_size
-from collections import Counter
 from pathlib import Path
 
 from commonUtils.ui import pyside
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 
-from features import registry
+from features.application import registry
 from features.contributions import UIAction
-from services.folders.policy import folder_parts
 from services.folders.sources import discover_folder_sources
-from services.folders.workspaces import SOURCE_NAMES, local_entries, local_entry_category, remote_entries, source_category, workspace_remote_sources
+from services.folders.workspaces import SOURCE_NAMES, source_category, workspace_remote_sources
 from desktop.pages.workspace_panes import WorkspacePanes, WORKSPACE_PANES_LOCKED
 from desktop.pages.workspace_tree import WorkspaceTree
 from desktop.settings.workspaces import workspace_visibility
@@ -34,6 +32,8 @@ class FoldersPage(pyside.QWidget):
 
     def __init__(self, parent=None, *, panes_locked=WORKSPACE_PANES_LOCKED):
         super().__init__(parent)
+        from .folder_tree import FolderTreePresentation
+        self.tree_presentation = FolderTreePresentation(self)
 
         self.controller = FolderController()
         self.panes_locked = panes_locked
@@ -146,7 +146,7 @@ class FoldersPage(pyside.QWidget):
         self.source_tabs.currentChanged.connect(self._source_changed)
         self.credential_combo.currentIndexChanged.connect(self._credential_changed)
         self.folder_tree.currentItemChanged.connect(self._selection_changed)
-        self.visibility.changed.connect(self._refresh_folder_tree)
+        self.visibility.changed.connect(self.tree_presentation.refresh)
 
     def refresh(self):
         """Refresh source groups while preserving the selected credential and folder."""
@@ -201,7 +201,7 @@ class FoldersPage(pyside.QWidget):
         if self._source_key(self.source_tabs.currentIndex()) != selected_source_key:
             selected_credential = None
         self._refresh_credentials(selected_credential)
-        self._refresh_folder_tree()
+        self.tree_presentation.refresh()
 
     def _rebuild_source_tabs(self, selected_source_key):
         """Keep the same three source categories as mobile, including empty ones."""
@@ -229,7 +229,7 @@ class FoldersPage(pyside.QWidget):
     def _source_changed(self, _index):
         self._selected_entry_key = None
         self._refresh_credentials()
-        self._refresh_folder_tree()
+        self.tree_presentation.refresh()
         # A source can change while the hub remains open (for example when
         # credentials are loaded in another window). Show the cached list now,
         # then reconcile it without blocking the tab switch.
@@ -237,7 +237,7 @@ class FoldersPage(pyside.QWidget):
 
     def _credential_changed(self, _index):
         self._selected_entry_key = None
-        self._refresh_folder_tree()
+        self.tree_presentation.refresh()
 
     def _get_selected_source(self):
         return self.source_tabs.tabData(self.source_tabs.currentIndex())
@@ -281,102 +281,6 @@ class FoldersPage(pyside.QWidget):
         return (entry.name, entry.remote_source, context,
                 str(entry.local.path) if entry.local is not None else None)
 
-    def _refresh_folder_tree(self):
-        if self._closing or self._sources is None:
-            return
-        selected_source = self._get_selected_source()
-        source_type = selected_source[0] if selected_source is not None else 'local'
-        entry_labels = {}
-
-        if source_type == 'local':
-            entries = local_entries(self._sources)
-            category = self.credential_combo.currentData()
-            if category is not None:
-                entries = [entry for entry in entries if local_entry_category(entry, self._sources) == category]
-            entry_labels.update((self._entry_key(entry), str(entry.local.path)) for entry in entries)
-        else:
-            _source_type, _feature_name, sources = selected_source
-            selected_credential = self.credential_combo.currentData()
-            entries = []
-            for source in sources:
-                if selected_credential is not None and source.source.context != selected_credential:
-                    continue
-                source_entries = remote_entries(source, self._local_folders)
-                entries.extend(source_entries)
-                for entry in source_entries:
-                    entry_labels[self._entry_key(entry)] = source.source.name
-
-        if not self.visibility.show_legacy:
-            entries = [entry for entry in entries if not entry.name.casefold().startswith('legacy-')]
-        entries.sort(key=lambda entry: (entry.name.casefold(), str(entry.remote_context)))
-        name_counts = Counter(entry.name for entry in entries)
-        copy_labels = {self._entry_key(entry): getattr(entry.local, 'storage_label', 'Local')
-                       if entry.local is not None else 'Remote' for entry in entries}
-        copy_counts = Counter((entry.name, copy_labels[self._entry_key(entry)]) for entry in entries)
-
-        self.folder_tree.clear()
-        self._entry_items = {}
-
-        if not entries:
-            self.selected_entry_name = None
-            self._show_empty_state()
-            return
-
-        tree_items = {}
-
-        for entry in entries:
-            name_parts = folder_parts(entry.name)
-            parent_item = None
-            path_parts = []
-            entry_key = self._entry_key(entry)
-
-            for index, name_part in enumerate(name_parts):
-                path_parts.append(name_part)
-                item_path = tuple(path_parts)
-                is_leaf = index == len(name_parts) - 1
-                if is_leaf and name_counts[entry.name] > 1:
-                    item_path = (*item_path, entry_key)
-                    label = copy_labels[entry_key]
-                    if copy_counts[entry.name, label] > 1:
-                        label += ' · ' + entry_labels[entry_key]
-                    name_part = f'{name_part} [{label}]'
-
-                item = tree_items.get(item_path)
-
-                if item is None:
-                    item = pyside.QTreeWidgetItem([name_part])
-                    tree_items[item_path] = item
-
-                    if parent_item is None:
-                        self.folder_tree.addTopLevelItem(item)
-                    else:
-                        parent_item.addChild(item)
-
-                if index == len(name_parts) - 1:
-                    item.setData(0, pyside.Qt.ItemDataRole.UserRole, entry)
-                    self._style_folder_item(item, entry)
-                    item.setToolTip(0, '\n'.join(filter(None, (entry.name, copy_labels[entry_key],
-                        entry_labels.get(entry_key, ''), str(entry.local.path) if entry.local is not None else ''))))
-                    self._entry_items[entry_key] = item
-
-                parent_item = item
-
-        for item in tree_items.values():
-            if item.data(0, pyside.Qt.ItemDataRole.UserRole) is None:
-                font = item.font(0)
-                font.setBold(True)
-                item.setFont(0, font)
-                item.setFlags(item.flags() & ~pyside.Qt.ItemFlag.ItemIsSelectable)
-
-        self.folder_tree.expandAll()
-
-        selected_item = self._entry_items.get(self._selected_entry_key)
-
-        if selected_item is None:
-            self._show_empty_state('Select a folder to browse its files.')
-            return
-
-        self.folder_tree.setCurrentItem(selected_item)
 
     def _selection_changed(self, current, _previous):
         if current is None:

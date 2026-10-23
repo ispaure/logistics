@@ -1,13 +1,10 @@
 """LM workspace presentation and navigation, backed by an owned conversation session."""
 from commonUtils.ui.appearance.typography import point_size
 from copy import deepcopy
-from pathlib import Path
-from uuid import uuid4
 
 from commonUtils.ui import pyside as qt
-from commonUtils.persistence import atomic_write_bytes, atomic_write_json
-from ..domain import conversation, defaults, message, validate_settings
-from ..storage import Store, export_markdown
+from ..domain import validate_settings
+from ..storage import Store
 from ..session import ConversationSession
 from ..agent import AgentClient
 from ..screenshots import encode_screenshot, MAX_IMAGES
@@ -62,6 +59,8 @@ class LMPage(qt.QWidget):
 
     def __init__(self, parent=None, *, store=None, client=None, project_context=None):
         super().__init__(parent)
+        from .conversation_actions import ConversationActions
+        self.conversations = ConversationActions(self)
         self.attachments = AttachmentController(self)
         self.project_context = project_context
         self.store = store or Store()
@@ -133,70 +132,9 @@ class LMPage(qt.QWidget):
         self.update_controls()
 
 
-    def conversation_menu(self, point):
-        item = self.list.itemAt(point)
-        if item is None or self.client.busy:
-            return
-        self.list.setCurrentItem(item)
-        key = item.data(0, qt.Qt.ItemDataRole.UserRole)
-        menu = qt.QMenu(self.list)
-        if key:
-            if self.data is None or self.data['id'] != key:
-                return  # Opening may have been refused by a lease or save conflict.
-            for action in (self.pin_action, self.fork_action, self.rename_button, self.move_button,
-                           self.export_button, self.delete_button):
-                menu.addAction(action)
-        else:
-            menu.addAction('New conversation here', self.new_conversation)
-            menu.addAction('New folder…', self.new_folder)
-        menu.exec(self.list.viewport().mapToGlobal(point))
 
-    def toggle_pin(self):
-        if self.client.busy or self.data is None or self.lease is None or not self.persist():
-            return
-        self.data['pinned'] = not self.data.get('pinned', False)
-        self.dirty = True
-        if self.persist():
-            self.refresh(reveal_current=True)
-        self.update_controls()
 
-    def fork_conversation(self):
-        if self.client.busy or self.data is None or self.lease is None or not self.persist():
-            return
-        from ..domain import now
-        fork = deepcopy(self.data)
-        fork.update(id=uuid4().hex, revision=0, title=(fork['title'] + ' (fork)')[:200],
-                    pinned=False, created=now(), updated=now())
-        for entry in fork['messages']:
-            entry['id'] = uuid4().hex
-        try:
-            self.session.create(fork)
-        except (OSError, ValueError) as error:
-            self.status.setText(str(error))
-            return
-        self.restore()
-        self.search.clear()
-        self.refresh(reveal_current=True)
-        self.status.setText('Conversation forked. The original is unchanged.')
 
-    def move_tree_item(self, source, destination):
-        if self.client.busy or not self.persist():
-            return
-        key, folder = source
-        try:
-            if key:
-                active = self.data is not None and self.data['id'] == key
-                data = self.data if active else self.store.load(key)
-                self.store.move(data, destination, lease=self.lease if active else None)
-            else:
-                moved_folder = self.store.move_folder(folder, destination, active=self.data, lease=self.lease)
-        except (OSError, ValueError) as error:
-            self.status.setText(str(error))
-            return
-        self.refresh(reveal_current=True)
-        if not key and moved_folder in self.folder_items:
-            self.list.setCurrentItem(self.folder_items[moved_folder])
-        self.status.setText('Moved to ' + (destination or '/') + '.')
 
     @staticmethod
     def button(title, callback, layout):
@@ -249,7 +187,7 @@ class LMPage(qt.QWidget):
 
     def paste_screenshot(self, image):
         if self.data is None:
-            self.new_conversation()
+            self.conversations.new_conversation()
         if self.data is None or self.lease is None:
             return
         try:
@@ -353,7 +291,7 @@ class LMPage(qt.QWidget):
             self.open_conversation(key)
             self.refresh(reveal_current=True)
         elif not self.search.text():
-            self.new_conversation()
+            self.conversations.new_conversation()
         self.update_controls()
 
     def project_changed(self):
@@ -496,47 +434,7 @@ class LMPage(qt.QWidget):
         item = self.list.currentItem()
         return item.data(0, qt.Qt.ItemDataRole.UserRole + 1) if item is not None else ''
 
-    def new_folder(self):
-        if self.client.busy:
-            return
-        parent = self.selected_folder()
-        name, accepted = qt.QInputDialog.getText(self, 'New conversation folder',
-            'Folder name (use / for multiple nested levels)')
-        if not accepted or not name:
-            return
-        path = '/'.join(part for part in (parent, name) if part)
-        try:
-            self.store.create_folder(path)
-        except (OSError, ValueError) as error:
-            self.status.setText(str(error))
-            return
-        self.search.clear()
-        self.refresh()
-        self.list.setCurrentItem(self.folder_items[path])
-        self.status.setText(f'Folder created: {path}. New conversations will be saved here.')
 
-    def move_conversation(self):
-        if self.client.busy or not self.data or not self.persist():
-            return
-        try:
-            choices = ['/', *self.store.folders()]
-        except (OSError, ValueError) as error:
-            self.status.setText(str(error))
-            return
-        current = self.data.get('folder') or '/'
-        destination, accepted = qt.QInputDialog.getItem(self, 'Move conversation',
-            'Destination folder (/ for root; use / for nested levels)', choices,
-            choices.index(current) if current in choices else 0, True)
-        if not accepted:
-            return
-        try:
-            self.store.move(self.data, '' if destination == '/' else destination, lease=self.lease)
-        except (OSError, ValueError) as error:
-            self.status.setText(str(error))
-            return
-        self.refresh(reveal_current=True)
-        self.update_controls()
-        self.status.setText(f'Conversation moved to {destination or "/"}.')
 
     def open_conversation(self, key):
         if not self.persist():
@@ -643,23 +541,6 @@ class LMPage(qt.QWidget):
             if item.data(0, qt.Qt.ItemDataRole.UserRole) == self.data['id']:
                 item.setText(0, ('★ ' if self.data.get('pinned') else '') + self.data['title'])
 
-    def new_conversation(self):
-        if self.client.busy or not self.persist():
-            return
-        data = conversation(defaults(), self.profile.currentData() or '', self.model.currentText())
-        data['folder'] = self.selected_folder()
-        data['mode'] = self.mode.currentData()
-        data['project_id'] = self.project_picker.currentData() or ''
-        try:
-            self.session.create(data)
-        except (OSError, ValueError) as error:
-            self.status.setText(str(error))
-            return
-        self.restore()
-        self.search.clear()
-        self.refresh(reveal_current=True)
-        self.update_controls()
-        self.composer.setFocus()
 
     def edit_profiles(self):
         if self.client.busy or not self.persist():
@@ -701,7 +582,7 @@ class LMPage(qt.QWidget):
         if self.client.busy:
             return
         if self.data is None:
-            self.new_conversation()
+            self.conversations.new_conversation()
         if self.data is None or (not self.composer.toPlainText().strip() and not self.draft_images):
             return
         if not self.persist():
@@ -847,59 +728,8 @@ class LMPage(qt.QWidget):
             action.setEnabled(not busy)
 
 
-    def rename(self):
-        if self.client.busy or not self.data:
-            return
-        title, accepted = qt.QInputDialog.getText(self, 'Rename conversation', 'Title', text=self.data['title'])
-        if accepted and title.strip():
-            self.data['title'] = title.strip()[:200]
-            self.dirty = True
-            self.persist()
 
-    def delete(self):
-        if self.client.busy or not self.data or not self.persist():
-            return
-        if qt.QMessageBox.question(self, 'Delete conversation', 'Permanently delete this saved conversation?',
-                                  qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.Cancel,
-                                  qt.QMessageBox.StandardButton.Cancel) != qt.QMessageBox.StandardButton.Yes:
-            return
-        try:
-            self.store.delete(self.data)
-        except (OSError, ValueError) as error:
-            self.status.setText(str(error))
-            return
-        self.release_lease()
-        self.data = None
-        self.draft_images = []
-        self.refresh_draft_images()
-        self.loading = True
-        self.composer.clear()
-        self.loading = False
-        self.refresh()
-        self.render()
-        self.update_controls()
 
-    def export(self):
-        if not self.data:
-            return
-        # Export is also available after save/conflict failures, without overwriting the source.
-        self.data['draft'] = self.composer.toPlainText()
-        self.data['draft_images'] = deepcopy(self.draft_images)
-        path, chosen = qt.QFileDialog.getSaveFileName(self, 'Export conversation', self.data['id'] + '.md',
-                                                     'Markdown (*.md);;JSON (*.json)')
-        if not path:
-            return
-        try:
-            if Path(path).resolve().is_relative_to(self.store.root.resolve()):
-                raise ValueError('Choose an export destination outside the LM storage folder.')
-            if 'JSON' in chosen:
-                atomic_write_json(path, self.data)
-            else:
-                atomic_write_bytes(path, export_markdown(self.data).encode('utf-8'))
-        except (OSError, ValueError) as error:
-            self.status.setText(f'Export failed: {error}')
-            return
-        self.status.setText(f'Conversation exported to {path}')
 
     def can_close(self):
         if self.discard_approved or self.persist():

@@ -11,7 +11,8 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from PySide6.QtTest import QTest
 from features.lm.domain import conversation, message
-from features.lm.page import LMPage, ProfilesDialog
+from features.lm.ui.page import LMPage
+from features.lm.ui.profiles import ProfilesDialog
 from features.lm.storage import Store
 
 
@@ -149,7 +150,7 @@ class LMUITests(QtTestCase):
 
     def chat(self, text='Hello'):
         if self.page.data is None:
-            self.page.new_conversation()
+            self.page.conversations.new_conversation()
         self.page.model.setCurrentText('fixture-model')
         self.page.composer.setPlainText(text)
         self.page.send()
@@ -175,7 +176,7 @@ class LMUITests(QtTestCase):
         snapshots.start()
         self.addCleanup(registered.stop)
         self.addCleanup(snapshots.stop)
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.mode.setCurrentIndex(1)
         self.page.project_picker.setCurrentIndex(self.page.project_picker.findData(project.id))
         return project
@@ -243,7 +244,7 @@ class LMUITests(QtTestCase):
         self.assertIn('Project file: main.py (editor snapshot)', self.page.composer.toPlainText())
         self.assertTrue(self.page.persist())
         key = self.page.data['id']
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.open_conversation(key)
         self.assertEqual(self.page.mode.currentData(), 'code')
         self.assertEqual(self.page.project_picker.currentData(), 'project-fixture')
@@ -252,7 +253,8 @@ class LMUITests(QtTestCase):
     def test_code_uses_real_ide_registration_buffer_and_selection(self):
         from features.ide.ui.page import IDEPage
         from features.ide.projects import Project
-        from features.lm.ide_context import registered_projects, editor_context
+        from features.lm.ui.ide_context import registered_projects
+        from features.lm.ui.ide_context import editor_context
         root = Path(self.temp.name) / 'source'
         root.mkdir()
         path = root / 'main.py'
@@ -281,7 +283,7 @@ class LMUITests(QtTestCase):
         buffers, selections = editor_context(self.page, project)
         self.assertEqual(buffers['main.py'], 'unsaved live value\n')
         self.assertEqual(selections, [('main.py', 1, 'unsaved live value')])
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.mode.setCurrentIndex(1)
         self.page.project_picker.setCurrentIndex(self.page.project_picker.findData(project.id))
         self.page.attach_selection()
@@ -333,7 +335,7 @@ class LMUITests(QtTestCase):
                 release.set()
 
     def test_chat_and_code_tabs_have_separate_lists_and_restore_drafts(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         chat_key = self.page.data['id']
         self.page.composer.setPlainText('Chat draft')
         self.page.mode.setCurrentIndex(1)
@@ -351,14 +353,14 @@ class LMUITests(QtTestCase):
         self.page.mode.setCurrentIndex(1)
         self.assertEqual(self.page.data['id'], code_key)
         self.assertEqual(self.page.composer.toPlainText(), 'Code draft')
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.assertEqual(self.page.data['mode'], 'code')
         self.assertEqual(self.store.load(chat_key)['mode'], 'chat')
         self.assertEqual(self.store.load(code_key)['mode'], 'code')
         self.assertIs(self.page.mode.parentWidget(), self.page.sidebar)
 
     def test_tab_switch_save_failure_keeps_conversation_and_draft(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         key = self.page.data['id']
         self.page.composer.setPlainText('Preserve me')
         with patch.object(self.store, 'save', side_effect=OSError('Fixture save failure')):
@@ -397,7 +399,7 @@ class LMUITests(QtTestCase):
         return image
 
     def test_dragged_image_file_attaches_in_composer_and_chat_without_file_uri_text(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         image = qt.QImage(250, 150, qt.QImage.Format.Format_RGB32)
         image.fill(qt.QColor('green'))
         path = Path(self.temp.name) / 'Dragged screenshot.png'
@@ -430,7 +432,7 @@ class LMUITests(QtTestCase):
         self.assertEqual(len(self.store.load(self.page.data['id'])['draft_images']), 2)
 
     def test_finder_file_paste_reads_actual_pixels_instead_of_icon_preview(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         screenshot = qt.QImage(321, 123, qt.QImage.Format.Format_RGB32)
         screenshot.fill(qt.QColor('#12ab34'))
         path = Path(self.temp.name) / 'Screenshot with spaces.png'
@@ -454,7 +456,7 @@ class LMUITests(QtTestCase):
         self.assertEqual(saved, record)
 
     def test_file_url_paste_without_image_preview_and_invalid_file_do_not_use_icons(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         screenshot = qt.QImage(100, 80, qt.QImage.Format.Format_RGB32)
         screenshot.fill(qt.QColor('blue'))
         path = Path(self.temp.name) / 'capture.png'
@@ -476,7 +478,7 @@ class LMUITests(QtTestCase):
         self.assertEqual(len(self.page.draft_images), 1)
 
     def test_pasted_screenshot_is_previewed_sent_and_retained_after_reopen(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.paste_image()
         self.assertEqual(len(self.page.draft_images), 1)
         self.assertFalse(self.page.image_drafts.isHidden())
@@ -495,19 +497,19 @@ class LMUITests(QtTestCase):
         self.assertEqual(len(bubble.images), 1)
         self.assertFalse(bubble.images[0].original.isNull())
         key = self.page.data['id']
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.open_conversation(key)
         self.assertEqual(self.page.data['messages'][0]['images'], [record])
         self.chat('What was in the screenshot?')
         self.until(lambda: not self.page.client.busy)
         self.assertEqual(self.server.requests[-1]['messages'][1]['content'][0]['type'], 'image_url')
-        self.page.fork_conversation()
+        self.page.conversations.fork_conversation()
         self.assertEqual(self.page.data['messages'][0]['images'], [record])
         from features.lm.storage import export_markdown
         self.assertIn('![Screenshot](data:image/png;base64,', export_markdown(self.page.data))
 
     def test_screenshot_draft_survives_mode_switch_and_page_restart_and_can_be_removed(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.paste_image()
         record = self.page.draft_images[0]
         key = self.page.data['id']
@@ -531,7 +533,7 @@ class LMUITests(QtTestCase):
             self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
 
     def test_failed_screenshot_publication_preserves_image_and_draft(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.paste_image()
         self.page.model.setCurrentText('fixture-model')
         self.assertTrue(self.page.persist())
@@ -682,7 +684,7 @@ class LMUITests(QtTestCase):
         self.assertEqual(self.store.load(self.page.data['id'])['messages'][-1]['status'], 'cancelled')
 
     def test_failed_save_prevents_network_request_and_keeps_draft(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.model.setCurrentText('fixture-model')
         self.page.composer.setPlainText('Keep this question')
         with patch.object(self.store, 'save', side_effect=OSError('Disk full')):
@@ -694,7 +696,7 @@ class LMUITests(QtTestCase):
         self.assertTrue(self.page.persist())
 
     def test_conflict_does_not_switch_or_lose_current_draft(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         key = self.page.data['id']
         other = self.store.load(key)
         other['title'] = 'External change'
@@ -725,7 +727,7 @@ class LMUITests(QtTestCase):
         self.assertEqual(bytes(self.page.transcript.loadResource(2, qt.QUrl('file:///etc/passwd'))), b'')
 
     def test_second_window_cannot_edit_open_conversation(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         second = LMPage(store=self.store)
         self.assertIsNone(second.data)
         self.assertIn('another Logistics window', second.status.text())
@@ -733,17 +735,17 @@ class LMUITests(QtTestCase):
         second.deleteLater()
 
     def test_export_keeps_unsaved_copy_and_cannot_overwrite_storage(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.composer.setPlainText('Draft for export')
         # Use a sibling folder, since exports deliberately cannot target LM storage.
         with TemporaryDirectory() as exports:
             target = Path(exports) / 'chat.json'
             with patch.object(qt.QFileDialog, 'getSaveFileName', return_value=(str(target), 'JSON (*.json)')):
-                self.page.export()
+                self.page.conversations.export()
             self.assertEqual(json.loads(target.read_text())['draft'], 'Draft for export')
         original = self.store.path(self.page.data['id']).read_bytes()
         with patch.object(qt.QFileDialog, 'getSaveFileName', return_value=(str(self.store.path(self.page.data['id'])), 'JSON (*.json)')):
-            self.page.export()
+            self.page.conversations.export()
         self.assertEqual(self.store.path(self.page.data['id']).read_bytes(), original)
 
     def test_invalid_default_context_is_rejected(self):
@@ -752,7 +754,7 @@ class LMUITests(QtTestCase):
             validate({('Chat', 'context_tokens_int'): '512', ('Chat', 'max_tokens_int'): '1024'})
 
     def test_refresh_reacquires_lease_after_another_page_vetoes_close(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.assertTrue(self.page.prepare_close())
         self.assertFalse(self.page.send_button.isEnabled())
         self.page.refresh()
@@ -760,7 +762,7 @@ class LMUITests(QtTestCase):
         self.assertTrue(self.page.send_button.isEnabled())
 
     def test_sampling_default_steps_directly_to_zero(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.temperature.setValue(-1)
         self.page.temperature.stepBy(1)
         self.assertEqual(self.page.temperature.value(), 0)
@@ -768,10 +770,10 @@ class LMUITests(QtTestCase):
         self.assertEqual(self.page.temperature.value(), -1)
 
     def test_destruction_releases_lease_without_explicit_preparation(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         key = self.page.data['id']
         other = LMPage(store=self.store)
-        other.new_conversation()
+        other.conversations.new_conversation()
         other_key = other.data['id']
         other.deleteLater()
         self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
@@ -791,7 +793,7 @@ class LMUITests(QtTestCase):
         self.assertTrue(self.page.persist())
 
     def test_transport_start_failure_keeps_saved_turn_and_clears_published_draft(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.model.setCurrentText('fixture-model')
         self.page.composer.setPlainText('Keep this retryable message')
         with patch.object(self.page.client, 'start', side_effect=OSError('Synthetic offline')):
@@ -805,7 +807,7 @@ class LMUITests(QtTestCase):
         self.assertEqual(self.server.requests, [])
 
     def test_first_publication_failure_keeps_unsent_user_draft(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.model.setCurrentText('fixture-model')
         self.page.composer.setPlainText('Keep this message')
         self.assertTrue(self.page.persist())
@@ -817,15 +819,15 @@ class LMUITests(QtTestCase):
 
     def test_nested_tree_new_conversation_move_and_restart(self):
         with patch.object(qt.QInputDialog, 'getText', return_value=('Projects/Planning/2026', True)):
-            self.page.new_folder()
+            self.page.conversations.new_folder()
         self.assertEqual(self.page.selected_folder(), 'Projects/Planning/2026')
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         key = self.page.data['id']
         self.assertEqual(self.page.data['folder'], 'Projects/Planning/2026')
         self.assertTrue((self.store.folder / 'Projects/Planning/2026' / (key + '.json')).is_file())
         self.page.composer.setPlainText('Draft in a folder')
         with patch.object(qt.QInputDialog, 'getItem', return_value=('Archive/Old/Chats', True)):
-            self.page.move_conversation()
+            self.page.conversations.move_conversation()
         self.assertEqual(self.page.data['folder'], 'Archive/Old/Chats')
         self.assertEqual(self.page.composer.toPlainText(), 'Draft in a folder')
         self.assertTrue(self.page.prepare_close())
@@ -840,7 +842,7 @@ class LMUITests(QtTestCase):
         self.assertIn('Archive/Old/Chats', self.page.folder_items)
 
     def test_enter_sends_and_shift_enter_inserts_newline_only_in_composer(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.model.setCurrentText('fixture-model')
         self.page.composer.setPlainText('First line')
         self.page.composer.moveCursor(qt.QTextCursor.MoveOperation.End)
@@ -860,7 +862,7 @@ class LMUITests(QtTestCase):
         self.assertIn('Shift+Enter', self.page.composer.placeholderText())
 
     def test_empty_enter_does_not_send_or_insert_newline(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         QTest.keyClick(self.page.composer, qt.Qt.Key.Key_Enter)
         self.assertEqual(self.page.composer.toPlainText(), '')
         self.assertEqual(self.server.requests, [])
@@ -913,7 +915,7 @@ class LMUITests(QtTestCase):
         self.assertLess(self.page.status.sizeHint().height(), 50)
 
     def test_stream_follows_bottom_without_interrupting_manual_scroll(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.resize(900, 600)
         self.page.show()
         self.page.data['messages'] = [message('user' if i % 2 == 0 else 'assistant',
@@ -959,7 +961,7 @@ class LMUITests(QtTestCase):
         self.assertEqual(saved['messages'][-1]['content'], 'Bonjour 🌍')
 
     def test_refresh_keeps_folder_selection_and_collapsed_branches(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.store.create_folder('Work/Nested')
         self.page.refresh()
         self.page.folder_items['Work'].setExpanded(False)
@@ -967,14 +969,14 @@ class LMUITests(QtTestCase):
         self.page.refresh()
         self.assertEqual(self.page.selected_folder(), 'Work')
         self.assertFalse(self.page.folder_items['Work'].isExpanded())
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.assertEqual(self.page.data['folder'], 'Work')
         self.assertTrue(self.page.folder_items['Work'].isExpanded())
 
     def test_new_conversation_clears_filter_and_is_visible(self):
         self.page.search.setText('No matching conversation')
         self.page.refresh()
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.assertEqual(self.page.search.text(), '')
         self.assertEqual(self.page.list.currentItem().data(0, qt.Qt.ItemDataRole.UserRole), self.page.data['id'])
 
@@ -1024,7 +1026,7 @@ class LMUITests(QtTestCase):
         self.assertEqual(self.server.requests[-1]['messages'][-1]['content'], 'Second question')
 
     def test_switching_conversations_returns_to_latest_messages(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         self.page.resize(900, 600)
         self.page.show()
         self.page.data['messages'] = [message('assistant', 'Long message\n\n' * 10) for _ in range(10)]
@@ -1043,7 +1045,7 @@ class LMUITests(QtTestCase):
         self.chat('Keep this history')
         self.until(lambda: not self.page.client.busy)
         original = self.page.data['id']
-        self.page.toggle_pin()
+        self.page.conversations.toggle_pin()
         self.assertTrue(self.store.load(original)['pinned'])
         self.assertEqual(self.page.pin_action.text(), 'Unpin conversation')
         entry = self.page.data['messages'][0]
@@ -1052,7 +1054,7 @@ class LMUITests(QtTestCase):
         self.assertTrue(timestamp.toolTip())
         self.page.composer.setPlainText('A draft to branch')
         requests = len(self.server.requests)
-        self.page.fork_conversation()
+        self.page.conversations.fork_conversation()
         self.assertEqual(len(self.server.requests), requests)
         self.assertEqual(self.page.data['draft'], 'A draft to branch')
         self.assertEqual(self.store.load(original)['draft'], 'A draft to branch')
@@ -1068,7 +1070,7 @@ class LMUITests(QtTestCase):
         self.assertEqual(content.layout().contentsMargins().bottom(), 8)
 
     def test_tree_move_persists_conversation_and_folder_destinations(self):
-        self.page.new_conversation()
+        self.page.conversations.new_conversation()
         key = self.page.data['id']
         self.store.create_folder('Work/Nested')
         self.store.create_folder('Archive')
@@ -1083,7 +1085,7 @@ class LMUITests(QtTestCase):
         event = SimpleNamespace(source=lambda: tree, position=lambda: qt.QPointF(point), ignore=lambda: None)
         tree.dropEvent(event)
         self.assertEqual(self.store.load(key)['folder'], 'Work/Nested')
-        self.page.move_tree_item((None, 'Work'), 'Archive')
+        self.page.conversations.move_tree_item((None, 'Work'), 'Archive')
         self.assertEqual(self.page.data['folder'], 'Archive/Work/Nested')
         self.assertEqual(self.store.load(key)['folder'], 'Archive/Work/Nested')
         self.page.composer.setPlainText('Still editable after moving')
