@@ -19,7 +19,7 @@ def page(image):
 
 class ExternalDisplayTests(unittest.TestCase):
     def setUp(self):
-        self.observers = patch.object(CloudClient, '_credential_observers', set())
+        self.observers = patch.object(CloudClient.credential_state, 'observers', set())
         self.observers.start()
         self.addCleanup(self.observers.stop)
         self.host = Host()
@@ -68,7 +68,7 @@ class ExternalDisplayTests(unittest.TestCase):
         sync(self.host, select=True)
         observer = Mock(disposed=False)
         observer.gates.return_value = (NS(locked=False),)
-        CloudClient._credential_observers.add(observer)
+        CloudClient.credential_state.observers.add(observer)
         self.output.refresh()
         self.assertIsNone(self.picture.image)
         observer.gates.return_value = ()

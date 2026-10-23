@@ -12,7 +12,7 @@ class CredentialLoadingTests(unittest.TestCase):
     def test_other_scene_cannot_queue_credential_loading(self):
         held, release = threading.Event(), threading.Event()
         def hold_publication():
-            with CloudClient._state_lock:
+            with CloudClient.credential_state.lock:
                 held.set()
                 release.wait(3)
         holder = threading.Thread(target=hold_publication)

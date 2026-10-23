@@ -134,12 +134,12 @@ class TVProbe(LogisticsMobile):
             await self.readers.active.previous_comic_file()
             owner = self.readers.active
             result['cases'].append('native_end_hint_repeat_opens_next_volume')
-            CloudClient._session_privacy = ResumePassword('synthetic-only')
+            CloudClient.credential_state.session_privacy = ResumePassword('synthetic-only')
             self.screen_privacy.refresh()
             assert picture.image is None, 'Session credentials left external pixels visible'
             assert output.ios_status is None
             result['cases'].append('session_credentials_blank_local_comic')
-            CloudClient._session_privacy = None
+            CloudClient.credential_state.session_privacy = None
             self.screen_privacy.refresh()
             assert picture.image is not None
             self.screen_privacy.conceal()

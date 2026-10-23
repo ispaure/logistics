@@ -69,7 +69,7 @@ class CredentialDocumentLists:
         self._write_tasks = set()
         _managers.add(self)
         from .cloud import CloudClient
-        CloudClient._document_list_observers.add(self)
+        CloudClient.credential_state.document_observers.add(self)
 
     def credentials_changed(self):
         if self.app.active_host and not self.app.loop.is_closed():

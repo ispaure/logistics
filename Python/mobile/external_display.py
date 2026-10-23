@@ -83,7 +83,7 @@ class ExternalComicDisplay:
         # displayed comic itself is an ordinary local file. Unlocking a gate
         # does not grant permission to transmit its content to another screen.
         from features.rclone.mobile.cloud import CloudClient
-        observers = tuple(CloudClient._credential_observers)
+        observers = tuple(CloudClient.credential_state.observers)
         if privacy.gates() or any(not owner.disposed and owner.gates() for owner in observers):
             return False
         if getattr(privacy, 'shield', None) is not None:

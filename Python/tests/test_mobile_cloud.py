@@ -25,10 +25,10 @@ def seed_download(store, name, data):
 
 class MobileCloudTests(unittest.TestCase):
     def test_privacy_gate_tracks_only_successful_session_loads_across_clients(self):
-        previous = CloudClient._session_privacy
-        self.addCleanup(setattr, CloudClient, '_package_privacy', CloudClient._package_privacy)
-        CloudClient._package_privacy = {}
-        self.addCleanup(setattr, CloudClient, '_session_privacy', previous)
+        previous = CloudClient.credential_state.session_privacy
+        self.addCleanup(setattr, CloudClient.credential_state, 'package_privacy', CloudClient.credential_state.package_privacy)
+        CloudClient.credential_state.package_privacy = {}
+        self.addCleanup(setattr, CloudClient.credential_state, 'session_privacy', previous)
         buffers = []
         response = {'ok': True, 'result': []}
         def call(action, data):
@@ -154,12 +154,12 @@ class MobileCloudTests(unittest.TestCase):
 
 class MultiPackagePrivacyTests(unittest.TestCase):
     def setUp(self):
-        for name in ('_package_records', '_package_privacy', '_session_privacy', '_state_epoch'):
-            self.addCleanup(setattr, CloudClient, name, getattr(CloudClient, name))
-        CloudClient._package_records = ()
-        CloudClient._package_privacy = {}
-        CloudClient._session_privacy = None
-        CloudClient._state_epoch = -1
+        for name in ('package_records', 'package_privacy', 'session_privacy', 'epoch'):
+            self.addCleanup(setattr, CloudClient.credential_state, name, getattr(CloudClient.credential_state, name))
+        CloudClient.credential_state.package_records = ()
+        CloudClient.credential_state.package_privacy = {}
+        CloudClient.credential_state.session_privacy = None
+        CloudClient.credential_state.epoch = -1
 
     def test_saved_and_two_session_packages_keep_distinct_resume_gates(self):
         client = CloudClient.__new__(CloudClient)

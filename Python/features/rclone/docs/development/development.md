@@ -305,7 +305,10 @@ routing. It does not own credential loading or create a second document store.
 `mobile/credentials_ui.py` owns credential package selection, retained associations,
 unlock prompts and startup restoration. The cloud controller composes one
 `CredentialWorkflow` and `CredentialState`; native credential publication and
-cross-scene identity remain in `CloudClient` and the Go bridge. Existing CloudUI
+cross-scene identity live in the process-wide `NativeCredentialState` composed by
+`CloudClient` and the Go bridge. The state owns package identity resolution, resume
+gates, publication epochs, observers and the publication lock; it imports no native
+transport or widgets. Every client and scene uses the same state instance. Existing CloudUI
 callbacks and the `SelectedCredentialZIP` import remain compatible. A bounded
 picked ZIP still consumes picker access immediately and retains only memory bytes.
 Credential restoration, package, import, background-refresh and workflow tests

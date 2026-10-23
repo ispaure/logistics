@@ -11,8 +11,8 @@ from features.rclone.mobile.session_privacy import ResumePassword
 class ScreenPrivacyTests(unittest.TestCase):
     def setUp(self):
         from features.rclone.mobile.cloud import CloudClient
-        self.addCleanup(setattr, CloudClient, '_session_privacy', CloudClient._session_privacy)
-        CloudClient._session_privacy = None
+        self.addCleanup(setattr, CloudClient.credential_state, 'session_privacy', CloudClient.credential_state.session_privacy)
+        CloudClient.credential_state.session_privacy = None
 
     def privacy(self, app, backend):
         privacy = object.__new__(ScreenPrivacy)
@@ -152,7 +152,7 @@ class ScreenPrivacyTests(unittest.TestCase):
         from features.rclone.mobile.cloud import CloudClient
         privacy = self.privacy(SimpleNamespace(), 'dummy')
         self.assertFalse(privacy.sensitive())
-        CloudClient._session_privacy = ResumePassword('other-scene-password')
+        CloudClient.credential_state.session_privacy = ResumePassword('other-scene-password')
         self.assertTrue(privacy.sensitive())
 
     def test_only_application_scenes_can_open_workspaces(self):
@@ -173,8 +173,8 @@ class ResumeLockTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         LogisticsMobile.storage_root = Path(directory.name)
         self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-        self.addCleanup(setattr, CloudClient, '_session_privacy', CloudClient._session_privacy)
-        CloudClient._session_privacy = None
+        self.addCleanup(setattr, CloudClient.credential_state, 'session_privacy', CloudClient.credential_state.session_privacy)
+        CloudClient.credential_state.session_privacy = None
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
         self.addCleanup(self.app.loop.close)
         self.addCleanup(self.app.main_window.close)

@@ -29,7 +29,7 @@ class ScreenPrivacy:
         self.trait_registration = self.trait_block = None
         self.backend = type(app._impl).__module__
         from features.rclone.mobile.cloud import CloudClient
-        CloudClient._credential_observers.add(self)
+        CloudClient.credential_state.observers.add(self)
         if self.backend.startswith('toga_iOS.'):
             from rubicon.objc import ObjCClass, Block, objc_id
             self.center = ObjCClass('NSNotificationCenter').defaultCenter
@@ -130,11 +130,11 @@ class ScreenPrivacy:
         batch = getattr(self.app, 'private_comic_batch', None)
         # Even a scene which has never opened Connections shares the native
         # process credential store and must protect itself immediately.
-        candidates = [CloudClient._session_privacy, getattr(client, 'session_privacy', None),
+        candidates = [CloudClient.credential_state.session_privacy, getattr(client, 'session_privacy', None),
                       getattr(batch, 'privacy_gate', None)]
         if getattr(self.app, 'save_as_data', None) is not None:
             candidates.append(getattr(self.app, 'save_as_privacy_gate', None))
-        candidates.extend(CloudClient._package_privacy.values())
+        candidates.extend(CloudClient.credential_state.package_privacy.values())
         candidates.extend(getattr(owner, 'privacy_gate', None) for owner in owners.values())
         return tuple(dict.fromkeys(gate for gate in candidates if gate is not None))
 
@@ -168,7 +168,7 @@ class ScreenPrivacy:
 
     def refresh_other_windows(self):
         from features.rclone.mobile.cloud import CloudClient
-        for observer in tuple(CloudClient._credential_observers):
+        for observer in tuple(CloudClient.credential_state.observers):
             if observer is not self and not observer.disposed and not observer.app.loop.is_closed():
                 observer.app.loop.call_soon_threadsafe(observer.refresh)
 
@@ -391,7 +391,7 @@ class ScreenPrivacy:
         self.disposed = True
         self.restore_lock_layout()
         from features.rclone.mobile.cloud import CloudClient
-        CloudClient._credential_observers.discard(self)
+        CloudClient.credential_state.observers.discard(self)
         if self.activity_listener is not None:
             self.application.unregisterActivityLifecycleCallbacks(self.activity_listener)
             self.activity_listener = self.application = None
