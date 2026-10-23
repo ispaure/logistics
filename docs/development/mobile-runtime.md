@@ -74,6 +74,13 @@ system accessibility extremes still require native layout validation.
 | Reader-facing host services and shared controls | `reader_host.py`, `reader_controls.py`, `reader_chrome.py` |
 | Device screen locking and sensitive-content protection | `screen_privacy.py` |
 
+`workspace_navigation.WorkspaceFrame.render()` updates its controls, selects a
+retained leading pane, then delegates compact drawer and wide/fold layout to
+`_render_drawer()` and `_render_split()`. `_leading_pane()` reuses the existing
+overview or document widgets, preserving their scroll and editing state. Workspace
+host tests cover drawer transitions, Back, rotation, fold direction and retained
+widget identity; native gesture and safe-area behavior still needs device checks.
+
 Format behavior and presentation remain with `features/books/mobile` and
 `features/comics/mobile`. Cloud, managed collections and encrypted-copy adapters
 remain with `features/rclone/mobile`. The host owns navigation, session policy and

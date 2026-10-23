@@ -538,6 +538,19 @@ class WorkspaceFrame:
                     self.header.add(self.pair)
             elif not self.pair.enabled and self.pair in self.header.children:
                 self.header.remove(self.pair)
+        left = self._leading_pane(opened)
+        if left is None:
+            return
+        if left is not self.main:
+            detach(left)
+        if navigation.wide:
+            self._render_split(left, opened)
+        else:
+            self._render_drawer(left)
+
+    def _leading_pane(self, opened):
+        """Select retained content without rebuilding its widgets or scroll state."""
+        navigation, destination = self.navigation, self.destination
         left = None
         if opened:
             left = navigation.browser(destination).widget
@@ -562,49 +575,51 @@ class WorkspaceFrame:
             if view is not None and view is not self.view():
                 frame = getattr(view, '_workspace_frame', None)
                 left = frame.main if frame else view
-        if left is None:
+        return left
+
+    def _render_drawer(self, left):
+        """Mount the compact browser while retaining the covered document."""
+        available = self.navigation.content_width(self.destination)
+        drawer_width = max(1, min(320, available - 64))
+        left.style.width, left.style.flex = drawer_width, 0
+        self.main.style.width, self.main.style.flex = available, 0
+        self.row.insert(0, left)
+        self.row.style.width = available
+        self.compact_open = True
+        if type(self.row._impl).__module__.startswith('toga_iOS.'):
+            self.row._impl.native.clipsToBounds = True
+            self.main._impl.native.userInteractionEnabled = False
+
+    def _render_split(self, left, opened):
+        """Apply the fold-aware allocation to the two retained panes."""
+        navigation, destination = self.navigation, self.destination
+        view = self.view()
+        margin = view.style.margin_left + view.style.margin_right if destination == 'files' else 24
+        available = navigation.content_width(destination, margin=margin)
+        from .fold_layout import division, has_fold
+        from .pane_layout import panes
+        fold = division(navigation.app, self.row)
+        priority = (destination == 'files' or opened) and (
+            has_fold(navigation.app, self.row) or
+            navigation.app.preferences.values.get('android_eink') == 'true')
+        allocation = panes(available, self.row.layout.content_height or 1,
+                           fold=fold, browser_priority=priority)
+        right = self.folder_placeholder if left is self.main else self.main
+        self.row.style.direction = ROW if allocation.axis == 'row' else COLUMN
+        for pane, extent in ((left, allocation.leading), (right, allocation.trailing)):
+            pane.style.flex = 0
+            if allocation.axis == 'row':
+                del pane.style.height
+                pane.style.width = extent
+            else:
+                del pane.style.width
+                pane.style.height = extent
+        right.style.margin_left = allocation.gap if allocation.axis == 'row' else 0
+        right.style.margin_top = allocation.gap if allocation.axis == 'column' else 0
+        if left is self.main:
+            self.row.add(right)
             return
-        if left is not self.main:
-            detach(left)
-        if not navigation.wide:
-            available = navigation.content_width(destination)
-            drawer_width = max(1, min(320, available - 64))
-            left.style.width, left.style.flex = drawer_width, 0
-            self.main.style.width, self.main.style.flex = available, 0
-            self.row.insert(0, left)
-            self.row.style.width = available
-            self.compact_open = True
-            if type(self.row._impl).__module__.startswith('toga_iOS.'):
-                self.row._impl.native.clipsToBounds = True
-                self.main._impl.native.userInteractionEnabled = False
-        else:
-            view = self.view()
-            margin = view.style.margin_left + view.style.margin_right if destination == 'files' else 24
-            available = navigation.content_width(destination, margin=margin)
-            from .fold_layout import division, has_fold
-            from .pane_layout import panes
-            fold = division(navigation.app, self.row)
-            priority = (destination == 'files' or opened) and (
-                has_fold(navigation.app, self.row) or
-                navigation.app.preferences.values.get('android_eink') == 'true')
-            allocation = panes(available, self.row.layout.content_height or 1,
-                               fold=fold, browser_priority=priority)
-            right = self.folder_placeholder if left is self.main else self.main
-            self.row.style.direction = ROW if allocation.axis == 'row' else COLUMN
-            for pane, extent in ((left, allocation.leading), (right, allocation.trailing)):
-                pane.style.flex = 0
-                if allocation.axis == 'row':
-                    del pane.style.height
-                    pane.style.width = extent
-                else:
-                    del pane.style.width
-                    pane.style.height = extent
-            right.style.margin_left = allocation.gap if allocation.axis == 'row' else 0
-            right.style.margin_top = allocation.gap if allocation.axis == 'column' else 0
-            if left is self.main:
-                self.row.add(right)
-                return
-            self.row.insert(0, left)
+        self.row.insert(0, left)
 
 
 class FileDrawer:
