@@ -22,7 +22,8 @@ class PackageTests(unittest.TestCase):
                    'test-results/mobile-evidence/report.json',
                    'docs/development/mobile-evidence/screenshot.png',
                    'docs/developer/mobile-evidence/old-report.json',
-                   'Python/features/books/docs/mobile-evidence/report.json']
+                   'Python/features/books/docs/mobile-evidence/report.json',
+                   'docs/features/books/mobile-evidence/report.json']
         for folder in ('Mobile', 'mobile_build'):
             private.extend(folder + '/' + name for name in (
                 'payload/mobile/app.py', 'build/generated.py', 'logs/deploy.log',

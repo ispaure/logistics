@@ -58,7 +58,7 @@ jobs:
           python -m pip install briefcase==0.4.5 toga-dummy==0.5.7 markdown-it-py==4.2.0 pygments==2.19.2 pypdf==6.21.0 -r mobile_build/requirements-testflight.txt
           python mobile_build/select_ios_sdk.py --github-env "$GITHUB_ENV"
           python -m mobile_build.deployment.testflight_tools plan --build-number "$BUILD_NUMBER" --team "$IOS_TEAM_ID" --expected-app-identifier "$IOS_APP_IDENTIFIER"
-          PYTHONPATH=Python TOGA_BACKEND=toga_dummy python -m unittest mobile_build.tests.test_testflight_tools mobile_build.tests.test_testflight_external mobile_build.tests.test_privacy_build mobile_build.tests.test_device_tools mobile_build.tests.test_cloud_import_ui -v
+          PYTHONPATH=Python TOGA_BACKEND=toga_dummy python -m unittest mobile_build.tests.tooling.test_testflight_tools mobile_build.tests.tooling.test_testflight_external mobile_build.tests.tooling.test_privacy_build mobile_build.tests.tooling.test_device_tools mobile_build.tests.transfers.test_cloud_import_ui -v
       - name: Install temporary signing assets
         env:
           IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}

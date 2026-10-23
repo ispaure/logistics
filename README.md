@@ -81,32 +81,32 @@ start with the [mobile build and release handbook](docs/development/mobile-handb
 | Tool | Use it to… |
 | --- | --- |
 | [File Browser & Markdown](docs/user/files-and-documents.md) | Browse files, explore storage usage, and open Markdown Notes Libraries from location actions |
-| [Git](Python/features/git/docs/user/user.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
-| [Bulk Rename](Python/desktop/bulk_rename/docs/user/user.md) | Preview and apply changes to many filenames at once |
-| [Text Editor](Python/features/text_editor/docs/user/user.md) | Edit text and code in tabs, search/replace, see Git change markers, and preserve file encodings |
-| [IDE](Python/features/ide/docs/user/user.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, search project files, and autosave with Git change markers |
-| [LM Chat](Python/features/lm/docs/user/user.md) | Chat with an existing LM server, paste screenshots, discuss IDE projects with read-only file tools, and save conversations locally |
-| [Books](Python/features/books/docs/user/user.md) and [Comics](Python/features/comics/docs/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
-| [PDF Reader](Python/features/pdf/docs/user/user.md) | Read and search local, remote and LocalCrypt PDFs on desktop and mobile, jump to page numbers, and swipe vertically |
-| [Archives](Python/features/archives/docs/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
-| [Images](Python/features/images/docs/user/user.md) | Compress images, work with photo metadata, and [capture bursts on iPhone](Python/features/images/docs/user_mobile/user_mobile.md) |
-| [rclone](Python/features/rclone/docs/user/user.md) | Browse remotes in read-only tabs, open supported files in memory, and use managed Pull/Push for local or encrypted folders |
-| [FUSE](Python/features/fuse/docs/user/user.md) | Open supported remote storage as a mounted folder |
-| [Calibre](Python/features/calibre/docs/user/user.md) | Open book libraries and export books |
-| [Plex](Python/features/plex/docs/user/user.md) | Back up and restore media-server data |
-| [YouTube Downloader](Python/features/youtube_downloader/docs/user/user.md) | Download channels and playlists |
-| [Minecraft](Python/features/minecraft/docs/user/user.md) | Find and manage local servers |
-| [Blender](Python/features/blender/docs/user/user.md) | Launch Blender configuration cards; manage presets, compatible addon libraries and Blue Hole branches/Deluxe in Settings |
-| [Perforce](Python/features/perforce/docs/user/user.md) | Launch configured servers on Linux |
-| [Obsidian](Python/features/obsidian/docs/user/user.md) | Find and open vaults |
-| [Dropbox](Python/features/dropbox/docs/user/user.md) | Browse Dropbox folders and clean up conflicting copies |
-| [Links](Python/features/links/docs/user/user.md) | Keep useful website shortcuts together |
-| [Smart Home](Python/features/smart_home/docs/user/user.md) | Control Philips Hue and access Tautulli tools |
-| [Aviation Tools](Python/features/aviation_tools/docs/user/user.md) | Flight calculators and aircraft/airport reference data |
-| [Flight Simulator](Python/features/flight_sim/docs/user/user.md) | Manage X-Plane settings and window presets |
-| [Media](Python/features/media/docs/user/user.md) | Rename audio chapters from a CSV |
-| [File Tools](Python/features/file_tools/docs/user/user.md) | Check filenames and remove Python bytecode files |
-| [System Tools](Python/features/system_tools/docs/user/user.md) | Run platform-specific maintenance tools |
+| [Git](docs/features/git/user/user.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
+| [Bulk Rename](docs/features/bulk_rename/user/user.md) | Preview and apply changes to many filenames at once |
+| [Text Editor](docs/features/text_editor/user/user.md) | Edit text and code in tabs, search/replace, see Git change markers, and preserve file encodings |
+| [IDE](docs/features/ide/user/user.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, search project files, and autosave with Git change markers |
+| [LM Chat](docs/features/lm/user/user.md) | Chat with an existing LM server, paste screenshots, discuss IDE projects with read-only file tools, and save conversations locally |
+| [Books](docs/features/books/user/user.md) and [Comics](docs/features/comics/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
+| [PDF Reader](docs/features/pdf/user/user.md) | Read and search local, remote and LocalCrypt PDFs on desktop and mobile, jump to page numbers, and swipe vertically |
+| [Archives](docs/features/archives/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
+| [Images](docs/features/images/user/user.md) | Compress images, work with photo metadata, and [capture bursts on iPhone](docs/features/images/user_mobile/user_mobile.md) |
+| [rclone](docs/features/rclone/user/user.md) | Browse remotes in read-only tabs, open supported files in memory, and use managed Pull/Push for local or encrypted folders |
+| [FUSE](docs/features/fuse/user/user.md) | Open supported remote storage as a mounted folder |
+| [Calibre](docs/features/calibre/user/user.md) | Open book libraries and export books |
+| [Plex](docs/features/plex/user/user.md) | Back up and restore media-server data |
+| [YouTube Downloader](docs/features/youtube_downloader/user/user.md) | Download channels and playlists |
+| [Minecraft](docs/features/minecraft/user/user.md) | Find and manage local servers |
+| [Blender](docs/features/blender/user/user.md) | Launch Blender configuration cards; manage presets, compatible addon libraries and Blue Hole branches/Deluxe in Settings |
+| [Perforce](docs/features/perforce/user/user.md) | Launch configured servers on Linux |
+| [Obsidian](docs/features/obsidian/user/user.md) | Find and open vaults |
+| [Dropbox](docs/features/dropbox/user/user.md) | Browse Dropbox folders and clean up conflicting copies |
+| [Links](docs/features/links/user/user.md) | Keep useful website shortcuts together |
+| [Smart Home](docs/features/smart_home/user/user.md) | Control Philips Hue and access Tautulli tools |
+| [Aviation Tools](docs/features/aviation_tools/user/user.md) | Flight calculators and aircraft/airport reference data |
+| [Flight Simulator](docs/features/flight_sim/user/user.md) | Manage X-Plane settings and window presets |
+| [Media](docs/features/media/user/user.md) | Rename audio chapters from a CSV |
+| [File Tools](docs/features/file_tools/user/user.md) | Check filenames and remove Python bytecode files |
+| [System Tools](docs/features/system_tools/user/user.md) | Run platform-specific maintenance tools |
 
 Additional emulator tools are available on request through ispaure’s **ally-tools**.
 
