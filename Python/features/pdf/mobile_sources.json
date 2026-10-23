@@ -14,6 +14,7 @@
     "mobile/contents.py",
     "mobile/copies.py",
     "mobile/search.py",
-    "search.py"
+    "search.py",
+    "search_controller.py"
   ]
 }

@@ -54,7 +54,7 @@ class PDFProbe(LogisticsMobile):
             report['numeric_jump'] = True
             owner.pdf_search.input.value = 'Searchable'
             await owner.pdf_search.next_match()
-            assert len(owner.pdf_search.results.matches) == 3, owner.pdf_search.status.text
+            assert len(owner.pdf_search.controller.results.matches) == 3, owner.pdf_search.status.text
             report['whole_document_search'] = True
             await asyncio.sleep(.3)
             await capture_window(self, output / 'search.png')

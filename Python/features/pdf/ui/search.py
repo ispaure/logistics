@@ -1,18 +1,17 @@
 """Asynchronous Qt PDF search; closing cancels work and retires search text."""
 from concurrent.futures import ThreadPoolExecutor
-from threading import Event
 from commonUtils.ui import pyside as qt
-from features.pdf.search import Results, search_pdf, result_text
+from features.pdf.search import search_pdf
+from features.pdf.search_controller import PDFSearchController, SearchRequest
 
 
 class PDFSearchBar(qt.QWidget):
     def __init__(self, data, go, parent=None):
         super().__init__(parent)
         self.data, self.go = data, go
-        self.results, self.cursor, self.query = Results(()), -1, None
+        self.controller = PDFSearchController()
+        self.request = None
         self.future = None
-        self.cancelled = Event()
-        self.disposed = False
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='pdf-search')
         self.input = qt.QLineEdit()
         self.input.setPlaceholderText('Find in PDF…')
@@ -37,67 +36,62 @@ class PDFSearchBar(qt.QWidget):
         self.timer.setInterval(30)
         self.timer.timeout.connect(self.poll)
 
+    def render(self):
+        state = self.controller.state
+        self.previous.setEnabled(state.previous_enabled)
+        self.following.setEnabled(state.next_enabled)
+        self.status.setText(state.status)
+
     def changed(self, *args):
-        self.cancelled.set()
-        self.query, self.results, self.cursor = None, Results(()), -1
-        self.status.setText('')
+        self.controller.set_query(self.input.text())
+        self.render()
 
     def next_match(self):
         self.find(1)
 
     def find(self, direction):
-        if self.disposed or self.future is not None:
-            return
-        query = ' '.join(self.input.text().split())
-        if not query:
-            self.changed()
-            return
-        if self.query == query:
-            self.show_match(direction)
-            return
-        self.cancelled = Event()
-        try:
-            self.future = self.executor.submit(search_pdf, self.data, query, cancelled=self.cancelled.is_set)
-        except (OSError, RuntimeError) as error:
-            self.query = None
-            self.status.setText('Cannot search PDF: ' + (str(error)[:200] or type(error).__name__))
-            return
-        self.query, self.direction = query, direction
-        self.previous.setEnabled(False)
-        self.following.setEnabled(False)
-        self.status.setText('Searching PDF…')
-        self.timer.start()
+        self.controller.set_query(self.input.text())
+        action = self.controller.step(direction)
+        if isinstance(action, SearchRequest):
+            try:
+                self.future = self.executor.submit(search_pdf, self.data, action.query,
+                                                  cancelled=action.cancelled.is_set)
+            except Exception as error:
+                self.controller.fail(action, error)
+            else:
+                self.request = action
+                self.timer.start()
+        else:
+            self.show_match(action)
+        self.render()
 
     def poll(self):
         if self.future is None or not self.future.done():
             return
         future, self.future = self.future, None
+        request, self.request = self.request, None
         self.timer.stop()
-        self.previous.setEnabled(True)
-        self.following.setEnabled(True)
-        if self.disposed or self.cancelled.is_set():
-            return
         try:
-            self.results = future.result()
-            self.cursor = -1 if self.direction > 0 else 0
-            self.show_match(self.direction)
+            results = future.result()
         except Exception as error:
-            self.query = None
-            self.status.setText('Cannot search PDF: ' + (str(error)[:200] or type(error).__name__))
+            self.controller.fail(request, error)
+        else:
+            self.show_match(self.controller.complete(request, results))
+        self.render()
 
-    def show_match(self, direction):
-        if self.results.matches:
-            self.cursor = (self.cursor + direction) % len(self.results.matches)
-            self.go(self.results.matches[self.cursor].page)
-        self.status.setText(result_text(self.results, self.cursor))
+    def show_match(self, match):
+        if match is not None:
+            revision = self.controller.revision
+            try:
+                self.go(match.page)
+            except Exception as error:
+                self.controller.navigation_failed(revision, error)
 
     def dispose(self):
-        self.disposed = True
-        self.cancelled.set()
+        self.controller.dispose()
         self.timer.stop()
         self.executor.shutdown(wait=False, cancel_futures=True)
-        self.future = None
+        self.future = self.request = None
         self.data, self.go = b'', lambda page: None
         self.input.clear()
-        self.status.clear()
-        self.results, self.query, self.cursor = Results(()), None, -1
+        self.render()

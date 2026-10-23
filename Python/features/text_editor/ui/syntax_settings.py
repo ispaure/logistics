@@ -4,12 +4,10 @@ from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui import pyside as qt
 from configparser import Error as ConfigError
 from commonUtils.ui.code_editor.widget import monospace_font
-from commonUtils.ui.code_editor.syntax import (
-    SyntaxHighlighter,
-    LANGUAGES,
-    detect_language,
-)
+from commonUtils.ui.code_editor.syntax import SyntaxHighlighter
 from features.text_editor.preferences import Preferences
+from commonUtils.formats.code_language import language_choices
+from commonUtils.runtime.choices import ChoiceOption, ChoiceSet
 
 
 class SyntaxSettings:
@@ -60,7 +58,7 @@ class SyntaxSettings:
         if any(options[key] != self.options[key] for key in options if key != 'geometry_str'):
             self.options = options
             for document in self.documents:
-                self._configure_document(document, preserve_language=True)
+                self._configure_document(document)
             self.actions['syntax'].setChecked(options['syntax_highlighting_bool'])
             self._active_changed()
 
@@ -95,9 +93,13 @@ class SyntaxSettings:
         option.setFlags(flags | whitespace if options["whitespace_bool"] else flags)
         editor.document().setDefaultTextOption(option)
 
-    def _configure_document(self, document, *, preserve_language=False):
-        if not preserve_language:
-            document.language = detect_language(document.path, document.editor.toPlainText()[:256])
+    def _refresh_document_language(self, document):
+        if document.language_selection.update(document.path, document.editor.document().firstBlock().text()):
+            self._configure_document(document)
+            self._document_changed(document)
+
+    def _configure_document(self, document):
+        document.language_selection.update(document.path, document.editor.document().firstBlock().text())
         if not hasattr(document, "highlighter"):
             document.highlighter = SyntaxHighlighter(document.editor)
             document.editor.zoom_changed.connect(self._preferences_changed)
@@ -121,34 +123,27 @@ class SyntaxSettings:
     def choose_language(self):
         if not self.current:
             return
-        from pygments.lexers import get_all_lexers
-
-        choices = {label: alias for label, alias in LANGUAGES}
-        for name, aliases, _, _ in get_all_lexers():
-            if aliases:
-                choices.setdefault(name, aliases[0])
-        names = ["Plain Text"] + sorted(
-            name for name in choices if name != "Plain Text"
-        )
+        document = self.current
+        choices = language_choices(extended=True)
+        selected = document.language_selection.selected_id
+        try:
+            index = choices.index_of(selected)
+        except KeyError:
+            choices = ChoiceSet((*choices, ChoiceOption(selected, selected)))
+            index = choices.index_of(selected)
+        names = choices.labels
         value, ok = qt.QInputDialog.getItem(
             self,
             "Syntax Language",
             "Highlighting does not modify the file:",
             names,
-            0,
+            index,
             False,
         )
-        if ok:
-            self.current.language = choices[value]
-            self.current.editor.folding.configure(self.current.language)
-            self.current.editor.folding.rebuild()
-            self.current.highlighter.configure(
-                self.current.language
-                if self.options["syntax_highlighting_bool"] and not self.current.simple
-                else "text"
-            )
-            self._sync_comment_prefix(self.current)
-            self.current.changed.emit()
+        if ok and document is self.current:
+            document.language_selection.select(choices.from_label(value).id)
+            self._configure_document(document)
+            document.changed.emit()
             self._active_changed()
 
     def toggle_syntax(self):

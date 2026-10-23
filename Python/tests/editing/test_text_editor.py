@@ -410,6 +410,49 @@ class TextEditorTests(QtTestCase):
             registry.set_feature_enabled("text_editor", True)
             self.assertTrue(registry.is_feature_enabled("text_editor"))
 
+    def test_language_chooser_preserves_ids_selection_source_and_split_configuration(self):
+        _, document = self.open('sample.py', b'print(1)\n')
+        self.window.split_document(qt.Qt.Orientation.Horizontal)
+        for label, identity in (('Plain Text', 'text'), ('JSON', 'json'), ('Automatic', None)):
+            previous = document.language_selection.selected_id
+            with patch.object(qt.QInputDialog, 'getItem', return_value=(label, True)) as chooser:
+                self.window.choose_language()
+            names, index = chooser.call_args.args[3:5]
+            self.assertEqual(names[index], 'Automatic' if previous is None else
+                             'Plain Text' if previous == 'text' else 'JSON')
+            self.assertEqual(document.language_selection.selected_id, identity)
+            self.assertEqual(document.language, identity or 'python')
+            self.assertEqual(document.highlighter.language, identity or 'python')
+            for editor in (document.views.primary, document.views.secondary):
+                self.assertEqual(editor.folding.language, identity or 'python')
+            self.assertEqual(document.editor.toPlainText(), 'print(1)\n')
+            self.assertFalse(document.modified)
+        with patch.object(qt.QInputDialog, 'getItem', return_value=('JSON', False)):
+            self.window.choose_language()
+        self.assertTrue(document.language_selection.automatic)
+        self.assertEqual(self.window.language_button.text(), 'Automatic · Python')
+
+    def test_automatic_language_tracks_shebang_and_save_as_but_manual_choice_survives(self):
+        document = self.window.current
+        document.editor.setPlainText('#!/usr/bin/env python\nprint(1)')
+        self.assertEqual(document.language, 'python')
+        target = self.root / 'renamed.json'
+        choice = ResourceChoice(LocalFiles(self.root), target.name)
+        with patch('services.documents.ui.editors.choose_editor_resource', return_value=choice):
+            self.window.save_document(save_as=True)
+            self.wait()
+        self.assertEqual(document.language, 'json')
+        self.assertFalse(document.modified)
+        with patch.object(qt.QInputDialog, 'getItem', return_value=('Plain Text', True)):
+            self.window.choose_language()
+        target = self.root / 'renamed.py'
+        choice = ResourceChoice(LocalFiles(self.root), target.name)
+        with patch('services.documents.ui.editors.choose_editor_resource', return_value=choice):
+            self.window.save_document(save_as=True)
+            self.wait()
+        self.assertEqual(document.language, 'text')
+        self.assertEqual(document.language_selection.detected_id, 'python')
+
     def test_status_conversions_preferences_and_themes_preserve_source(self):
         path, doc = self.open("config.py", b"value = 1\r\n")
         self.assertEqual(doc.language, "python")

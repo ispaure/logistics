@@ -46,9 +46,28 @@ validation; dummy backend tests do not establish that coverage.
 
 ## Text search
 
-Desktop search publishes its busy state only after its worker is submitted.
+`search_controller.PDFSearchController` is the shared desktop/mobile presentation
+controller and remains owned by Logistics. It imports no Qt, Toga or host UI.
+It normalizes queries, retains results and match position, wraps Previous/Next,
+and exposes an immutable `SearchState` with busy state, status text and action
+availability. `step()` returns a `SearchRequest`, an existing `Match` target or
+no action; adapters report worker results through `complete()` or `fail()`.
+Requests contain query/direction and cancellation only, without document or UI
+references. Request identity rejects duplicate or obsolete completions. Query
+changes signal cancellation and clear results immediately; a cancelled request
+remains busy until its worker retires. Disposal clears query/snippets and rejects
+late completions. Navigation errors carry a revision so they cannot overwrite a
+new query's status.
+
+The Qt and Toga search panels bind controls to that controller. They retain widget
+construction, layout, status wrapping, background execution and reader navigation.
+Qt retains its executor/timer and synchronous page callback; Toga retains its
+asyncio worker and awaited page callback, blocks overlapping navigation and checks
+the host's active/private session before publishing results or navigating.
 Worker startup errors remain visible with enabled retry controls; empty error
-messages use the exception type. Closing still cancels and retires the worker.
+messages use the exception type. Cancelling the mobile search task signals the
+worker and waits for extraction retirement before releasing its busy owner.
+No generic button framework or commonUtils API is introduced by this pilot.
 
 `search.py` extracts embedded text with the pinned pure-Python pypdf dependency
 from an in-memory BytesIO stream on every platform. It performs literal,
@@ -68,7 +87,12 @@ text extraction APIs or additional native mobile wheels.
 
 PDF tests cover real embedded text, repeated matches, case handling, no matches,
 result limits, next/previous wrapping, desktop navigation, and mobile search over
-local, remote and offline LocalCrypt sessions.
+local, remote and offline LocalCrypt sessions. Toolkit-independent transitions
+are covered by `Python/tests/readers/test_pdf_search_controller.py`. Desktop and
+mobile panel tests also cover worker-start failure/retry, query edits while work
+is pending, stale success/error rejection and disposal; mobile adds inactive
+session rejection and task cancellation. These host checks use offscreen Qt and
+the Toga dummy backend; they do not replace native device validation.
 
 ## Mobile opening and compact controls
 

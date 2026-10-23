@@ -21,7 +21,7 @@ contributions while retaining open documents for re-enablement.
 | `ui/file_operations.py` | Queued background loads/saves, conflicts and disk notifications |
 | `ui/editing.py` | Application commands, nonmodal search integration and status controls |
 | `ui/session.py`, `ui/commands.py` | Private recovery checkpoints, safe session restore, command discovery and shortcuts |
-| `ui/syntax_settings.py`, `preferences.py` | Language selection and existing INI-based preferences |
+| `ui/syntax_settings.py`, `preferences.py` | Desktop language chooser, syntax application and existing INI-based preferences |
 
 The shared dock workspace owns document tabs, splitting and detachment. Editors
 have no nested tab bar. File → New opens another document pane; opening a file
@@ -43,6 +43,25 @@ It retains Escape, hidden preference-shortcut reconciliation and status controls
 Group callbacks keep their captured loop values and route through the same editor
 commands. Search lifetime, Save/Save As, undo, source bytes and document ownership
 remain with their existing components.
+
+## Shared language selection
+
+Both editor presentations use commonUtils' toolkit-independent
+`formats.code_language.LanguageSelection` and `runtime.choices.ChoiceSet`.
+The [shared language API](../../../../Python/commonUtils/docs/reference/formats/formats.md#editor-language-selection)
+owns IDs, catalogue expansion and automatic/manual detection mechanics. Desktop
+`Document` retains its model; mobile binds directly to CodeInput's model rather
+than keeping a second override. Logistics retains the chooser/dropdown, the
+“Automatic · language” status caption, per-document ownership and applying desktop
+syntax to highlighting, both split views' folding and comments.
+
+Desktop recovery stores optional `language_override` alongside the existing
+`language` field. New checkpoints preserve Automatic versus manual choices;
+older checkpoints retain their recorded effective language as a manual choice.
+Mobile selection stays with the retained editor view and is not added to the
+workspace manifest. Desktop chooser/save/recovery and mobile dropdown/rename tests
+cover these adapters; shared model/choice/CodeInput tests live in commonUtils.
+Host checks use offscreen Qt and Toga's dummy backend, not physical devices.
 
 ## Notes document ownership
 

@@ -34,6 +34,7 @@ class SourceEditorTests(unittest.TestCase):
     def test_markdown_uses_one_formatted_surface_at_phone_and_wide_widths(self):
         owner = self.open('Live.md')
         self.assertIsInstance(owner.editor, CodeInput)
+        self.assertIs(owner.language_selection, owner.editor.language_selection)
         self.assertIsNotNone(owner.formatted)
         for width in (390, 800, 1200):
             owner.session.view['markdown_split'] = True  # Old versions' preference.
@@ -64,6 +65,40 @@ class SourceEditorTests(unittest.TestCase):
         owner.dispose()
         self.assertIsNone(owner.editor.pending)
         self.assertTrue(owner.editor.closed)
+
+    def test_language_selection_follows_rename_and_is_independent_per_document(self):
+        first = self.open('first.py')
+        source = 'print(1)'
+        first.editor.value = source
+        self.app.save_document()
+        first.language_choice.value = 'Plain Text'
+        self.assertEqual(first.language_selection.selected_id, 'text')
+        self.assertFalse(first.document.modified)
+        first.name.value = 'renamed.json'
+        self.assertEqual(first.editor.language, 'text')
+        self.assertEqual(first.language_selection.detected_id, 'json')
+        second = self.open('second.py')
+        self.assertTrue(second.language_selection.automatic)
+        self.assertEqual(second.language_choice.value, 'Automatic')
+        self.assertEqual(second.editor.language, 'python')
+        self.app.open_document(first.document.id)
+        self.assertIs(self.app.editor_view, first)
+        self.assertEqual(first.language_choice.value, 'Plain Text')
+        first.language_choice.value = 'Automatic'
+        self.assertTrue(first.language_selection.automatic)
+        self.assertEqual(first.editor.language, 'json')
+        self.assertEqual(first.editor.value, source)
+
+    def test_automatic_language_follows_shebang_edits_until_manually_selected(self):
+        owner = self.open('script')
+        owner.editor.value = '#!/usr/bin/env python\nprint(1)'
+        self.assertEqual(owner.language_selection.language_id, 'python')
+        owner.language_choice.value = 'JSON'
+        owner.editor.value = '#!/bin/sh\necho hi'
+        self.assertEqual(owner.editor.language, 'json')
+        self.assertEqual(owner.language_selection.detected_id, 'bash')
+        owner.language_choice.value = 'Automatic'
+        self.assertEqual(owner.editor.language, 'bash')
 
     def test_typing_does_not_relayout_unchanged_status_and_line_count(self):
         for name in ('Typing.txt', 'Typing.md'):

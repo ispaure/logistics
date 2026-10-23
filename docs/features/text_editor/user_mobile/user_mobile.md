@@ -57,6 +57,10 @@ formatting toolbar to place the cursor and open the keyboard.
 The formatting toolbar stays above the writing area while the document scrolls.
 Opening the keyboard resizes that area; continuing to type scrolls only as needed
 to keep the caret visible. Plain text and Markdown Source use native text inputs.
+The language dropdown starts on **Automatic**, following the filename and initial
+source line. A manual language stays selected through edits and renaming while
+that editor remains open. **Plain Text** disables highlighting; choose Automatic
+to resume detection. Changing language does not edit the document's text.
 On short phone screens or with enlarged text, the space around the caret shrinks
 to keep the current line inside the writing area above the keyboard.
 On Android, a short keyboard-sized window temporarily hides the app title and

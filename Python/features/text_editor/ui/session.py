@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 from commonUtils.ui import pyside as qt
 from commonUtils.persistence.session import SessionStore
+from commonUtils.formats.code_language import LanguageSelection
 from commonUtils.persistence.text import decode_bytes, read_text_file, MAX_BYTES
 
 
@@ -21,6 +22,7 @@ def document_record(document):
         "encoding": document.encoding, "newline": document.newline_override,
         "bom": document.bom_override.hex() if document.bom_override is not None else None,
         "language": document.language,
+        "language_override": document.language_selection.selected_id,
         "orientation": "vertical" if document.views.splitter.orientation() == qt.Qt.Orientation.Vertical else "horizontal",
         "views": [{"position": editor.textCursor().position(), "anchor": editor.textCursor().anchor(),
                    "scroll": editor.verticalScrollBar().value(), "horizontal_scroll": editor.horizontalScrollBar().value()}
@@ -52,6 +54,7 @@ def load_document_record(record):
         raise ValueError("Invalid recovered BOM.")
     if not isinstance(record.get("modified"), bool) or not isinstance(record.get("language", "text"), str):
         raise ValueError("Invalid recovered document metadata.")
+    LanguageSelection().select(record.get('language_override', record.get('language', 'text')))
     if record.get("active_view", 0) not in (0, 1) or record.get("orientation", "horizontal") not in ("horizontal", "vertical"):
         raise ValueError("Invalid recovered view layout.")
     views = record.get("views", [])
@@ -253,9 +256,9 @@ class EditorSession(qt.QObject):
                 document.encoding = metadata["encoding"]
                 document.newline_override = metadata.get("newline")
                 document.bom_override = bytes.fromhex(metadata["bom"]) if metadata.get("bom") is not None else None
-                document.language = metadata.get("language", "text")
-                document.highlighter.configure(document.language if not document.simple else "text")
-                document.editor.folding.configure(document.language)
+                # Old checkpoints recorded only the effective language.
+                document.language_selection.select(metadata.get('language_override', metadata.get('language', 'text')))
+                owner._configure_document(document)
                 document.external_changed = external
                 if external:
                     owner.external_notice.setText("The disk file changed or is unavailable since this session was saved. Compare or Save As before overwriting.")

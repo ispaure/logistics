@@ -130,6 +130,33 @@ class EditorRecoveryTests(QtTestCase):
         self.wait(lambda: resumed.session.future is None and resumed.session.persisted >= 0)
         self.assertFalse(checkpoint.exists())
 
+    def test_recovery_preserves_automatic_manual_and_legacy_language_choices(self):
+        service = self.service()
+        owners = []
+        for selected in (None, 'text', 'ruby'):
+            owner = service.open()
+            document = owner.current
+            document.editor.setPlainText('#!/usr/bin/env python\nprint(1)')
+            document.language_selection.select(selected)
+            owner._configure_document(document)
+            owners.append(owner)
+        # Represent an older checkpoint that knew only the effective language.
+        records = [document_record(owner.current) for owner in owners]
+        legacy = dict(records[-1])
+        legacy.pop('language_override')
+        records.append(legacy)
+        checkpoint = self.root / 'language-recovery.json'
+        SessionStore(checkpoint).write({'version': 1, 'documents': records, 'active': 0})
+        resumed = self.service()
+        owner = resumed.open()
+        resumed.session.restore(owner, checkpoint)
+        self.wait(lambda: not resumed.session.restoring and len(resumed.windows) == 4)
+        restored = [window.current for window in resumed.windows]
+        self.assertEqual([doc.language_selection.selected_id for doc in restored], [None, 'text', 'ruby', 'ruby'])
+        for doc in restored:
+            doc.editor.setPlainText('#!/bin/sh\necho hi')
+        self.assertEqual([doc.language for doc in restored], ['bash', 'text', 'ruby', 'ruby'])
+
     def test_live_session_lock_and_corrupt_session_preservation(self):
         first = self.service()
         first.open().current.editor.insertPlainText("live")
@@ -155,7 +182,7 @@ class EditorRecoveryTests(QtTestCase):
         restored = load_document_record(record)
         self.assertEqual(restored[2], "old")
         self.assertTrue(restored[4])
-        for key, value in (("views", []), ("active_view", "bad"), ("newline", "bad"), ("encoding", "unknown-codec")):
+        for key, value in (("views", []), ("active_view", "bad"), ("newline", "bad"), ("encoding", "unknown-codec"), ("language_override", 1), ("language_override", "")):
             invalid = dict(record, **{key: value})
             with self.assertRaises((ValueError, LookupError)):
                 load_document_record(invalid)

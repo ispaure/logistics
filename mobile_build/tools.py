@@ -63,6 +63,8 @@ SHARED_REQUIRED_MODULES = (
     'formats/code_blade.py',
     'formats/code_spans.py',
     'formats/code_syntax.py',
+    'formats/code_language.py',
+    'runtime/choices.py',
     'formats/image_headers.py',
     'formats/markdown/__init__.py',
     'formats/markdown/file.py',

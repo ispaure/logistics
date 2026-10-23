@@ -5,7 +5,7 @@ from toga.style.pack import COLUMN, ROW
 from features.text_editor.names import document_name
 from commonUtils.ui.native.editor_search import EditorSearch
 from commonUtils.ui.native.code_input import CodeInput
-from commonUtils.formats.code_syntax import LANGUAGES
+from commonUtils.formats.code_language import LANGUAGE_CHOICES
 from .markdown_editor import FormattedMarkdownInput
 
 FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_button',
@@ -33,6 +33,7 @@ class TextEditorView:
         self.editor = CodeInput(loop=app.loop, on_change=self.text_changed,
             highlighting=app.preferences.values.get('android_eink') != 'true',
             style=Pack(flex=1, font_size=app.presentation.font_size('text'), margin_top=4))
+        self.language_selection = self.editor.language_selection
         app.presentation.bind_font(self.editor, lambda: self.session.kind if self.session else 'text')
         if self.editor.backend_name.startswith('toga_iOS.'):
             # The source editor constructs its own native text view, bypassing
@@ -42,7 +43,7 @@ class TextEditorView:
             for edge in ('topEdgeEffect', 'bottomEdgeEffect'):
                 if native.respondsToSelector(SEL(edge)):
                     getattr(native, edge).hidden = True
-        self.language_choice = toga.Selection(items=['Automatic', *[name for name, code in LANGUAGES]],
+        self.language_choice = toga.Selection(items=LANGUAGE_CHOICES.labels,
             on_change=self.language_changed, style=Pack(flex=1, height=48))
         self.line_count = toga.Label('1 line', style=Pack(margin=8))
         self.edit_mode = toga.Selection(items=['Formatted', 'Source'], on_change=self.mode_changed,
@@ -125,10 +126,13 @@ class TextEditorView:
         self.app.show_view(content, destination='documents', route='document-name', title='Rename document')
 
     def load(self, document, session):
+        if self.document is not document:
+            self.editor.set_language(None)
         self.document, self.session = document, session
         self.loading = True
         self.name.value, self.editor.value = document.name, document.text
         self.editor.set_filename(document.name)
+        self._sync_language()
         session.view.setdefault('markdown_editor', 'formatted')
         session.view.pop('markdown_split', None)
         self.edit_mode.value = 'Source' if session.view['markdown_editor'] == 'source' else 'Formatted'
@@ -204,6 +208,7 @@ class TextEditorView:
         self.schedule_preview()
 
     def update_source_info(self):
+        self._sync_language()
         count = len(self.editor.line_starts)
         caption = f'{count} line' + ('s' if count != 1 else '')
         if self.line_count.text != caption:
@@ -221,10 +226,19 @@ class TextEditorView:
                 elif not source and control in self.source_tools.children:
                     self.source_tools.remove(control)
 
-    def language_changed(self, widget, **kwargs):
-        if not hasattr(self, 'editor'):
+    def _sync_language(self):
+        if self.document is None:
             return
-        self.editor.set_language(dict(LANGUAGES).get(widget.value))
+        label = LANGUAGE_CHOICES.by_id(self.language_selection.selected_id).label
+        if self.language_choice.value != label:
+            self.language_choice.value = label
+
+    def language_changed(self, widget, **kwargs):
+        if self.loading or self.document is None:
+            return
+        choice = LANGUAGE_CHOICES.from_label(widget.value)
+        self.editor.set_language(choice.id)
+        self._sync_language()
 
     def mode_changed(self, widget=None, **kwargs):
         if self.loading or self.session is None:

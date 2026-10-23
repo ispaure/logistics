@@ -6,10 +6,10 @@ from commonUtils.ui.document_host import close_document
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.ui.readers.reader_menus import RecentFiles
 from commonUtils.filesystem.storage import cache_directory
-from commonUtils.ui.code_editor.syntax import LANGUAGES
 from features.text_editor.ui.file_operations import FileOperations
 from features.text_editor.ui.editing import EditingCommands
 from features.text_editor.ui.syntax_settings import SyntaxSettings
+from commonUtils.formats.code_language import language_label
 from features.text_editor.ui.commands import CommandControls
 
 
@@ -202,9 +202,8 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
                 self._editing_status(document)
             if hasattr(self, "language_button"):
                 self.language_button.setText(
-                    dict((alias, name) for name, alias in LANGUAGES).get(
-                        document.language, document.language
-                    )
+                    ('Automatic · ' if document.language_selection.automatic else '')
+                    + language_label(document.language)
                 )
             if "indent_guides" in self.actions:
                 self.actions["indent_guides"].setChecked(document.editor.indent_guides)

@@ -183,7 +183,7 @@ class PDFReaderTests(QtTestCase):
                 with patch.object(search.executor, 'submit', side_effect=error):
                     search.find(1)
                 self.assertIsNone(search.future)
-                self.assertIsNone(search.query)
+                self.assertFalse(search.controller.state.busy)
                 self.assertTrue(search.previous.isEnabled())
                 self.assertTrue(search.following.isEnabled())
                 self.assertFalse(search.timer.isActive())
@@ -191,6 +191,73 @@ class PDFReaderTests(QtTestCase):
                 search.find(1)
                 self.wait_until(lambda: search.future is None)
                 self.assertIn('Match 1 of 3', search.status.text())
+
+    def test_search_query_edit_rejects_late_worker_success_and_error(self):
+        from concurrent.futures import Future
+        from features.pdf.search import search_pdf
+        from features.pdf.ui.search import PDFSearchBar
+        for failure in (False, True):
+            with self.subTest(failure=failure):
+                pages = []
+                search = PDFSearchBar(pdf_bytes(), pages.append)
+                self.addCleanup(search.deleteLater)
+                self.addCleanup(search.dispose)
+                pending = Future()
+                search.input.setText('needle')
+                with patch.object(search.executor, 'submit', return_value=pending):
+                    search.find(1)
+                search.input.setText('missing')
+                self.assertFalse(search.following.isEnabled())
+                if failure:
+                    pending.set_exception(RuntimeError('old query failed'))
+                else:
+                    pending.set_result(search_pdf(pdf_bytes(), 'needle'))
+                search.poll()
+                self.assertEqual(pages, [])
+                self.assertEqual(search.status.text(), '')
+                self.assertTrue(search.following.isEnabled())
+                search.find(1)
+                self.wait_until(lambda: search.future is None)
+                self.assertIn('No matches', search.status.text())
+
+    def test_search_navigation_error_does_not_overwrite_changed_query(self):
+        from features.pdf.search import search_pdf
+        from features.pdf.ui.search import PDFSearchBar
+        def navigate(page):
+            search.input.setText('new query')
+            raise ValueError('obsolete page error')
+        search = PDFSearchBar(pdf_bytes(), navigate)
+        self.addCleanup(search.deleteLater)
+        self.addCleanup(search.dispose)
+        search.input.setText('needle')
+        request = search.controller.step(1)
+        match = search.controller.complete(request, search_pdf(pdf_bytes(), 'needle'))
+        search.show_match(match)
+        search.render()
+        self.assertEqual(search.controller.state.query, 'new query')
+        self.assertEqual(search.status.text(), '')
+
+    def test_search_dispose_rejects_inflight_completion(self):
+        from concurrent.futures import Future
+        from features.pdf.search import search_pdf
+        from features.pdf.ui.search import PDFSearchBar
+        pages = []
+        search = PDFSearchBar(pdf_bytes(), pages.append)
+        self.addCleanup(search.deleteLater)
+        self.addCleanup(search.dispose)
+        pending = Future()
+        search.input.setText('needle')
+        with patch.object(search.executor, 'submit', return_value=pending):
+            search.find(1)
+        request = search.request
+        search.dispose()
+        pending.set_result(search_pdf(pdf_bytes(), 'needle'))
+        search.poll()
+        self.assertTrue(request.cancelled.is_set())
+        self.assertEqual(pages, [])
+        self.assertEqual(search.status.text(), '')
+        self.assertFalse(search.following.isEnabled())
+        self.assertEqual(search.data, b'')
 
     def test_desktop_search_navigates_wraps_and_clears(self):
         from features.pdf.ui.reader import PDFWindow
@@ -214,11 +281,11 @@ class PDFReaderTests(QtTestCase):
         self.wait_until(lambda: search.future is None)
         self.assertIn('No matches', search.status.text())
         search.input.clear()
-        self.assertFalse(search.results.matches)
+        self.assertFalse(search.controller.results.matches)
         self.assertEqual(search.status.text(), '')
         window.close()
         self.assertEqual(search.data, b'')
-        self.assertTrue(search.disposed)
+        self.assertTrue(search.controller.disposed)
 
     def test_remote_policy(self):
         from features.rclone.remote_policy import direct_kind, LocalCopyRequired

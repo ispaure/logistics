@@ -57,6 +57,7 @@ class FileOperations:
         document.editor.horizontalScrollBar().valueChanged.connect(self.service.session.changed)
         self.service.session.changed()
         self._configure_document(document)
+        document.editor.textChanged.connect(lambda: self._refresh_document_language(document))
         self._document_changed(document)
         document.editor.setFocus()
         return document
@@ -271,6 +272,7 @@ class FileOperations:
             document.snapshot = decode_bytes(
                 content, path=path, encoding=encoding, force=True
             )
+            self._refresh_document_language(document)
             document.encoding = document.snapshot.encoding
             document.newline_override = None
             document.bom_override = None

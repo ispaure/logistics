@@ -3,6 +3,7 @@
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor.views import EditorViews
 from commonUtils.persistence.text import TextSnapshot
+from commonUtils.formats.code_language import LanguageSelection
 
 
 class Document(qt.QWidget):
@@ -17,7 +18,7 @@ class Document(qt.QWidget):
         self.simple = len(self.snapshot.original) > 1024 * 1024
         self.external_changed = False
         self.external_acknowledged = False
-        self.language = "text"
+        self.language_selection = LanguageSelection()
         self.views = EditorViews(self)
         self.views.active_changed.connect(self.changed)
         layout = qt.QVBoxLayout(self)
@@ -31,6 +32,14 @@ class Document(qt.QWidget):
         from services.editors.ui.changes import ChangeMarkers
         self.markers = ChangeMarkers(self, self.editor.document(), lambda: self.snapshot,
             lambda: [v for v in (self.views.primary, self.views.secondary) if v is not None])
+
+    @property
+    def language(self):
+        return self.language_selection.language_id
+
+    @language.setter
+    def language(self, value):
+        self.language_selection.select(value)
 
     @property
     def editor(self):
