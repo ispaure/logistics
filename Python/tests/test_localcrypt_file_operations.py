@@ -18,6 +18,22 @@ class DesktopFileOperationsTests(unittest.TestCase):
                 raise RuntimeError('Required pinned rclone is missing.')
             raise unittest.SkipTest('Pinned rclone executable not installed')
 
+    def test_create_file_rejects_would_block_input_without_publishing_a_prefix(self):
+        from commonUtils.integrations.wrappers.cmdShellWrapper.binary import BinaryCommandError
+        with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+            crypt = fixture.provider
+            before = {path.relative_to(crypt.root) for path in crypt.root.rglob('*')}
+            for index, chunks in enumerate(((None,), (b'partial data', None))):
+                with self.subTest(prefix=index):
+                    pending = iter(chunks)
+                    class WouldBlock:
+                        def read(self, size):
+                            return next(pending, b'')
+                    with self.assertRaises(BinaryCommandError):
+                        crypt.create_file(f'blocked-{index}.txt', WouldBlock())
+                    self.assertEqual({path.relative_to(crypt.root) for path in crypt.root.rglob('*')}, before)
+                    self.assertEqual(crypt.read_bytes('note.md'), fixture.original)
+
     def test_folder_round_trip_and_ciphertext_rename(self):
         with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
             crypt = fixture.provider

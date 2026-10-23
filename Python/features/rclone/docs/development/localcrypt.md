@@ -828,3 +828,9 @@ decodes each listed child once and constructs metadata from its known physical
 entry, avoiding repeated native re-encoding calls. Shared browser search waits
 400 ms after the last edit and visits the full subtree by default; the former
 10,000-entry scan cutoff no longer hides matches in large collections.
+
+Desktop `create_file` streams input through the shared complete-copy contract.
+Would-block reads are errors rather than EOF; failed input cannot publish an
+empty/prefix ciphertext file. The existing command error and owned-stage cleanup
+paths remain responsible for reporting and retirement. No plaintext staging is
+introduced.

@@ -15,6 +15,7 @@ from commonUtils.persistence import atomic_write_json
 from commonUtils.runtime.resources.range_reader import RangeReader
 from commonUtils.runtime.resources.lifetime import ResourceLeases, WorkerCancellation
 from commonUtils.runtime.operations import check_cancelled
+from commonUtils.runtime.streams import copy_stream
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive, serialize_mutation
 from features.rclone import configuration, executable, session
@@ -427,9 +428,7 @@ class CryptResources(LocalFiles):
             temporary = '/'.join(p for p in (path.rpartition('/')[0], '.create-' + uuid4().hex) if p)
             encrypted = self.encrypted_path(temporary)
             def write(output):
-                while chunk := stream.read(256 * 1024):
-                    check_cancelled(cancelled)
-                    output.write(chunk)
+                copy_stream(stream, output, cancelled=cancelled)
             owned = False
             try:
                 with encrypted.open('xb'):
