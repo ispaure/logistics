@@ -150,7 +150,7 @@ or production-data mutation was performed.
 6. Formalize shared supported runtime/dependency ranges and consumer API policy;
    current CI pins are not a universal support promise.
 
-The [audit assessment](architecture_audit.md#beforeafter-assessment-of-this-pass)
+The [first-checkpoint assessment](architecture_audit.md#beforeafter-assessment-at-the-first-checkpoint)
 records evidence by quality dimension. The requested ecosystem-wide 7/10 target
 is not established. This is a committed incremental rehabilitation series with
 explicit remaining architecture and platform work, not certification that the
@@ -395,3 +395,23 @@ completed baseline. Remaining priorities continue to govern selection.
   formatting remain unchanged; concurrent edits still use optimistic checks.
 - All 28 IDE tests pass after the fixes; correctness lint and the existing
   architecture policy pass without added dependency exceptions.
+
+## Continued execution: provider stream ownership
+
+- Two regressions reproduced a nonblocking read being treated as EOF during
+  local creation and verification. One fixture published corrupted staged bytes
+  as a supposedly verified empty save. Local creation now calls copy_stream;
+  verification uses iter_chunks with the same cancellation/error contract.
+- Shared `00c11e5` passes all 13 provider-operation tests in desktop and mobile
+  environments, four shared resource test files, mobile resource-import tests
+  and focused LocalCrypt consumers (one case requires the native bridge and
+  remains skipped). Existing destination and stage cleanup semantics remain.
+- Logistics `3a7300a6` pins the revision; Blue Hole `2040abb` vendors it exactly
+  and passes all 31 consumer tests. IDE checkpoint fixes are `86ee872b`.
+- A fresh package contains 2,217 source files plus generated identity and install
+  manifests. All 2,218 content hashes were verified, with correct root revision,
+  required lazy browser presentation, and no local evidence or external emulator.
+  All 25 build-script tests pass with one Windows-only skip; publishing is mocked.
+- Doctor, dependency compatibility, toolchain, source hygiene and architecture
+  checks pass. Full desktop/shared suites are in progress at this checkpoint;
+  their completion is recorded separately rather than assumed.
