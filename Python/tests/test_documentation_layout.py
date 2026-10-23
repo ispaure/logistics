@@ -9,9 +9,8 @@ from commonUtils.formats.markdown.wiki import MarkdownWiki, documentation_root
 from services.documentation import feature_guide
 
 ROOT = Path(__file__).resolve().parents[2]
-SCOPES = [ROOT / 'docs', ROOT / 'Python/desktop/bulk_rename/docs'] + [
-    owner / 'docs' for owner in (ROOT / 'Python/features').iterdir()
-    if owner.is_dir() and not owner.is_symlink() and (owner / 'docs').is_dir()]
+SCOPES = [ROOT / 'docs']
+FEATURES = ROOT / 'docs/features'
 
 
 def links(text):
@@ -63,20 +62,22 @@ class DocumentationLayoutTests(unittest.TestCase):
                             self.assertIn(unquote(parsed.fragment), anchors)
 
     def test_feature_guide_scope_and_compatibility_links(self):
-        for scope in SCOPES[1:]:
-            page, directory = feature_guide(scope.parent)
+        for scope in sorted(p for p in FEATURES.iterdir() if p.is_dir()):
+            owner = (ROOT / 'Python/desktop/bulk_rename' if scope.name == 'bulk_rename'
+                     else ROOT / 'Python/features' / scope.name)
+            page, directory = feature_guide(owner)
             self.assertEqual(page, scope / 'user/user.md')
-            self.assertEqual(directory, scope)
+            self.assertEqual(directory, ROOT / 'docs')
             self.assertTrue(page.is_file())
-            index = scope.parent / 'user_docs/index.md'
+            index = owner / 'user_docs/index.md'
             if index.is_file():
                 destinations = [(index.parent / urlsplit(u).path).resolve() for u in links(index.read_text())]
                 self.assertIn(page, destinations)
-            self.assertEqual(documentation_root(page), scope)
+            self.assertEqual(documentation_root(page), ROOT / 'docs')
 
     def test_mobile_owners_and_systemic_hub_have_separate_scopes(self):
         for owner in ('books', 'comics', 'lm', 'rclone', 'text_editor'):
-            scope = ROOT / 'Python/features' / owner / 'docs'
+            scope = FEATURES / owner
             self.assertTrue((scope / 'user_mobile/user_mobile.md').is_file())
         guide = ROOT / 'docs/user_mobile/user_mobile.md'
         self.assertIn('## Workspaces and Local / LocalCrypt sync', guide.read_text())

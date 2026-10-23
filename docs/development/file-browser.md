@@ -195,7 +195,7 @@ workers are included in `FileBrowser.stop()` and `idle` handling.
 
 
 Archive inspection uses shared `ArchiveFile`/`ZIPFile` information hooks on the
-existing preview worker. The [Archives feature](../../Python/features/archives/docs/development/development.md) installs its
+existing preview worker. The [Archives feature](../features/archives/development/development.md) installs its
 manager and extraction actions through `SelectionAction`, its ZIP/TAR opening
 through `FileActivation`, and per-view routing through `create_controller`.
 CBZ activation remains with Comics. Successful writes invalidate the affected
@@ -208,5 +208,5 @@ The commonUtils regular and provider browsers now share list, tile and column
 presentation. Logistics retains crypt credentials, private-reader routing, transfer
 policy and domain-specific comic/EPUB cover loaders. The shared model supports
 opaque identities and custom properties; its API belongs to
-[commonUtils](../../Python/commonUtils/ui/resource-providers.md#shared-item-presentation).
+[commonUtils](../../Python/commonUtils/docs/reference/ui/resource-providers.md#shared-item-presentation).
 The mobile UI has not been migrated in this first phase.

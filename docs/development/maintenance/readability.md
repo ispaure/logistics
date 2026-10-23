@@ -62,9 +62,27 @@ Twenty report, workflow/gate and reader-resume tests pass; actionlint, Ruff and
 CLI help checks pass. No device validation or release rerun is claimed. Existing
 native test source and generated report locations remain unchanged.
 
+### One root wiki per repository
+
+Logistics feature documentation (107 pages) now lives in `docs/features/`,
+including Bulk Rename. Feature Settings, header menus and mobile offline help
+open the relevant article within the root Logistics sidebar. Source README and
+user_docs compatibility links point there. Shared APIs remain in commonUtils.
+
+commonUtils local commit `38c5d80` centralizes 65 guides, adds `docs/docs.md`, and
+groups developer, API and user references. Seventy-nine shared wiki pages have
+resolving local links; every folder has a linked landing and every page an H1.
+Fourteen shared layout/catalog/real viewer cases pass. No Perforce runtime,
+consumer build design or public Python interface changes.
+
+Logistics passes five wiki-layout and four real desktop viewer cases, including
+all built-in feature help buttons, folder landing rows and history. Fourteen mobile
+host documentation/packaged-startup cases pass using a fresh disposable payload.
+These verify that feature links retain the complete root sidebar and offline
+articles. No native-device appearance claim is made.
+
 ## Next work
 
-Consolidate the wiki
-under each repository's root `docs/`. Keep H1 page titles and linked same-named
-folder landing pages so the Markdown viewer presents a navigable tree. Preserve
-short compatibility entry links where applications or saved links depend on them.
+Group host regression tests by the same responsibilities, simplify remaining
+opaque tooling code and finish cross-consumer verification. Keep the established
+Perforce build and vendor architecture unchanged.

@@ -21,8 +21,8 @@ show or hide its value. Clearing the field hides it again.
 
 These INI files are not interchangeable. Each feature interprets its own sections;
 there is no universal ancestor inheritance rule. In particular, archive password
-inheritance belongs to [Archives](../../Python/features/archives/docs/development/development.md) and
-[Comics](../../Python/features/comics/docs/development/development.md#password-protected-cbzs), not rclone credentials.
+inheritance belongs to [Archives](../features/archives/development/development.md) and
+[Comics](../features/comics/development/development.md#password-protected-cbzs), not rclone credentials.
 
 ## Feature INI settings
 
@@ -181,17 +181,17 @@ An empty `Software/` directory does not provision every optional integration.
 
 | Integration | Configuration / prerequisites |
 | --- | --- |
-| [rclone](../../Python/features/rclone/docs/development/development.md) | Private credential ZIPs; generated configs in `~/.config/rclone` |
-| [FUSE](../../Python/features/fuse/docs/development/development.md) | rclone plus platform mount driver/helper |
-| [Comics](../../Python/features/comics/docs/development/development.md) | `[LogisticsComics]` library names; optional `[LogisticsZIP]` password |
-| [Archives](../../Python/features/archives/docs/development/development.md) | Workspace AES prompts; inherited `[LogisticsZIP]` for unlocking and the encrypted-selection action |
-| [Calibre](../../Python/features/calibre/docs/development/development.md) | Immediate child library with `metadata.db`; executable/device prerequisites |
-| [Plex](../../Python/features/plex/docs/development/development.md) | Matching `-PMSDATA` remote and platform server-data location |
-| [YouTube Downloader](../../Python/features/youtube_downloader/docs/development/development.md) | `[Youtube-Download]` folder config, `[Youtube-DL]` per-channel INIs and FFmpeg |
-| [Minecraft](../../Python/features/minecraft/docs/development/development.md) | `server.properties` plus `logistics_cfg.ini` for Java launch scripts |
-| [Perforce](../../Python/features/perforce/docs/development/development.md) | `[Perforce]` folder config and supplied Linux executables/data |
-| [Links](../../Python/features/links/docs/development/development.md) | Feature `config.ini` URL and hostname substitutions |
-| [Smart Home](../../Python/features/smart_home/docs/development/development.md) | Feature `config.ini` Hue bridge address and configured groups |
+| [rclone](../features/rclone/development/development.md) | Private credential ZIPs; generated configs in `~/.config/rclone` |
+| [FUSE](../features/fuse/development/development.md) | rclone plus platform mount driver/helper |
+| [Comics](../features/comics/development/development.md) | `[LogisticsComics]` library names; optional `[LogisticsZIP]` password |
+| [Archives](../features/archives/development/development.md) | Workspace AES prompts; inherited `[LogisticsZIP]` for unlocking and the encrypted-selection action |
+| [Calibre](../features/calibre/development/development.md) | Immediate child library with `metadata.db`; executable/device prerequisites |
+| [Plex](../features/plex/development/development.md) | Matching `-PMSDATA` remote and platform server-data location |
+| [YouTube Downloader](../features/youtube_downloader/development/development.md) | `[Youtube-Download]` folder config, `[Youtube-DL]` per-channel INIs and FFmpeg |
+| [Minecraft](../features/minecraft/development/development.md) | `server.properties` plus `logistics_cfg.ini` for Java launch scripts |
+| [Perforce](../features/perforce/development/development.md) | `[Perforce]` folder config and supplied Linux executables/data |
+| [Links](../features/links/development/development.md) | Feature `config.ini` URL and hostname substitutions |
+| [Smart Home](../features/smart_home/development/development.md) | Feature `config.ini` Hue bridge address and configured groups |
 
 Images, file diagnostics and media rename workflows take their input through
 individual dialogs. Dropbox discovers account roots from its installed account
@@ -227,11 +227,11 @@ existing controls rather than the general INI editor.
 
 ## Rclone download versions
 
-See [Choose rclone download versions](../../Python/features/rclone/docs/user/download-versions.md#rclone-download-versions).
+See [Choose rclone download versions](../features/rclone/user/download-versions.md#rclone-download-versions).
 
 ## Text Editor preferences
 
-See [Text Editor preferences](../../Python/features/text_editor/docs/user/preferences.md#text-editor-preferences).
+See [Text Editor preferences](../features/text_editor/user/preferences.md#text-editor-preferences).
 
 ## Software defaults and personal settings
 

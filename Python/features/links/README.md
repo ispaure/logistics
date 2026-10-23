@@ -1,3 +1,3 @@
 # Links Feature
 
-Documentation has moved to the [Links Feature guide](docs/development/development.md).
+Documentation has moved to the [Links Feature guide](../../../docs/features/links/development/development.md).

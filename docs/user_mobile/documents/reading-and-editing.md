@@ -74,7 +74,7 @@ Fullscreen reclaims the navigation area on both platforms, including Android's
 title bar. Transfer banners appear with reading controls and stay hidden during
 immersive comic reading; this does not pause transfers in the background.
 
-See [Comic gestures on mobile](../../../Python/features/comics/docs/user_mobile/gestures.md)
+See [Comic gestures on mobile](../../features/comics/user_mobile/gestures.md)
 for magnification, pinch zoom, panning and swipe navigation.
 
 Markdown files open in preview. Tap the top **pencil** icon (**Edit Markdown**) to edit in a single
@@ -130,7 +130,7 @@ Read aloud. On Samsung phones, use **Settings → General management → Text-to
 
 Open local, remote or LocalCrypt PDFs directly in a read-only session. Enter a
 page number and tap Go, or swipe up/down to turn pages. See the
-[mobile PDF guide](../../../Python/features/pdf/docs/user_mobile/user_mobile.md)
+[mobile PDF guide](../../features/pdf/user_mobile/user_mobile.md)
 for limits and private-session behavior.
 
 Opening an inline search or reader tool changes the document's **×** to a back

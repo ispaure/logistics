@@ -1,12 +1,12 @@
 # Documentation ownership and hierarchy
 
-The [Logistics wiki](../docs.md) contains systemic desktop usage, mobile usage
-and development guides. [Feature infrastructure](feature-infrastructure.md)
-explains feature ownership; each feature keeps its own `docs/` wiki. Common UI
-and Workspaces help belong to Logistics; Bulk Rename remains under `desktop`.
-Shared commonUtils API guides and optional external feature internals stay in
-their own repositories. Compatibility entries contain links rather than copied guides.
-Historical migration reports do not override these current ownership rules.
+The [Logistics wiki](../docs.md) contains systemic desktop, mobile and developer
+guides plus feature-owned sections under `docs/features/<owner>/`. Source code
+stays with its feature; documentation stays in this root wiki so the Markdown
+viewer exposes one complete sidebar. Bulk Rename uses `docs/features/bulk_rename/`.
+Shared APIs live in commonUtils' own root wiki. Optional external feature internals
+stay in their separate repositories. Source-local README and user_docs entries
+remain short compatibility links rather than duplicate guides.
 
 Screenshots, recordings and raw test results stay in ignored local artifact
 directories, outside the documentation wiki. See [local validation artifacts](validation-artifacts.md)
@@ -22,7 +22,7 @@ The H1 supplies the visible navigation title. Parent pages explicitly mention
 all immediate children in context or Further reading.
 
 Desktop help entry points use `services.documentation`: feature Settings opens
-the feature guide with its feature docs directory; browser and general help use
+the feature guide with the root Logistics docs directory; browser and general help use
 the root Logistics docs directory. Legacy external help remains supported.
 The shared viewer updates the sidebar when a link enters another wiki scope,
 including when returning through history. Rendering and navigation contracts are
@@ -30,12 +30,11 @@ maintained in commonUtils rather than duplicated here.
 
 ## Mobile packaging
 
-`mobile_build/tools.py` copies root and owned feature wiki Markdown into
+`mobile_build/tools.py` copies the single root wiki into
 `mobile/help/`, preserving repository-relative paths. It excludes linked
 features and never traverses the external emulation repository. The Settings
-entry opens `docs/user_mobile/user_mobile.md` with the Logistics tree. Cross-wiki
-links resolve within the mirrored payload, so users can read the scoped feature
-guides offline. Source files mentioned by developer pages are not included in
+entry opens `docs/user_mobile/user_mobile.md` with the Logistics tree. Feature links stay inside the same mirrored wiki, so users can read every
+feature guide offline without changing the sidebar scope. Source files mentioned by developer pages are not included in
 this documentation mirror.
 
 ## Validation

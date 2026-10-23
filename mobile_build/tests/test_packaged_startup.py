@@ -68,8 +68,8 @@ for saved_document in (False, True):
     owner = show_documentation(app)
     assert owner.path.name == 'user_mobile.md'
     assert owner.catalog.root == Path(mobile.__file__).resolve().parent / 'help/docs'
-    owner.follow_link(owner.web, '../../Python/features/lm/docs/user_mobile/user_mobile.md')
-    assert owner.catalog.root == Path(mobile.__file__).resolve().parent / 'help/Python/features/lm/docs'
+    owner.follow_link(owner.web, '../features/lm/user_mobile/user_mobile.md')
+    assert owner.catalog.root == Path(mobile.__file__).resolve().parent / 'help/docs'
     assert owner.path.name == 'user_mobile.md'
     assert owner.back()
     assert owner.catalog.root == Path(mobile.__file__).resolve().parent / 'help/docs'

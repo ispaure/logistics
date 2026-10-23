@@ -1534,3 +1534,14 @@ actionlint, Ruff and CLI help. The initial Duo help check exposed its old
 script-versus-package import branch; replacing that with the canonical module
 import fixes the check. Device tests and generated evidence retain their paths.
 No push, release retry, native build, app install or upload.
+
+## Readability follow-up: central documentation wikis
+
+Native validation grouping is committed as `e85a40d0`. Shared `38c5d80` centralizes
+65 guides under docs/ with 79 wiki pages, H1 titles, linked landing pages and short
+legacy source entry links. Logistics moves 107 feature/Bulk Rename guides into
+`docs/features/`; real desktop Settings/menu/viewer and mobile staged-help paths
+retain one root sidebar. Five Logistics layout, four real viewer, fourteen mobile
+help/startup and fourteen shared wiki cases pass. Cross-library links point at
+canonical shared articles, including heading anchors. Perforce runtime, saved
+formats and consumer packaging are unchanged. No push or release operation.

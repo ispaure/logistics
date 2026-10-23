@@ -282,19 +282,19 @@ and their ZIPs are retained.
 
 ### LocalCrypt session and screen privacy
 
-See [LocalCrypt on mobile](../../../Python/features/rclone/docs/user_mobile/localcrypt.md#localcrypt-session-and-screen-privacy).
+See [LocalCrypt on mobile](../../features/rclone/user_mobile/localcrypt.md#localcrypt-session-and-screen-privacy).
 
 ### Locked credentials and Workspaces
 
-See [Remote connections on mobile](../../../Python/features/rclone/docs/user_mobile/connections.md#locked-credentials-and-workspaces).
+See [Remote connections on mobile](../../features/rclone/user_mobile/connections.md#locked-credentials-and-workspaces).
 
 ### Reader navigation and imported metadata
 
-See [Books and comics on mobile](../../../Python/features/books/docs/user_mobile/library.md#reader-navigation-and-imported-metadata).
+See [Books and comics on mobile](../../features/books/user_mobile/library.md#reader-navigation-and-imported-metadata).
 
 ### Mobile EPUB speech and expanded appearance
 
-See [Books mobile workflows](../../../Python/features/books/docs/user_mobile/reading.md#mobile-epub-speech-and-expanded-appearance).
+See [Books mobile workflows](../../features/books/user_mobile/reading.md#mobile-epub-speech-and-expanded-appearance).
 
 ## Focused browsing and setup
 
@@ -371,4 +371,4 @@ refresh the current protection state without recreating document owners.
 
 ### Multiple credential packages on Android and iOS
 
-See [Remote connections on mobile](../../../Python/features/rclone/docs/user_mobile/connections.md#multiple-credential-packages-on-android-and-ios).
+See [Remote connections on mobile](../../features/rclone/user_mobile/connections.md#multiple-credential-packages-on-android-and-ios).

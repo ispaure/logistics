@@ -151,7 +151,7 @@ a remote on Workspaces to browse it in the Files pane. These tabs have their own
 current-folder search and memory-only previews. Supported files open directly;
 other files show a dialog asking you to manually make a local copy. There are no standalone file or folder download actions. Use managed Pull
 workflows for offline Local or LocalCrypt folders.
-See the [rclone guide](../../Python/features/rclone/docs/user/user.md#browse-remote-files-directly)
+See the [rclone guide](../features/rclone/user/user.md#browse-remote-files-directly)
 for limits, destinations and credential handling.
 
 ## Indexing across application instances
@@ -176,7 +176,7 @@ recovery applies to indexing, not copying, moving, compression or transfers.
 ## Organize files
 
 Use the selection's copy, cut, paste, rename or removal actions. Existing paste
-destinations are preserved on collisions. Use [Bulk Rename](../../Python/desktop/bulk_rename/docs/user/user.md)
+destinations are preserved on collisions. Use [Bulk Rename](../features/bulk_rename/user/user.md)
 for a previewed filename transformation across many items.
 
 Trash/Recycle Bin asks for confirmation; if the location cannot use Trash, files
@@ -221,8 +221,8 @@ opts into editing; it can change the documentation file on disk if saved. Local
 links navigate within the guide viewer, while web links open a browser. For shared
 formatting, properties, search and read-aloud controls, use the
 [commonUtils Markdown guide](https://github.com/ispaure/commonUtils/blob/main/ui/markdown/user_docs/README.md).
-For plain-source editing, choose [Text Editor](../../Python/features/text_editor/docs/user/user.md).
-[Obsidian](../../Python/features/obsidian/docs/user/user.md) launches vaults in the external app.
+For plain-source editing, choose [Text Editor](../features/text_editor/user/user.md).
+[Obsidian](../features/obsidian/user/user.md) launches vaults in the external app.
 
 ## Find a configured integration
 

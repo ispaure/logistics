@@ -1,3 +1,3 @@
 # Project IDE
 
-Documentation has moved to the [Project IDE guide](docs/development/development.md).
+Documentation has moved to the [Project IDE guide](../../../docs/features/ide/development/development.md).

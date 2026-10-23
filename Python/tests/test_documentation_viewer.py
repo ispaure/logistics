@@ -28,7 +28,7 @@ class DocumentationViewerTests(QtTestCase):
 
     def test_every_feature_help_button_opens_real_viewer_and_owned_tree(self):
         owners = sorted(p for p in (ROOT / 'Python/features').iterdir()
-                        if not p.is_symlink() and (p / 'docs/user/user.md').is_file())
+                        if not p.is_symlink() and (ROOT / 'docs/features' / p.name / 'user/user.md').is_file())
         self.assertGreaterEqual(len(owners), 22)
         for owner in owners:
             with self.subTest(feature=owner.name), patch.object(registry, 'get_settings', return_value=[]):
@@ -39,8 +39,8 @@ class DocumentationViewerTests(QtTestCase):
                 opened = set(_windows) - before
                 self.assertEqual(len(opened), 1)
                 window = opened.pop()
-                self.assert_scope(window.viewer, owner / 'docs/user/user.md', owner / 'docs')
-                self.assertNotIn(ROOT / 'docs/user/user.md', window.viewer.wiki.catalog.pages)
+                self.assert_scope(window.viewer, ROOT / 'docs/features' / owner.name / 'user/user.md', ROOT / 'docs')
+                self.assertIn(ROOT / 'docs/user/user.md', window.viewer.wiki.catalog.pages)
                 window.close()
                 panel.close()
                 panel.deleteLater()
@@ -57,12 +57,12 @@ class DocumentationViewerTests(QtTestCase):
         harness.guide = MethodType(HeaderMenus.guide, harness)
         states = [SimpleNamespace(name=p.name, label=p.name)
                   for p in (ROOT / 'Python/features').iterdir()
-                  if not p.is_symlink() and (p / 'docs/user/user.md').is_file()]
+                  if not p.is_symlink() and (ROOT / 'docs/features' / p.name / 'user/user.md').is_file()]
         with patch.object(registry, 'get_feature_states', return_value=states):
             HeaderMenus.update_guides(harness)
         expected = {'Logistics Guide': ROOT / 'docs/user/user.md',
-                    'Bulk Rename Guide': ROOT / 'Python/desktop/bulk_rename/docs/user/user.md'}
-        expected.update({state.label: ROOT / 'Python/features' / state.name / 'docs/user/user.md'
+                    'Bulk Rename Guide': ROOT / 'docs/features/bulk_rename/user/user.md'}
+        expected.update({state.label: ROOT / 'docs/features' / state.name / 'user/user.md'
                          for state in states})
         for action in menu.actions():
             with self.subTest(menu=action.text()):
@@ -72,7 +72,7 @@ class DocumentationViewerTests(QtTestCase):
                 self.assertEqual(len(opened), 1)
                 window = opened.pop()
                 page = expected.pop(action.text())
-                self.assert_scope(window.viewer, page, page.parent.parent)
+                self.assert_scope(window.viewer, page, ROOT / 'docs')
                 window.close()
         self.assertFalse(expected)
         before = set(_windows)
@@ -87,14 +87,12 @@ class DocumentationViewerTests(QtTestCase):
         before = set(_windows)
         help_menu.actions()[0].trigger()
         window = (set(_windows) - before).pop()
-        scope = ROOT / 'Python/desktop/bulk_rename/docs'
-        self.assert_scope(window.viewer, scope / 'user/user.md', scope)
+        scope = ROOT / 'docs/features/bulk_rename'
+        self.assert_scope(window.viewer, scope / 'user/user.md', ROOT / 'docs')
         window.close(); bulk.close(); host.close()
 
     def test_real_folder_rows_open_landings_and_up_history_keep_scope(self):
-        scopes = [ROOT / 'docs', ROOT / 'Python/desktop/bulk_rename/docs'] + [
-            p / 'docs' for p in (ROOT / 'Python/features').iterdir()
-            if not p.is_symlink() and (p / 'docs/docs.md').is_file()]
+        scopes = [ROOT / 'docs']
         for scope in scopes:
             with self.subTest(scope=scope):
                 viewer = MarkdownViewer(directory=scope)
@@ -119,14 +117,14 @@ class DocumentationViewerTests(QtTestCase):
 
     def test_real_feature_and_systemic_links_switch_tree_with_history(self):
         first = ROOT / 'docs/user/features.md'
-        second = ROOT / 'Python/features/git/docs/user/user.md'
+        second = ROOT / 'docs/features/git/user/user.md'
         viewer = MarkdownViewer(first, directory=ROOT / 'docs')
-        viewer.follow_link(qt.QUrl('../../Python/features/git/docs/user/user.md'))
-        self.assert_scope(viewer, second, second.parent.parent)
+        viewer.follow_link(qt.QUrl('../features/git/user/user.md'))
+        self.assert_scope(viewer, second, ROOT / 'docs')
         viewer.follow_link(qt.QUrl('../development/development.md'))
-        self.assert_scope(viewer, second.parent.parent / 'development/development.md', second.parent.parent)
+        self.assert_scope(viewer, second.parent.parent / 'development/development.md', ROOT / 'docs')
         viewer.back_button.click(); viewer.back_button.click()
         self.assert_scope(viewer, first, ROOT / 'docs')
         viewer.forward_button.click()
-        self.assert_scope(viewer, second, second.parent.parent)
+        self.assert_scope(viewer, second, ROOT / 'docs')
         viewer.close()

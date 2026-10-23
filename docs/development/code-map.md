@@ -56,8 +56,8 @@ aliases; external extensions must update their host imports.
 | Register a feature page, settings group or launcher | The feature's `__init__.py` and any delegated contribution module | [Extension points](extension-points.md) |
 | Browser actions, previews or file activation | Feature registration and handlers; `Python/desktop/file_browser.py` for host integration | [Browser extensions](file-browser.md) |
 | Desktop Workspaces | `Python/desktop/pages/folders.py`, `Python/services/folders/{catalog,sources,workspaces}.py` | [Feature lifecycle](features.md#remote-folder-source-context) |
-| Git commands versus Git presentation | `Python/features/git/ui/commands/`, `repository.py`; presentation in `ui/repository_view.py` | [Git developer guide](../../Python/features/git/docs/development/development.md) |
-| LM transport, saved data or desktop chat | `Python/features/lm/{transport,storage,session}.py`, `Python/features/lm/ui/` | [LM integration](../../Python/features/lm/docs/development/lm.md) |
+| Git commands versus Git presentation | `Python/features/git/ui/commands/`, `repository.py`; presentation in `ui/repository_view.py` | [Git developer guide](../features/git/development/development.md) |
+| LM transport, saved data or desktop chat | `Python/features/lm/{transport,storage,session}.py`, `Python/features/lm/ui/` | [LM integration](../features/lm/development/lm.md) |
 | EPUB or comic format behavior | `Python/features/books/`, `Python/features/comics/` | The owning feature's `README.md` |
 | Mobile app composition and navigation | `Python/mobile/composition/`, `Python/mobile/{app,workspace,workspace_navigation}.py` | [Mobile workspace](mobile-workspace-navigation.md) |
 | Mobile Workspaces discovery and refresh state | `Python/mobile/{folder_discovery,folder_controller,folder_hub}.py` | [Discovery ownership](mobile-runtime.md#workspaces-folder-discovery) |

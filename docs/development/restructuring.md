@@ -28,15 +28,15 @@ widget/layout/profile responsibilities have separate modules, and `session.py`
 owns conversation records, leases, saving and streaming response transitions.
 Root-level presentation imports remain compatible. The page retains navigation,
 transport dispatch, timers and close prompts. See the
-[LM module map](../../Python/features/lm/docs/development/development.md) for the current owners.
+[LM module map](../features/lm/development/development.md) for the current owners.
 The mobile pass adds composed Open/Save As and saved-import controllers, explicit
 host service/state access and workflow-local picker cancellation. Git history,
 search and preview orchestration now has a composed controller using its existing
 sequential job owner. Blender's main/preset and addon-library presentation now
 lives under `ui/`, with a separate layout builder and compatible root imports.
 See the [mobile map](mobile-runtime.md),
-[Git owners](../../Python/features/git/docs/development/development.md), and
-[Blender owners](../../Python/features/blender/docs/development/development.md).
+[Git owners](../features/git/development/development.md), and
+[Blender owners](../features/blender/development/development.md).
 
 Shell and infrastructure naming has been reassessed: keep `desktop` and the
 feature infrastructure import paths stable during these migrations. The

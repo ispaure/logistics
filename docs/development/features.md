@@ -268,7 +268,7 @@ Most other features are independent registry entries with external runtime
 prerequisites, not dependencies on another Logistics feature. Do not equate an
 installed feature package with a working external executable, credential or service.
 
-The [Blender manager](../../Python/features/blender/docs/development/development.md) is an independent
+The [Blender manager](../features/blender/development/development.md) is an independent
 page with feature-owned pinned releases and whole-application installation adapters.
 It reuses verified download mechanics, stores installations/presets in the per-user
 Logistics root and queries the selected Blender for saved addon state. Its catalog

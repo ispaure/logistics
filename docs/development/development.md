@@ -35,9 +35,8 @@ outputs; they are not source files to tweak.
 
 ## Current development references
 
-Read only the contracts relevant to your change. Feature-specific implementation
-and test maps live in `Python/features/<feature>/docs/development/`; package
-READMEs link there.
+Read only the contracts relevant to your change. Feature-specific implementation and test maps live in
+`docs/features/<feature>/development/`; source-package READMEs link there.
 
 | Topic | Reference |
 | --- | --- |
@@ -54,10 +53,10 @@ READMEs link there.
 | TestFlight archives and uploads | [TestFlight](mobile-testflight.md) |
 | Desktop and mobile release gates | [Releasing](releasing.md), [platform checks](platform-checks.md) |
 | Optional external feature hosting | [Integration boundary](optional-integration.md) |
-| IDE implementation | [IDE](../../Python/features/ide/docs/development/ide.md) |
-| LM implementation | [LM](../../Python/features/lm/docs/development/lm.md) |
-| PDF implementation | [PDF](../../Python/features/pdf/docs/development/development.md) |
-| Encrypted copies and remote browsing | [LocalCrypt](../../Python/features/rclone/docs/development/localcrypt.md), [remote browsing](../../Python/features/rclone/docs/development/remote-browsing.md) |
+| IDE implementation | [IDE](../features/ide/development/ide.md) |
+| LM implementation | [LM](../features/lm/development/lm.md) |
+| PDF implementation | [PDF](../features/pdf/development/development.md) |
+| Encrypted copies and remote browsing | [LocalCrypt](../features/rclone/development/localcrypt.md), [remote browsing](../features/rclone/development/remote-browsing.md) |
 
 ## Validation and evidence
 
@@ -92,23 +91,21 @@ test-directory moves remain deferred; current contracts are in the owner maps ab
 - [Maintenance priorities](maintenance.md)
 - [Mobile architecture roadmap](mobile-architecture-roadmap.md)
 - [Mobile navigation plan](mobile-navigation-plan.md)
-- [rclone parity plan](../../Python/features/rclone/docs/development/rclone-parity.md)
-- [Books and Comics parity](../../Python/features/books/docs/development/books-comics-parity.md)
+- [rclone parity plan](../features/rclone/development/rclone-parity.md)
+- [Books and Comics parity](../features/books/development/books-comics-parity.md)
 - [October 15 repository and mobile recovery audit](mobile-repository-audit.md)
 - [Historical documentation audit](documentation-audit.md)
 
 ## Documentation to update with a change
 
-Feature desktop usage belongs in `Python/features/<owner>/docs/user/`; mobile
-usage belongs in that owner's `docs/user_mobile/`, and architecture/contracts in
-its `docs/development/`. Systemic guides belong in the root wiki. Core UI and
-Folder Hub stay there; Bulk Rename retains its existing `desktop` documentation.
-Update the root README for setup or major capability changes.
-
-Keep package READMEs and `user_docs/index.md` as short links. Shared commonUtils
-APIs and external feature internals are documented in their owning repositories.
+Keep all substantive guides in this root wiki. Feature desktop usage belongs in
+`docs/features/<owner>/user/`, mobile usage in `user_mobile/`, and architecture in
+`development/` under the same feature section. Systemic guides keep their existing
+root audience branches. Update the root README for setup or major capabilities.
+Package READMEs and `user_docs/index.md` remain short compatibility links.
+Shared commonUtils APIs and external feature internals stay in their own wikis.
 Follow the [hierarchy rules](documentation-hierarchy.md) and verify consequential
-claims against source and tests. The [older getting-started URL](getting-started.md)
+claims against source/tests. The [older getting-started URL](getting-started.md)
 remains a compatibility entry to this guide.
 
 ## Refactored owner contracts
@@ -120,9 +117,9 @@ former flat modules:
 - [Detached desktop/mobile Folder Hub projection](services.md#detached-folder-hub-projection)
 - [Desktop launch catalog](architecture.md#desktop-launch-and-destination-projection)
 - [Feature runtime owners](feature-infrastructure.md#registry-runtime-ownership)
-- [LM generation lifecycle](../../Python/features/lm/docs/development/development.md#shared-desktop-and-mobile-generation)
-- [Transfer review approval](../../Python/features/rclone/docs/development/development.md#review-session-and-execution-handoff)
-- [Git captured command requests](../../Python/features/git/docs/development/development.md#captured-command-boundary)
+- [LM generation lifecycle](../features/lm/development/development.md#shared-desktop-and-mobile-generation)
+- [Transfer review approval](../features/rclone/development/development.md#review-session-and-execution-handoff)
+- [Git captured command requests](../features/git/development/development.md#captured-command-boundary)
 
 Shared provider, speech, transfer, archive, index and workspace APIs are documented
 in commonUtils; use the [integration boundary](commonutils-integration.md).

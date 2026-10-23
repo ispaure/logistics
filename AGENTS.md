@@ -38,28 +38,24 @@ Keep test apps only when the user explicitly requests it.
 ## Documentation ownership and maintenance
 
 Read [the developer index](docs/development/development.md) before structural changes.
-Update `Python/features/<owner>/docs/user/` for desktop workflows,
-`docs/user_mobile/` within mobile feature owners for mobile workflows, and their
-`docs/development/` for feature architecture/contracts. Systemic guides belong in
-root `docs/user/`, `docs/user_mobile/` and `docs/development/`. Update the root README for setup or
-major capabilities. Preserve `user_docs/index.md` as an in-app compatibility link.
-Systemic Core UI and Folder Hub guides belong in the Logistics wiki; Bulk Rename
-keeps its documentation beside its existing `desktop` owner.
-Describe implemented behavior and verify consequential operations against source/tests.
-Shared commonUtils APIs are documented in their own repository, not copied here.
+All substantive Logistics documentation belongs in the root `docs/` wiki.
+Systemic guides use `docs/user/`, `docs/user_mobile/` and `docs/development/`.
+Feature guides use `docs/features/<owner>/user/`, `user_mobile/` and `development/`;
+Bulk Rename uses `docs/features/bulk_rename/`. Keep source/package README and
+`user_docs/index.md` entries as short compatibility links. Update the root README
+for setup or major capabilities. Shared APIs are documented in commonUtils' own
+root `docs/`, rather than copied into Logistics.
 
 `Python/features/emulation` is an ignored link into a separate repository.
 When explicitly asked to document that local project, resolve the link, read its
-own AGENTS.md and keep feature/user/developer docs and commits there. Never stage
-those files in Logistics, replace the link with a directory, or include them in
-public documentation navigation/releases. Logistics documentation may explain only
-its host integration, configuration and workflow boundary. Emulator capabilities,
-setup and implementation belong to the linked project's own guides.
+own AGENTS.md and keep its guides and commits there. Never stage those files in
+Logistics, replace the link with a directory, or include its internals in public
+navigation/releases. Logistics may document only its host integration boundary.
 
-Documentation wikis use `docs/docs.md` as their scope landing. Each nested folder
-has a same-named landing page (`banana/banana.md`), with explicit links to every
-child page. Every Markdown page begins with an H1, after optional YAML properties.
-Keep package README and `user_docs/index.md` compatibility entries as short links.
+The wiki root is `docs/docs.md`. Every nested folder has a same-named landing
+(`banana/banana.md`) with explicit links to every child page. Every Markdown page
+begins with an H1 after optional YAML properties; that title labels its viewer row.
+Describe implemented behavior and verify consequential claims against source/tests.
 
 Keep raw test evidence (screenshots, recordings, reports and one-off probe copies)
 under ignored `test-results/` or `mobile_build/logs/`, outside documentation wikis.

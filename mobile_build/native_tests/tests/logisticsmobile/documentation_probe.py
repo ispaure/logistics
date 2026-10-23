@@ -67,14 +67,14 @@ class DocumentationProbe(LogisticsMobile):
             await asyncio.sleep(.6)
             clicked = await owner.web.evaluate_javascript('''(function(){const a=Array.from(document.querySelectorAll('a')).find(a=>a.textContent==='Chat on mobile');if(!a)return false;a.click();return true;})()''')
             assert clicked
-            feature_scope = root / 'Python/features/lm/docs'
+            feature_scope = root / 'docs/features/lm'
             target = feature_scope / 'user_mobile/conversations.md'
             for _ in range(60):
                 if owner.path == target.resolve(): break
                 await asyncio.sleep(.1)
             assert owner.path == target.resolve(), str(owner.path)
-            assert owner.catalog.root == feature_scope.resolve()
-            assert all(feature_scope.resolve() in page.parents for page in owner.catalog.pages)
+            assert owner.catalog.root == scope.resolve()
+            assert all(scope.resolve() in page.parents for page in owner.catalog.pages)
             assert any(row.children[-1].text == '✓ Chat on mobile' for row in owner.rows.children)
             report['cases'].append('rendered_link_switches_to_feature_tree_and_reveals_article')
             owner.show_browse()
@@ -86,7 +86,7 @@ class DocumentationProbe(LogisticsMobile):
             assert owner.back()
             assert owner.catalog.root == scope.resolve()
             assert owner.forward()
-            assert owner.catalog.root == feature_scope.resolve()
+            assert owner.catalog.root == scope.resolve()
             report['cases'].append('native_back_forward_restore_scopes')
             report['width'] = self.main_window.size.width
             report['wide'] = owner.wide

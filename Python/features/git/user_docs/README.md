@@ -1,3 +1,3 @@
 # Git
 
-Documentation has moved to the [Git guide](../docs/user/user.md).
+Documentation has moved to the [Git guide](../../../../docs/features/git/user/user.md).

@@ -28,20 +28,20 @@ class DocumentationTests(unittest.TestCase):
     def test_feature_links_and_history_restore_scoped_tree(self):
         root = Path(__file__).resolve().parents[2]
         app_scope = root / 'docs'
-        feature_scope = root / 'Python/features/lm/docs'
+        feature_scope = root / 'docs/features/lm'
         first = app_scope / 'user_mobile/user_mobile.md'
         second = feature_scope / 'user_mobile/user_mobile.md'
         owner = MarkdownWikiView(app_scope, first)
-        owner.follow_link(owner.web, '../../Python/features/lm/docs/user_mobile/user_mobile.md')
+        owner.follow_link(owner.web, '../features/lm/user_mobile/user_mobile.md')
         self.assertEqual(owner.path, second)
-        self.assertEqual(owner.catalog.root, feature_scope)
+        self.assertEqual(owner.catalog.root, app_scope)
         self.assertTrue(any(row.children[-1].text.startswith('✓ ') and
                             row.children[-1].text.endswith('on mobile') for row in owner.rows.children))
         self.assertTrue(owner.back())
         self.assertEqual(owner.path, first)
         self.assertEqual(owner.catalog.root, app_scope)
         self.assertTrue(owner.forward())
-        self.assertEqual(owner.catalog.root, feature_scope)
+        self.assertEqual(owner.catalog.root, app_scope)
 
     def test_same_named_root_indents_and_reveals_child(self):
         root = Path(self.temporary.name).resolve() / 'docs'

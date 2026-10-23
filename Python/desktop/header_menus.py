@@ -81,7 +81,7 @@ class HeaderMenus(qt.QObject):
     def update_guides(self):
         self.guides.clear()
         self.guide(self.guides, 'Logistics Guide', Path(__file__).resolve().parents[2] / 'docs/user/user.md')
-        self.guide(self.guides, 'Bulk Rename Guide', Path(__file__).with_name('bulk_rename') / 'docs/user/user.md')
+        self.guide(self.guides, 'Bulk Rename Guide', Path(__file__).resolve().parents[2] / 'docs/features/bulk_rename/user/user.md')
         for state in sorted(registry.get_feature_states(), key=lambda state: state.label.casefold()):
             # External features own their documentation; keep it in their settings.
             if state.name == 'emulation':

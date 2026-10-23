@@ -37,6 +37,6 @@ def build_menus(window, renamer, close=None):
         menu.aboutToShow.connect(update)
     from services.documentation import open_guide
     menus['Help'].addAction('Bulk Rename Guide', lambda: open_guide(
-        Path(__file__).with_name('docs') / 'user/user.md', parent=window.window(), detached=True, allow_new_tabs=False))
+        Path(__file__).resolve().parents[3] / 'docs/features/bulk_rename/user/user.md', parent=window.window(), detached=True, allow_new_tabs=False))
     update()
     return menus

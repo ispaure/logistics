@@ -68,7 +68,7 @@ modified flags and recovery data.
 Stable feature IDs, workflow IDs, configuration keys and public compatibility
 imports are contracts to examine before changing them. Preserve file formats and
 saved-state precedence; test old configuration fixtures when introducing new keys.
-Comic compression has an explicit [output contract](../../Python/features/comics/docs/development/compression.md),
+Comic compression has an explicit [output contract](../features/comics/development/compression.md),
 including rebuilding page records after page changes. Do not generalize one
 workflow's preservation or cancellation policy to all operations.
 
@@ -154,7 +154,7 @@ identities and the published module/path/digest inventory. Imports read metadata
 without executing code. Applying or launching a managed selection resolves latest
 compatible releases, copies files, enables modules through background Blender and
 saves preferences; failed updates restore preset resource folders. See the
-[Blender contracts](../../Python/features/blender/docs/development/development.md).
+[Blender contracts](../features/blender/development/development.md).
 
 The default credential ZIP root is now `Credentials/rclone` in the checkout, with
 read-only discovery of the matching Dropbox location. `RemoteCredentials` is no
@@ -212,7 +212,7 @@ in a short-lived session CLI process do not return to the host. Mobile persisten
 uses the separate protected vault contract in [mobile preparation](mobile-preparation.md).
 
 Local ciphertext mapping, dependent credential revocation and reader ownership are
-described in [LocalCrypt](../../Python/features/rclone/docs/development/localcrypt.md).
+described in [LocalCrypt](../features/rclone/development/localcrypt.md).
 
 ## Schema integration
 

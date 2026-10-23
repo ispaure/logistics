@@ -40,7 +40,7 @@ encrypted downloads. Use Workspaces's managed Pull workflows for offline Local
 or LocalCrypt folders. Existing offline copies remain readable and exportable.
 Direct readers show no Save, Save As or metadata-edit controls. Locking or replacing credentials
 retires their contents, including readers opened with session-only credentials.
-See the [rclone guide](../../Python/features/rclone/docs/user/user.md#browse-remote-files-directly)
+See the [rclone guide](../features/rclone/user/user.md#browse-remote-files-directly)
 for limits and desktop behavior.
 
 ## Android appearance and E Ink status
@@ -92,19 +92,19 @@ See [Document workflows](documents/workflows.md#document-workflow).
 
 ## Books and comics
 
-See [Books and comics on mobile](../../Python/features/books/docs/user_mobile/library.md#books-and-comics).
+See [Books and comics on mobile](../features/books/user_mobile/library.md#books-and-comics).
 
 ## LM chat
 
-See [Chat on mobile](../../Python/features/lm/docs/user_mobile/conversations.md#lm-chat).
+See [Chat on mobile](../features/lm/user_mobile/conversations.md#lm-chat).
 
 ## Remote files and credential ZIPs
 
-See [Remote connections on mobile](../../Python/features/rclone/docs/user_mobile/connections.md#remote-files-and-credential-zips).
+See [Remote connections on mobile](../features/rclone/user_mobile/connections.md#remote-files-and-credential-zips).
 
 ## LocalCrypt encrypted offline reading
 
-See [LocalCrypt on mobile](../../Python/features/rclone/docs/user_mobile/localcrypt.md#localcrypt-encrypted-offline-reading).
+See [LocalCrypt on mobile](../features/rclone/user_mobile/localcrypt.md#localcrypt-encrypted-offline-reading).
 
 ## File browser locations and actions
 

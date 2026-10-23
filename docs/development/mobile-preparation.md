@@ -461,7 +461,7 @@ authenticated ranges and lazy archive members. Local text/Markdown saves stage a
 are opened lazily through the bundled ZIP library. Comic/EPUB metadata saves replace
 only metadata and preserve inner passwords and untouched archive entries. The native private reader keeps text
 and PNG/JPEG/WebP images out of persistent
-document/library records. EPUB uses a generic archive source. See [LocalCrypt](../../Python/features/rclone/docs/development/localcrypt.md)
+document/library records. EPUB uses a generic archive source. See [LocalCrypt](../features/rclone/development/localcrypt.md)
 for API boundaries, limits and host regression coverage. Earlier phase-4 evidence
 predates this extension and does not validate its Android/iOS UI or native binaries.
 

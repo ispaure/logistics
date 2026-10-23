@@ -185,7 +185,7 @@ fixtures so windows and watchers are destroyed before their directories are
 removed, including on assertion failures. Register fixture-specific cleanup after
 creating the directory. Use `wait_until()` for condition-based Qt waits with
 operation-specific timeout messages. Tests must not depend on windows retained by
-other tests. See the [shared test guide](../../Python/commonUtils/tests/README.md)
+other tests. See the [shared test guide](../../Python/commonUtils/docs/reference/tests/tests.md)
 for lifecycle details.
 
 ## CI, release gates and advanced validation

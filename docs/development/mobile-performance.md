@@ -134,7 +134,7 @@ for equivalent encryption settings, then transfers prepared ciphers into the
 admitted credential session. Different backing paths retain distinct connection
 identities while sharing an equivalent cipher. Lock clears the cache; credential
 replacement prunes settings no longer referenced by loaded packages. The cache
-remains in memory. See the [LocalCrypt contract](../../Python/features/rclone/docs/development/localcrypt.md#shared-mobile-browsing-and-streaming).
+remains in memory. See the [LocalCrypt contract](../features/rclone/development/localcrypt.md#shared-mobile-browsing-and-streaming).
 
 On the same physical BOOX Note Air5 C and existing storage, four previous runs
 versus three optimized runs measured these medians:

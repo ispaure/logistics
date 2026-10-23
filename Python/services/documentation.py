@@ -3,8 +3,17 @@ from pathlib import Path
 
 
 def feature_guide(owner):
-    """Prefer the owned wiki, preserving separately installed legacy features."""
+    """Open built-in guides in the root wiki; preserve external feature help."""
     owner = Path(owner)
+    root = Path(__file__).resolve().parents[2]
+    if owner.parent == root / 'Python/features' and not owner.is_symlink():
+        guide = root / 'docs/features' / owner.name / 'user/user.md'
+    elif owner == root / 'Python/desktop/bulk_rename':
+        guide = root / 'docs/features/bulk_rename/user/user.md'
+    else:
+        guide = owner / 'docs/user/user.md'
+    if guide.is_file() and guide.is_relative_to(root / 'docs'):
+        return guide, root / 'docs'
     guide = owner / 'docs/user/user.md'
     if guide.is_file():
         return guide, owner / 'docs'

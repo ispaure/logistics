@@ -5,7 +5,7 @@
       "sources": [
         "Python/features/archives"
       ],
-      "guide": "Python/features/archives/docs/development/development.md",
+      "guide": "docs/features/archives/development/development.md",
       "tests": {
         "desktop": [
           "test_feature_registry.py"
@@ -16,7 +16,7 @@
       "sources": [
         "Python/features/aviation_tools"
       ],
-      "guide": "Python/features/aviation_tools/docs/development/development.md",
+      "guide": "docs/features/aviation_tools/development/development.md",
       "tests": {
         "desktop": [
           "test_aviation_tools*.py"
@@ -27,7 +27,7 @@
       "sources": [
         "Python/features/blender"
       ],
-      "guide": "Python/features/blender/docs/development/development.md",
+      "guide": "docs/features/blender/development/development.md",
       "tests": {
         "desktop": [
           "test_blender*.py"
@@ -38,7 +38,7 @@
       "sources": [
         "Python/features/books"
       ],
-      "guide": "Python/features/books/docs/development/development.md",
+      "guide": "docs/features/books/development/development.md",
       "tests": {
         "desktop": [
           "test_books*.py"
@@ -54,7 +54,7 @@
       "sources": [
         "Python/features/calibre"
       ],
-      "guide": "Python/features/calibre/docs/development/development.md",
+      "guide": "docs/features/calibre/development/development.md",
       "tests": {
         "desktop": [
           "test_calibre*.py"
@@ -65,7 +65,7 @@
       "sources": [
         "Python/features/comics"
       ],
-      "guide": "Python/features/comics/docs/development/development.md",
+      "guide": "docs/features/comics/development/development.md",
       "tests": {
         "desktop": [
           "test_comic*.py",
@@ -83,7 +83,7 @@
       "sources": [
         "Python/features/dropbox"
       ],
-      "guide": "Python/features/dropbox/docs/development/development.md",
+      "guide": "docs/features/dropbox/development/development.md",
       "tests": {
         "desktop": [
           "test_dropbox*.py"
@@ -94,7 +94,7 @@
       "sources": [
         "Python/features/file_tools"
       ],
-      "guide": "Python/features/file_tools/docs/development/development.md",
+      "guide": "docs/features/file_tools/development/development.md",
       "tests": {
         "desktop": [
           "test_file_tools*.py"
@@ -105,7 +105,7 @@
       "sources": [
         "Python/features/flight_sim"
       ],
-      "guide": "Python/features/flight_sim/docs/development/development.md",
+      "guide": "docs/features/flight_sim/development/development.md",
       "tests": {
         "desktop": [
           "test_flight_sim*.py"
@@ -116,7 +116,7 @@
       "sources": [
         "Python/features/fuse"
       ],
-      "guide": "Python/features/fuse/docs/development/development.md",
+      "guide": "docs/features/fuse/development/development.md",
       "tests": {
         "desktop": [
           "test_fuse*.py"
@@ -127,7 +127,7 @@
       "sources": [
         "Python/features/git"
       ],
-      "guide": "Python/features/git/docs/development/development.md",
+      "guide": "docs/features/git/development/development.md",
       "tests": {
         "desktop": [
           "test_git*.py"
@@ -138,7 +138,7 @@
       "sources": [
         "Python/features/ide"
       ],
-      "guide": "Python/features/ide/docs/development/development.md",
+      "guide": "docs/features/ide/development/development.md",
       "tests": {
         "desktop": [
           "test_ide*.py"
@@ -149,7 +149,7 @@
       "sources": [
         "Python/features/images"
       ],
-      "guide": "Python/features/images/docs/development/development.md",
+      "guide": "docs/features/images/development/development.md",
       "tests": {
         "desktop": [
           "test_feature_registry.py"
@@ -161,7 +161,7 @@
       "sources": [
         "Python/features/links"
       ],
-      "guide": "Python/features/links/docs/development/development.md",
+      "guide": "docs/features/links/development/development.md",
       "tests": {
         "desktop": [
           "test_feature_registry.py"
@@ -172,7 +172,7 @@
       "sources": [
         "Python/features/lm"
       ],
-      "guide": "Python/features/lm/docs/development/development.md",
+      "guide": "docs/features/lm/development/development.md",
       "tests": {
         "desktop": [
           "test_lm*.py"
@@ -187,7 +187,7 @@
       "sources": [
         "Python/features/media"
       ],
-      "guide": "Python/features/media/docs/development/development.md",
+      "guide": "docs/features/media/development/development.md",
       "tests": {
         "desktop": [
           "test_feature_registry.py"
@@ -198,7 +198,7 @@
       "sources": [
         "Python/features/minecraft"
       ],
-      "guide": "Python/features/minecraft/docs/development/development.md",
+      "guide": "docs/features/minecraft/development/development.md",
       "tests": {
         "desktop": [
           "test_minecraft*.py"
@@ -209,7 +209,7 @@
       "sources": [
         "Python/features/obsidian"
       ],
-      "guide": "Python/features/obsidian/docs/development/development.md",
+      "guide": "docs/features/obsidian/development/development.md",
       "tests": {
         "desktop": [
           "test_obsidian*.py"
@@ -220,7 +220,7 @@
       "sources": [
         "Python/features/pdf"
       ],
-      "guide": "Python/features/pdf/docs/development/development.md",
+      "guide": "docs/features/pdf/development/development.md",
       "tests": {
         "desktop": [
           "test_pdf*.py"
@@ -232,7 +232,7 @@
       "sources": [
         "Python/features/perforce"
       ],
-      "guide": "Python/features/perforce/docs/development/development.md",
+      "guide": "docs/features/perforce/development/development.md",
       "tests": {
         "desktop": [
           "test_perforce*.py"
@@ -243,7 +243,7 @@
       "sources": [
         "Python/features/plex"
       ],
-      "guide": "Python/features/plex/docs/development/development.md",
+      "guide": "docs/features/plex/development/development.md",
       "tests": {
         "desktop": [
           "test_plex*.py"
@@ -254,7 +254,7 @@
       "sources": [
         "Python/features/rclone"
       ],
-      "guide": "Python/features/rclone/docs/development/development.md",
+      "guide": "docs/features/rclone/development/development.md",
       "tests": {
         "desktop": [
           "test_rclone*.py"
@@ -271,7 +271,7 @@
       "sources": [
         "Python/features/smart_home"
       ],
-      "guide": "Python/features/smart_home/docs/development/development.md",
+      "guide": "docs/features/smart_home/development/development.md",
       "tests": {
         "desktop": [
           "test_smart_home*.py"
@@ -282,7 +282,7 @@
       "sources": [
         "Python/features/system_tools"
       ],
-      "guide": "Python/features/system_tools/docs/development/development.md",
+      "guide": "docs/features/system_tools/development/development.md",
       "tests": {
         "desktop": [
           "test_system_tools*.py"
@@ -293,7 +293,7 @@
       "sources": [
         "Python/features/text_editor"
       ],
-      "guide": "Python/features/text_editor/docs/development/development.md",
+      "guide": "docs/features/text_editor/development/development.md",
       "tests": {
         "desktop": [
           "test_text_editor*.py"
@@ -309,7 +309,7 @@
       "sources": [
         "Python/features/youtube_downloader"
       ],
-      "guide": "Python/features/youtube_downloader/docs/development/development.md",
+      "guide": "docs/features/youtube_downloader/development/development.md",
       "tests": {
         "desktop": [
           "test_youtube_downloader*.py"
