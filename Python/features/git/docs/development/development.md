@@ -148,6 +148,9 @@ open **Resolve conflict…** on double-click or from their context menu. The Git
 adapter reads ancestor/local/incoming blobs from index stages, rejects truncated
 or unsuitable inputs, and uses commonUtils' merge model/widget. Apply performs a
 conflict-checked atomic save, optionally stages the result, and refreshes Git state.
+Before optional staging, the adapter rechecks index entries and reads at most the
+expected saved byte count plus one. A changed or enlarged file remains unstaged;
+its contents are preserved for review instead of being read without a bound.
 Binary, delete/modify, symlink, submodule and conversion-filter conflicts retain
 manual handling. `preview.py` imports its shared renderer from
 `commonUtils.ui.code_editor.diff_bands`; Git patch parsing stays in `diff_view.py`.
