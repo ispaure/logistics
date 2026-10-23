@@ -14,7 +14,7 @@ from features.rclone.storage import local_records
 
 def storage_root():
     import config
-    return Path(config.LogisticsConfig().path_remote_local).absolute()
+    return Path(config.LogisticsConfig(create_resources=False).path_remote_local).absolute()
 
 
 class LocalConnection(Connection):

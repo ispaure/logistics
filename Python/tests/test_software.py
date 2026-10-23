@@ -34,6 +34,36 @@ class SoftwareTests(QtTestCase):
             self.assertFalse((root / 'Software').exists())
             self.assertFalse((root / 'Credentials').exists())
 
+    def test_location_and_connection_metadata_do_not_create_resource_directories(self):
+        from desktop.location_context import LocationCatalog
+        from features.rclone.localcrypt.connections import storage_root
+        from commonUtils.ui import pyside as qt
+        self.app = qt.QApplication.instance() or qt.QApplication([])
+        for lookup in ('location', 'connection'):
+            with self.subTest(lookup=lookup), TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                source = root / 'Python'
+                source.mkdir()
+                fake_module = source / 'config.py'
+                fake_module.touch()
+                (source / 'configFile.ini').write_text(
+                    '[DirectoryStructure]\nserver_path_macos=Server\n'
+                    'remote_network_mount_sub_path=Mounts\nremote_local_sub_path=Local\n')
+                with patch.object(config, '__file__', str(fake_module)), \
+                        patch.object(config, 'get_os', return_value=OS.MAC):
+                    expected = config.LogisticsConfig(create_resources=False).path_remote_local
+                    if lookup == 'connection':
+                        self.assertEqual(storage_root(), expected.absolute())
+                    else:
+                        catalog = LocationCatalog(None)
+                        try:
+                            context = catalog.local(expected / 'Library' / 'guide.txt')
+                            self.assertEqual(context.name, 'Library')
+                        finally:
+                            catalog.deleteLater()
+                self.assertFalse((root / 'Software').exists())
+                self.assertFalse((root / 'Credentials').exists())
+
     def test_manifest_covers_six_platforms_with_pinned_hashes(self):
         with TemporaryDirectory() as root:
             with patch.object(software.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_software=Path(root))):

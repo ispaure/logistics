@@ -678,3 +678,15 @@ completed baseline. Remaining priorities continue to govern selection.
 - Expanded read-only Blender discovery checked PATH, both application folders and
   the OS application index; no executable/bundle was found. Native Blender 5.2.2
   registration remains unverified. No application was downloaded or installed.
+
+## Bounded IDE conflict validation and immutable verification
+
+- A new fixture reproduced the workspace's conflict validator reading an entire
+  externally enlarged file before rejecting it. Loading and save validation now
+  use the shared bounded reader, preserving the 4 MiB policy and original bytes.
+- The new regression failed before the repair; all 29 IDE tests pass afterward.
+  Lint, architecture and all five documentation checks pass. Committed as
+  `f9ec2519`; the later frozen full run does not include this additional fix.
+- Frozen Logistics `07e76ab2` with shared `7978a28` passes all 162 mobile and
+  all 179 shared isolated test files. Desktop validation is still in progress.
+  The source tree being validated was not edited during either completed suite.
