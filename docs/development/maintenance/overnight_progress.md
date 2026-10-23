@@ -1466,3 +1466,38 @@ Final guide validation: all five documentation-layout and four real viewer
 integration cases pass. Inclusive AST spans confirm constructor/composition
 changes of 227→31, 200→40 and 197→39; the earlier 226 count excluded the
 definition line and is corrected above.
+
+## Follow-up review of all maintenance changes
+
+Reviewed the production diffs and affected contracts across Logistics, commonUtils
+and Blue Hole, including publication/rollback, move cleanup, bounded I/O, background
+submission and Qt lifetime handling, presentation extraction, consumer pins and
+documentation scope. No additional runtime defect was confirmed in this review.
+The shared architecture guide needed a clearer distinction between the complete-tree
+archive workspace extractor and the lower-level ZIP extractor, which still stages
+individual files. One extra blank line at the end of the portable wiki test was
+removed; its AST is unchanged. Shared commit `e2f18fd` contains those corrections;
+Blue Hole `0edf0d2` vendors the exact same revision. Production Python is unchanged.
+
+Fresh host validation completed:
+
+| Suite | Result | Scope |
+| --- | --- | --- |
+| Desktop | 179 files, 1,685 passes, zero skips/failures | Offscreen Qt with the existing cached native bridge. |
+| Shared | 181 files, 1,207 passes, 25 skips, zero failures | Declared optional toolkit/platform cases remain skipped. |
+| Mobile host | 162 files, 1,161 passes, two skips, zero failures | Both skipped DOM cases subsequently pass using existing Node/Playwright/Chrome; 1,163 cases pass across the full run and focused rerun. |
+| Blue Hole adapters | 33 passes | Exact shared vendor membership/content also verified. |
+| Regression-runner contracts | Seven passes | Includes discovery isolation and preservation of failure outcomes. |
+
+Correctness lint, architecture policy (24 host adapters / 15 feature edges / zero
+violations), toolchain consistency, source hygiene and whitespace checks pass.
+The cached native bridge hash is unchanged. Initial audit test invocations omitted
+the repository root from PYTHONPATH and encountered sandbox watcher/loopback
+restrictions; those runs were interrupted and retained as failed attempts. A
+comic-reader timing assertion failed in that initial run and passed in the complete
+corrected desktop run. No test assertion or timeout was weakened.
+
+This review did not repeat native device UI, Windows/Linux validation, target-version
+Blender registration/operators/exports or a fresh Go build. Earlier evidence keeps
+its recorded source/platform scope. The prior packaged source archive was not
+rebuilt for these documentation/whitespace corrections. No push or release occurred.
