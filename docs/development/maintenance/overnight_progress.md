@@ -1322,3 +1322,19 @@ Reviewed import cleanup: `0ac67e1c`.
 - Embedded Blender runs 152 cases (151 pass, one filesystem skip); 33 adapters,
   exact vendor checking and configured lint pass. Native iOS reports remain tied
   to their earlier clean source snapshot, not relabeled to this portable change.
+
+## LocalCrypt input completion
+
+- The desktop provider's manual upload loop treated a would-block (`None`) read
+  as EOF. Real pinned-rclone fixtures reproduce successful publication of empty
+  or partial encrypted files for two interrupted-input profiles. Both fail the
+  new expected-error regression before the fix.
+- `create_file` now delegates copying to the existing shared stream owner. Input
+  errors propagate through the existing binary command failure contract; owned
+  encrypted staging is removed and existing documents remain unchanged. No new
+  plaintext staging or storage format was introduced.
+- Five file-operation cases run: four pass, one mobile host-bridge case skips.
+  Both fault profiles verify exact ciphertext-tree preservation and original
+  document readability. All 39 real-rclone LocalCrypt integration cases pass,
+  including encrypted reads, metadata, editing and transfer/resource behavior.
+  Lint and five documentation checks pass.
