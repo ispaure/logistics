@@ -431,3 +431,68 @@ No native build, simulator/device interaction, deployment or push is claimed by
 these host results. No test app was installed. Root ignore rules, private resources,
 external feature ownership, the reserved Misc destination and the single Ally Tools
 acknowledgement were preserved. Changes were committed locally in reviewable steps.
+
+
+## October 22 rclone and LocalCrypt class/lifetime review
+
+The follow-up reviewed rclone credential loading, provider lifetimes, revocation,
+transfer approval and encrypted publication before expanding the earlier readability
+review. Work was committed in separate local steps, including a separate
+commonUtils commit for its reusable classes.
+
+| Area | Assessment after this pass | Ownership and remaining complexity |
+| --- | --- | --- |
+| Mobile rclone credentials | Clearer, independently testable state | `NativeCredentialState` owns process-wide epochs, generations, package identities, privacy gates and observers. `CloudClient` retains transport and vault operations. Native publication remains shared across scenes. |
+| Desktop credential sessions | Clearer, reusable class boundary | `CredentialSessions` owns isolated in-memory credential trees, revocation and launch environments. The application uses one registry; bounded ZIP decoding stays separate. |
+| Remote and LocalCrypt providers | Less duplicated lifecycle machinery | Providers compose shared lease/cancellation classes. Credential checks, ciphertext guards, caches and encrypted publication remain provider-owned; these security-sensitive I/O methods still require careful reading. |
+| Transfer approval | Existing class structure remains appropriate | `ReviewSession`/`ReviewScan` already separate approval and worker retirement. This review retained their binding checks, second comparison and execution preflight. |
+| Comics and images | Policy remains explicit and preservation-sensitive | The new shared mechanisms do not decide quality, retention, deletion, layout cleanup or archive publication. Baseline comparisons were repeated. |
+
+The edge-case review found that an observer exception could stop later credential
+invalidation callbacks. Desktop and mobile notification now attempt every callback
+before re-raising the first failure. LocalCrypt clears plaintext/path caches in a
+`finally` block even if revocation notification fails. Credential parent cycles are
+rejected before replacing existing generations. Native busy responses without
+optional error text retain their typed exception and response-pointer cleanup.
+Synthetic tests exercise those failures without real secrets.
+
+The additional pass inspected the earlier application/controller composition,
+startup, presentation, folder metadata, Git capture, LM framing, archive facade,
+image publication and comic sanitization changes, including their test changes.
+AST comparisons confirmed identical iOS/Android appearance bodies, startup phase
+statements/order (excluding moved imports and phase returns), LM menu statements
+and expanded controller inventories. No additional production correction was
+needed in those earlier refactors. The LocalCrypt mobile tests now explicitly
+answer and await close decisions rather than leaving unhandled dummy-backend
+dialog tasks.
+
+Repeated comic comparisons against `f55417a5` matched all 80 cleanup/failure
+traces, 24 encoded-image byte sequences and 32 full plain/AES compression runs,
+including extracted, sanitized, staged and final member manifests. Deletion/move
+rules, quality, retention thresholds and failure order remain unchanged.
+
+Host regression coverage for this follow-up:
+
+- Desktop: 177 isolated files and 1,608 tests, including six platform skips. Two
+  Bulk Rename UI timeouts passed on the complete 19-test file rerun. The sweep
+  also caught the new credential-state dependency missing from the independent
+  Qt proof packager; its explicit list was corrected and all seven packaging
+  tests passed again.
+- Mobile: 162 isolated files and 1,160 tests, including two platform skips. The
+  two loopback-dependent files passed with the required local-server permission.
+  All three LocalCrypt UI tests passed after explicitly resolving close dialogs,
+  without unhandled task exceptions.
+- commonUtils: 174 isolated files and 1,114 tests, including three platform skips.
+  Styling's 16-test file passed with the intended offscreen backend after the
+  initial invocation used the host display's different font resolution.
+
+A clean committed-source payload passed packaged startup, document restoration,
+provider Markdown and file-operation workflows. Source provenance reported both
+repositories clean. Lint, architecture, toolchain, indexed-source hygiene and diff
+checks passed. README acknowledgement, ignore rules, external feature boundaries
+and the reserved desktop Misc destination were preserved. Raw suite, comparison,
+AST and staging reports remain under ignored `test-results/`.
+
+This is host validation; no native binary was rebuilt and no simulator/device test
+or deployment was performed. No temporary Boox app was installed. No commits were
+pushed.
