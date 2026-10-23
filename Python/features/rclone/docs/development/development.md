@@ -367,3 +367,12 @@ plaintext and path caches in a `finally` block on close. Registry parent cycles
 are rejected before replacing an existing generation. Bridge busy errors may
 omit optional error text and still raise `CredentialBusyError`. Synthetic failure
 tests cover these paths without storing real credentials.
+
+LocalCrypt cache publication and retirement share the provider's cache lock. Late
+encoding, listing and recursive-search workers revalidate before storing decrypted
+names; size/block hits and publications also revalidate under that lock. Closing
+a provider atomically marks it closed and discards cached bytes, names and sizes
+before notifying other revocation observers. The session notification runs after
+releasing the cache lock. Paused-worker regressions cover closure between path
+validation and publication, and observers verify that private caches are already
+empty when they run.

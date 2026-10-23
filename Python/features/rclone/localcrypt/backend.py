@@ -316,9 +316,8 @@ class CryptResources(LocalFiles):
             encrypted = self.relative(row['EncryptedPath'])
             target = physical / encrypted
             _guard_path(target, self.root)
-            self._encoded_paths[relative] = target
+            self._remember_path(relative, target, directory=bool(row['IsDir']))
             if row['IsDir']:
-                self._directories[relative] = target
                 revision = None
             else:
                 revision = self.version(relative)
@@ -326,6 +325,8 @@ class CryptResources(LocalFiles):
                     self._remember_size(relative, revision, int(row['Size']))
             result.append(dict(name=name, path=relative, revision=revision,
                                directory=bool(row['IsDir']), size=int(row['Size']), modified=row.get('ModTime', '')))
+        self._check_active()
+        check_cancelled(cancelled)
         return sorted(result, key=lambda row: (not row['directory'], row['name'].casefold()))
 
     def search_entries(self, path='', *, cancelled=lambda: False):
@@ -356,19 +357,22 @@ class CryptResources(LocalFiles):
             relative = '/'.join(part for part in (prefix, child) if part)
             target = physical / self.relative(row['EncryptedPath'])
             _guard_path(target, self.root)
-            self._encoded_paths[relative] = target
+            self._remember_path(relative, target, directory=bool(row['IsDir']))
             if row['IsDir']:
-                self._directories[relative] = target
                 revision = None
             else:
                 revision = self.version(relative)
+            self._check_active()
+            check_cancelled(cancelled)
             yield dict(name=PurePosixPath(child).name, path=relative, revision=revision,
                        directory=bool(row['IsDir']), size=int(row['Size']), modified=row.get('ModTime', ''))
 
     def encrypted_path(self, path):
         self._check_active()
         relative = self.relative(path)
-        target = self._encoded_paths.get(relative)
+        with self._cache_lock:
+            self._check_active()
+            target = self._encoded_paths.get(relative)
         if target is None:
             revoked = session.revocation_check(self.context)
             launched = session.launch(self.context, 'view:', '')
@@ -385,8 +389,17 @@ class CryptResources(LocalFiles):
                 raise ValueError('Encrypted path could not be resolved.')
             target = self.root / self.relative(result[0])
         _guard_path(target, self.root)
-        self._encoded_paths[relative] = target
+        self._remember_path(relative, target)
         return target
+
+    def _remember_path(self, relative, target, *, directory=False):
+        # Publish names under the same lock as retirement. A worker returning
+        # from rclone/path validation must not restore a closed view's caches.
+        with self._cache_lock:
+            self._check_active()
+            self._encoded_paths[relative] = target
+            if directory:
+                self._directories[relative] = target
 
     def _physical(self, path, directory=False):
         relative = self.relative(path)
@@ -396,10 +409,12 @@ class CryptResources(LocalFiles):
         # Encoding a child maps every parent with the directory-name settings,
         # including remotes whose filename encryption is disabled.
         if directory:
-            if relative in self._directories:
+            with self._cache_lock:
                 self._check_active()
-                target = self._directories[relative]
+                target = self._directories.get(relative)
+            if target is not None:
                 _guard_path(target, self.root)
+                self._check_active()
                 return target
             return self.encrypted_path(relative + '/.directory-probe').parent
         return self.encrypted_path(relative)
@@ -437,6 +452,7 @@ class CryptResources(LocalFiles):
         path = self.relative(path)
         revision = self.version(path)
         with self._cache_lock:
+            self._check_active()
             cached = self._sizes.get(path)
             if cached and cached[0] == revision:
                 self._sizes.move_to_end(path)
@@ -451,6 +467,7 @@ class CryptResources(LocalFiles):
 
     def _remember_size(self, path, revision, size):
         with self._cache_lock:
+            self._check_active()
             self._sizes[path] = revision, size
             self._sizes.move_to_end(path)
             while len(self._sizes) > 10000:
@@ -473,6 +490,7 @@ class CryptResources(LocalFiles):
                 raise ValueError('The encrypted document changed; reopen it.')
             key = path, expected, offset, count
             with self._cache_lock:
+                self._check_active()
                 if key in self._blocks:
                     self._blocks.move_to_end(key)
                     return self._blocks[key]
@@ -569,16 +587,15 @@ class CryptResources(LocalFiles):
         return None
 
     def close(self):
-        if self.closed:
-            return
-        self.closed = True
-        try:
-            session.forget(self.context)
-        finally:
-            # Observer failures must not leave plaintext cached in a closed view.
-            with self._cache_lock:
-                self._blocks.clear()
-                self._sizes.clear()
-                self._encoded_paths.clear()
-                self._directories.clear()
-                self._cache_bytes = 0
+        with self._cache_lock:
+            if self.closed:
+                return
+            self.closed = True
+            # Retire private data before callbacks, including callbacks which
+            # block or fail. Late workers validate under this same lock.
+            self._blocks.clear()
+            self._sizes.clear()
+            self._encoded_paths.clear()
+            self._directories.clear()
+            self._cache_bytes = 0
+        session.forget(self.context)
