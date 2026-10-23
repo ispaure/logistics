@@ -27,9 +27,9 @@ python3 dev.py lint
 | Mobile builds, deployment or native bridges | `mobile_build/`; application source stays under `Python/` | [Mobile handbook](mobile-handbook.md) |
 | Tests for any of these | `Python/tests/` or `mobile_build/tests/` | [Test selection and commands](testing.md#find-the-tests-for-your-change) |
 
-Follow registration factories to the canonical implementation. Small modules at
-older paths may only forward compatibility imports. Edit the implementation they
-point to. Generated `mobile_build/payload/`, `mobile_build/build/`, caches and test reports are
+Follow registration factories to the canonical implementation. Feature redirectors
+have been removed; import the owning module directly. The application feature
+runtime is `features.application.registry`. Generated `mobile_build/payload/`, `mobile_build/build/`, caches and test reports are
 outputs; they are not source files to tweak.
 
 ## Current development references

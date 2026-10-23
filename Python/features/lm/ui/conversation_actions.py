@@ -1,4 +1,4 @@
-"""LM workspace presentation and navigation, backed by an owned conversation session."""
+"""Conversation and folder mutations coordinated with the LM page session."""
 from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4

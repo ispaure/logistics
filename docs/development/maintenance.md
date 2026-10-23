@@ -9,8 +9,8 @@ representative fixtures and platform checks before behavior changes.
 
 - **Plex:** read-only database access, episode/GUID comparison and staged package/
   restore handling now have fixture coverage. Validate Windows registry/7-Zip,
-  stopped-server restore, large packages, Linux ownership and failure during
-  multi-file archive promotion on real installations. Recovery copies intentionally
+  stopped-server restore, large packages, Linux ownership and multi-file recovery
+  conflicts on real installations. Recovery copies intentionally
   consume disk space until manually removed after checking the restored server.
   Source scan errors abort packaging; Unix ZIP restores preserve ordinary mode
   bits but do not change ownership. Duplicate hash matches can be reassigned.
@@ -25,9 +25,10 @@ representative fixtures and platform checks before behavior changes.
   Downloads, explicit updates and season transfers now use cancellable workers.
 - **FUSE:** command construction, timeout handling, recovery and conservative
   cleanup now have simulated-state coverage. Actual mounting still requires
-  macOS, Windows and Linux driver validation. Windows stale-mount recovery and
-  verifying which credential owns an already-mounted same-named remote remain
-  separate follow-ups; filesystem locations are shared across credentials.
+  macOS, Windows and Linux driver validation. Mount paths separate configuration
+  identities; a process-owned credential binding gates reuse and automatic recovery.
+  Unknown or changed bindings require explicit unmounting, including mounts inherited
+  after restart. Windows stale-mount recovery remains a separate follow-up.
 - **Media renaming:** CSV plans use the shared rollback-capable rename engine.
   Fixtures cover duplicate chapter numbers, invalid filenames and failed publication.
 
@@ -94,3 +95,25 @@ Other integrations still have synchronous work; this change does not imply that
 all Folders actions or external processes have cancellation support. See the
 [UI ownership guide](architecture.md#long-running-workflows-and-safe-closing)
 and [commonUtils recipes](https://github.com/ispaure/commonUtils/blob/main/ui/operation_progress.md) before extending a workflow.
+
+## Ownership refactor validation (2026-10-22)
+
+Final isolated runs passed all 179 desktop, 179 commonUtils and 162 mobile test
+files. Focused follow-up coverage checks Plex promotion/journal failures and
+malformed or linked recovery members, FUSE credential changes and refusal to
+probe unknown mounts, subprocess worker startup failure, and logger option isolation.
+Packaging, lint, architecture, compatibility, toolchain and source hygiene checks
+also passed. Extracted LM actions, folder projection and provider-opening bodies
+match their previous syntax trees after normalizing owner access and inlining view
+construction.
+
+Comics comparisons against the pre-refactor baseline passed 80 cleanup/error
+traces, 24 byte-identical encodings and 32 full plain/encrypted compression runs,
+including extraction, staging, final manifests and keep/delete behavior. These
+comparisons were repeated after the coordinated archive changes.
+
+Blue Hole remains a separate repository. Its exact committed commonUtils vendor
+copy passed membership and byte comparison, 25 consumer tests and 24 vendored
+Perforce tests. Save remains permissive when checkout fails; export still obeys
+its error policy. No live Blender, Perforce server, mount-driver or mobile-device
+validation is claimed by these host checks. No temporary Boox apps were installed.
