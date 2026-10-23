@@ -97,12 +97,14 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         self.menu_controls = RepositoryMenus(self)
         self._repositories()
         self._set_busy(False)
-        if self.preferences.warning: self._message(self.preferences.warning, error=True)
+        if self.preferences.warning:
+            self._message(self.preferences.warning, error=True)
         if restore_last and self.preferences.options['restore_windows'] and self.preferences.last_repository:
             qt.QTimer.singleShot(0, self, lambda: self.open_repository(self.preferences.last_repository))
 
     @property
-    def busy(self): return self.worker is not None
+    def busy(self):
+        return self.worker is not None
 
     def _set_busy(self, busy):
         if busy:
@@ -157,7 +159,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         return self._discard_draft()
 
     def _discard_draft(self):
-        if not self.changes.message.toPlainText().strip() or self.changes.message.toPlainText() == self._template_message: return True
+        if not self.changes.message.toPlainText().strip() or self.changes.message.toPlainText() == self._template_message:
+            return True
         if not self._confirm('Discard commit message?', 'The uncommitted message draft will be discarded. Files and staged changes are kept.'):
             return False
         self.changes.message.clear()
@@ -171,7 +174,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         return box.exec() == qt.QMessageBox.StandardButton.Yes
 
     def _save(self):
-        try: self.preferences.save()
+        try:
+            self.preferences.save()
         except OSError as exc:
             self._append_log(f'Settings were not saved: {exc}\n')
             self._message(f'Settings were not saved: {exc}', error=True)
@@ -184,7 +188,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
                                          lambda checked=False, path=path: self.open_repository(path))
 
     def open_repository(self, path):
-        if self.busy or self.closing: return
+        if self.busy or self.closing:
+            return
         path = Path(path).expanduser()
         if self.repository_opener is not None and self.path is not None and path.resolve() != self.path.resolve():
             return self.repository_opener(path)
@@ -209,7 +214,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         self._job('Open repository', lambda runner: Repository(path, runner).snapshot(limit), opened)
 
     def refresh(self):
-        if self.closing or not self.path: return
+        if self.closing or not self.path:
+            return
         if self.busy:
             self._refresh_pending = True
         else:
@@ -223,7 +229,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         path, limit = self.path, self.history_limit
         def render(snapshot):
             self._render(snapshot)
-            if operation_error: self._message(operation_error, error=True)
+            if operation_error:
+                self._message(operation_error, error=True)
         self._job('Refresh repository', lambda runner: Repository(path, runner).snapshot(limit), render)
 
     def _render(self, snapshot):
@@ -250,7 +257,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         self.operation_label.setText(f'{snapshot.operation} in progress — resolve conflicts, stage files, then Continue.')
         self.operation_bar.setVisible(snapshot.operation in ('merge', 'rebase', 'cherry-pick', 'revert'))
         self.changes.amend.setEnabled(bool(snapshot.commits) and not snapshot.operation)
-        if snapshot.operation: self.changes.amend.setChecked(False)
+        if snapshot.operation:
+            self.changes.amend.setChecked(False)
         self._set_busy(self.busy)
         self._restore_change_preview(status)
 
@@ -293,7 +301,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
                     for i in range(tree.topLevelItemCount()):
                         item = tree.topLevelItem(i)
                         if item.data(0, qt.Qt.ItemDataRole.UserRole)[0].path == relative:
-                            tree.setCurrentItem(item); break
+                            tree.setCurrentItem(item)
+                            break
                 self.preview_change(change, side)
             elif self.views.currentIndex() == 0:
                 self.preview.show_text(relative, 'No remaining changes.')
@@ -306,11 +315,13 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
 
     def _select_navigation(self, index):
         if hasattr(self, 'workspace_items'):
-            with qt.QSignalBlocker(self.refs): self.refs.setCurrentItem(self.workspace_items[index])
+            with qt.QSignalBlocker(self.refs):
+                self.refs.setCurrentItem(self.workspace_items[index])
 
     def _navigation_selected(self, item, column):
         value = item.data(0, qt.Qt.ItemDataRole.UserRole)
-        if not value: return
+        if not value:
+            return
         kind, name, ref = value
         if kind == 'view':
             self.views.setCurrentIndex(name)
@@ -325,39 +336,50 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
     def _filter_refs(self, text):
         def visit(item):
             visible = text.casefold() in item.text(0).casefold()
-            for i in range(item.childCount()): visible = visit(item.child(i)) or visible
+            for i in range(item.childCount()):
+                visible = visit(item.child(i)) or visible
             item.setHidden(not visible)
             return visible
-        for i in range(self.refs.topLevelItemCount()): visit(self.refs.topLevelItem(i))
+        for i in range(self.refs.topLevelItemCount()):
+            visit(self.refs.topLevelItem(i))
 
     def focus_commit(self):
         self.views.setCurrentIndex(0)
-        if self.preferences.options['select_all_commit']: self.changes.unstaged_files.selectAll()
+        if self.preferences.options['select_all_commit']:
+            self.changes.unstaged_files.selectAll()
         self.changes.message.setFocus()
 
     def view_remote(self):
-        if not self.path or not self.snapshot.remotes: return
+        if not self.path or not self.snapshot.remotes:
+            return
         from .chrome import browser_remote_url
         def show(address):
             url = browser_remote_url(address)
-            if url: qt.QDesktopServices.openUrl(qt.QUrl(url))
-            else: self._message('This remote has no HTTP browser address. Use Git settings or the operation log to inspect it.')
+            if url:
+                qt.QDesktopServices.openUrl(qt.QUrl(url))
+            else:
+                self._message('This remote has no HTTP browser address. Use Git settings or the operation log to inspect it.')
         self._job('Read remote address', lambda runner: Repository(self.path, runner).remote_details(self.snapshot.remotes[0]), show)
 
     def open_terminal(self):
-        if not self.path: return
+        if not self.path:
+            return
         from .terminal import launch
         command = 'cd' if sys.platform == 'win32' else f'cd -- {shlex.quote(str(self.path))} && pwd'
         try:
-            if launch(command, str(self.path), self.preferences.options['terminal']) is False: self._message('Terminal could not be opened.', error=True)
-        except OSError as error: self._message(str(error), error=True)
+            if launch(command, str(self.path), self.preferences.options['terminal']) is False:
+                self._message('Terminal could not be opened.', error=True)
+        except OSError as error:
+            self._message(str(error), error=True)
 
     def open_dialog(self):
         path = qt.QFileDialog.getExistingDirectory(self, 'Open Git repository', self.preferences.options['project_folder'])
-        if path: self.open_repository(path)
+        if path:
+            self.open_repository(path)
 
     def clone_dialog(self):
-        if not self._discard_draft(): return
+        if not self._discard_draft():
+            return
         dialog = FormDialog('Clone repository', self, 'SSH agents and Git credential helpers are used. Set up credentials outside Logistics before cloning private repositories.')
         url = dialog.text('Repository URL or local path')
         destination = dialog.text('Destination folder', folder=True)
@@ -365,12 +387,15 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         recursive = dialog.check('Initialize submodules recursively')
         if dialog.submitted():
             address, target, recurse, ref = url.text(), destination.text(), recursive.isChecked(), branch.text()
-            if not target.strip(): self._message('Enter a clone destination.', error=True); return
+            if not target.strip():
+                self._message('Enter a clone destination.', error=True)
+                return
             self._job('Clone repository', lambda runner: clone(address, target, runner, recurse, ref),
                       lambda path: self.open_repository(path))
 
     def init_dialog(self):
-        if not self._discard_draft(): return
+        if not self._discard_draft():
+            return
         path = qt.QFileDialog.getExistingDirectory(self, 'Initialize Git in folder')
         if path and self._confirm('Initialize repository?', f'Create Git metadata in:\n{path}\n\nExisting files will be kept.'):
             self._job('Initialize repository', lambda runner: initialize(path, runner), lambda path: self.open_repository(path))
@@ -419,10 +444,12 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
             path = choice.currentText()
             if action.currentIndex() == 0:
                 for entry in self.preferences.repositories:
-                    if entry['path'] == path: entry['pinned'] = not entry['pinned']
+                    if entry['path'] == path:
+                        entry['pinned'] = not entry['pinned']
             else:
                 self.preferences.repositories = [e for e in self.preferences.repositories if e['path'] != path]
-                if self.preferences.last_repository == path: self.preferences.last_repository = ''
+                if self.preferences.last_repository == path:
+                    self.preferences.last_repository = ''
             self._save()
             self._repositories()
 
@@ -430,7 +457,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         return self.history_controller.preview_change(change, staged)
 
     def apply_hunk(self, context, index, action):
-        if self.busy or not self.path or str(self.path) != context['root'] or not context['allowed']: return
+        if self.busy or not self.path or str(self.path) != context['root'] or not context['allowed']:
+            return
         repository = self.path
         branch = self.snapshot.status.branch if self.snapshot else None
         if action == 'discard' and not self._confirm('Discard this hunk?',
@@ -506,12 +534,15 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         value = item.data(0, qt.Qt.ItemDataRole.UserRole)
         if value and value[0] == 'submodule':
             candidate=(self.path / value[1]).resolve()
-            if candidate.is_relative_to(self.path.resolve()): self.open_repository(candidate)
-            else: self._message('The submodule path is outside this repository.', error=True)
+            if candidate.is_relative_to(self.path.resolve()):
+                self.open_repository(candidate)
+            else:
+                self._message('The submodule path is outside this repository.', error=True)
         elif value and value[0] == 'subtree':
             self.repository_tools.subtree_dialog()
         elif value and value[0] == 'branch':
-            if self.preferences.options['confirm_switch'] and self.snapshot and not self.snapshot.status.changes and not self._confirm('Switch branch?', f'Switch to {value[1]}?'): return
+            if self.preferences.options['confirm_switch'] and self.snapshot and not self.snapshot.status.changes and not self._confirm('Switch branch?', f'Switch to {value[1]}?'):
+                return
             self.commands.dispatch('Switch branch', 'switch', value[1], repository=self.path)
 
     def ref_menu(self, point):
@@ -562,7 +593,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         return self.commands.finish_operation(abort)
 
     def open_folder(self):
-        if self.path: qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(self.path)))
+        if self.path:
+            qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(self.path)))
 
     def resolve_conflict(self, relative_path):
         if self.busy or not self.path:
@@ -590,7 +622,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
                     raise ValueError('Repository changed or is busy. Reopen the merge.')
                 stage_requested = stage.isChecked()
                 dialog.applying = True
-                dialog.widget.setEnabled(False); stage.setEnabled(False)
+                dialog.widget.setEnabled(False)
+                stage.setEnabled(False)
                 dialog.apply_button.setEnabled(False)
                 dialog.widget.status.setText('Saving merge result…')
                 def saved(result):
@@ -605,7 +638,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
                 from shiboken6 import isValid
                 if isValid(dialog) and dialog.applying:
                     dialog.applying = False
-                    dialog.widget.setEnabled(True); stage.setEnabled(True)
+                    dialog.widget.setEnabled(True)
+                    stage.setEnabled(True)
                     dialog._ready()
                     dialog.widget.status.setText(self.status.text())
             self.idle.connect(finished)
@@ -614,12 +648,14 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
                 if isValid(self):
                     self.idle.disconnect(finished)
             dialog.destroyed.connect(disconnected)
-            dialog.apply_callback = apply; dialog._ready()
+            dialog.apply_callback = apply
+            dialog._ready()
             dialog.show()
         self._job('Read merge inputs', read, opened)
 
     def edit_file(self, relative_path):
-        if self.busy or not self.path: return
+        if self.busy or not self.path:
+            return
         path = (self.path / relative_path).resolve()
         if not path.is_relative_to(self.path.resolve()) or not path.is_file():
             self._message('The selected path is not a regular file within this repository.', error=True)
@@ -638,7 +674,8 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         service.open(path)
 
     def _editor_saved(self, path):
-        if self.path and Path(path).resolve().is_relative_to(self.path.resolve()): self.refresh()
+        if self.path and Path(path).resolve().is_relative_to(self.path.resolve()):
+            self.refresh()
 
     def compare_to_head(self):
         return self.history_controller.compare_to_head()

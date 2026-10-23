@@ -84,7 +84,8 @@ class Repository:
                                     'refs/heads', 'refs/remotes', 'refs/tags']).stdout)
 
     def history(self, limit=200):
-        if not 1 <= limit <= 5001: raise GitError('History limit must be between 1 and 5001.')
+        if not 1 <= limit <= 5001:
+            raise GitError('History limit must be between 1 and 5001.')
         return parse_log(self.run(['log', '--all', '--topo-order', f'--max-count={limit}',
                                   '--format=%H%x00%P%x00%an%x00' + ('%aI' if self.runner.author_date else '%cI') + '%x00%s%x00%D%x00%x00']).stdout)
 
@@ -94,8 +95,10 @@ class Repository:
             first, last = date.fromisoformat(since), date.fromisoformat(until)
         except ValueError as exc:
             raise GitError('Choose valid search dates.') from exc
-        if first > last: raise GitError('From date must be on or before To date.')
-        if not 1 <= limit <= 5000: raise GitError('Search limit must be between 1 and 5000.')
+        if first > last:
+            raise GitError('From date must be on or before To date.')
+        if not 1 <= limit <= 5000:
+            raise GitError('Search limit must be between 1 and 5000.')
         if mode not in ('Commit Message', 'Commit SHA', 'Branch', 'File Changes', 'User'):
             raise GitError('Unknown search field.')
         # Numeric bounds avoid Git's approximate-date parser misreading distant years.
@@ -108,12 +111,15 @@ class Repository:
         if query and mode == 'Branch':
             refs = [ref.name for ref in self.refs() if ref.name.startswith(('refs/heads/', 'refs/remotes/'))
                     and query.casefold() in ref.name.casefold()]
-            if not refs: return []
+            if not refs:
+                return []
         elif query and mode == 'Commit SHA':
-            if not re.fullmatch(r'[a-fA-F0-9]{4,64}', query): return []
+            if not re.fullmatch(r'[a-fA-F0-9]{4,64}', query):
+                return []
             hashes = self.run(['rev-list', '--all', *bounds]).stdout.decode('ascii').splitlines()
             refs = [oid for oid in hashes if oid.startswith(query.lower())][:limit + 1]
-            if not refs: return []
+            if not refs:
+                return []
             options = ['--no-walk']
         elif query and mode == 'File Changes':
             # Double NUL marks a header; filenames are NUL-separated and never empty.
@@ -125,14 +131,17 @@ class Repository:
                 paths = records[i + 1].removeprefix(b'\n').split(b'\0')
                 if any(query.casefold() in os.fsdecode(path).casefold() for path in paths if path):
                     refs.append(records[i].decode('ascii'))
-                    if len(refs) > limit: break
-            if not refs: return []
+                    if len(refs) > limit:
+                        break
+            if not refs:
+                return []
             options = ['--no-walk']
         elif query and mode == 'User':
             options = ['--regexp-ignore-case', '--extended-regexp', '--author=' + re.escape(query)]
         elif query:
             options = ['--regexp-ignore-case', '--fixed-strings', '--grep=' + query]
-        if not self.refs(): return []
+        if not self.refs():
+            return []
         return parse_log(self.run(['log', *refs, *bounds, *options, f'--max-count={limit + 1}',
                                   '--format=%H%x00%P%x00%an%x00' + ('%aI' if self.runner.author_date else '%cI') + '%x00%s%x00%D%x00%x00']).stdout)
 
@@ -142,8 +151,10 @@ class Repository:
                              ('REVERT_HEAD', 'revert'), ('BISECT_LOG', 'bisect')):
             result = self.run(['rev-parse', '--git-path', marker])
             path = Path(result.stdout.decode('utf-8', 'surrogateescape').rstrip('\r\n'))
-            if not path.is_absolute(): path = self.path / path
-            if path.exists(): return name
+            if not path.is_absolute():
+                path = self.path / path
+            if path.exists():
+                return name
         return ''
 
     def snapshot(self, limit=200):
@@ -160,7 +171,8 @@ class Repository:
             stashes.append((ref.decode('ascii'), subject.decode('utf-8', 'replace')))
         remotes = self.run(['remote']).stdout.decode('utf-8', 'replace').splitlines()
         config = self.run(['config', '--file', '.gitmodules', '--null', '--get-regexp', r'^submodule\..*\.path$'], check=False)
-        if config.returncode not in (0,1): raise GitError(config.stderr)
+        if config.returncode not in (0,1):
+            raise GitError(config.stderr)
         submodule_paths = tuple(os.fsdecode(record.partition(b'\n')[2]) for record in config.stdout.split(b'\0') if b'\n' in record)
         superproject = self.run(['rev-parse', '--show-superproject-working-tree']).stdout.removesuffix(b'\n')
         display_name = root.name
@@ -176,14 +188,16 @@ class Repository:
         result = self.run(['diff', '--no-ext-diff', '--no-textconv', '--src-prefix=a/', '--dst-prefix=b/', *(['HEAD'] if against_head else ['--cached'] if staged else []),
                            *(['--ignore-all-space'] if ignore_whitespace else []),
                            '--', path], check=False, limit=self.runner.diff_limit)
-        if result.returncode: raise GitError(result.stderr)
+        if result.returncode:
+            raise GitError(result.stderr)
         text = result.stdout.decode('utf-8', 'replace')
         return text + ('\n[Diff truncated to configured preview limit]' if result.truncated else '')
 
     def apply_hunk(self, relative_path, index, expected_patch, *, staged=False, discard=False):
         from tempfile import TemporaryDirectory
         from .patches import single_hunk
-        if discard and staged: raise GitError('Unstage this hunk before discarding it.')
+        if discard and staged:
+            raise GitError('Unstage this hunk before discarding it.')
         root = self.root().resolve()
         path = root / relative_path
         if Path(relative_path).is_absolute() or '..' in Path(relative_path).parts or path.is_symlink() or not path.resolve().is_relative_to(root):
@@ -199,11 +213,13 @@ class Repository:
             raise GitError('Hunk actions support regular text files only.')
         result = self.run(['diff', '--no-ext-diff', '--no-textconv', '--src-prefix=a/', '--dst-prefix=b/',
                            *(['--cached'] if staged else []), '--', relative_path], limit=self.runner.diff_limit)
-        if result.truncated: raise GitError('A truncated patch cannot be applied. Use file actions.')
+        if result.truncated:
+            raise GitError('A truncated patch cannot be applied. Use file actions.')
         if result.stdout.decode('utf-8', 'replace') != expected_patch:
             raise GitError('This file changed since the preview was loaded. Refresh before applying a hunk.')
         patch = single_hunk(result.stdout, index)
-        if discard: self.backup_files([relative_path])
+        if discard:
+            self.backup_files([relative_path])
         with TemporaryDirectory(prefix='logistics-hunk-') as folder:
             patch_path = Path(folder) / 'hunk.patch'
             patch_path.write_bytes(patch)
@@ -213,17 +229,22 @@ class Repository:
 
     def untracked_preview(self, path):
         file = self.path / path
-        if file.is_symlink(): return 'Symbolic link → ' + str(file.readlink())
-        if not file.is_file(): return 'Directory or nested repository. Open it separately to inspect its files.'
-        with file.open('rb') as stream: data = stream.read(1024 * 1024 + 1)
-        if b'\0' in data: return 'Binary file (preview unavailable).'
+        if file.is_symlink():
+            return 'Symbolic link → ' + str(file.readlink())
+        if not file.is_file():
+            return 'Directory or nested repository. Open it separately to inspect its files.'
+        with file.open('rb') as stream:
+            data = stream.read(1024 * 1024 + 1)
+        if b'\0' in data:
+            return 'Binary file (preview unavailable).'
         return data[:1024 * 1024].decode('utf-8', 'replace') + ('\n[Preview truncated]' if len(data) > 1024 * 1024 else '')
 
     def commit_details(self, oid):
         oid = self.object_id(oid)
         result = self.run(['show', '--no-ext-diff', '--no-textconv', '--format=fuller', '--stat', '--patch', oid,
                            '--'], check=False, limit=1024 * 1024)
-        if result.returncode: raise GitError(result.stderr)
+        if result.returncode:
+            raise GitError(result.stderr)
         return result.stdout.decode('utf-8', 'replace') + ('\n[Commit preview truncated]' if result.truncated else '')
 
     def commit_metadata(self, oid):
@@ -249,12 +270,14 @@ class Repository:
         result = self.run(['diff-tree', '--root', '-r', '--no-commit-id', '--patch', '--no-ext-diff',
                            '--no-textconv', *(['--ignore-all-space'] if ignore_whitespace else []),
                            *self._commit_comparison(oid), '--', path], check=False, limit=self.runner.diff_limit)
-        if result.returncode: raise GitError(result.stderr)
+        if result.returncode:
+            raise GitError(result.stderr)
         return result.stdout.decode('utf-8','replace') + ('\n[Diff truncated to configured preview limit]' if result.truncated else '')
 
     @staticmethod
     def object_id(oid):
-        if not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', oid): raise GitError('Invalid object ID.')
+        if not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', oid):
+            raise GitError('Invalid object ID.')
         return oid
 
     def tree(self, oid):
@@ -262,22 +285,28 @@ class Repository:
 
     def blob(self, oid):
         result = self.run(['cat-file', 'blob', self.object_id(oid)], check=False, limit=1024 * 1024)
-        if result.returncode: raise GitError(result.stderr)
-        if b'\0' in result.stdout: return 'Binary file (preview unavailable).'
+        if result.returncode:
+            raise GitError(result.stderr)
+        if b'\0' in result.stdout:
+            return 'Binary file (preview unavailable).'
         return result.stdout.decode('utf-8', 'replace') + ('\n[File preview truncated]' if result.truncated else '')
 
     def stage(self, paths):
-        if not paths: raise GitError('Select files to stage.')
+        if not paths:
+            raise GitError('Select files to stage.')
         return self.run(['add', '--', *paths])
 
     def unstage(self, paths):
-        if not paths: raise GitError('Select files to unstage.')
+        if not paths:
+            raise GitError('Select files to unstage.')
         # rm --cached also works before the first commit, and leaves files on disk.
-        if self.status().oid == '(initial)': return self.run(['rm', '--cached', '-r', '--', *paths])
+        if self.status().oid == '(initial)':
+            return self.run(['rm', '--cached', '-r', '--', *paths])
         return self.run(['restore', '--staged', '--', *paths])
 
     def commit(self, message, amend=False):
-        if not message.strip(): raise GitError('Enter a commit message.')
+        if not message.strip():
+            raise GitError('Enter a commit message.')
         if self.operation() in ('rebase', 'cherry-pick', 'revert'):
             raise GitError('Use Continue to finish the current operation.')
         self.check_submodules()
@@ -287,21 +316,24 @@ class Repository:
         name = argument(name.strip(), 'Branch name')
         self.run(['check-ref-format', '--branch', name])
         args = ['switch', '-c', name] if switch else ['branch', name]
-        if start_oid: args.append(self.object_id(start_oid))
+        if start_oid:
+            args.append(self.object_id(start_oid))
         return self.run(args)
 
     def compare(self, first, second, *, ignore_whitespace=False):
         result = self.run(['diff', '--no-ext-diff', '--no-textconv', '--stat', '--patch',
                            *(['--ignore-all-space'] if ignore_whitespace else []),
                            self.object_id(first), self.object_id(second), '--'], check=False, limit=1024 * 1024)
-        if result.returncode: raise GitError(result.stderr)
+        if result.returncode:
+            raise GitError(result.stderr)
         return result.stdout.decode('utf-8', 'replace') + ('\n[Comparison truncated]' if result.truncated else '')
 
     def create_tag(self, name, message='', oid=None):
         name = argument(name.strip(), 'Tag name')
         self.run(['check-ref-format', 'refs/tags/' + name])
         args = ['tag', '-a', name, '-m', message] if message.strip() else ['tag', name]
-        if oid: args.append(self.object_id(oid))
+        if oid:
+            args.append(self.object_id(oid))
         return self.run(args)
 
     def delete_tag(self, name):
@@ -393,28 +425,36 @@ class Repository:
                 raise GitError('Repository settings changed while the dialog was open. Reopen Settings before saving.')
         for name, url in remotes.items():
             if current.get(name) != url:
-                argument(name, 'Remote name'); remote_url(url)
+                argument(name, 'Remote name')
+                remote_url(url)
         if values['template_mode'] == 'custom' and values.get('template_changed', True):
             from commonUtils.persistence import atomic_write_bytes
             result = self.run(['rev-parse', '--git-path', 'logistics-commit-template.txt'])
             path = Path(result.stdout.decode('utf-8', 'replace').removesuffix('\n'))
-            if not path.is_absolute(): path = self.path / path
+            if not path.is_absolute():
+                path = self.path / path
             data = values['template_text'].encode('utf-8')
-            if len(data) > 1024 * 1024: raise GitError('Commit template exceeds 1 MiB.')
+            if len(data) > 1024 * 1024:
+                raise GitError('Commit template exceeds 1 MiB.')
             atomic_write_bytes(path, data)
             local = dict(local, **{'commit.template': str(path.resolve())})
         for key, value in local.items():
-            if value == self.config_value(key, local=True): continue
+            if value == self.config_value(key, local=True):
+                continue
             if value is None:
                 result = self.run(['config', '--local', '--unset-all', key], check=False)
-                if result.returncode not in (0, 5): raise GitError(result.stderr)
+                if result.returncode not in (0, 5):
+                    raise GitError(result.stderr)
             else:
                 self.run(['config', '--local', '--replace-all', key, value])
         for name in current:
-            if name not in remotes: self.remote_remove(name)
+            if name not in remotes:
+                self.remote_remove(name)
         for name, url in remotes.items():
-            if name not in current: self.remote_add(name, url)
-            elif self.remote_details(name) != url: self.remote_set_url(name, url)
+            if name not in current:
+                self.remote_add(name, url)
+            elif self.remote_details(name) != url:
+                self.remote_set_url(name, url)
         return self.settings()
 
     def switch(self, name):
@@ -449,7 +489,8 @@ class Repository:
 
     def pull(self, strategy='ff-only'):
         options = {'ff-only': ['--ff-only'], 'merge': ['--no-rebase', '--no-edit'], 'rebase': ['--rebase']}
-        if strategy not in options: raise GitError('Unknown pull strategy.')
+        if strategy not in options:
+            raise GitError('Unknown pull strategy.')
         return self.run(['pull', '--progress', *options[strategy]], timeout=1800)
 
     def push(self, remote=None, branch=None, *, force_with_lease=False):
@@ -457,7 +498,8 @@ class Repository:
         args = ['push', '--progress', '--no-follow-tags', *(['--tags'] if self.runner.push_tags else []),
                 *(['--force-with-lease'] if force_with_lease else [])]
         if remote:
-            if not branch: raise GitError('Select a branch to publish.')
+            if not branch:
+                raise GitError('Select a branch to publish.')
             self.run(['check-ref-format', 'refs/heads/' + argument(branch)])
             args += ['--set-upstream', argument(remote), f'HEAD:refs/heads/{branch}']
         else:
@@ -483,12 +525,15 @@ class Repository:
         return self.run(['stash', 'push', *(['--include-untracked'] if include_untracked else []), '-m', message or 'Logistics stash'])
 
     def stash_action(self, action, ref):
-        if action not in ('apply', 'pop', 'drop'): raise GitError('Invalid stash action.')
-        if not re.fullmatch(r'stash@\{\d+\}', ref): raise GitError('Invalid stash reference.')
+        if action not in ('apply', 'pop', 'drop'):
+            raise GitError('Invalid stash action.')
+        if not re.fullmatch(r'stash@\{\d+\}', ref):
+            raise GitError('Invalid stash reference.')
         return self.run(['stash', action, ref])
 
     def discard(self, paths):
-        if not paths: raise GitError('Select tracked files to discard.')
+        if not paths:
+            raise GitError('Select tracked files to discard.')
         self.backup_files(paths)
         return self.run(['restore', '--worktree', '--', *paths])
 
@@ -559,8 +604,10 @@ class Repository:
         return self.run(['revert', '--no-edit', self.object_id(oid)], timeout=600)
 
     def finish_operation(self, operation, abort=False):
-        if operation not in ('merge', 'rebase', 'cherry-pick', 'revert'): raise GitError('No supported operation in progress.')
-        if not abort and operation == 'merge': return self.run(['commit', '--no-edit'], timeout=600)
+        if operation not in ('merge', 'rebase', 'cherry-pick', 'revert'):
+            raise GitError('No supported operation in progress.')
+        if not abort and operation == 'merge':
+            return self.run(['commit', '--no-edit'], timeout=600)
         # Prevent an invisible editor when completing a rebase/cherry-pick.
         return self.run(['-c', 'core.editor=true', operation, '--abort' if abort else '--continue'], timeout=600)
 
@@ -569,11 +616,14 @@ class Repository:
         result, current = [], {}
         for record in data.split(b'\0'):
             if not record:
-                if current: result.append(current); current = {}
+                if current:
+                    result.append(current)
+                    current = {}
             else:
                 key, _, value = record.partition(b' ')
                 current[key.decode('ascii')] = value.decode('utf-8', 'surrogateescape')
-        if current: result.append(current)
+        if current:
+            result.append(current)
         return result
 
     def add_worktree(self, path, branch):
@@ -589,11 +639,14 @@ class Repository:
         return self.run(['submodule', 'add', '--', remote_url(url), argument(path, 'Submodule path')], timeout=1800)
 
     def subtree(self, action, prefix, url, branch, squash=False):
-        if action not in ('add', 'pull', 'push'): raise GitError('Invalid subtree action.')
+        if action not in ('add', 'pull', 'push'):
+            raise GitError('Invalid subtree action.')
         prefix = argument(prefix, 'Subtree prefix')
-        if Path(prefix).is_absolute() or '..' in Path(prefix).parts: raise GitError('Use a relative prefix within the repository.')
+        if Path(prefix).is_absolute() or '..' in Path(prefix).parts:
+            raise GitError('Use a relative prefix within the repository.')
         args = ['subtree', action, f'--prefix={prefix}', remote_url(url), argument(branch)]
-        if squash and action != 'push': args.append('--squash')
+        if squash and action != 'push':
+            args.append('--squash')
         return self.run(args, timeout=1800)
 
 
@@ -619,7 +672,8 @@ class Repository:
             if stage != b'0' or mode not in (b'100644', b'100755'):
                 raise GitError('Use Resolve conflict for unmerged files; submodules and symlinks use the unified preview.')
             data = self.run(['cat-file', 'blob', oid.decode('ascii')], limit=1024*1024)
-            if data.truncated: raise GitError('Comparison exceeds the 1 MiB limit.')
+            if data.truncated:
+                raise GitError('Comparison exceeds the 1 MiB limit.')
             index = decode_bytes(data.stdout).text
         if staged:
             head = ''
@@ -628,14 +682,17 @@ class Repository:
                 if tree:
                     metadata = tree.split(b'\t', 1)[0]
                     mode, kind, oid = metadata.split()
-                    if mode not in (b'100644', b'100755'): raise GitError('Use the unified preview for this file type.')
+                    if mode not in (b'100644', b'100755'):
+                        raise GitError('Use the unified preview for this file type.')
                     data = self.run(['cat-file', 'blob', oid.decode('ascii')], limit=1024*1024)
-                    if data.truncated: raise GitError('Comparison exceeds the 1 MiB limit.')
+                    if data.truncated:
+                        raise GitError('Comparison exceeds the 1 MiB limit.')
                     head = decode_bytes(data.stdout).text
             left, right = head, index
         else:
             left, right = index, read_text_file(path).text if path.exists() else ''
-        bounded(left); bounded(right)
+        bounded(left)
+        bounded(right)
         return left, right
 
     def conflict_inputs(self, relative_path):
@@ -662,7 +719,8 @@ class Repository:
         texts = []
         for stage in (1, 2, 3):
             if stage not in stages:
-                texts.append(''); continue
+                texts.append('')
+                continue
             result = self.run(['cat-file', 'blob', stages[stage]], limit=1024*1024)
             if result.truncated:
                 raise GitError('Merge input exceeds the 1 MiB limit.')
@@ -704,7 +762,8 @@ def clone(url, destination, runner=None, recursive=False, branch=''):
     if destination.exists() and (not destination.is_dir() or any(destination.iterdir())):
         raise GitError('Choose a new or empty destination directory.')
     args = ['clone', '--progress', *(['--recurse-submodules'] if recursive else [])]
-    if branch: args += ['--branch', argument(branch, 'Branch name')]
+    if branch:
+        args += ['--branch', argument(branch, 'Branch name')]
     runner.run([*args, '--', remote_url(url), str(destination)], timeout=1800)
     return destination
 
