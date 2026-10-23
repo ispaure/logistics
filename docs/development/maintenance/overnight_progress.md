@@ -882,3 +882,85 @@ completed baseline. Remaining priorities continue to govern selection.
   commit `19956ed`; Logistics pin `a4007ed6`. Native target 5.2.2 registration,
   Windows/Linux and physical-device validation remain unexecuted. No Docker,
   Podman or Colima CLI/standard app executable was found locally.
+
+## Actual packaged startup and a Blue Hole declaration cycle
+
+- Built Logistics `5e22726b` with shared `6ff379e`: 2,218 source members plus
+  generated manifests/identity. All 2,219 content hashes match; evidence and the
+  external emulation project are absent. A fresh extraction imports its own code.
+- Offscreen launch runs real settings initialization, feature activation, the main
+  window and index service with an owned temporary profile. Update checks are
+  disabled for this offline probe. Bulk Rename opens one fixture, renders its
+  controls and preserves its bytes. The tools-menu object remains present.
+- Initial close is deferred by cooperative workers; the application subsequently
+  exits normally with code 0 and stops the index service. This is packaged startup
+  validation, not native macOS menu/focus or physical-device UX coverage. The
+  screenshot/log/probe remain ignored evidence; the temporary extraction/profile
+  is removed. The archive is a local verification artifact, not a published release.
+- Blue Hole pie actions eagerly imported ten menu modules, while seven imported
+  those actions for drawing. The existing helper accepts registered menu-ID
+  strings; using those literal IDs removes the declaration-to-presentation edge
+  without a new API, wrapper, registration change or UI rewrite.
+- Before/after serialized comparisons match all 46 full descriptors, 22 keymap
+  bindings and catalog order byte-for-byte. Two new tests reject presentation
+  imports and verify IDs against actual menu declarations; import fails before
+  the repair and both tests pass afterward.
+- All 33 adapter tests pass. The actual embedded suite now has 95 cases: 94 pass
+  and one filesystem case skips. Static module-scope candidate groups drop from
+  three to two (580 to 569 internal edges), eliminating the eight-module pie
+  group. Remaining environment/context and project/filter reciprocal helpers
+  are not rewritten merely to lower graph counts without target-native evidence.
+- Blue Hole commit `e0202d9`; no target 5.2.2 registration/operators were exercised.
+  Immutable Logistics `5e22726b` / shared `6ff379e` runs completed: desktop
+  179 files / 1,664 cases (six skips), shared 180 files / 1,218 cases (25 skips),
+  zero failed files. Discovery includes the new portable batch file.
+
+## Read-only path queries
+
+- Local-folder discovery, Plex path queries, FUSE remote mount lookup and bundled
+  ffmpeg lookup created unrelated software/credential directories through Config.
+  Five lookup call sites now explicitly suppress resource creation. Actual Local
+  folder creation, operation setup and default Config behavior remain unchanged.
+- Three new fixture regressions failed before repair. All 16 software lookup,
+  23 Plex, 25 FUSE, 17 YouTube and 39 folder UI tests pass; installer/downloader
+  output in these suites is mocked. Architecture/lint and five documentation
+  checks pass. Commit `18a7fd3b`; no real installations/downloads were performed.
+
+## Shared natural filename ordering
+
+- Superscript/circled numerals could enter integer conversion and abort directory
+  scanning, native browse queries and comic page enumeration. Three regressions
+  failed before repair. The existing standard-library search.names owner now
+  supplies raw natural parts and tagged label keys; public path/comic wrappers
+  preserve their signatures and key shapes.
+- Previously supported sample keys and SQLite encoded sort bytes are identical for
+  all 2,006 comparison cases. Decimal Unicode runs remain numeric; other numeric
+  symbols remain text. New traversal, browsing and archive tests pass (3/13/59).
+- Fourteen index suites ran 108 cases: two watcher suites failed under restricted
+  filesystem access; their 12/11 cases pass with normal access. The other twelve
+  suites pass. No failed run is counted as a passing whole suite. Twenty Bulk
+  Rename tests, portable traversal/browsing and documentation/lint checks pass.
+- Shared commit `86a5d51`, Logistics `f4e35aee`, Blue Hole `5c63af4`. Exact vendor
+  comparison and all 33 adapter tests pass. Real Blender 4.5.1/Python 3.11.11 now
+  runs 99 cases (98 pass, one filesystem skip), reusing traversal regressions too.
+- Frozen shared `86a5d51`: all 180 files / 1,220 cases complete, 25 explicit skips,
+  zero failed files. Frozen mobile Logistics `f4e35aee`: 162 files / 1,161 cases,
+  two explicit Node/Playwright skips, zero failed files. Full desktop is still
+  running at this checkpoint. Target 5.2.2 registration remains unavailable.
+
+## Bounded reader state and consistent badge snapshots
+
+- Book/comic resume loaders checked size before an unbounded read. Stale size
+  metadata admitted oversized valid JSON. Comic badges also read state twice,
+  allowing concurrent saves to mix total and position from different records.
+- Both feature owners use the existing bounded stream reader with their existing
+  128 KiB policy. Comics owns one private JSON admission method and a position
+  projection, reused by resume and badges. Saved identity, JSON shape, name-first
+  restoration, clamping and malformed-state fallbacks stay unchanged.
+- Three new regressions fail before repair and pass afterward: oversized book and
+  comic records plus an actual fixture save between badge reads. All 52 book and
+  seven comic resume cases pass; portable Unicode/invalid JSON/invalid encoding/
+  oversized profiles pass in the mobile interpreter. Files are preserved by reads.
+- Lint, architecture and five documentation checks pass. Commit `b98da89a`.
+  Frozen full-suite totals above predate this unit; these focused checks validate
+  it separately. Writes retain their existing policy; no state migration occurs.

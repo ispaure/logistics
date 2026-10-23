@@ -121,7 +121,7 @@ verified changes, and retain platform limitations in the final assessment.
 A conservative AST graph includes imports inside functions and conditional blocks,
 resolves relative imports and records edges to known project modules. It excludes
 tests/vendors and does not execute registration or resolve arbitrary dynamic
-strings. Its current snapshot records:
+strings. Its initial snapshot records:
 
 | Repository | Modules | Internal edges | Potential cyclic groups | Largest group |
 | --- | ---: | ---: | ---: | ---: |
@@ -203,3 +203,55 @@ now share no-replace publication. Settings reset retains the old backup when an
 external directory occupies its path, rather than treating arbitrary current
 contents as its owned rollback output. These changes improve consistency without
 adding production packages or cross-feature policy layers.
+
+## Later verification and structural assessment
+
+At Logistics `b98da89a`, shared `86a5d51`, Blue Hole `5c63af4`, the same tracked-file
+measurement gives 1,152 / 508 / 203 Python files, respectively; production/test
+lines are 89,399 / 76,342, 42,502 / 23,201 and 22,804 / 757. Added files are test
+owners, including portable batch coverage and consumer smoke tests. No new
+production package or dependency was introduced. Exact repeated production bodies
+of at least 20 lines are still absent under the same comparison.
+
+Bulk Rename widget construction is now a short composition of three cohesive
+private builders in its existing module; expanded statements match the original
+constructor AST. This improves navigation without moving state into new objects.
+Natural sorting for filesystem paths, portable browse labels and comic pages now
+uses one standard-library filename owner. Raw/tagged keys and persisted index
+encoding match all 2,006 previously supported comparison cases, while superscript
+and circled numerals no longer abort listings. Reader state uses bounded reads;
+comic badge total and position come from one admitted snapshot.
+
+The conservative all-import graph now records Logistics 1,612 edges / 27 groups
+(largest 40), shared 953 / 7 (91), Blue Hole 586 / 2 (35). A separate module-scope
+inventory excludes function/lambda and TYPE_CHECKING imports: Logistics 861 edges
+and no candidate groups, shared 777 and two groups, Blue Hole 569 and two groups.
+Neither static graph resolves arbitrary dynamic imports or proves absence of
+runtime cycles. Shared candidates are the Qt facade bootstrap and command package
+exports; Blue Hole candidates are environment/context and project/filter helpers.
+The actual pie action/menu declaration cycle was removed using the existing menu-ID
+contract. All 46 serialized descriptors, 22 bindings and catalog order are unchanged.
+
+An existing Blender 4.5.1 LTS executable was subsequently found in managed software
+storage. Its real embedded Python 3.11.11 passes 98 selected portable/vendor cases
+with one filesystem skip, using a factory startup and temporary user profile.
+All 33 host adapter cases and the exact vendor checker pass. Blender 5.2.2 add-on
+registration, operators, export workflows and native UI are still unexecuted;
+older-runtime contract checks do not establish target-runtime compatibility.
+
+Frozen shared `86a5d51` passes all 180 files (1,220 cases, 25 skips); frozen mobile
+Logistics `f4e35aee` passes 162 files (1,161 cases, two Node/Playwright skips).
+The prior desktop `5e22726b` checkpoint passes 179 files (1,664 cases, six skips).
+A desktop run at `f4e35aee` is ongoing. The later reader-state unit has separate
+52 book/seven comic checks. A freshly extracted `5e22726b` package starts the real
+application offscreen with an isolated profile, opens a fixture in Bulk Rename,
+retains the reserved tools menu and exits normally. No device/native desktop
+focus behavior, real user settings or target Blender registration is implied.
+
+These results strengthen readability, duplication ownership, testability and
+reliability. Existing feature boundaries remain recognizable and policy checks
+remain at 25 reviewed host adapters, 15 feature edges and zero violations. The
+remaining large native UI owners, deferred graph groups and unexecuted platform
+contracts prevent an evidence-based ecosystem-wide 7/10 assertion. Continue with
+cohesive layout simplification and native lifecycle contracts; retain API/data
+compatibility and focused review rather than optimizing graph or line counts.
