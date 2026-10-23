@@ -50,6 +50,29 @@ passes all desktop, mobile and both shared matrix legs. Bridge/DOM skips pass on
 explicit replay; three shared filesystem/Windows platform skips remain. The record
 keeps exact source revisions and avoids adding overlapping replay counts.
 
+## Priority recheck after the rclone service work
+
+Source review at Logistics `92519da6` and commonUtils `ac1ae89` confirms that
+the original broad “shared UI next” ranking is no longer the current backlog.
+The browser's network/watch decisions now live in indexing; dock adoption has a
+captured transfer/rollback path and separate header reconciliation; Markdown has
+named classification/formatting stages; layered settings has field construction
+and row binding phases. These are implemented C2–C5 changes, not pending proposals.
+The later rclone service/adapters review through `01e8bfc9` is also complete.
+
+The next concrete shared-UI priority is C7's **native lifecycle acceptance** below,
+before extracting more navigation, canvas or speech factory code. Desktop
+FileBrowser/indexing still shares substantial mutable state across its mixin and
+uses private index-cache fields, so it remains a reasonable bounded follow-up.
+That residual coupling does not establish a new urgent defect or justify another
+whole-UI rewrite. Live integration/platform acceptance remains a separate risk.
+
+Fresh focused shared checks pass: six browser-index-policy, 25 workspace,
+14 Markdown-presentation, one layered-settings-editor and three required-Toga
+owner-lifetime cases. The Toga cases exercise dummy/fake adapters; they do not
+close the native acceptance gate. This recheck changes no shared/runtime code and
+does not claim another complete matrix or physical-device run.
+
 ## Remaining acceptance gate
 
 C7's native adapter factories remain unchanged. Before moving them, exercise the
