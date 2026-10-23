@@ -99,7 +99,7 @@ Raw reports remain ignored; tracked guides contain concise results only.
   recorded shared commit. No live Blender or Perforce-server check was possible.
 - Logistics pin checkpoint: `f561bef5`; IDE checkpoint: `d5e21cf1`.
 
-## Final validation checkpoint
+## First validation checkpoint (before resumed work)
 
 The matrix below distinguishes restricted runs from targeted host reruns rather
 than relabeling an initially failed command as passing.
@@ -197,3 +197,78 @@ completed baseline. Remaining priorities continue to govern selection.
   source conflict checks and private-provider behavior remain unchanged.
 - All 16 EPUB model/metadata tests pass, including corruption, backup permission
   failure, cancellation, duplicate backup naming and retained resource content.
+
+## Resumed execution: portable native-browser lifecycle admission
+
+- Fresh-interpreter tests reproduced that importing browser lifecycle required
+  Toga through the parent initializer, including in an isolated vendored namespace.
+- Kept the existing public package exports and moved their presentation body
+  unchanged into `ui/native_browser/presentation.py`. The small package initializer
+  now defers toolkit presentation and directly exports the portable lifecycle.
+  An AST comparison confirms the presentation implementation is unchanged.
+- Lifecycle-only tests now execute without Toga; only actual presentation cases
+  retain backend skips. Package import blocker and namespace isolation tests pass.
+  All 25 shared native test files pass in the mobile environment, and all three
+  mobile browser consumer test files pass. No toolkit dependency was added.
+- The mobile required-source list includes the moved implementation; packaged
+  startup passes, as do all seven source-packaging tests and correctness lint.
+- Prior resumed commits: Git backup verification `7bc7cb04`, EPUB verification
+  `ced6b55a`, progress checkpoint `1824cd5e`.
+
+## Resumed execution: deferred architecture references
+
+- New contract tests reproduced missed colon-qualified feature/host references
+  and deferred UI dependencies in modules declared portable. The AST scanner now
+  normalizes valid `module:attribute` strings and recognizes deferred commonUtils,
+  PySide6 and Toga module references without importing any implementation.
+- Invalid references/prose remain excluded. Existing import handling is retained;
+  a redundant identical branch in package-name calculation was removed.
+- All eight architecture/ownership/compatibility tests pass. The current tree
+  still has 25 reviewed host adapters, 15 cross-feature edges and zero violations;
+  no policy exception or dependency was added to obtain that result.
+- The full unrestricted shared suite now passes all 179 test files. Desktop and
+  mobile full runs are still active; their final outcomes will be recorded here.
+
+## Resumed execution: worker error and restart contracts
+
+- New tests reproduced blank/invalid error-formatter output becoming an empty
+  success signal, formatter exceptions escaping result publication, and stale
+  result/error/cancellation fields on restarted workers. An actual progress-widget
+  regression showed a `TimeoutError()` displayed as a successful finished job.
+- ResultWorker now resets state per run and always publishes a nonempty failed
+  outcome. A failed redaction formatter uses type-only fallback details, never
+  unredacted exception text. Success, configured cancellation and cooperative
+  thread retirement retain their existing contracts.
+- All four ResultWorker tests and seven operation/progress tests pass. Consumer
+  checks and shared pin/vendor coordination follow before this unit is committed.
+- The full unrestricted mobile suite passes all 162 files. Native-browser vendor
+  synchronization is committed in Blue Hole as `997b837`; deferred architecture
+  reference coverage is committed in Logistics as `821f0e3a`.
+
+## Resumed execution: complete binary stream writes
+
+- Reproduced silent truncation after short writes, successful completion after
+  invalid write counts, and a would-block read incorrectly treated as EOF.
+- The shared bounded copier now completes each chunk across short writes, checks
+  cancellation between those writes and rejects nonprogress/invalid results.
+  `None` from blocking read/write adapters raises BlockingIOError without spinning.
+  Progress retains its existing completed-read-chunk byte units; normal full-write
+  calls still receive the original bytes object.
+- All seven stream tests pass. Five archive test files, ZIP access, seven download
+  tests and seven Blender integration test files pass; only private fixtures were
+  used. Supported ordinary/ZipCrypto/AES and filesystem outputs retain behavior.
+- The worker follow-up full shared suite passes all 179 files; full unrestricted
+  desktop and mobile runs pass 179 and 162 files respectively. Worker-specific
+  validation additionally passes 26 IDE tests, six repository-tab tests, four
+  actual-vendor result-worker tests and seven actual-vendor progress tests.
+
+## Resumed execution: synchronous recovery close failures
+
+- Two new tests reproduced first-close deferral with no pending checkpoint future
+  after capture failure, and an escaping executor-submission RuntimeError.
+- Recovery now marks a close as pending only when a future exists. Synchronous
+  failures return to ordinary Save/Discard/Cancel immediately, keeping the draft;
+  asynchronous checkpoint behavior is unchanged.
+- All 12 recovery tests and 18 ordinary editor tests pass. Stream source/pin
+  checkpoint: Logistics `91fa93f5`; Blue Hole exact vendor `f0ac6b4`; shared stream
+  implementation `8a68cdf`. Shared worker correction is `c4d3dfc`.
