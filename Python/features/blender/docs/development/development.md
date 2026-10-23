@@ -67,8 +67,10 @@ See the [user guide](../user/user.md) for controls and recovery.
   inventory queries. `prepare_close()` requests cancellation and defers destruction;
   `idle` fires only after the worker retires. Preset selection uses filesystem metadata;
   the explicit Refresh action queries Blender. The core rail owns its Blender glyph.
-- `ui/layout.py` builds management widgets; the page retains operation and close
-  ownership. `addons/ui/page.py` owns the read-only addon catalog. Registration
+- `ui/layout.py` composes configuration pages, installation/preset controls and
+  addon selection through three private builders in that same module. Widget
+  construction and signal connection order are retained; the page keeps operation
+  and close ownership. `addons/ui/page.py` owns the read-only addon catalog. Registration
   and personal settings import these owners lazily. Root `page.py` and
   `library_page.py` remain compatibility imports. Backend managers, installation,
   addon resolution and saved configuration paths are unchanged.
