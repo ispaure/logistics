@@ -150,7 +150,7 @@ class CatalogTests(QtTestCase):
         self.catalog.path.write_text('invalid JSON')
         broken = self.root / 'broken.cbz'
         broken.write_bytes(b'not a zip')
-        with patch('commonUtils.formats.jsonType.os.replace', side_effect=PermissionError('read only')):
+        with patch('commonUtils.persistence.atomic.os.replace', side_effect=PermissionError('read only')):
             result = self.catalog.refresh()
         self.assertEqual(result['suggestions']['Writer'], ['Alice', 'Bob'])
         self.assertEqual(result['count'], 1)
