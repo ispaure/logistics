@@ -66,6 +66,41 @@ class DocumentTests(IDEQtTests):
 
 
 class ProjectTests(unittest.TestCase):
+    def test_save_baseline_does_not_adopt_another_writer_after_publication(self):
+        from unittest.mock import patch
+        from features.ide.projects import ProjectStore
+        from commonUtils.persistence import atomic_write_bytes
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'workspace.json'
+            store = ProjectStore(path)
+            external = b'{"version":1,"projects":[],"open_ids":[],"active_id":"external"}'
+            published = []
+            def publish_then_external_write(target, content, **kwargs):
+                atomic_write_bytes(target, content, **kwargs)
+                published.append(content)
+                path.write_bytes(external)
+            with patch('features.ide.projects.atomic_write_bytes', side_effect=publish_then_external_write):
+                store.save()
+            self.assertEqual(store.original, published[0])
+            with self.assertRaisesRegex(OSError, 'changed in another instance'):
+                store.save()
+            self.assertEqual(path.read_bytes(), external)
+
+    def test_oversized_save_preserves_readable_checkpoint_and_baseline(self):
+        from features.ide.projects import Project, ProjectStore
+        with tempfile.TemporaryDirectory() as directory:
+            store = ProjectStore(Path(directory) / 'workspace.json')
+            project = Project('Example', directory)
+            store.projects[project.id] = project
+            store.save()
+            original = store.path.read_bytes()
+            project.layout = {'oversized': 'x' * (4 * 1024 * 1024)}
+            with self.assertRaisesRegex(ValueError, '4 MiB'):
+                store.save()
+            self.assertEqual(store.path.read_bytes(), original)
+            self.assertEqual(store.original, original)
+            self.assertIsNone(ProjectStore(store.path).error)
+
     def test_column_guide_persistence_legacy_default_and_validation(self):
         from features.ide.projects import Project, ProjectStore
         with tempfile.TemporaryDirectory() as directory:

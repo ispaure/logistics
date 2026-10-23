@@ -124,7 +124,9 @@ IDE is an independent lazy PageContribution (`ide.workspace`). ProjectStore keep
 UUID registrations and all project layouts in one version-1 atomic workspace JSON
 beside Logistics preferences. It checks the previous bytes before publication to
 reject competing instance writes (this is not a cross-process lock). Corrupt or
-unsupported stores are retained. Store write failures are reported in the page;
+unsupported stores are retained. Reads and writes share a 4 MiB limit so a saved
+checkpoint remains readable. A successful save advances its baseline to the bytes
+it published, without adopting a subsequent writer's bytes. Store write failures are reported in the page;
 they do not trap the application in an endless shutdown wait after document close
 choices have completed.
 
