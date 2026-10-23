@@ -73,7 +73,10 @@ Edited signed books may require signing again. Atomic staging stays beside the
 EPUB so replacement is on the same filesystem; the source's permissions are kept.
 The backup must complete and match the SHA-256 of the copied original bytes
 before replacement. Backup changes during verification or corrupted copies
-abort publication and remove the failed backup. Failure/cancellation cleans staging
+abort publication and remove the failed backup only while it retains the identity
+of the exclusively created file. A replacement file/link is preserved and cannot
+admit publication, even with identical bytes. Identity checks are optimistic;
+they do not lock out external writers or attribute same-file in-place edits. Failure/cancellation cleans staging
 and leaves the source unchanged. External-process conflicts are checked using
 filesystem identity, size and nanosecond timestamps before replacement.
 

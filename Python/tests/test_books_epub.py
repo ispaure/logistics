@@ -142,6 +142,36 @@ class EPUBTests(unittest.TestCase):
         self.assertFalse(list(self.folder.glob('book.epub.bak*')))
         self.assertFalse(list(self.folder.glob('.*.epub')))
 
+    def test_replaced_backup_path_is_preserved_and_never_admits_publication(self):
+        from commonUtils.filesystem.snapshots import verified_file_snapshot
+        for kind in ('different-bytes', 'same-bytes', 'link'):
+            with self.subTest(replacement=kind):
+                path = make_book(self.folder / (kind + '.epub'))
+                original = path.read_bytes()
+                external = self.folder / (kind + '-external')
+                external.write_bytes(b'another writer owns this content')
+                observed = {}
+                def replace_backup(backup, **kwargs):
+                    backup = Path(backup)
+                    parked = backup.with_name(backup.name + '.owned')
+                    backup.rename(parked)
+                    if kind == 'link':
+                        backup.symlink_to(external)
+                    else:
+                        backup.write_bytes(original if kind == 'same-bytes' else external.read_bytes())
+                    observed.update(path=backup, parked=parked, content=backup.read_bytes())
+                    return verified_file_snapshot(backup, **kwargs)
+                with patch('commonUtils.filesystem.snapshots.verified_file_snapshot', side_effect=replace_backup):
+                    with self.assertRaisesRegex(BookError, 'backup'):
+                        save_metadata(EPUBBook(path), {'title': ['Must not publish']})
+                self.assertEqual(path.read_bytes(), original)
+                self.assertTrue(observed['path'].exists())
+                self.assertEqual(observed['path'].read_bytes(), observed['content'])
+                self.assertEqual(observed['parked'].read_bytes(), original)
+                self.assertEqual(observed['path'].is_symlink(), kind == 'link')
+                self.assertEqual(external.read_bytes(), b'another writer owns this content')
+                self.assertFalse(list(self.folder.glob('.*.epub')))
+
     def test_required_fields_and_refinement_removal(self):
         book = EPUBBook(self.path)
         with self.assertRaises(BookError):
