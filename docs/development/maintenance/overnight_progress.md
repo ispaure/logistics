@@ -415,3 +415,78 @@ completed baseline. Remaining priorities continue to govern selection.
 - Doctor, dependency compatibility, toolchain, source hygiene and architecture
   checks pass. Full desktop/shared suites are in progress at this checkpoint;
   their completion is recorded separately rather than assumed.
+
+## Continued execution: shared INI publication consolidation
+
+- INI saves duplicated staging/flush/fsync/permissions/replacement/cleanup and
+  bypassed host provider boundaries for existing files and new parent directories.
+  The format owner now delegates publication to atomic_write_bytes while retaining
+  INI parsing, BOM/newline handling and byte-conflict policy. The shared writer
+  also verifies staged contents before replacement.
+- All nine INI tests pass in both Python environments, including new boundary and
+  mid-stage external-write fixtures. Seven shared settings files, three Logistics
+  settings tests and three configuration migration tests pass. Lint/architecture
+  pass; no new dependency or JSON/INI format was introduced.
+- Shared `9518d82`, Logistics pin `4b4704c3` and Blue Hole vendor `08ae869` are
+  committed. Vendor membership/bytes match and all 31 Blue Hole tests pass.
+- The preceding full shared run at `00c11e5` completed all 179 files with zero
+  failures. The later INI change received the focused coverage above.
+
+## Continued execution: bounded mobile transfer record loading
+
+- A fixture grew a valid record beyond 4 MiB after metadata preflight; the old
+  reader admitted it after an unbounded read. Actual reads now stop at the shared
+  limit plus one byte and preserve/reject oversized records without admitting jobs.
+- All 29 transfer job tests and 14 mirror UI tests pass; committed as `63ce436b`.
+- A new full mobile run passed 160 of 162 files; two were blocked by sandbox denial
+  of their temporary loopback HTTP listener. Both passed unrestricted reruns
+  (15 chat UI tests and one complete mobile workflow). These are environment
+  failures followed by passing reruns, not a single unrestricted all-green run.
+
+## Continued execution: late Bulk Rename tree layouts
+
+- Full desktop verification completed 179 files with one failing file: Bulk
+  Rename navigation intermittently lost the selected folder after a later model
+  layout. A standalone 19-test rerun passed, but diagnostic repetition reproduced
+  two failures in eight attempts. Evidence showed a valid selected row far outside
+  the viewport after the initial reveal had already retired.
+- Model sorting/insertion now remembers whether the selection was visible and
+  defers a visibility correction until layout settles. It does not expand collapsed
+  branches or follow an already offscreen selection; hidden/closed widgets skip
+  correction. The existing initial reveal remains responsible for navigation.
+- All eight diagnostic repetitions and all 20 tests pass. The final fixture uses
+  owned sibling folders rather than host directory counts, and fresh indexes
+  after asynchronous sorting. Lint, architecture and five documentation checks
+  pass. The full desktop failure and subsequent focused repair remain in the
+  record; a full-suite rerun is separate validation.
+
+## Bulk Rename layout owner and deterministic regression
+
+- The second full desktop run completed 179 files with one failure in the new
+  regression's asynchronous filesystem sibling setup; the original navigation
+  case passed. No timeout increase or assertion removal was used.
+- Deferred layout ownership now belongs to a private _FolderTree view in the
+  existing widget module. Its regression uses an in-memory Qt item model to verify
+  visible-selection restoration, manual scrolling and collapse preservation,
+  independently of filesystem watcher timing. Hide retires its deferred timer.
+- All 20 Bulk Rename tests and eight real-filesystem navigation repetitions pass
+  after that extraction. The original race had failed two of eight repetitions.
+  A new full desktop run is separate from those focused results.
+
+## Complete bounded text reads and measured-stream integrity
+
+- A short-read provider fixture reproduced admitting only the first two bytes of
+  a complete text file as an editable baseline. ResourceTextSession now reads
+  through short reads to EOF or its byte ceiling plus one, then applies its
+  existing total editing limit and source revision checks.
+- Shared read_up_to owns that bounded prefix mechanism; ten stream tests, five
+  selection tests, four shared resource files in the mobile environment and seven
+  picker tests in each UI environment pass. Shared `1959963` was pinned as
+  Logistics `e29901a6` and Blue Hole vendor `c555097`; exact vendor and 31 consumer
+  tests pass.
+- Measured reads also reproduced hiding would-block as EOF and turning an
+  oversized result into an unlimited read. They now reject both while retiring
+  the progress scope and leaving source ownership unchanged. Six progress tests
+  pass in each environment, plus seven mobile file-loading and five notes/library
+  tests. Shared `6a9bcd4`, Logistics `3e696e46` and Blue Hole `e81bd7b` are committed;
+  exact vendor and all 31 consumer tests pass. A fresh full shared run is underway.
