@@ -55,7 +55,7 @@ class LocationCatalog(qt.QObject):
             return LocationContext('Local', max(matches, key=lambda item: len(item[0].parts))[1])
         if self._local_root is None:
             import config
-            self._local_root = Path(config.LogisticsConfig().path_remote_local).absolute()
+            self._local_root = Path(config.LogisticsConfig(create_resources=False).path_remote_local).absolute()
         try:
             relative = path.relative_to(self._local_root)
         except ValueError:
