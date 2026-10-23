@@ -65,6 +65,53 @@ class PersonalSettingsResetTests(unittest.TestCase):
         self.assertEqual(original.read_bytes(), before)
         self.assertEqual(list(self.root.glob('configuration.reset-backup-*')), [])
 
+    def test_failed_publication_preserves_racing_configuration_and_backup(self):
+        from commonUtils.persistence.publication import rename_exclusive
+        self.write('configuration/configFile.ini', 'original settings')
+        injected = []
+        def publish(source, target):
+            source, target = Path(source), Path(target)
+            if source.name == 'replacement':
+                self.config.mkdir()
+                self.write('configuration/other.ini', 'external settings')
+                injected.append(True)
+            return rename_exclusive(source, target)
+        # Exercise both the legacy rename boundary and the shared publication owner.
+        with patch.object(Path, 'rename', publish), \
+                patch('features.settings.rename_exclusive', side_effect=publish, create=True):
+            with self.assertRaisesRegex(OSError, 'Previous settings are kept'), reset_personal_configuration():
+                self.fail('Reset must not enter runtime activation after publication fails')
+        self.assertEqual(injected, [True])
+        self.assertEqual((self.config / 'other.ini').read_text(), 'external settings')
+        backup, = self.root.glob('configuration.reset-backup-*')
+        self.assertEqual((backup / 'configFile.ini').read_text(), 'original settings')
+        self.assertEqual(list(self.root.glob('.settings-reset-*')), [])
+        self.assertFalse((self.root / 'state/settings-migrations.ini').exists())
+
+    def test_runtime_rollback_preserves_a_replaced_configuration_directory(self):
+        self.write('configuration/configFile.ini', 'original settings')
+        moved = self.root / 'moved-reset-directory'
+        with self.assertRaisesRegex(OSError, 'Previous settings are kept'), reset_personal_configuration():
+            self.config.rename(moved)
+            self.config.mkdir()
+            self.write('configuration/other.ini', 'external settings')
+            raise RuntimeError('Activation failed after external replacement')
+        self.assertEqual((self.config / 'other.ini').read_text(), 'external settings')
+        backup, = self.root.glob('configuration.reset-backup-*')
+        self.assertEqual((backup / 'configFile.ini').read_text(), 'original settings')
+        self.assertTrue(moved.is_dir())
+        self.assertEqual(list(self.root.glob('.settings-reset-*')), [])
+
+    def test_successful_activation_does_not_discard_backup_after_directory_replacement(self):
+        self.write('configuration/configFile.ini', 'original settings')
+        with self.assertRaisesRegex(OSError, 'Previous settings are kept'), reset_personal_configuration():
+            self.config.rename(self.root / 'moved-reset-directory')
+            self.config.mkdir()
+            self.write('configuration/other.ini', 'external settings')
+        self.assertEqual((self.config / 'other.ini').read_text(), 'external settings')
+        backup, = self.root.glob('configuration.reset-backup-*')
+        self.assertEqual((backup / 'configFile.ini').read_text(), 'original settings')
+
     def test_symlinked_configuration_is_never_followed(self):
         target = self.root / 'other'
         target.mkdir()
@@ -77,12 +124,12 @@ class PersonalSettingsResetTests(unittest.TestCase):
 
     def test_failed_rollback_preserves_recoverable_backup(self):
         self.write('configuration/configFile.ini', '[Other]\nvalue_str=old\n')
-        original_rename = Path.rename
+        from commonUtils.persistence.publication import rename_exclusive
         def rename(path, target):
             if path.name.startswith('configuration.reset-backup-'):
                 raise OSError('Recovery rename failed')
-            return original_rename(path, target)
-        with patch.object(Path, 'rename', rename):
+            return rename_exclusive(path, target)
+        with patch('features.settings.rename_exclusive', side_effect=rename):
             with self.assertRaisesRegex(OSError, 'Previous settings are kept'), reset_personal_configuration():
                 raise RuntimeError('Apply failed')
         backups = list(self.root.glob('configuration.reset-backup-*'))

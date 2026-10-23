@@ -8,6 +8,8 @@ from uuid import uuid4
 
 from commonUtils.configuration.layered import LayeredSettings, register_settings
 from commonUtils.configuration.settings import settings_path
+from commonUtils.filesystem.links import is_junction
+from commonUtils.persistence.publication import rename_exclusive
 from features.preferences import preferences_path
 
 LEGACY_SETTINGS_MIGRATIONS = ('feature-enable-v1', 'feature-overrides-v2', 'blender-release-files-v1', 'text-editor-v1', 'git-options-v1')
@@ -60,7 +62,7 @@ def reset_personal_configuration():
     from commonUtils.persistence import atomic_write_bytes
     root = preferences_path().parent / 'configuration'
     root.parent.mkdir(parents=True, exist_ok=True)
-    if root.is_symlink() or (root.exists() and not root.is_dir()):
+    if root.is_symlink() or is_junction(root) or (root.exists() and not root.is_dir()):
         raise ValueError('Personal configuration must be a regular folder to reset it')
     ledger = migration_ledger()
     ledger_snapshot = ledger.path.read_bytes() if ledger.path.exists() else None
@@ -72,27 +74,39 @@ def reset_personal_configuration():
         replacement.mkdir(mode=0o700)
         if root.exists():
             for path in root.rglob('*'):
-                if path.is_symlink():
-                    raise ValueError('Personal configuration contains a symlink; inspect it before resetting')
+                if path.is_symlink() or is_junction(path):
+                    raise ValueError('Personal configuration contains a link; inspect it before resetting')
+        identity = replacement.stat()
+        def validate_published_root():
+            current = root.lstat()
+            if (root.is_symlink() or is_junction(root)
+                    or (current.st_dev, current.st_ino) != (identity.st_dev, identity.st_ino)):
+                raise OSError('Personal configuration directory changed during reset.')
         previous = root.exists()
+        published = False
         if previous:
-            root.rename(backup)
+            rename_exclusive(root, backup)
         try:
-            replacement.rename(root)
+            rename_exclusive(replacement, root)
+            published = True
             ledger.complete(*LEGACY_SETTINGS_MIGRATIONS)
             yield root
+            validate_published_root()
         except BaseException:
             try:
-                if root.exists():
+                if published and (root.exists() or root.is_symlink()):
+                    validate_published_root()
                     shutil.rmtree(root)
                 if previous:
-                    backup.rename(root)
-                if ledger_snapshot is None:
-                    ledger.path.unlink(missing_ok=True)
-                else:
-                    atomic_write_bytes(ledger.path, ledger_snapshot)
+                    rename_exclusive(backup, root)
+                if published:
+                    if ledger_snapshot is None:
+                        ledger.path.unlink(missing_ok=True)
+                    else:
+                        atomic_write_bytes(ledger.path, ledger_snapshot)
             except OSError as error:
-                raise OSError(f'Could not restore personal configuration. Previous settings are kept at {backup}') from error
+                recovery = f' Previous settings are kept at {backup}' if previous else ''
+                raise OSError('Could not restore personal configuration.' + recovery) from error
             raise
         else:
             if previous:
