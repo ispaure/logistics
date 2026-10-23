@@ -1,5 +1,16 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L8 text-editor command groups
+
+The editing builder names search, line/selection, structure/compare/tools and
+preference groups, retaining Escape/hidden-shortcut reconciliation and status
+controls centrally. Every original method, action/shortcut order and captured
+callback matches after AST expansion. All 86 editing cases across nine files pass
+before/after in identical order, including source bytes, recovery, resource pickers
+and Save behavior; architecture, owner lint, wiki and whitespace pass. No editor
+engine, Save policy, persisted format, reserved Misc code or external edit changed.
+This commits the editor stage; settings and Bulk Rename remain in L8. No push.
+
 ## Sequential audit implementation: L7 Cloud UI construction
 
 Cloud UI names retained control and connection/import/advanced/browser view

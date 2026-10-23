@@ -8,6 +8,23 @@ from commonUtils.ui.code_editor.search import SearchPanel
 
 class EditingCommands:
     def _build_editing(self, layout):
+        self._build_editor_search(layout)
+        self._build_editor_line_commands()
+        self._build_editor_structure_commands()
+        self._build_editor_preferences()
+        self.escape = qt.QShortcut(qt.QKeySequence("Escape"), self)
+        for key in ('font', 'zoom_in', 'zoom_out', 'wrap', 'numbers', 'whitespace', 'auto_indent', 'auto_pairs'):
+            self.actions[key].setVisible(False)
+            self.actions[key].setShortcut(qt.QKeySequence())
+        self.escape.setContext(qt.Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self.escape.activated.connect(self.escape_editor)
+        self.encoding_button = self._status_button("Encoding", self.choose_encoding)
+        self.endings_button = self._status_button("Line endings", self.choose_endings)
+        self.indent_button = self._status_button("Indentation", self.choose_indentation)
+        self._active_changed()
+
+    def _build_editor_search(self, layout):
+        """Build the retained search panel and its navigation commands."""
         self.search = SearchPanel(self)
         layout.insertWidget(layout.count() - 1, self.search)
         self.search.idle.connect(self.idle)
@@ -32,6 +49,9 @@ class EditingCommands:
             ("goto", "Go to Line / Column…", self.go_to, "Ctrl+G"),
         ]:
             self.action(menu, key, label, callback, shortcut)
+
+    def _build_editor_line_commands(self):
+        """Build line, selection and multi-cursor editing commands."""
         for key, label, callback, shortcut in [
             (
                 "duplicate",
@@ -80,6 +100,9 @@ class EditingCommands:
         self.action(self._edit_menu, "next_occurrence", "Add Next Occurrence", lambda: self.edit("add_next_occurrence"), "Ctrl+Alt+D")
         self.action(self._edit_menu, "rectangle", "Rectangular Selection from Selection", lambda: self.edit("rectangular_selection"))
         self.action(self._edit_menu, "clear_cursors", "Clear Extra Cursors", lambda: self.edit("clear_extra_cursors"))
+
+    def _build_editor_structure_commands(self):
+        """Build folding/split/compare, structured-data and text-transform command groups."""
         folding = self._view_menu.addMenu("Code Folding")
         for key, label, method in [("fold_current", "Toggle Current Fold", "fold_current"),
                                    ("fold_all", "Fold All", "fold_all"),
@@ -115,6 +138,9 @@ class EditingCommands:
         ]:
             self.action(transforms, "transform_" + key, label,
                         lambda key=key: self.transform_text(key))
+
+    def _build_editor_preferences(self):
+        """Build existing view/preference actions before shortcut and status reconciliation."""
         for key, label in [
             ("wrap", "Word Wrap"),
             ("numbers", "Line Numbers"),
@@ -147,16 +173,6 @@ class EditingCommands:
             lambda: self.zoom(-1),
             qt.QKeySequence.StandardKey.ZoomOut,
         )
-        self.escape = qt.QShortcut(qt.QKeySequence("Escape"), self)
-        for key in ('font', 'zoom_in', 'zoom_out', 'wrap', 'numbers', 'whitespace', 'auto_indent', 'auto_pairs'):
-            self.actions[key].setVisible(False)
-            self.actions[key].setShortcut(qt.QKeySequence())
-        self.escape.setContext(qt.Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        self.escape.activated.connect(self.escape_editor)
-        self.encoding_button = self._status_button("Encoding", self.choose_encoding)
-        self.endings_button = self._status_button("Line endings", self.choose_endings)
-        self.indent_button = self._status_button("Indentation", self.choose_indentation)
-        self._active_changed()
 
     def _status_button(self, name, callback):
         button = qt.QToolButton()

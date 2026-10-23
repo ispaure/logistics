@@ -37,6 +37,13 @@ rules are replaced. Conditional generic activation preserves specialized
 non-text file handling and the built-in Markdown reader; explicit text-editor
 opening remains available for Markdown and other text formats.
 
+`EditingCommands._build_editing` builds named search, line/selection,
+structure/compare/tools and preference command groups in their existing order.
+It retains Escape, hidden preference-shortcut reconciliation and status controls.
+Group callbacks keep their captured loop values and route through the same editor
+commands. Search lifetime, Save/Save As, undo, source bytes and document ownership
+remain with their existing components.
+
 ## Notes document ownership
 
 The desktop Notes library clears `viewer.document_state` when retiring a private
