@@ -1,5 +1,6 @@
 """Feature-owned user settings; no repository-specific config in Logistics core."""
 import json
+from copy import deepcopy
 import os
 from configparser import Error as ConfigError
 from pathlib import Path
@@ -23,11 +24,13 @@ class Preferences:
         self.last_repository = ''
         self.subtrees = {}
         self.warning = ''
+        self._original = None
         self.options = validate_options({})
         data = {}
         self.views = WeakSet()
         try:
-            data = json.loads(self.path.read_text(encoding='utf-8'))
+            self._original = self.path.read_bytes()
+            data = json.loads(self._original.decode('utf-8'))
             if not isinstance(data, dict): raise ValueError('Expected an object')
             self.executable = str(data.get('executable') or 'git')
             self.last_repository = str(data.get('last_repository', ''))
@@ -106,6 +109,12 @@ class Preferences:
         # Avoid overwriting malformed settings silently.
         if self.warning: raise OSError(self.warning)
         options = validate_options(self.options)
+        def validate():
+            current = self.path.read_bytes() if self.path.exists() else None
+            if current != self._original:
+                raise OSError('Git settings changed in another instance. Reopen the workspace to load them.')
+        # Check before independent INI updates as well as during JSON publication.
+        validate()
         if not self.custom:
             from .configuration import FIELDS, field_key
             changes = {('Git', field_key(key)): str(self.options[key]).lower() if isinstance(self.options[key], bool) else str(self.options[key])
@@ -125,7 +134,19 @@ class Preferences:
         if self.custom:
             payload['executable'] = self.executable
         content = json.dumps(payload, indent=2).replace('\n', os.linesep).encode('utf-8')
-        atomic_write_bytes(self.path, content)
+        atomic_write_bytes(self.path, content, validate=validate)
+        self._original = content
+
+    def adopt_saved(self, other):
+        """Adopt a same-file saved state without sharing its mutable collections."""
+        if self.path.resolve() != other.path.resolve():
+            raise ValueError('Cannot adopt preferences from a different settings file.')
+        self.options = deepcopy(other.options)
+        self.executable = other.executable
+        self.repositories = deepcopy(other.repositories)
+        self.last_repository = other.last_repository
+        self.subtrees = deepcopy(other.subtrees)
+        self._original = other._original
 
     def remember(self, path):
         value = str(Path(path))

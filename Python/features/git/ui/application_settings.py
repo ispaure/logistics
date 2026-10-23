@@ -456,10 +456,7 @@ class GitPreferencesPanel(qt.QWidget):
             current.save()
             for preferences in list(Preferences.instances):
                 if preferences.path.resolve() != current.path.resolve(): continue
-                preferences.options = deepcopy(options); preferences.executable = executable
-                preferences.repositories = deepcopy(current.repositories)
-                preferences.last_repository = current.last_repository
-                preferences.subtrees = deepcopy(current.subtrees)
+                preferences.adopt_saved(current)
                 for view in list(preferences.views): view.apply_preferences(); view.refresh()
             self.preferences = current
             if requested: self.identity = requested

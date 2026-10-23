@@ -262,3 +262,17 @@ This preparation does not lock out other editors; Git still owns the subsequent
 mutation and a concurrent change after the final check remains possible.
 `test_git_backend.py` covers corrupt copies and changes during multi-file backup;
 `test_git_preferences.py` covers the actual enabled UI and backup mapping.
+
+## Settings writer conflicts
+
+Git JSON preferences retain the bytes loaded by each instance. Save checks that
+baseline before separate INI changes and during atomic JSON publication, rejecting
+stale edits, external deletion and a file created after a missing-file load. A
+successful write advances the baseline to the published bytes. Settings fanout
+uses the preference owner's `adopt_saved` method to copy fields and the matching
+baseline together, so retained views remain writable after in-process updates.
+
+INI and JSON writes remain separate operations; this is optimistic conflict
+detection, not a multi-file transaction or cross-process writer lock. The error
+asks the user to reopen the workspace rather than overwrite another instance.
+`test_git_preferences.py` covers competing instances and retained-view fanout.
