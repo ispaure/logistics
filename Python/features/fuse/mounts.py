@@ -55,7 +55,7 @@ def get_remote_mount_path(remote_name: str, config_path=None) -> Path:
     """Return the expected local mount path for one rclone remote."""
 
     validate_remote_name(remote_name)
-    root = config.LogisticsConfig().path_remote_network_mount
+    root = config.LogisticsConfig(create_resources=False).path_remote_network_mount
     if config_path is not None:
         identity = os.path.normcase(str(Path(config_path).resolve()))
         root /= hashlib.sha256(os.fsencode(identity)).hexdigest()[:16]

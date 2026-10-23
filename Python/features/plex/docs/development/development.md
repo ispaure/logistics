@@ -17,7 +17,9 @@ Provides Plex integration for Logistics.
 ## Structure
 
 - `detection.py` detects Plex PMS support and platform data locations.
-- `folders.py` resolves local and mounted `-PMSDATA` helper folders.
+- `folders.py` resolves local and mounted `-PMSDATA` helper folders using
+  configuration path lookup that leaves unrelated software/credential directories
+  untouched. Folder object construction does not initialize those resources.
 - `actions.py` exposes package/restore actions and optional user-facing error messages.
 - `packages.py` stages archive creation and extraction before replacing existing data.
 - `database.py` reads SQLite databases in read-only mode and resolves media/episode relationships.

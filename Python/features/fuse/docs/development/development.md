@@ -12,7 +12,8 @@ Provides optional mounted-folder access for rclone remotes.
 FUSE requires the rclone feature. It contributes Open Mount Folder for configured
 remotes, using the selected credential context. Browsing/switching folders must
 not probe mounts, contact remotes or provision software; dependency checks,
-readiness probes and mounting run only after that action.
+readiness probes and mounting run only after that action. Mount-path calculation
+resolves configuration without creating unrelated Software or credential folders.
 
 ## Platform support
 

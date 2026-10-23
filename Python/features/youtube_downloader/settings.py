@@ -71,7 +71,7 @@ def find_ffmpeg() -> str:
     bundled = {OS.WIN: ('ffmpeg_win', 'ffmpeg.exe'), OS.MAC: ('ffmpeg_macos', 'ffmpeg')}
     if platform in bundled:
         import config
-        candidate = Path(config.LogisticsConfig().path_logistics_software, *bundled[platform])
+        candidate = Path(config.LogisticsConfig(create_resources=False).path_logistics_software, *bundled[platform])
         if candidate.is_file():
             return str(candidate)
     raise FileNotFoundError('FFmpeg was not found. Install it on PATH or provide the bundled executable.')
