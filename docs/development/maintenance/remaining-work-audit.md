@@ -158,14 +158,25 @@ subscription, presentation and retargeting. Original and extracted scan bodies
 match after captured-field expansion. Seven new contracts also pass against the
 original closure, covering cache-only/paused behavior, coordinator following,
 reconciliation arguments, cancellation, snapshot closure and propagated errors.
-Browser and index selections pass with native filesystem event delivery. Two
-sandbox-only watcher timeouts were reproduced on unchanged source and pass with
-native events enabled; they are not refactor regressions.
+Browser (57 cases in six files) and index (113 cases in 15 files) selections
+pass with native filesystem event delivery. Sandbox-only watcher timeouts in three
+baseline test files pass when unchanged source runs with native events enabled;
+they are not refactor regressions.
 
-The next consumer step is the desktop Folder Hub tree: source/category filtering,
-copy-label disambiguation, Qt item construction and selection restoration are still
-interleaved. The source and rendering phases can be named without moving public
-interfaces or changing the folder discovery model.
+The companion Logistics step separates desktop Folder Hub source/category/legacy
+filtering from copy-label/Qt tree rendering and final selection restoration in
+`FolderTreePresentation`. Ordered helper expansion reproduces the original refresh
+flow, including empty-state handling and signal-sensitive mutation order. The same
+39 Folder Hub UI tests pass before and after extraction; the broader five-file
+folder selection passes 52 cases. Discovery, physical entry
+keys, duplicate-copy labels, tooltips, grouping and selected-folder behavior stay
+unchanged. These two scoped improvements require no external consumer migration.
+
+Further work should start from the current code, not the completed C1–C8/L1–L10
+headings or old private-cache field notes. The browser GUI still owns admission and
+pending-job state; extracting another state owner needs a concrete lifetime or
+maintenance benefit. Native platform limits above and live-service checks remain
+separate from this desktop readability follow-up.
 
 ## Find the current contract
 
