@@ -114,6 +114,12 @@ separate preference polling timers. Layered saves notify after publication; one
 application monitor detects external changes every 500 ms and queues GUI callbacks.
 Subscriptions retire with their QObject owners. Launcher values apply at launch.
 Each panel retains editors for both scopes and checks all dirty editors on close.
+`FeatureSettingsPanel.refresh` retains contribution selection and availability
+decisions. `_refresh_editor_sources` refreshes contributed widgets and scoped INI
+sources without replacing retained buffers; `_project_feature_settings` reparents
+those controls into scoped sections and reveals only active tab pages. Creation,
+refresh, scope propagation and visibility keep their original order, including
+custom widgets that opt into the systemic editor.
 Feature schemas declare exposed systemic settings; runtime book positions,
 recovery, folder credentials and Git account/action records retain their own
 persistence. The feature-enable baseline is `[FeatureDefaults] disabled_list-str`

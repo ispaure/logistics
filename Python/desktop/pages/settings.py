@@ -185,6 +185,20 @@ class FeatureSettingsPanel(qt.QWidget):
         state = state or self._state()
         members = getattr(state, 'members', ()) or (state.name,)
         entries = [entry.contribution for entry in registry.get_settings() if entry.feature_name in members]
+        self._refresh_editor_sources(entries, members)
+        self._project_feature_settings(entries)
+        if not state.available:
+            self.status.setText('Required feature dependencies are unavailable.')
+        elif not state.enabled:
+            self.status.setText('Enable this feature under Features.')
+        elif not entries and not self.configs:
+            self.status.setText('No additional settings.')
+        else:
+            self.status.setText('')
+        self.status.setVisible(bool(self.status.text()))
+
+    def _refresh_editor_sources(self, entries, members):
+        """Refresh contributed widgets and scoped INI editors without replacing retained buffers."""
         paths = {'application': [], 'personal': []}
         for entry in entries:
             scope = entry.config_scope or entry.scope
@@ -211,6 +225,9 @@ class FeatureSettingsPanel(qt.QWidget):
         if self.selected_scope is not None:
             for config in self.configs.values():
                 config.set_scope(self.selected_scope)
+
+    def _project_feature_settings(self, entries):
+        """Reparent retained controls into scoped sections and reveal only active tab pages."""
         # Keep every editor and custom widget alive during enable/disable updates.
         for body in self.bodies.values():
             content = body.layout()
@@ -265,15 +282,6 @@ class FeatureSettingsPanel(qt.QWidget):
             if current is not None:
                 current.show()
         self.body = self.bodies.get('application') or self.bodies.get('personal')
-        if not state.available:
-            self.status.setText('Required feature dependencies are unavailable.')
-        elif not state.enabled:
-            self.status.setText('Enable this feature under Features.')
-        elif not entries and not self.configs:
-            self.status.setText('No additional settings.')
-        else:
-            self.status.setText('')
-        self.status.setVisible(bool(self.status.text()))
 
     def can_close(self):
         if not all(config.can_close() for config in self.configs.values()):

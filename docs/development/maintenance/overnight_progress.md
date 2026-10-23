@@ -1,5 +1,16 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L8 feature-settings projection
+
+Feature-settings refresh separates contributed widget/scoped INI source refresh
+from retained section/tab projection; contribution selection and availability
+decisions stay in `refresh`. Every original method/scope/callback/visibility
+statement matches after AST expansion. All 28 settings-page and ten personal-reset
+cases pass before/after in identical order, plus Blender settings seven,
+architecture, owner lint, wiki and whitespace. Retained custom state, dirty buffers,
+inheritance, scope propagation and close policy remain unchanged. This commits the
+settings stage; Bulk Rename remains in L8. No external edit or project push.
+
 ## Sequential audit implementation: L8 text-editor command groups
 
 The editing builder names search, line/selection, structure/compare/tools and
