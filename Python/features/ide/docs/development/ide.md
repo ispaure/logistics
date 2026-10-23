@@ -4,6 +4,9 @@ Find in Files uses the same Qt Popup/host-and-screen anchoring helper as Find
 Usages. Its bounded executor searches immutable root/options/buffer snapshots;
 debounced changes cancel earlier requests and generations reject stale results.
 Search and preview futures are separately retained and polled on the GUI thread.
+Failed worker submission reports an error in the matching status/preview label,
+sets that request's cancellation flag, and leaves it available for a fresh retry.
+Empty startup/completion exceptions show their type instead of blank feedback.
 Closing/dismissing cancels work, and project shutdown waits for jobs to retire.
 Shared search supplies bounded PCRE matching and UTF-16 positions; CodeEdit supplies syntax
 preview and selections; navigation converts to code-point columns through the

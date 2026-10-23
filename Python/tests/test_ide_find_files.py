@@ -80,6 +80,48 @@ class FindFilesTests(QtTestCase):
         self.assertFalse(dialog.open_button.isEnabled())
         self.workspace.current.document().setModified(False)
 
+    def test_search_worker_start_failure_is_visible_and_retryable(self):
+        from features.ide.ui import find_files
+        self.workspace.find_project()
+        dialog = self.workspace.project_find
+        for error in (OSError('synthetic startup failure'), RuntimeError()):
+            with self.subTest(error=type(error).__name__):
+                dialog.query.setText('old')
+                dialog.changed()
+                dialog.debounce.stop()
+                with patch.object(find_files._executor, 'submit', side_effect=error):
+                    dialog.start_search()
+                self.assertIn(str(error) or type(error).__name__, dialog.summary.text())
+                self.assertIsNone(dialog.search_future)
+                self.assertEqual(dialog.jobs, [])
+                self.assertTrue(dialog.search_cancel.is_set())
+                dialog.changed()
+                dialog.debounce.stop()
+                dialog.start_search()
+                self.wait_until(lambda: dialog.results.topLevelItemCount() == 1
+                                and dialog.preview_future is None)
+                self.assertEqual(dialog.preview.toPlainText(), 'old\n')
+
+    def test_preview_worker_start_failure_is_visible_and_retryable(self):
+        from features.ide.ui import find_files
+        self.workspace.find_project()
+        dialog = self.workspace.project_find
+        dialog.debounce.stop()
+        hit = search_files([self.root], [], 'old').hits[0]
+        item = qt.QTreeWidgetItem(['old', 'file.py', '1'])
+        item.setData(0, qt.Qt.ItemDataRole.UserRole, hit)
+        for error in (OSError('synthetic startup failure'), RuntimeError()):
+            with self.subTest(error=type(error).__name__):
+                with patch.object(find_files._executor, 'submit', side_effect=error):
+                    dialog.selected(item)
+                self.assertIn(str(error) or type(error).__name__, dialog.preview_title.text())
+                self.assertIsNone(dialog.preview_future)
+                self.assertEqual(dialog.jobs, [])
+                self.assertTrue(dialog.preview_cancel.is_set())
+                dialog.selected(item)
+                self.wait_until(lambda: dialog.preview_future is None)
+                self.assertEqual(dialog.preview.toPlainText(), 'old\n')
+
     def test_stale_job_is_discarded_and_close_cancels_search(self):
         from commonUtils.search.files import SearchResult
         started, release = Event(), Event()
