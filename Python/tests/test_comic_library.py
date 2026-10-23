@@ -124,6 +124,34 @@ class MetadataTests(ComicFixture, unittest.TestCase):
         with self.assertRaises(ValueError):
             ComicDocument(self.path)
 
+    def test_oversized_serialized_metadata_preserves_readable_archive_and_model(self):
+        self.archive()
+        document = ComicDocument(self.path)
+        before, metadata = self.path.read_bytes(), document.info.to_bytes()
+        # XML escaping makes this exceed 4 MiB although the input is only 1 MiB.
+        with self.assertRaisesRegex(ValueError, '4 MiB'):
+            document.save({'Summary': '&' * (1024 * 1024)})
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(document.info.to_bytes(), metadata)
+        self.assertTrue(document.unchanged())
+        self.assertEqual(ComicDocument(self.path).info.writer, 'Old')
+
+    def test_batch_size_admission_preserves_earlier_archives(self):
+        from features.comics.selection import ComicSelection
+        self.archive()
+        second = self.path.with_name('large.cbz')
+        with zipfile.ZipFile(second, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('ComicInfo.xml', '<ComicInfo><Notes>' + 'x' * (4 * 1024 * 1024 - 512)
+                             + '</Notes></ComicInfo>')
+        before = {path: path.read_bytes() for path in (self.path, second)}
+        selection = ComicSelection([self.path, second])
+        # Fits the first book, exceeds the second book's remaining metadata room.
+        with self.assertRaisesRegex(ValueError, '4 MiB'):
+            selection.save({'Summary': '&' * 512})
+        for path, content in before.items():
+            self.assertEqual(path.read_bytes(), content)
+        self.assertEqual(selection.documents[0].info.get_field('Summary'), '')
+
     def test_illegal_xml_characters_do_not_replace_archive(self):
         self.archive()
         before = self.path.read_bytes()
