@@ -290,6 +290,11 @@ def ensure_remote_mounted(
     wait_timeout = timeout_seconds(wait_timeout)
     mount_path = get_remote_mount_path(remote_name, config_path)
 
+    # Validate ownership before even probing the mounted filesystem.
+    if is_remote_mounted(remote_name, config_path=config_path) and not bindings.matches(mount_path, config_path, remote_name):
+        log(Severity.ERROR, 'ensure_remote_mounted', 'Existing mount credentials are unknown or changed. Unmount it explicitly before reopening.')
+        return None
+
     if is_remote_ready(remote_name, config_path=config_path):
         if bindings.matches(mount_path, config_path, remote_name):
             return mount_path

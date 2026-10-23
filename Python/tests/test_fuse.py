@@ -49,6 +49,27 @@ class FuseTests(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
+    def test_unknown_mount_is_not_probed_recovered_or_restarted(self):
+        mounts.bindings.forget(self.mount_path)
+        with patch.object(mounts, 'is_remote_mounted', return_value=True), \
+                patch.object(mounts, 'is_remote_ready') as probe, \
+                patch.object(mounts, 'unmount_remote') as unmount, \
+                patch.object(mounts, 'mount_remote') as start:
+            self.assertIsNone(mounts.ensure_remote_mounted('Mount', self.config_path))
+        probe.assert_not_called()
+        unmount.assert_not_called()
+        start.assert_not_called()
+
+    def test_credentials_changed_during_startup_are_not_bound(self):
+        mounts.bindings.forget(self.mount_path)
+        def start(*args, **kwargs):
+            self.config_path.write_text('new credentials')
+            return self.result()
+        with patch.object(mounts, 'is_mount_path_mounted', return_value=False), \
+                patch.object(mounts.subprocess, 'run', side_effect=start):
+            self.assertFalse(mounts.mount_remote('Mount', self.config_path, self.mount_path))
+        self.assertFalse(mounts.bindings.matches(self.mount_path, self.config_path, 'Mount'))
+
     def result(self, code=0, stdout='', stderr=''):
         return subprocess.CompletedProcess([], code, stdout, stderr)
 
