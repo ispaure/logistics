@@ -88,7 +88,7 @@ callbacks must not access Qt widgets. GUI failures remain visible in the dialog.
 
 ## Validation
 
-`Python/tests/test_youtube_downloader.py` covers settings, argument boundaries,
+`Python/tests/integrations/test_youtube_downloader.py` covers settings, argument boundaries,
 paths, Linux/system FFmpeg and bundled Windows fallback, failed commands and batch
 behavior. Processes are mocked: tests do not download videos, update packages or
 transfer remote files.

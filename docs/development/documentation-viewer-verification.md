@@ -5,7 +5,7 @@ navigation check; it does not certify other application workflows.
 
 ## Desktop
 
-`Python/tests/test_documentation_viewer.py` uses real Qt widgets and windows.
+`Python/tests/tooling/test_documentation_viewer.py` uses real Qt widgets and windows.
 All four integration tests pass with both offscreen Qt and the native macOS Cocoa
 backend. They exercise all 25 installed feature User Guide buttons, including
 when disabled; every Help / Guides menu entry; File Browser help; and Bulk Rename
@@ -21,9 +21,10 @@ captures were visually reviewed for Git and systemic Logistics help.
 Run from the repository root:
 
 ```sh
-PYTHONPATH=Python:Python/tests QT_QPA_PLATFORM=offscreen .venv/bin/python -m unittest \
-  test_documentation_layout test_settings_page test_documentation_viewer \
-  commonUtils.tests.test_wiki_catalog commonUtils.tests.test_markdown_wiki -q
+PYTHONPATH=Python:. QT_QPA_PLATFORM=offscreen .venv/bin/python -m unittest \
+  tests.tooling.test_documentation_layout tests.application.test_settings_page \
+  tests.tooling.test_documentation_viewer \
+  commonUtils.tests.markdown.test_wiki_catalog commonUtils.tests.markdown.test_markdown_wiki -q
 ```
 
 Use `QT_QPA_PLATFORM=cocoa` to exercise the four viewer integration tests on macOS.
@@ -39,9 +40,10 @@ cross-wiki history and the staged payload without checkout packages on its impor
 path. Packaged feature links resolve within the bundled documentation mirror.
 
 ```sh
-PYTHONPATH=Python:mobile_build/tests:Python/tests TOGA_BACKEND=toga_dummy \
-  mobile_build/.venv/bin/python -m unittest test_documentation_ui test_packaged_startup \
-  commonUtils.tests.test_native_markdown -q
+PYTHONPATH=Python:. TOGA_BACKEND=toga_dummy \
+  mobile_build/.venv/bin/python -m unittest mobile_build.tests.documents.test_documentation_ui \
+  mobile_build.tests.tooling.test_packaged_startup \
+  commonUtils.tests.native.test_native_markdown -q
 ```
 
 ## Native simulator evidence and limits

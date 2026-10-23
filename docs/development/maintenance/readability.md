@@ -133,8 +133,8 @@ release's failures are not fixed or relabeled as successful.
 ## Local commits and review locations
 
 Logistics uses `codex/readability-build-owners`; commonUtils uses
-`codex/readability-documentation` (`38c5d80`); Blue Hole uses
-`codex/readability-wiki` (`428f338`). The shared branch is also available in the
+`codex/readability-documentation` (`37bab64`); Blue Hole uses
+`codex/readability-wiki` (`5eb4e35`). The shared branch is also available in the
 canonical local shared repository, so the local Logistics pin resolves without a
 remote. Concurrent primary-checkout edits have not been merged, reset or staged.
 Nothing is pushed; the release heartbeat is paused.
@@ -144,10 +144,9 @@ Nothing is pushed; the release heartbeat is paused.
 Native probe grouping needs a separately validated Briefcase/native-device pass;
 its existing paths remain intact here. The 99-file native harness and remaining
 large host modules deserve a distinct review of real lifecycle/ownership
-boundaries rather than a filename-only split. Grouping the still-flat desktop
-and shared test suites should likewise preserve their independent consumer
-selection and embedded Blender smoke contracts. Keep the established
-Perforce build and vendor architecture unchanged.
+boundaries rather than a filename-only split. Desktop and shared test groups preserve their independent consumer selection;
+see the continuation record below. Keep the established Perforce build and vendor
+architecture unchanged.
 
 ## Continued code readability pass
 
@@ -171,3 +170,67 @@ text/popup flags relative to the repaired baseline. All 41 adapters pass. The
 [consumer guide](../../features/blender/development/blue-hole-maintenance.md)
 records the boundary and runtime validation limits. No Perforce build, environment
 schema or source-control operation has been redesigned.
+
+
+### Shared regression ownership and consumer selections
+
+commonUtils `37bab64` groups 184 regression files into 15 subject folders.
+Before and after, the complete isolated suite runs the same 1,250 cases with
+zero failed files and 25 existing optional/platform skips. Root
+`tests/qt_test_case.py` and `tests/mobile_smoke.py` retain their established consumer
+paths. Every grouped package initializer is side-effect free. Four stale relative
+test links surfaced during the first run; the corrected wiki and repeated full
+suite pass. No test assertion was weakened.
+
+Blue Hole `5eb4e35` contains the exact shared revision and retargets its existing
+26 portable selectors to the owning test folders. All 41 adapter cases pass.
+The selected portable suite passes 156 cases on host Python 3.11.8, with one
+filesystem skip, against both shared source and Blue Hole's actual vendored copy.
+This is not Blender embedded-runtime, registration or UI validation. The vendor
+check confirms exact tracked membership and bytes, including the preserved
+Perforce implementation. `5fbb146` also puts the public ordered preflight flow
+before its private message helpers.
+
+### Desktop regression ownership and wiki commands
+
+Logistics groups 156 desktop regression files into 14 subject folders documented
+in the [test owner map](../testing.md#desktop-test-folders). The 23 portable mobile
+profiles, shared root fixtures and runner/testbed drivers keep their existing
+paths. Cross-group fixture imports are explicit. An AST comparison verifies that
+all 156 moved files retain their bodies and assertions after the required import
+and source-path adjustments. All destinations are indexed; none fell through
+an ignore rule.
+
+The full mobile host suite still passes 163 files and 1,169 cases, with its two
+optional DOM cases subsequently passing using existing offline browser tools.
+The current wiki commands pass 48 desktop and 20 mobile cases; they now name the
+actual grouped modules. Documentation remains in the root H1-titled wikis with
+linked folder landings. Configured Ruff, architecture and toolchain checks pass;
+indexed-source hygiene reports zero violations. No dependency was added.
+
+
+The full desktop before/after runs each execute 179 files and 1,633 cases, with
+zero failed files and the same 29 skips. Filenames, normalized case identities
+and skip reasons match exactly. Skips require the pinned rclone executable or a
+rebuilt host native bridge; neither runtime was installed for this pass. The
+ordinary recursive `unittest discover` path also passes its focused build-version
+checks. No assertion or timeout was relaxed. Test evidence stays under ignored
+`test-results/`, outside this wiki.
+
+### Continuation assessment
+
+| Dimension | Before these continued units | Verified result |
+| --- | --- | --- |
+| Readability | Encoding, compression and preflight logic mixed preparation, policy and diagnostics | Same public entry points expose named phases and explicit inputs |
+| Modularity | Flat desktop/shared regression directories | 14 desktop and 15 shared subject groups; testbed source paths retained |
+| Testability | Consumer selectors and sibling fixtures depended on flat layouts | Explicit grouped fixture imports, exact case-set parity and retargeted portable selectors |
+| Coupling | Existing shared allocation and consumer policies | Caller-owned image allocation, comic replacement and consumer preflight order preserved |
+| Duplication | Diagnostic closures obscured the ordered operation checks | Cohesive same-file diagnostic helpers; no extra runtime layer |
+| Consistency | Developer commands and source links named older module paths | Executable current wiki commands and root-wiki owner maps |
+| Reliability | Diagnostic NameError on an invalid Blue Hole scene path | Eight behavior contracts protect repaired diagnostics; 1,078 parity profiles protect ordering/text |
+
+This evidence supports these specific improvements. It does not establish a new
+whole-ecosystem score or certify unavailable Blender/native runtime behavior.
+Remaining high-value work is lifecycle ownership in the large mobile host and
+native probe harness; moving those files requires appropriate platform validation,
+not a filename-only reorganization. The abandoned release remains abandoned.

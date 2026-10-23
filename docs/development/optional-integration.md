@@ -15,7 +15,7 @@ package only when activation has occurred; a leftover link alone is insufficient
 From Logistics, the activated feature participates in the normal feature registry,
 Settings and navigation contribution contracts. A missing destination should be
 investigated through launcher selection, activation and feature availability before
-changing the generic host. `Python/tests/test_ally_integration.py` covers the host
+changing the generic host. `Python/tests/application/test_ally_integration.py` covers the host
 boundary. Do not remove environment locks or replace an ordinary feature directory
 to force activation.
 

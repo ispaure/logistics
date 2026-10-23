@@ -118,6 +118,38 @@ tooling after application caches are isolated.
 
 ## Testing
 
+### Desktop test folders
+
+`Python/tests/` groups regression contracts by subject. Filename selection through
+`dev.py` and the isolated runner searches these folders recursively; keep that
+selection when a guide does not need to name an individual test class.
+
+| Folder | Responsibility |
+| --- | --- |
+| `application/` | Startup, feature registration, preferences and host shell |
+| `files/` | Folder Hub, file browser, indexing and Bulk Rename |
+| `readers/` | Books, PDF and shared document reading workflows |
+| `editing/` | Text editing, notes and resource pickers |
+| `resources/` | Credentials, encrypted storage, remote sessions and transfers |
+| `integrations/` | External service and application adapters |
+| `comics/` | Comic archives, compression, library and reading state |
+| `images/` | Image conversion, color, staging and folder tools |
+| `archives/` | Archive browsing, authentication and workspace presentation |
+| `version_control/` | Git backend and UI workflows |
+| `chat/` | LM conversations, generation, streaming and storage adapters |
+| `ide/` | IDE layout, browser, navigation and search |
+| `blender/` | Blender integration, library, metadata and operation UI |
+| `tooling/` | Build, documentation, architecture and runner contracts |
+
+The 23 root `test_mobile*.py` profiles remain at their established paths because
+the independent portable testbed consumes them. Root fixture and driver files
+also retain their paths: they are shared inputs, not extra subject groups.
+Desktop cross-group imports name `tests.<owner>` explicitly; shared contracts use
+`commonUtils.tests.<owner>`. The shared test owner map lives in
+[commonUtils](../../Python/commonUtils/docs/reference/tests/tests.md).
+The small package initializers enable recursive standard `unittest discover`
+and contain no setup or runtime registration.
+
 ### Find the tests for your change
 
 Use `python3 dev.py owners` to list developer guides, then
@@ -131,18 +163,18 @@ the map does not invent individual maintainer assignments.
 
 | Owner | Start with |
 | --- | --- |
-| Feature infrastructure | `Python/tests/test_feature_registry.py`, `test_feature_preferences.py`, `test_settings_page.py` |
-| Desktop shell/documents | `Python/tests/test_main_window.py`, `test_document_workspace.py` |
-| LM conversation lifecycle and presentation | `Python/tests/test_lm_session.py`, `test_lm_ui.py`, `test_lm_appearance.py` |
-| Git history, search, preview and job ownership | `Python/tests/test_git_ui.py`, `test_git_preferences.py`, `test_git_repository_tabs.py`, `test_git_hunk_layout.py` |
-| Blender presentation and operation lifecycle | `Python/tests/test_blender_page.py`, `test_blender_settings.py`, `test_blender_library.py` |
+| Feature infrastructure | `Python/tests/application/test_feature_registry.py`, `test_feature_preferences.py`, `test_settings_page.py` |
+| Desktop shell/documents | `Python/tests/application/test_main_window.py`, `Python/tests/readers/test_document_workspace.py` |
+| LM conversation lifecycle and presentation | `Python/tests/chat/test_lm_session.py`, `test_lm_ui.py`, `test_lm_appearance.py` |
+| Git history, search, preview and job ownership | `Python/tests/version_control/test_git_ui.py`, `test_git_preferences.py`, `test_git_repository_tabs.py`, `test_git_hunk_layout.py` |
+| Blender presentation and operation lifecycle | `Python/tests/blender/test_blender_page.py`, `test_blender_settings.py`, `test_blender_library.py` |
 | Mobile Open/Save As and file management | `mobile_build/tests/documents/test_editor_picker.py`, `test_files_ui.py`, `test_private_sessions.py` |
 | Mobile saved imports and window ownership | `mobile_build/tests/documents/test_saved_files.py`, `test_window_owners.py`, `test_workspace_ui.py` |
 | Mobile source selection and import isolation | `Python/tests/test_mobile_packaging.py`, `test_mobile_portability.py`, `mobile_build/tests/tooling/test_packaged_startup.py` |
 
 The [mobile owner map](mobile-runtime.md) explains controller
 and packaging boundaries. For focused runs, use `dev.py test desktop <filename>` or
-`dev.py test mobile <filename>`. Existing test paths remain valid. Isolated mode also supports nested directories,
+`dev.py test mobile <filename>`. Filename selectors remain valid after grouping. Isolated mode also supports nested directories,
 running each file from its own parent in a separate process. Duplicate filenames
 in different directories cannot shadow each other. Each isolated child loads its
 exact file, so packaged child directories cannot be rediscovered in the parent run. Empty test modules fail. The runner puts the selected suite first

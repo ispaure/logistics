@@ -132,9 +132,9 @@ warrant virtualization and a rebuildable search index later. No LM server is
 installed/started. The normal footer uses the shared StatusLine; save errors keep
 their separate wrapped recovery message.
 
-Validation: `Python/tests/test_lm_session.py` exercises replacement lease cleanup,
+Validation: `Python/tests/chat/test_lm_session.py` exercises replacement lease cleanup,
 recovery, publication rollback and retained partial output without chat widgets.
-`Python/tests/test_lm.py` exercises schema/context/persistence/SSE;
+`Python/tests/chat/test_lm.py` exercises schema/context/persistence/SSE;
 `test_lm_ui.py` uses a local HTTP fixture and real Qt event loop for streaming,
 timeouts, stop/close, failures, profiles and recovery. Real LM Studio and native
 Windows/Linux behavior require separate smoke checks.

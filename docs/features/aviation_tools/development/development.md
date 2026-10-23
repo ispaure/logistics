@@ -46,6 +46,6 @@ the existing shared submodule; it is not merged into that submodule.
 
 ## Validation
 
-`Python/tests/test_aviation_tools.py` covers feature discovery/tab retention,
+`Python/tests/integrations/test_aviation_tools.py` covers feature discovery/tab retention,
 every migrated calculator, popup lifetime/input retention, input error recovery, reference outputs, all datasets
 and loading from an unrelated working directory.

@@ -106,7 +106,7 @@ types remain explicitly unsupported instead of returning misleading empty result
 
 ## Validation
 
-`Python/tests/test_plex.py` uses temporary SQLite databases and package folders,
+`Python/tests/integrations/test_plex.py` uses temporary SQLite databases and package folders,
 with external commands mocked. It covers extraction failures, traversal, failed
 replacement/rollback, missing metadata, duplicate matching and dialog startup.
 It does not operate on an installed Plex server.

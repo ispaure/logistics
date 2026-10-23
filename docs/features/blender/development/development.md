@@ -83,10 +83,10 @@ than inventing archives or selecting a different architecture silently.
 
 ## Validation
 
-`Python/tests/test_blender_manager.py` covers verified full-bundle installation,
+`Python/tests/blender/test_blender_manager.py` covers verified full-bundle installation,
 hash failures, cancellation, traversal/link rejection, DMG cleanup, locking,
 preset independence, child environments, deletion boundaries and addon fallbacks.
-`Python/tests/test_blender_page.py` covers contribution discovery, absence of
+`Python/tests/blender/test_blender_page.py` covers contribution discovery, absence of
 startup provisioning, inventory display and worker-close cancellation.
 
 Real OS-specific extraction and Blender startup should also be exercised on each

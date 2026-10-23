@@ -293,7 +293,7 @@ class DocumentationTests(unittest.TestCase):
 
 class DocumentationImageTests(unittest.TestCase):
     def test_native_wiki_renders_sized_gif_and_keeps_custom_renderer_compatible(self):
-        from commonUtils.tests.test_gif_headers import GIF
+        from commonUtils.tests.formats.test_gif_headers import GIF
         from commonUtils.ui.native.markdown_images import local_image_source
         with TemporaryDirectory() as directory:
             root = Path(directory)

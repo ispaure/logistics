@@ -39,7 +39,7 @@ this documentation mirror.
 
 ## Validation
 
-Run `Python/tests/test_documentation_layout.py` for H1s, landing-page ownership,
+Run `Python/tests/tooling/test_documentation_layout.py` for H1s, landing-page ownership,
 parent-child links, migrated Markdown links and the repository boundary.
 Desktop Settings and shared wiki tests cover guide entry points and scope changes;
 mobile documentation tests cover offline rendering and scope/history navigation.

@@ -29,7 +29,7 @@ desktop `ui/`, optional `mobile/`, a `docs/docs.md` wiki with `development/devel
 `user/user.md` and, where supported, `user_mobile/user_mobile.md`. Existing packages migrate incrementally; do not create
 empty layers or duplicate Core UI/Bulk Rename packages to match a template.
 
-Start feature-infrastructure validation with `Python/tests/test_feature_registry.py`,
+Start feature-infrastructure validation with `Python/tests/application/test_feature_registry.py`,
 `test_feature_preferences.py` and `test_settings_page.py`. The isolated regression
 runner supports nested test files while keeping one process per file. Existing flat paths remain supported.
 

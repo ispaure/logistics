@@ -58,7 +58,7 @@ recovery; failed startup reports failure and removes only an ordinary empty moun
 directory. Automatic recovery of an unresponsive Windows mount remains unsupported.
 Linux dependency/installer checks do not require private Software resources.
 
-`Python/tests/test_fuse.py` simulates mount states and process outcomes, including
+`Python/tests/integrations/test_fuse.py` simulates mount states and process outcomes, including
 deadline handling, recovery failures and link preservation. It also runs the
 directory probe against a temporary local folder. These tests do not mount real
 remotes or validate macFUSE/WinFsp/Linux drivers.

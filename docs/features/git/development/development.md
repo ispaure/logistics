@@ -120,9 +120,10 @@ files and upstream ahead/behind counts from the latest fetched state.
 From the repository root:
 
 ```sh
-PYTHONPATH=Python:Python/tests QT_QPA_PLATFORM=offscreen python3 -m unittest \
-  test_git_backend test_git_ui test_main_window test_feature_registry \
-  test_feature_preferences test_settings_page
+PYTHONPATH=Python:. QT_QPA_PLATFORM=offscreen python3 -m unittest \
+  tests.version_control.test_git_backend tests.version_control.test_git_ui \
+  tests.application.test_main_window tests.application.test_feature_registry \
+  tests.application.test_feature_preferences tests.application.test_settings_page
 ```
 
 Tests use disposable repositories and local bare remotes, including rename/path

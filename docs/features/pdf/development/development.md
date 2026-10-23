@@ -34,7 +34,7 @@ destruction. PrivateViewGuard supplies the existing credential revocation policy
 
 Validation:
 
-- `Python/tests/test_pdf_reader.py`: real PDF rendering, bounds, registration,
+- `Python/tests/readers/test_pdf_reader.py`: real PDF rendering, bounds, registration,
   provider reads, desktop page jumps and dragging, and document buffer release.
 - `mobile_build/tests/reading/test_pdf_reader.py`: Toga dummy UI integration for local, remote
   and offline LocalCrypt reading, numeric navigation, vertical gesture dispatch,

@@ -60,7 +60,7 @@ folder UI. Linux launching prefers native Calibre, then checks the Flatpak using
 `flatpak info`, covering user and system installations. Windows uses the bundled
 executable; macOS retains the existing bundled-archive installation fallback.
 
-`Python/tests/test_calibre.py` uses disposable libraries/device folders and mocked
+`Python/tests/readers/test_calibre.py` uses disposable libraries/device folders and mocked
 launchers. It covers naming, collisions, links, copy failures, changed files,
 disconnected storage and Linux launcher selection. Actual device exports and
 desktop launching still require platform validation.

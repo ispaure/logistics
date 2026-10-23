@@ -1,0 +1,1 @@
+"""Comics regression contracts."""
