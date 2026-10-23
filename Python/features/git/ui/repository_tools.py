@@ -2,7 +2,6 @@
 
 Uses the workspace job/operation boundary; never starts independent write workers.
 """
-from pathlib import Path
 from ..repository import Repository
 from .dialogs import FormDialog
 

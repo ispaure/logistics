@@ -1,5 +1,4 @@
 """Forms collect immutable operation inputs; GitJobs owns execution and refresh."""
-from pathlib import Path
 from commonUtils.ui import pyside as qt
 from ...repository import Repository
 from ..changes import ChangesPanel
