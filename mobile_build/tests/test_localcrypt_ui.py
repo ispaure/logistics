@@ -22,6 +22,13 @@ def seed_offline_copy(copies, data=b'opaque-original'):
 
 
 class LocalCryptUITests(unittest.TestCase):
+    def cancel_close_dialog(self, app):
+        pending = list(app._document_close_tasks.values())
+        self.assertEqual(len(pending), 1)
+        app.main_window._impl.dialog_responses.setdefault('QuestionDialog', []).append('cancel')
+        app.loop.run_until_complete(pending[0])
+        self.assertFalse(app._document_close_tasks)
+
     def test_ini_opens_edits_and_saves_without_plaintext_history(self):
         class Client:
             generation = 0
@@ -109,6 +116,7 @@ class LocalCryptUITests(unittest.TestCase):
                 self.assertEqual(owner.crypt_text.value, '# private reader sentinel')
                 owner.crypt_text.value = '# edited private reader sentinel'
                 app.close_crypt()
+                self.cancel_close_dialog(app)
                 self.assertIsNotNone(owner.crypt_reader)
                 self.assertFalse(app.exit_app(app))
                 app.loop.run_until_complete(app.clear_cloud())
@@ -165,6 +173,7 @@ class LocalCryptUITests(unittest.TestCase):
                 app.edit_crypt_metadata()
                 owner.crypt_metadata_fields['Title'].value = 'After'
                 app.close_crypt()
+                self.cancel_close_dialog(app)
                 self.assertIsNotNone(owner.crypt_reader)
                 app.edit_crypt_metadata()
                 with patch.object(app.crypt_copies, 'save_metadata', side_effect=ValueError('conflict')):
