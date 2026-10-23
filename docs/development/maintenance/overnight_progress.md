@@ -1,5 +1,15 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L8 Bulk Rename presentation
+
+Bulk Rename names rule/preview controls, preset-menu construction and admitted
+plan-row projection. Generation admission, signal/update/scroll guards, status and
+preview publication remain in the widget. Every original method and command
+binding matches after AST expansion. All 22 desktop cases pass before/after,
+plus 19 shared engine cases (one platform skip), architecture, owner lint, wiki
+and whitespace. No engine, persistence, public API or external consumer changed.
+This completes L8 alongside the editor/settings stages. No project push.
+
 ## Sequential audit implementation: L8 feature-settings projection
 
 Feature-settings refresh separates contributed widget/scoped INI source refresh

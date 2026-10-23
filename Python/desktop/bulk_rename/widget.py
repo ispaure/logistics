@@ -261,36 +261,8 @@ class BulkRenameWidget(qt.QWidget):
         self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.status.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.status)
-        self.load_preset_button = qt.QPushButton('Load rules…')
-        self.load_preset_button.clicked.connect(self.load_preset)
-        self.save_preset_button = qt.QPushButton('Save rules…')
-        self.save_preset_button.clicked.connect(self.save_preset)
-        self.reset_button = qt.QPushButton('Reset rules')
-        self.reset_button.clicked.connect(lambda: self.controls.set_rules(RenameRules()))
-        self.preview_button = qt.QPushButton('Preview')
-        # Reserve the wider label so offering cancellation cannot move nearby buttons.
-        preview_width = self.preview_button.sizeHint().width()
-        self.preview_button.setText('Cancel preview')
-        self.preview_button.setMinimumWidth(max(preview_width, self.preview_button.sizeHint().width()))
-        self.preview_button.setText('Preview')
-        self.preview_button.clicked.connect(self._preview_clicked)
-        self.undo_button = qt.QPushButton('Undo last rename')
-        self.undo_button.clicked.connect(self.undo)
-        self.rename_button = qt.QPushButton('Rename selected')
-        self.rename_button.clicked.connect(self.apply)
-        presets = qt.QToolButton()
-        self.presets_button = presets
-        presets.setText('Rule presets…')
-        presets.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
-        presets_menu = qt.QMenu(presets)
-        for button in (self.load_preset_button, self.save_preset_button):
-            button.setParent(self)
-            button.hide()
-            action = presets_menu.addAction(button.text(), button.click)
-            button._menu_action = action
-        presets.setMenu(presets_menu)
-        presets_menu.aboutToShow.connect(lambda: [button._menu_action.setEnabled(button.isEnabled())
-            for button in (self.load_preset_button, self.save_preset_button)])
+        self._build_rule_and_preview_controls()
+        presets = self._build_presets_menu()
         self.action_area = qt.QWidget(self)
         actions = qt.QHBoxLayout(self.action_area)
         actions.setContentsMargins(0, 4, 0, 0)
@@ -311,6 +283,43 @@ class BulkRenameWidget(qt.QWidget):
         self.rename_button.setToolTip('Apply the reviewed filename changes to selected items')
         actions.addWidget(self.rename_button)
         layout.addWidget(self.action_area)
+
+    def _build_rule_and_preview_controls(self):
+        """Create retained rule/preview/apply controls before laying out their groups."""
+        self.load_preset_button = qt.QPushButton('Load rules…')
+        self.load_preset_button.clicked.connect(self.load_preset)
+        self.save_preset_button = qt.QPushButton('Save rules…')
+        self.save_preset_button.clicked.connect(self.save_preset)
+        self.reset_button = qt.QPushButton('Reset rules')
+        self.reset_button.clicked.connect(lambda: self.controls.set_rules(RenameRules()))
+        self.preview_button = qt.QPushButton('Preview')
+        # Reserve the wider label so offering cancellation cannot move nearby buttons.
+        preview_width = self.preview_button.sizeHint().width()
+        self.preview_button.setText('Cancel preview')
+        self.preview_button.setMinimumWidth(max(preview_width, self.preview_button.sizeHint().width()))
+        self.preview_button.setText('Preview')
+        self.preview_button.clicked.connect(self._preview_clicked)
+        self.undo_button = qt.QPushButton('Undo last rename')
+        self.undo_button.clicked.connect(self.undo)
+        self.rename_button = qt.QPushButton('Rename selected')
+        self.rename_button.clicked.connect(self.apply)
+
+    def _build_presets_menu(self):
+        """Keep preset menu actions tied to their existing button readiness state."""
+        presets = qt.QToolButton()
+        self.presets_button = presets
+        presets.setText('Rule presets…')
+        presets.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
+        presets_menu = qt.QMenu(presets)
+        for button in (self.load_preset_button, self.save_preset_button):
+            button.setParent(self)
+            button.hide()
+            action = presets_menu.addAction(button.text(), button.click)
+            button._menu_action = action
+        presets.setMenu(presets_menu)
+        presets_menu.aboutToShow.connect(lambda: [button._menu_action.setEnabled(button.isEnabled())
+            for button in (self.load_preset_button, self.save_preset_button)])
+        return presets
 
     def set_inputs(self, directory=None, *, paths=()):
         """Replace the candidates while retaining all rule/filter controls.
@@ -504,18 +513,7 @@ class BulkRenameWidget(qt.QWidget):
         self.table.setUpdatesEnabled(False)
         blocker = qt.QSignalBlocker(self.table)
         try:
-            for index in range(self.table.topLevelItemCount()):
-                item = self.table.topLevelItem(index)
-                entry = entries.get(item.data(0, qt.Qt.ItemDataRole.UserRole))
-                item.setText(1, entry.target.name if entry else item.text(0))
-                item.setToolTip(1, preview_tooltip(item.text(0), item.text(1)))
-                status = entry.error if entry and entry.error else 'Ready' if entry and entry.changed else 'Unchanged' if entry else 'Not selected'
-                item.setText(5, status)
-                color = qt.QColor('#bb2525') if entry and entry.error else self.palette().color(
-                    qt.QPalette.ColorRole.Link if entry and entry.changed else qt.QPalette.ColorRole.Text)
-                item.setForeground(1, color)
-                item.setForeground(5, color)
-                item.setToolTip(5, status)
+            self._project_plan_rows(entries)
         finally:
             del blocker
             self.table.setUpdatesEnabled(True)
@@ -525,6 +523,21 @@ class BulkRenameWidget(qt.QWidget):
         self.status.setText(f'{len(plan.entries)} selected · {len(plan.changes)} changes · {errors} errors. '
                             + ('Fix all errors before renaming.' if errors else 'No disk changes until Rename selected.'))
         self.preview_ready.emit(plan)
+
+    def _project_plan_rows(self, entries):
+        """Project admitted names/errors while the caller holds update/selection guards."""
+        for index in range(self.table.topLevelItemCount()):
+            item = self.table.topLevelItem(index)
+            entry = entries.get(item.data(0, qt.Qt.ItemDataRole.UserRole))
+            item.setText(1, entry.target.name if entry else item.text(0))
+            item.setToolTip(1, preview_tooltip(item.text(0), item.text(1)))
+            status = entry.error if entry and entry.error else 'Ready' if entry and entry.changed else 'Unchanged' if entry else 'Not selected'
+            item.setText(5, status)
+            color = qt.QColor('#bb2525') if entry and entry.error else self.palette().color(
+                qt.QPalette.ColorRole.Link if entry and entry.changed else qt.QPalette.ColorRole.Text)
+            item.setForeground(1, color)
+            item.setForeground(5, color)
+            item.setToolTip(5, status)
 
     def _start(self, state, work, message):
         self.preview_timer.stop()

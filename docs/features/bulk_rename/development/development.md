@@ -65,6 +65,11 @@ Folder controls own address/filter construction, the browser area owns tree/tabl
 and rule panes, and the action area owns progress/preset/apply controls. Scanning,
 preview generations, mutation results and cooperative close stay on the widget.
 
+The action area names rule/preview control construction and preset-menu binding
+separately from footer layout. `_show_plan` keeps generation admission, signal and
+scroll guards, status and preview publication; `_project_plan_rows` only projects
+the admitted plan into retained rows while those guards are held.
+
 ## Use the engine without Qt
 
 ```python
