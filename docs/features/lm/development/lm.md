@@ -19,6 +19,18 @@ new package lazily. Mobile also consumes the shared generation/session owners
 through its own execution adapter; see the
 [shared lifecycle contract](development.md#shared-desktop-and-mobile-generation).
 
+Mobile `ChatUI.show_chat` retains profile admission and lazy initial selection;
+named builders assemble input/transcript controls, configuration and the retained
+workspace in their original order. `_project_chat_rows` updates recycled rows
+under the native selection guard without selecting a new record itself. Desktop
+`LMPage._bind_session_controls` retains timers and transport/widget bindings;
+`_populate_conversation_tree` projects records while `refresh` retains the signal
+guard, prior selection and expansion restoration. Neither path adds chat state.
+Transcript workers still capture the conversation and render generation, rejecting
+stale results. Session leases, drafts typed during generation, cancellation,
+session-only keys and the distinct desktop tools/mobile text policies retain their
+existing owners and contracts.
+
 Conversation/profile data are under `preferences_path().parent / 'LM'`, outside
 personal `configuration/` reset. Version-one JSON transcripts have stable UUIDs,
 optimistic revisions, drafts, turn states and generation metadata. UI selection

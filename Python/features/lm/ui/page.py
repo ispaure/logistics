@@ -83,6 +83,27 @@ class LMPage(qt.QWidget):
         self.discard_approved = False
         self.closing = False
         layout = build_layout(self)
+        self._bind_session_controls()
+        from commonUtils.ui.appearance.styling import styling
+        self.styling = styling(qt.QApplication.instance())
+        self.styling.bind(self.transcript, 'reading')
+        self.styling.bind(self.composer, 'reading')
+        self.styling.changed.connect(self.render)
+        build_menus(self, layout)
+        self.apply_chrome()
+        self.styling.changed.connect(self.apply_chrome)
+        theme = getattr(qt.QApplication.instance(), '_commonutils_theme', None)
+        if theme is not None:
+            theme.changed.connect(self.apply_chrome)
+        self.load_profiles()
+        self.refresh()
+        first = next((item for item in self.tree_items() if item.data(0, qt.Qt.ItemDataRole.UserRole)), None)
+        if first is not None:
+            self.list.setCurrentItem(first)
+        self.update_controls()
+
+    def _bind_session_controls(self):
+        """Retain timers and bind widgets/transport to the existing session owner."""
         self.save_timer = qt.QTimer(self)
         self.save_timer.setSingleShot(True)
         self.save_timer.setInterval(700)
@@ -113,28 +134,6 @@ class LMPage(qt.QWidget):
         self.client.completed.connect(self.completed)
         if hasattr(self.client, 'activity'):
             self.client.activity.connect(self.status.setText)
-        from commonUtils.ui.appearance.styling import styling
-        self.styling = styling(qt.QApplication.instance())
-        self.styling.bind(self.transcript, 'reading')
-        self.styling.bind(self.composer, 'reading')
-        self.styling.changed.connect(self.render)
-        build_menus(self, layout)
-        self.apply_chrome()
-        self.styling.changed.connect(self.apply_chrome)
-        theme = getattr(qt.QApplication.instance(), '_commonutils_theme', None)
-        if theme is not None:
-            theme.changed.connect(self.apply_chrome)
-        self.load_profiles()
-        self.refresh()
-        first = next((item for item in self.tree_items() if item.data(0, qt.Qt.ItemDataRole.UserRole)), None)
-        if first is not None:
-            self.list.setCurrentItem(first)
-        self.update_controls()
-
-
-
-
-
 
     @staticmethod
     def button(title, callback, layout):
@@ -376,6 +375,23 @@ class LMPage(qt.QWidget):
             self.status.setText(str(error))
             return
         self.list.blockSignals(True)
+        self._populate_conversation_tree(records, folders, current)
+        if selected_folder in self.folder_items and not reveal_current:
+            self.list.setCurrentItem(self.folder_items[selected_folder])
+        for path, item in self.folder_items.items():
+            item.setExpanded(True if self.search.text() else expanded.get(path, True))
+        if reveal_current and self.list.currentItem() is not None:
+            parent = self.list.currentItem().parent()
+            while parent is not None:
+                parent.setExpanded(True)
+                parent = parent.parent()
+        self.list.blockSignals(False)
+        self.update_controls()
+        if warnings:
+            self.status.setText('Some conversation files could not be read and were preserved. ' + '\n'.join(warnings[:3]))
+
+    def _populate_conversation_tree(self, records, folders, current):
+        """Project records/folders while refresh retains the selection and signal guard."""
         self.list.clear()
         root = qt.QTreeWidgetItem(self.list, ['Conversations'])
         root.setData(0, qt.Qt.ItemDataRole.UserRole + 1, '')
@@ -398,19 +414,6 @@ class LMPage(qt.QWidget):
             item.setData(0, qt.Qt.ItemDataRole.UserRole + 1, data['folder'])
             if data['id'] == current:
                 self.list.setCurrentItem(item)
-        if selected_folder in self.folder_items and not reveal_current:
-            self.list.setCurrentItem(self.folder_items[selected_folder])
-        for path, item in self.folder_items.items():
-            item.setExpanded(True if self.search.text() else expanded.get(path, True))
-        if reveal_current and self.list.currentItem() is not None:
-            parent = self.list.currentItem().parent()
-            while parent is not None:
-                parent.setExpanded(True)
-                parent = parent.parent()
-        self.list.blockSignals(False)
-        self.update_controls()
-        if warnings:
-            self.status.setText('Some conversation files could not be read and were preserved. ' + '\n'.join(warnings[:3]))
 
     def select(self, item, previous=None):
         if item is None or self.client.busy:

@@ -35,120 +35,9 @@ class ChatUI:
                 self.chat_profile = dict(schema=1, base_url='', model='', settings=dict(DEFAULT_SETTINGS))
                 self.chat_profile_original = None
                 error = str(problem)
-            self.chat_url = toga.TextInput(value=self.chat_profile['base_url'],
-                placeholder='e.g. http://192.168.1.10:1234', style=Pack(height=48))
-            self.chat_key = PasswordInput(placeholder='API key (session only)', style=Pack(height=48))
-            self.chat_model = toga.TextInput(value=self.chat_profile['model'], placeholder='Filled after connecting, or enter a model ID', style=Pack(height=48))
-            self.chat_models = toga.Selection(on_change=self.select_chat_model, style=Pack(height=48))
-            self.chat_refresh = toga.Button('Connect & load models', on_press=self.refresh_chat_models, style=Pack(height=48))
-            self.chat_selector = toga.Selection(on_change=self.select_chat, style=Pack(height=48))
-            self.chat_new = self.presentation.surface(toga.Button('New chat', on_press=self.new_chat,
-                style=Pack(height=52, width=148, font_size=17, font_weight='bold')),
-                radius=26, background='chat_background', foreground='text', outlined=True)
-            self.chat_render_ready = False
-            self.chat_render_revision = 0
-            self.chat_render_generation = 0
-            self.chat_render_task = None
-            self.chat_render_key = None
-            self.chat_render_entries = []
-            self.chat_force_latest = False
-            self.chat_transcript = ChatTranscript(on_navigation_starting=lambda widget, url, **kw: False,
-                on_webview_load=self.chat_transcript_loaded, style=Pack(flex=1))
-            self.presentation.surface(self.chat_transcript, radius=0, background='chat_background', outlined=False)
-            self.chat_prompt = toga.MultilineTextInput(on_change=self.chat_draft_changed,
-                placeholder='Message…', style=Pack(flex=1, height=52, margin=4, margin_left=12, font_size=int(self.preferences.values['font_size'])))
-            self.chat_send = self.presentation.icon_button('up', 'Send', on_press=self.chat_primary_action)
-            self.chat_send.style.margin = 6
-            self.chat_export = toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=48))
-            contexts = sorted({'2048', '4096', '8192', '16384', '32768', str(self.chat_profile['settings']['context_tokens'])}, key=int)
-            replies = sorted({'256', '512', '1024', '2048', '4096', str(self.chat_profile['settings']['max_tokens'])}, key=int)
-            self.chat_context = toga.Selection(items=contexts,
-                value=str(self.chat_profile['settings']['context_tokens']), style=Pack(flex=1, height=48))
-            self.chat_max_tokens = toga.Selection(items=replies,
-                value=str(self.chat_profile['settings']['max_tokens']), style=Pack(flex=1, height=48))
-            self.chat_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
-            self.chat_config_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
-            self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
-            self.chat_config_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
-                toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=48)),
-                toga.Label('Server API URL'), self.chat_url,
-                toga.Label('A plain address uses /v1 automatically.\nFor a computer server, use its LAN address.', style=Pack(font_size=12)),
-                toga.Label('API key (optional; session only)'), self.chat_key,
-                self.chat_refresh, self.chat_config_status_box,
-                toga.Label('Model'), self.chat_models,
-                toga.Label('Choose a model above, or enter its exact ID below.', style=Pack(font_size=12)), self.chat_model,
-                toga.Label('Generation settings (defaults work for most servers)'),
-                toga.Label('Context tokens / maximum\nreply tokens'),
-                toga.Box(children=[self.chat_context, self.chat_max_tokens], style=Pack(direction=ROW)),
-                toga.Button('Save & return to chat', on_press=self.save_chat_configuration, style=Pack(height=48))],
-                style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
-            self.chat_title = toga.Label('New conversation', style=Pack(font_weight='bold', font_size=16))
-            self.chat_model_label = toga.Label('', style=Pack(font_size=12))
-            for label in (self.chat_title, self.chat_model_label):
-                backend = type(label._impl).__module__
-                if backend.startswith('toga_iOS.'):
-                    label._impl.native.numberOfLines = 1
-                    label._impl.native.lineBreakMode = 4
-                elif backend.startswith('toga_android.'):
-                    from android.text import TextUtils
-                    label._impl.native.setSingleLine(True)
-                    label._impl.native.setEllipsize(TextUtils.TruncateAt.END)
-            self.chat_menu_button = self.presentation.menu_button(self.toggle_chat_conversations, 'Conversations')
-            self.chat_header_new = self.presentation.icon_button('compose', 'New conversation', on_press=self.new_chat)
-            self.chat_actions_button = self.presentation.icon_button('more', 'Conversation actions')
-            self.chat_actions = self.presentation.NativeMenu(self.chat_actions_button, [
-                ('New conversation', self.new_chat), ('Export conversation…', self.export_chat),
-                ('Server & model settings', self.show_chat_configuration)], invoke=self.invoke_chat_action,
-                context=lambda: self._impl.native, fallback=self.show_chat_actions)
-            backend = type(self.chat_actions_button._impl).__module__
-            if backend.startswith('toga_iOS.'):
-                self.chat_actions_button._impl.native.accessibilityLabel = 'Conversation actions'
-            elif backend.startswith('toga_android.'):
-                self.chat_actions_button._impl.native.setContentDescription('Conversation actions')
-            self.chat_conversation_list = self.presentation.summary_list(kind='Conversation',
-                icon_kind='chat', on_select=self._select_conversation_row, style=Pack(flex=1))
-            self.chat_conversation_buttons = []  # Compatibility; rows are recycled natively.
-            self.chat_drawer_settings = self.presentation.icon_button('preferences' if self.routes.apple else 'more', 'Chat settings', on_press=self.show_chat_configuration)
-            self.chat_sidebar_title = toga.Label('Conversations',
-                style=Pack(font_size=22, font_weight='bold', margin_bottom=20))
-            self.chat_sidebar_content = sidebar = toga.Box(children=[self.chat_sidebar_title,
-                self.chat_conversation_list,
-                toga.Box(children=[self.chat_new, toga.Box(style=Pack(flex=1)), self.chat_drawer_settings],
-                         style=Pack(direction=ROW, margin_top=16))],
-                style=Pack(direction=COLUMN, flex=1, margin=16))
-            self.chat_sidebar = self.presentation.surface(toga.Box(children=[sidebar], style=Pack(direction=COLUMN, flex=1)),
-                                        radius=0, background='chat_background', outlined=False)
-            self.chat_status_box = toga.Box(style=Pack(direction=COLUMN))
-            self.chat_composer = toga.Box(children=[self.chat_prompt, self.chat_send],
-                style=Pack(direction=ROW, align_items=END, margin_top=12, margin_bottom=4))
-            self.presentation.surface(self.chat_composer, radius=30, background='chat_input', outlined=False)
-            self.chat_setup = self.presentation.action_button(toga.Button('Set up chat', on_press=self.show_chat_configuration,
-                                                        style=Pack(height=48, margin_bottom=8)))
-            self.chat_setup_box = toga.Box(style=Pack(direction=COLUMN))
-            self.chat_transcript_card = toga.Box(children=[self.chat_transcript], style=Pack(direction=COLUMN, flex=1))
-            self.presentation.surface(self.chat_prompt, radius=22, background='chat_input', foreground='text', outlined=False)
-            self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
-            self.presentation.surface(self.chat_status, radius=0, background='chat_background', foreground='muted', outlined=False)
-            self.chat_messages = toga.Box(children=[self.chat_transcript_card, self.chat_status_box, self.chat_composer],
-                style=Pack(direction=COLUMN, flex=1))
-            self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
-            self.chat_drawer_open = self.adaptive.width() >= 640
-            for control in (self.chat_header_new, self.chat_actions_button):
-                self.presentation.surface(control, radius=24, background='chat_input', foreground='text', outlined=False)
-            self.chat_header_actions = self.presentation.surface(toga.Box(children=[self.chat_header_new, self.chat_actions_button],
-                style=Pack(direction=ROW)), radius=24, background='chat_input', outlined=False)
-            self.chat_header = toga.Box(children=[self.chat_menu_button,
-                toga.Box(children=[self.chat_title, self.chat_model_label], style=Pack(direction=COLUMN, flex=1, margin_left=4)),
-                self.chat_header_actions],
-                style=Pack(direction=ROW, margin_bottom=12))
-            self.chat_view = toga.Box(children=[self.chat_header, self.chat_setup_box, self.chat_workspace],
-                style=Pack(direction=COLUMN, margin=12, flex=1))
-            self.presentation.surface(self.chat_view, radius=0, background='chat_background', outlined=False)
-            # The host mounts screen actions in its native iOS navigation bar.
-            # Content/header/composer ownership remains unchanged on Android.
-            self.chat_view._ios_toolbar_buttons = [self.chat_header_new, self.chat_actions_button]
-            self.chat_view._ios_toolbar_leading = [self.chat_menu_button]
-            self.chat_view._ios_toolbar_hidden = [self.chat_header_actions]
+            self._build_chat_controls()
+            self._build_chat_configuration()
+            self._build_chat_workspace()
             self._chat_needs_initial_selection = True
             self.refresh_chats()
             if error:
@@ -167,6 +56,129 @@ class ChatUI:
                     root.remove(child)
                 root.add(self.chat_view)
             self.render_chat_workspace()
+
+    def _build_chat_controls(self):
+        """Build retained connection, transcript and composer input controls."""
+        self.chat_url = toga.TextInput(value=self.chat_profile['base_url'],
+            placeholder='e.g. http://192.168.1.10:1234', style=Pack(height=48))
+        self.chat_key = PasswordInput(placeholder='API key (session only)', style=Pack(height=48))
+        self.chat_model = toga.TextInput(value=self.chat_profile['model'], placeholder='Filled after connecting, or enter a model ID', style=Pack(height=48))
+        self.chat_models = toga.Selection(on_change=self.select_chat_model, style=Pack(height=48))
+        self.chat_refresh = toga.Button('Connect & load models', on_press=self.refresh_chat_models, style=Pack(height=48))
+        self.chat_selector = toga.Selection(on_change=self.select_chat, style=Pack(height=48))
+        self.chat_new = self.presentation.surface(toga.Button('New chat', on_press=self.new_chat,
+            style=Pack(height=52, width=148, font_size=17, font_weight='bold')),
+            radius=26, background='chat_background', foreground='text', outlined=True)
+        self.chat_render_ready = False
+        self.chat_render_revision = 0
+        self.chat_render_generation = 0
+        self.chat_render_task = None
+        self.chat_render_key = None
+        self.chat_render_entries = []
+        self.chat_force_latest = False
+        self.chat_transcript = ChatTranscript(on_navigation_starting=lambda widget, url, **kw: False,
+            on_webview_load=self.chat_transcript_loaded, style=Pack(flex=1))
+        self.presentation.surface(self.chat_transcript, radius=0, background='chat_background', outlined=False)
+        self.chat_prompt = toga.MultilineTextInput(on_change=self.chat_draft_changed,
+            placeholder='Message…', style=Pack(flex=1, height=52, margin=4, margin_left=12, font_size=int(self.preferences.values['font_size'])))
+        self.chat_send = self.presentation.icon_button('up', 'Send', on_press=self.chat_primary_action)
+        self.chat_send.style.margin = 6
+        self.chat_export = toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=48))
+
+    def _build_chat_configuration(self):
+        """Build session-key and generation settings without contacting the server."""
+        contexts = sorted({'2048', '4096', '8192', '16384', '32768', str(self.chat_profile['settings']['context_tokens'])}, key=int)
+        replies = sorted({'256', '512', '1024', '2048', '4096', str(self.chat_profile['settings']['max_tokens'])}, key=int)
+        self.chat_context = toga.Selection(items=contexts,
+            value=str(self.chat_profile['settings']['context_tokens']), style=Pack(flex=1, height=48))
+        self.chat_max_tokens = toga.Selection(items=replies,
+            value=str(self.chat_profile['settings']['max_tokens']), style=Pack(flex=1, height=48))
+        self.chat_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
+        self.chat_config_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
+        self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
+        self.chat_config_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
+            toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=48)),
+            toga.Label('Server API URL'), self.chat_url,
+            toga.Label('A plain address uses /v1 automatically.\nFor a computer server, use its LAN address.', style=Pack(font_size=12)),
+            toga.Label('API key (optional; session only)'), self.chat_key,
+            self.chat_refresh, self.chat_config_status_box,
+            toga.Label('Model'), self.chat_models,
+            toga.Label('Choose a model above, or enter its exact ID below.', style=Pack(font_size=12)), self.chat_model,
+            toga.Label('Generation settings (defaults work for most servers)'),
+            toga.Label('Context tokens / maximum\nreply tokens'),
+            toga.Box(children=[self.chat_context, self.chat_max_tokens], style=Pack(direction=ROW)),
+            toga.Button('Save & return to chat', on_press=self.save_chat_configuration, style=Pack(height=48))],
+            style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+
+    def _build_chat_workspace(self):
+        """Assemble the retained header, conversation drawer and message workspace."""
+        self.chat_title = toga.Label('New conversation', style=Pack(font_weight='bold', font_size=16))
+        self.chat_model_label = toga.Label('', style=Pack(font_size=12))
+        for label in (self.chat_title, self.chat_model_label):
+            backend = type(label._impl).__module__
+            if backend.startswith('toga_iOS.'):
+                label._impl.native.numberOfLines = 1
+                label._impl.native.lineBreakMode = 4
+            elif backend.startswith('toga_android.'):
+                from android.text import TextUtils
+                label._impl.native.setSingleLine(True)
+                label._impl.native.setEllipsize(TextUtils.TruncateAt.END)
+        self.chat_menu_button = self.presentation.menu_button(self.toggle_chat_conversations, 'Conversations')
+        self.chat_header_new = self.presentation.icon_button('compose', 'New conversation', on_press=self.new_chat)
+        self.chat_actions_button = self.presentation.icon_button('more', 'Conversation actions')
+        self.chat_actions = self.presentation.NativeMenu(self.chat_actions_button, [
+            ('New conversation', self.new_chat), ('Export conversation…', self.export_chat),
+            ('Server & model settings', self.show_chat_configuration)], invoke=self.invoke_chat_action,
+            context=lambda: self._impl.native, fallback=self.show_chat_actions)
+        backend = type(self.chat_actions_button._impl).__module__
+        if backend.startswith('toga_iOS.'):
+            self.chat_actions_button._impl.native.accessibilityLabel = 'Conversation actions'
+        elif backend.startswith('toga_android.'):
+            self.chat_actions_button._impl.native.setContentDescription('Conversation actions')
+        self.chat_conversation_list = self.presentation.summary_list(kind='Conversation',
+            icon_kind='chat', on_select=self._select_conversation_row, style=Pack(flex=1))
+        self.chat_conversation_buttons = []  # Compatibility; rows are recycled natively.
+        self.chat_drawer_settings = self.presentation.icon_button('preferences' if self.routes.apple else 'more', 'Chat settings', on_press=self.show_chat_configuration)
+        self.chat_sidebar_title = toga.Label('Conversations',
+            style=Pack(font_size=22, font_weight='bold', margin_bottom=20))
+        self.chat_sidebar_content = sidebar = toga.Box(children=[self.chat_sidebar_title,
+            self.chat_conversation_list,
+            toga.Box(children=[self.chat_new, toga.Box(style=Pack(flex=1)), self.chat_drawer_settings],
+                     style=Pack(direction=ROW, margin_top=16))],
+            style=Pack(direction=COLUMN, flex=1, margin=16))
+        self.chat_sidebar = self.presentation.surface(toga.Box(children=[sidebar], style=Pack(direction=COLUMN, flex=1)),
+                                    radius=0, background='chat_background', outlined=False)
+        self.chat_status_box = toga.Box(style=Pack(direction=COLUMN))
+        self.chat_composer = toga.Box(children=[self.chat_prompt, self.chat_send],
+            style=Pack(direction=ROW, align_items=END, margin_top=12, margin_bottom=4))
+        self.presentation.surface(self.chat_composer, radius=30, background='chat_input', outlined=False)
+        self.chat_setup = self.presentation.action_button(toga.Button('Set up chat', on_press=self.show_chat_configuration,
+                                                    style=Pack(height=48, margin_bottom=8)))
+        self.chat_setup_box = toga.Box(style=Pack(direction=COLUMN))
+        self.chat_transcript_card = toga.Box(children=[self.chat_transcript], style=Pack(direction=COLUMN, flex=1))
+        self.presentation.surface(self.chat_prompt, radius=22, background='chat_input', foreground='text', outlined=False)
+        self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
+        self.presentation.surface(self.chat_status, radius=0, background='chat_background', foreground='muted', outlined=False)
+        self.chat_messages = toga.Box(children=[self.chat_transcript_card, self.chat_status_box, self.chat_composer],
+            style=Pack(direction=COLUMN, flex=1))
+        self.chat_workspace = toga.Box(style=Pack(direction=ROW, flex=1))
+        self.chat_drawer_open = self.adaptive.width() >= 640
+        for control in (self.chat_header_new, self.chat_actions_button):
+            self.presentation.surface(control, radius=24, background='chat_input', foreground='text', outlined=False)
+        self.chat_header_actions = self.presentation.surface(toga.Box(children=[self.chat_header_new, self.chat_actions_button],
+            style=Pack(direction=ROW)), radius=24, background='chat_input', outlined=False)
+        self.chat_header = toga.Box(children=[self.chat_menu_button,
+            toga.Box(children=[self.chat_title, self.chat_model_label], style=Pack(direction=COLUMN, flex=1, margin_left=4)),
+            self.chat_header_actions],
+            style=Pack(direction=ROW, margin_bottom=12))
+        self.chat_view = toga.Box(children=[self.chat_header, self.chat_setup_box, self.chat_workspace],
+            style=Pack(direction=COLUMN, margin=12, flex=1))
+        self.presentation.surface(self.chat_view, radius=0, background='chat_background', outlined=False)
+        # The host mounts screen actions in its native iOS navigation bar.
+        # Content/header/composer ownership remains unchanged on Android.
+        self.chat_view._ios_toolbar_buttons = [self.chat_header_new, self.chat_actions_button]
+        self.chat_view._ios_toolbar_leading = [self.chat_menu_button]
+        self.chat_view._ios_toolbar_hidden = [self.chat_header_actions]
 
     def toggle_chat_conversations(self, widget=None, **kwargs):
         self.chat_drawer_open = not self.chat_drawer_open
@@ -399,6 +411,19 @@ class ChatUI:
             if selected_label is not None:
                 self.chat_selector.value = selected_label
         self.chat_loading = False
+        self._project_chat_rows(labels)
+        if warnings:
+            self.set_chat_status(f'{len(warnings)} conversation(s) could not be read; originals preserved.')
+        if (authoritative and not self.chat_busy
+                and getattr(self, '_chat_needs_initial_selection', False)):
+            self._chat_needs_initial_selection = False
+            if self.chat_labels:
+                self.open_chat(next(iter(self.chat_labels.values())))
+            else:
+                self.new_chat()
+
+    def _project_chat_rows(self, labels):
+        """Project a detached inventory while suppressing native selection callbacks."""
         listing = self.chat_conversation_list
         listing.updating = True
         try:
@@ -410,15 +435,6 @@ class ChatUI:
             listing.select_index(selected)
         finally:
             listing.updating = False
-        if warnings:
-            self.set_chat_status(f'{len(warnings)} conversation(s) could not be read; originals preserved.')
-        if (authoritative and not self.chat_busy
-                and getattr(self, '_chat_needs_initial_selection', False)):
-            self._chat_needs_initial_selection = False
-            if self.chat_labels:
-                self.open_chat(next(iter(self.chat_labels.values())))
-            else:
-                self.new_chat()
 
     def _select_conversation_row(self, widget, **kwargs):
         if widget.updating or self.chat_busy:

@@ -28,6 +28,7 @@ below describe the assessment snapshot, before this implementation.
 | L1 | Managed-text host workflows grouped over existing store/workspace/view owners; aggregate lifecycle stays in app | See sequential progress entry |
 | L2 | Retained drawer/listing owner separated from frame layout; import compatibility preserved | See sequential progress entry |
 | L3 | Explicit unpublished-control adoption/retirement; verified failed-build cleanup; named library page preparation/projection | See sequential progress entry |
+| L5 | Named mobile control/workspace assembly and recycled rows; desktop timer/signal binding and tree projection | See sequential progress entry |
 
 Items absent from this table remain outstanding. Native/platform acceptance limits
 are recorded with each unit; a passing host suite is not native certification.

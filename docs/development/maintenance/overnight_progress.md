@@ -1,5 +1,19 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L5 chat assembly and projection
+
+Mobile `show_chat` names input/transcript, configuration and retained workspace
+construction; recycled-row projection keeps its selection suppression guard.
+Desktop LM names timer/signal binding and record-to-tree projection while retaining
+selection/expansion and signal guards in `refresh`. Every original method in both
+classes matches ordered expanded AST/signatures, including property getters and
+setters. Full desktop chat/session/generation/tool-context tests pass 118 cases
+across nine files before/after; mobile chat 22 and deferred drafts four pass in
+identical order. Staged startup, architecture, feature lint and wiki checks pass.
+Generation/current captures, leases, next drafts, cancellation, keys, transcript
+publication and distinct tool policies stay with their existing owners. No new
+state owner, persisted format, external consumer change or push occurred.
+
 ## Sequential audit implementation: C7 native contract stage
 
 Shared `016a35d` documents paired navigation installation/restoration, canvas gesture
