@@ -98,14 +98,8 @@ def package_data(source: Path, destination: Path, platform, seven_zip=None, pref
         obsolete = [path for path in destination.iterdir()
                     if path.is_file() and path.name not in names
                     and platform == OS.WIN and path.name.startswith('pms_data.7z')]
-        for path in outputs:
-            target = destination / path.name
-            if _is_link(target) or (target.exists() and not target.is_file()):
-                raise ValueError(f'Package destination is not a regular file: {target}')
-        for path in outputs:
-            os.replace(path, destination / path.name)
-        for path in obsolete:
-            path.unlink()
+        from .package_publication import PackagePublication
+        PackagePublication(destination, outputs, obsolete).publish()
 
 
 def _extract_zip(archive, staging):

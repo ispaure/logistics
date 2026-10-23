@@ -47,9 +47,14 @@ installations may need additional filesystem permissions and ownership handling.
 - New package files are staged and verified before replacing previous files.
   Unreadable source directories fail the package operation instead of silently
   leaving their contents out.
-  Unrelated plist/registry files are retained. Promotion is per file, so a failure
-  while replacing a split archive can leave a partly updated package; there is
-  no transaction covering all package files.
+  Unrelated plist/registry files are retained. `PackagePublication` moves the old
+  generation into a private recovery directory before promoting the new files.
+  Ordinary failures restore the old generation. Conflicts or failed rollback
+  retain originals and `journal.json` in `.logistics-plex-recovery-<id>` and report
+  that path. Inspect it before explicit `PackagePublication.recover(path)` rollback;
+  changed published files and occupied restoration targets are preserved for manual
+  resolution. Multi-file visibility is not atomic, and committed cleanup failures
+  report the retained directory without undoing the valid new generation.
 - Restores extract into a temporary sibling directory before moving the current
   data aside. ZIP entries must stay under `Plex Media Server/`; linked content
   and overlapping data/package locations are rejected. Legacy macOS ZIP archives
