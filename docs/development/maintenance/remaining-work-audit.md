@@ -2,9 +2,9 @@
 
 Updated October 23, 2026. The original assessment covered eight shared-library,
 ten Logistics and five cross-cutting priorities. Their host-implementable stages
-are complete. **C7's native factory extraction is in progress**, with native
-acceptance before each committed step; its lifecycle contract stage is complete. This page is the current status, not a
-claim that every future maintainability opportunity has been exhausted.
+are complete. **C7's bounded native factory extraction is complete**, with iOS
+and Android acceptance before each committed step. This page is the current
+status, not a claim that every future maintainability opportunity has been exhausted.
 
 The [assessment snapshot](history/assessment-20261023.md) retains the original
 source revisions, measurements, proposals and test scope. The
@@ -28,6 +28,7 @@ records each checked unit, including caught errors and validation limits; the
 | C7 (native-owner slice) | Android/iOS simulator/emulator lifecycle checks; navigation admission/resize/selection restoration and speech callback release | shared `3e08820` |
 | C7 (navigation construction) | Named Apple observer/controller assembly and Android bar/listener/menu stages; callback/disposal bodies unchanged | shared `0035641` |
 | C7 (canvas construction) | Named Apple gesture/magnifier assembly and Android page-listener binding; native class caches and retirement unchanged | shared `8aa81ca` |
+| C7 (speech construction) | Lazy Android weak-listener and cached Apple delegate factories; engine/voice/runtime ownership unchanged | shared `d21f9cc` |
 | C8 | Explicit checkout admission/actions; hook and declined-prompt contracts; legacy exports retained | shared `9aaf84d` |
 | L1 | Managed-text host workflows grouped over existing store/workspace/view owners; aggregate lifecycle stays in app | `380ab06e` |
 | L2 | Retained drawer/listing owner separated from frame layout; import compatibility preserved | `c2d4cc55` |
@@ -63,9 +64,8 @@ named classification/formatting stages; layered settings has field construction
 and row binding phases. These are implemented C2–C5 changes, not pending proposals.
 The later rclone service/adapters review through `01e8bfc9` is also complete.
 
-The current shared-UI priority is C7's **native factory extraction** below,
-with native acceptance before each step. Desktop
-FileBrowser/indexing still shares substantial mutable state across its mixin and
+C7's **native factory extraction** is now complete below, with native acceptance
+before each step. Desktop FileBrowser/indexing still shares substantial mutable state across its mixin and
 uses private index-cache fields, so it remains a reasonable bounded follow-up.
 That residual coupling does not establish a new urgent defect or justify another
 whole-UI rewrite. Live integration/platform acceptance remains a separate risk.
@@ -77,23 +77,26 @@ close the native acceptance gate. That prioritization recheck changed no
 shared/runtime code; the subsequent native-owner fixes and their acceptance
 limits are recorded below.
 
-## Remaining acceptance gate
+## Native acceptance and remaining platform coverage
 
-C7's original contract stage left native adapter factories unchanged. Their
-construction extraction now proceeds in verified steps. Before moving them, exercise the
-relevant Android/iOS install/dispose/reinstall paths on a supported native runtime:
-reader chrome, pinch/scroll/menu callbacks, rendering-canvas retirement, queued
-speech completions, background/resume and repeated window closure. Dummy/fake
-bridge cases establish contracts but cannot prove native peer/delegate lifetimes.
-The [2026-10-23 native-owner pass](../mobile-navigation-proof.md#shared-native-owner-lifecycle-checks-2026-10-23)
-uses isolated iOS 27.0 and Android 15 simulator/emulator apps. It covers repeated
-installation/retirement, chrome restoration, canvas pixel/listener cleanup,
-offline speech stop/restart and late callbacks, background/resume, and Android
-in-place phone/tablet/landscape layout changes. It fixes failed admission,
-retired layout dispatch, Android resize-wrapper/selection restoration and retained
-speech callbacks. That acceptance slice left factories unchanged. Physical gestures, IME,
-multi-window/recreation, system audio interruption and minimum-runtime checks
-remain outside this focused pass. Preserve the main Logistics app and its data.
+C7 now separates construction from runtime events within the existing navigation,
+canvas and speech owners. The preceding
+[2026-10-23 native-owner pass](../mobile-navigation-proof.md#shared-native-owner-lifecycle-checks-2026-10-23)
+fixed failed admission, retired layout dispatch, Android resize-wrapper/selection
+restoration and retained speech callbacks. That earlier pass used iOS 27.0 and
+Android 15 and left factories unchanged.
+
+The subsequent extraction uses fresh iOS 27.0 and Android 16/API 36 baseline and
+post-change runs, recorded below. Each native run covers three repeated
+navigation/canvas/speech cycles, chrome restoration, zoom/gesture callback
+retirement, magnifier/pixel cleanup on Apple, offline speech stop/restart and late
+callbacks, and background/resume while each owner is live. Android also exercises
+in-place phone/tablet/landscape layouts while retaining one Activity and probe UUID.
+Loaded source/bytecode fingerprints change only for the intended module per step.
+Physical gesture performance, independent windows, Activity recreation, system
+IME/audio interruption and minimum-runtime coverage remain separate platform
+checks; this construction refactor does not certify them. Preserve the main
+Logistics app and its data.
 
 Existing platform/service acceptance for Blender activation, FUSE drivers, real
 remote/collection operations and desktop integrations remains separate from this
@@ -119,8 +122,18 @@ F811 gate and compatibility-export decision, not a repository-wide unused-code s
   matrix passes, including magnifier creation/pixel cleanup and live owner resume.
   Ten Logistics navigation test files also pass. Android logs contain no Python
   tracebacks in either extraction run.
-- Speech construction remains next. The broader native acceptance limits above
-  remain separate from this behavior-preserving pass.
+- Speech (`d21f9cc`): Android weak listener proxies and the cached Apple delegate
+  class have lazy factories in the existing module. Engine/voice setup, runtime
+  event bodies and shutdown remain unchanged. Ordered AST expansion matches after
+  normalizing lazy imports and factory argument/result aliases. Both shared legs
+  pass 117 cases in 26 files; the same iOS/Android native matrix passes, including
+  real offline speech stop/restart and late-callback suppression. The Logistics
+  speech selection passes 16 cases in four files and magnifier selection passes
+  four cases. Final lint, architecture and toolchain checks pass. All three steps
+  retain their public imports/signatures and require no Ally Tools/Blue Hole edits.
+
+All three scoped construction steps are complete. Evidence is retained outside
+public documentation; broader platform coverage remains as listed above.
 
 ## Find the current contract
 
