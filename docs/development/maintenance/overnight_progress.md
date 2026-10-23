@@ -1053,3 +1053,134 @@ Reader write-bound commit: `a4e10aba`. The full frozen `f15fdb8c` / shared
 `73a8c86` integration run is ongoing for desktop; shared completes all 180 files /
 1,222 cases (25 skips), mobile all 162 files / 1,161 cases (two skips), zero failed
 files. The newer reader bound has its focused checks above.
+
+## Completed integration checkpoint and packaged LM startup
+
+- Immutable Logistics `f15fdb8c` completes all 179 desktop files / 1,675 cases,
+  six explicit native-bridge skips, zero failed files. Matching shared `73a8c86`
+  completes 180 / 1,222 / 25 skips; mobile completes 162 / 1,161 / two skips.
+  These totals precede the later reader write-bound and comic XML admission units.
+- Built local package `cc1f3b31`: all 2,219 content hashes verify. Fresh extraction
+  starts the real app with a private profile, renders fixture Bulk Rename and LM,
+  retains tools_menu and exits normally. Expanded generation/token controls were
+  visually inspected. LM is enabled through the normal API only in that profile;
+  it is disabled by default, so an initial probe assumption failed before the
+  probe was corrected. Both attempts remain ignored evidence. No network updates,
+  user profile/preferences or published artifact was used.
+- Current compile checks cover 1,863 tracked Python sources across the three
+  owners. Compatibility, source hygiene, toolchain consistency and doctor pass.
+  Release tests run 18 cases (17 pass, one Windows-only skip); publishing output
+  is mocked, and no release/upload occurs.
+
+## Comic metadata write/read admission consistency
+
+- ComicInfo reads reject XML over 4 MiB, while edits could publish larger XML and
+  make the comic unreadable afterward. XML escaping can cross the limit even
+  when the submitted text is much smaller. Two regressions fail before repair:
+  one save and a two-comic batch with only the later archive near its limit.
+- The existing document preparation path now applies the read limit to serialized
+  bytes. Single/local/private saves and portable batch plans share that path;
+  preflight rejects the batch before any earlier archive is replaced. Rejected
+  edits preserve both loaded metadata and exact archive bytes. No format changes.
+- All 34 comic library/editor cases, 19 encrypted comic cases, 39 real-rclone private
+  cases and the mobile collection privacy case pass. A portable mobile-interpreter
+  metadata plan also rejects escaped XML overflow without changing its fixture.
+  Lint, architecture and five documentation checks pass.
+
+Comic XML admission commit: `bb6a40ca`.
+
+## EPUB backup pathname ownership
+
+- Failure cleanup unlinked the backup pathname even if another writer replaced
+  it after the exclusive creation. An identical-byte replacement also admitted
+  publication despite no longer being the independently created backup.
+- A real fixture regression reproduces three profiles: different bytes, identical
+  bytes, and a symbolic link. Before repair the foreign paths are removed or the
+  source is published. After repair original EPUB bytes, loaded metadata, moved
+  owned backup bytes, foreign paths and link targets all survive appropriately.
+- The writer captures the created descriptor's device/inode, checks the regular
+  pathname identity before permissions and final publication, and cleans only
+  while that identity remains. Existing corrupt same-file backups still abort
+  and clean up. This is optimistic identity validation, not a cross-process lock
+  or attribution of external in-place writes to the same file object.
+- All 54 book cases pass, including legacy corruption/cancellation/permissions/
+  failed-replacement coverage. Lint, architecture and five documentation checks
+  pass. The final one-snapshot lstat predicate additionally passes all 19 EPUB
+  cases. Native Windows/network-filesystem behavior remains unexecuted.
+
+EPUB backup ownership commit: `5b9876a7`.
+
+## Reviewed private UI import cleanup
+
+- The optional import report was reviewed against tracked consumers in all three
+  owners. Five unused Path/GitError imports were removed from private Git/IDE/
+  comic UI implementation leaves. Direct/star consumers and qualified references
+  were checked; all five owners import, scoped F401 and configured lint pass.
+- Public package exports, DownloadCancelled, legacy comic patch targets and
+  registry facade names remain intact. No lint gate was weakened or global
+  automatic import rewrite applied. No new tests were needed for these removals.
+- Mobile composition was inspected separately: its explicit typed controller
+  factories duplicate a few lines but make ownership visible, while the existing
+  decorator supplies enumerated compatibility accessors. Replacing them with more
+  generated behavior was rejected as a readability regression. No device/UI
+  behavior change is inferred from a smaller line count.
+
+## Bounded LM and workspace restoration reads
+
+- LM conversation/profile reads and mobile workspace restoration checked size
+  metadata before unbounded reads. Two public-load regressions reproduce oversized
+  JSON being admitted when stat metadata is stale.
+- Both owners now use the existing bounded reader with their unchanged limits:
+  32 MiB for LM records, 64 KiB for workspace manifests, plus one detection byte.
+  JSON schemas, defaults, warning behavior, save veto and file bytes are preserved.
+- All 116 LM cases in nine files pass, including real local HTTP fixtures. All 43
+  native-dummy workspace UI cases in four files pass. The five pure workspace
+  cases and two injected-lock LM adapter cases also pass in the mobile interpreter.
+  Lint, architecture and five documentation checks pass. No new shared API/dependency.
+
+LM/workspace bounded-read commit: `197943e7`; private UI import cleanup: `db39d3cf`.
+
+## Bounded signature verification and guarded LM move rollback
+
+- Existing stream/file snapshot hashing now accepts optional max_bytes. Default
+  behavior and result formats are unchanged. Oversized input raises ValueError,
+  never returns a prefix digest, and stops growing streams with at most one 1 MiB
+  chunk of lookahead. Negative/noninteger limits fail before stream reads.
+- Eleven stream and seven snapshot cases pass in both interpreters. The reused
+  embedded suite runs 143 cases (142 pass, one filesystem skip) in real Blender
+  4.5.1 / Python 3.11.11; all 33 Blue Hole adapters and exact vendor checks pass.
+  Shared `178f5da`, Blue Hole `3b679c3`, Logistics pin `66dc2aa4`.
+- LM moves previously deleted a changed/new destination after source retirement
+  failed, and could delete late source edits or roll back the only surviving copy
+  when the source vanished. Seven profiles reproduce against the committed prior
+  implementation: four replacement/edit/link rollback cases plus late source,
+  destination and missing-source cases (six assertion failures, one expected
+  uncaught FileNotFoundError in that baseline probe).
+- Moves verify published content with the bounded snapshot API, recheck source and
+  copy revisions, and remove a rollback copy only while both paths still match.
+  Changed/missing sources retain the surviving copy; replaced/modified copies are
+  preserved with both paths named in the conflict. In-memory revision/folder state
+  advances only on complete success. Checks remain optimistic filesystem samples.
+- The initial test design removed an unchanged copy after any source change; review
+  identified that this could erase the only surviving copy if the source vanished.
+  Coverage was strengthened to require retained recovery content for changed or
+  missing sources before implementation was committed. No passing baseline was
+  claimed for the failing profiles.
+- All 118 LM cases across nine files pass, including ordinary rollback, locks,
+  history/drafts, generation and local HTTP fixtures. Mobile-interpreter injected
+  lock smoke verifies successful move and unchanged rollback without Qt locks.
+  Lint, architecture and five documentation checks pass.
+
+Guarded LM move commit: `572250fe`.
+
+## Existing browser and native runtime inventory
+
+- The bundled workspace runtime provides Node 24 and Playwright; installed Chrome
+  is available even though Node is absent from the default shell PATH. Both
+  previously skipped browser DOM cases now pass against their unchanged offline
+  fixtures using explicit runtime/Chrome paths and temporary profiles. No package
+  or browser was installed; this is Chromium evidence, not iOS WebKit rendering.
+- Read-only native inventory finds installed iOS 26.5/27.0/27.1 runtimes and no
+  connected Android device. Existing simulators are all shut down. Native iOS
+  evidence is being prepared in an owned simulator/build, preserving existing
+  simulator data and generated builds. No Boox app was installed or changed.
