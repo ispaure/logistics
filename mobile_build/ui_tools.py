@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import plistlib
 import signal
 import shutil
 import subprocess
@@ -89,9 +90,15 @@ def simulator_report(device, started_ns, *, diagnostics=None):
     return json.loads(raw)
 
 
-def run(target, device, *, local=False, require_independent_windows=False, require_duo=False):
+def run(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False):
+    if no_update:
+        if target != 'ios':
+            raise ValueError('Shared test application reuse is supported only for iOS.')
+        verify_prebuilt_ios()
     command = [sys.executable, '-m', 'briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
+    if no_update:
+        command.append('--no-update')
     if target == 'android':
         command.extend(['--Xemulator=-no-window', '--Xemulator=-no-audio', '--Xemulator=-no-snapshot-load', '--Xemulator=-gpu',
                         '--Xemulator=swiftshader_indirect', '--shutdown-on-exit'])
@@ -153,6 +160,25 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
     if require_duo:
         verify_duo_rotation(report)
     return report
+
+
+def verify_prebuilt_ios():
+    """Fail instead of silently rebuilding a missing or mismatched shared app."""
+    project = Path('build/logisticsmobile/ios/xcode')
+    app = project / 'build/Debug-iphonesimulator/Logistics Mobile.app'
+    if not (project / 'briefcase.toml').is_file() or not (app / 'Logistics Mobile').is_file():
+        raise ValueError('Shared iOS test application or Briefcase metadata is missing.')
+    with (app / 'Info.plist').open('rb') as stream:
+        info = plistlib.load(stream)
+    if info.get('MainModule') != 'tests.logisticsmobile':
+        raise ValueError('Shared iOS application was not built in test mode.')
+    source = json.loads((app / 'app/mobile/source.json').read_text())
+    expected = json.loads(Path('payload/source.json').read_text())
+    root = subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip()
+    shared = subprocess.check_output(['git', '-C', str(REPO / 'Python/commonUtils'), 'rev-parse', 'HEAD'], text=True).strip()
+    if (source != expected or source.get('dirty') is not False
+            or source.get('logistics_commit') != root or source.get('commonUtils_commit') != shared):
+        raise ValueError('Shared iOS test application came from a different source.')
 
 
 
@@ -228,6 +254,7 @@ if __name__ == '__main__':
     parser.add_argument('--local', action='store_true', help='Verify this exact local payload; not release evidence')
     parser.add_argument('--require-independent-windows', action='store_true')
     parser.add_argument('--require-duo', action='store_true')
+    parser.add_argument('--no-update', action='store_true', help='Reuse an already built test application')
     args = parser.parse_args()
     if args.command == 'ios-device':
         print(ios_device())
@@ -240,4 +267,5 @@ if __name__ == '__main__':
     else:
         if not args.target or not args.device:
             parser.error('run requires a target and --device')
-        run(args.target, args.device, local=args.local, require_independent_windows=args.require_independent_windows, require_duo=args.require_duo)
+        run(args.target, args.device, local=args.local, require_independent_windows=args.require_independent_windows,
+            require_duo=args.require_duo, no_update=args.no_update)

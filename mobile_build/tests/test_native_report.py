@@ -3,6 +3,7 @@ import base64
 import importlib.util
 import json
 from pathlib import Path
+import plistlib
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
@@ -16,6 +17,57 @@ spec.loader.exec_module(ui_tools)
 
 
 class NativeReportTests(unittest.TestCase):
+    def test_shared_test_app_is_reused_and_wrong_or_missing_builds_fail_before_launch(self):
+        import os
+        from unittest.mock import patch
+        report = self.report()
+        def revision(args, **kwargs):
+            key = 'commonUtils_commit' if 'commonUtils' in args[2] else 'logistics_commit'
+            return report['source'][key]
+        def launch(command, *, stdout, **kwargs):
+            self.assertIn('--no-update', command)
+            stdout.write(ui_tools.PREFIX + json.dumps(report) + '\n')
+            stdout.flush()
+            return SimpleNamespace(wait=lambda **kwargs: 0)
+        with TemporaryDirectory() as directory, patch.object(ui_tools.subprocess, 'Popen', side_effect=launch) as process, \
+                patch.object(ui_tools.subprocess, 'check_output', side_effect=revision):
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                project = Path('build/logisticsmobile/ios/xcode')
+                app = project / 'build/Debug-iphonesimulator/Logistics Mobile.app'
+                (app / 'app/mobile').mkdir(parents=True)
+                (app / 'Logistics Mobile').write_text('synthetic binary')
+                (project / 'briefcase.toml').write_text('[briefcase]\n')
+                Path('payload').mkdir()
+                Path('payload/source.json').write_text(json.dumps(report['source']))
+                manifest = app / 'app/mobile/source.json'
+                manifest.write_text(json.dumps(report['source']))
+                info = app / 'Info.plist'
+                info.write_bytes(plistlib.dumps(dict(MainModule='tests.logisticsmobile')))
+                for family in ('iphone', 'duo'):
+                    # Separate jobs restore the same project, without rebuilding.
+                    self.assertEqual(ui_tools.run('ios', family, no_update=True), report)
+                    self.assertEqual(manifest.read_text(), json.dumps(report['source']))
+                self.assertEqual(process.call_count, 2)
+                process.reset_mock()
+                for source in (dict(report['source'], dirty=True),
+                               dict(report['source'], logistics_commit='0' * 40),
+                               dict(report['source'], commonUtils_commit='0' * 40)):
+                    manifest.write_text(json.dumps(source))
+                    with self.assertRaisesRegex(ValueError, 'different source'):
+                        ui_tools.run('ios', 'device', no_update=True)
+                manifest.write_text(json.dumps(report['source']))
+                info.write_bytes(plistlib.dumps(dict(MainModule='logisticsmobile')))
+                with self.assertRaisesRegex(ValueError, 'test mode'):
+                    ui_tools.run('ios', 'device', no_update=True)
+                (app / 'Logistics Mobile').unlink()
+                with self.assertRaisesRegex(ValueError, 'missing'):
+                    ui_tools.run('ios', 'device', no_update=True)
+                process.assert_not_called()
+            finally:
+                os.chdir(previous)
+
     def test_simulator_selection_keeps_duo_separate_from_renamed_iphone(self):
         def device(kind, name, state='Shutdown'):
             return dict(isAvailable=True, name=name, state=state, udid=name,
