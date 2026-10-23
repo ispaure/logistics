@@ -1,5 +1,9 @@
 # Maintenance priorities
 
+For readability audit completion and its remaining native gate, use the
+[current implementation status](maintenance/remaining-work-audit.md). The platform
+and live-integration acceptance below remains separate.
+
 The generic application shell now has isolated regression coverage for feature
 initialization, folder sources, page lifecycle, and action dispatch. The larger
 remaining maintenance risks are in external integrations, where validation needs
@@ -21,7 +25,7 @@ representative fixtures and platform checks before behavior changes.
 - **YouTube downloads:** INI parsing, shell-free arguments, execution and remote
   sync are separated. Linux uses system FFmpeg. Mocked tests cover quoting,
   failures and batch status. Keep package-updating policy separate from downloads;
-  consider explicit updates and declared dependencies rather than automatic pip.
+  explicit dependency updates remain separate from ordinary downloads.
   Downloads, explicit updates and season transfers now use cancellable workers.
 - **FUSE:** command construction, timeout handling, recovery and conservative
   cleanup now have simulated-state coverage. Actual mounting still requires

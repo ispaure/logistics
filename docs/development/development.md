@@ -77,13 +77,12 @@ validate a new change.
 
 ## Plans and historical assessments
 
-These pages retain proposals and migration history. Use the current code map and
-owner guides above for today's layout. Check each page's implementation status
-before treating an old finding as remaining work. The October 21 incremental pass below adds controller boundaries and nested test
-discovery. The desktop and mobile hosts now live in `Python/desktop/` and
-`Python/mobile/`; mobile build tooling lives in `mobile_build/`. Regression suites now use the subject folders in the
-[test owner map](testing.md#desktop-test-folders); native harness paths retain
-their existing build and runtime contracts.
+Use the [current audit implementation status](maintenance/remaining-work-audit.md)
+for completed units and the remaining native acceptance gate. The
+[history index](maintenance/history/history.md) preserves dated assessments and
+implementation evidence; old proposed next steps are not today's backlog.
+Current code and test owners are linked above. Host source lives in
+`Python/desktop/` and `Python/mobile/`; build tooling lives in `mobile_build/`.
 
 - [October 22 readability and shared-mechanism validation](restructuring.md#october-22-readability-and-shared-mechanism-pass)
 - [Restructuring assessment and migration record](restructuring.md)

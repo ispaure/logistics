@@ -80,4 +80,4 @@ this pass.
 
 The October 16 full-app limitation above retains its original snapshot scope.
 Later full-app simulator and portable-catalog evidence is recorded in the
-[maintenance assessment](maintenance/architecture_audit.md#current-assessment-after-the-october-23-maintenance-pass).
+[maintenance assessment](maintenance/history/architecture-audit.md#current-assessment-after-the-october-23-maintenance-pass).

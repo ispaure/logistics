@@ -5,6 +5,15 @@ and native acceptance packaging. Start with the [code map](code-map.md)
 and [mobile preparation guide](mobile-preparation.md).
 User behavior belongs in [the mobile user guide](../user_mobile/user_mobile.md).
 
+| Task | Current contract |
+| --- | --- |
+| Find a lifecycle/state owner | [Owner map](#owners), [host capabilities](#composition-and-explicit-host-capabilities) |
+| Change browser/listing or file operations | [Listing](#folder-listing-ownership), [operations](#file-operation-ownership), [Workspaces](#workspaces-refresh) |
+| Open/save or publish a reader | [Open/Save As](#opensave-as-lifecycle), [provider adoption](#provider-presentation-assembly), [publication](#reader-publication-boundary) |
+| Close, replace or trim a host | [Shutdown](#application-shutdown-and-disposable-resources), [sleep/trim](#sleep-memory-trimming-and-visible-library-readers) |
+| Work on settings or startup | [Settings owners](#settings-implementation-owners), [startup](#native-startup-progress) |
+| Reproduce a dated timing result | [Performance evidence and limits](mobile-performance.md) |
+
 Workspace restoration reads at most 64 KiB plus one byte before decoding its
 manifest, independently of file-size metadata. Oversized/invalid input preserves
 the original manifest and keeps the existing restoration error/save veto. Schema,
@@ -712,48 +721,8 @@ saves workspace state once afterward. These paths are shared by Android and iOS.
 
 ### BOOX file-list before/after profiling — 2026-10-19
 
-The paired BOOX report (local artifact `test-results/mobile-evidence/2026-10-19-boox-file-list-profile.json`)
-compares the original progressive browser against the recycled List renderer in
-one isolated QA process on a physical Note Air 5C (Android API 35, reported
-refresh rate 38 Hz). It uses production appearance hooks with normal system
-appearance and synthetic in-memory records. Provider I/O, app startup and physical
-E Ink pixel presentation are excluded. Each size has five alternating paired
-trials after excluded warmups; cProfile runs are separate.
-
-| Files | Original next native draw, median | Recycled next native draw, median | Ratio |
-| --- | ---: | ---: | ---: |
-| 40 | 2,547 ms | 74 ms | 34.2× |
-| 200 | 2,523 ms | 96 ms | 26.3× |
-| 1,000 | 2,536 ms | 179 ms | 14.1× |
-
-The original renderer initially constructs 40 rows at every size. Its 200-file
-cProfile points to widget construction and surface styling: 320 `paint_surface`
-calls within the initial batch. Profiled times include profiler overhead and are
-not used in the latency ratios. Browser-control construction remains about
-250 ms for either implementation, measured separately from listing publication.
-
-Steady-state scrolling was measured only after all 200 records were available
-and the old browser had finished constructing all 200 widgets. That old
-progressive construction took about 101 seconds in this run. Three trials per
-implementation used identical native touch sequences. Median trial frame p50 was
-137 ms original versus 145 ms recycled; median trial p95 was 172 versus 171 ms.
-This does **not** demonstrate a scrolling improvement. Native fling behavior
-produces different travel distances, and Android frame metrics include rendering
-pipeline delays, so these results do not establish the remaining cause or a
-physical E Ink refresh rate. Layout/render tracing remains necessary to diagnose
-the residual scrolling lag. Do not present the listing speedup as an overall app
-or scrolling speedup.
-
-`mobile_build/native_tests/tests/logisticsmobile/boox_file_list_profile.py` is a
-QA-only launcher. Stage the original browser at the report's pinned commit as
-`mobile.legacy_browser_ui`, the current browser normally, and the
-QA-only `android/io/github/ispaure/logisticsmobile/FileListBenchmark.java` into
-the disposable app's Java source tree. The helper is not in the production
-source allowlist. Results and cProfile trees are written beneath that QA app's
-cache in `boox-file-list-profile/`. Local raw results, call trees and a mixed
-render-tail `gfxinfo framestats` dump are retained under
-`mobile_build/build/list-recycling-qa/boox-profile/`. The published JSON omits
-noncomparable backing-view counts and records this instrumentation limitation.
+The dated [paired BOOX measurements and limitations](mobile-performance.md#boox-file-list-beforeafter-profiling--2026-10-19)
+are retained in the performance reference. Current listing contracts are above.
 
 ## Workspaces refresh
 
@@ -836,48 +805,9 @@ at the provider root and returns to Workspaces; nested folders retain Up.
 
 ## Android Workspaces profiling — 2026-10-19
 
-The disposable [performance probe](../../mobile_build/native_tests/tests/logisticsmobile/performance_probe.py)
-measures native Android navigation callbacks, the next native draw, nested workflow
-spans and cProfile call trees. It uses an isolated storage root and four synthetic
-locked LocalCrypt folders with matching retained remote metadata. Credentials are
-not loaded, and the association lookup returns fixture metadata. Discovery and UI
-construction otherwise use the normal application paths. This does not measure
-an external SD card or the user's credential vault.
-
-The measured source was Logistics `433c6038` and commonUtils `710bc341`, with a
-probe-only launcher. The API 35 ARM64 emulator ran on the development Mac; these
-times are not Samsung A15 hardware timings. Three unprofiled visits per source
-gave these medians:
-
-| Operation | Local | Cloud |
-| --- | ---: | ---: |
-| Navigation callback, including native activation | 173 ms | 156 ms |
-| Entry to next native draw | 191 ms | 168 ms |
-| Folder discovery | 4.8 ms | 4.3 ms |
-| Whole picker construction, including discovery and rows | 164 ms | 146 ms |
-| Row construction and styling, within picker construction | 118 ms | 102 ms |
-| Workspace save | 0.4 ms | 0.2 ms |
-
-Nested spans overlap and must not be added. cProfile adds overhead, so its elapsed
-times are used to locate work rather than as user-facing latency measurements.
-One Local visit constructed 74 widgets and 25 buttons, called `paint_surface`
-112 times and button `rehint` 221 times. Surface painting occupied 129 ms of a
-233 ms profiled visit, including native drawable/tint work and Java import
-resolution. It overlaps widget-construction time.
-
-`HubUI.refresh_hub('files')` rebuilds the picker on every root tab visit.
-`build_folder_picker` resets `folder_tab_views`, so that cache does not survive
-leaving and returning to Workspaces. A probe-only counterfactual that bypassed
-this rebuild reduced the callback median to 8 ms and next-draw median to 25 ms.
-It is not a production fix: retaining a page must still refresh discovery and
-invalidate rows when credentials, lock state, storage, mappings or visibility
-change.
-
-Other measured callbacks were Documents 41–43 ms; Settings 305 ms on first entry
-and 52 ms on return; Chat 239 ms on first entry and 14 ms on return. The four-second
-Samsung delay was not reproduced in this emulator. Device CPU speed, actual
-storage and application state remain unmeasured; do not attribute the entire
-reported delay to these emulator results.
+The dated [emulator measurements, retained-view verification and probe procedure](mobile-performance.md#android-workspaces-profiling--2026-10-19)
+are retained in the performance reference, including the October 20 incremental
+comparison. They do not certify later changes or physical-phone latency.
 
 ### Retained Workspaces implementation
 
@@ -905,53 +835,7 @@ than resetting the control and forcing repeated Toga layout. No persistent cache
 new credential index or row virtualization is introduced.
 
 The attached root is not removed and reattached on an unchanged tab return.
-Detail routes retain their previous browser/Back behavior. The same emulator
-fixture measured warm Local callbacks at 12–13 ms and Cloud at 9–12 ms, with the
-next native draw at 20–31 ms. The first build of a source remains more expensive
-(126–143 ms callback in this run). These are emulator results, not an estimate of
-Samsung A15 latency. Native checks verify page/source reuse, lock/unlock changes,
-hidden-source invalidation and folder creation/removal. The mobile regression
-suite also covers credential filters, transfer actions, discovery recovery and
-reader/browser return routes. Native iOS simulator checks also pass for retained
-view parenting, source/credential selection, lock indicators, folder discovery,
-workspace actions and Back navigation.
-
-The probe must run only in a disposable QA application on a simulator/emulator.
-Copy it into that application's isolated Python payload and replace only the QA
-launcher with `main().main_loop()`. It writes `performance-evidence/result.json`,
-human-readable profiles and `.prof` call trees under that app's cache directory.
-Keep it out of normal launchers and signed tester releases. The draw listener is
-Android-specific. Results in this run are retained locally under
-`mobile_build/build/performance-profile/android/`.
-
-
-### Incremental Workspaces verification — 2026-10-20
-
-A paired run on the same API 35 ARM64 AOSP ATD emulator uses synthetic cache-only
-folders, retained metadata and no loaded credentials or network. The before build
-preserves the pre-change presentation files; the after build changes only row
-reconciliation and surface/icon handling. These are emulator timings, not a
-physical-phone latency claim.
-
-| Operation with 100 local folders | Before | After |
-| --- | ---: | ---: |
-| UI row work after a remote-only metadata change, both publications | 3,700 ms | 9.3 ms |
-| Full row construction, unprofiled callback | 1,888 ms | 810 ms |
-| Unchanged repeat visit callback | 16.6 ms | 10.7 ms |
-
-The original cache discarded Local rows once against old discovery results and
-again when new Remote choices arrived, even though the Local folders were
-unchanged. Reconciliation retains all those native controls across both updates.
-Updating all 100 lock icons in place takes 128–139 ms in this fixture. Native
-checks verify retained button/icon identities and independent pressed states.
-Light, Dark and E Ink before/after screenshots are pixel-identical at 1080×1920.
-The 100-row profile reduces actual native background paints from 1,614 to 706;
-wrapper calls that only enqueue a final paint are not counted as native paints.
-The full list still constructs all its native controls on first use; recycling
-large offscreen lists remains separate work. This incremental run did not include
-native iOS timing or screenshots. Raw profiles, source hashes and
-screenshots are retained locally in
-`mobile_build/logs/workspaces-optimization-20261020/`.
+Detail routes retain their previous browser/Back behavior.
 
 ## App reset boundary
 
