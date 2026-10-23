@@ -1,5 +1,37 @@
 # Ecosystem maintenance progress
 
+## Complete remaining-work audit
+
+Assessed clean Logistics `4f78de7d` / commonUtils `2cd0516`, retaining the current
+branches. The [current remaining-work audit](remaining-work-audit.md) replaces
+historical next-step suggestions as the active backlog: eight shared-library,
+ten Logistics and five cross-cutting work items, each with scope and preservation
+checks. No production code, shared revision or external consumer changed.
+
+The Git-index inventory covers all 1,703 Python files across the two repositories,
+excluding generated/toolchain trees and the optional feature link. Detailed review
+concentrates on the ranked owners, transactions, state contracts and their tests;
+it is not a claim of exhaustive runtime path verification. A concrete tooling
+finding is that configured lint currently selects generated/toolchain copies;
+tracked-only optional diagnostics are recorded separately from passing CI rules.
+
+Fresh full host suites were attempted, then every permission-dependent failed
+file was rerun successfully using disposable fixtures and the needed host
+capabilities. Reconciled results: Logistics desktop 179 files / 1,694 outer cases /
+six native-bridge skips; mobile 165 / 1,185 / two DOM skips; shared Qt/portable
+184 / 1,260 / 25 optional/platform skips; shared native 25 / 108 / zero skips.
+Shared/native overlap is not additional distinct coverage. An initial shared run
+in the wrong environment is explicitly excluded from source-regression conclusions.
+No unresolved executed-group failures remain; this is not one unrestricted
+all-suite run or native acceptance. Doctor, configured lint, architecture,
+toolchain, hygiene and Logistics/shared documentation checks pass.
+
+Ally Tools and Blue Hole remain clean and untouched. Their scope is explicitly
+limited to changes required by shared import/signature/binding/resource migration;
+unrelated refactors or vendor refreshes are excluded. No push, deployment, native
+app installation, real remote/collection mutation or release occurred. The audit
+sets no numeric ecosystem score and keeps raw evidence outside the public wiki.
+
 ## Provider preparation/publication and collection operations continuation
 
 Started from clean Logistics `47cdc198` on `alpha`, with shared `2cd0516` on

@@ -1,5 +1,10 @@
 # Ecosystem architecture audit
 
+The [remaining-work audit](remaining-work-audit.md) is the current assessment at
+Logistics `4f78de7d` / commonUtils `2cd0516`, with fresh full host-test evidence.
+The implementation records and earlier assessments below retain their original
+source scope; completed migrations are not outstanding work.
+
 ## Provider preparation and collection-operation follow-up
 
 Logistics `585abf2e` separates initial preview preparation and admitted-view

@@ -1,5 +1,8 @@
 # Readability and organization rehabilitation
 
+For outstanding work, use the [current remaining-work audit](remaining-work-audit.md).
+The source snapshots, plans and completed implementation records below are historical.
+
 ## Scope and priorities
 
 The October 23 follow-up prioritizes human navigation, cohesive ownership and
