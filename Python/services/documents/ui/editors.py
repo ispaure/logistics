@@ -10,7 +10,8 @@ _windows = []
 
 
 def choose_editor_resource(parent, mode, provider=None, name='', *, markdown=False, extensions=None, directory=None):
-    from features.rclone.localcrypt.backend import connections, CryptResources
+    from features.rclone.localcrypt.backend import connections
+    from features.rclone.desktop_service import service
     from features.rclone.localcrypt.ui.views import ensure_session
     from services.local_storage import install_local_storage_policy
     install_local_storage_policy()
@@ -30,8 +31,12 @@ def choose_editor_resource(parent, mode, provider=None, name='', *, markdown=Fal
         def factory(item=item):
             if not ensure_session(item.context, package=item.package, parent=parent):
                 raise ValueError('Unlock this storage to browse it.')
-            backend = CryptResources(item)
-            return backend, backend.acquire()
+            backend = service.localcrypt.open(item)
+            try:
+                return backend, backend.acquire()
+            except BaseException:
+                backend.close()
+                raise
         locations.append((f'LocalCrypt · {item.remote} · {item.package.name}', factory))
     if directory is None:
         directory = '' if provider else Path.home().relative_to(local_root).as_posix()

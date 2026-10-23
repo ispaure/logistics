@@ -77,6 +77,8 @@ class RemoteResources:
 
     def __init__(self, config_path, remote, *, binary):
         self.config_path, self.remote, self.binary = Path(config_path), remote, Path(binary)
+        from .desktop_service import service
+        self._credential_grant = service.credentials.capture(self.config_path)
         revoked = session.revocation_check(self.config_path)
         values = session.credentials(self.config_path)
         self._disk_revision = None
@@ -99,6 +101,7 @@ class RemoteResources:
                          parent=self.config_path if self._disk_revision is None else None)
         self._revoked = session.revocation_check(self.context)
         try:
+            self._credential_grant.check()
             if self._disk_revision is None and revoked():
                 raise ValueError('Credentials changed. Reopen this remote.')
             if self._disk_revision is not None and self._disk_revision != self._config_revision():
@@ -126,6 +129,11 @@ class RemoteResources:
         check_cancelled(self._cancellation.current)
         if self.closed or self._revoked():
             raise ValueError('Credentials changed or were locked. Reopen this remote.')
+        try:
+            self._credential_grant.check()
+        except ValueError:
+            self.close()
+            raise
         if self._disk_revision is not None:
             try:
                 current = self._config_revision()

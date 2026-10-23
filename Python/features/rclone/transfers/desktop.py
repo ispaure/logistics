@@ -121,17 +121,11 @@ def build_plan(transfer, credentials):
     request = ReviewRequest(transfer.operation, transfer.source, transfer.destination,
                             str(transfer.config), options)
     path = transfer.config
-    def stamp():
-        info = path.stat()
-        return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
-    grant = credentials.capture(path) if path.suffix == '.session' else None
-    original = None if grant is not None else stamp()
+    grant = credentials.capture(path)
     def active():
         try:
-            if grant is not None:
-                grant.check()
-                return True
-            return stamp() == original
+            grant.check()
+            return True
         except (OSError, ValueError):
             return False
     def compare(emit, cancelled):

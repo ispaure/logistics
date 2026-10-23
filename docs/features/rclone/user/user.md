@@ -28,16 +28,18 @@ does not mean local-only. Workspaces shows the package with a **(session)** labe
 Pull and previews pass its settings to each rclone child in a private environment,
 with a memory-only config and no secret command arguments. Existing saved configs
 remain unchanged. Session credentials disappear when Logistics exits, or when you
-use **Forget Credentials** / **Forget All Session Credentials**. The cleanup controls appear in order: **Clear All .rconf Files**, **Forget
-Credentials**, then **Forget All Session Credentials**. The first deletes saved
+use **Forget Credentials** / **Lock All Session Credentials**. The cleanup controls appear in order: **Clear All Saved Configs**, **Forget
+Credentials**, then **Lock All Session Credentials**. The first deletes saved
 rclone `.conf` files; **Forget Credentials** removes both saved and session
 credentials for the selected package and keeps its ZIP. Detached FUSE mounts
 currently require saved configs.
 
 Short-lived desktop CLI processes do not return refreshed OAuth tokens to Logistics.
-Session mode may need another unlock or a renewed package if a provider rotates its
-refresh token. Saved `.conf` files retain rclone's token updates; these files contain
-credentials and rclone's obscured passwords are not secure encryption. Mobile's
+Logistics remote views and transfers use private credential snapshots, including
+when opened from a saved `.conf`; refreshed tokens are not written back to that
+file. A provider that rotates refresh tokens may require a renewed credential
+package. Saved configs contain credentials, and rclone's obscured passwords are
+not secure encryption. Mobile's
 saved option instead uses its device-protected encrypted vault.
 
 The **INI files** tab holds feature configuration, including software download
@@ -340,7 +342,7 @@ images to a combined 32 MiB. Comic members have separate bounded reading limits.
 
 Closing the browser does not invalidate documents that are still open. Closing
 the last owner removes its private reader credentials. **Forget Selected
-Credentials** and **Forget All Session Credentials** also revoke dependent reader
+Credentials** and **Lock All Session Credentials** also revoke dependent reader
 credentials. Unlock the matching ZIP and reopen documents to resume I/O. Already
 visible text/images may remain in memory until their windows close. Session-only
 storage does not promise secure erasure of process memory.

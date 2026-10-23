@@ -18,6 +18,48 @@ class DesktopTransferTests(unittest.TestCase):
         self.assertTrue(prepared.review.scan.retired.wait(2))
         self.assertTrue(prepared.review.approved)
 
+    def test_saved_config_lock_revokes_review_and_does_not_revive_after_reopen(self):
+        with TemporaryDirectory() as root:
+            config = Path(root) / 'account.conf'
+            config.write_text('[Files]\ntype = local\n')
+            transfer = DesktopTransferRequest(root, 'Files:', 'Push', config, Path('/rclone'))
+            with patch('features.rclone.transfers.desktop.scanner', return_value=lambda emit, cancelled: 'revision'), patch(
+                    'features.rclone.transfers.sync.rclone_sync') as execute:
+                prepared = service.transfers.review(transfer)
+                self.approve(prepared)
+                service.credentials.lock(config)
+                self.assertTrue(config.is_file())
+                service.credentials.capture(config).check()
+                with self.assertRaises(ValueError):
+                    service.transfers.execute(prepared)
+                execute.assert_not_called()
+
+    def test_programmatic_transfer_uses_captured_access_and_preflight_without_scanning(self):
+        with TemporaryDirectory() as root:
+            config = Path(root) / 'account.conf'
+            config.write_text('[Files]\ntype = local\n')
+            transfer = DesktopTransferRequest(root, 'Files:', 'Push', config, Path('/rclone'),
+                before_start=lambda: service.credentials.lock(config))
+            with patch('features.rclone.transfers.desktop.scanner') as scan, patch(
+                    'features.rclone.transfers.sync.rclone_sync') as execute:
+                with self.assertRaises(OperationCancelled):
+                    service.transfers.run(transfer)
+                execute.assert_not_called()
+                scan.assert_not_called()
+
+    def test_saved_config_lock_cancels_running_programmatic_transfer(self):
+        with TemporaryDirectory() as root:
+            config = Path(root) / 'account.conf'
+            config.write_text('[Files]\ntype = local\n')
+            transfer = DesktopTransferRequest(root, 'Files:', 'Push', config, Path('/rclone'))
+            def execute(*args, **kwargs):
+                self.assertFalse(kwargs['cancelled']())
+                service.credentials.lock(config)
+                self.assertTrue(kwargs['cancelled']())
+                return False
+            with patch('features.rclone.transfers.sync.rclone_sync', side_effect=execute):
+                self.assertFalse(service.transfers.run(transfer))
+
     def test_replacement_in_launch_hook_cannot_start_an_engine_with_new_access(self):
         with TemporaryDirectory() as root:
             config = Path(root) / 'account.session'

@@ -234,15 +234,28 @@ async def _reopen_file(app, source):
     if hasattr(client, 'resolve_remote'):
         remote = client.resolve_remote(remote, identity, cipher=True) if cipher else client.resolve_remote(remote, identity)
     if source['type'] == 'remote':
-        from features.rclone.mobile.remote_readers import RemoteReaders
-        copies = RemoteReaders(client, remote, identity=identity)
+        from features.rclone.mobile.service import native_service
+        from features.rclone.remote_access import NativeRemoteLocation
+        resource = native_service(client).remotes.open(NativeRemoteLocation(remote, identity=identity))
+        try:
+            copies = resource.readers()
+        except BaseException:
+            resource.close()
+            raise
     elif source['type'] == 'crypt':
-        from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
+        from features.rclone.localcrypt.mobile.resources import ManagedCopies
+        from features.rclone.mobile.service import native_service, LocalCryptLocation
         from features.rclone.mobile.storage_location import collection_path
-        copies = ManagedCopies(CryptFiles(collection_path(app.private_root, True), client, remote,
+        provider = native_service(client).localcrypt.open(LocalCryptLocation(
+            collection_path(app.private_root, True), remote,
             namespace=source['namespace'], storage_root=app.private_root, create=False))
-        if copies.provider.identity != identity:
-            raise ValueError('The encrypted file connection changed.')
+        try:
+            if provider.identity != identity:
+                raise ValueError('The encrypted file connection changed.')
+            copies = ManagedCopies(provider)
+        except BaseException:
+            provider.close()
+            raise
     else:
         copies = app.crypt_copies
         if copies.record(source['key'])['identity'] != identity:

@@ -1,6 +1,7 @@
 """Desktop credential publication; no dialogs, extracted TXT files or network I/O."""
 from dataclasses import dataclass
 from pathlib import Path
+from threading import RLock
 from . import session
 from .service import CredentialGrant
 from commonUtils.runtime.operations import check_cancelled
@@ -23,13 +24,36 @@ class DesktopCredentialLoad:
 
 class DesktopCredentials:
     lock_scope = 'package'
+    _saved_lock = RLock()
+    _saved_generations = {}
 
     def capture(self, key):
         key = Path(key)
-        return CredentialGrant(key, session.revocation_check(key))
+        if key.suffix == '.session' or session.names(key) is not None:
+            return CredentialGrant(key, session.revocation_check(key))
+        def revision():
+            try:
+                info = key.stat()
+                return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+            except OSError:
+                return None
+        original = revision()
+        if original is None:
+            raise ValueError('This saved credential config is unavailable.')
+        saved = key.absolute()
+        with self._saved_lock:
+            generation = self._saved_generations.setdefault(saved, 0)
+        def revoked():
+            with self._saved_lock:
+                return self._saved_generations.get(saved) != generation or revision() != original
+        return CredentialGrant(key, revoked)
 
     def lock(self, key=None):
-        paths = [Path(key)] if key is not None else session.paths()
+        with self._saved_lock:
+            paths = [Path(key)] if key is not None else list(set(session.paths()) | set(self._saved_generations))
+            for path in paths:
+                saved = (path.with_suffix('.conf') if path.suffix == '.session' else path).absolute()
+                self._saved_generations[saved] = self._saved_generations.get(saved, 0) + 1
         # Attempt every revocation even if a view's cleanup callback fails.
         failure = None
         for path in paths:
@@ -37,7 +61,7 @@ class DesktopCredentials:
             # Saved config bytes are retained; existing views must still
             # retire. Explicitly reopening a saved config creates new access.
             for revoke in (lambda: session.forget(path),
-                           lambda: invalidate_config(path.with_suffix('.conf'))):
+                           lambda: invalidate_config(path.with_suffix('.conf') if path.suffix == '.session' else path)):
                 try:
                     revoke()
                 except Exception as error:

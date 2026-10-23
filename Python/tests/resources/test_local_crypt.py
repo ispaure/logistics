@@ -188,7 +188,7 @@ class LocalCryptTests(QtTestCase):
                     self.assertFalse(actions.push_to_cloud(LocalFolder(item.data), f.context))
                     unlock.assert_called_once_with(item.context, package=f.package)
                 with patch('features.rclone.localcrypt.ui.views.ensure_session', return_value=True), \
-                     patch('features.rclone.transfers.sync.rclone_sync', return_value=True) as push:
+                     patch('features.rclone.transfers.workflow.sync_transfer', return_value=True) as push:
                     self.assertTrue(actions.push_to_cloud(LocalFolder(item.data), f.context))
                     self.assertEqual(push.call_args.args, (item.data, 'Secret:'))
                     self.assertEqual(push.call_args.kwargs['config_path'], item.context)
@@ -810,7 +810,7 @@ class LocalCryptTests(QtTestCase):
                 bad.write_text(text)
                 self.assertEqual(local_crypt.connections(), [f.item])
             folder = SimpleNamespace(name='Secret')
-            with patch('features.rclone.actions.rclone_sync.rclone_sync', return_value=True) as transfer:
+            with patch('features.rclone.transfers.workflow.sync_transfer', return_value=True) as transfer:
                 actions.push_specific_directory(folder, f.context, str(f.item.data))
                 self.assertEqual(transfer.call_args.args[1], local_crypt.push_target(f.item.data, f.context, folder.name, specific=True))
                 self.assertFalse(transfer.call_args.kwargs['copy_links'])
@@ -856,7 +856,7 @@ class LocalCryptTests(QtTestCase):
             self.assertEqual(dialog.result_destination.text(), 'Cloud:' + str(f.cloud))
             f.item.record.unlink()
             with patch('features.rclone.transfers.ui.push_dialog.ui.display_msg_box_ok') as message, \
-                 patch('features.rclone.actions.rclone_sync.rclone_sync') as transfer:
+                 patch('features.rclone.transfers.workflow.sync_transfer') as transfer:
                 dialog._push()
                 transfer.assert_not_called()
                 self.assertIn('no valid credential mapping', message.call_args.args[1])

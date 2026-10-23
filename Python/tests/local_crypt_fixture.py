@@ -42,12 +42,14 @@ def crypt_fixture(root, binary, *, crypt_settings=None):
     run_bytes([str(binary), '--config', session.NULL_CONFIG, 'copy', str(source), str(destination)], environment=environment, max_output=0)
     actual_sync = sync.rclone_sync
     def transfer(source, destination, **options):
-        return actual_sync(source, destination, **options, wait_for_output=True, executable_path=binary)
+        options.update(wait_for_output=True, executable_path=binary)
+        return actual_sync(source, destination, **options)
     with ExitStack() as patches:
         patches.enter_context(patch.object(local_crypt.configuration, 'get_credential_config_path', return_value=root / 'Accounts.conf'))
         patches.enter_context(patch.object(storage, 'application_root', return_value=root / 'Application Support/Logistics'))
         patches.enter_context(patch.object(actions.config, 'LogisticsConfig', return_value=SimpleNamespace(server_path=root / 'Server', path_remote_local=root / 'Server/Local')))
         patches.enter_context(patch.object(sync, 'rclone_sync', side_effect=transfer))
+        patches.enter_context(patch.object(sync.executable, 'ensure_rclone', return_value=binary))
         assert actions.pull_encrypted_copy('Secret', context)
         item = local_crypt.connection(context, 'Secret')
         provider = local_crypt.CryptResources(item, binary=binary)

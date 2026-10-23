@@ -86,19 +86,45 @@ class CloudRestoreTests(IsolatedAsyncioTestCase):
                     private_root=None, require_remote_credentials_async=AsyncMock(return_value=True),
                     open_crypt=AsyncMock(return_value=True))
                 source = dict(type=kind, remote='Drive', identity='identity', key='Notes.md', namespace='copy')
-                with patch('features.rclone.mobile.remote_readers.RemoteReaders', return_value=copies), \
-                        patch('features.rclone.localcrypt.mobile.resources.CryptFiles'), \
+                with patch('features.rclone.mobile.service.native_service') as service, \
                         patch('features.rclone.localcrypt.mobile.resources.ManagedCopies', return_value=copies), \
                         patch('features.rclone.mobile.storage_location.collection_path'):
+                    service.return_value.remotes.open.return_value.readers.return_value = copies
+                    service.return_value.localcrypt.open.return_value = copies.provider
                     opening = asyncio.create_task(_reopen_file(app, source))
                     await asyncio.sleep(0)
                     client.request.assert_not_called()
+                    service.assert_not_called()
                     app.open_crypt.assert_not_awaited()
                     ready.set()
                     self.assertTrue(await opening)
+                    service.assert_called_once_with(client)
+                    if kind == 'remote':
+                        location = service.return_value.remotes.open.call_args.args[0]
+                        self.assertEqual((location.remote, location.identity), ('Drive', 'identity'))
+                    else:
+                        location = service.return_value.localcrypt.open.call_args.args[0]
+                        self.assertEqual((location.remote, location.namespace, location.create), ('Drive', 'copy', False))
                 app.open_crypt.assert_awaited_once_with(copies=copies, key='Notes.md')
                 if kind == 'crypt':
                     app.require_remote_credentials_async.assert_not_awaited()
+
+    async def test_changed_crypt_identity_closes_provider_before_reader_setup(self):
+        client = SimpleNamespace(request=Mock(return_value={'identity': 'identity'}))
+        provider = SimpleNamespace(identity='replacement', close=Mock())
+        app = SimpleNamespace(show_cloud=Mock(), active_host=True, navigation_generation=1,
+            cloud_client=client, cloud_restore_task=None, private_root=None,
+            require_remote_credentials_async=AsyncMock(), open_crypt=AsyncMock())
+        source = dict(type='crypt', remote='Drive', identity='identity', key='Notes.md', namespace='copy')
+        with patch('features.rclone.mobile.service.native_service') as service, \
+                patch('features.rclone.mobile.storage_location.collection_path'), \
+                patch('features.rclone.localcrypt.mobile.resources.ManagedCopies') as readers:
+            service.return_value.localcrypt.open.return_value = provider
+            with self.assertRaisesRegex(ValueError, 'connection changed'):
+                await _reopen_file(app, source)
+            provider.close.assert_called_once_with()
+            readers.assert_not_called()
+            app.open_crypt.assert_not_awaited()
 
     async def test_navigation_away_during_restore_does_not_resume_document_open(self):
         ready = asyncio.Event()

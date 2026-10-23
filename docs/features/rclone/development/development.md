@@ -457,6 +457,24 @@ releasing the cache lock. Paused-worker regressions cover closure between path
 validation and publication, and observers verify that private caches are already
 empty when they run.
 
+## Application service boundaries
+
+Desktop Open/Save pickers and Notes Library factories open LocalCrypt through
+`RcloneService.localcrypt`. Mobile Notes Library mappings and restored private
+documents do the same; restored remote documents open a remote session through
+`RcloneService.remotes` and obtain its reader adapter. Browser preview readers use
+the browser's captured remote resource, including its original generation.
+The direct document API can open a fresh service session when no browser exists.
+An identity mismatch during restored LocalCrypt setup closes the new provider.
+
+Platform adapters still perform engine I/O and construct internal crypt comparison
+and authentication providers. Metadata discovery (connection/cipher identities,
+copy associations and crypt types), storage layout, document formats and browser
+navigation remain with their feature owners; these are not alternate credential
+publication or transfer launch paths. `test_rclone_service_boundaries.py` checks
+application factory/engine-import boundaries, while adapter and native-bridge
+regressions exercise actual captured access and cancellation.
+
 ## Captured transfer plans
 
 `transfers/service.py` supplies the shared `TransferService`. Its runtime adapter
@@ -464,7 +482,7 @@ turns a captured `DesktopTransferRequest` or `NativeTransferRequest` into a
 `TransferPlan` containing the immutable `ReviewRequest`, comparison adapter,
 approval binding, execution lifetime and execution adapter. Desktop
 `transfers/desktop.py` owns plan assembly and crypt comparison resources;
-`transfers/workflow.py` presents the review. Native `transfers/mobile/plan.py`
+`transfers/workflow.py` presents the review and routes programmatic sync requests. Native `transfers/mobile/plan.py`
 owns the comparison transport, captured mapping and execution binding;
 `transfers/mobile/review_ui.py` presents the review. `RcloneService.transfers` retains the
 approval authority for its runtime. Browser/UI state and engine execution stay
@@ -479,12 +497,26 @@ progress. A plan from another service, a modified review, a changed connection,
 an unretired comparison or a reused approval is refused before execution.
 Execution failure or cancellation consumes approval; retry requires a new review.
 
+`run(request, context)` retains the existing explicitly noninteractive transfer
+API for automation. It constructs the same platform plan, checks its binding and
+runs mandatory preflight without starting a comparison or inventing review approval.
+Desktop actions and YouTube configuration/season sync enter through
+`transfers/workflow.py:sync_transfer`; their interactive `review=True` paths still
+use review/execute and the existing confirmation. The engine-level `sync.rclone_sync`
+is transport/preflight code for adapters and low-level tests, not the application
+entry point.
+
 Completed review still performs a fresh matching comparison. Explicit incomplete
 approval still waits for the comparison worker to retire and retains mandatory
 LocalCrypt authentication, link, destination and connection checks. The plan does
 not make remote Sync atomic or add rollback to partially completed transfers.
-Desktop session validity now captures a credential generation rather than
-comparing credential values, so reloading identical values invalidates old plans.
+Desktop session validity captures a credential generation rather than comparing
+credential values, so reloading identical values invalidates old plans. Saved-config
+grants capture both a file revision and a process-wide lock generation. Locking a
+saved package revokes its plans and remote views without deleting the file;
+reopening that file obtains new access and cannot revive an old grant. Lock All
+also revokes captured saved-config grants. These checks apply during comparison,
+launch hooks and running transfers, including noninteractive transfers.
 The service checks request validity before starting comparison. Approval validity
 includes the original copy records and mapping signature. Execution lifetime is
 separate: saving those records during a valid transfer must not cancel its own

@@ -8,6 +8,12 @@ from .transfer_options import TransferOptions
 
 
 def reviewed_sync(source, destination, *, operation, config_path, crypt_item=None, before_start=lambda: None, **kwargs):
+    return sync_transfer(source, destination, operation=operation, config_path=config_path,
+                         crypt_item=crypt_item, before_start=before_start, review=True, **kwargs)
+
+
+def sync_transfer(source, destination, *, operation, config_path, crypt_item=None, before_start=lambda: None,
+                  review=False, **kwargs):
     binary = kwargs.pop('executable_path', None) or executable.ensure_rclone()
     if binary is None:
         return False
@@ -18,6 +24,8 @@ def reviewed_sync(source, destination, *, operation, config_path, crypt_item=Non
     cancelled = kwargs.pop('cancelled', lambda: False)
     transfer = DesktopTransferRequest(str(source), str(destination), operation, Path(config_path), Path(binary),
         options, crypt_item, before_start, kwargs)
+    if not review:
+        return service.transfers.run(transfer, TransferContext(cancelled=cancelled))
     prepared = service.transfers.review(transfer)
     try:
         from .ui.review import confirm_review

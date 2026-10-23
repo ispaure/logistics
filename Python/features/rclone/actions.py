@@ -9,15 +9,12 @@ import config
 from commonUtils.filesystem import directories as dirUtils
 from commonUtils.runtime.diagnostics import Severity, log
 
-from features.rclone.transfers import sync as rclone_sync
 from models.local_folder import LocalFolder
 
 
 def _transfer(source, destination, *, review=False, operation='Push', **kwargs):
-    if review:
-        from features.rclone.transfers.workflow import reviewed_sync
-        return reviewed_sync(source, destination, operation=operation, **kwargs)
-    return rclone_sync.rclone_sync(source, destination, **kwargs)
+    from features.rclone.transfers.workflow import sync_transfer
+    return sync_transfer(source, destination, operation=operation, review=review, **kwargs)
 
 
 def pull_remote(remote_name: str, config_path: str | Path, *, package=None, review=False) -> bool:
@@ -128,9 +125,5 @@ def pull_encrypted_copy(remote_name, config_path, *, item=None, review=False):
     values = unlock(item)
     from features.rclone.localcrypt.backend import validate_ciphertext_tree
     validate_ciphertext_tree(item)
-    if review:
-        from features.rclone.transfers.workflow import reviewed_sync
-        return reviewed_sync(backing_target(values, remote_name), item.data, operation='Pull',
-            config_path=config_path, copy_links=False, crypt_item=item, before_start=item.publish)
-    item.publish()
-    return rclone_sync.rclone_sync(backing_target(values, remote_name), item.data, config_path=config_path, copy_links=False)
+    return _transfer(backing_target(values, remote_name), item.data, operation='Pull', review=review,
+        config_path=config_path, copy_links=False, crypt_item=item, before_start=item.publish)

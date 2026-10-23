@@ -106,6 +106,24 @@ class CredentialServiceTests(unittest.TestCase):
             self.service.forget(package)
         self.assertEqual(package.read_bytes(), b'original')
 
+    def test_saved_grants_follow_lock_all_and_file_replacement_across_services(self):
+        config = self.root / 'Account.CONF'
+        config.write_text('[Files]\ntype = local\n')
+        grant = self.service.capture(config)
+        other = CredentialService(DesktopCredentials())
+        other.lock(config)
+        with self.assertRaises(ValueError):
+            grant.check()
+        reopened = self.service.capture(config)
+        reopened.check()
+        other.lock()
+        with self.assertRaises(ValueError):
+            reopened.check()
+        replacement = self.service.capture(config)
+        config.write_text('[Different]\ntype = local\n')
+        with self.assertRaises(ValueError):
+            replacement.check()
+
     def test_lock_during_slow_decode_prevents_late_publication(self):
         started, release = Event(), Event()
         values = {'Files': {'type': 'local'}}

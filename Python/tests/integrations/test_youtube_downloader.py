@@ -140,20 +140,20 @@ class DownloaderTests(unittest.TestCase):
         for name in ('Season 1', 'Seasonal Extras', 'Old Season 2'):
             (self.root / 'Channel' / name).mkdir(parents=True)
         (self.root / 'Channel/Season 3').symlink_to(self.root / 'Channel/Season 1', target_is_directory=True)
-        with patch('features.rclone.transfers.sync.rclone_sync') as transfer:
+        with patch('features.rclone.transfers.workflow.sync_transfer') as transfer:
             sync.push_seasons(folder, '/credentials.ini')
         transfer.assert_called_once_with(self.root / 'Channel/Season 1', 'Videos:Channel/Season 1',
-                                         config_path='/credentials.ini', wait_for_output=True)
+                                         config_path='/credentials.ini', operation='Push', review=False, wait_for_output=True)
 
     def test_config_sync_uses_normalized_relative_path(self):
         from features.youtube_downloader import sync
         folder = SimpleNamespace(path=self.root, name='Videos')
         (self.root / 'remoteConfig.ini').write_text('[Youtube-Download]\nconfig_sub_path=Configs\\YouTube\n')
-        with patch('features.rclone.transfers.sync.rclone_sync') as transfer:
+        with patch('features.rclone.transfers.workflow.sync_transfer') as transfer:
             sync.push_config(folder, '/credentials.ini')
-            transfer.assert_called_with(self.root / 'Configs/YouTube', 'Videos:Configs/YouTube', config_path='/credentials.ini')
+            transfer.assert_called_with(self.root / 'Configs/YouTube', 'Videos:Configs/YouTube', config_path='/credentials.ini', operation='Push', review=False)
             sync.pull_config(folder, '/credentials.ini')
-            transfer.assert_called_with('Videos:Configs/YouTube', self.root / 'Configs/YouTube', config_path='/credentials.ini')
+            transfer.assert_called_with('Videos:Configs/YouTube', self.root / 'Configs/YouTube', config_path='/credentials.ini', operation='Pull', review=False)
 
 
     def test_numbering_continues_after_highest_episode_despite_gaps(self):

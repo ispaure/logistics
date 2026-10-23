@@ -60,6 +60,23 @@ class TransferService:
             raise TypeError('This transfer service has no platform adapter.')
         return self.prepare(self._plan_factory(request))
 
+    def run(self, request, context=TransferContext()):
+        """Run an explicitly requested programmatic transfer without a review UI.
+
+        Interactive commands use review/execute. Automation retains its existing
+        noninteractive API, with the same captured access and platform preflight.
+        """
+        if self._plan_factory is None:
+            raise TypeError('This transfer service has no platform adapter.')
+        check_cancelled(context.cancelled)
+        plan = self._plan_factory(request)
+        if not plan.valid():
+            raise ValueError('Connection or target changed. Start the transfer again.')
+        active = plan.active or plan.valid
+        execution = TransferContext(lambda: context.cancelled() or not active(), context.progress)
+        check_cancelled(execution.cancelled)
+        return plan.execute(plan.request, execution)
+
     def prepare(self, plan: TransferPlan) -> PreparedTransfer:
         if not plan.valid():
             raise ValueError('Connection or target changed. Review the transfer again.')

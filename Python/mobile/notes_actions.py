@@ -21,6 +21,15 @@ class RemoteNotes:
     def check(self):
         self.resource.check()
 
+    def operation(self, cancelled):
+        return self.resource.operation(cancelled)
+
+    def acquire(self):
+        return self.resource.acquire()
+
+    def close(self):
+        self.resource.close()
+
     def list(self, path='', *, cancelled=lambda: False):
         return self.resource.list(path, cancelled=cancelled)
 
@@ -40,7 +49,8 @@ class RemoteNotes:
 def resolve_source(app, entry):
     from features.rclone.mobile.storage_location import collection_path
     from commonUtils.runtime.resources.local import LocalFiles
-    from features.rclone.localcrypt.mobile.resources import encrypted_storage, CryptFiles
+    from features.rclone.localcrypt.mobile.resources import encrypted_storage
+    from features.rclone.mobile.service import native_service, LocalCryptLocation
     kind, value = entry['kind'], entry['value']
     client = getattr(app, 'cloud_client', None)
     job = app.mirror_store().jobs.get(value) if kind in ('job', 'job-remote') else None
@@ -59,8 +69,9 @@ def resolve_source(app, entry):
         from features.rclone.transfers.mobile.jobs import remote_location
         remote, folder = remote_location(client, dict(job))
         if kind == 'job':
-            return CryptFiles(collection_path(app.private_root, True), client, remote,
-                namespace=job['identity'], storage_root=app.private_root, create=False), folder
+            return native_service(client).localcrypt.open(LocalCryptLocation(
+                collection_path(app.private_root, True), remote,
+                namespace=job['identity'], storage_root=app.private_root, create=False)), folder
     else:
         remote, folder = value
     return RemoteNotes(client, remote), folder

@@ -8,8 +8,8 @@ def sources(entry):
     result = []
     if entry.local is not None:
         if getattr(entry.local, 'private', False):
-            from features.rclone.localcrypt.backend import CryptResources
-            result.append(('LocalCrypt', lambda: CryptResources(entry.local.connection), False))
+            from features.rclone.desktop_service import service
+            result.append(('LocalCrypt', lambda: service.localcrypt.open(entry.local.connection), False))
         else:
             from commonUtils.runtime.resources.local import LocalFiles
             result.append(('Local', lambda: LocalFiles(entry.local.path), False))

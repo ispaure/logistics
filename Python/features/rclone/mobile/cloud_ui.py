@@ -576,11 +576,14 @@ class CloudUI(LocalCryptUI):
         self.show_cloud(present=False)
         self.cloud_status.value = opening
         try:
-            from features.rclone.mobile.remote_readers import RemoteReaders
+            from .service import native_service
+            from features.rclone.remote_access import NativeRemoteLocation
+            resource = self.browser_state.resource
+            if resource is None:
+                resource = native_service(self.cloud_client).remotes.open(NativeRemoteLocation(self.cloud_open_remote))
             async with self.remote_activity(opening) as progress:
                 opened = await self.open_crypt(
-                    copies=RemoteReaders(self.cloud_client, self.cloud_open_remote, progress=progress,
-                                         resource=self.browser_state.resource),
+                    copies=resource.readers(progress=progress),
                     key=row['path'])
         except Exception as error:
             # Session setup can fail before the provider reader's error handler.
