@@ -25,6 +25,7 @@ records each checked unit, including caught errors and validation limits; the
 | C5 | Per-field control construction/binding and row/reset/preview assembly | shared `e37da37` |
 | C6 | Named INI validation/location/replacement and rename stem/context stages | shared `d1ba7cd` |
 | C7 (contract stage) | Paired install/retirement and late-callback contracts; native factories unchanged and platform-gated | shared `016a35d` |
+| C7 (native-owner slice) | Android/iOS simulator/emulator lifecycle checks; navigation admission/resize/selection restoration and speech callback release | shared `3e08820` |
 | C8 | Explicit checkout admission/actions; hook and declined-prompt contracts; legacy exports retained | shared `9aaf84d` |
 | L1 | Managed-text host workflows grouped over existing store/workspace/view owners; aggregate lifecycle stays in app | `380ab06e` |
 | L2 | Retained drawer/listing owner separated from frame layout; import compatibility preserved | `c2d4cc55` |
@@ -70,8 +71,9 @@ whole-UI rewrite. Live integration/platform acceptance remains a separate risk.
 Fresh focused shared checks pass: six browser-index-policy, 25 workspace,
 14 Markdown-presentation, one layered-settings-editor and three required-Toga
 owner-lifetime cases. The Toga cases exercise dummy/fake adapters; they do not
-close the native acceptance gate. This recheck changes no shared/runtime code and
-does not claim another complete matrix or physical-device run.
+close the native acceptance gate. That prioritization recheck changed no
+shared/runtime code; the subsequent native-owner fixes and their acceptance
+limits are recorded below.
 
 ## Remaining acceptance gate
 
@@ -80,8 +82,15 @@ relevant Android/iOS install/dispose/reinstall paths on a supported native runti
 reader chrome, pinch/scroll/menu callbacks, rendering-canvas retirement, queued
 speech completions, background/resume and repeated window closure. Dummy/fake
 bridge cases establish contracts but cannot prove native peer/delegate lifetimes.
-No connected Android device or booted iOS simulator was available for this pass;
-no temporary apps were installed. Keep the main Logistics app and its data.
+The [2026-10-23 native-owner pass](../mobile-navigation-proof.md#shared-native-owner-lifecycle-checks-2026-10-23)
+uses isolated iOS 27.0 and Android 15 simulator/emulator apps. It covers repeated
+installation/retirement, chrome restoration, canvas pixel/listener cleanup,
+offline speech stop/restart and late callbacks, background/resume, and Android
+in-place phone/tablet/landscape layout changes. It fixes failed admission,
+retired layout dispatch, Android resize-wrapper/selection restoration and retained
+speech callbacks. Native factories remain unchanged. Physical gestures, IME,
+multi-window/recreation, system audio interruption and minimum-runtime checks
+remain outside this focused pass. Preserve the main Logistics app and its data.
 
 Existing platform/service acceptance for Blender activation, FUSE drivers, real
 remote/collection operations and desktop integrations remains separate from this

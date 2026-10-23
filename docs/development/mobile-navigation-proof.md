@@ -13,6 +13,61 @@ declared iOS 15 minimum and guarding newer controller APIs.
 
 ## Local evidence
 
+### Shared native-owner lifecycle checks (2026-10-23)
+
+`mobile_build/native_tests/tests/logisticsmobile/native_lifecycle_probe.py` is an
+isolated Toga entry point using synthetic image/text content. Stage it as the
+test app's `logisticsmobile.app` with current commonUtils and its Android Java
+sources. Its `main()` returns the Toga app. Keep the existing launcher calling
+`main().main_loop()`, use bundle/application ID
+`io.github.ispaure.logisticsnativelifecycle`, and retain the Android speech-service
+queries. Never install this fixture over the main app. The probe uses the same
+shared cooperative-loop binding as the Logistics host.
+
+The Android fixture additionally handles `density|smallestScreenSize` configuration
+changes in its Activity manifest. These flags belong to the isolated fixture:
+the driver changes emulator density/size while testing an installed native owner.
+It must not restart the Activity and silently test an obsolete Python task. Each
+checkpoint checks the current Activity, and the driver requires one probe UUID
+and PID throughout the run. This does not validate Activity recreation/recovery.
+
+After installing the isolated app on a dedicated target, run:
+
+```sh
+python3 mobile_build/validation/native_lifecycle_tools.py ios \
+  --device SIMULATOR_UUID --output test-results/native-lifecycle
+python3 mobile_build/validation/native_lifecycle_tools.py android \
+  --device emulator-PORT --output test-results/native-lifecycle
+```
+
+The driver rejects physical Android serials, switches the live app through
+background/foreground at navigation, canvas and speech checkpoints, and restores
+Android display overrides in `finally`. Reports retain native backend identity,
+loaded source/bytecode fingerprints, run UUID, callbacks and external checkpoints.
+Save evidence before uninstalling the isolated app; preserve the main package.
+
+Local runs on an iPhone 18 Pro / iOS 27.0 simulator and an Android 15 / API 35
+emulator pass three cycles per component: navigation installation, chrome
+restoration, uninstallation/reinstallation and retired callbacks; image zoom/fit,
+native gesture handlers, pixel/listener cleanup and repeated disposal; and native
+offline speech callbacks, stop/restart, close and suppression of late deliveries.
+The iOS canvas also creates a native magnifier and checks its pixel cleanup.
+Android additionally crosses phone, tablet rail and landscape allocations while
+keeping the Activity and selected destination. Both platforms observe actual
+background/foreground callbacks while each owner is live.
+
+The baseline reproduced failed navigation admission retaining host/native state
+and speech closure retaining presentation callbacks. Further native checks caught
+Android resize wrapper identity/argument errors and programmatic tab selection
+leaking through install/uninstall. Shared fixes preserve paired retirement and
+selection without moving native factories. The image canvas required no runtime
+change. Host native contracts, mobile navigation/speech checks and lint pass.
+
+This focused pass does not certify physical-device touch/pinch/pan, audible output,
+system audio interruption, IME restoration, iPad independent windows, Activity
+recreation or minimum-version OS behavior. Keep those acceptance gates separate;
+the fixture's UIKit selector/Java listener calls are not finger-driven gestures.
+
 ### Normal startup and saved-workspace audit
 
 The iOS startup audit uses the normal app storage paths rather than overriding
