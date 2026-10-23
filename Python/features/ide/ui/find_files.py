@@ -196,10 +196,15 @@ class FindFiles(qt.QFrame):
         self.job_generation = self.generation
         self.search_cancel = Event()
         buffers = {path: doc.toPlainText() for path, doc in self.workspace.documents.items()}
-        self.search_future = _executor.submit(search_files, roots, tuple(project.excluded_paths),
-            self.query.text(), self.masks.text(), buffers=buffers,
-            cancelled=self.search_cancel.is_set,
-            **{key: button.isChecked() for key, button in self.options.items()})
+        try:
+            self.search_future = _executor.submit(search_files, roots, tuple(project.excluded_paths),
+                self.query.text(), self.masks.text(), buffers=buffers,
+                cancelled=self.search_cancel.is_set,
+                **{key: button.isChecked() for key, button in self.options.items()})
+        except (OSError, RuntimeError) as error:
+            self.search_cancel.set()
+            self.summary.setText('Cannot search files: ' + (str(error) or type(error).__name__))
+            return
         self.jobs.append((self.search_future, self.search_cancel))
         self.poll.start()
 
@@ -220,7 +225,12 @@ class FindFiles(qt.QFrame):
         self.preview_job_generation = self.preview_generation
         doc = self.workspace.documents.get(self.preview_hit.path)
         self.preview_cancel = Event()
-        self.preview_future = _executor.submit(preview_text, self.preview_hit.path, doc.toPlainText() if doc else None)
+        try:
+            self.preview_future = _executor.submit(preview_text, self.preview_hit.path, doc.toPlainText() if doc else None)
+        except (OSError, RuntimeError) as error:
+            self.preview_cancel.set()
+            self.preview_title.setText('Cannot load preview: ' + (str(error) or type(error).__name__))
+            return
         self.jobs.append((self.preview_future, self.preview_cancel))
         self.poll.start()
 
@@ -244,7 +254,7 @@ class FindFiles(qt.QFrame):
                     if result.hits:
                         self.results.setCurrentItem(self.results.topLevelItem(0))
                 except Exception as error:
-                    self.summary.setText(str(error))
+                    self.summary.setText('Cannot search files: ' + (str(error) or type(error).__name__))
             if self.pending_search:
                 self.start_search()
         if self.preview_future is not None and self.preview_future.done():
@@ -266,7 +276,7 @@ class FindFiles(qt.QFrame):
                     self.preview.highlight_cursor()
                     self.preview_title.setText(str(hit.path) + f' — line {hit.line}')
                 except Exception as error:
-                    self.preview_title.setText(str(error))
+                    self.preview_title.setText('Cannot load preview: ' + (str(error) or type(error).__name__))
             self.start_preview()
         if self.search_future is None and self.preview_future is None:
             self.poll.stop()
