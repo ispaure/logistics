@@ -1,5 +1,21 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: T4 reviewed lint rule
+
+Removed the two duplicate SettingsLabel imports while retaining each owner's
+canonical `.forms.SettingsLabel` binding. Downloader sync imports become explicit
+same-name re-exports: the feature dialog demonstrably calls those attributes, so
+removing them would break compatibility. F811 is now part of the configured gate
+for real source/test/tooling scope; a temporary duplicate fixture is rejected by
+the actual configuration. Full lint passes. Settings cases in three files and all
+17 downloader cases pass before/after; direct checks retain all label/callable
+identities. Optional F401/F841 diagnostics were reviewed by category/owner: package
+and compatibility exports, registration side effects, native/test lifetime imports,
+and unused locals whose evaluation can matter. They remain optional rather than
+mass-deleting facades or changing legacy aviation output. Developer selection,
+architecture, wiki and whitespace checks pass. Concurrent rclone/consumer workflow
+edits are excluded. No external repository change or project push.
+
 ## Sequential audit implementation: T3 portable owner coverage
 
 Architecture policy expands eight direct modules to 81 reviewed modules, including

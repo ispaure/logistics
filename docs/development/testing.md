@@ -251,8 +251,15 @@ and installed drivers require separate validation.
 
 Normal launchers synchronize runtime dependencies only. Use the environment setup
 above to install developer tools, then run `python3 dev.py lint` (`py` on Windows).
-The initial lint policy checks syntax and correctness without forcing a formatting
-rewrite. `commonUtils.tests.qt_test_case.QtTestCase` gives GUI tests ownership of
+The lint policy checks syntax/correctness (`E9`, `F63`, `F7`, `F82`) and reviewed
+unused redefinitions (`F811`) without forcing a formatting rewrite. `F401` and
+`F841` remain optional review aids: package/module re-exports, format-registration
+imports, test mocks, native type imports and retained lifetime handles need owner
+review before removal. An unused assignment may still evaluate a required operation;
+removing its evaluation can change behavior. In particular, downloader sync names
+are explicit same-name re-exports used by its UI, and the legacy aviation
+`print_info` method's lack of output is preserved rather than silently fixed during
+lint cleanup. Do not apply repository-wide unused-import/local autofixes. `commonUtils.tests.qt_test_case.QtTestCase` gives GUI tests ownership of
 new windows: it requests worker shutdown, drains deferred deletion and deletes
 windows before the next test. Use its `temporary_directory()` for GUI filesystem
 fixtures so windows and watchers are destroyed before their directories are

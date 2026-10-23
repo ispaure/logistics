@@ -92,3 +92,11 @@ callbacks must not access Qt widgets. GUI failures remain visible in the dialog.
 paths, Linux/system FFmpeg and bundled Windows fallback, failed commands and batch
 behavior. Processes are mocked: tests do not download videos, update packages or
 transfer remote files.
+
+## Sync compatibility exports
+
+`downloader.py` explicitly re-exports `push_seasons`, `push_config` and
+`pull_config` from `sync.py`. The feature dialog calls those names through the
+downloader module; they retain the same callable objects and signatures. An
+unused-import report inside `downloader.py` is not evidence these commands can be
+removed. Transfer preparation and review remain in their existing owners.

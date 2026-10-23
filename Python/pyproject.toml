@@ -41,5 +41,6 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-# Start with correctness checks; formatting and legacy import cleanup are separate.
-select = ["E9", "F63", "F7", "F82"]
+# Correctness checks plus reviewed duplicate-definition checks; compatibility
+# exports and optional unused-binding diagnostics are reviewed separately.
+select = ["E9", "F63", "F7", "F82", "F811"]

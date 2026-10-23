@@ -11,7 +11,7 @@ from services.build_version import BuildVersion, installed_build
 
 
 from commonUtils.ui.native import forms as _forms
-from commonUtils.ui.native.forms import wrap_text, FittedLabel as SettingsLabel
+from commonUtils.ui.native.forms import wrap_text
 
 
 from .forms import settings_presentation, fit_section, fit_text, SettingsLabel, disclosure, group_rows

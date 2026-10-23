@@ -8,7 +8,8 @@ import sys
 from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.integrations.wrappers.cmdShellWrapper import run_command
 from features.youtube_downloader.settings import DownloadSettings, download_arguments, find_ffmpeg
-from .sync import push_seasons, push_config, pull_config
+# Public command aliases used by the feature UI and existing consumers.
+from .sync import push_seasons as push_seasons, push_config as push_config, pull_config as pull_config
 
 
 def update_yt_dlp(*, cancelled=lambda: False) -> bool:
