@@ -419,6 +419,11 @@ Their native builds and runtime checks are mandatory alongside macOS, Windows
 and Linux validation before a release can be packaged or published. A manual
 Source release run validates and packages without publishing a release.
 
+The native UI runner invokes Briefcase through its own Python interpreter
+(`python -m briefcase`), so it uses that environment's pinned dependency instead
+of a potentially stale or unrelated console script on PATH. Run the tool with
+the prepared mobile host environment.
+
 Native build jobs additionally run the actual Toga app in Briefcase test mode on
 an Android emulator and iPhone Simulator. Fifteen required UI cases cover the hub,
 preferences, documents, rendered Markdown, rendered EPUB chapters, bookmarks and

@@ -8,6 +8,7 @@ from pathlib import Path
 import signal
 import shutil
 import subprocess
+import sys
 import time
 
 PREFIX = 'LOGISTICS_NATIVE_UI_RESULT='
@@ -89,7 +90,7 @@ def simulator_report(device, started_ns, *, diagnostics=None):
 
 
 def run(target, device, *, local=False, require_independent_windows=False, require_duo=False):
-    command = ['briefcase', 'run', 'android' if target == 'android' else 'iOS',
+    command = [sys.executable, '-m', 'briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
     if target == 'android':
         command.extend(['--Xemulator=-no-window', '--Xemulator=-no-audio', '--Xemulator=-no-snapshot-load', '--Xemulator=-gpu',
