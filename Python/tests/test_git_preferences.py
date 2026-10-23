@@ -27,6 +27,44 @@ class GitPreferenceTests(unittest.TestCase):
                     preferences.save()
             self.assertEqual(path.read_bytes(), before)
 
+    def test_stale_preferences_do_not_overwrite_another_instances_bookmarks(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'git.json'
+            first = Preferences(path)
+            first.save()
+            second = Preferences(path)
+            first.remember(Path(directory) / 'first-repository')
+            first.save()
+            saved = path.read_bytes()
+            second.remember(Path(directory) / 'second-repository')
+            with self.assertRaisesRegex(OSError, 'changed'):
+                second.save()
+            self.assertEqual(path.read_bytes(), saved)
+            self.assertEqual(Preferences(path).last_repository, str(Path(directory) / 'first-repository'))
+
+    def test_previously_missing_preferences_do_not_overwrite_a_new_external_file(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'git.json'
+            preferences = Preferences(path)
+            external = b'{"repositories": [], "last_repository": "external"}'
+            path.write_bytes(external)
+            with self.assertRaisesRegex(OSError, 'changed'):
+                preferences.save()
+            self.assertEqual(path.read_bytes(), external)
+
+    def test_external_deletion_is_a_conflict_and_successful_saves_advance_the_baseline(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'git.json'
+            preferences = Preferences(path)
+            preferences.save()
+            preferences.last_repository = 'second save'
+            preferences.save()
+            self.assertEqual(Preferences(path).last_repository, 'second save')
+            path.unlink()
+            with self.assertRaisesRegex(OSError, 'changed'):
+                preferences.save()
+            self.assertFalse(path.exists())
+
     def test_round_trip_and_reject_plaintext_secret_metadata(self):
         with TemporaryDirectory() as folder:
             prefs = Preferences(Path(folder) / 'git.json')
@@ -120,6 +158,17 @@ class PreferenceUITests(QtTestCase):
         saved = Preferences(self.page.preferences.path)
         self.assertEqual(saved.last_repository, str(self.root / 'another-repo'))
         self.assertTrue(any(entry['path'] == str(self.root / 'another-repo') for entry in saved.repositories))
+
+    def test_successful_settings_fanout_keeps_retained_view_writable(self):
+        self.open()
+        panel = self.settings_panel()
+        panel.form.fields['stage_double_click'].setChecked(True)
+        panel.save()
+        self.wait_panel(panel)
+        later = self.root / 'later-repository'
+        self.page.preferences.remember(later)
+        self.page.preferences.save()
+        self.assertEqual(Preferences(self.page.preferences.path).last_repository, str(later))
 
     def test_discard_backs_up_original_bytes(self):
         self.commit_fixture(); file = self.repo.path / 'file.txt'
