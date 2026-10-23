@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from commonUtils.persistence import atomic_write_bytes, atomic_write_json
+from commonUtils.runtime.streams import read_up_to
 from .screenshots import image_url
 from .domain import base_url, identity, now, validate_conversation
 
@@ -45,9 +46,11 @@ class Store:
         self.folder = self.root / 'conversations'
 
     def _read(self, path):
-        if path.stat().st_size > MAX_FILE_BYTES:
+        with path.open('rb') as stream:
+            content = read_up_to(stream, MAX_FILE_BYTES + 1)
+        if len(content) > MAX_FILE_BYTES:
             raise ValueError('LM data exceeds the 32 MiB file limit; original preserved.')
-        return json.loads(path.read_text(encoding='utf-8'))
+        return json.loads(content.decode('utf-8'))
 
     def lease(self, key):
         """Nonblocking OS-backed Qt lock with automatic dead-process recovery."""

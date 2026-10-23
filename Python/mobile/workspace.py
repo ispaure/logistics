@@ -9,6 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 from services.identifiers import uuid
 from commonUtils.persistence import atomic_write_json
+from commonUtils.runtime.streams import read_up_to
 
 MAX_SESSIONS = 32
 MAX_MANIFEST = 64 * 1024
@@ -71,9 +72,13 @@ class Workspace:
         if not self.path.exists():
             return
         try:
-            if self.path.is_symlink() or self.path.stat().st_size > MAX_MANIFEST:
+            if self.path.is_symlink():
                 raise ValueError('Invalid workspace file.')
-            data = json.loads(self.path.read_text(encoding='utf-8'))
+            with self.path.open('rb') as stream:
+                content = read_up_to(stream, MAX_MANIFEST + 1)
+            if len(content) > MAX_MANIFEST:
+                raise ValueError('Invalid workspace file.')
+            data = json.loads(content.decode('utf-8'))
             if not isinstance(data, dict) or data.get('schema') != 1:
                 raise ValueError('Unsupported workspace schema.')
             entries = data.get('sessions')

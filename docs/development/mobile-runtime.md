@@ -5,6 +5,11 @@ and native acceptance packaging. Start with the [code map](code-map.md)
 and [mobile preparation guide](mobile-preparation.md).
 User behavior belongs in [the mobile user guide](../user_mobile/user_mobile.md).
 
+Workspace restoration reads at most 64 KiB plus one byte before decoding its
+manifest, independently of file-size metadata. Oversized/invalid input preserves
+the original manifest and keeps the existing restoration error/save veto. Schema,
+session identity, privacy exclusions and view-state rules remain in `workspace.py`.
+
 ## Owners
 
 `mobile.snow.SeasonalSnow` uses `services.seasonal` for the shared
