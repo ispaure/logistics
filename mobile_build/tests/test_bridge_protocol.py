@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock
 from features.rclone.mobile.bridge_protocol import ACTIONS, decode_envelope
-from features.rclone.mobile.cloud import CloudClient
+from features.rclone.mobile.cloud import CloudClient, CredentialBusyError
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -33,3 +33,12 @@ class BridgeProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Unsupported'):
             client.request('not-an-action')
         client.call.assert_not_called()
+
+    def test_busy_response_without_optional_error_text_is_typed_and_freed(self):
+        client = CloudClient.__new__(CloudClient)
+        payload = ctypes.create_string_buffer(b'{"ok":false,"error_code":"credentials_busy"}')
+        client.call = Mock(return_value=ctypes.addressof(payload))
+        client.free = Mock()
+        with self.assertRaisesRegex(CredentialBusyError, 'Credentials are in use'):
+            client.request('import')
+        client.free.assert_called_once()

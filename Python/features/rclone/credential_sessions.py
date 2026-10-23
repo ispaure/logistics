@@ -46,8 +46,14 @@ class CredentialSessions:
     def remember(self, config_path, values, *, package_path=None, private=False, parent=None):
         with self._lock:
             config_path = Path(config_path)
-            if parent is not None and Path(parent) not in self._sets:
-                raise ValueError('The credential session is locked.')
+            if parent is not None:
+                ancestor = Path(parent)
+                if ancestor not in self._sets:
+                    raise ValueError('The credential session is locked.')
+                while ancestor is not None:
+                    if ancestor == config_path:
+                        raise ValueError('Credential sessions cannot depend on themselves or their descendants.')
+                    ancestor = self._parents.get(ancestor)
             _, callbacks = self._forget_locked(config_path)
             if parent is not None:
                 self._parents[config_path] = Path(parent)
@@ -121,8 +127,14 @@ class CredentialSessions:
 
 
 def _notify(callbacks):
+    failure = None
     for reference in callbacks:
         callback = reference()
         if callback is not None:
-            callback()
-
+            try:
+                callback()
+            except Exception as error:
+                if failure is None:
+                    failure = error
+    if failure is not None:
+        raise failure

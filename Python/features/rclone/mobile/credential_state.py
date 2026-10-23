@@ -66,6 +66,12 @@ class NativeCredentialState:
                     self.package_privacy = {name: gate for name, gate in self.package_privacy.items() if name in labels}
             self.session_privacy = next(iter(self.package_privacy.values()), None)
             self.generation += 1
+            failure = None
             for observer in (*tuple(self.observers), *tuple(self.document_observers)):
-                observer.credentials_changed()
-
+                try:
+                    observer.credentials_changed()
+                except Exception as error:
+                    if failure is None:
+                        failure = error
+            if failure is not None:
+                raise failure

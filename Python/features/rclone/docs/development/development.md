@@ -360,3 +360,10 @@ instance; the existing module operations bind to that instance. ZIP decoding sta
 in `session.read_package`, separate from lifetime state. Independent registries
 can be created without touching the application's credentials. No credentials or
 package contents are written by the registry.
+
+Credential observers are all notified even when an earlier callback fails; the
+first exception is re-raised after invalidation completes. LocalCrypt clears its
+plaintext and path caches in a `finally` block on close. Registry parent cycles
+are rejected before replacing an existing generation. Bridge busy errors may
+omit optional error text and still raise `CredentialBusyError`. Synthetic failure
+tests cover these paths without storing real credentials.

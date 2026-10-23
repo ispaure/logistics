@@ -61,4 +61,3 @@ def read_package(path, password):
     if not pending:
         raise ValueError('No credential TXT files found.')
     return pending
-

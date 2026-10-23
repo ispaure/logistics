@@ -572,10 +572,13 @@ class CryptResources(LocalFiles):
         if self.closed:
             return
         self.closed = True
-        session.forget(self.context)
-        with self._cache_lock:
-            self._blocks.clear()
-            self._sizes.clear()
-            self._encoded_paths.clear()
-            self._directories.clear()
-            self._cache_bytes = 0
+        try:
+            session.forget(self.context)
+        finally:
+            # Observer failures must not leave plaintext cached in a closed view.
+            with self._cache_lock:
+                self._blocks.clear()
+                self._sizes.clear()
+                self._encoded_paths.clear()
+                self._directories.clear()
+                self._cache_bytes = 0

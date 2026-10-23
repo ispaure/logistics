@@ -105,7 +105,7 @@ class CloudClient:
             self.free(pointer)
         if not reply.get('ok'):
             if reply.get('error_code') == 'credentials_busy':
-                raise CredentialBusyError(reply['error'])
+                raise CredentialBusyError(reply.get('error', 'Credentials are in use. Stop the active operation, then retry.'))
             if reply.get('error_code') == 'archive_password':
                 from commonUtils.archives.zip_access import ArchivePasswordError
                 raise ArchivePasswordError(reply.get('error', 'Inner ZIP password required.'))
