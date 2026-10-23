@@ -490,3 +490,23 @@ completed baseline. Remaining priorities continue to govern selection.
   pass in each environment, plus seven mobile file-loading and five notes/library
   tests. Shared `6a9bcd4`, Logistics `3e696e46` and Blue Hole `e81bd7b` are committed;
   exact vendor and all 31 consumer tests pass. A fresh full shared run is underway.
+
+## Committed verification isolation and bounded Git staging checks
+
+- Shared `6a9bcd4` completed all 179 files with zero failures in the new full run.
+  Bulk Rename ownership extraction is committed as `89d2cfd6`.
+- A full desktop run picked up an intermediate Git test fixture while its macOS
+  resolved-path spy was being corrected. The corrected seven-test merge suite
+  passes; the new bound regression fails against the previous committed method
+  loaded in memory, without reverting the working source.
+- Optional conflict staging now reads only the expected saved byte count plus
+  one after rechecking index entries. A changed/enlarged result remains untouched
+  and unstaged. Committed as `96d38b79`; lint, architecture and docs checks pass.
+- Broad verification now uses a managed checkout frozen at `96d38b79`, with an
+  independent local clone pinned to shared `6a9bcd4` and the existing desktop/mobile
+  interpreters. No remote fetch or dependency installation was needed. This keeps
+  ongoing source edits out of test discovery and exercises a checkout without the
+  external emulator. Full desktop and mobile runs are underway there.
+- Only the verification checkout's two environment symlinks are untracked; its
+  tracked source and shared clone are clean. Logs remain with ignored main-checkout
+  evidence. Retire this owned checkout and clone after its validation is saved.

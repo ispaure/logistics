@@ -163,21 +163,22 @@ and precise limits.
 ## Continued work assessment (October 23, 2026)
 
 The first checkpoint was followed by further implemented, committed repairs.
-The original measurements above remain the baseline. Current tracked Python
-counts are Logistics 1,152 files (89,292 production / 75,910 test lines),
-commonUtils 507 (42,483 / 22,725) and Blue Hole 201 (22,814 / 580), using the
+The original measurements above remain the baseline. At committed checkpoint
+Logistics `96d38b79`, commonUtils `6a9bcd4` and Blue Hole `e81bd7b`, tracked Python
+counts are Logistics 1,152 files (89,342 production / 76,005 test lines),
+commonUtils 507 (42,496 / 22,848) and Blue Hole 201 (22,814 / 580), using the
 same exclusions. Exact repeated production function bodies of 20+ lines remain
 absent under the same AST comparison; this does not establish no near-duplication.
 
 | Dimension | Additional evidence and limits |
 | --- | --- |
-| Readability | Git preference adoption now owns both saved fields and their conflict baseline, replacing repeated UI assignments. Provider stream loops use the shared stream contracts. Large UI construction methods remain. |
-| Modularity | Native browser presentation moved intact into its owner module; package and lifecycle imports work without importing Toga or Qt. Existing public exports retain identity. No broad feature moves were justified. |
+| Readability | Git preference adoption owns saved fields and their conflict baseline, replacing repeated UI assignments. INI publication and provider stream loops use existing shared owners. Large UI construction methods remain. |
+| Modularity | Native browser presentation moved intact into its owner module; package and lifecycle imports work without Toga or Qt. Existing public exports retain identity. A private Bulk Rename tree owns deferred layout preservation and accepts an independent Qt model for testing. No broad feature moves were justified. |
 | Testability | New regressions exercise damaged backups, late source changes, short/nonblocking streams, empty worker failures, stale settings and checkpoint size conflicts. Native Toga fixtures run in the mobile environment rather than treating missing desktop dependencies as coverage. |
 | Coupling | The architecture policy still reports 25 approved host adapters, 15 feature edges and zero violations. Portable lifecycle imports no longer require a toolkit. Deferred import groups and live consumer coupling remain. |
-| Duplication | Local provider copying and verification now use shared stream iteration/copying; saved preference adoption sits in Preferences. Application-specific overwrite, credential and cleanup policy stays with consumers. |
+| Duplication | Local provider copying/verification and bounded text reads use shared stream mechanisms. INI delegates staging, verification, permissions and replacement to the atomic writer; saved preference adoption sits in Preferences. Application-specific credential and cleanup policy stays with consumers. |
 | Consistency | Legacy File/Directory operations and local document exports respect existing provider guards. Cross-volume moves verify copied content and revalidate sources before cleanup; settings writers retain their own published bytes. These remain optimistic checks, not filesystem isolation or cross-process locks. |
-| Reliability | Reproduced data-preservation failures now have focused regression coverage. Both consumers track exact committed shared revisions, and Blue Hole vendor membership/bytes are verified. Windows/Linux, real Android/iOS pickers, Blender and live Perforce remain unverified. |
+| Reliability | Reproduced data-preservation failures have focused regression coverage. Shared revision 6a9bcd4 passes all 179 files; both consumers track it exactly, with verified Blue Hole membership/bytes and 31 passing consumer tests. Late folder layouts, short reads and post-save bounds have dedicated regressions. Windows/Linux, real Android/iOS pickers, Blender and live Perforce remain unverified. |
 
 Reliability and testability have stronger evidence than whole-system structural
 simplification. A numeric 7/10 remains unsubstantiated: the remaining large UI
