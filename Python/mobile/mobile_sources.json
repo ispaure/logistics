@@ -64,6 +64,7 @@
     "locations_controller.py",
     "locations_ui.py",
     "magnifier.py",
+    "managed_documents.py",
     "markdown_speech.py",
     "navigation.py",
     "notes_actions.py",

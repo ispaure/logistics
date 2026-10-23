@@ -1,5 +1,19 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L1 managed-document workflows
+
+`ManagedDocumentWorkflows` groups 15 existing create/open/save/inventory/preview
+and import/export callbacks. All moved methods and retained app members match
+their original AST; startup, retained factories, scene publication and aggregate
+checkpoint guards stay in the app. No additional state owner, forwarding layer,
+persisted format or callback signature is introduced. The curated mobile manifest
+includes the new module. New original/refactored tests cover import completion
+after switching and export completion after closing its origin. Document,
+checkpoint, picker, privacy, workspace, secondary-window and staged startup
+contracts pass, as do packaging, architecture, lint and documentation checks.
+These are host contracts, not new native-device acceptance. No external consumer
+changes, deployment or push occurred.
+
 ## Sequential audit implementation: C2 browser policy and retirement
 
 Network/watch-set/revisit/notification callbacks move unchanged into the existing

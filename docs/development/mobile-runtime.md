@@ -64,6 +64,7 @@ system accessibility extremes still require native layout validation.
 | Saved-import inventory and confirmed deletion | `saved_files_ui.py`: composed `SavedFilesController` |
 | Explicit read-only services and writable compatibility state | `services/workflow_host.py`; lazy owner access in `composition/assembly.py` |
 | Managed text bytes, checkpoints and editing widgets | `documents.py` (host recovery), `features/text_editor/mobile/ui.py` (widgets) |
+| Managed-text create/open/save, inventory, preview and picker completion | `managed_documents.py` (`ManagedDocumentWorkflows`); app retains aggregate checkpoint guards |
 | Provider Markdown modes, controls and preview lifecycle | `features/text_editor/mobile/provider_markdown.py`, composed by `composition.presentation.provider_markdown`; session source input remains authoritative |
 | Ordinary and provider reader ownership | `reader_sessions.py`, `private_sessions.py` |
 | Session Close/Back decisions and source return | `session_workflows/transitions.py`, source-specific `session_workflows/adapters.py`; facade in `reader_lifecycle.py` |
@@ -406,6 +407,15 @@ LocalCrypt transfer behavior still need the existing native acceptance scenarios
 in `mobile_build/native_tests/tests/logisticsmobile/localcrypt_checks.py`.
 
 ## Workflow controllers
+
+`ManagedDocumentWorkflows` groups the managed-text host callbacks without adding
+another state owner. `DocumentStore` owns bytes and recovery, `Workspace` owns
+identity/generation admission, and `TextEditorView` owns each document's controls.
+Import/export capture the originating view and workspace token before awaiting;
+completion cannot replace a newer draft or publish into a closed session. The app
+retains startup, scene publication and the aggregate checkpoint guard that also
+flushes readers, chat and credential-backed document lists. Existing app callback
+names remain inherited, including for secondary scene hosts.
 
 The application declares its retained controller factories directly in `app.py`,
 so editor navigation can resolve workflow owners without evaluating decorators.

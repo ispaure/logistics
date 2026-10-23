@@ -20,6 +20,7 @@ below describe the assessment snapshot, before this implementation.
 | C1 | Index target/validation/retirement phases; transaction remains centralized | shared `17978f2` |
 | C2 | Indexing owns network/watch policy; shared close/idle admission | shared `9ac9121` |
 | C3 | Captured dock transfer/rollback and separate header reconciliation | shared `e8ac643` |
+| L1 | Managed-text host workflows grouped over existing store/workspace/view owners; aggregate lifecycle stays in app | See sequential progress entry |
 
 Items absent from this table remain outstanding. Native/platform acceptance limits
 are recorded with each unit; a passing host suite is not native certification.
