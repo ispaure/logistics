@@ -10,11 +10,9 @@ INFRASTRUCTURE = {'application', 'feature_runtime', 'contributions', 'preference
 
 
 def references(path, source_root):
-    """Include relative imports and literal lazy factory/module references."""
+    """Include relative imports and literal module[:attribute] references."""
     relative = path.relative_to(source_root).with_suffix('')
     package = '.'.join(relative.parts[:-1])
-    if relative.name == '__init__':
-        package = '.'.join(relative.parts[:-1])
     tree = ast.parse(path.read_text(encoding='utf-8'))
     result = set()
     for node in ast.walk(tree):
@@ -27,8 +25,13 @@ def references(path, source_root):
             result.add(module)
             result.update(module + '.' + alias.name for alias in node.names if alias.name != '*')
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if re.fullmatch(r'(features|desktop|mobile)(\.[A-Za-z_]\w*)+', node.value):
-                result.add(node.value)
+            module, separator, attribute = node.value.partition(':')
+            if separator and not re.fullmatch(r'[A-Za-z_]\w*(\.[A-Za-z_]\w*)*', attribute):
+                continue
+            application = re.fullmatch(r'(features|desktop|mobile|commonUtils)(\.[A-Za-z_]\w*)+', module)
+            toolkit = re.fullmatch(r'(PySide6|toga)(\.[A-Za-z_]\w*)*', module)
+            if application or toolkit:
+                result.add(module)
     return result
 
 

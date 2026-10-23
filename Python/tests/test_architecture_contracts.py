@@ -21,6 +21,43 @@ class ArchitectureTests(unittest.TestCase):
             self.assertIn('features.comics.pages', found)
             self.assertIn('desktop.dialogs.prompt', found)
 
+    def test_colon_qualified_factories_expose_their_module_dependencies(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / 'Python/features/books'
+            folder.mkdir(parents=True)
+            path = folder / 'example.py'
+            path.write_text("TYPE = 'features.comics.cbz:CBZFile'\n"
+                            "PROMPT = 'desktop.dialogs:prompt'\n"
+                            "TEXT = 'Use features.other.Type for examples'\n"
+                            "INVALID = 'features.invalid:Not a name'\n")
+            found = references(path, root / 'Python')
+            self.assertIn('features.comics.cbz', found)
+            self.assertIn('desktop.dialogs', found)
+            self.assertNotIn('features.invalid', found)
+            self.assertEqual(feature_edges(root), (
+                {('Python/features/books/example.py', 'desktop.dialogs')}, {('books', 'comics')}))
+
+    def test_portable_contract_rejects_deferred_ui_dependencies(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        import json
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / 'Python/features/books'
+            folder.mkdir(parents=True)
+            (root / 'Scripts').mkdir()
+            policy = {'host_adapters': [], 'feature_dependencies': [],
+                      'portable_modules': ['features.books.data']}
+            (root / 'Scripts/architecture.json').write_text(json.dumps(policy))
+            for factory in ('commonUtils.ui.native.forms:FittedLabel', 'PySide6.QtWidgets:QWidget', 'toga'):
+                with self.subTest(factory=factory):
+                    (folder / 'data.py').write_text(f'FACTORY = {factory!r}\n')
+                    output = StringIO()
+                    with redirect_stdout(output):
+                        self.assertEqual(check(root), 1)
+                    self.assertIn('imports presentation', output.getvalue())
+
     def test_external_feature_link_is_not_scanned(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
