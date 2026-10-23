@@ -105,6 +105,12 @@ crops, directions, swipe traversal, boundary buttons, failed composition, settin
 persistence, imported resume and landscape restoration with Toga's dummy backend.
 Native device appearance and gestures still require device/simulator validation.
 
+Metadata preparation enforces the same 4 MiB encoded ComicInfo limit as reading,
+after XML escaping. Oversized edits leave both archive and loaded model unchanged.
+Desktop and portable collection/private batch preflight use this preparation path,
+so an edit exceeding a later comic's available space is rejected before earlier
+archives are written. Individual publication/conflict policy stays with storage.
+
 ## Reader and catalog contracts
 
 Readers sort pages and sibling comics naturally and load without extraction.

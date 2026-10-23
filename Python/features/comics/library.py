@@ -13,6 +13,9 @@ from commonUtils.archives.zip_access import open_archive, authenticate, archive_
 from services.documents.zip_passwords import resolve_password, remember_verified_password
 
 
+MAX_METADATA_BYTES = 4 * 1024 * 1024
+
+
 class ComicDocument:
     def __init__(self, path, *, password=None, source=None):
         self.path = Path(path)
@@ -47,7 +50,7 @@ class ComicDocument:
             if len(matches) > 1:
                 raise ValueError('Multiple ComicInfo.xml entries; cannot choose one safely')
             self.member = matches[0].filename if matches else 'ComicInfo.xml'
-            if matches and matches[0].file_size > 4 * 1024 * 1024:
+            if matches and matches[0].file_size > MAX_METADATA_BYTES:
                 raise ValueError('ComicInfo.xml is too large to edit')
             self.exists = bool(matches)
             data = archive.read(matches[0]) if matches else b'<ComicInfo />'
@@ -80,7 +83,9 @@ class ComicDocument:
         info = ComicInfoXML.from_bytes(self.info.to_bytes())
         for field, value in changes.items():
             info.set_field(field, value)
-        info.to_bytes()  # Validate XML characters before callers stage a save.
+        data = info.to_bytes()  # Validate XML characters before callers stage a save.
+        if len(data) > MAX_METADATA_BYTES:
+            raise ValueError('Edited ComicInfo.xml exceeds the 4 MiB editing limit.')
         return info
 
     def save(self, changes):
