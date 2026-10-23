@@ -798,3 +798,23 @@ completed baseline. Remaining priorities continue to govern selection.
 - Frozen Logistics `bdb7c28d` / shared `7978a28` now passes all 162 mobile files;
   all 179 desktop files pass too. This checkpoint includes the later settings
   and Blender repairs but precedes the shared rename-owner consolidation.
+
+## Native browser queued-work retirement
+
+- Two regressions reproduced accepting a new task after stop and raising on a
+  closed supplied loop while leaving an open coroutine. Admission now closes
+  unscheduled coroutines and returns None for either retired state. Existing
+  running tasks remain retained until close; prepared-tree reuse stays supported.
+- All seven lifecycle cases pass (two optional Toga skips in desktop), and all
+  108 tests in 25 native Toga files pass through the mobile dummy backend. All
+  21 mobile folder-navigation and 15 screen-privacy tests pass. Lint/architecture
+  checks pass. Shared `c61e24b` is committed.
+- Exact Blue Hole vendor verification and all 31 adapter tests pass. Its five
+  actual embedded smoke tests also pass on Blender 4.5.1 / Python 3.11.11, now
+  exercising retired admission and valid lifecycle reuse. Vendor/driver commit
+  `0f070b6`; Logistics pin `21aa3b9c`.
+- Complete frozen checkpoint totals: Logistics `bdb7c28d` has 1,664 desktop tests
+  (six native-bridge skips) and 1,161 mobile tests (two Node/Playwright skips),
+  across 179/162 files with zero failures. Shared `eb757e5` has 1,213 tests across
+  179 files, zero failures, 25 declared platform/toolkit skips. The later lifecycle
+  guard has the focused/native validation above, not a claimed new full run.
