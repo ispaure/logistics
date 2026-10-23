@@ -602,3 +602,16 @@ completed baseline. Remaining priorities continue to govern selection.
   five native rclone session tests pass. Lint and docs checks pass.
 - Shared `c1eb35a` is committed, with exact Blue Hole vendor and 31 consumer tests
   passing. XML pin/vendor commits are Logistics `53082958` and Blue Hole `30907e9`.
+
+## Legacy text encoding admission before mutation
+
+- Two fixtures reproduced an invalid Unicode surrogate on a later text line
+  truncating existing output after writing a prefix and changing read-only mode.
+  TXTFile validates UTF-8 before parent creation, permission preparation or opening
+  the destination, retaining its existing in-place streaming/newline behavior.
+- All 13 file-operation tests pass in desktop and mobile environments, including
+  source/alternate output and permission preservation. Nine layered-settings and
+  all 58 Comics tests pass. Lint and documentation checks pass.
+- Shared `8086ff6` is committed; exact Blue Hole vendor bytes and all 31 consumer
+  tests pass. The preceding legacy export pin/vendor commits are Logistics
+  `034e11ed` and Blue Hole `9f9383b`.
