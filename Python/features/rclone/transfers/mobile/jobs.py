@@ -15,6 +15,7 @@ from features.rclone.transfers.local_policy import transfer_inventory, cleanup_c
 from features.rclone.transfers.transfer_options import TransferOptions, DEFAULT_EXCLUDES, CLEANUP_NAMES
 from features.rclone.transfers.scope import pull_name, push_scope
 
+MAX_RECORD_BYTES = 4 * 1024 * 1024
 
 
 def copy_target(root, job):
@@ -50,9 +51,12 @@ class MirrorJobs:
         self.lock = RLock()
         try:
             if self.path.exists():
-                if self.path.is_symlink() or self.path.stat().st_size > 4 * 1024 * 1024:
+                if self.path.is_symlink() or self.path.stat().st_size > MAX_RECORD_BYTES:
                     raise ValueError('Invalid transfer records.')
-                self.original = self.path.read_bytes()
+                with self.path.open('rb') as stream:
+                    self.original = stream.read(MAX_RECORD_BYTES + 1)
+                if len(self.original) > MAX_RECORD_BYTES:
+                    raise ValueError('Invalid transfer records.')
                 value = json.loads(self.original)
                 if not isinstance(value, dict) or value.get('schema') not in (3, 4):
                     raise ValueError('Invalid transfer records.')
@@ -92,7 +96,7 @@ class MirrorJobs:
             self.validate(job)
         data = json.dumps({'schema': 4, 'jobs': list(self.jobs.values())},
                           ensure_ascii=False, allow_nan=False).encode('utf-8')
-        if len(data) > 4 * 1024 * 1024:
+        if len(data) > MAX_RECORD_BYTES:
             raise ValueError('Transfer records exceed the size limit.')
         atomic_write_bytes(self.path, data, validate=self.check_records)
         self.original = data
@@ -107,7 +111,7 @@ class MirrorJobs:
         current = None
         if self.path.exists():
             with self.path.open('rb') as stream:
-                current = stream.read(4 * 1024 * 1024 + 1)
+                current = stream.read(MAX_RECORD_BYTES + 1)
         if current != self.original:
             raise OSError('Local copy records changed; reopen Logistics before transferring again.')
 

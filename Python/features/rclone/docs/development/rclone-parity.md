@@ -430,6 +430,8 @@ local and unstaged; no commits.
   argument and schema-1/2 snapshot recovery/automatic-backup deletion. Schema 4
   persists only copy bindings. Schema-3 bindings load in place with their baseline
   ignored; loading is read-only, and the next normal save writes schema 4.
+  Transfer-record reads and writes share a 4 MiB limit; the reader also bounds
+  actual bytes consumed if the file grows after its metadata preflight.
   Unsupported older records and backup trees are preserved. Metadata inspection
   retains symlink/junction/regular-file/hard-link checks and the entry bound.
   Crypt Push still authenticates every file through `mirror_validate`, validates

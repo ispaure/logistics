@@ -86,6 +86,27 @@ class MirrorClient:
 
 
 class MirrorJobTests(unittest.TestCase):
+    def test_records_growing_after_preflight_are_read_with_a_hard_limit(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'mirror-jobs.json'
+            original = b'{"schema":4,"jobs":[]}'
+            path.write_bytes(original)
+            oversized = original + b' ' * (4 * 1024 * 1024)
+            open_path = Path.open
+            def grow_before_read(candidate, mode='r', *args, **kwargs):
+                if candidate == path and mode == 'rb':
+                    with open_path(path, 'wb') as output:
+                        output.write(oversized)
+                return open_path(candidate, mode, *args, **kwargs)
+            with patch.object(Path, 'open', grow_before_read):
+                store = MirrorJobs(directory)
+            self.assertTrue(store.error)
+            self.assertEqual(store.jobs, {})
+            self.assertLessEqual(len(store.original), 4 * 1024 * 1024 + 1)
+            self.assertEqual(path.read_bytes(), oversized)
+            with self.assertRaises(ValueError):
+                store.save()
+
     def test_pull_downloads_entries_removed_during_local_preflight(self):
         for remote, folder, filename in (('Remote', 'folder', 'note.txt'),
                                          ('Secret', 'private', 'opaque-name')):
