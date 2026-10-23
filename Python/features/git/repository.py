@@ -686,7 +686,12 @@ class Repository:
         write_text_file(inputs.path, content, expected=inputs.working.original if inputs.existed else None)
         if stage:
             current = self.run(['ls-files', '--unmerged', '-z', '--', inputs.relative_path]).stdout
-            if current != inputs.index_state or inputs.path.read_bytes() != content:
+            unchanged = False
+            if current == inputs.index_state:
+                from commonUtils.runtime.streams import read_up_to
+                with inputs.path.open('rb') as stream:
+                    unchanged = read_up_to(stream, len(content) + 1) == content
+            if not unchanged:
                 raise GitError('Result saved, but the file or index changed before staging. Review it and stage manually.')
             self.stage([inputs.relative_path])
         return inputs.path

@@ -74,3 +74,35 @@ class GitMergeTests(unittest.TestCase):
         self.path.write_text('new file\n')
         with self.assertRaises(FileConflictError): self.repo.save_conflict(inputs,'result\n')
         self.assertEqual(self.path.read_text(),'new file\n')
+
+    def test_changed_saved_result_is_checked_with_a_bounded_read_before_staging(self):
+        from contextlib import contextmanager
+        from unittest.mock import patch
+        from commonUtils.persistence.text import write_text_file
+        inputs = self.repo.conflict_inputs(self.path.name)
+        external = b'external content' * 1024
+        requested = []
+        open_path = Path.open
+        @contextmanager
+        def observed_open(path, mode='r', *args, **kwargs):
+            with open_path(path, mode, *args, **kwargs) as stream:
+                if path == inputs.path and mode == 'rb':
+                    class ObservedRead:
+                        def read(self, count=-1):
+                            requested.append(count)
+                            return stream.read(count)
+                    yield ObservedRead()
+                else:
+                    yield stream
+        def publish_then_change(*args, **kwargs):
+            write_text_file(*args, **kwargs)
+            self.path.write_bytes(external)
+        with patch.object(Path, 'open', observed_open), \
+                patch('commonUtils.persistence.text.write_text_file', side_effect=publish_then_change):
+            with self.assertRaisesRegex(GitError, 'file or index changed before staging'):
+                self.repo.save_conflict(inputs, 'result\n', stage=True)
+        self.assertTrue(requested)
+        self.assertTrue(all(0 <= count <= max(len(inputs.working.original), len(b'result\n')) + 1
+                            for count in requested))
+        self.assertEqual(self.path.read_bytes(), external)
+        self.assertTrue(any(change.conflict for change in self.repo.status().changes))
