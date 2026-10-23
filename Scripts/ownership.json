@@ -8,7 +8,8 @@
       "guide": "docs/features/archives/development/development.md",
       "tests": {
         "desktop": [
-          "test_feature_registry.py"
+          "test_feature_registry.py",
+          "test_archive*.py"
         ]
       }
     },
@@ -41,11 +42,19 @@
       "guide": "docs/features/books/development/development.md",
       "tests": {
         "desktop": [
-          "test_books*.py"
+          "test_books*.py",
+          "test_document_preparation.py",
+          "test_reading_feature.py",
+          "test_reading_parity.py"
         ],
         "mobile": [
           "test_epub_navigation.py",
-          "test_reader_formats.py"
+          "test_reader_formats.py",
+          "test_epub*.py",
+          "test_chapter_drawer.py",
+          "test_contents_hierarchy.py",
+          "test_reading_publication.py",
+          "test_collection_parity.py"
         ]
       },
       "mobile_manifest": "Python/features/books/mobile_sources.json"
@@ -74,7 +83,10 @@
         "mobile": [
           "test_comic_split.py",
           "test_reader_formats.py",
-          "test_reader_parity.py"
+          "test_reader_parity.py",
+          "test_comic*.py",
+          "test_collection_parity.py",
+          "test_reading_publication.py"
         ]
       },
       "mobile_manifest": "Python/features/comics/mobile_sources.json"
@@ -178,7 +190,9 @@
           "test_lm*.py"
         ],
         "mobile": [
-          "test_chat_ui.py"
+          "test_chat_ui.py",
+          "test_chat*.py",
+          "test_deferred_chat.py"
         ]
       },
       "mobile_manifest": "Python/features/lm/mobile_sources.json"
@@ -224,6 +238,10 @@
       "tests": {
         "desktop": [
           "test_pdf*.py"
+        ],
+        "mobile": [
+          "test_pdf_reader.py",
+          "test_remote_readers.py"
         ]
       },
       "mobile_manifest": "Python/features/pdf/mobile_sources.json"
@@ -257,12 +275,26 @@
       "guide": "docs/features/rclone/development/development.md",
       "tests": {
         "desktop": [
-          "test_rclone*.py"
+          "test_rclone*.py",
+          "test_localcrypt*.py",
+          "test_local_crypt.py",
+          "test_remote_browser.py",
+          "test_credential*.py",
+          "test_review_session.py"
         ],
         "mobile": [
           "test_cloud_restore.py",
           "test_localcrypt_ui.py",
-          "test_bridge_protocol.py"
+          "test_bridge_protocol.py",
+          "test_cloud*.py",
+          "test_credential*.py",
+          "test_localcrypt*.py",
+          "test_mirror*.py",
+          "test_background_credential_refresh.py",
+          "test_connection_settings.py",
+          "test_multi_credentials.py",
+          "test_smb_ui.py",
+          "test_transfer_feedback.py"
         ]
       },
       "mobile_manifest": "Python/features/rclone/mobile_sources.json"
@@ -296,11 +328,17 @@
       "guide": "docs/features/text_editor/development/development.md",
       "tests": {
         "desktop": [
-          "test_text_editor*.py"
+          "test_text_editor*.py",
+          "test_editor*.py",
+          "test_notes_library_desktop.py"
         ],
         "mobile": [
           "test_editor_picker.py",
-          "test_notes_library.py"
+          "test_notes_library.py",
+          "test_source_editor.py",
+          "test_markdown_editor.py",
+          "test_provider_markdown.py",
+          "test_provider_opening.py"
         ]
       },
       "mobile_manifest": "Python/features/text_editor/mobile_sources.json"
@@ -357,7 +395,12 @@
           "test_workspace_navigation.py",
           "test_document_dialogs.py",
           "test_reader_sessions.py",
-          "test_screen_privacy.py"
+          "test_screen_privacy.py",
+          "test_application_lifecycle.py",
+          "test_session_transitions.py",
+          "test_document_navigation.py",
+          "test_provider_opening.py",
+          "test_reading_publication.py"
         ],
         "desktop": [
           "test_workspace_policy.py"
@@ -374,7 +417,12 @@
         "mobile": [
           "test_private_sessions.py",
           "test_storage_ui.py",
-          "test_app_reset.py"
+          "test_app_reset.py",
+          "test_storage_location.py",
+          "test_android_storage.py",
+          "test_storage_reader_opening.py",
+          "test_credential_document_lists.py",
+          "test_file_operations.py"
         ]
       }
     },

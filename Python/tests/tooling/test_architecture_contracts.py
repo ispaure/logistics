@@ -83,6 +83,32 @@ class OwnershipTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Unknown owner'):
             selected_tests(ROOT, 'not-a-real-owner')
 
+    def test_workflow_owners_include_their_specialist_regressions(self):
+        from Scripts.ownership import selected_tests
+        required = {
+            'archives': [('desktop', 'test_archive_credentials.py'), ('desktop', 'test_archive_workspace_ui.py')],
+            'books': [('mobile', 'test_reading_publication.py')],
+            'comics': [('mobile', 'test_comic_sharing.py')],
+            'lm': [('mobile', 'test_chat_inventory.py')],
+            'pdf': [('mobile', 'test_pdf_reader.py')],
+            'rclone': [('desktop', 'test_remote_browser.py'), ('mobile', 'test_credential_document_lists.py')],
+            'text_editor': [('desktop', 'test_editor_resource_picker.py'), ('mobile', 'test_provider_opening.py')],
+            'mobile-host': [('mobile', 'test_application_lifecycle.py')],
+            'mobile-storage': [('mobile', 'test_storage_location.py')],
+        }
+        for owner, tests in required.items():
+            with self.subTest(owner=owner):
+                selection = selected_tests(ROOT, owner)
+                self.assertTrue(set(tests) <= set(selection))
+                self.assertEqual(len(selection), len(set(selection)))
+
+    def test_invalid_suite_is_rejected_instead_of_selecting_mobile_tests(self):
+        from unittest.mock import patch
+        from Scripts.ownership import selected_tests
+        with patch('Scripts.ownership.owners', return_value={'owner': {'tests': {'typo': ['test_*.py']}}}):
+            with self.assertRaisesRegex(ValueError, 'unknown test suite'):
+                selected_tests(ROOT, 'owner')
+
 
 class CompatibilityTests(unittest.TestCase):
     def test_no_legacy_forwarding_modules_remain(self):

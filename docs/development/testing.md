@@ -195,7 +195,10 @@ Use `python3 dev.py owners` to list developer guides, then
 `python3 dev.py test-owner books --dry-run` to inspect an owner's test selection.
 Remove `--dry-run` to run it across the appropriate desktop/mobile environments.
 `Scripts/ownership.json` owns these source, guide, manifest and test associations;
-update it when moving an owner or renaming tests. Small integrations with no
+update it when moving an owner or renaming tests. Archive, reading, chat, provider
+and storage selections include their specialist workflow suites; overlapping
+filename patterns execute each selected file once. Unknown suite names and
+patterns matching no files are errors. Small integrations with no
 specialist suite use registry checks as their starting group; that is not proof
 of external application behavior. Review responsibility follows the source owner;
 the map does not invent individual maintainer assignments.

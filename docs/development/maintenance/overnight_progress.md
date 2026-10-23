@@ -1,5 +1,15 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: T2 owner selections
+
+Expanded specialist selections for nine archive/reading/chat/provider/storage
+owners, retaining registry coverage and existing command behavior. Overlapping
+patterns are deduplicated; invalid suite keys now fail instead of silently using
+the mobile folder. All declared patterns resolve. Ten architecture/ownership
+contracts, the complete expanded archive owner group and configured lint pass.
+The remaining audit units are still open; this entry does not mark them complete.
+No shared or external-consumer source changes, deployment or push occurred.
+
 ## Deterministic lint scope and shared test matrix
 
 Logistics `75395cc0` implements audit T1 and the shared-matrix part of T2 on the

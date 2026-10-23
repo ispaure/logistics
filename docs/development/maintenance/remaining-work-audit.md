@@ -7,8 +7,8 @@ and [progress log](overnight_progress.md) retain earlier implementation evidence
 
 Implementation update: Logistics `75395cc0` completes T1's lint scope and T2's
 [shared Qt/native matrix entry point](../testing.md#shared-library-test-matrix),
-with selection/failure regressions in the static CI job. T2's owner-specific test
-selection expansion remains outstanding. Measurements and historical test results
+with selection/failure regressions in the static CI job. T2's owner-specific selection is now expanded for archive, reading, chat, provider
+and storage workflows, with resolution/deduplication contracts. Measurements and historical test results
 below describe the assessment snapshot, before this implementation.
 
 ## Assessment
