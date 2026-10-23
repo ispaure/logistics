@@ -218,6 +218,31 @@ class BulkRenameWidgetTests(QtTestCase):
         self.widget._folder_directory_loaded(str(self.root))
         self.assertFalse(self.widget.folder_tree.isExpanded(index.parent()))
 
+    def test_late_model_layout_preserves_visible_selection_but_respects_manual_scroll(self):
+        target = self.root / 'zzzz-current'
+        for number in range(40):
+            (self.root / f'row{number:03}').mkdir()
+        target.mkdir()
+        self.widget.load_directory(target)
+        self.wait_idle()
+        self.wait_folder_visible(target)
+        model, tree = self.widget.folder_model, self.widget.folder_tree
+        self.wait_until(lambda: model.index(str(target)).row() >= 40,
+                        message='Folder model did not finish sorting fixture siblings')
+        index = model.index(str(target))
+        # Model sorting can adjust scrolling after the reveal request finishes.
+        model.layoutAboutToBeChanged.emit()
+        tree.verticalScrollBar().setValue(0)
+        model.layoutChanged.emit()
+        self.wait_folder_visible(target)
+        # A user who already scrolled away should keep their chosen position.
+        tree.verticalScrollBar().setValue(0)
+        self.assertFalse(tree.viewport().rect().intersects(tree.visualRect(index)))
+        model.layoutAboutToBeChanged.emit()
+        model.layoutChanged.emit()
+        self.app.processEvents()
+        self.assertEqual(tree.verticalScrollBar().value(), 0)
+
     def test_preview_apply_and_undo_use_background_work_and_preserve_data(self):
         self.assertEqual(len(self.widget.selected_paths()), 2)
         self.widget.controls.fields['prefix'].setText('new_')

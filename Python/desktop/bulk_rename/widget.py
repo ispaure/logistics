@@ -130,6 +130,14 @@ class BulkRenameWidget(qt.QWidget):
         self._folder_reveal_timer = qt.QTimer(self)
         self._folder_reveal_timer.setSingleShot(True)
         self._folder_reveal_timer.timeout.connect(self._reveal_current_folder)
+        self._folder_was_visible = False
+        self._folder_layout_timer = qt.QTimer(self)
+        self._folder_layout_timer.setSingleShot(True)
+        self._folder_layout_timer.timeout.connect(self._restore_folder_visibility)
+        self.folder_model.layoutAboutToBeChanged.connect(self._remember_folder_visibility)
+        self.folder_model.rowsAboutToBeInserted.connect(self._remember_folder_visibility)
+        self.folder_model.layoutChanged.connect(self._folder_layout_changed)
+        self.folder_model.rowsInserted.connect(self._folder_layout_changed)
         for column in range(1, self.folder_model.columnCount()):
             self.folder_tree.hideColumn(column)
         self.folder_tree.clicked.connect(lambda index: self.load_directory(self.folder_model.filePath(index)))
@@ -319,6 +327,27 @@ class BulkRenameWidget(qt.QWidget):
         if pending is not None and Path(path) in (pending, *pending.parents):
             # Let Qt apply its queued directory sorting/layout before scrolling.
             self._folder_reveal_timer.start(0)
+
+    def _remember_folder_visibility(self, *_):
+        if not self.isVisible():
+            return
+        rectangle = self.folder_tree.visualRect(self.folder_tree.currentIndex())
+        self._folder_was_visible |= not rectangle.isEmpty() and self.folder_tree.viewport().rect().intersects(rectangle)
+
+    def _folder_layout_changed(self, *_):
+        if self._folder_was_visible:
+            self._folder_layout_timer.start(0)
+
+    def _restore_folder_visibility(self):
+        self._folder_was_visible = False
+        if not self.isVisible():
+            return
+        self.folder_tree.doItemsLayout()
+        index = self.folder_tree.currentIndex()
+        # Preserve selection visibility across queued sorting/insertion, without
+        # reopening collapsed branches or following a user who scrolled away.
+        if not self.folder_tree.visualRect(index).isEmpty():
+            self.folder_tree.scrollTo(index, qt.QAbstractItemView.ScrollHint.EnsureVisible)
 
     def _reveal_current_folder(self):
         path = self._folder_reveal_pending
@@ -616,6 +645,8 @@ class BulkRenameWidget(qt.QWidget):
             self.preview_timer.stop()
             self._folder_reveal_timer.stop()
             self._folder_reveal_pending = None
+            self._folder_layout_timer.stop()
+            self._folder_was_visible = False
             super().closeEvent(event)
         else:
             self._closing = True
