@@ -4,6 +4,7 @@ from hashlib import sha256
 from pathlib import Path
 import os
 import shutil
+import stat
 from tempfile import NamedTemporaryFile
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
@@ -125,15 +126,27 @@ def _save_metadata(book, changes, cancelled):
             except FileExistsError:
                 backup = book.path.with_name(book.path.name + f'.bak.{suffix}')
                 suffix += 1
+        identity = None
+        def owns_backup():
+            try:
+                current = backup.lstat()
+            except OSError:
+                return False  # Do not remove or alter a path whose ownership is unknown.
+            return stat.S_ISREG(current.st_mode) and (current.st_dev, current.st_ino) == identity
         try:
             copied = sha256()
-            with destination, book.path.open('rb') as source:
-                while chunk := source.read(1024 * 1024):
-                    check()
-                    destination.write(chunk)
-                    copied.update(chunk)
+            with destination:
+                opened = os.fstat(destination.fileno())
+                identity = opened.st_dev, opened.st_ino
+                with book.path.open('rb') as source:
+                    while chunk := source.read(1024 * 1024):
+                        check()
+                        destination.write(chunk)
+                        copied.update(chunk)
                 destination.flush()
                 os.fsync(destination.fileno())
+            if not owns_backup():
+                raise BookError(f'EPUB backup path changed; original preserved. Path retained: {backup}')
             shutil.copymode(book.path, backup)
             try:
                 _, backup_digest = verified_file_snapshot(backup, cancelled=cancelled)
@@ -142,8 +155,11 @@ def _save_metadata(book, changes, cancelled):
             if backup_digest != copied.digest():
                 raise BookError('EPUB backup verification failed; original preserved.')
             check()
+            if not owns_backup():
+                raise BookError(f'EPUB backup path changed; original preserved. Path retained: {backup}')
         except BaseException:
-            backup.unlink(missing_ok=True)
+            if owns_backup():
+                backup.unlink(missing_ok=True)
             raise
         os.replace(staged, book.path)
     def cleanup():
