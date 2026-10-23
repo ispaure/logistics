@@ -212,7 +212,7 @@ Host dummy-backend baseline, with allocation tracing enabled (2026-10-19):
 
 These are host measurements with instrumentation overhead, not device latency
 claims. Native draw, native memory and visual correctness remain separate device
-checks. `mobile_build/tests/test_performance_workloads.py` verifies detection of blocked
+checks. `mobile_build/tests/workspace/test_performance_workloads.py` verifies detection of blocked
 callbacks and omission of operation return values from reports.
 
 ## Ordered work

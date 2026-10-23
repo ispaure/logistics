@@ -364,11 +364,11 @@ generated `mobile_build/payload/` or Briefcase projects as application source.
 
 | Contract | Tests |
 | --- | --- |
-| Picker ownership, cancellation, stale results, locked-source saving | `mobile_build/tests/test_editor_picker.py` |
-| Provider identity, Save As verification and reopen failures | `mobile_build/tests/test_files_ui.py` |
-| Private drafts, privacy handoff and delayed opens | `mobile_build/tests/test_private_sessions.py` |
-| Saved-import safety, other windows and reader retirement | `mobile_build/tests/test_saved_files.py` |
-| Window ownership, layout/navigation and paired panes | `mobile_build/tests/test_window_owners.py`, `test_workspace_ui.py` |
+| Picker ownership, cancellation, stale results, locked-source saving | `mobile_build/tests/documents/test_editor_picker.py` |
+| Provider identity, Save As verification and reopen failures | `mobile_build/tests/storage/test_files_ui.py` |
+| Private drafts, privacy handoff and delayed opens | `mobile_build/tests/documents/test_private_sessions.py` |
+| Saved-import safety, other windows and reader retirement | `mobile_build/tests/documents/test_saved_files.py` |
+| Window ownership, layout/navigation and paired panes | `mobile_build/tests/workspace/test_window_owners.py`, `test_workspace_ui.py` |
 | Payload completeness and portable imports | `Python/tests/test_mobile_packaging.py`, `test_mobile_portability.py` |
 
 Use the [host validation commands](mobile-launchers.md#host-validation).
@@ -385,7 +385,7 @@ the enumerated app accessors for existing callbacks and tests, and respects an
 explicit factory rather than replacing it. Presentation contracts describe named
 arguments and asynchronous return values without importing either UI toolkit.
 
-`features/lm/mobile/controller.py` owns chat state; rclone owns cloud and transfer controllers. Host navigation workflows have dedicated `*_controller.py` modules. `services/workflow_host.py` supplies explicit read/write host attributes. `composition.assembly.composed_workflow` installs only declared compatibility names. Transfer/review cancellation is independent from file/cloud cancellation; global Cancel dispatches to both. Ownership and cancellation are exercised by `mobile_build/tests/test_workflow_ownership.py`.
+`features/lm/mobile/controller.py` owns chat state; rclone owns cloud and transfer controllers. Host navigation workflows have dedicated `*_controller.py` modules. `services/workflow_host.py` supplies explicit read/write host attributes. `composition.assembly.composed_workflow` installs only declared compatibility names. Transfer/review cancellation is independent from file/cloud cancellation; global Cancel dispatches to both. Ownership and cancellation are exercised by `mobile_build/tests/workspace/test_workflow_ownership.py`.
 
 ## Native source editor and live Markdown
 
@@ -426,7 +426,7 @@ private pages retain their existing 2 MiB memory-only bound. Retired URLs return
 410, and unmarked book/transcript pages retain their own typography. Code stays
 monospace. Older Android versions, inaccessible fonts and native font buffers
 above 32 MiB retain the CSS fallback; other script fallback remains WebView-owned.
-`mobile_build/tests/test_markdown_font.py` covers routing, retirement, content policy,
+`mobile_build/tests/editing/test_markdown_font.py` covers routing, retirement, content policy,
 font collection extraction and lossless WOFF tables. The isolated
 `mobile_build/native_tests/tests/logisticsmobile/markdown_font_probe.py` checks actual
 font loading and native glyph measurements across preview, formatted editing
@@ -580,8 +580,8 @@ separate pre-existing broad-suite failures were reproduced with the original
 browser. These synthetic checks establish bounded UI work, not real storage
 latency or full-app frame timing.
 Regression coverage lives in
-`mobile_build/tests/test_browser_progressive.py`, `mobile_build/tests/test_keyboard.py`,
-`mobile_build/tests/test_native_browser.py`, `mobile_build/tests/test_settings_ui.py`,
+`mobile_build/tests/storage/test_browser_progressive.py`, `mobile_build/tests/native/test_keyboard.py`,
+`mobile_build/tests/storage/test_native_browser.py`, `mobile_build/tests/workspace/test_settings_ui.py`,
 `Python/tests/test_mobile_hub.py` and `mobile_build/rclone_bridge/list_test.go`.
 
 Session-only imports retain password-protected source ZIPs using the separate
@@ -638,7 +638,7 @@ half-hour offsets, including fractional seconds that round across DST changes.
 In a macOS host microbenchmark, 1,000 timestamp conversions
 dropped from about 604 ms to 62 ms; this is not Android device timing.
 
-`mobile_build/tests/test_mobile_responsiveness.py` covers deferred Settings, native tab
+`mobile_build/tests/workspace/test_mobile_responsiveness.py` covers deferred Settings, native tab
 selection without reentry, file taps bypassing metadata, and worker-only initial
 Markdown rendering. Existing browser, folder-navigation, private-session and
 Android Back tests cover lifecycle behavior. Physical Android launch, filesystem
@@ -730,7 +730,7 @@ of row count. Source changes suppress the credential selector's reset callback
 to avoid a duplicate discovery/render pass. Folder discovery still checks local
 changes when switching sources; cached widgets do not authorize remote access.
 
-`mobile_build/tests/test_folder_navigation_performance.py` covers row reuse, bounded
+`mobile_build/tests/storage/test_folder_navigation_performance.py` covers row reuse, bounded
 credential reads, a single source-change render and local/lock-state invalidation.
 These host checks establish work reduction; device timing remains unmeasured.
 
@@ -964,7 +964,7 @@ sessions and Recent references) surface connection-busy decisions with a native
 dialog. Feature menus resolve the native activity through the reader controller's
 host and dispatch presentation commands during transfers; operation-specific
 guards still own mutations and credential requests. Regression coverage is in
-`mobile_build/tests/test_transfer_feedback.py`; the physical Android acceptance probe is
+`mobile_build/tests/transfers/test_transfer_feedback.py`; the physical Android acceptance probe is
 `mobile_build/native_tests/tests/logisticsmobile/transfer_feedback_probe.py`.
 
 ## Unified iOS local browsing

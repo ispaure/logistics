@@ -112,7 +112,7 @@ Errors stop the workflow and retain diagnostic logs. Local configuration,
 profiles, certificates, payloads, environments, screenshots and device logs
 are excluded from Git; no credentials are written by the helper.
 
-Focused unit checks in `mobile_build/tests/test_device_tools.py` cover identity
+Focused unit checks in `mobile_build/tests/tooling/test_device_tools.py` cover identity
 rejection, normal-launcher restoration, physical-device selection and SDK
 paths containing spaces. Actual build/install/launch evidence lives in ignored
 `mobile_build/logs/device-*.log` and `device-deployment.json`; this workflow does not
@@ -145,7 +145,7 @@ an omitted allowlist entry.
 
 `mobile_build/tools.py` now rejects app-relative imports absent from the allowlist before
 creating a payload. Packaging tests remove the recent-documents entry to assert
-that this check fails. `mobile_build/tests/test_packaged_startup.py` stages the actual
+that this check fails. `mobile_build/tests/tooling/test_packaged_startup.py` stages the actual
 allowlist and starts Home in a separate process with only that payload on its
 application import path, using empty and existing-document storage. This host test
 uses Toga's dummy backend; a successful deploy must still be visually checked on

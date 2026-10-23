@@ -1545,3 +1545,15 @@ retain one root sidebar. Five Logistics layout, four real viewer, fourteen mobil
 help/startup and fourteen shared wiki cases pass. Cross-library links point at
 canonical shared articles, including heading anchors. Perforce runtime, saved
 formats and consumer packaging are unchanged. No push or release operation.
+
+## Readability follow-up: grouped host regressions
+
+The central Logistics wiki is committed as `50480def`. All 163 mobile host test
+modules move into nine subject folders with explicit cross-folder fixture imports.
+Before and after runs each discover 1,169 cases, zero failed files and two DOM
+skips; both DOM cases pass separately with existing Node/Playwright/Chrome.
+Filenames and recursive developer selection remain stable. All moved files are
+trackable (the tooling group avoids generated-build ignore rules). Configured
+lint, ownership/architecture, toolchain and hygiene checks pass. Blue Hole
+`428f338` passes all 33 adapter cases and exact shared vendor checking; production
+Python including Perforce is byte-identical to its prior copy. No push.

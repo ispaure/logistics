@@ -25,7 +25,7 @@ mask converts inverse grayscale luminance, multiplied by source alpha, to opacit
 this retains the original shading when the launcher supplies its tint. Original
 downloads are not changed. Native launchers apply their own final icon masks.
 
-Verify catalog and resource installation with `mobile_build/tests/test_icon_build.py`.
+Verify catalog and resource installation with `mobile_build/tests/tooling/test_icon_build.py`.
 Compile the generated iOS catalog with Xcode's asset compiler when changing its
 appearance slots. Home-screen appearance and launcher cache refresh still need
 device validation; host tests do not establish those behaviors.
@@ -1083,7 +1083,7 @@ Installation enables the static plist capability before first launch. Old root
 contents can therefore be visible to a trusted computer between installation and
 the first successful migration; users must open the update before file sharing.
 There is no runtime plist switch that can defer this capability until migration.
-`mobile_build/tests/test_ios_storage.py` covers data/mapping preservation, fresh installs,
+`mobile_build/tests/storage/test_ios_storage.py` covers data/mapping preservation, fresh installs,
 relaunch, interruption in both phases, conflicts, links, and backup failure.
 
 Android and iOS now share the Show Legacy preference and filtering; dummy/desktop

@@ -57,3 +57,32 @@ The build root now has three Python entry points: `tools.py` for payloads,
 `cloud_build.py` for native project composition and `select_ios_sdk.py` for SDK
 selection. Credentials, manifests, native bridge sources and build products keep
 their existing paths.
+
+## Find mobile regression contracts
+
+`mobile_build/tests/` groups contracts by responsibility. Test filenames remain
+unique, so the developer command still accepts a single filename and discovers it
+recursively:
+
+```sh
+python dev.py test mobile test_native_report.py
+python dev.py test mobile 'test_reader_*.py'
+```
+
+| Folder | Contracts and reusable test fixtures |
+| --- | --- |
+| `tooling/` | Payload/build identity, native reports, signing, distribution and worker launchers |
+| `reading/` | EPUB/PDF/comic readers, library, progress and lifecycle |
+| `documents/` | Open/save, drafts, document menus, imports and offline help |
+| `storage/` | Browser/folder navigation, local search and file operations |
+| `transfers/` | Cloud credentials, LocalCrypt, mirror jobs and reviewed transfers |
+| `workspace/` | Host composition, navigation, settings and retained window/session owners |
+| `native/` | Platform controls, sizing, rotation, keyboard and native adapters |
+| `editing/` | Source/Markdown editing, search and speech presentation |
+| `chat/` | Conversations, inventory, deferred chat and transcript DOM contracts |
+
+Cross-group fixtures use explicit `mobile_build.tests.<group>.<module>` imports,
+so moving a file does not rely on another test directory being on sys.path. The
+EPUB and transcript DOM drivers stay beside their Python contracts. Use the
+existing isolated-module runner for a full suite; no compatibility forwarding
+test modules or generated test registries are needed.

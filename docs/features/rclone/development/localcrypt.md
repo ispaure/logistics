@@ -230,7 +230,7 @@ revocation, leases, cancellation, invalid mappings and failure preservation.
 `mobile_build/rclone_bridge/localcrypt_test.go` covers real rclone cipher listing, exact
 ciphertext copies, offline decrypt after remote removal, re-unlock, tampering and
 unsafe backing rejection. `test_mobile_localcrypt.py` covers ciphertext bookkeeping
-and portable RAM readers; `mobile_build/tests/test_localcrypt_ui.py` covers dummy-backend editing and lifecycle controls.
+and portable RAM readers; `mobile_build/tests/transfers/test_localcrypt_ui.py` covers dummy-backend editing and lifecycle controls.
 Host tests do not establish Android/iOS native runtime behavior. The native suite
 also exercises desktop-generated ciphertext through real platform widgets and the
 compiled bridge: reading, text/Markdown saves, comic/EPUB metadata saves with inner

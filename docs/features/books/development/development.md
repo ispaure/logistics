@@ -256,7 +256,7 @@ explicitly reopening an already loaded imported EPUB. A retained archive decoder
 does not establish that the native WebView still has its document. Reopen waits
 for pending position writes through `move_book_page`, replaces the chapter bridge
 and restores the saved passage without creating another session or import.
-`mobile_build/tests/test_reader_sessions.py` covers this recovery path. Switching
+`mobile_build/tests/reading/test_reader_sessions.py` covers this recovery path. Switching
 destinations alone does not trigger a chapter reload.
 
 `mobile/speech.py` keeps bounded utterances and a private in-memory word-offset

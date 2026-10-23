@@ -136,9 +136,9 @@ the map does not invent individual maintainer assignments.
 | LM conversation lifecycle and presentation | `Python/tests/test_lm_session.py`, `test_lm_ui.py`, `test_lm_appearance.py` |
 | Git history, search, preview and job ownership | `Python/tests/test_git_ui.py`, `test_git_preferences.py`, `test_git_repository_tabs.py`, `test_git_hunk_layout.py` |
 | Blender presentation and operation lifecycle | `Python/tests/test_blender_page.py`, `test_blender_settings.py`, `test_blender_library.py` |
-| Mobile Open/Save As and file management | `mobile_build/tests/test_editor_picker.py`, `test_files_ui.py`, `test_private_sessions.py` |
-| Mobile saved imports and window ownership | `mobile_build/tests/test_saved_files.py`, `test_window_owners.py`, `test_workspace_ui.py` |
-| Mobile source selection and import isolation | `Python/tests/test_mobile_packaging.py`, `test_mobile_portability.py`, `mobile_build/tests/test_packaged_startup.py` |
+| Mobile Open/Save As and file management | `mobile_build/tests/documents/test_editor_picker.py`, `test_files_ui.py`, `test_private_sessions.py` |
+| Mobile saved imports and window ownership | `mobile_build/tests/documents/test_saved_files.py`, `test_window_owners.py`, `test_workspace_ui.py` |
+| Mobile source selection and import isolation | `Python/tests/test_mobile_packaging.py`, `test_mobile_portability.py`, `mobile_build/tests/tooling/test_packaged_startup.py` |
 
 The [mobile owner map](mobile-runtime.md) explains controller
 and packaging boundaries. For focused runs, use `dev.py test desktop <filename>` or

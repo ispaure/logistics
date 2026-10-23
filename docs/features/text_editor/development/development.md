@@ -14,7 +14,7 @@ contributions while retaining open documents for re-enablement.
 | Module | Responsibility |
 | --- | --- |
 | `contributions.py`, `ui/page.py` | Lazy feature registration, entry point and browser integration |
-| `mobile/provider_markdown.py` | Provider Markdown modes, web surfaces, preview tasks, search/speech attachment and cleanup; test with `mobile_build/tests/test_provider_markdown.py` and `test_markdown_editor.py` |
+| `mobile/provider_markdown.py` | Provider Markdown modes, web surfaces, preview tasks, search/speech attachment and cleanup; test with `mobile_build/tests/editing/test_provider_markdown.py` and `test_markdown_editor.py` |
 | `ui/service.py` | Per-document window ownership and browser save notifications |
 | `ui/window.py` | Single-document presentation, menus, status and close lifecycle |
 | `ui/document.py` | Per-document snapshot, encoding and editing metadata |
@@ -163,7 +163,7 @@ Run `python3 dev.py test mobile test_provider_markdown.py` for ownership, stale
 results/errors, lock/close and replacement regressions. Also run
 `test_markdown_*.py`, `test_private_sessions.py` and `test_remote_readers.py`.
 `Python/tests/test_mobile_packaging.py` checks allowlist omissions;
-`mobile_build/tests/test_packaged_startup.py` opens a provider Markdown view and switches between preview and editing
+`mobile_build/tests/tooling/test_packaged_startup.py` opens a provider Markdown view and switches between preview and editing
 using only freshly staged sources. See the root [validation guide](../../../development/testing.md)
 for environment setup (`py` instead of `python3` on Windows).
 
@@ -224,7 +224,7 @@ files use their existing folder-owned deletion workflow.
 Closing an iOS editor stops its live WebView and detaches WebKit delegates before
 replacing preview content. Queued native navigation decisions must not outlive
 the Toga interface. Native close/discard checks explicitly collect closed editors.
-Regression coverage lives in `mobile_build/tests/test_markdown_editor.py`,
+Regression coverage lives in `mobile_build/tests/editing/test_markdown_editor.py`,
 `test_source_editor.py` and the workspace/provider suites. The isolated native
 `editor_probe.py` checks blank-page hit targets, default preview, formatted typing and toolbar edits,
 source fallback, table structure undo/redo and unchanged neighboring syntax in
@@ -256,7 +256,7 @@ range/decryption stream without creating plaintext files.
 
 The formatted editor renders images inside protected inline spans while retaining
 Markdown syntax for serialization. Wiki embeds retain their exact block source.
-Missing images fall back to alt text. Tests in `mobile_build/tests/test_markdown_images.py`
+Missing images fall back to alt text. Tests in `mobile_build/tests/editing/test_markdown_images.py`
 and `test_markdown_editor.py` cover rooted paths, GIF/WebP/PNG/JPEG, encrypted-provider
 reads, revoked access and source preservation. GIFs retain their complete encoded
 bytes for native WebView animation. Shared image markup interprets Obsidian width

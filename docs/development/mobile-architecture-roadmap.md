@@ -361,7 +361,7 @@ a new framework, a Swift rewrite or a switch to PySide on mobile.
 
 ## Validation and documentation
 
-Existing tests to retain include `mobile_build/tests/test_reader_sessions.py`,
+Existing tests to retain include `mobile_build/tests/reading/test_reader_sessions.py`,
 `test_mobile_ui_workflows.py`, `test_files_ui.py`, `test_window_owners.py`, and
 `Python/tests/test_mobile_{readers,localcrypt,workspace,portability,packaging}.py`.
 Native checks cover reader behavior, LocalCrypt, navigation and browser Back.

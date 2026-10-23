@@ -42,7 +42,7 @@ The following code/artwork is local only and not backed up by a commit/push:
 | `mobile_build/build_support/icon_build.py` | Untracked: icon installation and optional artwork resizing |
 | `mobile_build/resources/icons/ios/` | Untracked: iOS PNG artwork and asset catalog |
 | `mobile_build/resources/icons/android/` | Untracked: Android PNG artwork and XML resources |
-| `mobile_build/tests/test_icon_build.py` | Untracked: artwork/catalog and repeated-installation checks |
+| `mobile_build/tests/tooling/test_icon_build.py` | Untracked: artwork/catalog and repeated-installation checks |
 
 There are **67 artwork/resource files**: 60 PNGs, six XML files and one JSON
 catalog. Including the build helper, test and changed build entry point, group A

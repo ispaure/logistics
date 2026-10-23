@@ -16,7 +16,7 @@ their names never enter this index. Navigation, browser stop and host retirement
 cancel obsolete work. Existing directory-cache generations/checkpoints retain
 interrupted scans. No file text is indexed.
 
-`mobile_build/tests/test_local_search.py` verifies restart reuse without directory
+`mobile_build/tests/storage/test_local_search.py` verifies restart reuse without directory
 enumeration, matching parity, refreshed names, source exclusions, scoped queries,
 worker-thread preparation and cancellation. Native BOOX performance and appearance
 still require device validation.
@@ -161,7 +161,7 @@ specific. `Open beside another document` is offered only at widths of at least
 640 logical pixels and for sessions supported by the editable pane host. Resize
 refreshes retained menus; the picker also rejects compact invocation.
 
-`mobile_build/tests/test_folder_navigation.py` covers native ancestor controllers,
+`mobile_build/tests/storage/test_folder_navigation.py` covers native ancestor controllers,
 multi-level pop callbacks, guarded Back, retained reader return, Home reveal,
 file selection and unsaved provider drafts. These mocked native and dummy-host
 checks do not certify physical iOS gesture rendering.
@@ -245,7 +245,7 @@ Documents secondary column. Failure removes the temporary route and reveals the
 retained origin. Cleanup never selects a tab the user has left. Library readers
 prepare their first page before presenting their view.
 
-`mobile_build/tests/test_file_loading.py` checks the panel contents and replacement
+`mobile_build/tests/documents/test_file_loading.py` checks the panel contents and replacement
 across Home, Documents and Workspaces, failure recovery and Back during loading.
 
 ## Compact Android top chrome
@@ -269,9 +269,9 @@ window title remains available as metadata. Reader fullscreen and keyboard
 chrome snapshots therefore normally capture an already hidden activity bar.
 Home uses an 8-point content top margin without an additional heading top margin.
 
-`mobile_build/tests/test_navigation_contrast.py` checks initial tablet installation,
+`mobile_build/tests/workspace/test_navigation_contrast.py` checks initial tablet installation,
 late rail creation, and preserved selection appearance with mocked Android APIs.
-`mobile_build/tests/test_hub_documents.py` checks the Home heading inset. Physical Boox
+`mobile_build/tests/workspace/test_hub_documents.py` checks the Home heading inset. Physical Boox
 layout still requires device validation.
 
 ## Android Back policy and panel audit (2026-10-18)
@@ -319,7 +319,7 @@ serialized until completion; failed browser navigation retains its history.
 Checkpoint refusal consumes Back without popping or changing tabs. Returning Home
 runs destination selection and route rendering, restoring body ownership and chrome.
 
-`mobile_build/tests/test_android_back.py` covers these policies with real app panels,
+`mobile_build/tests/native/test_android_back.py` covers these policies with real app panels,
 synthetic local files/books/PDFs, remote navigation fixtures, and a mocked Java
 listener boundary. These host tests do not certify physical gestures, IME ordering
 or predictive animations. The local QA emulator could not boot for this audit:
@@ -387,7 +387,7 @@ loading. No plaintext staging directory is created.
 Remote adapters advertise `remote_storage`; neither UI creates a search field
 for them. Root detection and explicit folder expansion use immediate listings,
 with no recursive enumeration, prefetch or remote search. Local name filtering
-only examines loaded rows. `mobile_build/tests/test_notes_library.py` and desktop
+only examines loaded rows. `mobile_build/tests/documents/test_notes_library.py` and desktop
 `test_notes_library_desktop.py` cover action placement, Documents ownership,
 remote call bounds, containment, cancellation and credential retirement. Native
 `obsidian_checks.py` covers real Local/LocalCrypt reads and action screenshots.
@@ -478,7 +478,7 @@ export commands remain available from Chat. No model request starts from
 navigation. The conversation list represents the existing flat conversation
 store; no new folder or branching persistence format is introduced.
 
-Host coverage is in `mobile_build/tests/test_workspace_navigation.py`, including
+Host coverage is in `mobile_build/tests/workspace/test_workspace_navigation.py`, including
 compact drawers, nested-file opening, independent drafts, two-document/browser
 switches, collapse and close, and chat history/draft restoration. The native UI
 review calls `workspace_checks.py` to exercise real phone/tablet content and
@@ -860,7 +860,7 @@ gutter. Layout watchers compare posture/seam as well as viewport dimensions and
 wait for fit zoom before rebuilding. Provider worker loads use a main-thread
 snapshot of the layout mode and never read UIKit hinge geometry on a worker.
 
-`mobile_build/tests/test_fold_layout.py` covers rail offsets, status/orientation fallback,
+`mobile_build/tests/native/test_fold_layout.py` covers rail offsets, status/orientation fallback,
 unequal aspect ratios, unpaired manga and landscape isolation. The cache-only
 `fold_seam_probe` records native Home joins and a real composed comic; its partial
 status is injected explicitly when the simulator is flat, so it does not claim
@@ -1024,7 +1024,7 @@ controls before entering credential checks, so cold-start unlocking uses the sam
 password prompt and resume callback as Home unlock.
 Private app data is never used as the shared root. Managed copies continue using
 `CollectionFiles` and their transfer mappings.
-Regression coverage is in `mobile_build/tests/test_folder_source_tabs.py` and the hub
+Regression coverage is in `mobile_build/tests/storage/test_folder_source_tabs.py` and the hub
 and document-layout tests. Native device appearance still requires a device run.
 
 ## Offline documentation wiki
@@ -1057,7 +1057,7 @@ links/images. Documentation opts into local links and heading navigation through
 the shared wiki. Its rows reserve disclosure space for leaves and indent every
 level, so expanding a folder cannot move child labels left of their parent.
 Focused regressions live in `commonUtils.tests.test_native_markdown` and
-`mobile_build/tests/test_documentation_ui.py`; host/dummy checks do not certify native
+`mobile_build/tests/documents/test_documentation_ui.py`; host/dummy checks do not certify native
 iOS or Android visual layout. See the shared native embedding guide for API details.
 
 

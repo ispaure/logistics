@@ -100,7 +100,7 @@ also reconcile their initial window estimate with the mounted reading pane.
 Imported records persist validated `comic_half` values of 0 or 1 alongside the
 original source position; older records default to the first half. Provider half
 state remains in memory with its reader. Rendering errors preserve the committed
-half, visible pixels and source position. `mobile_build/tests/test_comic_split.py` checks
+half, visible pixels and source position. `mobile_build/tests/reading/test_comic_split.py` checks
 crops, directions, swipe traversal, boundary buttons, failed composition, setting
 persistence, imported resume and landscape restoration with Toga's dummy backend.
 Native device appearance and gestures still require device/simulator validation.
@@ -227,7 +227,7 @@ After foregrounding or completing resume-password verification, `ScreenPrivacy`
 asks only the visible private owner to reload a suspended page. The owner retains
 its page, route and immersive state and coalesces pending resume reads; suspension
 clears only after successful page presentation. A failed suspended fullscreen
-read exposes controls and its error. `mobile_build/tests/test_private_sessions.py`
+read exposes controls and its error. `mobile_build/tests/documents/test_private_sessions.py`
 covers repeated password resume after memory cleanup, wrong-password protection,
 page navigation after resume and recovery from a failed reload.
 
@@ -252,7 +252,7 @@ proportions at a common height and manga visual order, with no artificial gutter
 between the pages. Desktop and mobile use the same zero-gap policy.
 Geometry regressions in
 `Python/tests/test_mobile_composite.py` verify touching page edges across viewport
-sizes and bitmap allocation limits; `mobile_build/tests/test_fold_layout.py` separately
+sizes and bitmap allocation limits; `mobile_build/tests/native/test_fold_layout.py` separately
 checks reserved physical hinge clearance. Combined output is capped at 16 million pixels and 8192 pixels per side before native
 allocation. UIKit rendering explicitly uses scale 1 so Retina density does not
 multiply that budget. Android and iOS compose directly in RAM; no temporary page
@@ -348,7 +348,7 @@ navigation to preserve wide-page halves and bypass zoom deferral only when the
 fold region changes. Imported progress persists the anchor using the existing
 position schema; provider progress remains session-owned.
 
-`mobile_build/tests/test_comic_split.py` exercises imported/provider round trips in both
+`mobile_build/tests/reading/test_comic_split.py` exercises imported/provider round trips in both
 reading directions, wide-half retention, and transparent fold margins.
 
 ## Mobile page-transition publication
@@ -379,7 +379,7 @@ and display disconnect release output image references. Android system mirroring
 uses the existing fullscreen reader and FLAG_SECURE policy; presentation output
 does not implement the separate Google Cast sender/receiver protocol.
 
-`mobile_build/tests/test_external_display.py` covers publication, routing, process privacy
+`mobile_build/tests/reading/test_external_display.py` covers publication, routing, process privacy
 and disconnect cleanup. Native probes verified the UIKit viewer in a second window
 of the iPad simulator's application scene, and Android 36 `Presentation` on a
 synthetic 1280×720 display. They exercised fitted output, image clearing and
@@ -414,7 +414,7 @@ pages without writing preferences. Connection changes notify layout watchers,
 including while zoomed; disconnect restores the saved mode and wide-page half.
 Provider workers receive sharing state captured on the UI thread. Pair eligibility
 includes square pages, with landscape and ComicInfo DoublePage pages kept single.
-`mobile_build/tests/test_comic_sharing.py` covers imported and provider transitions and
+`mobile_build/tests/reading/test_comic_sharing.py` covers imported and provider transitions and
 checks that preference bytes remain unchanged.
 
 `SPREAD_GAP` is zero for desktop painting and bounded native composition. The

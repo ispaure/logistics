@@ -81,8 +81,26 @@ host documentation/packaged-startup cases pass using a fresh disposable payload.
 These verify that feature links retain the complete root sidebar and offline
 articles. No native-device appearance claim is made.
 
+### Regression tests grouped by subject
+
+The 163 mobile host test files now live in nine coherent subject folders, with
+four to 29 files per folder. Existing filenames and developer glob commands are
+preserved. Cross-group fixtures use explicit package imports instead of depending
+on sys.path ordering. The two browser DOM drivers stay with their contracts.
+
+Both the complete pre-move and post-move suites discover the same 163 files and
+1,169 cases with zero failed files. Each skips two browser DOM cases without Node;
+both cases subsequently pass using the existing Node/Playwright/Chrome tools.
+All moved tests are staged and trackable; `tooling/` deliberately avoids the
+repository's generated `build/` ignore rule. No assertion or timeout was relaxed.
+
+Blue Hole local commit `428f338` carries the exact shared documentation revision;
+all 33 adapters and vendor membership/content checks pass. Production Python,
+including all Perforce code, remains byte-identical to its prior consumer copy.
+
 ## Next work
 
-Group host regression tests by the same responsibilities, simplify remaining
-opaque tooling code and finish cross-consumer verification. Keep the established
+Simplify the remaining opaque build-tool declarations, then finish the source
+and documentation review. Native probe grouping needs a separately validated
+Briefcase/native-device pass; its existing paths remain intact here. Keep the established
 Perforce build and vendor architecture unchanged.

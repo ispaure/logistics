@@ -36,7 +36,7 @@ Validation:
 
 - `Python/tests/test_pdf_reader.py`: real PDF rendering, bounds, registration,
   provider reads, desktop page jumps and dragging, and document buffer release.
-- `mobile_build/tests/test_pdf_reader.py`: Toga dummy UI integration for local, remote
+- `mobile_build/tests/reading/test_pdf_reader.py`: Toga dummy UI integration for local, remote
   and offline LocalCrypt reading, numeric navigation, vertical gesture dispatch,
   credential revocation and no plaintext persistence. Native rasterization is
   replaced by a small fixture in these mobile UI tests.
@@ -106,7 +106,7 @@ are omitted; PDFs without contents return an empty tuple.
 `mobile.contents.PDFContents` loads on demand in a worker, checks the owning
 session before publishing or navigating, and keeps page jump/search available
 when parsing fails. It uses `commonUtils.ui.native.presentation.HierarchyList`;
-the host injects colours through `hierarchy_row_style`. `mobile_build/tests/test_contents_hierarchy.py`
+the host injects colours through `hierarchy_row_style`. `mobile_build/tests/reading/test_contents_hierarchy.py`
 covers real PDF destinations, disclosure independence and stale-session guards.
 
 ## Backend layout
