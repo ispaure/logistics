@@ -1,5 +1,16 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: C5 layered settings fields
+
+Shared `e37da37` names schema-control construction/binding and row/reset/preview
+assembly. The existing rebuild retains filtering, tabs and its lazy font-family
+cache. Expansion matches every original class statement and signature. A new
+original/refactored mixed-field contract verifies section/key callback capture,
+sparse reset, unchanged defaults and no-op saves. Configuration 40, styling 16,
+wheel policy four, Logistics settings 28, Blender settings seven and external
+compatibility 48/2 pass; shared wiki, configured lint and whitespace pass. No new
+form framework, persistence/API change, external edit or push occurred.
+
 ## Sequential audit implementation: C4 Markdown presentation and conversion
 
 Shared `c542e92` separates fragment classification, inline/fenced-code typography

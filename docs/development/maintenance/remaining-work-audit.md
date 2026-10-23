@@ -21,6 +21,7 @@ below describe the assessment snapshot, before this implementation.
 | C2 | Indexing owns network/watch policy; shared close/idle admission | shared `9ac9121` |
 | C3 | Captured dock transfer/rollback and separate header reconciliation | shared `e8ac643` |
 | C4 | Named block classification, code/image typography and authored-source conversion phases | shared `c542e92` |
+| C5 | Per-field control construction/binding and row/reset/preview assembly | shared `e37da37` |
 | L1 | Managed-text host workflows grouped over existing store/workspace/view owners; aggregate lifecycle stays in app | See sequential progress entry |
 | L2 | Retained drawer/listing owner separated from frame layout; import compatibility preserved | See sequential progress entry |
 | L3 | Explicit unpublished-control adoption/retirement; verified failed-build cleanup; named library page preparation/projection | See sequential progress entry |
