@@ -25,10 +25,6 @@ concurrency:
 jobs:
   static:
     runs-on: ubuntu-latest
-    env:
-      # Test storage isolation changes XDG_CACHE_HOME; keep browser tooling at
-      # the same explicit path for installation and fixture subprocesses.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/mobile-dom-browsers
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -45,6 +41,9 @@ jobs:
       - run: python dev.py hygiene
       - name: Install the browser used by mobile DOM regressions
         run: |
+          # Keep browser tooling visible after tests isolate XDG_CACHE_HOME.
+          export PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/mobile-dom-browsers"
+          echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" >> "$GITHUB_ENV"
           npm install --prefix "$RUNNER_TEMP/mobile-dom" --no-save --ignore-scripts playwright@1.62.1
           "$RUNNER_TEMP/mobile-dom/node_modules/.bin/playwright" install --with-deps chromium
           echo "NODE_PATH=$RUNNER_TEMP/mobile-dom/node_modules" >> "$GITHUB_ENV"
