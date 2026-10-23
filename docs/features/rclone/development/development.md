@@ -37,16 +37,64 @@ corresponding ZIP. Initialization only creates the config directory; it never
 merges credentials into a global config. The checkout's credentials directory
 may be empty, and Logistics Local folders work without this feature.
 
-Desktop Settings decodes credential ZIPs in an `OperationProgress` worker using
-`session.read_package`. It validates password-protected TXT entries in memory and
-atomically writes the config for **Load on Disk**; **Load for Session** publishes
-values on the GUI thread. It never extracts TXT files or starts rclone. Cancellation
+Desktop Settings submits `DesktopCredentialLoad` through the shared
+`RcloneService.credentials`. An `OperationProgress` worker prepares the ZIP using
+`session.read_package`. The desktop adapter validates password-protected TXT
+entries in memory and atomically writes the config for **Load on Disk**;
+**Load for Session** publishes values on the GUI thread. It never extracts TXT files or starts rclone. Cancellation
 before publication preserves existing credentials; once the disk write commits,
-completion reports success. Closing Settings requests cancellation and defers
+cancellation does not remove the saved file. Closing Settings requests cancellation and defers
 closure until the worker stops. Completion updates the selected row without
 rescanning cloud-backed credential roots. The legacy programmatic
-`load_remote_from_zip_to_config` helper still uses a private extraction workspace
-for disk loads. Comics' ancestor INI passwords and unlock caches do not apply.
+`load_remote_from_zip_to_config` helper now uses the same service and in-memory
+validation for disk and session loads. The unused extracted-TXT loading/writing
+helpers were removed. Comics' ancestor INI passwords and unlock caches do not apply.
+
+
+`CredentialService.prepare_load(request, password, context)` returns a one-use,
+service-owned `PreparedCredentials` admission without publishing credentials or
+saved files. `unlock(prepared)` publishes that staged load; `load(...)` combines
+both steps when the platform can run them on one worker. Passwords are separate
+arguments and never appear in requests, admissions or results. Discarding or
+collecting an admission releases staging; consumed or foreign admissions cannot
+publish. The desktop adapter copies settings into the session before clearing
+its staging dictionaries. LocalCrypt backing/password checks happen before
+publication, so invalid crypt settings preserve the old session.
+
+The service guards publication with nonblocking admission. A lock, an unlock
+publication attempt, or saved-vault restore retires other pending loads in that
+service; the platform generation/file checks also reject stale loads. Pending
+admissions are conservatively invalidated across packages within a service,
+while existing desktop access grants retain their package-specific revocation.
+Cancellation and host validity are checked before publication, including the
+atomic saved-file commit. A completed publication remains committed if a caller
+cancels afterward; cancellation does not roll credentials back. Notification
+failures after publication can likewise leave the new credentials active.
+
+Desktop Workspaces and the standalone unlock prompt prepare on a worker and
+publish on the GUI thread through this same authority. `DesktopCredentials` in
+`desktop_credentials.py` owns publication; `desktop_service.py` only composes it.
+Native `mobile/credential_loading.py` captures a bounded ZIP and alias snapshot,
+then delegates atomic import, device-vault restore, or SMB addition to the
+existing `CloudClient`/native authorities. Native ZIP passwords remain necessary
+for retained session ZIPs; this does not turn device retention into an unlock.
+`CredentialPackages` still owns ZIP retention and metadata, and UI hosts still
+resolve private edits, pick documents and present password prompts.
+
+Mobile credential workers use `run_credentials`: cancellation keeps the host busy
+until the worker retires and suppresses publication if it has not started yet.
+Navigation/client/host checks prevent stale load results from resuming a different
+view. `credentials.restore()` is the saved-vault entry point; `credentials.lock()`
+continues to retain saved config/ZIP storage. Native locking still affects all
+loaded packages together. The bridge remains the final busy/publication authority
+across scenes and clients.
+
+`test_credential_service.py`, `test_native_credential_service.py`,
+`test_archive_credentials.py`, the Settings/Workspaces unlock tests and mobile
+credential/retention/SMB suites cover these boundaries. The host native-bridge
+fixture loads credentials through the service, runs the previous remote/transfer
+slice, locks and reloads them, and verifies that old grants stay revoked.
+These checks do not constitute physical-device validation.
 
 Mobile imports, saved-vault restores and SMB credential additions use a nonblocking
 native credential-publication scope. Active network operations or local readers
@@ -97,7 +145,7 @@ for reusable verification, staging and worker behavior.
 ## Validation
 
 Use the [project test commands](../../../development/getting-started.md).
-`test_archive_credentials.py` covers package extraction/config output,
+`test_archive_credentials.py` covers in-memory package validation/config output,
 `test_folder_sources_ui.py` covers source selection/context, and `test_software.py`
 covers provisioning policy. Tests use local fixtures and mocked providers; actual
 remote transfers and credential ownership of existing mounts need platform checks.

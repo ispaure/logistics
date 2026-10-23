@@ -26,7 +26,7 @@ class RcloneSessionTests(unittest.TestCase):
                 archive.writestr('remote.txt', '[Dépôt.alpha+user@example]\ntype=local\n')
                 archive.writestr('private.txt', '[Synthetic]\ntype=webdav\nurl=https://example.invalid\npass=synthetic-secret\n')
             with patch.object(configuration, 'get_credential_config_path', return_value=config_path), \
-                 patch.object(credentials.zipUtils, 'unzip_file', side_effect=AssertionError('Session must not extract')):
+                 patch('commonUtils.archives.legacy.unzip_file', side_effect=AssertionError('Session must not extract')):
                 self.assertTrue(credentials.load_remote_from_zip_to_config(package, 'synthetic-zip-password', remember=False))
             context = config_path.with_suffix('.session')
             self.assertEqual(configuration.get_rclone_remote_names(context), ['Dépôt.alpha+user@example', 'Synthetic'])

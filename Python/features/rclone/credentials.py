@@ -3,41 +3,14 @@ Credential management for the Logistics rclone feature.
 """
 
 from pathlib import Path
-from typing import cast
-from tempfile import TemporaryDirectory
 
 import config
 
-from commonUtils.filesystem import directories as dirUtils, files as fileUtils
+from commonUtils.filesystem import files as fileUtils
 from commonUtils import ui
-from commonUtils.archives import legacy as zipUtils
-from commonUtils.runtime.diagnostics import Severity, log, print_debug_msg
-from commonUtils.formats import txtType
+from commonUtils.runtime.diagnostics import print_debug_msg
 
 from . import configuration
-
-
-def get_remote_credentials_dict(remote_credentials_dir: str | Path) -> dict:
-    """Return rclone remote credentials stored as TXT files in the given directory."""
-
-    remote_credentials_directory = dirUtils.Directory(remote_credentials_dir)
-    credential_files = cast(
-        list[txtType.TXTFile],
-        remote_credentials_directory.list_files(filter_extension='txt')
-    )
-
-    credentials = {}
-
-    for file in credential_files:
-        lines = file.read_lines()
-
-        if not lines:
-            continue
-
-        remote_name = lines[0][1:-1]
-        credentials[remote_name] = lines
-
-    return credentials
 
 
 def get_credential_package_directories() -> tuple[Path, ...]:
@@ -72,71 +45,24 @@ def get_loaded_credential_config_paths() -> list[Path]:
     return configuration.get_all_conf_paths() + session.paths()
 
 
-def write_remote_credentials_to_config(
-    remote_credentials_dir: str | Path,
-    config_path: str | Path
-) -> bool:
-    """Write one extracted credential set into one dedicated rclone config."""
-
-    remote_credentials = get_remote_credentials_dict(remote_credentials_dir)
-
-    if not remote_credentials:
-        log(
-            Severity.ERROR,
-            'Load Remote Credential',
-            'No rclone credential TXT files were found in the credential package.',
-            popup=True
-        )
-        return False
-
-    config_path = Path(config_path)
-    config_file = txtType.TXTFile(config_path)
-    config_file.line_lst = []
-
-    for remote_lines in remote_credentials.values():
-        config_file.line_lst.extend(remote_lines)
-        config_file.line_lst.append('')
-
-    if config_file.line_lst:
-        config_file.line_lst.pop()
-
-    config_file.write_lines()
-    from .remote_resources import invalidate_config
-    invalidate_config(config_path)
-    return True
-
-
 def load_remote_from_zip_to_config(zip_path: str | Path, zip_pw: str, *, remember=True) -> bool:
     """
-    Extract one credential archive and write its dedicated same-named .conf.
+    Validate a credential archive and publish its explicit saved config or session.
 
     The credential ZIP is never modified or deleted.
     """
 
     zip_path = Path(zip_path)
-    from . import session
+    from .desktop_service import service
+    from .desktop_credentials import DesktopCredentialLoad
+    config_path = configuration.get_credential_config_path(zip_path)
+    if not remember:
+        config_path = config_path.with_suffix('.session')
     try:
-        values = session.read_package(zip_path, zip_pw)
+        service.credentials.load(DesktopCredentialLoad(zip_path, config_path, remember), zip_pw)
     except Exception:
         ui.display_msg_box_ok('Load Remote Credential',
-            'The password or credential package is invalid. Every credential TXT must be password-protected. Existing credentials were preserved.')
+            'Could not load the credential ZIP. Check the password and local file access. Every credential TXT must be password-protected.')
         return False
-    if not remember:
-        session.remember(configuration.get_credential_config_path(zip_path).with_suffix('.session'), values, package_path=zip_path)
-        return True
-    logistics_cfg = config.LogisticsConfig()
-    config_path = configuration.get_credential_config_path(zip_path)
-    workspace_root = Path(logistics_cfg.temp_path)
-    workspace_root.mkdir(parents=True, exist_ok=True)
-    # Per-operation private workspaces avoid mixing concurrent credential sets.
-    with TemporaryDirectory(prefix='logistics-credentials-', dir=workspace_root,
-                            ignore_cleanup_errors=True) as workspace:
-        extract_dir = Path(workspace)
-        if not zipUtils.unzip_file(zip_path, extract_dir, zip_pw):
-            ui.display_msg_box_ok('Load Remote Credential',
-                'Password is invalid or the credential archive could not be extracted.')
-            return False
-        if not write_remote_credentials_to_config(extract_dir, config_path):
-            return False
-        print_debug_msg(f'Successfully loaded remote credentials to "{config_path.name}"!', True)
-        return True
+    print_debug_msg(f'Successfully loaded remote credentials to "{config_path.name}"!', True)
+    return True

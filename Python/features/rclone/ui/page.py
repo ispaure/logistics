@@ -403,7 +403,9 @@ class RclonePage(pyside.QWidget):
             return
 
         from features.rclone import session
-        from commonUtils.persistence import atomic_write_bytes
+        from features.rclone.desktop_service import service
+        from features.rclone.desktop_credentials import DesktopCredentialLoad
+        from features.rclone.credential_loading import CredentialContext
         config_path = configuration.get_credential_config_path(package.path)
         if not self._prepare_lock([config_path, config_path.with_suffix('.session')]):
             return
@@ -412,20 +414,17 @@ class RclonePage(pyside.QWidget):
             widget.setEnabled(False)
 
         def load(report, cancelled):
+            request = DesktopCredentialLoad(package.path,
+                config_path if remember else config_path.with_suffix('.session'), remember)
+            context = CredentialContext(cancelled)
             try:
-                values = session.read_package(package.path, password)
+                if remember:
+                    return service.credentials.load(request, password, context)
+                return service.credentials.prepare_load(request, password, context)
             except Exception:
-                raise ValueError('The password or credential ZIP is invalid. Existing credentials were preserved.') from None
-            if cancelled():
-                return None
-            if remember:
-                # Publish only a fully validated package, without extracted TXT files.
-                content = '\n\n'.join(
-                    '[' + name + ']\n' + '\n'.join(f'{key} = {value}' for key, value in settings.items())
-                    for name, settings in values.items()) + '\n'
-                config_path.parent.mkdir(parents=True, exist_ok=True)
-                atomic_write_bytes(config_path, content.encode('utf-8'))
-            return values
+                if cancelled():
+                    return None
+                raise ValueError('Could not load credentials. Check the password and local file access.') from None
 
         self.load_operation.start(load, message='Loading credentials locally…')
 
@@ -441,19 +440,24 @@ class RclonePage(pyside.QWidget):
         self.load_operation.hide()
         for widget in self._credential_controls():
             widget.setEnabled(True)
-        if values is not None and not error:
-            if remember:
-                from features.rclone.remote_resources import invalidate_config
-                invalidate_config(config_path)
+        if values is not None and not error and not remember:
+            from features.rclone.desktop_service import service
+            if self.load_operation.cancelled.is_set():
+                service.credentials.discard(values)
+                values = None
             else:
-                config_path = config_path.with_suffix('.session')
-                session.remember(config_path, values, package_path=package.path)
+                try:
+                    values = service.credentials.unlock(values)
+                except Exception:
+                    values, error = None, 'Credential loading is no longer current.'
+            config_path = config_path.with_suffix('.session')
+        if values is not None and not error:
             self._active_modes[package.path] = remember
             # Do not rescan credential roots (which may be cloud-backed) on completion.
             self.loaded_status.setText('Saved' if remember else 'Session only')
             self.generated_config_path.setText(str(config_path) if remember else 'Memory only — no file created')
             self.remote_list.clear()
-            self.remote_list.addItems(sorted(values))
+            self.remote_list.addItems(list(values.remotes))
             item = self.credential_list.currentItem()
             label = item.text().replace(' [Saved]', '').replace(' [Session]', '')
             if remember or config_path.with_suffix('.conf').is_file():

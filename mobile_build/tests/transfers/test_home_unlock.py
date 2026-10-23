@@ -84,7 +84,8 @@ class HomeUnlockTests(unittest.TestCase):
             with patch.object(app.cloud_client, 'import_package', wraps=app.cloud_client.import_package) as imported:
                 app.credential_unlock_password.value = 'correct'
                 app.loop.run_until_complete(app.credential_unlock_button.on_press())
-                self.assertEqual(imported.call_args.args[1:3], (self.keys['Work.zip'], 'correct'))
+                self.assertEqual(imported.call_args.args[0].name, 'Work.zip')
+                self.assertEqual(imported.call_args.args[1:3], (None, 'correct'))
                 self.assertEqual(imported.call_args.kwargs, dict(remember=False))
             self.assertEqual(app.credential_unlock_password.value, '')
             self.assertEqual(app.native_host.state.destination, 'home')

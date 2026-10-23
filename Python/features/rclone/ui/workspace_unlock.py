@@ -5,6 +5,9 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.pyside.passwords import password_field
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from features.rclone import session
+from features.rclone.desktop_service import service
+from features.rclone.desktop_credentials import DesktopCredentialLoad
+from features.rclone.credential_loading import CredentialContext
 
 
 def unlock_target(location, *, package=None):
@@ -95,7 +98,8 @@ class WorkspaceUnlockView(qt.QWidget):
         package = self.package
         def validate(report, cancelled):
             try:
-                return session.read_package(package, password)
+                return service.credentials.prepare_load(DesktopCredentialLoad(package, self.config), password,
+                    CredentialContext(cancelled, lambda: not self.closing))
             except Exception:
                 raise ValueError('Could not unlock the credential ZIP.') from None
         self.operation.start(validate, message='Unlocking credentials…')
@@ -103,18 +107,27 @@ class WorkspaceUnlockView(qt.QWidget):
     def _completed(self, values, error):
         self.operation.hide()
         if self.closing:
+            if values is not None:
+                service.credentials.discard(values)
             self.idle.emit()
             return
         self.error.setVisible(bool(error) or self.operation.cancelled.is_set())
         self.password.setEnabled(True)
         self.submit_button.setEnabled(True)
         if self.operation.cancelled.is_set():
+            if values is not None:
+                service.credentials.discard(values)
             self.error.setText('Unlock cancelled.')
         elif error:
             self.error.setText('Could not unlock the credential ZIP. Check the password and try again.')
         else:
-            session.remember(self.config, values, package_path=self.package)
-            self.unlocked.emit()
+            try:
+                service.credentials.unlock(values)
+            except ValueError:
+                self.error.setText('Credentials changed while loading. Try again.')
+                self.error.show()
+            else:
+                self.unlocked.emit()
         self.idle.emit()
 
     def prepare_close(self):

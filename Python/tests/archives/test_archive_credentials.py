@@ -1,7 +1,6 @@
-"""Shared extraction retains rclone package layout and cleans private workspaces."""
+"""Credential package loading validates in memory and never extracts plaintext TXT."""
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from commonUtils.archives.zip_access import open_archive
@@ -9,53 +8,47 @@ from features.rclone import credentials
 
 
 class ArchiveCredentialsTests(unittest.TestCase):
-    def test_aes_credential_package_preserves_layout_and_cleans_workspace(self):
+    def package(self, source):
+        with open_archive(source, 'w', password='test-only-password') as archive:
+            archive.writestr('remote.txt', '[TestRemote]\ntype = local\n')
+
+    def test_aes_package_writes_only_the_selected_config_and_preserves_zip(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             source, output = root / 'credentials.zip', root / 'credentials.conf'
-            with open_archive(source, 'w', password='test-only-password') as archive:
-                archive.writestr('remote.txt', '[TestRemote]\ntype = local\n')
+            self.package(source)
             before = source.read_bytes()
-            with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(temp_path=root / 'temp')), patch.object(credentials.configuration, 'get_credential_config_path', return_value=output):
+            with patch.object(credentials.configuration, 'get_credential_config_path', return_value=output), patch(
+                    'commonUtils.archives.legacy.unzip_file', side_effect=AssertionError('Must not extract')):
                 self.assertTrue(credentials.load_remote_from_zip_to_config(source, 'test-only-password'))
             self.assertEqual(output.read_text().strip(), '[TestRemote]\ntype = local')
             self.assertEqual(source.read_bytes(), before)
-            self.assertEqual(list((root / 'temp').iterdir()), [])
+            self.assertEqual(set(root.iterdir()), {source, output})
 
-    def test_credentials_extract_inside_configured_temp_and_cleanup_on_exception(self):
-        with TemporaryDirectory() as tmp:
-            root = Path(tmp); temp = root/'Application Support/commonUtils/Temp'
-            source = root/'credentials.zip'; output = root/'credentials.conf'; seen = []
-            with open_archive(source,'w', password='test-only-password') as archive:
-                archive.writestr('remote.txt','[Synthetic]\ntype = local\n')
-            unzip = credentials.zipUtils.unzip_file
-            def record(source, destination, password):
-                destination = Path(destination); seen.append(destination)
-                self.assertEqual(destination.parent,temp)
-                self.assertTrue(destination.name.startswith('logistics-credentials-'))
-                if __import__('os').name != 'nt':
-                    self.assertEqual(destination.stat().st_mode & 0o777,0o700)
-                return unzip(source,destination,password)
-            with patch.object(credentials.config,'LogisticsConfig',return_value=SimpleNamespace(temp_path=temp)), \
-                 patch.object(credentials.configuration,'get_credential_config_path',return_value=output), \
-                 patch.object(credentials.zipUtils,'unzip_file',side_effect=record), \
-                 patch.object(credentials,'write_remote_credentials_to_config',side_effect=OSError('synthetic write failure')):
-                with self.assertRaises(OSError):
-                    credentials.load_remote_from_zip_to_config(source,'test-only-password')
-            self.assertEqual(len(seen),1)
-            self.assertFalse(seen[0].exists())
-            self.assertFalse((root/'remote.txt').exists())
-            self.assertTrue(source.exists())
-
-    def test_incorrect_password_keeps_existing_config_and_removes_workspace(self):
+    def test_write_failure_preserves_config_zip_and_leaves_no_extracted_files(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             source, output = root / 'credentials.zip', root / 'credentials.conf'
+            self.package(source)
+            output.write_bytes(b'original config')
+            before = source.read_bytes()
+            with patch.object(credentials.configuration, 'get_credential_config_path', return_value=output), patch(
+                    'commonUtils.persistence.atomic_write_bytes', side_effect=OSError('Fixture failure')), patch.object(
+                    credentials.ui, 'display_msg_box_ok'):
+                self.assertFalse(credentials.load_remote_from_zip_to_config(source, 'test-only-password'))
+            self.assertEqual(output.read_bytes(), b'original config')
+            self.assertEqual(source.read_bytes(), before)
+            self.assertEqual(set(root.iterdir()), {source, output})
+
+    def test_incorrect_password_keeps_existing_config(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, output = root / 'credentials.zip', root / 'credentials.conf'
+            self.package(source)
             output.write_text('existing config')
-            with open_archive(source, 'w', password='test-only-correct') as archive:
-                archive.writestr('remote.txt', '[Remote]\ntype = local\n')
-            with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(temp_path=root / 'temp')), patch.object(credentials.configuration, 'get_credential_config_path', return_value=output), patch.object(credentials.ui, 'display_msg_box_ok') as message:
+            with patch.object(credentials.configuration, 'get_credential_config_path', return_value=output), patch.object(
+                    credentials.ui, 'display_msg_box_ok') as message:
                 self.assertFalse(credentials.load_remote_from_zip_to_config(source, 'test-only-wrong'))
             message.assert_called_once()
             self.assertEqual(output.read_text(), 'existing config')
-            self.assertFalse((root / 'temp').exists())
+            self.assertEqual(set(root.iterdir()), {source, output})

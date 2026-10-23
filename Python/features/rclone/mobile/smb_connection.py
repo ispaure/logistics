@@ -120,13 +120,20 @@ class SMBConnection:
         form.smb_connect.enabled = False
         form.smb_status.text = 'Adding connection…'
         try:
-            names = await asyncio.to_thread(cloud.cloud_client.add_smb, name, host, user, password,
-                                           domain, port or '445', remember=remember)
-            if not cloud.active_host:
+            from .service import native_service
+            from .credential_loading import NativeSMBLoad, run_credentials
+            client, origin = cloud.cloud_client, cloud.navigation_generation
+            current = lambda: cloud.active_host and cloud.cloud_client is client and cloud.navigation_generation == origin
+            result = await run_credentials(native_service(client).credentials.load,
+                NativeSMBLoad(name, host, user, domain, port or '445', remember), password, valid=current)
+            names = list(result.remotes)
+            if not current():
                 return
             visible_remotes = cloud.rclone_ui.visible_remotes
             cloud.set_loaded_remote_names(cloud.visible_remote_names(names))
             await cloud._load_crypt_remote_names()
+            if not current():
+                return
             cloud.cloud_remote.value = name
             cloud.cloud_location.value = cloud.cloud_path = ''
             cloud.cloud_open_remote = None

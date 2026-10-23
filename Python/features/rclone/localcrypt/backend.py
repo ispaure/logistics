@@ -174,9 +174,10 @@ def unlock(item, password=None):
     if values is None or session.package_path(item.context) != item.package:
         if password is None:
             raise ValueError('Unlock the matching credential ZIP for this session.')
-        values = session.read_package(item.package, password)
-        backing_target(values, item.remote)
-        session.remember(item.context, values, package_path=item.package)
+        from features.rclone.desktop_service import service
+        from features.rclone.desktop_credentials import DesktopCredentialLoad
+        service.credentials.load(DesktopCredentialLoad(item.package, item.context, crypt_remote=item.remote), password)
+        values = session.credentials(item.context)
     backing_target(values, item.remote)
     if 'password' not in values[item.remote]:
         raise ValueError('The credential ZIP is missing its crypt password setting.')

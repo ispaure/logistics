@@ -32,6 +32,15 @@ class NativeCredentials:
         generation = self.client.generation
         return CredentialGrant(key, lambda: self.client.generation != generation)
 
+    def prepare(self, request, password):
+        from .credential_loading import prepare
+        return prepare(self.client, request, password)
+
+    def restore(self, *, create=False):
+        from features.rclone.credential_loading import CredentialResult
+        names = self.client.restore(create=True) if create else self.client.restore()
+        return CredentialResult(self.client.package_name, tuple(names), True)
+
     def lock(self, key=None):
         if key is not None:
             raise ValueError('This runtime locks all loaded packages together.')

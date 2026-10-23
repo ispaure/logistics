@@ -39,12 +39,14 @@ class CredentialImportUITests(unittest.TestCase):
 
     def test_zip_is_selected_before_password_and_failed_load_can_retry_without_picker(self):
         class Client:
+            generation = 1
             def __init__(self): self.calls = []
             def import_package(self, access, reference, password, *, remember=True):
                 with access.open(reference) as (name, stream):
                     self.calls.append((name, stream.read(), password, remember))
                 if password != 'correct': raise ValueError('Incorrect ZIP password')
                 self.package_name = name
+                self.generation += 1
                 return ['Example']
             def cancel(self): pass
             def clear(self): pass

@@ -126,13 +126,16 @@ class MobileUITests(unittest.TestCase):
                 app.show_chat_configuration()
                 app.show_chat()
             class FixtureCloud:
+                package_name = ''
                 generation = 1
                 forgotten = False
                 def connection_identity(self, remote):
                     return remote + '-identity'
                 def import_package(self, access, reference, password, *, remember=True):
-                    with access.open(reference) as (_, stream):
+                    with access.open(reference) as (name, stream):
                         assert stream.read(1024) == b'synthetic package'
+                    self.package_name = name
+                    self.generation += 1
                     assert password == 'synthetic-ui-password'
                     return ['Fixture']
                 def entries(self, remote, path=''):

@@ -10,6 +10,8 @@ from toga.style.pack import COLUMN
 from commonUtils.ui.native.password_input import PasswordInput
 from .cloud import CredentialBusyError, PACKAGE_LIMIT, download_name
 from .messages import import_hint
+from .service import native_service
+from .credential_loading import NativeCredentialLoad, run_credentials
 
 
 class SelectedCredentialZIP:
@@ -328,13 +330,23 @@ class CredentialWorkflow:
                 if not cloud.clear_private_reader():
                     raise ValueError('Save or discard private edits before unlocking another credential.')
                 cloud.clear_private_catalog()
-                names = await asyncio.to_thread(cloud.cloud_client.import_package, cache, selected, secret, remember=False)
+                client, origin = cloud.cloud_client, cloud.navigation_generation
+                current = lambda: cloud.active_host and cloud.cloud_client is client and cloud.navigation_generation == origin
+                result = await run_credentials(native_service(client).credentials.load,
+                    NativeCredentialLoad(cache, selected, remember=False), secret, valid=current)
+                if not current():
+                    return
+                names = list(result.remotes)
                 await cloud._load_crypt_remote_names()
+                if not current():
+                    return
                 cloud.set_loaded_remote_names(cloud.visible_remote_names(names))
                 checked_remote = cloud.cloud_client.resolve_remote(remote, identity) if remote is not None and identity is not None and hasattr(cloud.cloud_client, 'resolve_remote') else remote
                 if checked_remote is not None and (checked_remote not in names or (identity is not None
                         and await asyncio.to_thread(cloud.cloud_client.connection_identity, checked_remote) != identity)):
                     raise ValueError('This ZIP does not match the folder connection.')
+                if not current():
+                    return
                 cloud.remember_loaded_packages(cache.items[selected]['zip'], names, session_only=True)
                 cloud.cloud_package.text = cloud.loaded_package_label()
                 cloud.app.credential_document_lists.refresh()
@@ -377,8 +389,11 @@ class CredentialWorkflow:
             # ordinary local browsers may already be in use while it runs.
             if not initial:
                 cloud.clear_private_catalog()
-            names = await asyncio.to_thread(cloud.cloud_client.restore)
-            if not cloud.active_host:
+            client = cloud.cloud_client
+            result = await run_credentials(native_service(client).credentials.restore,
+                valid=lambda: cloud.active_host and cloud.cloud_client is client)
+            names = list(result.remotes)
+            if not cloud.active_host or cloud.cloud_client is not client:
                 return
             await cloud._load_crypt_remote_names()
             visible_remotes = cloud.rclone_ui.visible_remotes
@@ -453,12 +468,21 @@ class CredentialWorkflow:
                 cloud.cloud_import_message.text = import_hint('Save or discard your private edits before loading another package.')
                 return
             cloud.clear_private_catalog()
-            names = await asyncio.to_thread(cloud.cloud_client.import_package, selected, None, password, remember=cloud.cloud_remember.value)
+            remember = cloud.cloud_remember.value
+            client, origin = cloud.cloud_client, cloud.navigation_generation
+            current = lambda: cloud.active_host and cloud.cloud_client is client and cloud.navigation_generation == origin
+            result = await run_credentials(native_service(client).credentials.load,
+                NativeCredentialLoad(selected, None, remember=remember), password, valid=current)
+            if not current():
+                return
+            names = list(result.remotes)
             await cloud._load_crypt_remote_names()
+            if not current():
+                return
             visible_remotes = cloud.rclone_ui.visible_remotes
-            cloud.remember_loaded_packages(selected.name, names, session_only=not cloud.cloud_remember.value)
+            cloud.remember_loaded_packages(selected.name, names, session_only=not remember)
             cache_error = ''
-            if not cloud.cloud_remember.value:
+            if not remember:
                 try:
                     cache = cloud.retained_packages()
                     if cache is not None:
@@ -482,7 +506,7 @@ class CredentialWorkflow:
             cloud.cloud_selected_zip.text = import_hint('Loaded ZIP: ' + selected.name)
             cloud.cloud_import_message.text = import_hint(f'{len(names)} total remote(s) available. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.' + cache_error)
             cloud.app.credential_document_lists.refresh()
-            cloud.cloud_status.value = f'{selected.name} loaded ({"saved" if cloud.cloud_remember.value else "session only"}). {len(names)} total remote(s) available. Open Workspaces to browse. No connection has been made yet.'
+            cloud.cloud_status.value = f'{selected.name} loaded ({"saved" if remember else "session only"}). {len(names)} total remote(s) available. Open Workspaces to browse. No connection has been made yet.'
         except CredentialBusyError as error:
             cloud.cloud_status.value = str(error)
             cloud.cloud_import_message.text = import_hint(str(error))

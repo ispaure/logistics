@@ -4,6 +4,8 @@
     "__init__.py",
     "localcrypt/__init__.py",
     "access.py",
+    "credential_loading.py",
+    "mobile/credential_loading.py",
     "remote_access.py",
     "mobile/remote_resources.py",
     "localcrypt/mobile/__init__.py",

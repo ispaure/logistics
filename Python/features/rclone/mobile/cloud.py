@@ -6,12 +6,9 @@ from pathlib import Path, PurePosixPath
 
 from .bridge_protocol import ACTIONS, decode_envelope
 from .credential_state import NativeCredentialState
+from features.rclone.credential_loading import CredentialBusyError
 
 PACKAGE_LIMIT = 1024 * 1024
-
-
-class CredentialBusyError(ValueError):
-    """Credential publication was refused without waiting for active work."""
 
 
 class CloudClient:

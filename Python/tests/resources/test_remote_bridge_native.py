@@ -64,7 +64,10 @@ class RemoteNativeBridgeTests(unittest.TestCase):
                 archive.writestr('Cloud.txt', '[Cloud]\ntype=memory\n')
                 archive.writestr('Secret.txt', '[Secret]\ntype=crypt\nremote=Cloud:encrypted\n'
                     'password=kbLdY_D-MRsrDH6_akD3SfOzlJ0VseUk2jfUrywMSTOLmTrSvFOxCkP94a-Ul-w\n')
-            client.import_package(LocalDocuments(), package, '', remember=False)
+            from features.rclone.mobile.credential_loading import NativeCredentialLoad
+            loaded = native_service(client).credentials.load(
+                NativeCredentialLoad(LocalDocuments(), package, False), '')
+            self.assertEqual(set(loaded.remotes), {'Cloud', 'Secret'})
             service = native_service(client).transfers
             store = MirrorJobs(root)
             for remote in ('Cloud', 'Secret'):
@@ -87,6 +90,15 @@ class RemoteNativeBridgeTests(unittest.TestCase):
                     self.assertEqual(reader.data, b'service transfer fixture')
                 finally:
                     reader.source.close()
+            credentials = native_service(client).credentials
+            grant = credentials.capture('Cloud')
+            credentials.lock()
+            with self.assertRaises(ValueError):
+                grant.check()
+            reloaded = credentials.load(NativeCredentialLoad(LocalDocuments(), package, False), '')
+            self.assertEqual(set(reloaded.remotes), {'Cloud', 'Secret'})
+            with self.assertRaises(ValueError):
+                grant.check()
 
 
 if __name__ == '__main__':

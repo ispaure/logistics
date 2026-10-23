@@ -60,7 +60,7 @@ class CredentialRevocationTests(QtTestCase):
                     with self.subTest(mixed=mixed, remember=remember), \
                          patch.object(credentials.configuration, 'get_credential_config_path', return_value=config), \
                          patch.object(credentials.ui, 'display_msg_box_ok'), \
-                         patch.object(credentials.zipUtils, 'unzip_file') as extract:
+                         patch('commonUtils.archives.legacy.unzip_file') as extract:
                         before = package.read_bytes()
                         self.assertFalse(credentials.load_remote_from_zip_to_config(
                             package, 'synthetic-password', remember=remember))

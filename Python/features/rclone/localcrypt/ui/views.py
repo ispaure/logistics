@@ -22,11 +22,16 @@ def ensure_session(config_path, *, package=None, parent=None):
         qt.QMessageBox.warning(parent, 'Unlock credentials', 'Select and unlock the matching credential ZIP in Settings first.')
         return False
     from desktop.dialogs.archive_password import ask_validated_password
+    from features.rclone.desktop_credentials import DesktopCredentialLoad
     values = ask_validated_password(package, 'Unlock the crypt settings and cloud credentials in this ZIP.',
-                                    lambda password: session.read_package(package, password), parent)
+                                    lambda password: service.credentials.prepare_load(DesktopCredentialLoad(package, path), password), parent)
     if values is None:
         return False
-    session.remember(path, values, package_path=package)
+    try:
+        service.credentials.unlock(values)
+    except ValueError:
+        qt.QMessageBox.warning(parent, 'Unlock credentials', 'Credentials changed while loading. Try again.')
+        return False
     return True
 
 
