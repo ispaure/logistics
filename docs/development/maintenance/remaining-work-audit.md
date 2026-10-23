@@ -31,7 +31,7 @@ below describe the assessment snapshot, before this implementation.
 | L4 | Detached copy descriptors, browser construction and retained source-tab/tree projection | See sequential progress entry |
 | L5 | Named mobile control/workspace assembly and recycled rows; desktop timer/signal binding and tree projection | See sequential progress entry |
 | L6 | Captured IDE opens/recovery; Git snapshot projection; desktop source resolution and guarded action publication | See sequential progress entries |
-| L7 (policy stage) | Named encrypted push authentication and collection staging/final verification; Cloud UI stage remains | See sequential progress entry |
+| L7 | Cloud controls/views separated from credential publication; named encrypted push and collection staging/verification | See sequential progress entries |
 
 Items absent from this table remain outstanding. Native/platform acceptance limits
 are recorded with each unit; a passing host suite is not native certification.

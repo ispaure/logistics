@@ -1,5 +1,13 @@
 # Read-only remote browsing
 
+Mobile `CloudUI.show_cloud` retains prepared-client admission, cached credential
+publication, restore startup, busy-state projection and generation refresh checks.
+`_build_cloud_controls` constructs the existing connection/browser/download controls;
+`_build_cloud_views` assembles their connection/import/advanced routes and browser
+parenting in the original order. Both populate the retained CloudController fields;
+they introduce no account, request or cancellation owner. Credential workflows and
+the remote listing service remain independent from this construction boundary.
+
 Desktop hosts `RemoteBrowserView` in the existing File Browser workspace. Its
 `RemoteLocation` carries config identity, remote name and relative directory;
 cloning a tab retains all three. Workspaces selection and the browser's

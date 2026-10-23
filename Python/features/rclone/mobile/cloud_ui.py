@@ -119,90 +119,8 @@ class CloudUI(LocalCryptUI):
         if not hasattr(self, 'cloud_view'):
             self.downloads = Downloads(self.private_root / 'Downloads')
             error = getattr(self, '_cloud_restore_error', '') or self._cloud_setup_error
-            self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=self.choose_cloud_package, style=Pack(height=44))
-            self.cloud_selected_zip = toga.Label('No ZIP selected', style=Pack(font_size=14))
-            self.cloud_import_message = toga.Label(import_hint('Choose a ZIP, then enter its password and tap Load remotes.'), style=Pack(font_size=14))
-            self.cloud_password = PasswordInput(placeholder='ZIP password (if encrypted)', on_confirm=self.import_cloud_package, style=Pack(flex=1, height=44))
-            self.cloud_import = toga.Button('Load remotes', on_press=self.import_cloud_package, style=Pack(height=44, font_weight='bold'))
-            self.cloud_probe = toga.Button('Check rclone engine', on_press=self.probe_cloud, style=Pack(height=44))
-            self.cloud_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
-            self.cloud_package = toga.Label('Credential package: none', style=Pack(font_size=14))
-            self.cloud_reload = toga.Button('Reload saved credentials', on_press=self.restore_cloud, style=Pack(height=44))
-            self.cloud_remote = toga.Selection(on_change=self.cloud_remote_changed, style=Pack(height=44))
-            self.cloud_remote_heading = toga.Label('Choose remote · tap the name below', style=Pack(font_size=14))
-            self.cloud_remote_help = toga.Label('Load a credential ZIP to see its remotes.', style=Pack(font_size=14))
-            self.cloud_location = toga.TextInput(placeholder='Folder within remote', style=Pack(height=44))
-            self.cloud_browse = toga.Button('Browse folder', on_press=self.browse_cloud, style=Pack(flex=1, height=44))
-            self.cloud_up = self.rclone_ui.icon_button('up', 'Parent folder', on_press=self.parent_cloud)
-            self.cloud_entries = toga.Selection(style=Pack(height=44))
-            NativeBrowser = self.rclone_ui.NativeBrowser
-            self.remote_browser = NativeBrowser(bounded_pages=True, folder_visible=self.folder_path_visible, selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location, open_file=self.open_remote_document)
-            self.remote_browser.on_item_actions = self.show_remote_item_actions
-            self.remote_browser.navigation_controls.remove(self.remote_browser.back_button)
-            self.remote_browser.search.placeholder = 'Search this folder'
-            self.cloud_open = toga.Button('Open folder', on_press=self.open_cloud_folder, style=Pack(height=44))
-            self.cloud_cancel = toga.Button('Cancel request', on_press=self.cancel_cloud, style=Pack(height=44))
-            self.cloud_clear = toga.Button('Forget saved credentials', on_press=self.clear_cloud, style=Pack(height=44))
-            self.cloud_lock = toga.Button('Lock connections', on_press=self.lock_cloud, style=Pack(height=48))
-            self.cloud_retained_box = toga.Box(style=Pack(direction=COLUMN))
-            self.cloud_status = NativeBrowser.status_label(value=error or 'Choose saved or session-only credentials, then import a ZIP. Its password is never saved.',
-                                                       style=Pack(height=20, margin_top=14, margin_bottom=14))
-            self.download_selector = toga.Selection(style=Pack(height=44))
-            self.download_open = toga.Button('Open private copy', on_press=self.open_download, style=Pack(flex=1, height=44))
-            self.download_export = toga.Button('Export private copy…', on_press=self.export_download, style=Pack(flex=1, height=44))
-            ui = self.rclone_ui
-            self.cloud_connections_status = ui.settings.note(error)
-            self.cloud_import_entry = toga.Button('Import credential ZIP…', on_press=self.begin_cloud_import, style=Pack(height=48))
-            troubleshooting, self.cloud_settings_toggle = ui.settings.disclosure('Advanced & troubleshooting', [
-                ui.settings.group([self.cloud_reload, self.cloud_probe, self.cloud_clear])])
-            self.cloud_connections_view = ui.settings.page('rclone connections',
-                'Your cloud storage, ready when you need it.', [
-                    ui.settings.heading('CREDENTIAL PACKAGES'), self.cloud_retained_box,
-                    self.cloud_import_entry, ui.settings.note('Import a package exported from Logistics desktop.'),
-                    ui.settings.heading('SESSION'), ui.settings.group([self.cloud_lock]),
-                    ui.settings.note('Lock to stop access until you unlock again. This also locks SMB connections.'),
-                    troubleshooting, self.cloud_connections_status])
-            self.cloud_import_view = ui.settings.page('Import credential ZIP',
-                'Choose your Logistics credential package.', [
-                    self.cloud_choose, self.cloud_selected_zip,
-                    ui.settings.group([ui.settings.field('ZIP password (if encrypted)', self.cloud_password)]),
-                    self.cloud_import, self.cloud_import_message,
-                    ui.settings.heading('STORAGE'), ui.settings.group([self.cloud_remember]),
-                    ui.settings.note('Off keeps decoded credentials in memory. Password-protected ZIPs are retained encrypted for future unlocking. The ZIP password is never saved.')])
-            self.cloud_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
-                toga.Label('Remote files', style=Pack(font_size=22)),
-                toga.Button('Manage connections…', on_press=self.show_cloud_connections, style=Pack(height=44)),
-                self.cloud_remote_heading, self.cloud_remote, self.cloud_remote_help,
-                self.cloud_location, toga.Box(children=[self.cloud_browse, self.cloud_up], style=Pack(direction=ROW)),
-                self.cloud_status, self.cloud_cancel, self.remote_browser.widget,
-                self.cloud_open,
-                toga.Label('Downloaded copies', style=Pack(font_size=18, margin_top=12)), self.download_selector,
-                toga.Box(children=[self.download_open, self.download_export], style=Pack(direction=ROW)),
-                *self.build_localcrypt()], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
-            self.cloud_advanced_view = self.cloud_view
-            advanced = self.cloud_advanced_view.content
-            for control in (self.cloud_remote, self.cloud_status, self.remote_browser.widget,
-                            self.cloud_open, self.cloud_cancel, self.cloud_browse):
-                advanced.remove(control)
-            self.cloud_up.parent.remove(self.cloud_up)
-            self.cloud_open.style.flex = 1
-            advanced.add(self.cloud_remote)
-            advanced.add(self.cloud_browse)
-            advanced.insert(advanced.children.index(self.cloud_location) + 1,
-                toga.Button('Browse folder', on_press=self.browse_cloud_path, style=Pack(height=44)))
-            self.cloud_remote.style.flex = 1
-            self.cloud_browse.text = 'Open remote'
-            self.cloud_cancel.text = 'Cancel'
-            self.cloud_status.style.font_size = 15
-            self.cloud_status.style.flex = 1
-            self.cloud_cancel.style.width = 68
-            self.cloud_transfer_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=4))
-            self.remote_browser.attach_location_header(self.cloud_status, self.cloud_up)
-            self.remote_browser.location_bar.update('', remote=True)
-            self.cloud_view = toga.Box(children=[
-                self.remote_browser.location_bar,
-                self.remote_browser.scroll_container()],
-                style=Pack(direction=COLUMN, margin=12, flex=1))
+            self._build_cloud_controls(error)
+            self._build_cloud_views(error)
             self.refresh_downloads()
             self.set_loaded_remote_names(self.loaded_remote_names())
             self.cloud_package.text = self.loaded_package_label() if self.cloud_client is not None else 'Credential package: none'
@@ -215,6 +133,96 @@ class CloudUI(LocalCryptUI):
             self.cloud_package.text = self.loaded_package_label()
         if present:
             self.show_view(self.cloud_view, destination='files', route='remote-browser', title='Cloud File Browser')
+
+    def _build_cloud_controls(self, error):
+        """Construct retained connection, browser and download controls."""
+        self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=self.choose_cloud_package, style=Pack(height=44))
+        self.cloud_selected_zip = toga.Label('No ZIP selected', style=Pack(font_size=14))
+        self.cloud_import_message = toga.Label(import_hint('Choose a ZIP, then enter its password and tap Load remotes.'), style=Pack(font_size=14))
+        self.cloud_password = PasswordInput(placeholder='ZIP password (if encrypted)', on_confirm=self.import_cloud_package, style=Pack(flex=1, height=44))
+        self.cloud_import = toga.Button('Load remotes', on_press=self.import_cloud_package, style=Pack(height=44, font_weight='bold'))
+        self.cloud_probe = toga.Button('Check rclone engine', on_press=self.probe_cloud, style=Pack(height=44))
+        self.cloud_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
+        self.cloud_package = toga.Label('Credential package: none', style=Pack(font_size=14))
+        self.cloud_reload = toga.Button('Reload saved credentials', on_press=self.restore_cloud, style=Pack(height=44))
+        self.cloud_remote = toga.Selection(on_change=self.cloud_remote_changed, style=Pack(height=44))
+        self.cloud_remote_heading = toga.Label('Choose remote · tap the name below', style=Pack(font_size=14))
+        self.cloud_remote_help = toga.Label('Load a credential ZIP to see its remotes.', style=Pack(font_size=14))
+        self.cloud_location = toga.TextInput(placeholder='Folder within remote', style=Pack(height=44))
+        self.cloud_browse = toga.Button('Browse folder', on_press=self.browse_cloud, style=Pack(flex=1, height=44))
+        self.cloud_up = self.rclone_ui.icon_button('up', 'Parent folder', on_press=self.parent_cloud)
+        self.cloud_entries = toga.Selection(style=Pack(height=44))
+        NativeBrowser = self.rclone_ui.NativeBrowser
+        self.remote_browser = NativeBrowser(bounded_pages=True, folder_visible=self.folder_path_visible, selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location, open_file=self.open_remote_document)
+        self.remote_browser.on_item_actions = self.show_remote_item_actions
+        self.remote_browser.navigation_controls.remove(self.remote_browser.back_button)
+        self.remote_browser.search.placeholder = 'Search this folder'
+        self.cloud_open = toga.Button('Open folder', on_press=self.open_cloud_folder, style=Pack(height=44))
+        self.cloud_cancel = toga.Button('Cancel request', on_press=self.cancel_cloud, style=Pack(height=44))
+        self.cloud_clear = toga.Button('Forget saved credentials', on_press=self.clear_cloud, style=Pack(height=44))
+        self.cloud_lock = toga.Button('Lock connections', on_press=self.lock_cloud, style=Pack(height=48))
+        self.cloud_retained_box = toga.Box(style=Pack(direction=COLUMN))
+        self.cloud_status = NativeBrowser.status_label(value=error or 'Choose saved or session-only credentials, then import a ZIP. Its password is never saved.',
+                                                   style=Pack(height=20, margin_top=14, margin_bottom=14))
+        self.download_selector = toga.Selection(style=Pack(height=44))
+        self.download_open = toga.Button('Open private copy', on_press=self.open_download, style=Pack(flex=1, height=44))
+        self.download_export = toga.Button('Export private copy…', on_press=self.export_download, style=Pack(flex=1, height=44))
+
+    def _build_cloud_views(self, error):
+        """Assemble connection/import/advanced views and mount the existing browser controls."""
+        ui = self.rclone_ui
+        self.cloud_connections_status = ui.settings.note(error)
+        self.cloud_import_entry = toga.Button('Import credential ZIP…', on_press=self.begin_cloud_import, style=Pack(height=48))
+        troubleshooting, self.cloud_settings_toggle = ui.settings.disclosure('Advanced & troubleshooting', [
+            ui.settings.group([self.cloud_reload, self.cloud_probe, self.cloud_clear])])
+        self.cloud_connections_view = ui.settings.page('rclone connections',
+            'Your cloud storage, ready when you need it.', [
+                ui.settings.heading('CREDENTIAL PACKAGES'), self.cloud_retained_box,
+                self.cloud_import_entry, ui.settings.note('Import a package exported from Logistics desktop.'),
+                ui.settings.heading('SESSION'), ui.settings.group([self.cloud_lock]),
+                ui.settings.note('Lock to stop access until you unlock again. This also locks SMB connections.'),
+                troubleshooting, self.cloud_connections_status])
+        self.cloud_import_view = ui.settings.page('Import credential ZIP',
+            'Choose your Logistics credential package.', [
+                self.cloud_choose, self.cloud_selected_zip,
+                ui.settings.group([ui.settings.field('ZIP password (if encrypted)', self.cloud_password)]),
+                self.cloud_import, self.cloud_import_message,
+                ui.settings.heading('STORAGE'), ui.settings.group([self.cloud_remember]),
+                ui.settings.note('Off keeps decoded credentials in memory. Password-protected ZIPs are retained encrypted for future unlocking. The ZIP password is never saved.')])
+        self.cloud_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
+            toga.Label('Remote files', style=Pack(font_size=22)),
+            toga.Button('Manage connections…', on_press=self.show_cloud_connections, style=Pack(height=44)),
+            self.cloud_remote_heading, self.cloud_remote, self.cloud_remote_help,
+            self.cloud_location, toga.Box(children=[self.cloud_browse, self.cloud_up], style=Pack(direction=ROW)),
+            self.cloud_status, self.cloud_cancel, self.remote_browser.widget,
+            self.cloud_open,
+            toga.Label('Downloaded copies', style=Pack(font_size=18, margin_top=12)), self.download_selector,
+            toga.Box(children=[self.download_open, self.download_export], style=Pack(direction=ROW)),
+            *self.build_localcrypt()], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+        self.cloud_advanced_view = self.cloud_view
+        advanced = self.cloud_advanced_view.content
+        for control in (self.cloud_remote, self.cloud_status, self.remote_browser.widget,
+                        self.cloud_open, self.cloud_cancel, self.cloud_browse):
+            advanced.remove(control)
+        self.cloud_up.parent.remove(self.cloud_up)
+        self.cloud_open.style.flex = 1
+        advanced.add(self.cloud_remote)
+        advanced.add(self.cloud_browse)
+        advanced.insert(advanced.children.index(self.cloud_location) + 1,
+            toga.Button('Browse folder', on_press=self.browse_cloud_path, style=Pack(height=44)))
+        self.cloud_remote.style.flex = 1
+        self.cloud_browse.text = 'Open remote'
+        self.cloud_cancel.text = 'Cancel'
+        self.cloud_status.style.font_size = 15
+        self.cloud_status.style.flex = 1
+        self.cloud_cancel.style.width = 68
+        self.cloud_transfer_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=4))
+        self.remote_browser.attach_location_header(self.cloud_status, self.cloud_up)
+        self.remote_browser.location_bar.update('', remote=True)
+        self.cloud_view = toga.Box(children=[
+            self.remote_browser.location_bar,
+            self.remote_browser.scroll_container()],
+            style=Pack(direction=COLUMN, margin=12, flex=1))
 
     async def browse_cloud_path(self, widget=None, **kwargs):
         if await self.browse_cloud(preserve_path=True):

@@ -1,5 +1,18 @@
 # Ecosystem maintenance progress
 
+## Sequential audit implementation: L7 Cloud UI construction
+
+Cloud UI names retained control and connection/import/advanced/browser view
+construction. The entry point retains prepared-client admission, credential
+publication, restore startup, busy projection and generation checks. Every original
+method/signature/callback expands to identical ordered AST, including reparenting.
+All 24 cloud cases and six background-refresh cases pass before/after with identical
+selection, plus multi-account three, packages seven, workflow ownership four,
+staged startup, architecture, owner lint, wiki and whitespace. Active credential
+workflow/service edits are excluded. This completes the construction stage of L7
+alongside the committed push/collection policy stage; independent privacy and
+cancellation owners remain intact. No external consumer edit or project push.
+
 ## Sequential audit implementation: L7 push and collection policy stages
 
 Push validation names allowlisted raw-file cleanup and whole-content authentication
