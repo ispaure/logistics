@@ -331,3 +331,7 @@ ordinary Save/Discard/Cancel prompt; no nonexistent completion callback is await
 Executor submission errors are reported as recovery failures, and unsaved text
 remains in the editor. Asynchronous write failures retain the existing retry and
 normal-close fallback. `test_text_editor_recovery.py` covers both failure timings.
+
+Recovery errors retain a nonempty failure state even when an exception supplies
+no message. This prevents a failed checkpoint from restarting automatic suspension
+or being treated as success; the normal close prompt remains available.

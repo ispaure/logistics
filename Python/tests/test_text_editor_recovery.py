@@ -207,6 +207,26 @@ class EditorRecoveryTests(QtTestCase):
         self.assertFalse(getattr(owner, '_recovery_waiting', False))
         self.assertEqual(owner.current.editor.toPlainText(), 'keep this draft')
 
+    def test_empty_checkpoint_exception_keeps_failed_state_and_normal_close_prompts(self):
+        from concurrent.futures import Future
+        service = self.service()
+        owner = service.open()
+        owner.current.editor.insertPlainText('keep this draft')
+        session = service.session
+        session.timer.stop()
+        session.future = Future()
+        session.future.set_exception(OSError())
+        session.writing_revision = session.revision
+        session.finished()
+        self.assertTrue(session.error)
+        self.assertFalse(session.timer.isActive())
+        owner._suspend_requested = True
+        with patch('commonUtils.ui.pyside.QMessageBox.question',
+                   return_value=qt.QMessageBox.StandardButton.Cancel) as question:
+            self.assertFalse(owner.close())
+            question.assert_called_once()
+        self.assertEqual(owner.current.editor.toPlainText(), 'keep this draft')
+
     def test_host_shutdown_keeps_session_without_saving_original(self):
         from desktop.documents import DocumentsPage
         from commonUtils.ui.document_host import register_document_host

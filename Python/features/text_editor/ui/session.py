@@ -157,9 +157,9 @@ class EditorSession(qt.QObject):
             self.report(str(error))
 
     def report(self, error):
-        self.error = error
+        self.error = error or "No error details were supplied."
         for window in tuple(self.service.windows):
-            window.statusBar().showMessage("Recovery checkpoint failed: " + error, 10000)
+            window.statusBar().showMessage("Recovery checkpoint failed: " + self.error, 10000)
 
     def finished(self):
         if self.future is None or not self.future.done():
