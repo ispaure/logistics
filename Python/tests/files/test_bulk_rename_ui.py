@@ -204,6 +204,16 @@ class BulkRenameWidgetTests(QtTestCase):
         self.assertEqual(self.widget.directory, parent)
         self.assertTrue(self.widget.folder_tree.isExpanded(self.widget.folder_model.index(str(unrelated))))
 
+    def test_folder_reveal_retries_before_the_model_creates_its_index(self):
+        self.wait_folder_visible(self.root)
+        self.widget._folder_reveal_pending = self.root
+        self.widget._folder_reveal_timer.stop()
+        with patch.object(self.widget.folder_model, 'index', return_value=qt.QModelIndex()):
+            self.widget._reveal_current_folder()
+        self.assertTrue(self.widget._folder_reveal_timer.isActive())
+        self.wait_folder_visible(self.root)
+        self.assertIsNone(self.widget._folder_reveal_pending)
+
     def test_empty_folder_stays_visible_and_async_loads_do_not_reopen_collapsed_branches(self):
         empty = self.root / 'Empty'
         empty.mkdir()

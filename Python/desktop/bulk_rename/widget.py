@@ -385,6 +385,9 @@ class BulkRenameWidget(qt.QWidget):
             return
         index = self.folder_model.index(str(path))
         if not index.isValid():
+            # A newly created branch can arrive after its parent load signal.
+            # Keep the request alive until the model inserts the folder row.
+            self._folder_reveal_timer.start(50)
             return
         # Empty folders may not expand in QTreeView, so expansion alone never
         # asks QFileSystemModel to load them or emits directoryLoaded. Request

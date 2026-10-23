@@ -30,7 +30,9 @@ The folder tree retains its filesystem root while revealing the current folder.
 Reveal explicitly fetches unloaded folder contents, including empty folders that
 Qt does not expand, and retries queued row insertion/layout until the selected
 row has stable visible geometry. Already-populated ancestors need not emit a
-fresh load notification. Later notifications do not reopen user-collapsed branches.
+fresh load notification. A temporarily missing model index also retains the
+reveal retry, including when a new branch arrives after its parent's load signal.
+Later notifications do not reopen user-collapsed branches.
 The private `_FolderTree` view owns deferred layout correction, independently of
 filesystem scans and rename workers. Queued model sorting and row insertion
 preserve a selection that was visible
