@@ -80,3 +80,98 @@ class ReadingPublicationTests(unittest.TestCase):
         self.assertTrue(current())
         valid[0] = False
         self.assertFalse(current())
+
+
+class ProviderPresentationTests(unittest.TestCase):
+    def comic(self):
+        from unittest.mock import Mock
+        navigation = SimpleNamespace(prepared=((0, 1), 0), crop=None, half=0,
+                                     part_label='', commit=Mock())
+        reader = SimpleNamespace(book=None, kind='.cbz', labels=['first', 'second'],
+                                 comic_navigation=navigation, right_to_left=False)
+        spread = Surface()
+        spread.prepare_replacement = Mock(return_value=Mock())
+        view = SimpleNamespace(crypt_reader=reader, crypt_content=Container(spread),
+            provider_spread=spread, crypt_page=SimpleNamespace(value='second'),
+            crypt_text=SimpleNamespace(value='preserved draft'), crypt_image=SimpleNamespace(image=None),
+            crypt_title=SimpleNamespace(text='original title'), _provider_displayed_index=0)
+        controller = SimpleNamespace(active_host=True, preferences=SimpleNamespace(values={}),
+            private_comic_viewport=lambda view: (400, 800), private_comic_seam=lambda view: None,
+            format_services=SimpleNamespace(seam_gap=lambda box: 0, page_region=lambda box: (400, 800)))
+        return controller, view, spread
+
+    def test_provider_decode_failure_preserves_visible_pixels_and_navigation_commit(self):
+        from mobile.provider_ui import ProviderUI
+        controller, view, old = self.comic()
+        old.prepare_replacement.side_effect = ValueError('Synthetic decoding failure')
+        with patch('features.comics.mobile.presentation.SpreadView', Surface), \
+                patch('mobile.magnifier.bind'), patch('mobile.page_animation.begin_page_slide') as begin:
+            with self.assertRaisesRegex(ValueError, 'Synthetic decoding failure'):
+                ProviderUI._show_crypt_content(controller, 'spread', ((0, 1), b'new'), view=view)
+        self.assertEqual(view.crypt_content.children, [old])
+        self.assertFalse(old.disposed)
+        self.assertEqual(view.crypt_title.text, 'original title')
+        self.assertEqual(view.crypt_text.value, 'preserved draft')
+        view.crypt_reader.comic_navigation.commit.assert_not_called()
+        begin.assert_not_called()
+
+    def test_provider_retired_during_placement_cannot_commit_prepared_spread(self):
+        from mobile.provider_ui import ProviderUI
+        controller, view, old = self.comic()
+        publish = old.prepare_replacement.return_value
+        def retire(*args):
+            controller.active_host = False
+        with patch('features.comics.mobile.presentation.SpreadView', Surface), \
+                patch('mobile.magnifier.bind'), patch('mobile.page_animation.begin_page_slide'), \
+                patch('mobile.page_animation.cancel_page_slide') as cancel, \
+                patch('features.comics.mobile.presentation.place_page', side_effect=retire), \
+                patch.object(ReadingPublication, 'chrome') as chrome:
+            ProviderUI._show_crypt_content(controller, 'spread', ((0, 1), b'new'), view=view)
+        publish.assert_not_called()
+        view.crypt_reader.comic_navigation.commit.assert_not_called()
+        self.assertEqual(view.crypt_content.children, [old])
+        self.assertFalse(old.disposed)
+        self.assertEqual(view.crypt_text.value, 'preserved draft')
+        self.assertEqual(view._provider_displayed_index, 0)
+        cancel.assert_called()
+        chrome.assert_not_called()
+
+    def test_provider_epub_fallback_preserves_anchor_bookmarks_and_motion_callbacks(self):
+        from unittest.mock import Mock
+        import toga
+        from mobile.provider_presentation import prepare_epub_page
+        button = toga.Button('Tools')
+        panel = SimpleNamespace(text=toga.MultilineTextInput(), tools=SimpleNamespace(
+            button=button, widget=toga.Box(children=[button]), panel=toga.Box()),
+            chapters=SimpleNamespace(render=Mock()))
+        host = SimpleNamespace(preferences=SimpleNamespace(values={
+            'reading_theme': 'light', 'epub_font_size': '18', 'reading_margin': '12'}))
+        controller = SimpleNamespace(_provider_epub_target='section', open_provider_epub_chapter=Mock())
+        chapter = SimpleNamespace(anchors={'section': 21}, length=200)
+        view = SimpleNamespace(crypt_reader=SimpleNamespace(book=SimpleNamespace(spine=['one', 'two']),
+            labels=['one', 'two']), crypt_page=SimpleNamespace(value='two'),
+            crypt_bookmark_button=toga.Button('Bookmark'), crypt_bookmark_selector=toga.Selection(items=[]),
+            page_footer=SimpleNamespace(chapter_progress=Mock()))
+        with patch('features.books.mobile.provider_reader.provider_view', return_value=panel) as factory, \
+                patch('mobile.font_scaling.bind') as bind, \
+                patch('mobile.page_animation.begin_page_slide') as begin, \
+                patch('mobile.page_animation.finish_page_slide') as finish:
+            self.assertIs(prepare_epub_page(host, controller, view, ('<p>Text</p>', chapter)), panel)
+            self.assertEqual(factory.call_args.kwargs['offset'], 21)
+            self.assertIs(factory.call_args.kwargs['on_chapter'], controller.open_provider_epub_chapter)
+            factory.call_args.kwargs['on_position'](32)
+            self.assertEqual(view._provider_epub_locations, {'two': 32})
+            view.page_footer.chapter_progress.assert_called_once_with(1, 2, 32, 200)
+            self.assertIsNone(controller._provider_epub_target)
+            bind.assert_called_once_with(host, panel.text, 'epub')
+            self.assertNotIn(button, panel.tools.widget.children)
+            self.assertIs(view.crypt_bookmark_button.parent, panel.tools.panel)
+            self.assertIs(view.crypt_bookmark_selector.parent, panel.tools.panel)
+            surface = object()
+            panel.page_motion[0](surface, 1)
+            panel.page_motion[1](surface, 1)
+            begin.assert_called_once_with(surface, 1, host.preferences.values)
+            finish.assert_called_once_with(surface, 1, host.preferences.values)
+        self.assertTrue(panel.page_motion_enabled())
+        host.preferences.values['android_eink'] = 'true'
+        self.assertFalse(panel.page_motion_enabled())

@@ -237,3 +237,100 @@ def _mount_editor(self, view, controls):
         view.crypt_view._native_reader_hidden = [view.crypt_save]
         self.refresh_private_text_controls(view=view)
     view.crypt_controls = [control for control in controls if control is not view.crypt_content]
+
+
+def prepare_comic_spread(controller, view, content):
+    """Decode a replacement before publication can retire displayed pixels.
+
+    A retained SpreadView returns a delayed commit callback. Its old pixels stay
+    authoritative if preparation fails or publication rejects the reader token.
+    """
+    publish_spread = None
+    from features.comics.mobile.presentation import SpreadView
+    from commonUtils.ui.native.image_canvas import ImageCanvas
+    _, data = content
+    # Decode/compose before retiring the displayed private pixels. Native
+    # allocation or decoder failures must preserve the previous spread.
+    previous = getattr(view, 'provider_spread', None)
+    if isinstance(previous, SpreadView) and previous in view.crypt_content.children:
+        prepared_spread = previous
+        publish_spread = previous.prepare_replacement(data,
+            right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
+            viewport=controller.private_comic_viewport(view), seam=controller.private_comic_seam(view),
+            crop=view.crypt_reader.comic_navigation.crop,
+            seam_gap=controller.format_services.seam_gap(view.crypt_content),
+            anchor_right=controller.private_comic_seam(view) is not None)
+    else:
+        prepared_spread = SpreadView(data, canvas=ImageCanvas,
+            on_page=controller.swipe_crypt_page, on_toggle=controller.toggle_private_reading_mode,
+            right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
+            viewport=controller.private_comic_viewport(view),
+            seam=controller.private_comic_seam(view),
+            crop=view.crypt_reader.comic_navigation.crop,
+            seam_gap=controller.format_services.seam_gap(view.crypt_content),
+            anchor_right=controller.private_comic_seam(view) is not None)
+    from .magnifier import bind
+    bind(controller, prepared_spread)
+    return prepared_spread, publish_spread
+
+
+def prepare_epub_page(host, controller, view, content):
+    """Build one chapter using host appearance and session-owned navigation.
+
+    The view retains chapter positions and bookmark controls. The controller owns
+    navigation callbacks; the application host supplies typography and drawers.
+    Publication, stale-token checks and old-view disposal remain with the caller.
+    """
+    from features.books.mobile.provider_reader import provider_view
+    from .page_animation import begin_page_slide, finish_page_slide
+    from features.books.mobile.typography import options as typography_options
+    book = view.crypt_reader.book
+    index = view.crypt_reader.labels.index(view.crypt_page.value)
+    locations = getattr(view, '_provider_epub_locations', {})
+    view._provider_epub_locations = locations
+    target = getattr(controller, '_provider_epub_target', None)
+    controller._provider_epub_target = None
+    offset = locations.get(book.spine[index], 0)
+    if target is not None:
+        offset = content[1].anchors.get(target, 0) if isinstance(target, str) else target
+    from .palette import themed_chapter
+    content = (themed_chapter(content[0], host.preferences.values['reading_theme']), content[1])
+    def position_changed(value):
+        locations[book.spine[index]] = value
+        if hasattr(view, 'page_footer'):
+            view.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
+    from .chapter_drawer import ChapterDrawer
+    view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
+        font_size=int(host.preferences.values['epub_font_size']),
+        margin=int(host.preferences.values['reading_margin']), theme=host.preferences.values['reading_theme'], typography=typography_options(host.preferences.values),
+        on_chapter=controller.open_provider_epub_chapter,
+        on_position=position_changed,
+        motion_enabled=host.preferences.values.get('android_eink') != 'true',
+        sidebar_factory=lambda *args, **kwargs: ChapterDrawer(*args, app=host, **kwargs))
+    from .font_scaling import bind
+    epub_surface = getattr(view.provider_epub_view, 'webview', None)
+    if epub_surface is not None:
+        from .fold_layout import bind_epub_geometry
+        bind_epub_geometry(epub_surface)
+        bind(host, epub_surface, 'epub', web=True)
+    else:
+        bind(host, view.provider_epub_view.text, 'epub')
+    chapters = getattr(view.provider_epub_view, 'chapters', None)
+    if chapters is not None:
+        from .appearance import hierarchy_row_style
+        chapters.row_style, chapters.current = hierarchy_row_style, index
+        chapters.render()
+    view.provider_epub_view.page_motion_enabled = lambda: host.preferences.values.get('android_eink') != 'true'
+    if epub_surface is None:
+        view.provider_epub_view.page_motion = (
+            lambda surface, delta: begin_page_slide(surface, delta, host.preferences.values),
+            lambda surface, delta: finish_page_slide(surface, delta, host.preferences.values))
+    tools = view.provider_epub_view.tools
+    if tools.button in tools.widget.children:
+        tools.widget.remove(tools.button)
+    for control in (view.crypt_bookmark_button, view.crypt_bookmark_selector):
+        if control.parent is not None:
+            control.parent.remove(control)
+        tools.panel.add(control)
+    tools.panel.add(toga.Label('Bookmarks stay in this session\nand are cleared on close.'))
+    return view.provider_epub_view

@@ -1155,6 +1155,20 @@ provider readers. `reading.sources` captures source-specific validity: library
 reader/epoch or provider reader/workspace token, plus active-host checks.
 Formats retain decoding, page targets, reading progress and private-source policy.
 
+`ProviderUI._show_crypt_content()` names the host's page-publication sequence:
+prepare a spread if needed, calculate direction, enter the validity scope, build
+the surface, mount it, then update positions and chrome. Its existing call
+signature still supports the application host, private controller and retained view
+as distinct participants. `provider_presentation.prepare_comic_spread()` prepares
+a replacement without committing its pixels; `prepare_epub_page()` constructs
+chapter controls using explicit host, controller and view inputs. Both remain in
+the existing presentation owner, alongside initial reader/editor chrome.
+The view keeps positions and bookmark widgets; the controller keeps navigation;
+the host supplies theme/font policy and chapter drawers. Preparation does not own
+credentials, persistence or source admission. `test_reading_publication` exercises
+the real host entry point on decoder failure and reader retirement during placement,
+plus EPUB fallback motion, anchor offsets and bookmark reparenting.
+
 Use the `preparing(direction)` scope around view preparation. It releases outgoing
 animation snapshots even if construction fails or is cancelled. `mount` checks
 validity again, disposes an obsolete unmounted disposable surface, and retires

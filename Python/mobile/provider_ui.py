@@ -28,6 +28,21 @@ from .files_ui import FilesUI
 from .reader_controls import schedule_swipe
 
 
+def _provider_page_direction(view, kind, index):
+    """Preserve spread-half and reading-direction semantics across page changes."""
+    from .page_animation import page_direction
+    if (kind in {'spread', 'image'} and view.crypt_reader.kind in {'.cbz', '.zip'}
+            and view.crypt_content.children):
+        previous_index = getattr(view, '_provider_displayed_index', None)
+        half = view.crypt_reader.comic_navigation.prepared[1] if kind == 'spread' else 0
+        return page_direction(None if previous_index is None else previous_index + getattr(view, '_provider_displayed_half', 0) / 2,
+            index + half / 2,
+            right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
+    elif view.crypt_reader.kind in {'.epub', '.pdf'} and view.crypt_content.children:
+        return page_direction(getattr(view, '_provider_displayed_index', None), index)
+    return 0
+
+
 class _MarkdownState:
     """Compatibility names expose the workflow's single state owner."""
     def __init__(self, name):
@@ -274,6 +289,8 @@ class ProviderUI(FilesUI):
             self.show_cloud()
 
     def _show_crypt_content(self, kind, content, *, view=None, owner=None):
+        """Prepare, validate and mount content before updating session chrome."""
+        from .provider_presentation import prepare_comic_spread, prepare_epub_page
         controller = owner or self
         view = self if view is None else view
         from .reading.publication import ReadingPublication
@@ -281,99 +298,15 @@ class ProviderUI(FilesUI):
         old_epub = getattr(view, 'provider_epub_view', None)
         prepared_spread = publish_spread = None
         if view.crypt_reader.book is None and kind == 'spread':
-            from features.comics.mobile.presentation import SpreadView
-            from commonUtils.ui.native.image_canvas import ImageCanvas
-            indices, data = content
-            # Decode/compose before retiring the displayed private pixels. Native
-            # allocation or decoder failures must preserve the previous spread.
-            previous = getattr(view, 'provider_spread', None)
-            if isinstance(previous, SpreadView) and previous in view.crypt_content.children:
-                prepared_spread = previous
-                publish_spread = previous.prepare_replacement(data,
-                    right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
-                    viewport=controller.private_comic_viewport(view), seam=controller.private_comic_seam(view),
-                    crop=view.crypt_reader.comic_navigation.crop,
-                    seam_gap=controller.format_services.seam_gap(view.crypt_content),
-                    anchor_right=controller.private_comic_seam(view) is not None)
-            else:
-                prepared_spread = SpreadView(data, canvas=ImageCanvas,
-                    on_page=controller.swipe_crypt_page, on_toggle=controller.toggle_private_reading_mode,
-                    right_to_left=getattr(view.crypt_reader, 'right_to_left', False),
-                    viewport=controller.private_comic_viewport(view),
-                    seam=controller.private_comic_seam(view),
-                    crop=view.crypt_reader.comic_navigation.crop,
-                    seam_gap=controller.format_services.seam_gap(view.crypt_content),
-                    anchor_right=controller.private_comic_seam(view) is not None)
-            from .magnifier import bind
-            bind(controller, prepared_spread)
-        from .page_animation import page_direction, begin_page_slide, finish_page_slide
+            indices, _ = content
+            prepared_spread, publish_spread = prepare_comic_spread(controller, view, content)
         index = view.crypt_reader.labels.index(view.crypt_page.value)
-        direction = 0
-        if (kind in {'spread', 'image'} and view.crypt_reader.kind in {'.cbz', '.zip'}
-                and view.crypt_content.children):
-            previous_index = getattr(view, '_provider_displayed_index', None)
-            half = view.crypt_reader.comic_navigation.prepared[1] if kind == 'spread' else 0
-            direction = page_direction(None if previous_index is None else previous_index + getattr(view, '_provider_displayed_half', 0) / 2,
-                index + half / 2,
-                right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
-        elif view.crypt_reader.kind in {'.epub', '.pdf'} and view.crypt_content.children:
-            direction = page_direction(getattr(view, '_provider_displayed_index', None), index)
+        direction = _provider_page_direction(view, kind, index)
         with publication.preparing(direction) as current:
             if not current:
                 return
             if view.crypt_reader.book is not None:
-                from features.books.mobile.provider_reader import provider_view
-                from features.books.mobile.typography import options as typography_options
-                book = view.crypt_reader.book
-                index = view.crypt_reader.labels.index(view.crypt_page.value)
-                locations = getattr(view, '_provider_epub_locations', {})
-                view._provider_epub_locations = locations
-                target = getattr(controller, '_provider_epub_target', None)
-                controller._provider_epub_target = None
-                offset = locations.get(book.spine[index], 0)
-                if target is not None:
-                    offset = content[1].anchors.get(target, 0) if isinstance(target, str) else target
-                from .palette import themed_chapter
-                content = (themed_chapter(content[0], self.preferences.values['reading_theme']), content[1])
-                def position_changed(value):
-                    locations[book.spine[index]] = value
-                    if hasattr(view, 'page_footer'):
-                        view.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
-                from .chapter_drawer import ChapterDrawer
-                view.provider_epub_view = provider_view(book, index, offset=offset, prepared=content,
-                    font_size=int(self.preferences.values['epub_font_size']),
-                    margin=int(self.preferences.values['reading_margin']), theme=self.preferences.values['reading_theme'], typography=typography_options(self.preferences.values),
-                    on_chapter=controller.open_provider_epub_chapter,
-                    on_position=position_changed,
-                    motion_enabled=self.preferences.values.get('android_eink') != 'true',
-                    sidebar_factory=lambda *args, **kwargs: ChapterDrawer(*args, app=self, **kwargs))
-                from .font_scaling import bind
-                epub_surface = getattr(view.provider_epub_view, 'webview', None)
-                if epub_surface is not None:
-                    from .fold_layout import bind_epub_geometry
-                    bind_epub_geometry(epub_surface)
-                    bind(self, epub_surface, 'epub', web=True)
-                else:
-                    bind(self, view.provider_epub_view.text, 'epub')
-                chapters = getattr(view.provider_epub_view, 'chapters', None)
-                if chapters is not None:
-                    from .appearance import hierarchy_row_style
-                    chapters.row_style, chapters.current = hierarchy_row_style, index
-                    chapters.render()
-                view.provider_epub_view.page_motion_enabled = lambda: self.preferences.values.get('android_eink') != 'true'
-                if epub_surface is None:
-                    view.provider_epub_view.page_motion = (
-                        lambda surface, delta: begin_page_slide(surface, delta, self.preferences.values),
-                        lambda surface, delta: finish_page_slide(surface, delta, self.preferences.values))
-                tools = view.provider_epub_view.tools
-                if tools.button in tools.widget.children:
-                    tools.widget.remove(tools.button)
-                for control in (view.crypt_bookmark_button, view.crypt_bookmark_selector):
-                    if control.parent is not None:
-                        control.parent.remove(control)
-                    tools.panel.add(control)
-                tools.panel.add(toga.Label('Bookmarks stay in this session\nand are cleared on close.'))
-                surface = view.provider_epub_view
+                surface = prepare_epub_page(self, controller, view, content)
             elif kind == 'spread':
                 from features.comics.mobile.presentation import place_page
                 place_page(prepared_spread, controller.format_services.page_region(view.crypt_content))

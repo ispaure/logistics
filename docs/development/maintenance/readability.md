@@ -255,3 +255,25 @@ and retired-menu states match the original renderer at `a66162df`. Native backen
 styling implementation is unchanged; no new native device run is claimed.
 The first new fixture incorrectly used `asyncio.run` on Toga's already-created
 Task; corrected asynchronous test methods await the real handler contract.
+
+
+### Provider page preparation and publication
+
+After Workspaces commit `41da70d6`, provider refresh was the next mixed host
+responsibility. Its 136-line content method now exposes preparation, validity,
+mount and final state/chrome updates in 66 lines. Spread and EPUB construction
+live in the existing `provider_presentation.py`, with explicit controller/view
+and host inputs. There is no new package, workflow base class or state proxy.
+Decoder preparation still precedes displayed-pixel retirement; publication still
+rechecks the reader/workspace token before committing navigation or discarding
+reserved text. A prepare helper import initially omitted fallback animation names;
+Ruff caught that before tests, and the corrected imports have explicit callback
+coverage.
+
+The unchanged 26-file reader suite passes the same 140 cases before and after,
+including one optional DOM skip. Three added provider contracts (seven publication
+checks total) verify failed decoding, retirement during placement and EPUB
+anchor/position/bookmark/fallback-motion behavior. Private session, provider
+Markdown and staged-startup consumers pass 28 cases. Native decoding/allocation
+and device presentation still need their platform checks; host tests do not
+certify device rendering. The Perforce build design remains unchanged.
