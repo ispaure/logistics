@@ -153,7 +153,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         app.settings_navigation.choose('Workspaces')
         self.assertIsNotNone(app.show_legacy_choice.parent)
         for backend in ('toga_android.app', 'toga_iOS.app'):
-            with self.subTest(backend=backend), patch.object(type(app._impl), '__module__', backend):
+            with self.subTest(backend=backend), patch.object(type(app._impl), '__module__', backend), patch('mobile.external_display.sync'):
                 app.change_show_legacy(SimpleNamespace(value=False))
                 self.assertFalse(app.folder_path_visible('Books/Legacy-old'))
                 self.assertFalse(app.legacy_name_visible('LegacyArchive.zip', prefix='legacy'))
@@ -175,7 +175,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             app.remember_credential_association(package['zip'], package['remotes'], session_only=True)
         app.set_loaded_remote_names(['Main', 'Old', 'Old2', 'Other'])
         app.show_locations()
-        with patch.object(type(app._impl), '__module__', 'toga_iOS.app'):
+        with patch.object(type(app._impl), '__module__', 'toga_iOS.app'), patch('mobile.external_display.sync'):
             app.change_show_legacy(SimpleNamespace(value=False))
             self.assertEqual(list(app.folder_credentials), ['All', 'Personal', 'MyLegacy'])
             self.assertEqual([row.value for row in app.folder_credential.items], list(app.folder_credentials))
@@ -213,7 +213,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         from types import SimpleNamespace
         from mobile.browser_ui import FileBrowser
         app = self.app
-        with patch.object(type(app._impl), '__module__', 'toga_iOS.app'):
+        with patch.object(type(app._impl), '__module__', 'toga_iOS.app'), patch('mobile.external_display.sync'):
             browser = FileBrowser(selected=lambda row: None, folder_visible=app.folder_path_visible)
             for remote in ('', 'ordinary', 'Legacy-remote'):
                 provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path, remote=remote)

@@ -4,6 +4,8 @@
 class ProviderDocumentSession:
     def __init__(self, owner):
         self.owner = owner
+        from .provider_opening import ProviderDocumentOpening
+        self.opening = ProviderDocumentOpening(owner)
         self._reader = None
         self.metadata_fields = {}
         self.metadata_initial = {}

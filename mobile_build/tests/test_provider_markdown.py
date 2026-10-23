@@ -217,13 +217,12 @@ class ProviderMarkdownTests(unittest.TestCase):
         self.assertEqual(owner.crypt_text.value, '# Latest')
 
     def test_prepared_replacement_retires_old_workflow_and_can_return_to_plain_text(self):
-        from mobile.provider_ui import ProviderUI
         owner = self.owner
         for name in ('Replacement.md', 'Plain.txt'):
             previous = owner._provider_markdown
             (self.files / name).write_text('Replacement text')
             reader = self.copies.open(name)
-            self.assertTrue(self.app.loop.run_until_complete(ProviderUI.open_crypt(owner,
+            self.assertTrue(self.app.loop.run_until_complete(owner.provider_document().opening.open(
                 copies=self.copies, key=name, prepared=(reader, 'text', reader.text))))
             self.assertTrue(previous.closed)
             if name.endswith('.md'):

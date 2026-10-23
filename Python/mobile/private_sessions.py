@@ -351,7 +351,7 @@ class PrivateSessions:
             self.app.remote_read_busy = True
             self.app.set_cloud_busy(True)
         try:
-            opened = await ProviderUI.open_crypt(owner, copies=copies, key=key, prepared=prepared, independent=independent, edit=edit)
+            opened = await owner.provider_document().opening.open( copies=copies, key=key, prepared=prepared, independent=independent, edit=edit)
             if not opened or not self.app.active_host or not self.app.workspace.accepts(token):
                 retire_open()
                 return False

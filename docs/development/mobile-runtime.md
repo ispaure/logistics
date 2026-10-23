@@ -1039,8 +1039,11 @@ owner opens a document. `provider_document.ProviderDocumentSession` owns the cur
 draft state and disposes its format resources after the busy/dirty guards accept
 closure. Compatibility attributes on the controller forward to this session;
 repeated disposal is harmless, and adopting a reader starts a new lifetime.
-`provider_ui.py` retains session commands, credential
-identity checks and publication; Books, Comics and Markdown controllers retain
+`provider_opening.ProviderDocumentOpening` owns document preparation, credential
+identity checks, cancellation and publication, with
+`provider_view.ProviderDocumentView` constructing the unpublished controls. Each
+`ProviderDocumentSession` retains its opening owner. `provider_ui.py` retains
+close/save and other session commands; Books, Comics and Markdown controllers retain
 format navigation. The `compact_private_view` host callback remains compatible.
 Private-session, provider-Markdown and reader-chrome tests cover the assembly.
 Native visual behavior still requires the relevant native acceptance scenarios.

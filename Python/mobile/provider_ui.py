@@ -4,9 +4,8 @@ import threading
 import textwrap
 from pathlib import Path
 import toga
-from .control_icons import icon_button
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import COLUMN
 
 def speech_session_valid(owner):
     if not owner.active_host or owner.crypt_reader is None:
@@ -23,11 +22,10 @@ def private_label(value):
     return textwrap.fill(str(value), width=30)
 
 
-from commonUtils.runtime.operations import check_cancelled
 
 
 from .files_ui import FilesUI
-from .reader_controls import ReadingFrame, PageFooter, page_buttons, schedule_swipe
+from .reader_controls import schedule_swipe
 
 
 class _MarkdownState:
@@ -163,155 +161,6 @@ class ProviderUI(FilesUI):
 
 
 
-    async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, independent=False, edit=False, **kwargs):
-        copies = copies or self.crypt_copies
-        key = key if key is not None else self.crypt_labels.get(self.crypt_selector.value)
-        if (self.cloud_busy and not (independent and self.transfer_busy and getattr(copies, 'offline', False))) or key is None:
-            return
-        password = self.crypt_password.value
-        self.crypt_password.value = ''
-        if self._crypt_cancel is not None:
-            return
-        if prepared is None and self.private_dirty():
-            self.crypt_title.text = private_label('Unsaved changes: save, or discard and close.')
-            self.resume_crypt()
-            return
-        if not independent:
-            self.set_cloud_busy(True)
-        self._crypt_cancel = threading.Event()
-        reader = None
-        try:
-            if prepared is None:
-                from .loading_progress import opening_options
-                reader = await asyncio.to_thread(copies.open, key,
-                    password=password, cancelled=self._crypt_cancel.is_set, **opening_options(copies))
-                self._provider_comic_mode = self.private_comic_mode()
-                self._provider_comic_sharing = self.format_services.comic_sharing()
-                self._provider_comic_seam = self.private_comic_seam()
-                self._provider_viewport = (max(1, self.main_window.size.width), max(1, self.main_window.size.height))
-                kind, content = await asyncio.to_thread(self.provider_page_content, reader, 0)
-            else:
-                reader, kind, content = prepared
-            initial_preview = None
-            initial_preview_error = None
-            if (not edit and reader.editable and not getattr(reader, 'read_only', False)
-                    and reader.kind in {'.md', '.markdown'}):
-                from .preview import markdown_preview, reader_image_source
-                try:
-                    initial_preview = await asyncio.to_thread(markdown_preview, content,
-                        int(self.preferences.values['markdown_font_size']), image_source=reader_image_source(copies, reader))
-                except ValueError as error:
-                    # Keep the established source fallback and error feedback.
-                    initial_preview_error = str(error)
-            check_cancelled(self._crypt_cancel.is_set)
-            from types import SimpleNamespace
-            view = SimpleNamespace()
-            view.crypt_reader = reader
-            view._crypt_reader_store = copies
-            view.crypt_title = toga.Label(private_label(Path(reader.name).name), style=Pack(font_size=18))
-            view.crypt_page = toga.Selection(items=reader.labels, style=Pack(height=44))
-            view.crypt_page.value = reader.labels[0]
-            view.crypt_read_page = toga.Button('Read selected page', on_press=self.read_crypt_page, style=Pack(height=44))
-            view.crypt_bookmarks = set()
-            view.epub_session_bookmarks = set()
-            view.crypt_bookmark_button = toga.Button('Bookmark', on_press=self.toggle_private_bookmark,
-                                                    enabled=not reader.editable, style=Pack(height=44))
-            view.crypt_bookmark_selector = toga.Selection(items=['Bookmarks…'],
-                on_change=self.select_private_bookmark, enabled=not reader.editable, style=Pack(height=44))
-            from commonUtils.ui.native.code_input import CodeInput
-            from .font_scaling import bind, font_size
-            view.crypt_text = CodeInput(loop=self.loop, filename=reader.name, readonly=not reader.editable,
-                highlighting=self.preferences.values.get('android_eink') != 'true',
-                on_change=self.private_source_changed,
-                style=Pack(flex=1, font_size=font_size(self, reader.kind)))
-            bind(self, view.crypt_text, reader.kind)
-            if getattr(reader, 'read_only', False):
-                view.crypt_text.readonly = True
-            from commonUtils.ui.native.image_canvas import ImageCanvas
-            if reader.kind == '.pdf':
-                from features.pdf.mobile.canvas import PDFCanvas
-                view.crypt_image = PDFCanvas(on_page=self.swipe_crypt_page,
-                    on_toggle=self.toggle_private_reading_mode, style=Pack(flex=1))
-            else:
-                view.crypt_image = ImageCanvas(on_page=self.swipe_crypt_page,
-                    page_swipes_at_edges=reader.kind in {'.cbz', '.zip'},
-                    on_toggle=self.toggle_private_reading_mode, style=Pack(flex=1))
-            from .magnifier import bind
-            bind(self, view.crypt_image)
-            view.crypt_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
-            self._show_crypt_content(kind, content, view=view)
-            view.crypt_save = toga.Button('Save encrypted copy' if getattr(copies, 'encrypted', True) else 'Save local file', on_press=self.save_crypt, enabled=reader.editable and not getattr(reader, 'read_only', False), style=Pack(height=44))
-            view.crypt_read_page.enabled = not reader.editable
-            read_only = getattr(reader, 'read_only', False)
-            mutation_controls = [] if read_only else ([view.crypt_save,
-                toga.Button('Save As…', on_press=self.show_crypt_save_as, style=Pack(height=44))]
-                if reader.editable else [toga.Button('Edit metadata…', on_press=self.edit_crypt_metadata, style=Pack(height=44))])
-            view.crypt_view = toga.Box(children=[view.crypt_title, view.crypt_page, view.crypt_read_page, view.crypt_content,
-                *mutation_controls,
-                toga.Button('Open…', on_press=self.show_editor_open, style=Pack(height=44)),
-                toga.Label(private_label('Remote preview · Read-only' if read_only else
-                    ('Edits stay in memory until saved to the selected local file.' if reader.editable else 'Reading position stays in this session'))),
-                toga.Button('Cancel request', on_press=self.cancel_cloud, style=Pack(height=44)),
-                *([] if read_only or not reader.editable else [toga.Button('Discard changes and close', on_press=self.discard_crypt, style=Pack(height=44))]),
-                toga.Button('Close private reader', on_press=self.close_crypt, style=Pack(height=44))],
-                style=Pack(direction=COLUMN, flex=1, margin=12))
-            self.compact_private_view(view)
-            if password:
-                from features.rclone.mobile.session_privacy import ResumePassword
-                view.privacy_gate = ResumePassword(password)
-            elif getattr(self, 'privacy_gate', None) is not None:
-                view.privacy_gate = self.privacy_gate
-            handoff = (prepared is not None and getattr(self, 'save_as_source_document', None) is self.current
-                       and getattr(self.current, 'private', False))
-            if not self.show_view(view.crypt_view, checkpoint=not handoff, title=Path(reader.name).name):
-                return False
-            self._crypt_cancel = None
-            self.clear_private_reader(discard=True)
-            self._provider_markdown = getattr(view, '_provider_markdown', None)
-            for name, value in vars(view).items():
-                if self._provider_markdown is not None and isinstance(getattr(type(self), name, None), _MarkdownState):
-                    continue
-                setattr(self, name, value)
-            if reader.editable and not getattr(reader, 'read_only', False) and reader.kind in {'.md', '.markdown'}:
-                if edit:
-                    self.show_private_markdown_editor()
-                elif initial_preview_error is not None:
-                    self.crypt_title.text = private_label(initial_preview_error)
-                else:
-                    self.toggle_private_preview(initial=True, rendered=initial_preview)
-            privacy = getattr(getattr(self, 'app', self), 'screen_privacy', None)
-            if privacy is not None:
-                privacy.refresh()
-            self.watch_provider_layout()
-            self.watch_provider_epub_width()
-            if view.crypt_reader.kind in {'.cbz', '.zip'}:
-                await self.refresh_provider_comic_neighbors()
-            return True
-        except Exception as error:
-            if self._crypt_cancel is not None and self._crypt_cancel.is_set():
-                self.cloud_status.value = 'Remote opening cancelled.' if getattr(copies, 'remote_storage', False) else 'Private reading cancelled.'
-                return False
-            self.cloud_status.value = 'Private reading failed: ' + str(error)[:300]
-            if getattr(copies, 'remote_storage', False):
-                from commonUtils.archives.zip_access import ArchivePasswordError
-                if isinstance(error, ArchivePasswordError):
-                    row = next((row for row in self.app.cloud_rows.values() if row['path'] == key),
-                               dict(path=key, directory=False, size=0))
-                    self.app.show_remote_item_actions(row, password_required=True)
-                    return False
-                from features.rclone.remote_policy import LOCAL_COPY_MESSAGE
-                await self.main_window.dialog(toga.InfoDialog('Remote preview unavailable',
-                    str(error)[:200] + '\n\n' + LOCAL_COPY_MESSAGE))
-            else:
-                await self.main_window.dialog(toga.InfoDialog('Could not open document', str(error)[:300]))
-        finally:
-            if (prepared is None and getattr(copies, 'remote_storage', False) and reader is not None
-                    and getattr(self, 'crypt_reader', None) is not reader):
-                reader.source.close()
-            password = None
-            self._crypt_cancel = None
-            if not independent:
-                self.set_cloud_busy(False)
 
     def edit_crypt_metadata(self, widget=None, **kwargs):
         if getattr(self.crypt_reader, 'read_only', False):
@@ -323,7 +172,7 @@ class ProviderUI(FilesUI):
             return
         reader = self.crypt_reader
         if reader.kind == '.epub':
-            from features.books.mobile.metadata import values
+            from features.books.library.metadata import values
             initial, self.crypt_metadata_values = values(reader.book)
         else:
             try:
@@ -353,7 +202,7 @@ class ProviderUI(FilesUI):
             return
         edited = {key: field.value for key, field in self.crypt_metadata_fields.items()}
         if self.crypt_reader.kind == '.epub':
-            from features.books.mobile.metadata import patch
+            from features.books.library.metadata import patch
             changes = patch(self.crypt_metadata_initial, edited, self.crypt_metadata_values)
         else:
             from features.comics.mobile.metadata import patch
