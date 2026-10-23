@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.app import LogisticsMobile
-from features.rclone.mobile.cloud_ui import SelectedCredentialZIP
+from features.rclone.mobile.credentials_ui import SelectedCredentialZIP
 
 
 class CredentialImportUITests(unittest.TestCase):

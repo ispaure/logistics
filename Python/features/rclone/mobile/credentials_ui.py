@@ -11,6 +11,7 @@ from commonUtils.ui.native.password_input import PasswordInput
 from .cloud import PACKAGE_LIMIT, download_name
 from features.rclone.credential_loading import CredentialBusyError
 from .messages import import_hint
+from .credential_catalog import CredentialCatalog, remember_association
 from .service import native_service
 from .credential_loading import NativeCredentialLoad, run_credentials
 
@@ -41,6 +42,13 @@ class CredentialState:
 class CredentialWorkflow:
     def __init__(self, cloud):
         self.cloud = cloud
+
+    def _current(self, client, *, navigation=None, generation=None):
+        """Check the captured host/client and, after publication, its generation."""
+        cloud = self.cloud
+        return (cloud.active_host and cloud.cloud_client is client
+                and (navigation is None or cloud.navigation_generation == navigation)
+                and (generation is None or getattr(client, 'generation', 0) == generation))
 
     def refresh_retained_credentials(self):
         cloud = self.cloud
@@ -100,9 +108,12 @@ class CredentialWorkflow:
         kinds = getattr(cloud.cloud_client, 'crypt_remotes', lambda: ())
         records = getattr(cloud.cloud_client, 'package_records', ())
         if records and all('crypt_identities' in record for record in records):
-            cloud.cloud_crypt_remotes = {remote for record in records for remote in record['crypt_identities']}
+            crypt_remotes = {remote for record in records for remote in record['crypt_identities']}
         else:
-            cloud.cloud_crypt_remotes = set(await asyncio.to_thread(kinds))
+            crypt_remotes = set(await asyncio.to_thread(kinds))
+        if not self._current(client, generation=generation):
+            return False
+        cloud.cloud_crypt_remotes = crypt_remotes
         try:
             cache = cloud.retained_packages()
             update = getattr(cache, 'update_crypt_remotes', None)
@@ -120,11 +131,16 @@ class CredentialWorkflow:
                             valid=lambda: cloud.active_host and cloud.cloud_client is client)
         except (OSError, ValueError) as error:
             cloud.folder_hub_error = 'Could not save folder type metadata: ' + str(error)[:200]
+        if not self._current(client, generation=generation):
+            return False
         try:
             await cloud.refresh_hub_crypt_locations()
         except (OSError, ValueError) as error:
             cloud.folder_hub_error = str(error)[:300]
+        if not self._current(client, generation=generation):
+            return False
         cloud.refresh_cloud_remote_help()
+        return True
 
     def retained_packages(self, *, for_forget=False):
         cloud = self.cloud
@@ -142,24 +158,16 @@ class CredentialWorkflow:
         cloud = self.cloud
         import json
         previous = json.loads(cloud.preferences.values['remote_packages'])
-        packages = [item for item in previous if item['zip'] != name and not item['session_only']]
-        association = dict(zip=name, remotes=list(remotes), session_only=session_only)
-        sessions = [item for item in getattr(cloud, 'session_credential_packages', ()) if item['zip'] != name]
-        cloud.session_credential_packages = [*sessions, association] if session_only else sessions
-        if session_only:
-            return
-        packages.append(association)
-        if packages[-32:] != previous:
-            cloud.preferences.save(remote_packages=json.dumps(packages[-32:]))
+        update = remember_association(previous, getattr(cloud, 'session_credential_packages', ()),
+                                      name, remotes, session_only=session_only)
+        cloud.session_credential_packages = update.sessions
+        if not session_only and update.saved != previous:
+            cloud.preferences.save(remote_packages=json.dumps(update.saved))
 
     def visible_remote_names(self, names):
         cloud = self.cloud
-        exclusions = cloud.rclone_ui.exclusions
-        from services.folders.policy import visible_name
-        original = {alias: name for item in getattr(cloud.cloud_client, 'package_records', ())
-                    for name, alias in item.get('aliases', {}).items()}
-        rules = exclusions()
-        return sorted((name for name in names if visible_name(original.get(name, name), rules, remote=True)), key=str.casefold)
+        catalog = CredentialCatalog(getattr(cloud.cloud_client, 'package_records', ()))
+        return catalog.visible_remotes(names, cloud.rclone_ui.exclusions())
 
     def package_remote_names(self, label, fallback):
         cloud = self.cloud
@@ -168,7 +176,6 @@ class CredentialWorkflow:
 
     def remember_loaded_packages(self, label, names, *, session_only):
         cloud = self.cloud
-        visible_remotes = cloud.rclone_ui.visible_remotes
         records = getattr(cloud.cloud_client, 'package_records', ())
         if records:
             for item in records:
@@ -178,50 +185,27 @@ class CredentialWorkflow:
 
     def loaded_package_label(self):
         cloud = self.cloud
-        records = getattr(cloud.cloud_client, 'package_records', ())
-        if not records:
-            return 'Credential package: ' + (getattr(cloud.cloud_client, 'package_name', '') or 'none')
-        return 'Loaded:\n' + '\n'.join(item['package_name'] + (' (saved)' if item['saved'] else ' (session only)') for item in records)
+        catalog = CredentialCatalog(getattr(cloud.cloud_client, 'package_records', ()))
+        return catalog.label(getattr(cloud.cloud_client, 'package_name', ''))
 
     def credential_groups(self, choices=None):
-        cloud = self.cloud
         import json
-        from pathlib import Path
-        groups = {'All': None}
-        associations = {item['zip']: item for item in json.loads(cloud.preferences.values['remote_packages'])
-                        + cloud.retained_credential_associations() + getattr(cloud, 'session_credential_packages', [])}
-        loaded = set()
-        for item in getattr(getattr(cloud, 'cloud_client', None), 'package_records', ()):
-            loaded.add(item['package_name'])
-            associations[item['package_name']] = dict(zip=item['package_name'], remotes=item['remotes'])
-        available = {copy['remote'] for entry in (cloud.folder_choices() if choices is None else choices).values()
+        cloud = self.cloud
+        catalog = CredentialCatalog(getattr(cloud.cloud_client, 'package_records', ()))
+        associations = (json.loads(cloud.preferences.values['remote_packages'])
+                        + cloud.retained_credential_associations()
+                        + getattr(cloud, 'session_credential_packages', []))
+        folders = cloud.folder_choices() if choices is None else choices
+        available = {copy['remote'] for entry in folders.values()
                      for copy in entry.get('copies', ()) if copy.get('remote')}
         if choices is None:
-            # Loaded packages are authoritative while folder discovery is still
-            # pending. An explicit choices snapshot still scopes its own rows.
             available.update(cloud.loaded_remote_names())
-        for item in associations.values():
-            if item['zip'] in ('Network shares', 'Session network shares'):
-                continue
-            if not cloud.legacy_name_visible(Path(item['zip']).name, prefix='legacy'):
-                continue
-            remotes = set(item['remotes']) & available
-            if not remotes and item['zip'] not in loaded:
-                continue
-            name = Path(item['zip']).name
-            base = name[:-4] if name.lower().endswith('.zip') else name
-            title = base
-            number = 2
-            while title in groups:
-                title = f'{base} ({number})'
-                number += 1
-            from services.folders.catalog import CredentialScope
-            groups[title] = CredentialScope(remotes, item['zip'])
-        return groups
+        return catalog.groups(associations, available,
+                              visible=lambda name: cloud.legacy_name_visible(name, prefix='legacy'))
 
     def home_unlock_candidates(self):
-        cloud = self.cloud
         """Inspect retained metadata/files only; never restore or decode credentials."""
+        cloud = self.cloud
         try:
             cache = cloud.retained_packages()
             loaded = {item['package_name'] for item in
@@ -280,8 +264,8 @@ class CredentialWorkflow:
         return cloud.require_remote_credentials(remote, identity=identity, resume=resume, checked=True)
 
     def require_remote_credentials(self, remote, *, identity=None, resume=None, checked=False):
-        cloud = self.cloud
         """Return immediately when loaded; otherwise present the matching ZIP unlock."""
+        cloud = self.cloud
         if identity is not None and hasattr(cloud.cloud_client, 'resolve_remote'):
             remote = cloud.cloud_client.resolve_remote(remote, identity)
         loaded = cloud.loaded_remote_names()
@@ -339,9 +323,10 @@ class CredentialWorkflow:
                     raise ValueError('Save or discard private edits before unlocking another credential.')
                 cloud.clear_private_catalog()
                 client, origin = cloud.cloud_client, cloud.navigation_generation
-                current = lambda: cloud.active_host and cloud.cloud_client is client and cloud.navigation_generation == origin
+                current = lambda: self._current(client, navigation=origin)
                 result = await run_credentials(native_service(client).credentials.load,
                     NativeCredentialLoad(cache, selected, remember=False), secret, valid=current)
+                current = lambda: self._current(client, navigation=origin, generation=result.generation)
                 if not current():
                     return
                 names = list(result.remotes)
@@ -372,7 +357,6 @@ class CredentialWorkflow:
                     result = resume()
                     if inspect.isawaitable(result):
                         await result
-        visible_remotes = cloud.rclone_ui.visible_remotes
         password.on_confirm = unlock
         cloud.credential_unlock_button = toga.Button('Unlock', on_press=unlock, style=Pack(height=44))
         box = toga.Box(children=[toga.Label('Choose credential' if choices else import_hint('Unlock ' + cache.items[key]['zip']), style=Pack(font_size=18)),
@@ -399,12 +383,13 @@ class CredentialWorkflow:
                 cloud.clear_private_catalog()
             client = cloud.cloud_client
             result = await run_credentials(native_service(client).credentials.restore,
-                valid=lambda: cloud.active_host and cloud.cloud_client is client)
+                valid=lambda: self._current(client))
             names = list(result.remotes)
-            if not cloud.active_host or cloud.cloud_client is not client:
+            if not self._current(client, generation=result.generation):
                 return
             await cloud._load_crypt_remote_names()
-            visible_remotes = cloud.rclone_ui.visible_remotes
+            if not self._current(client, generation=result.generation):
+                return
             cloud.set_loaded_remote_names(cloud.visible_remote_names(names))
             if names and cloud.cloud_client.package_name:
                 cloud.remember_loaded_packages(cloud.cloud_client.package_name, names, session_only=False)
@@ -478,9 +463,10 @@ class CredentialWorkflow:
             cloud.clear_private_catalog()
             remember = cloud.cloud_remember.value
             client, origin = cloud.cloud_client, cloud.navigation_generation
-            current = lambda: cloud.active_host and cloud.cloud_client is client and cloud.navigation_generation == origin
+            current = lambda: self._current(client, navigation=origin)
             result = await run_credentials(native_service(client).credentials.load,
                 NativeCredentialLoad(selected, None, remember=remember), password, valid=current)
+            current = lambda: self._current(client, navigation=origin, generation=result.generation)
             if not current():
                 return
             names = list(result.remotes)
@@ -488,7 +474,6 @@ class CredentialWorkflow:
             await cloud._load_crypt_remote_names()
             if not current():
                 return
-            visible_remotes = cloud.rclone_ui.visible_remotes
             cloud.remember_loaded_packages(selected.name, names, session_only=not remember)
             cache_error = ''
             if not remember:

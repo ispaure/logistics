@@ -57,6 +57,7 @@ class PushPolicyTests(unittest.TestCase):
         from io import BytesIO
         from features.rclone import actions
         from features.rclone.localcrypt import backend as local_crypt
+        from features.rclone.localcrypt import mapping as copy_mapping
         binary = executable.get_rclone_path()
         if not binary.is_file(): self.skipTest('Pinned rclone unavailable')
         with TemporaryDirectory() as directory, crypt_fixture(directory, binary) as f:
@@ -143,10 +144,11 @@ class PushPolicyTests(unittest.TestCase):
         if not binary.is_file(): self.skipTest('Pinned rclone unavailable')
         with TemporaryDirectory() as directory, crypt_fixture(directory, binary) as f:
             from features.rclone.localcrypt import backend as local_crypt
-            values = local_crypt.unlock(f.item)
+            from features.rclone.localcrypt import mapping as copy_mapping
+            values = copy_mapping.unlock(f.item)
             values = {name: dict(settings) for name, settings in values.items()}
             values[f.item.remote]['no_data_encryption'] = 'true'
-            with patch.object(local_crypt, 'unlock', return_value=values):
+            with patch.object(copy_mapping, 'unlock', return_value=values):
                 with self.assertRaisesRegex(ValueError, 'requires content encryption'):
                     push_policy.validate_localcrypt_push(f.item, binary)
 

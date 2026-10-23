@@ -293,7 +293,9 @@
           "test_background_credential_refresh.py",
           "test_connection_settings.py",
           "test_multi_credentials.py",
+          "test_remote_activity.py",
           "test_smb_ui.py",
+          "test_transfer_execution.py",
           "test_transfer_feedback.py"
         ]
       },

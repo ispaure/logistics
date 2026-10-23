@@ -22,6 +22,23 @@ Downloader uses it optionally. See the [user guide](../user/user.md) for control
 [resource setup](../../../user/configuration.md) for paths/provisioning, and
 [UI architecture](../../../development/features.md#remote-folder-source-context) for source wiring.
 
+## Find the contract you need
+
+| Change or question | Start here |
+| --- | --- |
+| Which module owns the change? | [Service ownership](#service-ownership) |
+| Load, restore, lock or forget credentials | [Credential contract](#credential-contract) |
+| Package labels, aliases and credential groups | [Credential presentation workflow](#credential-presentation-workflow) |
+| Transfer approval and captured options | [Review and execution handoff](#review-session-and-execution-handoff) |
+| Mobile writer admission, progress or native wire routing | [Native execution and wire boundaries](#native-execution-and-wire-boundaries) |
+| Ciphertext paths, reader lifetime or verified saves | [LocalCrypt data flow](localcrypt.md) |
+| Online provider access and cancellation | [Read-only remote browsing](remote-browsing.md) |
+| Mobile capabilities and migration records | [Parity and migration reference](rclone-parity.md) |
+
+The ownership table and contracts describe the current implementation. Dated
+audit sections in the detailed guides retain the context and validation scope of
+earlier changes; they do not establish validation of a new change.
+
 ## Service ownership
 
 Composition modules wire adapters together; they do not publish credentials or
@@ -35,14 +52,46 @@ own navigation. Read these owners when changing a particular responsibility:
 | Native ZIP/SMB preparation and cancellable workers | `mobile/credential_loading.py` |
 | Native retained ZIPs and association metadata | `mobile/credential_retention.py`, `mobile/credential_packages.py` |
 | Managed LocalCrypt and offline-copy references | `localcrypt/mobile/locations.py` |
+| Desktop ciphertext copy identity, records and backing-target routing | `localcrypt/mapping.py` |
 | Remote and LocalCrypt session lifetime / transport | `remote_resources.py`, `mobile/remote_resources.py`, `localcrypt/backend.py`, `localcrypt/mobile/resources.py` |
+| Desktop private read-cache lifetime and budgets | `localcrypt/read_cache.py` |
+| Session-bound desktop crypt command execution | `localcrypt/transport.py` |
+| Native request progress lifetime / widget projection | `mobile/activity.py` / `CloudActivityPresentation` in `mobile/cloud_ui.py` |
 | Shared transfer admission and execution lifetime | `transfers/service.py` |
 | Platform transfer plans | `transfers/desktop.py`, `transfers/mobile/plan.py` |
+| Native credential catalogue projection | `mobile/credential_catalog.py` |
+| Native writer admission, execution state and progress | `transfers/mobile/execution.py` |
+| Go wire admission / request routing / operation locks | `mobile_build/rclone_bridge/{protocol,requests,operation_scope}.go` |
 
 Both compositions capture their credential adapter directly when constructing the
 transfer service. Plans do not reach back through a partially constructed global
 service or client attribute. Desktop and native transfer request construction uses
 named fields for direction, options, mapping state and launch hooks.
+
+### Follow an encrypted read or save
+
+Desktop `CryptResources` owns virtual-to-physical validation and document policy.
+It delegates credential-bound command execution to `CryptCommand`, and private
+metadata/byte retention to `PrivateReadCache`. The command adapter receives one
+session context and the provider's cancellation/access checks; it never writes
+decoded configuration. The cache validates access under its retirement lock,
+including hits and late worker publications. Closing retires all cached data
+before notifying session observers. See the [LocalCrypt data flow](localcrypt.md#desktop).
+
+For a save, follow `CryptResources.replace_stream`: stage ciphertext, read back and
+verify, revalidate the original, publish, then clean staging. Cleanup forgets the
+temporary logical path's encoded name, size and verification blocks together.
+The provider retains file revision and mutation policy; neither the cache nor the
+command adapter can authorize publication.
+
+Mobile `CloudUI.remote_activity` delegates to the controller's `RemoteActivity`.
+Its presentation port updates existing status controls and the progress bar; the
+workflow owns the timer, nested request ordering and worker callback retirement.
+Credential and transfer workers keep their own cancellation and publication rules.
+The new module is declared in the feature's mobile manifest and portable-import
+checks. `test_remote_activity`, `test_localcrypt_cache_retirement`,
+`test_localcrypt_transport` and real-rclone `test_localcrypt_file_operations` cover
+these boundaries; `python3 dev.py test-owner rclone` selects the feature suites.
 
 ## Credential contract
 
@@ -257,8 +306,9 @@ The cloud controller passes its application host to native credential-vault
 creation, including retained ZIP storage. Android requires the real native
 activity and application storage policy; workflow controllers do not supply them.
 
-`localcrypt/backend.py` owns ciphertext mappings, explicit backing-target routing, private
-reader providers and verified encrypted replacements. `localcrypt/ui/views.py` owns
+`localcrypt/mapping.py` owns ciphertext mappings and explicit backing-target routing.
+`localcrypt/backend.py` owns private reader providers and verified encrypted replacements.
+`localcrypt/ui/views.py` owns
 unlock prompts and private document presentation. See the [LocalCrypt architecture](localcrypt.md)
 for ownership, cancellation, provider lifetime, desktop/mobile differences and
 validation. Generic resource contracts are documented in commonUtils.
@@ -417,11 +467,48 @@ cross-scene identity live in the process-wide `NativeCredentialState` composed b
 `CloudClient` and the Go bridge. The state owns package identity resolution, resume
 gates, publication epochs, observers and the publication lock; it imports no native
 transport or widgets. Every client and scene uses the same state instance. Existing CloudUI
-callbacks and the `SelectedCredentialZIP` import remain compatible. A bounded
+callbacks delegate to the retained workflow directly; focused tests construct that
+owner rather than relying on a UI fallback to create it. Import `SelectedCredentialZIP`
+from `mobile.credentials_ui`. A bounded
 picked ZIP still consumes picker access immediately and retains only memory bytes.
 Credential restoration, package, import, background-refresh and workflow tests
 cover this extraction. Cloud browsing, busy policy and cancellation remain cloud
 controller responsibilities.
+
+`mobile/credential_catalog.py` snapshots nonsecret package names, aliases and remote
+lists before computing labels, exclusions and credential groups. It preserves the
+full package identity when basenames collide. Preference projection keeps session
+associations in memory and bounds saved associations independently. It performs no
+storage, toolkit or bridge operations. Credential publication and retention remain
+service responsibilities. The UI workflow rechecks host, client, navigation and
+the published generation after asynchronous metadata and identity work; a newer
+credential generation cannot receive the older result's controls or preferences.
+
+## Native execution and wire boundaries
+
+`transfers/mobile/execution.py` owns `TransferState`, writer admission, coalesced
+progress delivery and worker retirement. `TransferController` exposes its existing
+app fields through that state; `TransferExecutionPresentation` projects state into
+controls. A second caller which also awaited credential restoration must pass a
+fresh busy check before starting a writer. Cancellation retains busy ownership
+until native work retires. Result validation must finish before marking completion;
+malformed results and changed credentials remain terminal failures. Progress
+messages and known-work percentages are computed without widget access.
+
+`mobile/storage_location.py` captures each collection copy as one source, target
+and inventory record. Conflict checks, free-space calculation, staging and final
+verification consume those records, keeping their identities together through
+pointer publication. The existing backup/adoption and verified-copy policy remains.
+
+The Go bridge separates wire decoding, operation admission and response publication
+in `protocol.go` from the domain dispatch in `requests.go`. `main.go` retains the C
+entry points and engine helpers; `operation_scope.go` retains reader, transfer and
+credential locking. The shared protocol fixture checks actions across both routing
+owners and exercises actual dispatch. Run the Go suite with `go test -race ./...`
+from `mobile_build/rclone_bridge` using the configured Go toolchain. A host
+`-buildmode=c-shared` library supplied through `LOGISTICS_MOBILE_BRIDGE` also enables
+the Python native LocalCrypt, folder-listing and file-operation integration checks.
+These synthetic host checks do not establish physical-device UI behavior.
 
 ## Review session and execution handoff
 

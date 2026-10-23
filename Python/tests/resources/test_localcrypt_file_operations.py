@@ -18,6 +18,30 @@ class DesktopFileOperationsTests(unittest.TestCase):
                 raise RuntimeError('Required pinned rclone is missing.')
             raise unittest.SkipTest('Pinned rclone executable not installed')
 
+    def test_verified_save_drops_temporary_plaintext_and_keeps_original_cache_valid(self):
+        with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+            provider = fixture.provider
+            updated = b'# Verified replacement\n'
+            provider.write_bytes('note.md', updated, expected=fixture.original)
+            self.assertEqual(provider.read_bytes('note.md'), updated)
+            cache = provider._cache
+            self.assertFalse(any('.save-' in path for path in cache._paths))
+            self.assertFalse(any('.save-' in path for path in cache._sizes))
+            self.assertFalse(any('.save-' in key[0] for key in cache._blocks))
+
+    def test_evicted_directory_mapping_can_be_rebuilt_without_changing_ciphertext(self):
+        from io import BytesIO
+        with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+            provider = fixture.provider
+            provider.mkdir('nested')
+            provider.create_file('nested/note.md', BytesIO(b'original'))
+            before = sorted(path.relative_to(fixture.item.data) for path in fixture.item.data.rglob('*'))
+            provider._cache.forget_path('nested')
+            self.assertEqual(provider.read_bytes('nested/note.md'), b'original')
+            self.assertEqual(provider.list('nested')[0]['name'], 'note.md')
+            after = sorted(path.relative_to(fixture.item.data) for path in fixture.item.data.rglob('*'))
+            self.assertEqual(after, before)
+
     def test_create_file_rejects_would_block_input_without_publishing_a_prefix(self):
         from commonUtils.integrations.wrappers.cmdShellWrapper.binary import BinaryCommandError
         with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:

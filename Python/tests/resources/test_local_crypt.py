@@ -11,6 +11,8 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.rclone import executable
 from features.rclone.localcrypt import backend as local_crypt
+from features.rclone.localcrypt import mapping as copy_mapping
+from features.rclone.localcrypt import transport
 from features.rclone import actions
 from features.rclone import session
 from features.comics.library import ComicDocument
@@ -67,7 +69,7 @@ class LocalCryptTests(QtTestCase):
                 stream.seek(0)
                 session.forget(f.context)
                 self.assertTrue(f.provider.closed)
-                self.assertFalse(f.provider._blocks)
+                self.assertFalse(f.provider._cache._blocks)
                 with self.assertRaisesRegex(ValueError, 'locked'):
                     stream.read(1)
                 session.remember(f.context, {'Secret': {'type': 'crypt'}}, package_path=f.package)
@@ -131,7 +133,7 @@ class LocalCryptTests(QtTestCase):
         from io import BytesIO
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f:
             f.provider.list()
-            with patch.object(local_crypt, 'run_bytes', wraps=local_crypt.run_bytes) as commands:
+            with patch.object(transport, 'run_bytes', wraps=transport.run_bytes) as commands:
                 for name in ('plain.cbz', 'encrypted.cbz'):
                     document = ComicDocument(f.item.data / name, source=f.provider)
                     self.assertEqual(ComicPages(document.path, document).read_page(0)[0], f.image)
@@ -157,8 +159,8 @@ class LocalCryptTests(QtTestCase):
                 with f.provider.open('note.md'):
                     pass
             f.provider.close()
-            self.assertFalse(f.provider._blocks)
-            self.assertFalse(f.provider._sizes)
+            self.assertFalse(f.provider._cache._blocks)
+            self.assertFalse(f.provider._cache._sizes)
 
     def test_decrypted_pull_remembers_package_after_session_restart(self):
         from features.rclone.localcrypt import connections as local_connections
@@ -463,7 +465,7 @@ class LocalCryptTests(QtTestCase):
             self.assertEqual(set(record), {'schema', 'package', 'remote'})
             self.assertEqual(record['schema'], 2)
             self.assertEqual(f.item.data, f.root / 'Application Support' / 'Logistics' / 'LocalCrypt' / 'Secret')
-            self.assertEqual(local_crypt.for_path(f.item.data), f.item)
+            self.assertEqual(copy_mapping.for_path(f.item.data), f.item)
             self.assertNotIn('password', f.item.record.read_text())
 
     def test_stale_failed_and_linked_saves_preserve_ciphertext_and_session_expiry_requires_zip(self):
@@ -477,17 +479,17 @@ class LocalCryptTests(QtTestCase):
                 with self.assertRaises(OSError):
                     f.provider.write_bytes('note.md', b'# failed', expected=f.original)
             self.assertEqual(target.read_bytes(), prior)
-            self.assertEqual(local_crypt.push_target(f.item.data, f.context), 'Cloud:' + str(f.cloud))
+            self.assertEqual(copy_mapping.push_target(f.item.data, f.context), 'Cloud:' + str(f.cloud))
             with self.assertRaises(ValueError):
-                local_crypt.push_target(f.item.data, f.root / 'Different.session')
+                copy_mapping.push_target(f.item.data, f.root / 'Different.session')
             session.forget(f.context)
             with self.assertRaises(ValueError):
                 f.provider.read_bytes('note.md')
             from commonUtils.archives.zip_access import ArchivePasswordError
             with self.assertRaises(ArchivePasswordError):
-                local_crypt.unlock(f.item, 'wrong package password')
+                copy_mapping.unlock(f.item, 'wrong package password')
             self.assertIsNone(session.credentials(f.context))
-            self.assertEqual(local_crypt.unlock(f.item, 'synthetic-package-password')['Secret']['type'], 'crypt')
+            self.assertEqual(copy_mapping.unlock(f.item, 'synthetic-package-password')['Secret']['type'], 'crypt')
 
     def test_regular_browser_routes_navigation_and_reuses_private_tab(self):
         from desktop.file_browser import FileBrowserPage, _browser_view, _new_browser_tab
@@ -509,7 +511,7 @@ class LocalCryptTests(QtTestCase):
                 self.assertEqual(browser.navigation.directory, f.root)
                 with patch('desktop.file_browser.time.monotonic', return_value=123), \
                      patch('desktop.file_browser._crypt_location', return_value=(f.item, True)) as resolve, \
-                     patch.object(local_crypt, 'storage_root', return_value=f.item.root) as root_lookup:
+                     patch.object(copy_mapping, 'storage_root', return_value=f.item.root) as root_lookup:
                     for _ in range(1000):
                         self.assertTrue(original._directory_boundary(f.item.data))
                     resolve.assert_called_once()
@@ -569,7 +571,7 @@ class LocalCryptTests(QtTestCase):
              patch('features.rclone.credentials.get_loaded_credential_config_paths',
                    return_value=[f.context, *(f.root / f'account{i}.session' for i in range(7))]), \
              patch('models.folder_discovery.get_local_folders', return_value=[]) as ordinary, \
-             patch.object(local_crypt, 'connections', wraps=local_crypt.connections) as copies:
+             patch.object(copy_mapping, 'connections', wraps=copy_mapping.connections) as copies:
             sources = _get_remote_sources()
             for source in sources:
                 source.get_local_folders()
@@ -605,34 +607,34 @@ class LocalCryptTests(QtTestCase):
             actual = f.root / 'relocated-ciphertext'
             f.item.data.rename(actual)
             f.item.data.symlink_to(actual, target_is_directory=True)
-            local_crypt.validate_ciphertext_tree(f.item)
-            self.assertEqual(local_crypt.for_path(f.item.data), f.item)
+            copy_mapping.validate_ciphertext_tree(f.item)
+            self.assertEqual(copy_mapping.for_path(f.item.data), f.item)
             provider = local_crypt.CryptResources(f.item, binary=self.binary)
             try:
                 self.assertEqual(provider.read_bytes('note.md'), f.original)
-                self.assertEqual(local_crypt.push_target(f.item.data, f.context), 'Cloud:' + str(f.cloud))
+                self.assertEqual(copy_mapping.push_target(f.item.data, f.context), 'Cloud:' + str(f.cloud))
                 self.assertTrue(actions.push_to_cloud(local_crypt.LocalCryptFolder(f.item), f.context))
                 self.assertTrue(actions.pull_encrypted_copy('Secret', f.context))
                 self.assertTrue(f.item.data.is_symlink())
                 linked = f.item.data / 'bad-link'
                 linked.symlink_to(f.root / 'plain', target_is_directory=True)
                 with self.assertRaises(ValueError) as error:
-                    local_crypt.validate_ciphertext_tree(f.item)
+                    copy_mapping.validate_ciphertext_tree(f.item)
                 self.assertIn(str(linked), str(error.exception))
                 with self.assertRaises(ValueError):
                     provider.list()
                 with self.assertRaises(ValueError):
-                    local_crypt.push_target(f.item.data, f.context)
+                    copy_mapping.push_target(f.item.data, f.context)
                 linked.unlink()
                 linked = f.item.data / 'bad-hard-link'
                 os.link(provider.encrypted_path('note.md'), linked)
                 with self.assertRaises(ValueError) as error:
-                    local_crypt.validate_ciphertext_tree(f.item)
+                    copy_mapping.validate_ciphertext_tree(f.item)
                 self.assertIn('independent regular files:', str(error.exception))
                 linked.unlink()
                 f.item.record.unlink()
                 with self.assertRaisesRegex(ValueError, 'no valid credential mapping'):
-                    local_crypt.push_target(f.item.data, f.context)
+                    copy_mapping.push_target(f.item.data, f.context)
             finally:
                 provider.close()
 
@@ -766,7 +768,7 @@ class LocalCryptTests(QtTestCase):
             self.assertIsNotNone(session.credentials(private_context))
             session.forget(f.context)
             self.assertIsNone(session.credentials(private_context))
-            local_crypt.unlock(f.item, 'synthetic-package-password')
+            copy_mapping.unlock(f.item, 'synthetic-package-password')
             with self.assertRaisesRegex(ValueError, 'Reopen'):
                 f.provider.read_bytes('note.md')
             with_provider = local_crypt.CryptResources(f.item, binary=self.binary)
@@ -808,11 +810,11 @@ class LocalCryptTests(QtTestCase):
             bad = f.item.record.parent / 'malformed.json'
             for text in ('[]', 'null', '123', '"text"', '{broken'):
                 bad.write_text(text)
-                self.assertEqual(local_crypt.connections(), [f.item])
+                self.assertEqual(copy_mapping.connections(), [f.item])
             folder = SimpleNamespace(name='Secret')
             with patch('features.rclone.transfers.workflow.sync_transfer', return_value=True) as transfer:
                 actions.push_specific_directory(folder, f.context, str(f.item.data))
-                self.assertEqual(transfer.call_args.args[1], local_crypt.push_target(f.item.data, f.context, folder.name, specific=True))
+                self.assertEqual(transfer.call_args.args[1], copy_mapping.push_target(f.item.data, f.context, folder.name, specific=True))
                 self.assertFalse(transfer.call_args.kwargs['copy_links'])
                 f.item.record.unlink()
                 transfer.reset_mock()
@@ -1099,9 +1101,9 @@ class LocalCryptNamingTests(unittest.TestCase):
         from desktop.file_browser import _crypt_location
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            item = local_crypt.Connection(root / 'one.zip', 'Secret', root / 'LocalCrypt')
+            item = copy_mapping.Connection(root / 'one.zip', 'Secret', root / 'LocalCrypt')
             with patch('services.local_storage.install_local_storage_policy'), \
-                 patch.object(local_crypt, 'storage_root', return_value=item.root):
+                 patch.object(copy_mapping, 'storage_root', return_value=item.root):
                 item.publish()
                 target = root / 'relocated'
                 item.data.rename(target)
@@ -1115,16 +1117,16 @@ class LocalCryptNamingTests(unittest.TestCase):
     def test_clean_name_repeat_publish_and_conflicts(self):
         with TemporaryDirectory() as directory:
             root = Path(directory) / 'LocalCrypt'
-            first = local_crypt.Connection(Path(directory) / 'one.zip', 'Legacy-ComicRack', root)
+            first = copy_mapping.Connection(Path(directory) / 'one.zip', 'Legacy-ComicRack', root)
             with patch('services.local_storage.install_local_storage_policy'):
                 first.publish()
                 self.assertEqual(first.data, root / 'Legacy-ComicRack')
                 (first.data / 'sentinel').write_bytes(b'ciphertext')
                 first.publish()
-                self.assertEqual(local_crypt.connections(root), [first])
-                self.assertEqual(local_crypt.for_path(first.data / 'sentinel', root), first)
+                self.assertEqual(copy_mapping.connections(root), [first])
+                self.assertEqual(copy_mapping.for_path(first.data / 'sentinel', root), first)
                 for name in ('Legacy-ComicRack', 'legacy-comicrack'):
-                    other = local_crypt.Connection(Path(directory) / 'two.zip', name, root)
+                    other = copy_mapping.Connection(Path(directory) / 'two.zip', name, root)
                     with self.assertRaisesRegex(ValueError, 'another credential package'):
                         other.publish()
                     self.assertFalse(other.record.exists())
@@ -1136,7 +1138,7 @@ class LocalCryptNamingTests(unittest.TestCase):
     def test_unsupported_mapping_is_preserved_and_invalid_names_are_refused(self):
         with TemporaryDirectory() as directory:
             root = Path(directory) / 'LocalCrypt'
-            current = local_crypt.Connection(Path(directory) / 'one.zip', 'Secret', root)
+            current = copy_mapping.Connection(Path(directory) / 'one.zip', 'Secret', root)
             current.record.parent.mkdir(parents=True)
             original = json.dumps({'schema': 1, 'package': str(current.package), 'remote': current.remote}).encode()
             current.record.write_bytes(original)
@@ -1144,7 +1146,7 @@ class LocalCryptNamingTests(unittest.TestCase):
             old_data.mkdir(parents=True)
             (old_data / 'sentinel').write_bytes(b'preserve old ciphertext')
             with patch('services.local_storage.install_local_storage_policy'):
-                self.assertEqual(local_crypt.connections(root), [])
+                self.assertEqual(copy_mapping.connections(root), [])
                 with self.assertRaisesRegex(ValueError, 'existing LocalCrypt credential mapping is invalid'):
                     current.publish()
                 self.assertFalse(current.data.exists())
@@ -1152,4 +1154,4 @@ class LocalCryptNamingTests(unittest.TestCase):
                 self.assertEqual((old_data / 'sentinel').read_bytes(), b'preserve old ciphertext')
                 for name in ('../escape', '.connections', 'a/b', 'a\\b', 'CON', 'trailing.', 'trailing '):
                     with self.assertRaises(ValueError):
-                        local_crypt.Connection(current.package, name, root).publish()
+                        copy_mapping.Connection(current.package, name, root).publish()

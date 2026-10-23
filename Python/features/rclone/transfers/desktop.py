@@ -116,7 +116,7 @@ def _compare(transfer, config_path, emit, cancelled):
 def build_plan(transfer, credentials):
     if not isinstance(transfer, DesktopTransferRequest):
         raise TypeError('Choose a desktop transfer request.')
-    from features.rclone.localcrypt.backend import for_path
+    from features.rclone.localcrypt.mapping import for_path
     item = transfer.crypt_item or for_path(transfer.source if transfer.operation == 'Push' else transfer.destination)
     transfer = replace(transfer, crypt_item=item,
         options=replace(transfer.options, copy_links=False) if item is not None else transfer.options)

@@ -13,7 +13,7 @@ class ProgressDeliveryTests(unittest.TestCase):
         from threading import Thread
         from types import SimpleNamespace
         from unittest.mock import Mock
-        from features.rclone.transfers.mobile.ui import coalesced_progress
+        from features.rclone.transfers.mobile.execution import coalesced_progress
         queued, published = [], Mock()
         loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
         progress = coalesced_progress(loop, published)
@@ -34,7 +34,7 @@ class ProgressDeliveryTests(unittest.TestCase):
     def test_arrivals_during_render_queue_one_successor_without_blocking_worker(self):
         from threading import Thread
         from types import SimpleNamespace
-        from features.rclone.transfers.mobile.ui import coalesced_progress
+        from features.rclone.transfers.mobile.execution import coalesced_progress
         queued, published = [], []
         loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
         def publish(values):
@@ -59,7 +59,8 @@ class ProgressDeliveryTests(unittest.TestCase):
     def test_old_queued_progress_cannot_overwrite_terminal_or_new_transfer(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
-        from features.rclone.transfers.mobile.ui import MirrorUI, coalesced_progress
+        from features.rclone.transfers.mobile.ui import MirrorUI
+        from features.rclone.transfers.mobile.execution import coalesced_progress
         queued = []
         loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
         bar = SimpleNamespace(max=100, value=100, start=Mock(), stop=Mock())

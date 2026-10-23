@@ -68,7 +68,7 @@ class DesktopTransferTests(unittest.TestCase):
             self.addCleanup(session.forget, config)
             transfer = DesktopTransferRequest(root, 'Files:', 'Push', config, Path('/rclone'),
                 before_start=lambda: session.remember(config, values))
-            with patch('features.rclone.localcrypt.backend.for_path', return_value=None), patch(
+            with patch('features.rclone.localcrypt.mapping.for_path', return_value=None), patch(
                     'features.rclone.transfers.desktop.scanner', return_value=lambda emit, cancelled: 'revision'), patch(
                     'features.rclone.transfers.sync.rclone_sync') as execute:
                 prepared = service.transfers.review(transfer)
@@ -88,7 +88,7 @@ class DesktopTransferTests(unittest.TestCase):
             options = TransferOptions(bw_limit=3, excludes=('*.tmp',))
             transfer = DesktopTransferRequest(root, 'Files:', 'Push', config, Path('/rclone'), options, launch=launch)
             launch['wait_for_output'] = False
-            with patch('features.rclone.localcrypt.backend.for_path', return_value=None), patch(
+            with patch('features.rclone.localcrypt.mapping.for_path', return_value=None), patch(
                     'features.rclone.transfers.desktop.scanner', return_value=lambda emit, cancelled: 'revision'), patch(
                     'features.rclone.transfers.sync.rclone_sync', return_value=True) as execute:
                 prepared = service.transfers.review(transfer)
@@ -117,7 +117,7 @@ class DesktopTransferTests(unittest.TestCase):
                 window.runner.completed.connect.side_effect = completions.append
                 kwargs['on_launch'](window)
                 return True
-            with patch('features.rclone.localcrypt.backend.for_path', return_value=None), patch(
+            with patch('features.rclone.localcrypt.mapping.for_path', return_value=None), patch(
                     'features.rclone.transfers.desktop.scanner', side_effect=scanner), patch(
                     'features.rclone.transfers.sync.rclone_sync', side_effect=execute):
                 prepared = service.transfers.review(transfer)

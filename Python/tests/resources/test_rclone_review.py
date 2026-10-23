@@ -218,6 +218,7 @@ class ReviewDialogTests(QtTestCase):
         from unittest.mock import patch
         from features.rclone import executable
         from features.rclone.localcrypt import backend as local_crypt
+        from features.rclone.localcrypt import mapping as copy_mapping
         from features.rclone import session
         from features.rclone.transfers import workflow
         from tests.local_crypt_fixture import crypt_fixture
@@ -241,7 +242,7 @@ class ReviewDialogTests(QtTestCase):
                 with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
                         'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm):
                     self.assertFalse(workflow.reviewed_sync(f.item.data,
-                        local_crypt.backing_target(session.credentials(f.context), 'Secret'),
+                        copy_mapping.backing_target(session.credentials(f.context), 'Secret'),
                         operation='Push', config_path=f.context, copy_links=False))
                 self.assertEqual(list(f.item.data.rglob('.logistics-review-directory*')), [])
 
@@ -267,6 +268,7 @@ class ReviewDialogTests(QtTestCase):
         from unittest.mock import patch
         from features.rclone import executable
         from features.rclone.localcrypt import backend as local_crypt
+        from features.rclone.localcrypt import mapping as copy_mapping
         from features.rclone.transfers import sync
         from features.rclone.transfers import workflow
         from tests.local_crypt_fixture import crypt_fixture
@@ -283,7 +285,7 @@ class ReviewDialogTests(QtTestCase):
                     'features.rclone.transfers.ui.review.confirm_review', side_effect=self.approve_prepared), patch.object(
                     sync, 'rclone_sync', side_effect=execute), patch.object(sync, '_run_sync') as run:
                 with self.assertRaisesRegex(ValueError, 'push refused'):
-                    workflow.reviewed_sync(f.item.data, local_crypt.backing_target(local_crypt.unlock(f.item), 'Secret'),
+                    workflow.reviewed_sync(f.item.data, copy_mapping.backing_target(copy_mapping.unlock(f.item), 'Secret'),
                         operation='Push', config_path=f.context, copy_links=False)
                 run.assert_not_called()
 
@@ -313,6 +315,7 @@ class ReviewDialogTests(QtTestCase):
         from unittest.mock import patch
         from features.rclone import executable
         from features.rclone.localcrypt import backend as local_crypt
+        from features.rclone.localcrypt import mapping as copy_mapping
         from features.rclone import session
         from features.rclone.transfers import workflow
         from tests.local_crypt_fixture import crypt_fixture
@@ -335,7 +338,7 @@ class ReviewDialogTests(QtTestCase):
             with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
                     'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm):
                 self.assertFalse(workflow.reviewed_sync(f.item.data,
-                    local_crypt.backing_target(session.credentials(f.context), 'Secret'),
+                    copy_mapping.backing_target(session.credentials(f.context), 'Secret'),
                     operation='Push', config_path=f.context, copy_links=False))
             self.assertTrue(raw.exists())
 
@@ -373,6 +376,7 @@ class ReviewDialogTests(QtTestCase):
         from unittest.mock import patch
         from features.rclone import executable
         from features.rclone.localcrypt import backend as local_crypt
+        from features.rclone.localcrypt import mapping as copy_mapping
         from features.rclone.transfers import sync
         from features.rclone.transfers import workflow
         from tests.local_crypt_fixture import crypt_fixture
@@ -398,7 +402,7 @@ class ReviewDialogTests(QtTestCase):
                     'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm), patch.object(
                     sync, 'rclone_sync', side_effect=execute):
                 self.assertTrue(workflow.reviewed_sync(
-                    local_crypt.backing_target(local_crypt.unlock(f.item), 'Secret'), f.item.data,
+                    copy_mapping.backing_target(copy_mapping.unlock(f.item), 'Secret'), f.item.data,
                     operation='Pull', config_path=f.context, crypt_item=f.item,
                     before_start=f.item.publish, copy_links=False))
             self.assertTrue(f.item.data.is_dir())

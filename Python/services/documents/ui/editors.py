@@ -10,7 +10,7 @@ _windows = []
 
 
 def choose_editor_resource(parent, mode, provider=None, name='', *, markdown=False, extensions=None, directory=None):
-    from features.rclone.localcrypt.backend import connections
+    from features.rclone.localcrypt.mapping import connections
     from features.rclone.desktop_service import service
     from features.rclone.localcrypt.ui.views import ensure_session
     from services.local_storage import install_local_storage_policy

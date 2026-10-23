@@ -10,6 +10,7 @@ from commonUtils.archives.zip_access import open_archive
 from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
 from features.rclone import session
 from features.rclone.localcrypt import backend as local_crypt
+from features.rclone.localcrypt import mapping as copy_mapping
 from features.rclone import actions
 from features.rclone.transfers import sync
 from features.rclone import storage
@@ -51,7 +52,7 @@ def crypt_fixture(root, binary, *, crypt_settings=None):
         patches.enter_context(patch.object(sync, 'rclone_sync', side_effect=transfer))
         patches.enter_context(patch.object(sync.executable, 'ensure_rclone', return_value=binary))
         assert actions.pull_encrypted_copy('Secret', context)
-        item = local_crypt.connection(context, 'Secret')
+        item = copy_mapping.connection(context, 'Secret')
         provider = local_crypt.CryptResources(item, binary=binary)
         try:
             yield SimpleNamespace(root=root, plain=plain, cloud=cloud, package=package, context=context,

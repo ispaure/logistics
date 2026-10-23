@@ -342,7 +342,7 @@ class CryptBrowserView(qt.QMainWindow):
     def import_item(self, folder=False):
         from commonUtils.runtime.resources.local import LocalFiles
         from commonUtils.runtime.resources.mutations import move_resource
-        from features.rclone.localcrypt.backend import for_path, storage_root
+        from features.rclone.localcrypt.mapping import for_path, storage_root
         if self.file_browser.operation.busy:
             return
         selected = (qt.QFileDialog.getExistingDirectory(self, 'Move local folder into LocalCrypt') if folder else

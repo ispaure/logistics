@@ -61,7 +61,7 @@ def push_to_cloud(
         config_path = association.context
     if not ensure_session(config_path, package=association.package if association else None):
         return False
-    from features.rclone.localcrypt.backend import push_target, for_path
+    from features.rclone.localcrypt.mapping import push_target, for_path
     source_path = folder.path
     destination_path = push_target(source_path, config_path, folder.name)
 
@@ -103,7 +103,7 @@ def push_specific_directory(
         config_path = association.context
     if not ensure_session(config_path, package=association.package if association else None):
         return False
-    from features.rclone.localcrypt.backend import for_path, push_target
+    from features.rclone.localcrypt.mapping import for_path, push_target
     item = for_path(directory.path)
     destination_path = push_target(directory.path, config_path, folder.name, specific=True)
 
@@ -117,13 +117,13 @@ def push_specific_directory(
 
 
 def pull_encrypted_copy(remote_name, config_path, *, item=None, review=False):
-    from features.rclone.localcrypt.backend import connection, backing_target, unlock
+    from features.rclone.localcrypt.mapping import connection, backing_target, unlock
     from features.rclone.localcrypt.ui.views import ensure_session
     if not ensure_session(config_path, package=item.package if item else None):
         return False
     item = item or connection(config_path, remote_name)
     values = unlock(item)
-    from features.rclone.localcrypt.backend import validate_ciphertext_tree
+    from features.rclone.localcrypt.mapping import validate_ciphertext_tree
     validate_ciphertext_tree(item)
     return _transfer(backing_target(values, remote_name), item.data, operation='Pull', review=review,
         config_path=config_path, copy_links=False, crypt_item=item, before_start=item.publish)

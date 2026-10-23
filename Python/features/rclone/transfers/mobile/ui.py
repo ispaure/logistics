@@ -1,63 +1,13 @@
 """Managed copies and transfers which keep ordinary Documents usable."""
 from features.rclone.mobile.storage_location import collection_path
 import asyncio
-from threading import Event, Lock
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from features.rclone.transfers.mobile.jobs import MirrorJobs
+from .execution import transfer_progress
 from features.rclone.mobile.messages import import_hint
 from features.rclone.transfers.mobile.review_ui import TransferReviewUI
-
-
-def coalesced_progress(loop, publish):
-    """Keep only the newest worker snapshot while native UI rendering is busy."""
-    lock = Lock()
-    latest, scheduled = None, False
-
-    def drain():
-        nonlocal latest, scheduled
-        with lock:
-            values, latest, scheduled = latest, None, False
-        # Rendering can be slow. Do not hold the worker lock across native UI;
-        # arrivals during this call can schedule at most one successor.
-        publish(values)
-
-    def progress(**values):
-        nonlocal latest, scheduled
-        with lock:
-            latest = values
-            if scheduled:
-                return
-            scheduled = True
-        loop.call_soon_threadsafe(drain)
-
-    return progress
-
-
-async def _transfer_result(worker, cancel, client):
-    """Cancellation keeps ownership until the native writer has retired."""
-    try:
-        return await asyncio.shield(worker)
-    except asyncio.CancelledError:
-        cancel.set()
-        try:
-            client.cancel()
-        except (OSError, ValueError):
-            pass
-        while not worker.done():
-            try:
-                await asyncio.shield(worker)
-            except asyncio.CancelledError:
-                continue
-            except Exception:
-                break
-        # Consume a late failure without replacing the caller's cancellation.
-        try:
-            worker.result()
-        except BaseException:
-            pass
-        raise
 
 
 class MirrorUI(TransferReviewUI):
@@ -347,110 +297,15 @@ class MirrorUI(TransferReviewUI):
             self.cloud_status.value = 'No local copy exists. Choose a folder in Files and Pull first.'
 
     async def run_mirror_work(self, work, operation, *, source=None, destination=None):
-        if getattr(self, 'transfer_busy', False):
-            return False
-        if not await self.mirror_connection_ready():
-            self.show_transfers(present=self.native_host.state.destination == 'files')
-            return False
-        client, generation = self.cloud_client, self.cloud_client.generation
-        self.transfer_endpoints = (source, destination) if source is not None and destination is not None else None
-        self.transfer_busy = True
-        self.transfer_notification = True
-        self.transfer_complete = False
-        self.transfer_percentage = None
-        self.set_cloud_busy(True)
-        self._transfer_cancel = Event()
-        cancel = self._transfer_cancel
-        self.transfer_message = 'Preparing transfer…'
-        self.show_transfers(present=self.native_host.state.destination == 'files')
-        self.refresh_transfer_status()
-        epoch = self.transfer_epoch = getattr(self, 'transfer_epoch', 0) + 1
-        progress = coalesced_progress(self.loop, lambda values: self.publish_mirror_progress(epoch, values))
-        result = None
-        try:
-            worker = asyncio.create_task(asyncio.to_thread(work, client, cancel.is_set, progress))
-            result = await _transfer_result(worker, cancel, client)
-            if not self.active_host or self.cloud_client is not client or client.generation != generation:
-                result = None
-                self.transfer_message = 'Sync stopped because the connection changed; completed destination changes remain.'
-                return False
-            if operation == 'push':
-                self.transfer_message = f'Push sync verified: {result} file(s) sent. Destination-only entries were removed.'
-            else:
-                status, _ = result[1] if operation == 'create' else result
-                self.transfer_message = ('Files changed during the operation; inspect the local destination.'
-                                         if status == 'conflict' else 'Pull sync complete. The local folder now matches the remote.')
-            self.transfer_message = '100% · ' + self.transfer_message
-            return True
-        except asyncio.CancelledError:
-            self.transfer_message = 'Sync cancelled; completed destination changes remain.'
-            raise
-        except Exception as error:
-            self.transfer_message = 'Sync stopped; completed destination changes remain. ' + str(error)[:350]
-            return False
-        finally:
-            self.transfer_epoch += 1
-            self._transfer_cancel = None
-            self.transfer_busy = False
-            self.set_cloud_busy(False)
-            if self.active_host:
-                self.transfer_complete = result is not None
-                self.cloud_status.value = self.transfer_message
-                self.cloud_transfer_progress.stop()
-                self.cloud_transfer_progress.max = 100
-                self.cloud_transfer_progress.value = 100 if result is not None else 0
-                self.transfer_notice.text = import_hint(self.transfer_message.replace(' · ', '\n'))
-                self.transfer_progress.stop()
-                self.transfer_progress.max = 100
-                self.transfer_progress.value = 100 if result is not None else 0
-                self.refresh_transfer_status()
-                if self.transfer_complete:
-                    completed_epoch = self.transfer_epoch
-
-                    def clear_completion():
-                        if (self.active_host and not self.transfer_busy
-                                and self.transfer_epoch == completed_epoch):
-                            self.dismiss_transfer_status()
-
-                    self.loop.call_later(5, clear_completion)
-                screens = self.routes.screens[self.native_host.state.destination]
-                if screens and screens[-1][0] == 'transfers':
-                    # A transfer completion updates its own status. It does not
-                    # take Documents away while a reader/editor is active.
-                    self.show_transfers()
+        return await self.execution.run(work, operation, source=source, destination=destination)
 
     def publish_mirror_progress(self, epoch, values):
         if not self.active_host or epoch != getattr(self, 'transfer_epoch', None) or not self.transfer_busy:
             return
         previous = getattr(self, 'transfer_message', None)
-        phase, files = values['phase'], values['files']
-        done, total = values['done'], values['total']
-        total_files = values.get('total_files', 0)
-        # Rclone discovers work while syncing. Prefer bytes; zero-byte files
-        # can still supply a useful file-based total. Completion is verified
-        # separately, so keep live progress below 100%.
-        numerator, denominator = (done, total) if total > 0 else (files, total_files)
-        self.transfer_percentage = min(99, max(0, 100 * numerator / denominator)) if denominator > 0 else None
-        phase = {'Discovering / checking files': 'Finding and comparing files…',
-                 'Checking / finishing sync': 'Finishing and checking the destination…',
-                 'Sync complete; verifying local copy': 'Verifying the local copy…',
-                 'Transferring': 'Copying files…'}.get(phase, phase)
-        self.transfer_message = f'{phase} · Files copied: {files:,}'
-        if total_files > 0:
-            self.transfer_message += f' of {total_files:,} found so far'
-        if self.transfer_percentage is not None:
-            self.transfer_message += f' · {self.transfer_percentage:.0f}% of known work'
-        if values.get('attempt', 0) > 1 or values.get('retrying'):
-            state = 'Retrying' if values.get('retrying') else 'Attempt'
-            self.transfer_message += f' · {state} {values["attempt"]}/{values["max_attempts"]}'
-        if values.get('active', 0):
-            self.transfer_message += f' · Copying now: {values["active"]:,} files'
-        if values.get('listed', 0) or values.get('checks', 0):
-            self.transfer_message += f' · Files found: {values.get("listed", 0):,} · Files compared: {values.get("checks", 0):,}'
-        if total > 0:
-            self.transfer_message += f' · {done / 1_000_000:,.2f} / {total / 1_000_000:,.2f} MB (known so far)'
-        elif done > 0:
-            self.transfer_message += f' · {done / 1_000_000:,.2f} MB transferred'
+        snapshot = transfer_progress(values)
+        self.transfer_percentage, self.transfer_message = snapshot.percentage, snapshot.message
+        done, total = snapshot.done, snapshot.total
         widgets = (id(self.transfer_notice), id(self.cloud_status), id(self.transfer_progress),
                    id(getattr(self, 'cloud_transfer_progress', None)), done, total)
         if self.transfer_message == previous and widgets == getattr(self, '_mirror_progress_widgets', None):
@@ -517,9 +372,64 @@ class MirrorUI(TransferReviewUI):
                 return False
             if (not self.active_host or origin != self.navigation_generation or client is not self.cloud_client
                     or generation != getattr(client, 'generation', None)):
+                provider.close()
                 return False
             label = 'LocalCrypt: ' + job['remote'] + ' (pulled)'
             self.file_roots[label] = provider
             self.update_file_locations()
             return await self.browser_file_location((label, folder))
         return await self.browser_file_location(('Local files', job['target']))
+
+
+class TransferExecutionPresentation:
+    """Project retained execution state into controls and the existing routes."""
+    def __init__(self, controller):
+        self.controller = controller
+
+    async def ready(self):
+        return await self.controller.mirror_connection_ready()
+
+    def connection(self):
+        client = self.controller.cloud_client
+        return client, client.generation
+
+    def current(self, client, generation):
+        owner = self.controller
+        return owner.active_host and owner.cloud_client is client and client.generation == generation
+
+    def unavailable(self):
+        owner = self.controller
+        owner.show_transfers(present=owner.native_host.state.destination == 'files')
+
+    def started(self):
+        owner = self.controller
+        owner.set_cloud_busy(True)
+        owner.show_transfers(present=owner.native_host.state.destination == 'files')
+        owner.refresh_transfer_status()
+
+    def progress(self, epoch, values):
+        self.controller.publish_mirror_progress(epoch, values)
+
+    def finished(self):
+        owner = self.controller
+        owner.set_cloud_busy(False)
+        if not owner.active_host:
+            return
+        owner.cloud_status.value = owner.transfer_message
+        for bar in (owner.cloud_transfer_progress, owner.transfer_progress):
+            bar.stop()
+            bar.max = 100
+            bar.value = 100 if owner.transfer_complete else 0
+        owner.transfer_notice.text = import_hint(owner.transfer_message.replace(' · ', '\n'))
+        owner.refresh_transfer_status()
+        if owner.transfer_complete:
+            completed_epoch = owner.transfer_epoch
+
+            def clear_completion():
+                if owner.active_host and not owner.transfer_busy and owner.transfer_epoch == completed_epoch:
+                    owner.dismiss_transfer_status()
+
+            owner.loop.call_later(5, clear_completion)
+        screens = owner.routes.screens[owner.native_host.state.destination]
+        if screens and screens[-1][0] == 'transfers':
+            owner.show_transfers()

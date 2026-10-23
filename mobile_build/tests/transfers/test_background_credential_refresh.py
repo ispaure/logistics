@@ -1,9 +1,10 @@
+from features.rclone.mobile.credentials_ui import CredentialWorkflow
 """Credential publication updates retained Home controls and uses published metadata."""
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from unittest import TestCase
+from unittest import TestCase, IsolatedAsyncioTestCase
 from unittest.mock import Mock, patch
 
 from features.rclone.mobile.cloud_ui import CloudUI
@@ -84,9 +85,9 @@ class CredentialMetadataPreparationTests(TestCase):
         association = dict(zip='Saved.zip', remotes=['Cloud'], session_only=False)
         preferences = SimpleNamespace(values={'remote_packages': json.dumps([association])}, save=Mock())
         app = SimpleNamespace(preferences=preferences)
-        CloudUI.remember_credential_association(app, 'Saved.zip', ['Cloud'], session_only=False)
+        CredentialWorkflow(app).remember_credential_association('Saved.zip', ['Cloud'], session_only=False)
         preferences.save.assert_not_called()
-        CloudUI.remember_credential_association(app, 'Saved.zip', ['Changed'], session_only=False)
+        CredentialWorkflow(app).remember_credential_association('Saved.zip', ['Changed'], session_only=False)
         preferences.save.assert_called_once()
 
 class PublishedCryptMetadataTests(TestCase):
@@ -95,9 +96,65 @@ class PublishedCryptMetadataTests(TestCase):
         from unittest.mock import AsyncMock
         client = SimpleNamespace(package_records=(dict(crypt_identities={'Secret': 'a' * 64}),),
             crypt_remotes=Mock(side_effect=AssertionError('redundant bridge query')))
-        app = SimpleNamespace(cloud_client=client, retained_packages=lambda: None,
+        app = SimpleNamespace(cloud_client=client, active_host=True, retained_packages=lambda: None,
             refresh_hub_crypt_locations=AsyncMock(), refresh_cloud_remote_help=Mock())
-        asyncio.run(CloudUI._load_crypt_remote_names(app))
+        asyncio.run(CredentialWorkflow(app)._load_crypt_remote_names())
         self.assertEqual(app.cloud_crypt_remotes, {'Secret'})
         client.crypt_remotes.assert_not_called()
         app.refresh_hub_crypt_locations.assert_awaited_once()
+
+
+class CredentialFreshnessTests(IsolatedAsyncioTestCase):
+    async def test_late_crypt_lookup_cannot_replace_new_generation_metadata(self):
+        from unittest.mock import AsyncMock
+        client = SimpleNamespace(generation=1, package_records=())
+        def lookup():
+            client.generation = 2
+            return ['Obsolete']
+        client.crypt_remotes = lookup
+        app = SimpleNamespace(cloud_client=client, active_host=True, cloud_crypt_remotes={'Current'},
+            retained_packages=Mock(), refresh_hub_crypt_locations=AsyncMock(), refresh_cloud_remote_help=Mock())
+        self.assertFalse(await CredentialWorkflow(app)._load_crypt_remote_names())
+        self.assertEqual(app.cloud_crypt_remotes, {'Current'})
+        app.retained_packages.assert_not_called()
+        app.refresh_cloud_remote_help.assert_not_called()
+
+    async def test_restore_rechecks_generation_after_metadata_preparation(self):
+        from unittest.mock import AsyncMock
+        from features.rclone.credential_loading import CredentialResult
+        client = SimpleNamespace(generation=1)
+        async def metadata():
+            client.generation = 2
+        app = SimpleNamespace(cloud_client=client, active_host=True, cloud_busy=False,
+            set_cloud_busy=Mock(), _load_crypt_remote_names=metadata, set_loaded_remote_names=Mock(),
+            _publish_restored_connections=Mock())
+        result = CredentialResult('Original.zip', ('Original',), True, 1)
+        with patch('features.rclone.mobile.credentials_ui.native_service'), \
+             patch('features.rclone.mobile.credentials_ui.run_credentials', new=AsyncMock(return_value=result)):
+            await CredentialWorkflow(app).restore_cloud(initial=True)
+        app.set_loaded_remote_names.assert_not_called()
+        app._publish_restored_connections.assert_not_called()
+        app.set_cloud_busy.assert_called_once_with(False)
+
+    async def test_import_rechecks_generation_before_preferences_or_retention(self):
+        from unittest.mock import AsyncMock
+        from features.rclone.credential_loading import CredentialResult
+        client = SimpleNamespace(generation=1)
+        selected = SimpleNamespace(name='Original.zip')
+        async def metadata():
+            client.generation = 2
+        app = SimpleNamespace(cloud_client=client, active_host=True, cloud_busy=False,
+            navigation_generation=1, cloud_pending_zip=selected,
+            cloud_password=SimpleNamespace(value='synthetic'), cloud_remember=SimpleNamespace(value=False),
+            cloud_import_message=SimpleNamespace(text=''), set_cloud_busy=Mock(),
+            clear_private_reader=lambda: True, clear_private_catalog=Mock(),
+            _load_crypt_remote_names=metadata, remember_loaded_packages=Mock(), retained_packages=Mock())
+        result = CredentialResult('Original.zip', ('Original',), False, 1)
+        with patch('features.rclone.mobile.credentials_ui.native_service'), \
+             patch('features.rclone.mobile.credentials_ui.run_credentials', new=AsyncMock(return_value=result)):
+            await CredentialWorkflow(app).import_cloud_package()
+        app.remember_loaded_packages.assert_not_called()
+        app.retained_packages.assert_not_called()
+        self.assertIs(app.cloud_pending_zip, selected)
+        self.assertEqual(app.cloud_password.value, '')
+        app.set_cloud_busy.assert_called_with(False)

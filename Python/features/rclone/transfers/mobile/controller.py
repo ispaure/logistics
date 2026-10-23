@@ -1,6 +1,7 @@
 """Owned workflow state and explicit application services."""
-from services.workflow_host import HostAttribute
-from features.rclone.transfers.mobile.ui import MirrorUI
+from services.workflow_host import HostAttribute, StateAttribute
+from features.rclone.transfers.mobile.ui import MirrorUI, TransferExecutionPresentation
+from .execution import TransferExecution, TransferState
 
 
 class TransferController(MirrorUI):
@@ -11,8 +12,19 @@ class TransferController(MirrorUI):
 
     def __init__(self, app):
         self.app = app
+        self.state = TransferState()
+        self.execution = TransferExecution(self.state, TransferExecutionPresentation(self))
         self._transfer_cancel = None
         self._cancel_transfer_review = None
+
+    transfer_busy = StateAttribute("state", "busy")
+    transfer_notification = StateAttribute("state", "notification")
+    transfer_complete = StateAttribute("state", "complete")
+    transfer_percentage = StateAttribute("state", "percentage")
+    transfer_epoch = StateAttribute("state", "epoch")
+    transfer_message = StateAttribute("state", "message")
+    transfer_endpoints = StateAttribute("state", "endpoints")
+    _transfer_cancel = StateAttribute("state", "cancel")
 
     active_host = HostAttribute('active_host')
     browser_file_location = HostAttribute('browser_file_location')

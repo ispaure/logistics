@@ -6,7 +6,8 @@ from services.workflow_host import HostAttribute, HostService, StateAttribute
 from .smb_connection import SMBConnection, SMBFormState
 from .downloads import DownloadWorkflow, DownloadState
 from .credentials_ui import CredentialWorkflow, CredentialState
-from features.rclone.mobile.cloud_ui import CloudUI, CloudBrowserPresentation
+from features.rclone.mobile.cloud_ui import CloudUI, CloudBrowserPresentation, CloudActivityPresentation
+from .activity import RemoteActivity
 from .browser_workflow import RemoteBrowserState, RemoteBrowserWorkflow
 
 
@@ -72,7 +73,6 @@ class CloudController(CloudUI):
         "use_downloaded_file",
     )
     FIELDS = (
-        "_remote_activities",
         "cloud_import_entry",
         "cloud_import_view",
         "cloud_connections_status",
@@ -163,6 +163,7 @@ class CloudController(CloudUI):
         self.download_state = DownloadState()
         self.download_workflow = DownloadWorkflow(self)
         self.state = CloudState()
+        self.activity_workflow = RemoteActivity(CloudActivityPresentation(self))
         self.browser_state = RemoteBrowserState()
         self.browser_workflow = RemoteBrowserWorkflow(
             self.browser_state, CloudBrowserPresentation(self)

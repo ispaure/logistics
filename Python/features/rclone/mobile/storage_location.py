@@ -1,5 +1,6 @@
 """One mobile collection drive; private control state never leaves app storage."""
 from hashlib import sha256
+from dataclasses import dataclass
 import errno
 import json
 from datetime import datetime, timedelta, timezone
@@ -362,13 +363,26 @@ def _stage_collection_tree(source, target, expected, destination_base, report):
             shutil.rmtree(temporary)
 
 
-def _verify_collection_copy(sources, destinations, snapshots, report):
+@dataclass(frozen=True)
+class _PlannedTree:
+    source: Path
+    target: Path
+    snapshot: dict
+
+    @property
+    def required_bytes(self):
+        if self.target.exists() and any(self.target.iterdir()):
+            return 0
+        return sum(file[0] for file in self.snapshot.values() if file is not None)
+
+
+def _verify_collection_copy(trees, report):
     """Revalidate both destination trees and active sources before pointer publication."""
     report.update('Final verification')
-    for target, expected in zip(destinations, snapshots):
-        if expected and _inventory(target, report) != expected:
+    for tree in trees:
+        if tree.snapshot and _inventory(tree.target, report) != tree.snapshot:
             raise OSError('Destination verification failed; original location retained.')
-    if [_inventory(source, report) for source in sources] != snapshots:
+    if [_inventory(tree.source, report) for tree in trees] != [tree.snapshot for tree in trees]:
         raise OSError('Collection changed during copying; original location retained.')
 
 
@@ -396,16 +410,15 @@ def switch_location(private_root, volume, *, progress=None):
         ('Local', 'LocalCrypt') if volume is not None else ('LocalFiles', 'LocalCryptFolders'))]
     report = _Progress(progress)
     report.update('Checking source files')
-    snapshots = [_inventory(source, report) for source in sources]
+    trees = [_PlannedTree(source, target, _inventory(source, report))
+             for source, target in zip(sources, destinations)]
     report.update('Checking destination files')
     # Check all conflicts before publishing either tree.
-    for target, expected in zip(destinations, snapshots):
-        existing = _inventory(target, report)
-        if existing and expected and existing != expected:
-            raise FileExistsError('Destination already contains different files: ' + str(target))
-    needed = sum(size for target, snapshot in zip(destinations, snapshots)
-                 if not target.exists() or not any(target.iterdir()) for value in snapshot.values()
-                 if value is not None for size in [value[0]])
+    for tree in trees:
+        existing = _inventory(tree.target, report)
+        if existing and tree.snapshot and existing != tree.snapshot:
+            raise FileExistsError('Destination already contains different files: ' + str(tree.target))
+    needed = sum(tree.required_bytes for tree in trees)
     if shutil.disk_usage(volume or private_root).free < needed + 1024 * 1024:
         raise OSError('Not enough free space to copy both collections.')
     destination_base.mkdir(parents=True, exist_ok=True)
@@ -414,15 +427,15 @@ def switch_location(private_root, volume, *, progress=None):
         token = marker.read_text()
         if len(token) != 32 or any(c not in '0123456789abcdef' for c in token):
             raise ValueError('Invalid destination collection marker.')
-    for source, target, expected in zip(sources, destinations, snapshots):
-        _unlinked(target)
-        if target.exists() and any(target.iterdir()):
+    for tree in trees:
+        _unlinked(tree.target)
+        if tree.target.exists() and any(tree.target.iterdir()):
             report.update('Verifying files')
-            if expected and _inventory(target, report) != expected:
+            if tree.snapshot and _inventory(tree.target, report) != tree.snapshot:
                 raise OSError('Destination changed during copying; original location retained.')
             continue  # Identical backup, or adoption when the source is empty.
-        _stage_collection_tree(source, target, expected, destination_base, report)
-    _verify_collection_copy(sources, destinations, snapshots, report)
+        _stage_collection_tree(tree.source, tree.target, tree.snapshot, destination_base, report)
+    _verify_collection_copy(trees, report)
     report.update('Saving location')
     _activate(private_root, volume, destination_base)
     report.update('Complete', force=True)

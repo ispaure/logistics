@@ -32,7 +32,7 @@ class RclonePushDialog(pyside.QDialog):
 
         self.regular_radio = pyside.QRadioButton('Entire local folder')
         self.specific_radio = pyside.QRadioButton('Specific folder')
-        from features.rclone.localcrypt.backend import for_path
+        from features.rclone.localcrypt.mapping import for_path
         self.crypt_copy = for_path(entry.local.path)
         if self.crypt_copy is not None:
             self.specific_radio.setEnabled(False)
@@ -176,7 +176,7 @@ class RclonePushDialog(pyside.QDialog):
     def _update_result_preview(self):
         if self.regular_radio.isChecked():
             self.result_source.setText(str(self.entry.local.path))
-            from features.rclone.localcrypt.backend import push_target
+            from features.rclone.localcrypt.mapping import push_target
             try:
                 target = push_target(self.entry.local.path, self.config_path, self.entry.remote_name)
             except ValueError as error:
@@ -201,7 +201,7 @@ class RclonePushDialog(pyside.QDialog):
             return
 
         directory = Path(directory_path)
-        from features.rclone.localcrypt.backend import push_target
+        from features.rclone.localcrypt.mapping import push_target
         try:
             remote_destination = push_target(directory, self.config_path, self.entry.remote_name, specific=True)
         except ValueError as error:

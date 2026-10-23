@@ -17,6 +17,8 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.rclone import credentials, session
 from features.rclone.localcrypt.backend import CryptResources
+from features.rclone.localcrypt.read_cache import PrivateReadCache
+from features.rclone.localcrypt.transport import CryptCommand
 from features.rclone.transfers import sync, review_cli
 
 
@@ -34,11 +36,12 @@ class CredentialRevocationTests(QtTestCase):
 
     def provider(self):
         provider = CryptResources.__new__(CryptResources)
-        provider.context, provider.binary, provider.closed = self.context, Path('synthetic-rclone'), False
+        provider.context, provider.binary = self.context, Path('synthetic-rclone')
         provider.root = Path('/synthetic/ciphertext')
         provider._cancellation = WorkerCancellation()
-        provider._encoded_paths = {}
-        provider._cache_lock = threading.RLock()
+        provider._cache = PrivateReadCache(provider.root, provider._check_active)
+        provider._commands = CryptCommand(provider.binary, provider.context, provider._cancellation,
+                                          provider._check_active, closed=lambda: provider.closed)
         return provider
 
     def test_unencrypted_and_mixed_packages_preserve_existing_credentials_in_both_modes(self):
@@ -105,7 +108,7 @@ class CredentialRevocationTests(QtTestCase):
                     if localcrypt:
                         def run(_arguments, **kwargs):
                             return run_bytes(arguments, **kwargs)
-                        with patch('features.rclone.localcrypt.backend.run_bytes', side_effect=run):
+                        with patch('features.rclone.localcrypt.transport.run_bytes', side_effect=run):
                             with self.assertRaises(OperationCancelled):
                                 self.provider().command('cat', 'note.md')
                     else:
@@ -186,13 +189,13 @@ class CredentialRevocationTests(QtTestCase):
                         if not late:
                             raise OperationCancelled('Operation cancelled')
                         return b'["encoded"]' if encode else b'synthetic plaintext'
-                    with patch('features.rclone.localcrypt.backend.run_bytes', side_effect=run):
+                    with patch('features.rclone.localcrypt.transport.run_bytes', side_effect=run):
                         with self.assertRaises(OperationCancelled):
                             if encode:
                                 provider.encrypted_path('note.md')
                             else:
                                 provider.command('cat', 'note.md')
-                    self.assertFalse(provider._encoded_paths)
+                    self.assertFalse(provider._cache._paths)
 
     def test_review_stops_without_publishing_results_after_replacement(self):
         def lines(arguments, environment, cancelled, consume):

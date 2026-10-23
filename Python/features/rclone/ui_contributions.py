@@ -100,7 +100,8 @@ def _matching_local_folders(config_path, *, local_folders=None, copies=None, loc
     Match package identity as well as remote names; session paths alone can collide.
     """
     from models.folder_discovery import get_local_folders
-    from features.rclone.localcrypt.backend import connections, LocalCryptFolder
+    from features.rclone.localcrypt.mapping import connections
+    from features.rclone.localcrypt.backend import LocalCryptFolder
     from . import session
     folders = list(get_local_folders() if local_folders is None else local_folders)
     names = {folder.name for folder in folders}
@@ -121,7 +122,8 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
     """Return one Folders source for every loaded credential config."""
 
     from models.folder_discovery import get_local_folders
-    from features.rclone.localcrypt.backend import connections, LocalCryptFolder
+    from features.rclone.localcrypt.mapping import connections
+    from features.rclone.localcrypt.backend import LocalCryptFolder
     sources = []
     represented_copies = set()
     configs = credentials.get_loaded_credential_config_paths()

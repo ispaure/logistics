@@ -58,7 +58,7 @@ def rclone_sync(source_path, destination_path, *, config_path, query=False, wait
     is_push = Path(source_path).is_dir() and ':' in str(destination_path) and not Path(destination_path).is_absolute()
     if is_push:
         from features.rclone.transfers.push_policy import load_excludes, validate_localcrypt_push
-        from features.rclone.localcrypt.backend import for_path, storage_root
+        from features.rclone.localcrypt.mapping import for_path, storage_root
         options['excludes'] = load_excludes() if excludes is None else excludes
         item = for_path(source_path)
         boundary = storage_root().absolute()

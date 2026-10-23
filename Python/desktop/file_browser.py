@@ -40,13 +40,13 @@ BROWSER_POLICY = WorkspacePolicy(allow_last_tab_detach=False,
 def _crypt_copies(root, record_revision, interval):
     # Model callbacks are frequent. Refresh on publication and at least once a
     # second for external record edits; cache identities, never decoded names.
-    from features.rclone.localcrypt.backend import connections
+    from features.rclone.localcrypt.mapping import connections
     return tuple(connections(root))
 
 
 def _crypt_location(path, *, root=None):
     """Resolve raw paths/aliases only at the host's provider boundary."""
-    from features.rclone.localcrypt.backend import storage_root
+    from features.rclone.localcrypt.mapping import storage_root
     path = Path(path).absolute()
     configured_root = Path(root if root is not None else storage_root()).absolute()
     root = configured_root.resolve()
@@ -139,7 +139,7 @@ class _BrowserHost:
         # always uses the fresh resolver below.
         interval = int(time.monotonic())
         if getattr(self, '_boundary_interval', None) != interval:
-            from features.rclone.localcrypt.backend import storage_root
+            from features.rclone.localcrypt.mapping import storage_root
             self._boundary_interval = interval
             self._boundary_root = storage_root()
             self._boundary_paths = {}

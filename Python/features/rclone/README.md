@@ -1,3 +1,4 @@
 # rclone Feature
 
-Documentation has moved to the [rclone Feature guide](../../../docs/features/rclone/development/development.md).
+Start with the [rclone documentation index](../../../docs/features/rclone/rclone.md)
+for desktop, mobile and developer guides.

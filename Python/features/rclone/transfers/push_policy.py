@@ -77,7 +77,8 @@ def validate_localcrypt_push(item, binary, *, cancelled=lambda: False, report=la
     Filters cannot hide invalid files. Preview does not delete generated files;
     real pushes remove only the exact allowlist of independent regular files.
     """
-    from features.rclone.localcrypt.backend import CryptResources, unlock
+    from features.rclone.localcrypt.mapping import unlock
+    from features.rclone.localcrypt.backend import CryptResources
     with mutation_lock:
         check_cancelled(cancelled)
         if not item.data.is_dir():

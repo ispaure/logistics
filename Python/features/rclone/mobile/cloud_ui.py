@@ -1,18 +1,15 @@
 """Native read-only remote browser and access to existing offline copies."""
 from commonUtils.ui.native.password_input import PasswordInput
-from features.rclone.mobile.storage_location import collection_path
 import asyncio
-from contextlib import asynccontextmanager
 from pathlib import Path
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
-from features.rclone.mobile.cloud import CloudClient, CredentialBusyError, Downloads, PACKAGE_LIMIT, download_name
+from features.rclone.mobile.cloud import CloudClient, Downloads
 from features.rclone.localcrypt.mobile.ui import LocalCryptUI
 
 
 from features.rclone.mobile.messages import import_hint
-from .credentials_ui import CredentialWorkflow, SelectedCredentialZIP
 
 
 async def explain_remote_busy(app):
@@ -26,62 +23,8 @@ async def explain_remote_busy(app):
 
 
 class CloudUI(LocalCryptUI):
-    @asynccontextmanager
-    async def remote_activity(self, stage):
-        """Keep the current network step and elapsed wait visible on the UI loop."""
-        loop = asyncio.get_running_loop()
-        state = dict(stage=stage, started=loop.time(), active=True)
-        activities = getattr(self, '_remote_activities', None)
-        if activities is None:
-            activities = self._remote_activities = []
-        def update(message):
-            if state['active']:
-                state.update(stage=message, started=loop.time())
-                render()
-        def render():
-            if not activities or activities[-1] is not state:
-                return
-            elapsed = int(loop.time() - state['started'])
-            message = f"{state['stage']} · {elapsed}s"
-            self.cloud_status.value = message
-            status = getattr(self, 'folder_picker_status', None)
-            if status is not None:
-                status.text = message
-            if getattr(self, '_folder_opening', False):
-                self.folder_loading_status.text = message
-        def progress(message):
-            if state['active'] and not loop.is_closed():
-                loop.call_soon_threadsafe(update, message)
-        async def tick():
-            while True:
-                await asyncio.sleep(1)
-                render()
-        bar = self.cloud_transfer_progress
-        state['render'] = render
-        activities.append(state)
-        bar.max = None
-        bar.start()
-        render()
-        task = asyncio.create_task(tick())
-        try:
-            # Let UIKit draw the status and spinner before starting any work.
-            await asyncio.sleep(0)
-            yield progress
-        finally:
-            state['active'] = False
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-            activities.remove(state)
-            if activities:
-                bar.max = None
-                bar.start()
-                activities[-1]['render']()
-            else:
-                bar.stop()
-                bar.max, bar.value = 100, 0
+    def remote_activity(self, stage):
+        return self.activity_workflow.track(stage)
 
     def prepare_cloud(self):
         """Prepare connection state without constructing browser/settings views."""
@@ -189,27 +132,18 @@ class CloudUI(LocalCryptUI):
                 self.cloud_import, self.cloud_import_message,
                 ui.settings.heading('STORAGE'), ui.settings.group([self.cloud_remember]),
                 ui.settings.note('Off keeps decoded credentials in memory. Password-protected ZIPs are retained encrypted for future unlocking. The ZIP password is never saved.')])
-        self.cloud_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
+        # Build each route in its final shape. Browser controls belong only to
+        # the browser header; advanced actions never temporarily adopt them.
+        self.cloud_advanced_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
             toga.Label('Remote files', style=Pack(font_size=22)),
             toga.Button('Manage connections…', on_press=self.show_cloud_connections, style=Pack(height=44)),
-            self.cloud_remote_heading, self.cloud_remote, self.cloud_remote_help,
-            self.cloud_location, toga.Box(children=[self.cloud_browse, self.cloud_up], style=Pack(direction=ROW)),
-            self.cloud_status, self.cloud_cancel, self.remote_browser.widget,
-            self.cloud_open,
+            self.cloud_remote_heading, self.cloud_remote_help, self.cloud_location,
+            toga.Button('Browse folder', on_press=self.browse_cloud_path, style=Pack(height=44)),
             toga.Label('Downloaded copies', style=Pack(font_size=18, margin_top=12)), self.download_selector,
             toga.Box(children=[self.download_open, self.download_export], style=Pack(direction=ROW)),
-            *self.build_localcrypt()], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
-        self.cloud_advanced_view = self.cloud_view
-        advanced = self.cloud_advanced_view.content
-        for control in (self.cloud_remote, self.cloud_status, self.remote_browser.widget,
-                        self.cloud_open, self.cloud_cancel, self.cloud_browse):
-            advanced.remove(control)
-        self.cloud_up.parent.remove(self.cloud_up)
+            *self.build_localcrypt(), self.cloud_remote, self.cloud_browse,
+        ], style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
         self.cloud_open.style.flex = 1
-        advanced.add(self.cloud_remote)
-        advanced.add(self.cloud_browse)
-        advanced.insert(advanced.children.index(self.cloud_location) + 1,
-            toga.Button('Browse folder', on_press=self.browse_cloud_path, style=Pack(height=44)))
         self.cloud_remote.style.flex = 1
         self.cloud_browse.text = 'Open remote'
         self.cloud_cancel.text = 'Cancel'
@@ -285,8 +219,7 @@ class CloudUI(LocalCryptUI):
         self.show_view(self.cloud_import_view, destination='settings', route='import-credentials', title='Import credential ZIP')
 
     def refresh_retained_credentials(self):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.refresh_retained_credentials()
+        return self.credential_workflow.refresh_retained_credentials()
 
     def loaded_remote_names(self):
         client = getattr(self, 'cloud_client', None)
@@ -417,68 +350,52 @@ class CloudUI(LocalCryptUI):
         self.cloud_remote_help.text = import_hint(message)
 
     async def _load_crypt_remote_names(self):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return await workflow._load_crypt_remote_names()
+        return await self.credential_workflow._load_crypt_remote_names()
 
     def retained_packages(self, **kwargs):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.retained_packages(**kwargs)
+        return self.credential_workflow.retained_packages(**kwargs)
 
     def remember_credential_association(self, name, remotes, *, session_only):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.remember_credential_association(name, remotes, session_only=session_only)
+        return self.credential_workflow.remember_credential_association(name, remotes, session_only=session_only)
 
     def visible_remote_names(self, names):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.visible_remote_names(names)
+        return self.credential_workflow.visible_remote_names(names)
 
     def package_remote_names(self, label, fallback):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.package_remote_names(label, fallback)
+        return self.credential_workflow.package_remote_names(label, fallback)
 
     def remember_loaded_packages(self, label, names, *, session_only):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.remember_loaded_packages(label, names, session_only=session_only)
+        return self.credential_workflow.remember_loaded_packages(label, names, session_only=session_only)
 
     def loaded_package_label(self):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.loaded_package_label()
+        return self.credential_workflow.loaded_package_label()
 
     def credential_groups(self, choices=None):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.credential_groups(choices)
+        return self.credential_workflow.credential_groups(choices)
 
     def home_unlock_candidates(self):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.home_unlock_candidates()
+        return self.credential_workflow.home_unlock_candidates()
 
     def show_home_unlock(self, widget=None, **kwargs):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.show_home_unlock(widget, **kwargs)
+        return self.credential_workflow.show_home_unlock(widget, **kwargs)
 
     def retained_credential_associations(self):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.retained_credential_associations()
+        return self.credential_workflow.retained_credential_associations()
 
     async def require_remote_credentials_async(self, remote, *, identity=None, resume=None):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return await workflow.require_remote_credentials_async(remote, identity=identity, resume=resume)
+        return await self.credential_workflow.require_remote_credentials_async(remote, identity=identity, resume=resume)
 
     def require_remote_credentials(self, remote, *, identity=None, resume=None, checked=False):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.require_remote_credentials(remote, identity=identity, resume=resume, checked=checked)
+        return self.credential_workflow.require_remote_credentials(remote, identity=identity, resume=resume, checked=checked)
 
     def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files', choices=None):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow.show_retained_unlock(key, remote, identity=identity, resume=resume, destination=destination, choices=choices)
+        return self.credential_workflow.show_retained_unlock(key, remote, identity=identity, resume=resume, destination=destination, choices=choices)
 
     async def restore_cloud(self, widget=None, *, initial=False, **kwargs):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return await workflow.restore_cloud(widget, initial=initial, **kwargs)
+        return await self.credential_workflow.restore_cloud(widget, initial=initial, **kwargs)
 
     def _publish_restored_connections(self, names):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return workflow._publish_restored_connections(names)
+        return self.credential_workflow._publish_restored_connections(names)
 
     async def probe_cloud(self, widget=None, **kwargs):
         if self.cloud_busy or self.cloud_client is None:
@@ -493,12 +410,10 @@ class CloudUI(LocalCryptUI):
             self.set_cloud_busy(False)
 
     async def choose_cloud_package(self, widget=None, **kwargs):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return await workflow.choose_cloud_package(widget, **kwargs)
+        return await self.credential_workflow.choose_cloud_package(widget, **kwargs)
 
     async def import_cloud_package(self, widget=None, **kwargs):
-        workflow = getattr(self, 'credential_workflow', None) or CredentialWorkflow(self)
-        return await workflow.import_cloud_package(widget, **kwargs)
+        return await self.credential_workflow.import_cloud_package(widget, **kwargs)
 
     async def browse_cloud(self, widget=None, *, preserve_path=False, **kwargs):
         return await self.browser_workflow.browse(self.cloud_client, self.selected_cloud_remote(),
@@ -714,3 +629,28 @@ class CloudBrowserPresentation:
 
     def stop(self):
         self.cloud.remote_browser.stop()
+
+
+class CloudActivityPresentation:
+    """Project progress into existing controls; tasks stay with RemoteActivity."""
+    def __init__(self, cloud):
+        self.cloud = cloud
+
+    def start(self):
+        bar = self.cloud.cloud_transfer_progress
+        bar.max = None
+        bar.start()
+
+    def show(self, message):
+        cloud = self.cloud
+        cloud.cloud_status.value = message
+        status = getattr(cloud, 'folder_picker_status', None)
+        if status is not None:
+            status.text = message
+        if getattr(cloud, '_folder_opening', False):
+            cloud.folder_loading_status.text = message
+
+    def stop(self):
+        bar = self.cloud.cloud_transfer_progress
+        bar.stop()
+        bar.max, bar.value = 100, 0

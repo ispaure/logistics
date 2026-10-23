@@ -8,7 +8,7 @@ from pathlib import Path
 
 from commonUtils.persistence import atomic_write_json
 from commonUtils.persistence.publication import serialize_mutation
-from features.rclone.localcrypt.backend import Connection, _linked
+from features.rclone.localcrypt.mapping import Connection, is_linked
 from features.rclone.storage import local_records
 
 
@@ -25,7 +25,7 @@ class LocalConnection(Connection):
 
     def check(self):
         self.data  # Validate the remote's folder spelling before any transfer.
-        if _linked(self.record.parent) or _linked(self.record):
+        if is_linked(self.record.parent) or is_linked(self.record):
             raise ValueError('Local credential associations cannot be stored through a link.')
         mapped = connections(self.root, include_missing=True)
         own = next((item for item in mapped if item.record == self.record), None)
@@ -45,12 +45,12 @@ class LocalConnection(Connection):
 def connections(root=None, *, include_missing=False):
     root = Path(root or storage_root()).absolute()
     directory = local_records(root)
-    if not directory.is_dir() or _linked(directory):
+    if not directory.is_dir() or is_linked(directory):
         return []
     result = []
     for record in directory.glob('*.json'):
         try:
-            if _linked(record) or record.stat().st_size > 8192:
+            if is_linked(record) or record.stat().st_size > 8192:
                 continue
             data = json.loads(record.read_text(encoding='utf-8'))
             if not isinstance(data, dict) or set(data) != {'schema', 'package', 'remote'} or data['schema'] != 1:

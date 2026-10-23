@@ -11,7 +11,7 @@ from features.rclone.mobile.service import native_service
 from features.rclone.transfers.mobile.jobs import MirrorJobs
 from features.rclone.transfers.mobile.plan import NativeTransferRequest
 from features.rclone.transfers.mobile.review_ui import _prepare
-from features.rclone.transfers.mobile.ui import _transfer_result
+from features.rclone.transfers.mobile.execution import wait_for_transfer
 from features.rclone.transfers.review import ReviewRequest
 from features.rclone.transfers.service import TransferPlan, TransferService
 from features.rclone.transfers.transfer_options import TransferOptions
@@ -89,7 +89,7 @@ class TransferCancellationTests(unittest.IsolatedAsyncioTestCase):
             raise OSError('Late write failure')
         client = Mock()
         worker = asyncio.create_task(asyncio.to_thread(writing))
-        caller = asyncio.create_task(_transfer_result(worker, stopping, client))
+        caller = asyncio.create_task(wait_for_transfer(worker, stopping, client))
         try:
             self.assertTrue(await asyncio.to_thread(started.wait, 2))
             caller.cancel()

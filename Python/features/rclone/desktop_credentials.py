@@ -126,7 +126,7 @@ class DesktopCredentials:
             values.clear()
         try:
             if request.crypt_remote is not None:
-                from .localcrypt.backend import backing_target
+                from .localcrypt.mapping import backing_target
                 backing_target(values, request.crypt_remote)
                 if 'password' not in values[request.crypt_remote]:
                     raise ValueError('The credential ZIP is missing its crypt password setting.')

@@ -1,17 +1,12 @@
-"""Local ciphertext copies, explicit transfer routing and session-only read access."""
+"""Session-only resource provider for desktop ciphertext copies."""
 from contextlib import contextmanager
-from collections import OrderedDict
-from dataclasses import dataclass
 from hashlib import sha256
 import json
 import os
 from pathlib import Path, PurePosixPath
 import stat
-import threading
 from uuid import uuid4
 
-from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
-from commonUtils.persistence import atomic_write_json
 from commonUtils.runtime.resources.range_reader import RangeReader
 from commonUtils.runtime.resources.lifetime import ResourceLeases, WorkerCancellation
 from commonUtils.runtime.operations import check_cancelled
@@ -19,188 +14,9 @@ from commonUtils.runtime.streams import copy_stream
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive, serialize_mutation
 from features.rclone import configuration, executable, session
-
-
-def storage_root():
-    from features.rclone.storage import crypt_root
-    return crypt_root()
-
-
-def _linked(path):
-    return path.is_symlink() or (hasattr(path, 'is_junction') and path.is_junction())
-
-
-def _guard_path(path, root):
-    """Permit the chosen root's location; reject links below that boundary."""
-    path, root = Path(path).absolute(), Path(root).absolute()
-    path.relative_to(root)
-    for candidate in (path, *path.parents):
-        if candidate == root:
-            break
-        if _linked(candidate):
-            raise ValueError(f'Encrypted storage cannot contain links or junctions: {candidate}')
-
-
-def validate_ciphertext_tree(item):
-    if not item.data.exists():
-        return
-    for folder, directories, files in os.walk(item.data, followlinks=False):
-        for name in (*directories, *files):
-            path = Path(folder) / name
-            if _linked(path):
-                raise ValueError(f'Encrypted copies cannot transfer symbolic links or junctions: {path}')
-            info = path.lstat()
-            if not stat.S_ISDIR(info.st_mode) and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
-                raise ValueError(f'Encrypted copies require independent regular files: {path}')
-
-
-@dataclass(frozen=True)
-class Connection:
-    package: Path
-    remote: str
-    root: Path
-
-    @property
-    def context(self):
-        return configuration.get_credential_config_path(self.package).with_suffix('.session')
-
-    @property
-    def data(self):
-        # Keep the actual remote spelling; never silently map two names together.
-        name = self.remote
-        if (not name or name.startswith('.') or name.endswith((' ', '.'))
-                or any(ord(c) < 32 or c in '<>:"/\\|?*' for c in name)
-                or name.split('.')[0].upper() in {'CON', 'PRN', 'AUX', 'NUL',
-                    *(f'COM{i}' for i in range(1, 10)), *(f'LPT{i}' for i in range(1, 10))}):
-            raise ValueError('The crypt remote name must be a valid folder name. Rename the remote before pulling.')
-        return self.root / name
-
-    @property
-    def record(self):
-        identity = sha256((str(self.package) + '\0' + self.remote).encode()).hexdigest()
-        return self.root / '.connections' / (identity + '.json')
-
-    @serialize_mutation
-    def publish(self):
-        from services.local_storage import install_local_storage_policy
-        install_local_storage_policy(self.root)
-        if _linked(self.record.parent):
-            raise ValueError('LocalCrypt credential mappings cannot be stored through a link.')
-        mapped = connections(self.root, _include_missing=True)
-        own = next((item for item in mapped if item.record == self.record), None)
-        if own is not None and own != self:
-            raise ValueError('This credential package already has a different LocalCrypt mapping.')
-        if self.record.exists() and own is None:
-            raise ValueError('The existing LocalCrypt credential mapping is invalid.')
-        for item in mapped:
-            if item != self and item.data.relative_to(self.root).as_posix().casefold() == self.data.relative_to(self.root).as_posix().casefold():
-                raise ValueError(f'LocalCrypt folder {self.remote!r} belongs to another credential package. Rename the remote before pulling.')
-        validate_ciphertext_tree(self)
-        if own is None:
-            # Exclusive creation also refuses an untracked directory or symlink.
-            self.data.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            if any(child.name.casefold() == self.data.name.casefold() for child in self.data.parent.iterdir()):
-                raise ValueError(f'LocalCrypt destination already exists without this credential mapping: {self.data}')
-            self.data.mkdir(mode=0o700)
-        else:
-            self.data.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.record.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        from commonUtils.filesystem.local_access import provider_record_access
-        with provider_record_access(self.record):
-            atomic_write_json(self.record, {'schema': 2, 'package': str(self.package), 'remote': self.remote})
-
-
-def connection(config_path, remote, *, root=None):
-    package = session.package_path(config_path)
-    if package is None:
-        raise ValueError('Unlock this credential ZIP for the current session first.')
-    values = session.credentials(config_path)
-    if values is None or values.get(remote, {}).get('type') != 'crypt':
-        raise ValueError('Pull encrypted copy requires a session-loaded crypt remote.')
-    backing_target(values, remote)
-    root = Path(root or storage_root()).absolute()
-    return next((item for item in connections(root, _include_missing=True)
-                 if item.package == package.absolute() and item.remote == remote),
-                Connection(package.absolute(), remote, root))
-
-
-def connections(root=None, *, _include_missing=False):
-    root = Path(root or storage_root()).absolute()
-    directory = root / '.connections'
-    if not directory.is_dir() or directory.is_symlink():
-        return []
-    result = []
-    for record in directory.glob('*.json'):
-        try:
-            if record.is_symlink() or record.stat().st_size > 8192:
-                continue
-            data = json.loads(record.read_text(encoding='utf-8'))
-            if not isinstance(data, dict) or data.get('schema') != 2 or set(data) != {'schema', 'package', 'remote'}:
-                continue
-            package = Path(data['package'])
-            remote = data['remote']
-            if not package.is_absolute() or not isinstance(remote, str) or not remote or any(c in remote for c in '\0\r\n/\\:'):
-                continue
-            item = Connection(package, remote, root)
-            item.data  # Validate the folder name even for a missing copy.
-            if item.record != record or (not _include_missing and not item.data.is_dir()):
-                continue
-            result.append(item)
-        except (OSError, ValueError, TypeError, KeyError):
-            continue
-    return sorted(result, key=lambda item: (item.package.name.casefold(), item.remote.casefold()))
-
-
-def for_path(path, root=None):
-    path = Path(path).absolute()
-    return next((item for item in connections(root) if path == item.data or item.data in path.parents), None)
-
-
-def backing_target(values, remote):
-    settings = values.get(remote, {})
-    if settings.get('type') != 'crypt':
-        raise ValueError('The selected remote is not a crypt remote.')
-    target = settings.get('remote', '')
-    name, colon, _path = target.partition(':')
-    if not colon or not name or name not in values or values[name].get('type') in {'crypt', 'alias', 'union', 'combine'}:
-        raise ValueError('Crypt must point directly to a cloud remote and subpath in the same ZIP.')
-    if not target or any(c in target for c in '\0\r\n'):
-        raise ValueError('Invalid backing remote.')
-    return target
-
-
-def unlock(item, password=None):
-    values = session.credentials(item.context)
-    if values is None or session.package_path(item.context) != item.package:
-        if password is None:
-            raise ValueError('Unlock the matching credential ZIP for this session.')
-        from features.rclone.desktop_service import service
-        from features.rclone.desktop_credentials import DesktopCredentialLoad
-        service.credentials.load(DesktopCredentialLoad(item.package, item.context, crypt_remote=item.remote), password)
-        values = session.credentials(item.context)
-    backing_target(values, item.remote)
-    if 'password' not in values[item.remote]:
-        raise ValueError('The credential ZIP is missing its crypt password setting.')
-    return values
-
-
-def push_target(path, config_path, remote_name=None, *, root=None, specific=False):
-    """Resolve ciphertext copies before ordinary remote:path construction."""
-    item = for_path(path, root)
-    if item is None:
-        boundary = Path(root or storage_root()).absolute()
-        candidate = Path(path).absolute()
-        if candidate == boundary or boundary in candidate.parents:
-            raise ValueError(f'Encrypted copy has no valid credential mapping: {candidate}')
-        from features.rclone.transfers.scope import push_scope
-        remote, prefix = push_scope(Path(path).name, remote_name, specific=specific)
-        return remote + ':' + prefix
-    validate_ciphertext_tree(item)
-    if Path(config_path) != item.context:
-        raise ValueError('This encrypted copy belongs to a different credential package.')
-    target = backing_target(unlock(item), item.remote)
-    suffix = Path(path).absolute().relative_to(item.data).as_posix()
-    return target.rstrip('/') + ('/' + suffix if suffix != '.' else '')
+from .mapping import guard_ciphertext_path, is_linked, unlock, validate_ciphertext_tree
+from .read_cache import PrivateReadCache
+from .transport import CryptCommand
 
 
 class LocalCryptFolder:
@@ -239,18 +55,18 @@ class CryptResources(LocalFiles):
         settings['remote'] = str(item.data.resolve(strict=True))
         self.storage_namespace = sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()
         session.remember(self.context, {'view': settings}, private=True, parent=item.context)
-        self.closed = False
-        self._encoded_paths = {}
-        self._directories = {'': self.root}
-        self._sizes = OrderedDict()
-        self._blocks = OrderedDict()
-        self._cache_bytes = 0
-        self._cache_lock = threading.RLock()
         self._cancellation = WorkerCancellation()
+        self._cache = PrivateReadCache(self.root, self._check_active)
+        self._commands = CryptCommand(self.binary, self.context, self._cancellation,
+                                      self._check_active, closed=lambda: self.closed)
         self._leases = ResourceLeases(validate=self._check_active, close=self.close)
         self._unsubscribe = session.on_forget(self.context, self.close)
         from features.rclone.desktop_service import service
         self.credential_grant = service.credentials.capture(self.context)
+
+    @property
+    def closed(self):
+        return self._cache.closed
 
     def acquire(self):
         return self._leases.acquire()
@@ -278,32 +94,19 @@ class CryptResources(LocalFiles):
         return resource_path(text)
 
     def command(self, operation, path='', *extra, input_data=None, input_writer=None, limit=1024 * 1024, cancelled=lambda: False):
-        self._check_active()
-        scoped = self._cancellation.current
-        requested = cancelled
-        revoked = session.revocation_check(self.context)
-        cancelled = lambda: self.closed or revoked() or scoped() or requested()
-        relative = self.relative(path)
-        launched = session.launch(self.context, 'view:' + relative, '')
-        if launched is None:
-            raise ValueError('The credential session is locked. Reopen the document after unlocking its ZIP.')
-        environment, remote, _ = launched
-        arguments = [str(self.binary), '--config', session.NULL_CONFIG, '--log-level', 'ERROR', '--retries', '1',
-                     '--low-level-retries', '1', '--contimeout', '15s', '--timeout', '30s', operation, remote, *extra]
-        result = run_bytes(arguments, environment=environment, input_data=input_data, input_writer=input_writer, max_output=limit, cancelled=cancelled)
-        self._check_active()
-        check_cancelled(cancelled)
-        return result
+        return self._commands.command(operation, self.relative(path), *extra,
+                                      input_data=input_data, input_writer=input_writer,
+                                      limit=limit, cancelled=cancelled)
 
     def list(self, path='', *, cancelled=lambda: False):
         # Transfers and initial unlock validate the whole tree. Navigation only
         # needs to inspect the requested directory and its immediate children.
         physical = self._physical(path, directory=True)
-        _guard_path(physical, self.root)
+        guard_ciphertext_path(physical, self.root)
         versions = {}
         for child in physical.iterdir():
             check_cancelled(cancelled)
-            if _linked(child):
+            if is_linked(child):
                 raise ValueError(f'Encrypted copies cannot contain links or junctions: {child}')
             info = child.lstat()
             versions[child] = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
@@ -321,14 +124,14 @@ class CryptResources(LocalFiles):
             relative = '/'.join(part for part in (prefix, name) if part)
             encrypted = self.relative(row['EncryptedPath'])
             target = physical / encrypted
-            _guard_path(target, self.root)
-            self._remember_path(relative, target, directory=bool(row['IsDir']))
+            guard_ciphertext_path(target, self.root)
+            self._cache.remember_path(relative, target, directory=bool(row['IsDir']))
             if row['IsDir']:
                 revision = None
             else:
                 revision = self.version(relative)
                 if versions.get(target) == revision:
-                    self._remember_size(relative, revision, int(row['Size']))
+                    self._cache.remember_size(relative, revision, int(row['Size']))
             result.append(dict(name=name, path=relative, revision=revision,
                                directory=bool(row['IsDir']), size=int(row['Size']), modified=row.get('ModTime', '')))
         self._check_active()
@@ -347,7 +150,7 @@ class CryptResources(LocalFiles):
             for name in (*directories, *files):
                 check_cancelled(cancelled)
                 target = Path(folder) / name
-                _guard_path(target, self.root)
+                guard_ciphertext_path(target, self.root)
                 info = target.lstat()
                 if not stat.S_ISDIR(info.st_mode) and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
                     raise ValueError(f'Encrypted copies require independent regular files: {target}')
@@ -362,8 +165,8 @@ class CryptResources(LocalFiles):
                 raise ValueError('Invalid decrypted filename.')
             relative = '/'.join(part for part in (prefix, child) if part)
             target = physical / self.relative(row['EncryptedPath'])
-            _guard_path(target, self.root)
-            self._remember_path(relative, target, directory=bool(row['IsDir']))
+            guard_ciphertext_path(target, self.root)
+            self._cache.remember_path(relative, target, directory=bool(row['IsDir']))
             if row['IsDir']:
                 revision = None
             else:
@@ -376,36 +179,12 @@ class CryptResources(LocalFiles):
     def encrypted_path(self, path):
         self._check_active()
         relative = self.relative(path)
-        with self._cache_lock:
-            self._check_active()
-            target = self._encoded_paths.get(relative)
+        target = self._cache.path(relative)
         if target is None:
-            revoked = session.revocation_check(self.context)
-            launched = session.launch(self.context, 'view:', '')
-            if launched is None:
-                raise ValueError('The credential session is locked. Reopen the document after unlocking its ZIP.')
-            environment, remote, _ = launched
-            arguments = [str(self.binary), '--config', session.NULL_CONFIG, 'backend', 'encode', remote, relative, '--json']
-            scoped = self._cancellation.current
-            cancelled = lambda: self.closed or revoked() or scoped()
-            result = json.loads(run_bytes(arguments, environment=environment, max_output=16384, cancelled=cancelled))
-            self._check_active()
-            check_cancelled(cancelled)
-            if not isinstance(result, list) or len(result) != 1:
-                raise ValueError('Encrypted path could not be resolved.')
-            target = self.root / self.relative(result[0])
-        _guard_path(target, self.root)
-        self._remember_path(relative, target)
+            target = self.root / self.relative(self._commands.encode(relative))
+        guard_ciphertext_path(target, self.root)
+        self._cache.remember_path(relative, target)
         return target
-
-    def _remember_path(self, relative, target, *, directory=False):
-        # Publish names under the same lock as retirement. A worker returning
-        # from rclone/path validation must not restore a closed view's caches.
-        with self._cache_lock:
-            self._check_active()
-            self._encoded_paths[relative] = target
-            if directory:
-                self._directories[relative] = target
 
     def _physical(self, path, directory=False):
         relative = self.relative(path)
@@ -415,11 +194,9 @@ class CryptResources(LocalFiles):
         # Encoding a child maps every parent with the directory-name settings,
         # including remotes whose filename encryption is disabled.
         if directory:
-            with self._cache_lock:
-                self._check_active()
-                target = self._directories.get(relative)
+            target = self._cache.path(relative, directory=True)
             if target is not None:
-                _guard_path(target, self.root)
+                guard_ciphertext_path(target, self.root)
                 self._check_active()
                 return target
             return self.encrypted_path(relative + '/.directory-probe').parent
@@ -444,7 +221,7 @@ class CryptResources(LocalFiles):
             finally:
                 if owned:
                     encrypted.unlink(missing_ok=True)
-                self._encoded_paths.pop(temporary, None)
+                self._cache.forget_path(temporary)
 
     def version(self, path):
         info = self.encrypted_path(path).stat()
@@ -455,27 +232,16 @@ class CryptResources(LocalFiles):
     def size(self, path):
         path = self.relative(path)
         revision = self.version(path)
-        with self._cache_lock:
-            self._check_active()
-            cached = self._sizes.get(path)
-            if cached and cached[0] == revision:
-                self._sizes.move_to_end(path)
-                return cached[1]
+        cached = self._cache.size(path, revision)
+        if cached is not None:
+            return cached
         row = json.loads(self.command('lsjson', path, '--stat', limit=65536))
         if row.get('IsDir') or not isinstance(row.get('Size'), int) or row['Size'] < 0:
             raise ValueError('Choose a regular file.')
         if self.version(path) != revision:
             raise ValueError('The encrypted document changed; reopen it.')
-        self._remember_size(path, revision, row['Size'])
+        self._cache.remember_size(path, revision, row['Size'])
         return row['Size']
-
-    def _remember_size(self, path, revision, size):
-        with self._cache_lock:
-            self._check_active()
-            self._sizes[path] = revision, size
-            self._sizes.move_to_end(path)
-            while len(self._sizes) > 10000:
-                self._sizes.popitem(last=False)
 
     def read_bytes(self, path, *, limit=None):
         limit = self.max_text if limit is None else limit
@@ -493,22 +259,13 @@ class CryptResources(LocalFiles):
             if self.version(path) != expected:
                 raise ValueError('The encrypted document changed; reopen it.')
             key = path, expected, offset, count
-            with self._cache_lock:
-                self._check_active()
-                if key in self._blocks:
-                    self._blocks.move_to_end(key)
-                    return self._blocks[key]
+            cached = self._cache.block(key)
+            if cached is not None:
+                return cached
             data = self.command('cat', path, '--offset', str(offset), '--count', str(count), limit=count)
             if self.version(path) != expected:
                 raise ValueError('The encrypted document changed; reopen it.')
-            with self._cache_lock:
-                self._check_active()
-                if key not in self._blocks:
-                    self._blocks[key] = data
-                    self._cache_bytes += len(data)
-                while self._cache_bytes > 32 * 1024 * 1024 or len(self._blocks) > 512:
-                    _, evicted = self._blocks.popitem(last=False)
-                    self._cache_bytes -= len(evicted)
+            self._cache.remember_block(key, data)
             return data
         def validate():
             # RangeReader can satisfy a read entirely from its own RAM cache.
@@ -569,7 +326,7 @@ class CryptResources(LocalFiles):
         def cleanup():
             if owned:
                 encrypted_temporary.unlink(missing_ok=True)
-            self._encoded_paths.pop(temporary, None)
+            self._cache.forget_path(temporary)
         save_transaction(stage=stage, verify=verified, validate=validate,
                          publish=lambda: os.replace(encrypted_temporary, target),
                          cleanup=cleanup, cancelled=cancelled)
@@ -591,15 +348,5 @@ class CryptResources(LocalFiles):
         return None
 
     def close(self):
-        with self._cache_lock:
-            if self.closed:
-                return
-            self.closed = True
-            # Retire private data before callbacks, including callbacks which
-            # block or fail. Late workers validate under this same lock.
-            self._blocks.clear()
-            self._sizes.clear()
-            self._encoded_paths.clear()
-            self._directories.clear()
-            self._cache_bytes = 0
-        session.forget(self.context)
+        if self._cache.retire():
+            session.forget(self.context)

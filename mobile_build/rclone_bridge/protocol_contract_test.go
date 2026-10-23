@@ -30,10 +30,6 @@ func TestSharedProtocolContract(t *testing.T) {
 	if fixture.Schema != 1 {
 		t.Fatal("unsupported fixture schema")
 	}
-	tree, err := parser.ParseFile(token.NewFileSet(), "main.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
 	handled := map[string]bool{}
 	add := func(expr ast.Expr) {
 		if literal, ok := expr.(*ast.BasicLit); ok && literal.Kind == token.STRING {
@@ -43,28 +39,34 @@ func TestSharedProtocolContract(t *testing.T) {
 			}
 		}
 	}
-	for _, decl := range tree.Decls {
-		function, ok := decl.(*ast.FuncDecl)
-		if !ok || function.Name.Name != "dispatch" {
-			continue
+	for _, filename := range []string{"protocol.go", "requests.go"} {
+		tree, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
+		if err != nil {
+			t.Fatal(err)
 		}
-		ast.Inspect(function.Body, func(node ast.Node) bool {
-			switch node := node.(type) {
-			case *ast.SwitchStmt:
-				if tag, ok := node.Tag.(*ast.Ident); ok && tag.Name == "action" {
-					for _, item := range node.Body.List {
-						for _, expr := range item.(*ast.CaseClause).List {
-							add(expr)
+		for _, decl := range tree.Decls {
+			function, ok := decl.(*ast.FuncDecl)
+			if !ok || (function.Name.Name != "dispatch" && function.Name.Name != "executeRequest") {
+				continue
+			}
+			ast.Inspect(function.Body, func(node ast.Node) bool {
+				switch node := node.(type) {
+				case *ast.SwitchStmt:
+					if tag, ok := node.Tag.(*ast.Ident); ok && tag.Name == "action" {
+						for _, item := range node.Body.List {
+							for _, expr := range item.(*ast.CaseClause).List {
+								add(expr)
+							}
 						}
 					}
+				case *ast.BinaryExpr:
+					if left, ok := node.X.(*ast.Ident); ok && left.Name == "action" && node.Op == token.EQL {
+						add(node.Y)
+					}
 				}
-			case *ast.BinaryExpr:
-				if left, ok := node.X.(*ast.Ident); ok && left.Name == "action" && node.Op == token.EQL {
-					add(node.Y)
-				}
-			}
-			return true
-		})
+				return true
+			})
+		}
 	}
 	for _, action := range fixture.Actions {
 		if !handled[action] {

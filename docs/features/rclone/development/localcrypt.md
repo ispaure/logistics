@@ -24,7 +24,7 @@ does not satisfy this creation contract. The same session can supply online Clou
 remotes, including those without a local copy. Credential lifetime and persistence
 of the ciphertext copy are separate: ending the session preserves the copy.
 
-`features/rclone/localcrypt/backend.py` maps an absolute credential ZIP path and remote
+`features/rclone/localcrypt/mapping.py` maps an absolute credential ZIP path and remote
 name to a stable directory under the Logistics per-user application support root's
 `LocalCrypt`. `.connections` records contain
 only schema, package path and remote name. Schema 2 stores new copies directly at
@@ -32,7 +32,8 @@ only schema, package path and remote name. Schema 2 stores new copies directly a
 compatibility branch is removed. Unsupported records and their ciphertext are
 preserved without migration or deletion. A same-account unsupported record blocks
 publication of a replacement mapping instead of adopting or overwriting data.
-Publication is serialized, rejects case-insensitive name ownership conflicts and untracked
+Import copy identities and routing helpers from this mapping owner; reader sessions
+remain in `localcrypt.backend`. Publication is serialized, rejects case-insensitive name ownership conflicts and untracked
 existing destinations, and requires portable folder names rather than silently
 sanitizing them. Malformed records are ignored. Package
 moves change identity; missing mappings block transfers inside the LocalCrypt
@@ -86,6 +87,15 @@ streams share revision-keyed range blocks in provider-owned RAM, capped at 32 Mi
 and 512 blocks; size metadata is capped at 10,000 files. Cache hits still check
 session validity, cancellation and physical revisions. Publication changes the
 revision, and provider closure clears the cache. No plaintext disk cache is added.
+
+`localcrypt/read_cache.py:PrivateReadCache` owns the session-private caches and
+their retirement lock. Encoded path/directory mappings are also limited to 10,000
+recent paths; an evicted mapping is reconstructed through rclone when needed.
+`localcrypt/transport.py:CryptCommand` applies the same session launch, revocation,
+worker cancellation and output-bound checks to path encoding and document I/O.
+`CryptResources` keeps physical path/revision checks and verified replacement
+policy. Temporary-save cleanup removes both metadata and plaintext verification
+blocks for the staged path, including after provider retirement.
 
 Desktop archive streams use two cached 4 MiB ranges per reader to reduce CLI
 startup overhead for large covers. Bounded text/INI reads share the same cache.

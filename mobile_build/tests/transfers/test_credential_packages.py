@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch, Mock, AsyncMock
 from mobile.app import LogisticsMobile
 from features.rclone.mobile.credential_packages import CredentialPackages
-from features.rclone.mobile.cloud_ui import SelectedCredentialZIP
+from features.rclone.mobile.credentials_ui import SelectedCredentialZIP
 from commonUtils.runtime.resources.documents import LocalDocuments
 
 

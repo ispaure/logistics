@@ -1,10 +1,10 @@
 """Credential publication keeps invalidation fail-safe across mobile scenes."""
-import threading
 import unittest
 from unittest.mock import patch
 
 from features.rclone.mobile.credential_state import NativeCredentialState
 from features.rclone.localcrypt.backend import CryptResources
+from features.rclone.localcrypt.read_cache import PrivateReadCache
 
 
 class CredentialPublicationTests(unittest.TestCase):
@@ -30,20 +30,18 @@ class CredentialPublicationTests(unittest.TestCase):
 
     def test_closed_localcrypt_discards_plaintext_even_if_notification_fails(self):
         provider = CryptResources.__new__(CryptResources)
-        provider.closed, provider.context = False, '/synthetic/reader'
-        provider._cache_lock = threading.RLock()
-        provider._blocks = {'block': b'synthetic plaintext'}
-        provider._sizes = {'file': 10}
-        provider._encoded_paths = {'file': 'ciphertext'}
-        provider._directories = {'': 'root'}
-        provider._cache_bytes = 19
+        provider.context = '/synthetic/reader'
+        provider._cache = PrivateReadCache('root', lambda: None)
+        provider._cache.remember_block(('file', ('revision',), 0, 19), b'synthetic plaintext')
+        provider._cache.remember_size('file', ('revision',), 10)
+        provider._cache.remember_path('file', 'ciphertext')
         with patch('features.rclone.session.forget', side_effect=ValueError('synthetic observer failure')):
             with self.assertRaisesRegex(ValueError, 'synthetic observer failure'):
                 provider.close()
         self.assertTrue(provider.closed)
-        self.assertEqual(provider._blocks, {})
-        self.assertEqual(provider._sizes, {})
-        self.assertEqual(provider._encoded_paths, {})
-        self.assertEqual(provider._directories, {})
-        self.assertEqual(provider._cache_bytes, 0)
+        self.assertEqual(provider._cache._blocks, {})
+        self.assertEqual(provider._cache._sizes, {})
+        self.assertEqual(provider._cache._paths, {})
+        self.assertEqual(provider._cache._directories, {})
+        self.assertEqual(provider._cache._bytes, 0)
         provider.close()

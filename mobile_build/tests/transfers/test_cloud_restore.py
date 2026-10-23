@@ -1,3 +1,4 @@
+from features.rclone.mobile.credentials_ui import CredentialWorkflow
 """Home/local actions stay usable while cloud-backed reopens await credentials."""
 import asyncio
 from pathlib import Path
@@ -68,7 +69,7 @@ class CloudRestoreTests(IsolatedAsyncioTestCase):
         app = SimpleNamespace(cloud_client=client, active_host=True, navigation_generation=1,
             cloud_restore_task=asyncio.create_task(restore()), loaded_remote_names=lambda: [],
             require_remote_credentials=Mock(return_value=False))
-        opening = asyncio.create_task(CloudUI.require_remote_credentials_async(app, 'Drive', identity='identity'))
+        opening = asyncio.create_task(CredentialWorkflow(app).require_remote_credentials_async('Drive', identity='identity'))
         await asyncio.sleep(0)
         client.connection_identity.assert_not_called()
         ready.set()

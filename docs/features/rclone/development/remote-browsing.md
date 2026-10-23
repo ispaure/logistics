@@ -4,7 +4,9 @@ Mobile `CloudUI.show_cloud` retains prepared-client admission, cached credential
 publication, restore startup, busy-state projection and generation refresh checks.
 `_build_cloud_controls` constructs the existing connection/browser/download controls;
 `_build_cloud_views` assembles their connection/import/advanced routes and browser
-parenting in the original order. Both populate the retained CloudController fields;
+directly in their final layout. Browser status and parent navigation belong to the
+browser header; advanced actions never temporarily adopt those controls. Both
+builders populate the retained CloudController fields;
 they introduce no account, request or cancellation owner. Credential workflows and
 the remote listing service remain independent from this construction boundary.
 
@@ -58,9 +60,13 @@ the listing. Focused workflow and remote-reader tests cover both paths.
 
 Mobile remote listings deliberately have no thumbnail callback, including tile
 mode: enumerating a folder must not enqueue archive-cover reads on the serial
-native connection. `CloudUI.remote_activity` runs a UI-loop timer and marshals
-worker step notifications back to that loop. Its timer and indeterminate bar are
-retired on success, error and cancellation; late worker callbacks are ignored.
+native connection. `CloudUI.remote_activity` delegates to `mobile.activity.RemoteActivity`,
+which owns one UI-loop timer per controller and marshals worker step notifications
+back to that loop. The newest active request owns status; nested or overlapping
+requests can retire in either order. Its presentation port projects messages into
+the browser/folder status controls. The timer and indeterminate bar are retired on
+success, error and cancellation; late or already-queued worker callbacks are
+ignored after their request retires.
 The mobile browser is titled **Cloud File Browser** and starts with its compact
 location header and the listing. Open documents and Recent use cloud/device and
 connection lock badges. The mobile host's `document_sources` keeps saved-credential

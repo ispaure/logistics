@@ -84,7 +84,7 @@ class ResourceImportTests(unittest.TestCase):
                 app.show_cloud()
                 path = seed_download(app.downloads, 'same.md', b'original')
                 app.refresh_downloads(path)
-                with patch('features.rclone.mobile.cloud_ui.collection_path', side_effect=OSError('SD card unavailable')):
+                with patch('features.rclone.mobile.downloads.collection_path', side_effect=OSError('SD card unavailable')):
                     app.loop.run_until_complete(app.open_download())
                 self.assertEqual(app.editor.value, 'original', app.cloud_status.value)
                 key = app.current.id
