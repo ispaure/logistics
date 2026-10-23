@@ -369,3 +369,29 @@ completed baseline. Remaining priorities continue to govern selection.
 - The latest shared boundary/permission revision `9c2f420` passes all 179 shared
   files in one unrestricted run and exact vendor comparison; 31 Blue Hole consumer
   tests pass. No remote push or release has occurred.
+
+## Continued execution: local export provider boundaries
+
+- Two regressions reproduced local document export publishing directly into a
+  host-protected provider root, including a root registered during copying.
+- The existing path guard now runs before source access and before publication.
+  Denial preserves the selected file and removes only the export's own stage.
+  Existing successful overwrite and failed-copy behavior remain covered.
+- Shared `0e25281` passes all six document-export tests, the 25-file native suite
+  with Toga's dummy backend and correctness lint. Consumer picker (5), editor
+  picker (7), screen privacy (15) and LocalCrypt UI (3) tests pass. The preceding
+  full mobile run completed all 162 files with zero failures.
+- Logistics `51691705` pins that revision; Blue Hole `0a67b2b` vendors its exact
+  bytes and passes all 31 consumer tests. Actual Android/iOS pickers remain
+  outside host validation. Git settings changes were committed as `357af455`,
+  the preceding shared pin as `8a4a86f2`, vendor as `f8881cb`.
+
+## Continued execution: IDE checkpoint baseline and size consistency
+
+- Two regressions reproduced an IDE save adopting another writer's bytes after
+  publication and saving a checkpoint too large for its own reader to reopen.
+- The writer retains its own published bytes as the next conflict baseline and
+  checks the same 4 MiB byte limit as the reader before staging. JSON schema and
+  formatting remain unchanged; concurrent edits still use optimistic checks.
+- All 28 IDE tests pass after the fixes; correctness lint and the existing
+  architecture policy pass without added dependency exceptions.
