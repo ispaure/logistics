@@ -40,10 +40,8 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
         self.assertNotIn('needs:', workflow['android'])
         self.assertIn('fail-fast: false', workflow['ios-ui'])
         self.assertNotIn('max-parallel: 1', workflow['ios-ui'])
-        alternatives = re.findall(r"'([\[][\"\w,]+\])'", workflow['ios-ui'])
-        self.assertEqual([json.loads(value) for value in alternatives],
-                         [['iphone', 'duo', 'ipad'], ['iphone', 'duo']])
-        self.assertIn('inputs.include_ipad', workflow['ios-ui'])
+        self.assertIn('        device: [iphone, duo, ipad]\n', workflow['ios-ui'])
+        self.assertNotIn('include_ipad', (REPO / '.github/workflows/mobile-build.yml').read_text())
         self.assertIn('briefcase build iOS --test --no-input', workflow['ios-build'])
         self.assertNotIn('briefcase build', workflow['ios-ui'])
         self.assertIn('name: logistics-ios-test-project', workflow['ios-build'])

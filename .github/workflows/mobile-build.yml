@@ -12,18 +12,11 @@ on:
         type: choice
         default: both
         options: [android, ios, both]
-      include_ipad:
-        description: Also require iPad independent-window validation
-        type: boolean
-        default: false
   workflow_call:
     inputs:
       target:
         type: string
         default: both
-      include_ipad:
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -157,7 +150,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: ${{ fromJSON(inputs.include_ipad && '["iphone","duo","ipad"]' || '["iphone","duo"]') }}
+        device: [iphone, duo, ipad]
     defaults:
       run:
         shell: bash

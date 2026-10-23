@@ -90,7 +90,7 @@ process. See `Python/tests/run_platform_checks.py` for the current orchestration
 ## Parallel native iOS validation
 
 `.github/workflows/mobile-build.yml` builds one iOS Simulator application in
-Briefcase test mode, then runs the complete native suite on iPhone and iPhone Duo
+Briefcase test mode, then runs the complete native suite on iPhone, iPhone Duo and iPad
 in separate matrix jobs. Each device restores the same generated project and
 binary and runs with `ui_tools.py run ios --no-update`. The runner rejects a
 missing binary, a production-mode app, dirty source or a different Logistics or
@@ -98,11 +98,10 @@ commonUtils commit before launch; the resulting report must still pass the full
 native case and source checks. The Duo job additionally requires its rotation
 matrix. Android builds and validates independently of the iOS jobs.
 
-Default native coverage excludes iPad. Select `include_ipad` when manually running
-the native workflow, or pass it to the reusable workflow, to add a parallel iPad
-job with required independent-window checks. A selected iPad failure blocks that
-run. Device jobs use separate runners and artifacts named
-`logistics-native-ios-iphone`, `logistics-native-ios-duo` and, when selected,
+Every iOS validation run requires all three device families, including iPad
+independent-window checks. An iPad failure blocks the run. Device jobs use
+separate runners and artifacts named
+`logistics-native-ios-iphone`, `logistics-native-ios-duo` and
 `logistics-native-ios-ipad`; their logs and reports cannot overwrite each other.
 The shared project is retained as `logistics-ios-test-project`, and
 `logistics-native-ios` contains the test-mode simulator ZIP and build diagnostics.
