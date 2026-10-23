@@ -8,6 +8,12 @@ checkpoints below retain their original scope. Source snapshot: Logistics
 maintenance branches. Both consumers pin the exact same shared content. No
 remote push, release, dependency installation or persisted-format migration.
 
+The [follow-up review](overnight_progress.md#follow-up-review-of-all-maintenance-changes)
+found no additional runtime defect. It clarified shared extraction documentation
+and removed test whitespace without changing its AST. Both consumers now pin shared
+`e2f18fd` (Blue Hole `0edf0d2`); production behavior and the implementation metrics
+below are unchanged. The follow-up records fresh host suites and their skips.
+
 | Repository | Baseline → current production lines | Baseline → current test lines | Python files |
 | --- | ---: | ---: | ---: |
 | Logistics | 89,213 → 89,510 | 75,541 → 76,703 | 1,152 → 1,152 |
