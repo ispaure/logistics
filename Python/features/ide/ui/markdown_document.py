@@ -8,10 +8,10 @@ from features.ide.ui.documents import DocumentBuffer, EditorDocument
 class MarkdownBuffer(DocumentBuffer):
     def configure(self):
         for view in self.views:
-            view._loaded_path = self.snapshot.path
+            view.document_state.loaded_path = self.snapshot.path
             view.history = [{'url': qt.QUrl.fromLocalFile(str(self.snapshot.path)), 'scroll': 0}]
             view.history_index = 0
-            view._source_bytes = self.snapshot.original
+            view.document_state.source_bytes = self.snapshot.original
             view._update_buttons()
             view._source_changed()
 

@@ -103,7 +103,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertIn('nested note',window.viewer.browser.toPlainText())
             window.retire()
             self.assertEqual(window.storage.data,b'')
-            self.assertIsNone(window.viewer._source_bytes)
+            self.assertIsNone(window.viewer.document_state.source_bytes)
             self.assertTrue(provider.closed)
 
     def test_marker_file_and_escape_never_open(self):
@@ -163,4 +163,4 @@ class NotesLibraryDesktopTests(QtTestCase):
                 self.wait_until(lambda:not isValid(window) or not window.progress.busy)
                 if isValid(window):
                     self.assertEqual(window.storage.data, b'')
-                    self.assertIsNone(window.viewer._source_bytes)
+                    self.assertIsNone(window.viewer.document_state.source_bytes)

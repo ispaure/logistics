@@ -189,8 +189,7 @@ class NotesLibraryWindow(qt.QMainWindow):
     def clear_content(self):
         self.viewer.speech.stop()
         self.storage.data = b''; self.storage.path = None
-        self.viewer._source_bytes = self.viewer._rich_source = self.viewer._rich_snapshot = None
-        self.viewer._loaded_path = None
+        self.viewer.document_state.new()
         self.viewer.document_title.setText('');self.viewer.location.clear()
         self.viewer.history.clear(); self.viewer.history_index = -1
         self.viewer.browser.clear(); self.viewer.editor.clear(); self.viewer.formatted_editor.clear()

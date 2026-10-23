@@ -37,6 +37,16 @@ rules are replaced. Conditional generic activation preserves specialized
 non-text file handling and the built-in Markdown reader; explicit text-editor
 opening remains available for Markdown and other text formats.
 
+## Notes document ownership
+
+The desktop Notes library clears `viewer.document_state` when retiring a private
+draft, then clears the reading/source/formatted surfaces. Saved byte and rich
+baselines therefore retire through the declared shared owner rather than through
+separate private viewer attributes. The ownership contract is documented in
+[commonUtils Markdown](../../../../commonUtils/ui/markdown/README.md#internal-ownership-and-embedding-contracts),
+and `test_notes_library_desktop.py` verifies that retired drafts retain no saved
+byte baseline.
+
 ## Highlighting dependency
 
 Logistics pins pure-Python **Pygments 2.19.2** in its project and lockfile. Its
