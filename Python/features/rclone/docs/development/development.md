@@ -337,3 +337,18 @@ machine. Desktop sync and mobile jobs retain mandatory execution preflight and
 mutation/collision policy. A completed comparison is not an atomic storage lock
 or a guarantee against later remote changes. Focused coverage includes
 `test_review_session`, `test_rclone_review`, push-policy and mobile review tests.
+
+## Desktop provider lifetimes
+
+`RemoteResources` and LocalCrypt `CryptResources` compose the shared
+`ResourceLeases` and `WorkerCancellation` classes. Each provider retains its own
+credential validation, explicit close, encrypted-path guards and cache cleanup.
+Browser/document owners acquire independent idempotent releases; the last release
+closes the provider. Nested worker cancellation restores the outer scope even on
+failure, without affecting readers in another thread. LocalCrypt captures the
+current predicate before invoking command, encoding and staged-save work.
+
+Focused validation covers concurrent/duplicate releases, rejected acquisition,
+nested scopes, exception restoration and thread isolation in commonUtils, plus
+real rclone LocalCrypt reading, encrypted saves, cancellation, revocation and
+remote browser workflows in Logistics.

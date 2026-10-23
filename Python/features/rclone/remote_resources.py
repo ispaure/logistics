@@ -11,6 +11,7 @@ from uuid import uuid4
 from commonUtils.integrations.wrappers.cmdShellWrapper.binary import BinaryCommandError, run_bytes
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.resources.range_reader import RangeReader
+from commonUtils.runtime.resources.lifetime import ResourceLeases, WorkerCancellation
 from commonUtils.runtime.resources.paths import resource_path
 from commonUtils.runtime.resources.provider import ResourceCapabilities
 from . import session
@@ -91,9 +92,8 @@ class RemoteResources:
                          parent=self.config_path if self._disk_revision is None else None)
         self.root = Path(Path.home().anchor) / '.logistics-remote' / sha256(str(self.config_path).encode()).hexdigest()[:16] / remote
         self.closed = False
-        self._owners = 0
-        self._lock = threading.RLock()
-        self._scope = threading.local()
+        self._cancellation = WorkerCancellation()
+        self._leases = ResourceLeases(validate=self._check_active, close=self.close)
         with _providers_lock:
             _providers.add(self)
 
@@ -103,7 +103,7 @@ class RemoteResources:
         return resource_path(str(path))
 
     def _check_active(self):
-        check_cancelled(getattr(self._scope, 'cancelled', lambda: False))
+        check_cancelled(self._cancellation.current)
         if self.closed or session.credentials(self.context) is None:
             raise ValueError('Credentials changed or were locked. Reopen this remote.')
         if self._disk_revision is not None:
@@ -117,28 +117,13 @@ class RemoteResources:
 
     @contextmanager
     def operation(self, cancelled):
-        previous = getattr(self._scope, 'cancelled', lambda: False)
-        self._scope.cancelled = lambda: previous() or cancelled()
-        try:
+        """Scope cancellation to this worker; validate before entering."""
+        with self._cancellation.scope(cancelled):
             self._check_active()
             yield
-        finally:
-            self._scope.cancelled = previous
 
     def acquire(self):
-        with self._lock:
-            self._check_active()
-            self._owners += 1
-        released = False
-        def release(*_):
-            nonlocal released
-            with self._lock:
-                if not released:
-                    released = True
-                    self._owners -= 1
-                    if self._owners == 0:
-                        self.close()
-        return release
+        return self._leases.acquire()
 
     def close(self):
         self.closed = True
@@ -156,7 +141,7 @@ class RemoteResources:
                 '--contimeout', '15s', '--timeout', '30s', operation, *flags, '--', source],
                 environment=environment, max_output=limit, max_stderr=64 * 1024,
                 cancelled=lambda: cancelled() or self.closed or session.credentials(self.context) is None
-                or getattr(self._scope, 'cancelled', lambda: False)())
+                or self._cancellation.current())
         except BinaryCommandError as error:
             self._check_active()
             raise OSError(remote_failure(error)) from None

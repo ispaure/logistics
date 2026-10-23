@@ -13,6 +13,7 @@ from uuid import uuid4
 from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
 from commonUtils.persistence import atomic_write_json
 from commonUtils.runtime.resources.range_reader import RangeReader
+from commonUtils.runtime.resources.lifetime import ResourceLeases, WorkerCancellation
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive, serialize_mutation
@@ -243,40 +244,22 @@ class CryptResources(LocalFiles):
         self._blocks = OrderedDict()
         self._cache_bytes = 0
         self._cache_lock = threading.RLock()
-        self._operation = threading.local()
-        self._owners = 0
-        self._owner_lock = threading.RLock()
+        self._cancellation = WorkerCancellation()
+        self._leases = ResourceLeases(validate=self._check_active, close=self.close)
         self._unsubscribe = session.on_forget(self.context, self.close)
 
     def acquire(self):
-        """Return an idempotent release callback for a browser/document owner."""
-        with self._owner_lock:
-            self._check_active()
-            self._owners += 1
-        released = False
-        def release(*_):
-            nonlocal released
-            with self._owner_lock:
-                if not released:
-                    released = True
-                    self._owners -= 1
-                    if self._owners == 0:
-                        self.close()
-        return release
+        return self._leases.acquire()
 
     @contextmanager
     def operation(self, cancelled):
-        """Scope cancellation to this worker; concurrent readers remain independent."""
-        previous = getattr(self._operation, 'cancelled', lambda: False)
-        self._operation.cancelled = lambda: previous() or cancelled()
-        try:
+        """Scope cancellation to this worker; validate before entering."""
+        with self._cancellation.scope(cancelled):
             self._check_active()
             yield
-        finally:
-            self._operation.cancelled = previous
 
     def _check_active(self):
-        check_cancelled(getattr(self._operation, 'cancelled', lambda: False))
+        check_cancelled(self._cancellation.current)
         if self.closed or session.credentials(self.context) is None:
             raise ValueError('The credential session is locked. Reopen the document after unlocking its ZIP.')
 
@@ -290,7 +273,7 @@ class CryptResources(LocalFiles):
 
     def command(self, operation, path='', *extra, input_data=None, input_writer=None, limit=1024 * 1024, cancelled=lambda: False):
         self._check_active()
-        scoped = getattr(self._operation, 'cancelled', lambda: False)
+        scoped = self._cancellation.current
         requested = cancelled
         revoked = session.revocation_check(self.context)
         cancelled = lambda: self.closed or revoked() or scoped() or requested()
@@ -393,7 +376,7 @@ class CryptResources(LocalFiles):
                 raise ValueError('The credential session is locked. Reopen the document after unlocking its ZIP.')
             environment, remote, _ = launched
             arguments = [str(self.binary), '--config', session.NULL_CONFIG, 'backend', 'encode', remote, relative, '--json']
-            scoped = getattr(self._operation, 'cancelled', lambda: False)
+            scoped = self._cancellation.current
             cancelled = lambda: self.closed or revoked() or scoped()
             result = json.loads(run_bytes(arguments, environment=environment, max_output=16384, cancelled=cancelled))
             self._check_active()
@@ -537,7 +520,7 @@ class CryptResources(LocalFiles):
             temporary = temporary[2:]
         encrypted_temporary = self.encrypted_path(temporary)
         from commonUtils.persistence.publication import save_transaction
-        cancelled = getattr(self._operation, 'cancelled', lambda: False)
+        cancelled = self._cancellation.current
         owned = False
         def stage():
             nonlocal owned
