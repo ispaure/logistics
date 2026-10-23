@@ -235,7 +235,7 @@ async def _reopen_file(app, source):
         remote = client.resolve_remote(remote, identity, cipher=True) if cipher else client.resolve_remote(remote, identity)
     if source['type'] == 'remote':
         from features.rclone.mobile.remote_readers import RemoteReaders
-        copies = RemoteReaders(client, remote)
+        copies = RemoteReaders(client, remote, identity=identity)
     elif source['type'] == 'crypt':
         from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
         from features.rclone.mobile.storage_location import collection_path

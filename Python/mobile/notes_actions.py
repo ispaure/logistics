@@ -1,10 +1,7 @@
 """Location actions resolve a single Notes Library root without opening a browser."""
 import asyncio
-import base64
 from contextlib import contextmanager
-from io import BytesIO
 from pathlib import Path
-from commonUtils.runtime.resources.paths import resource_path
 from features.text_editor.notes import vault_root
 from commonUtils.runtime.operations import OperationCancelled
 
@@ -12,46 +9,31 @@ from commonUtils.runtime.operations import OperationCancelled
 class RemoteNotes:
     private = remote_storage = True
     def __init__(self, client, remote):
-        self.client, self.remote, self.generation = client, remote, client.generation
-        self.identity = client.connection_identity(remote)
-        self.root = Path('/remote') / remote
+        from features.rclone.mobile.service import native_service
+        from features.rclone.remote_access import NativeRemoteLocation
+        self.resource = native_service(client).remotes.open(NativeRemoteLocation(remote))
+        self.root = self.resource.root
+        self.remote = self.resource.remote
 
     def relative(self, path):
-        return resource_path(str(path.relative_to(self.root)) if isinstance(path, Path) and path.is_absolute() else str(path))
+        return self.resource.relative(path)
 
     def check(self):
-        if self.client.generation != self.generation:
-            raise ValueError('Credentials changed. Reopen the Notes Library.')
+        self.resource.check()
 
     def list(self, path='', *, cancelled=lambda: False):
-        self.check()
-        if cancelled():
-            raise ValueError('Notes Library closed.')
-        rows = self.client.entries(self.remote, self.relative(path))
-        self.check()
-        if cancelled():
-            raise ValueError('Notes Library closed.')
-        return [dict(row, name=Path(row['path']).name) for row in rows]
+        return self.resource.list(path, cancelled=cancelled)
 
     def entry(self, path):
-        self.check()
-        info = self.client.request('remote_stat', remote=self.remote, path=self.relative(path), identity=self.identity)
-        self.check()
-        return dict(path=self.relative(path), size=info['size'], revision=info['revision'], directory=False)
+        return self.resource.entry(path)
 
     @contextmanager
     def open(self, path):
-        self.check()
-        before = self.entry(path)
-        if before['size'] > 2 * 1024 * 1024:
+        if self.entry(path)['size'] > 2 * 1024 * 1024:
             raise ValueError('Note exceeds the 2 MiB preview limit.')
-        result = self.client.request('remote_range', remote=self.remote, path=self.relative(path), identity=self.identity,
-            expected=before['revision'], offset=0, count=before['size'])
-        self.check()
-        data = base64.b64decode(result['data'], validate=True)
-        if len(data) != before['size']:
-            raise ValueError('Remote note changed or is incomplete.')
-        with BytesIO(data) as stream:
+        with self.resource.open(path) as stream:
+            if stream.size > 2 * 1024 * 1024:
+                raise ValueError('Note exceeds the 2 MiB preview limit.')
             yield stream
 
 

@@ -571,7 +571,8 @@ class CloudUI(LocalCryptUI):
             from features.rclone.mobile.remote_readers import RemoteReaders
             async with self.remote_activity(opening) as progress:
                 opened = await self.open_crypt(
-                    copies=RemoteReaders(self.cloud_client, self.cloud_open_remote, progress=progress),
+                    copies=RemoteReaders(self.cloud_client, self.cloud_open_remote, progress=progress,
+                                         resource=self.browser_state.resource),
                     key=row['path'])
         except Exception as error:
             # Session setup can fail before the provider reader's error handler.
@@ -683,18 +684,13 @@ class CloudBrowserPresentation:
     def has_listing(self):
         return self.cloud.remote_browser.tree is not None
 
-    def publish(self, rows, remote, folder):
-        from types import SimpleNamespace
-        from commonUtils.runtime.resources.paths import resource_path
+    def publish(self, provider, rows, remote, folder):
         cloud = self.cloud
-        root = Path('/remote') / remote
-        provider = SimpleNamespace(root=root, remote=remote, relative=lambda path:
-            resource_path(str(Path(path).relative_to(root)) if Path(path).is_absolute() else path))
         # Online browsing must not open archives to fetch covers.
         cloud.remote_browser.closed = False
         cloud.remote_browser.thumbnail = None
         cloud.remote_browser.set_entries(provider, folder,
-            [dict(row, name=Path(row['path']).name, modified='') for row in rows], location=(remote, folder))
+            rows, location=(remote, folder))
         cloud.remote_browser.location_bar.update(folder, remote=True,
             encrypted=remote in cloud.cloud_crypt_remotes, unlocked=True,
             session_only=any(remote in record.get('remotes', ()) and not record.get('saved', False)

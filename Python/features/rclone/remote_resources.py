@@ -77,12 +77,13 @@ class RemoteResources:
 
     def __init__(self, config_path, remote, *, binary):
         self.config_path, self.remote, self.binary = Path(config_path), remote, Path(binary)
+        revoked = session.revocation_check(self.config_path)
         values = session.credentials(self.config_path)
         self._disk_revision = None
         if values is None:
             if self.config_path.suffix == '.session':
                 raise ValueError('Unlock this credential package first.')
-            self._disk_revision = self.config_path.stat().st_mtime_ns
+            self._disk_revision = self._config_revision()
             parser = ConfigParser(interpolation=None)
             parser.read(self.config_path, encoding='utf-8')
             values = {name: dict(parser[name]) for name in parser.sections()}
@@ -96,12 +97,25 @@ class RemoteResources:
         self.context = self.config_path.with_name('remote-' + uuid4().hex + '.session')
         session.remember(self.context, values, private=True,
                          parent=self.config_path if self._disk_revision is None else None)
+        self._revoked = session.revocation_check(self.context)
+        try:
+            if self._disk_revision is None and revoked():
+                raise ValueError('Credentials changed. Reopen this remote.')
+            if self._disk_revision is not None and self._disk_revision != self._config_revision():
+                raise ValueError('Credentials changed. Reopen this remote.')
+        except BaseException:
+            session.forget(self.context)
+            raise
         self.root = Path(Path.home().anchor) / '.logistics-remote' / sha256(str(self.config_path).encode()).hexdigest()[:16] / remote
         self.closed = False
         self._cancellation = WorkerCancellation()
         self._leases = ResourceLeases(validate=self._check_active, close=self.close)
         with _providers_lock:
             _providers.add(self)
+
+    def _config_revision(self):
+        info = self.config_path.stat()
+        return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
 
     def relative(self, path):
         if isinstance(path, Path):
@@ -110,11 +124,11 @@ class RemoteResources:
 
     def _check_active(self):
         check_cancelled(self._cancellation.current)
-        if self.closed or session.credentials(self.context) is None:
+        if self.closed or self._revoked():
             raise ValueError('Credentials changed or were locked. Reopen this remote.')
         if self._disk_revision is not None:
             try:
-                current = self.config_path.stat().st_mtime_ns
+                current = self._config_revision()
             except OSError:
                 current = None
             if current != self._disk_revision:
@@ -167,6 +181,7 @@ class RemoteResources:
             result.append(dict(name=name, path='/'.join(p for p in (prefix, name) if p),
                 directory=row['IsDir'], size=row['Size'], modified=row.get('ModTime', ''),
                 revision=self._revision(row)))
+        self._check_active()
         return sorted(result, key=lambda row: (not row['directory'], row['name'].casefold()))
 
     @staticmethod
@@ -175,6 +190,12 @@ class RemoteResources:
 
     def stat(self, path):
         return json.loads(self.command('lsjson', path, '--stat', '--no-mimetype'))
+
+    def entry(self, path):
+        key = self.relative(path)
+        row = self.stat(key)
+        return dict(name=Path(key).name, path=key, directory=row['IsDir'],
+                    size=row['Size'], modified=row.get('ModTime', ''), revision=self._revision(row))
 
     def version(self, path):
         return self._revision(self.stat(path))
@@ -199,11 +220,11 @@ class RemoteResources:
 
     def read_bytes(self, path, *, limit=None):
         limit = self.max_resource if limit is None else limit
-        if self.stat(path)['Size'] > limit:
-            from .remote_policy import LocalCopyRequired
-            raise LocalCopyRequired()
         with self.open(path) as stream:
-            return stream.read(limit + 1)
+            if stream.size > limit:
+                from .remote_policy import LocalCopyRequired
+                raise LocalCopyRequired()
+            return stream.read()
 
     def archive_password(self, path):
         return None

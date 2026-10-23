@@ -348,6 +348,12 @@ class FileBrowser(RecycledBrowser):
         if self.search_open:
             self._start_local_index()
 
+    async def _search_subfolders(self, epoch, cancelled):
+        # Online search filters the loaded listing; recursive I/O is explicit.
+        if getattr(self.search_provider, 'remote_storage', False):
+            return
+        await super()._search_subfolders(epoch, cancelled)
+
     def _start_local_index(self):
         provider = self.search_provider
         if (not self._index_started and provider is not None and self.local_search is not None

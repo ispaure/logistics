@@ -36,14 +36,11 @@ class RemoteBrowserView(qt.QMainWindow):
 
     def __init__(self, location, parent=None):
         super().__init__(parent)
-        from features.rclone import executable
-        from features.rclone.remote_resources import RemoteResources
-        binary = executable.ensure_rclone()
-        if not binary:
-            raise ValueError('The rclone executable is required to browse remotes.')
+        from features.rclone.desktop_service import service
+        from features.rclone.remote_access import DesktopRemoteLocation
         self.location, self.closing = location, False
         self.extensions, self._extensions_by_feature = [], {}
-        self.provider = RemoteResources(location.config, location.remote, binary=binary)
+        self.provider = service.remotes.open(DesktopRemoteLocation(location.config, location.remote))
         self._release = self.provider.acquire()
         self.destroyed.connect(self._release)
         content = qt.QWidget(self)

@@ -402,3 +402,43 @@ Desktop session validity now captures a credential generation rather than
 comparing credential values, so reloading identical values invalidates old plans.
 `test_transfer_service.py`, `test_rclone_review.py` and mobile `test_mirror_ui.py`
 cover this handoff alongside the existing engine/preflight suites.
+
+## Shared remote access
+
+`RcloneService.remotes.open(location)` is the entry point for remote browsing and
+Notes Library access on desktop and mobile. `remote_access.py` defines the session
+contract and immutable platform references: desktop supplies a config path and
+remote name; native supplies a remote alias, with optional expected connection
+identity and credential generation. The service owns access construction; each
+browser owns its navigation and each document owns its reader lifetime.
+
+Desktop `remote_resources.py` retains explicit CLI configuration, range limits and
+read-only capabilities. Each provider has a private child credential session and
+captures its generation. Reloading identical settings revokes existing views.
+Saved config views also verify device, inode, size, modification and change times
+before returning results; locking retires views without deleting saved config
+bytes. Explicit reopening can create new access from those saved settings.
+
+Native `mobile/remote_resources.py` binds a session to its connection identity and
+credential generation. `access.py` shares cancellation, leases and closure with
+LocalCrypt providers. Listing and file reads validate access before and after
+native requests. `RemoteReaders` retains the original grant and opens independent
+sessions for documents; closing the browser or another document leaves them
+usable. Locking or replacing credentials revokes every old session, including
+reader stores that have not opened a document yet. Reopening a closed view never
+rebinds it to a newer generation.
+
+`mobile/browser_workflow.py` publishes a provider together with the listing.
+Failed publication restores the previous rows, location and provider. Cancelled
+listing workers retire late sessions without publishing them. Mobile remote
+search filters the loaded listing and does not recursively enumerate the remote
+or build a local search index. Preview-only controls and existing archive/range
+limits remain in place. Archive cleanup retires the native cache token after a
+failed or late download, even if the reader closed before cache publication.
+
+Validation includes real CLI local/crypt backend fixtures in
+`test_remote_browser.py`, the native bridge fixture in
+`test_remote_bridge_native.py`, and mobile `test_remote_service.py`,
+`test_cloud_browser_workflow.py`, `test_remote_readers.py` and Notes Library tests.
+These host tests exercise the shared mobile workflow; they do not constitute a
+physical Android or iOS device run.

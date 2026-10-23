@@ -2,6 +2,7 @@
 from pathlib import Path
 from . import session
 from .service import CredentialGrant, CredentialService, LocalCryptService, RcloneService
+from .remote_access import DesktopRemoteLocation, RemoteService
 
 
 class DesktopCredentials:
@@ -34,5 +35,16 @@ def _open_localcrypt(connection):
     return CryptResources(connection)
 
 
+def _open_remote(location):
+    if not isinstance(location, DesktopRemoteLocation):
+        raise TypeError('Choose an explicit credential config and remote.')
+    from .remote_resources import RemoteResources
+    from . import executable
+    binary = executable.ensure_rclone()
+    if binary is None:
+        raise ValueError('The rclone executable is required to browse remotes.')
+    return RemoteResources(location.config, location.remote, binary=binary)
+
+
 service = RcloneService(CredentialService(DesktopCredentials()),
-                        LocalCryptService(_open_localcrypt))
+                        LocalCryptService(_open_localcrypt), RemoteService(_open_remote))

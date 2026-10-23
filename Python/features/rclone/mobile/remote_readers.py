@@ -18,23 +18,35 @@ class RemoteSource(NativeArchiveAccess):
     private = True
     archive_limit = 128 * 1024 * 1024
 
-    def __init__(self, client, remote, path, *, password='', cancelled=lambda: False, progress=lambda message: None):
+    def __init__(self, client, remote, path, *, password='', cancelled=lambda: False,
+                 progress=lambda message: None, resource=None, owns_resource=False):
+        from features.rclone.remote_access import NativeRemoteLocation
+        from .service import native_service
+        if resource is not None and (resource.client is not client or resource.remote != remote):
+            raise ValueError('The remote view belongs to another connection.')
+        self.resource = resource or native_service(client).remotes.open(NativeRemoteLocation(remote))
+        self.owns_resource = owns_resource or resource is None
         self.client, self.remote, self.path = client, remote, path
-        self.generation = client.generation
-        self.identity = client.connection_identity(remote)
+        self.generation = self.resource.generation
+        self.identity = self.resource.identity
         self.password, self.cancelled = password, cancelled
         self.progress = progress
         self.headers, self.cache, self.cache_bytes = None, OrderedDict(), 0
         self.cache_token = None
         self.closed = False
-        info = self.request('remote_stat')
-        self.size, self.expected = info['size'], info['revision']
+        try:
+            info = self.request('remote_stat')
+            self.size, self.expected = info['size'], info['revision']
+        except BaseException:
+            self.close()
+            raise
 
     def check(self):
         check_cancelled(self.cancelled)
         if self.closed or self.client.generation != self.generation:
             self.close()
             raise ValueError('Credentials changed or were locked. Reopen the remote.')
+        self.resource.check()
 
     def version(self, path):
         self.check()
@@ -70,6 +82,7 @@ class RemoteSource(NativeArchiveAccess):
         """One native network stream into RAM; progress/control bypass network locks."""
         if self.size > self.archive_limit:
             raise LocalCopyRequired()
+        self.check()
         token, stopped = uuid4().hex, Event()
         self.cache_token = token
         def poll():
@@ -85,19 +98,32 @@ class RemoteSource(NativeArchiveAccess):
                 except Exception:
                     return
         worker = Thread(target=poll, daemon=True)
-        self.progress('Downloading archive to memory: 0%')
-        worker.start()
+        started = False
         try:
+            self.progress('Downloading archive to memory: 0%')
+            worker.start()
+            started = True
+            self.check()
             self.client.request('remote_cache_open', remote=self.remote, path=self.path,
                                 identity=self.identity, expected=self.expected, run=token)
             self.check()
-        except Exception:
-            self.close()
+        except BaseException:
+            # An earlier close may have run before native cache publication.
+            # Retire this exact token again after the request has finished.
+            try:
+                self.close()
+            finally:
+                self.client.request('remote_cache_close', run=token)
             raise
         finally:
             stopped.set()
-            worker.join()
-        self.progress('Archive downloaded: 100% · Preparing reader from memory')
+            if started:
+                worker.join()
+        try:
+            self.progress('Archive downloaded: 100% · Preparing reader from memory')
+        except BaseException:
+            self.close()
+            raise
 
     @contextmanager
     def open(self, path):
@@ -109,9 +135,11 @@ class RemoteSource(NativeArchiveAccess):
     def close(self):
         self.closed = True
         token, self.cache_token = self.cache_token, None
+        super().close()
+        if self.owns_resource:
+            self.resource.close()
         if token is not None:
             self.client.request('remote_cache_close', run=token)
-        super().close()
 
 
 class RemoteReaders:
@@ -119,15 +147,21 @@ class RemoteReaders:
     encrypted = True
     remote_storage = True
 
-    def __init__(self, client, remote, *, progress=lambda message: None):
+    def __init__(self, client, remote, *, progress=lambda message: None, resource=None, identity=None):
+        from features.rclone.remote_access import NativeRemoteLocation
+        from .service import native_service
+        if resource is not None and (resource.client is not client or resource.remote != remote):
+            raise ValueError('The remote view belongs to another connection.')
+        self.resource = resource or native_service(client).remotes.open(NativeRemoteLocation(remote, identity=identity))
         self.client, self.remote = client, remote
         self.progress = progress
-        self.root = Path('/remote') / str(client.generation) / remote
+        self.root = self.resource.root
 
     def open(self, key, *, password='', cancelled=lambda: False):
         self.progress('Checking remote connection')
+        resource = self.resource.reopen()
         source = RemoteSource(self.client, self.remote, key, password=password, cancelled=cancelled,
-                              progress=self.progress)
+                              progress=self.progress, resource=resource, owns_resource=True)
         try:
             kind = direct_kind(key, source.size)
             if kind == 'text':

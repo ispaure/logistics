@@ -46,6 +46,42 @@ class RemoteBrowserTests(QtTestCase):
         if not cls.binary.is_file():
             raise unittest.SkipTest('Pinned rclone is not installed')
 
+    def test_shared_service_sessions_are_independent_and_identical_reload_revokes(self):
+        from features.rclone.desktop_service import service
+        from features.rclone.remote_access import DesktopRemoteLocation
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'note.txt').write_bytes(b'note')
+            config = root / 'account.session'
+            values = {'Files': {'type': 'alias', 'remote': str(root)}}
+            session.remember(config, values)
+            self.addCleanup(session.forget, config)
+            with patch('features.rclone.executable.ensure_rclone', return_value=self.binary):
+                first = service.remotes.open(DesktopRemoteLocation(config, 'Files'))
+                second = service.remotes.open(DesktopRemoteLocation(config, 'Files'))
+            self.addCleanup(first.close)
+            self.addCleanup(second.close)
+            first.close()
+            self.assertEqual(second.read_bytes('note.txt'), b'note')
+            session.remember(config, values)
+            with self.assertRaises(ValueError):
+                second.list()
+
+    def test_saved_config_replacement_with_preserved_mtime_revokes_view(self):
+        with TemporaryDirectory() as folder:
+            config = Path(folder) / 'account.conf'
+            config.write_text('[Files]\ntype = local\n')
+            resource = RemoteResources(config, 'Files', binary=self.binary)
+            self.addCleanup(resource.close)
+            old = config.stat()
+            replacement = config.with_suffix('.replacement')
+            replacement.write_bytes(config.read_bytes())
+            os.utime(replacement, ns=(old.st_atime_ns, old.st_mtime_ns))
+            replacement.replace(config)
+            with self.assertRaisesRegex(ValueError, 'Credentials changed'):
+                resource.check()
+            self.assertIsNone(session.credentials(resource.context))
+
     def test_account_isolation_range_reads_and_revocation(self):
         with TemporaryDirectory() as folder:
             root = Path(folder)

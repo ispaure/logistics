@@ -98,12 +98,16 @@ class FolderPreview:
             self.task = app.loop.create_task(self.prepare())
 
     async def prepare(self):
+        owned = None
         try:
             if hasattr(self.provider, 'list'):
                 rows = await asyncio.to_thread(self.provider.list, self.entry.path)
             elif self.entry.kind == 'remote-browser':
-                rows = await asyncio.to_thread(self.client.entries, self.entry.source, self.entry.path)
-                rows = [dict(row, name=PurePosixPath(row['path']).name, modified='') for row in rows]
+                from features.rclone.mobile.service import native_service
+                from features.rclone.remote_access import NativeRemoteLocation
+                self.provider = owned = native_service(self.client).remotes.open(
+                    NativeRemoteLocation(self.entry.source, generation=self.generation))
+                rows = await asyncio.to_thread(self.provider.list, self.entry.path)
             else:
                 return
             if (not self.app.active_host or (self.private and (
@@ -111,9 +115,13 @@ class FolderPreview:
                     or self.generation != getattr(self.client, 'generation', None)))):
                 return
             self.browser.set_entries(self.provider, self.entry.path, rows)
+            owned = None
             self.status.value = ''
         except (OSError, ValueError, AttributeError):
             self.status.value = 'Return to this folder to refresh.'
+        finally:
+            if owned is not None:
+                owned.close()
 
     def close(self):
         if self.task is not None:

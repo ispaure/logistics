@@ -108,9 +108,9 @@ class LocalCryptConfigurationTests(unittest.TestCase):
             (folder / 'encoded-file').write_bytes(b'ciphertext fixture')
             provider = object.__new__(CryptFiles)
             LocalFiles.__init__(provider, root)
-            from features.rclone.localcrypt.access import LocalCryptAccess
+            from features.rclone.access import ResourceAccess
             from features.rclone.service import CredentialGrant
-            provider._access = LocalCryptAccess(CredentialGrant('fixture', lambda: False))
+            provider._access = ResourceAccess(CredentialGrant('fixture', lambda: False))
             provider.collection_storage_root = None
             provider.mapping = lambda path, directory=False, decode=False: path
             provider.remote, provider.identity = 'Secret', 'a' * 64
@@ -138,9 +138,9 @@ class LocalCryptConfigurationTests(unittest.TestCase):
             vanished.write_bytes(b'old ciphertext')
             provider = object.__new__(CryptFiles)
             LocalFiles.__init__(provider, root)
-            from features.rclone.localcrypt.access import LocalCryptAccess
+            from features.rclone.access import ResourceAccess
             from features.rclone.service import CredentialGrant
-            provider._access = LocalCryptAccess(CredentialGrant('fixture', lambda: False))
+            provider._access = ResourceAccess(CredentialGrant('fixture', lambda: False))
             provider.collection_storage_root = None
             def mapping(path, directory=False, decode=False):
                 self.assertNotEqual(path, partial.name)

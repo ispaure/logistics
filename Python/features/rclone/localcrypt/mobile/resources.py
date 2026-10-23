@@ -15,7 +15,7 @@ from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import read_up_to
 from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
-from features.rclone.localcrypt.access import LocalCryptAccess
+from features.rclone.access import ResourceAccess
 from features.rclone.mobile.service import LocalCryptLocation, OfflineCryptLocation, native_service
 
 
@@ -69,7 +69,7 @@ class CryptFiles(LocalFiles):
     def __init__(self, root, client, remote, *, namespace=None, storage_root=None, create=True):
         self.collection_storage_root = storage_root
         self.client, self.remote = client, remote
-        self._access = LocalCryptAccess(native_service(client).credentials.capture(remote))
+        self._access = ResourceAccess(native_service(client).credentials.capture(remote))
         self.identity = client.request('crypt_path', remote=remote, path='', directory=True)['identity']
         self._access.check()
         if namespace is not None and (not isinstance(namespace, str) or len(namespace) != 64
@@ -302,7 +302,7 @@ class DownloadedCryptFile(LocalFiles):
     def __init__(self, copies, key):
         self.copies, self.key = copies, key
         record = copies.record(key)
-        self._access = LocalCryptAccess(native_service(copies.client).credentials.capture(record['remote']))
+        self._access = ResourceAccess(native_service(copies.client).credentials.capture(record['remote']))
         name = copies.client.request('crypt_describe', remote=record['remote'], identity=record['identity'], path=record['encrypted_path'])
         self._access.check()
         self.name = Path(name).name

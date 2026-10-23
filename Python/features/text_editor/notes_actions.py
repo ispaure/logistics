@@ -15,9 +15,9 @@ def sources(entry):
             result.append(('Local', lambda: LocalFiles(entry.local.path), False))
     if entry.remote_source == 'rclone' and entry.remote_name is not None and entry.remote_context is not None:
         def remote():
-            from features.rclone.remote_resources import RemoteResources
-            from features.rclone.executable import get_rclone_path
-            return RemoteResources(Path(entry.remote_context), entry.remote_name, binary=get_rclone_path())
+            from features.rclone.desktop_service import service
+            from features.rclone.remote_access import DesktopRemoteLocation
+            return service.remotes.open(DesktopRemoteLocation(Path(entry.remote_context), entry.remote_name))
         result.append(('Remote', remote, True))
     return result
 

@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from features.rclone.service import CredentialGrant, CredentialService, LocalCryptService, RcloneService
+from features.rclone.remote_access import NativeRemoteLocation, RemoteService
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,11 @@ def native_service(client):
             return CryptFiles(location.root, client, location.remote,
                               namespace=location.namespace, storage_root=location.storage_root,
                               create=location.create)
+        def open_remote(location):
+            if not isinstance(location, NativeRemoteLocation):
+                raise TypeError('Choose a native remote location.')
+            from .remote_resources import NativeRemoteResources
+            return NativeRemoteResources(client, location)
         client._rclone_service = RcloneService(CredentialService(NativeCredentials(client)),
-                                               LocalCryptService(open_resource))
+                                               LocalCryptService(open_resource), RemoteService(open_remote))
     return client._rclone_service

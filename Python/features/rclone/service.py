@@ -1,4 +1,4 @@
-"""Application services for credential generations and opened LocalCrypt resources.
+"""Application services for credentials, remote/LocalCrypt access and transfers.
 
 Platform adapters own credential publication and storage layout. An opened provider
 is a resource session: its leases belong to browsers/readers, not to the account.
@@ -55,8 +55,9 @@ class LocalCryptService:
 
 class RcloneService:
     """Retained composition root; browser navigation stays with each browser."""
-    def __init__(self, credentials, localcrypt):
+    def __init__(self, credentials, localcrypt, remotes):
         from .transfers.service import TransferService
         self.credentials = credentials
         self.localcrypt = localcrypt
+        self.remotes = remotes
         self.transfers = TransferService()

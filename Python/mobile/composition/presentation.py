@@ -168,11 +168,8 @@ def notes_host(app):
         from features.rclone.localcrypt.mobile.resources import encrypted_document
 
         if remote:
-            from features.rclone.mobile.remote_readers import RemoteReaders
-
-            return await app.open_crypt(
-                copies=RemoteReaders(client, provider.remote), key=path
-            )
+            resource = getattr(provider, 'resource', provider)
+            return await app.open_crypt(copies=resource.readers(), key=path)
         source = encrypted_document(provider, path)
         copies, key = (
             source if source is not None else (LocalTextCopies(provider), path)

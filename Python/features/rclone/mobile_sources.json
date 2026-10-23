@@ -3,7 +3,9 @@
   "modules": [
     "__init__.py",
     "localcrypt/__init__.py",
-    "localcrypt/access.py",
+    "access.py",
+    "remote_access.py",
+    "mobile/remote_resources.py",
     "localcrypt/mobile/__init__.py",
     "localcrypt/mobile/archive_source.py",
     "localcrypt/mobile/copies.py",

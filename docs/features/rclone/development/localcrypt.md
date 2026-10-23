@@ -858,7 +858,7 @@ reopening a saved desktop config can create new access using its saved credentia
 
 `LocalCryptService.open` creates an independent provider session. Desktop
 `CryptResources` retains its existing child credential context, private caches and
-resource leases. Native `CryptFiles` composes `LocalCryptAccess`, which owns its
+resource leases. Native `CryptFiles` composes `ResourceAccess`, which owns its
 closed state, grant validation, worker cancellation scopes and leases. Native
 listings validate the grant before publishing rows, including empty folders.
 Fallback buffered streams validate access on reads and seeks; native streaming

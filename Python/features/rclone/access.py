@@ -1,11 +1,11 @@
-"""Independent resource-session lifetime bound to one credential generation."""
+"""Resource-session lifetime bound to one credential generation."""
 from contextlib import contextmanager
 from threading import RLock
 from commonUtils.runtime.resources.lifetime import ResourceLeases, WorkerCancellation
 from commonUtils.runtime.operations import check_cancelled
 
 
-class LocalCryptAccess:
+class ResourceAccess:
     def __init__(self, grant):
         self.grant = grant
         self.closed = False
@@ -17,7 +17,7 @@ class LocalCryptAccess:
         check_cancelled(self._cancellation.current)
         with self._lock:
             if self.closed:
-                raise ValueError('This LocalCrypt view is closed. Reopen it.')
+                raise ValueError('This resource view is closed. Reopen it.')
             try:
                 self.grant.check()
             except ValueError:

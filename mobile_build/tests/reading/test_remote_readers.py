@@ -477,7 +477,7 @@ class RemoteReaderTests(unittest.TestCase):
                 app.cloud_remote.items = ['Files']
                 self.assertTrue(app.loop.run_until_complete(app.browse_cloud()))
                 self.assertNotIn('\n', app.cloud_status.value)
-                self.assertFalse(hasattr(app.remote_browser.search_provider, 'list'))
+                self.assertTrue(app.remote_browser.search_provider.remote_storage)
                 client.calls.clear()
                 app.remote_browser.search.value = 'note'
                 self.assertFalse(any(action == 'list' for action, _ in client.calls))

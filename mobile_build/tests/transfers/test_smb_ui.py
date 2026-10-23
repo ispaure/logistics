@@ -19,6 +19,7 @@ class SMBConnectionTests(unittest.TestCase):
                 self.servers[name] = (host, user, password, domain, port, remember)
                 return list(self.servers)
             def crypt_remotes(self): return []
+            def connection_identity(self, remote): return remote + '-identity'
             def entries(self, remote, path):
                 self.visits.append((remote, path))
                 return [dict(path='Shared', directory=True, size=0)] if not path else []
