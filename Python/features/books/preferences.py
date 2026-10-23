@@ -3,11 +3,14 @@ import hashlib
 import json
 from pathlib import Path
 from commonUtils.persistence import atomic_write_json
+from commonUtils.runtime.streams import read_up_to
 
 from commonUtils.filesystem.storage import cache_directory
 from commonUtils.configuration.settings import get_setting
 
 from .themes import THEMES
+
+MAX_STATE_BYTES = 128 * 1024
 
 APPEARANCE_KEYS = {'font_family': ('Styling', 'reading_font_family_str'),
                    'font_size': ('Styling', 'reading_font_size_int'),
@@ -46,9 +49,11 @@ class ReadingState:
 
     def load(self):
         try:
-            if self.path.stat().st_size > 128 * 1024:
+            with self.path.open('rb') as stream:
+                content = read_up_to(stream, MAX_STATE_BYTES + 1)
+            if len(content) > MAX_STATE_BYTES:
                 return {}
-            data = json.loads(self.path.read_text(encoding='utf-8'))
+            data = json.loads(content.decode('utf-8'))
             if not isinstance(data, dict):
                 return {}
             expected = {'path': str, 'font_family': str, 'theme': str, 'font_size': int,

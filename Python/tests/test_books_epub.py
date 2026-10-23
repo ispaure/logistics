@@ -169,6 +169,15 @@ class EPUBTests(unittest.TestCase):
         first.path.write_text('invalid')
         self.assertEqual(first.load(), {})
 
+    def test_reading_state_enforces_limit_when_size_metadata_is_stale(self):
+        from types import SimpleNamespace
+        state = ReadingState(self.path, folder=self.folder / 'state')
+        state.save({'position': .5, 'padding': 'x' * (128 * 1024)})
+        before = state.path.read_bytes()
+        with patch.object(Path, 'stat', return_value=SimpleNamespace(st_size=0)):
+            self.assertEqual(state.load(), {})
+        self.assertEqual(state.path.read_bytes(), before)
+
     def test_thumbnail_progress_supports_legacy_state_and_live_updates(self):
         from features.books.file_type import EPUBFile
         with patch('features.books.preferences.cache_directory', return_value=self.folder / 'cache'):
