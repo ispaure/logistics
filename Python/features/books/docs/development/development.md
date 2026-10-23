@@ -60,7 +60,9 @@ There are no new dependencies. Settings
 live directly in `config.ini` and use the shared typed INI editor. Reading state
 uses a SHA-256 key of the canonical absolute book path under `commonUtils/Cache/Books`.
 Loads read at most 128 KiB plus one byte before JSON parsing; oversized or malformed
-records return the existing empty state without changing the file.
+records return the existing empty state without changing the file. Saves enforce
+the same encoded-byte limit before publication, preserving the previous checkpoint
+on oversized bookmark data. The reader reports the existing save error feedback.
 Archive limits: 512 MiB uncompressed total, 20,000 entries, 32 MiB per read
 resource; image decoding checks dimensions before reading pixel data.
 

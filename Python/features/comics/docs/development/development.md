@@ -208,6 +208,8 @@ existing resolved-path identity and remember_position_bool setting. Resume and b
 loads enforce the 128 KiB limit while reading, even if size metadata is stale.
 Each badge uses one state snapshot for both total and position, so another reader
 saving between reads cannot mix records. Malformed/oversized files remain untouched.
+Saves enforce the same encoded-byte limit before publication and preserve the
+previous checkpoint when an oversized page identity is rejected.
 
 The portable `comic_page_names` helper supplies identical header-only page filtering
 and natural order for imports and readers. Native ordinary encrypted comics and
