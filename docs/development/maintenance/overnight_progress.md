@@ -20,3 +20,51 @@ Raw reports remain ignored; tracked guides contain concise results only.
 - Initial priorities: no-overwrite installation promotion, shortcut persistence,
   staged archive publication and malformed project state. Implementation and
   validation entries follow as work units complete.
+
+## Shared installation promotion
+
+- Reproduced three baseline failures: racing publication overwritten, existing
+  recovery copy overwritten, and external content replaced during rollback.
+- All promotion/backup/restoration moves now use existing atomic no-replace
+  publication. Conflicted restoration retains and reports its recovery path.
+  Resolved path overlap checks also reject parent aliases.
+- Validation: 11 focused persistence/exclusive-copy tests pass; existing directory
+  promotion and normal rollback remain covered. Shared commit: `69b2ef1`.
+- Limitation: host macOS primitives exercised; native Windows/Linux CI not run.
+
+## Test harness isolation and optional backend
+
+- Initial complete runs: shared 179 files / 5 failed; desktop 179 / 11 failed;
+  mobile 162 / 2 failed. Blue Hole: 26 tests pass. These are fresh baseline results,
+  not regressions introduced by promotion (which had no production call sites).
+- Baseline failures include sandbox-denied commonUtils cache/temp writes, denied
+  loopback socket fixtures, watcher/timing assertions and missing optional Toga.
+- Regression runner now scopes shared storage, `Path.home()` and platform
+  config/cache roots before discovery; it restores state and removes only its own
+  fixtures. HOME remains unchanged. Seven runner regressions pass, including
+  single-process/module-isolated storage creation and cleanup.
+- Shared native-browser lifecycle tests now explicitly skip when optional Toga
+  is absent, matching other native test modules; all four pass in the existing
+  mobile environment with the dummy backend. No dependency added.
+- Full reruns are in progress. Native backend tests remain distinct from device
+  tests; a skip in the desktop interpreter is not recorded as a pass.
+
+## Editor shortcuts
+
+- Reproduced retained changed bindings after JSON serialization failure and leaked
+  temporary QActions after malformed shortcut values.
+- Replaced duplicated file staging/fsync/replace with shared atomic JSON writer;
+  restored live bindings after serialization/value/I/O failure; validation actions
+  now retire through a full-loop finally block. Existing persisted mapping and
+  post-save cross-window propagation remain intact.
+- All 12 editor-extension tests pass, including new failure and cleanup cases.
+  Commit identifier follows in the next work-log checkpoint.
+
+## Archive extraction
+
+- Reproduced publicly visible partial output during per-child publication.
+- Completed staged directory now publishes through one atomic no-replace rename;
+  failed publication no longer recursively removes a public directory.
+- All 19 shared archive tests pass, including format/encryption round trips,
+  cancellation, complete-tree publication and racing destination preservation.
+  Shared commit identifier follows at the next checkpoint.
