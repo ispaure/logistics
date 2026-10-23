@@ -72,64 +72,8 @@ class GitRunner:
     ):
         if self.cancel.is_set():
             raise GitCancelled("Operation cancelled.")
-        program = shutil.which(external or self.executable)
-        if program is None:
-            raise GitError(
-                "Git executable not found. Install Git or set its path in Git settings."
-            )
-        defaults = [
-            part
-            for key, value in self.config_options.items()
-            for entry in (value if isinstance(value, list) else [value])
-            for part in ("-c", key + "=" + entry)
-        ]
-        command = (
-            [program, *map(str, arguments)]
-            if external
-            else [
-                program,
-                "--no-pager",
-                "--literal-pathspecs",
-                "-c",
-                "color.ui=false",
-                "-c",
-                "core.quotepath=false",
-                *defaults,
-                *map(str, arguments),
-            ]
-        )
-        env = os.environ.copy()
-        # Do not let another repository's shell environment redirect this workspace.
-        for key in (
-            "GIT_DIR",
-            "GIT_WORK_TREE",
-            "GIT_INDEX_FILE",
-            "GIT_COMMON_DIR",
-            "GIT_OBJECT_DIRECTORY",
-            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-            "GIT_NAMESPACE",
-        ):
-            env.pop(key, None)
-        # Background status/diff reads must not rewrite the index and trigger
-        # our filesystem watcher again. Required locks for mutations still work.
-        env.update(
-            GIT_TERMINAL_PROMPT="0",
-            GCM_INTERACTIVE="never",
-            LC_ALL="C",
-            GIT_OPTIONAL_LOCKS="0",
-        )
-        if sensitive:
-            for key in list(env):
-                if key.startswith("GIT_TRACE") or key == "GCM_TRACE_SECRETS":
-                    env.pop(key, None)
-        if self.config_options.get("credential.credentialStore"):
-            env["GCM_CREDENTIAL_STORE"] = self.config_options[
-                "credential.credentialStore"
-            ]
-        # SSH agents and configured credential helpers remain available. Never wait
-        # for an invisible terminal prompt; host-key/password setup happens outside.
-        if "GIT_SSH_COMMAND" not in env and "GIT_SSH" not in env:
-            env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+        command = self._command(arguments, external)
+        env = self._environment(sensitive)
         duration = self.timeout if timeout is None else timeout
         if input_data is not None and len(input_data) > 4096:
             raise GitError("Input exceeds the supported size.")
@@ -173,3 +117,67 @@ class GitRunner:
                 "Git response exceeded the capture limit. Narrow the selection and try again."
             )
         return result
+
+    def _command(self, arguments, external):
+        program = shutil.which(external or self.executable)
+        if program is None:
+            raise GitError(
+                "Git executable not found. Install Git or set its path in Git settings."
+            )
+        defaults = [
+            part
+            for key, value in self.config_options.items()
+            for entry in (value if isinstance(value, list) else [value])
+            for part in ("-c", key + "=" + entry)
+        ]
+        command = (
+            [program, *map(str, arguments)]
+            if external
+            else [
+                program,
+                "--no-pager",
+                "--literal-pathspecs",
+                "-c",
+                "color.ui=false",
+                "-c",
+                "core.quotepath=false",
+                *defaults,
+                *map(str, arguments),
+            ]
+        )
+        return command
+
+    def _environment(self, sensitive):
+        env = os.environ.copy()
+        # Do not let another repository's shell environment redirect this workspace.
+        for key in (
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+            "GIT_INDEX_FILE",
+            "GIT_COMMON_DIR",
+            "GIT_OBJECT_DIRECTORY",
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+            "GIT_NAMESPACE",
+        ):
+            env.pop(key, None)
+        # Background status/diff reads must not rewrite the index and trigger
+        # our filesystem watcher again. Required locks for mutations still work.
+        env.update(
+            GIT_TERMINAL_PROMPT="0",
+            GCM_INTERACTIVE="never",
+            LC_ALL="C",
+            GIT_OPTIONAL_LOCKS="0",
+        )
+        if sensitive:
+            for key in list(env):
+                if key.startswith("GIT_TRACE") or key == "GCM_TRACE_SECRETS":
+                    env.pop(key, None)
+        if self.config_options.get("credential.credentialStore"):
+            env["GCM_CREDENTIAL_STORE"] = self.config_options[
+                "credential.credentialStore"
+            ]
+        # SSH agents and configured credential helpers remain available. Never wait
+        # for an invisible terminal prompt; host-key/password setup happens outside.
+        if "GIT_SSH_COMMAND" not in env and "GIT_SSH" not in env:
+            env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+        return env

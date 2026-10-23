@@ -62,6 +62,12 @@ The UI log is bounded by block/character counts and truncates oversized individu
 lines before Qt text layout; URL redaction avoids unbounded regex backtracking.
 Large output may still consume temporary disk space during command execution.
 
+`GitRunner.run()` keeps admission, captured execution, exception translation and
+result validation together. Two private helpers in `runner.py` prepare executable/
+argument arrays and the child environment. Preparation still precedes input-size
+validation, preserving existing failure order. Helpers use the current runner
+options for each call; they neither cache policy nor start processes.
+
 Git uses literal pathspecs and argument arrays, never shell command strings.
 Inherited repository-location environment variables are cleared. Existing Git
 configuration, hooks, signing, SSH commands, and credential helpers otherwise apply.
