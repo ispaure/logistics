@@ -331,6 +331,8 @@ def provider_markdown(owner, view, footer):
         action_items=view.crypt_action_items,
         actions_menu=view.crypt_actions_menu,
         read_only=getattr(view.crypt_reader, "read_only", False),
+        private=getattr(view._crypt_reader_store, "encrypted", False)
+                or getattr(getattr(view._crypt_reader_store, "provider", None), "private", False),
     )
     return workflow
 

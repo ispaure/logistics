@@ -7,7 +7,7 @@ from uuid import uuid4
 import toga
 from toga.style import Pack
 from commonUtils.ui.native.markdown_search import MarkdownPageSearch
-from .markdown_editor import FormattedMarkdownInput, retire_webview
+from .markdown_editor import FormattedMarkdownInput, retire_webview, markdown_webview
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,7 @@ class ProviderMarkdown:
     """Own view state and pending rendering, using the session's existing source input."""
 
     def __init__(self, host, *, source, content, toolbar, save, actions, footer,
-                 action_items, actions_menu, read_only=False):
+                 action_items, actions_menu, read_only=False, private=False):
         self.host = host
         self.source, self.content, self.toolbar = source, content, toolbar
         self.save, self.actions, self.footer = save, actions, footer
@@ -45,6 +45,7 @@ class ProviderMarkdown:
         self.preview_text = None
         self.pending = self.token = self.menu_state = self.mode = None
         self.closed = False
+        self.private = private
         self.preview_button = host.icon_button('view', 'View Markdown', on_press=self.toggle_preview)
         toolbar.insert(len(toolbar.children) - 1, self.preview_button)
         host.apply_icon(save, 'save', 'Save Markdown')
@@ -55,7 +56,6 @@ class ProviderMarkdown:
         if not read_only:
             self.edit_mode = toga.Selection(items=['Formatted', 'Source'], on_change=self.edit_mode_changed,
                                             style=Pack(flex=1, height=44))
-            footer.add(self.edit_mode)
         self.initializing = False
         self.native_buttons = [self.preview_button, actions]
 
@@ -82,6 +82,9 @@ class ProviderMarkdown:
         state = dirty, reading
         if state != self.menu_state:
             actions = list(self.action_items)
+            if not getattr(reader, 'read_only', False):
+                actions[0:0] = [('Formatted editing', lambda: self.choose_mode('Formatted')),
+                                ('Source editing', lambda: self.choose_mode('Source'))]
             mode = ('View source text' if getattr(reader, 'read_only', False) else 'Edit Markdown') if reading else 'View Markdown'
             actions.insert(0, (mode, self.toggle_preview))
             if reading:
@@ -102,8 +105,8 @@ class ProviderMarkdown:
             self.search.dispose()
             self.search = None
         self.token = None
-        if self.edit_mode is not None and self.edit_mode not in self.footer.children:
-            self.footer.add(self.edit_mode)
+        if self.edit_mode is not None and self.edit_mode in self.footer.children:
+            self.footer.remove(self.edit_mode)
         if self.speech is not None:
             self.speech.close()
             if self.speech.button in self.toolbar.children:
@@ -213,7 +216,7 @@ class ProviderMarkdown:
             return
         content = rendered if rendered is not None else '<p>Loading preview…</p>'
         if self.preview is None:
-            self.preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
+            self.preview = markdown_webview(private=self.private, on_navigation_starting=lambda widget, url, **kw: False,
                                         style=Pack(flex=1))
         preview = self.preview
         self.host.bind_font(preview, web=True)
@@ -252,6 +255,21 @@ class ProviderMarkdown:
         self.clear()
         self.show_editor()
 
+    def choose_mode(self, value):
+        reader = self.host.reader()
+        if (self.closed or reader is None or getattr(reader, 'read_only', False)
+                or not self.host.valid(reader)):
+            return
+        if self.edit_mode.value != value:
+            self.edit_mode.value = value
+        else:
+            self.clear()
+            self.show_editor()
+
+    async def flush(self):
+        if self.formatted is not None and self.formatted.view in self.content.children:
+            await self.formatted.flush()
+
     def show_editor(self):
         reader = self.host.reader()
         if (reader is None or getattr(reader, 'read_only', False) or self.closed
@@ -259,12 +277,15 @@ class ProviderMarkdown:
             return
         self.mode = 'edit'
         if getattr(self.edit_mode, 'value', 'Formatted') == 'Source':
+            if self.edit_mode not in self.footer.children:
+                self.footer.add(self.edit_mode)
+            self.refresh_controls()
             return
         def changed(text):
             if self.host.valid(reader) and formatted.view in self.content.children and not self.closed:
                 self.source.value = text
         formatted = FormattedMarkdownInput(changed, font_size=self.host.font_size(),
-            stylesheet=self.host.stylesheet(), image_source=lambda: self.host.image_source(reader))
+            stylesheet=self.host.stylesheet(), image_source=lambda: self.host.image_source(reader), private=self.private)
         try:
             formatted.load(self.source.value)
         except ValueError as error:

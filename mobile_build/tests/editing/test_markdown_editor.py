@@ -9,6 +9,43 @@ from features.text_editor.mobile.markdown_editor import editor_blocks, editor_ht
 
 
 class MarkdownEditorTests(unittest.TestCase):
+    def test_save_flushes_the_final_dom_patch_and_rejects_replaced_pages(self):
+        import json
+        from unittest.mock import AsyncMock, patch
+        from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
+        updates = []
+        editor = FormattedMarkdownInput(updates.append)
+        editor.load('# Before\r\n\r\nUntouched\r\n')
+        raw = json.dumps(dict(revision=1, changes=[[0, '# After 😀\r\n']]))
+        async def exercise():
+            with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.widgets.webview'), \
+                 patch.object(editor.view, 'evaluate_javascript', new=AsyncMock(return_value=raw)):
+                await editor.flush()
+                self.assertEqual(updates, ['# After 😀\r\n\r\nUntouched\r\n'])
+            async def replaced(script):
+                editor.load('# Replacement')
+                return raw
+            with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.widgets.webview'), \
+                 patch.object(editor.view, 'evaluate_javascript', side_effect=replaced):
+                with self.assertRaises(ValueError):
+                    await editor.flush()
+            self.assertEqual(len(updates), 1)
+        self.app.loop.run_until_complete(exercise())
+        editor.dispose()
+
+    def test_mode_commands_work_when_keyboard_tucks_the_secondary_row(self):
+        from mobile.keyboard import _tuck_control
+        self.app.create_chosen_document('md')
+        owner = self.app.editor_view
+        _tuck_control(owner.source_tools, True)
+        self.assertIsNone(owner.source_tools.parent)
+        actions = dict(owner.actions.actions)
+        actions['Source editing']()
+        self.assertEqual(owner.editor_area.children, [owner.editor])
+        actions['Formatted editing']()
+        self.assertEqual(owner.editor_area.children, [owner.formatted.view])
+        _tuck_control(owner.source_tools, False)
+
     def test_ios_retirement_clears_live_document_before_replacement_navigation(self):
         from types import SimpleNamespace
         from features.text_editor.mobile.markdown_editor import retire_webview
@@ -297,8 +334,9 @@ class MarkdownEditorTests(unittest.TestCase):
         self.assertIn('html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif}', preview)
         self.assertIn('code{font-family:monospace}', preview)
         self.assertIn('<meta name="logistics-native-font" content="true">', preview)
-        self.assertIn('16px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;',
-                      editor_html('Paragraph', 'logistics-editor://test/'))
+        content = editor_html('Paragraph', 'logistics-editor://test/')
+        self.assertIn('font-size:16px', content)
+        self.assertIn('font-family: -apple-system,BlinkMacSystemFont,sans-serif;', content)
 
     def test_code_and_unicode_line_separators_keep_correct_source_ranges(self):
         source = '# Heading\r\n\r\nText with \u2028 separator\r\n\r\n```html\r\n<tag>$5 [0]</tag>\r\n```\r\n'

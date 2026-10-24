@@ -60,11 +60,13 @@ class TextEditorView:
             on_press=lambda widget, **kw: self.actions.invoke(app.save_copy), style=Pack(height=48))
         self.action_items = [
             ('Rename document…', self.rename_document), ('Find and replace…', self.toggle_search),
+            ('Formatted editing', lambda: self.choose_mode('Formatted')),
+            ('Source editing', lambda: self.choose_mode('Source')),
             ('View document', app.show_preview),
             ('Open documents', app.show_documents_hub), ('New document', app.choose_document_type),
             ('Open beside another document', lambda: app.adaptive.show_pair_picker()),
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
-            ('Save', app.save_document), ('Save a copy', app.save_copy),
+            ('Save', self.save), ('Save a copy', app.save_copy),
             ('Save As…', app.show_document_save_as), ('Export…', lambda: app.export_document(origin=self)),
             ('Close document', lambda: app.request_close_session(self.session.id)),
             ('Delete document…', lambda: app.request_delete_document(self.session.id))]
@@ -72,7 +74,7 @@ class TextEditorView:
         self.actions = ActionMenu(self.actions_button, self,
             [item for item in self.action_items if item[0] != 'Save'])
         # A visible left-hand editor still owns its toolbar commands.
-        self.save_button.on_press = lambda widget, **kw: self.actions.invoke(app.save_document)
+        self.save_button.on_press = lambda widget, **kw: self.actions.invoke(self.save)
         self.preview_button = icon_button('view', 'View document',
             on_press=lambda widget, **kw: self.actions.invoke(app.show_preview))
         self.find_button = icon_button('find', 'Find and replace', on_press=self.toggle_search)
@@ -108,6 +110,24 @@ class TextEditorView:
         self.search.toggle()
         self.app.refresh_reader_exit(self.document_view)
         self.app.adaptive.render()
+
+    def choose_mode(self, value):
+        if self.session is not None and self.session.kind == 'markdown':
+            self.edit_mode.value = value
+
+    async def save(self):
+        document, session = self.document, self.session
+        try:
+            if self.formatted is not None and self.formatted.view in self.editor_area.children:
+                await self.formatted.flush()
+            if (not self.app.active_host or self.session is not session
+                    or session.id not in self.app.workspace.sessions):
+                return
+            self.app.store.save(document)
+            self.app.refresh_documents()
+            self.refresh_status()
+        except (OSError, ValueError) as error:
+            self.status.text = str(error)
 
     def rename_document(self, widget=None, **kwargs):
         name = toga.TextInput(value=self.document.name, style=Pack(height=48))
@@ -148,13 +168,15 @@ class TextEditorView:
         dirty = bool(self.document.modified)
         self.save_button.enabled = dirty
         folder_actions = self.app.presentation.folder_actions(self.session)
-        menu_state = dirty, bool(folder_actions)
+        markdown = self.session.kind == 'markdown'
+        menu_state = dirty, bool(folder_actions), markdown
         toolbar_changed = menu_state != getattr(self, '_action_state', None)
         if toolbar_changed:
             self._action_state = menu_state
             self.save_visible = dirty
             self.actions.dispose()
-            actions = [item for item in self.action_items if dirty or item[0] != 'Save'] + folder_actions
+            actions = [item for item in self.action_items if (dirty or item[0] != 'Save')
+                       and (markdown or item[0] not in ('Formatted editing', 'Source editing'))] + folder_actions
             self.actions = self.app.presentation.ActionMenu(self.actions_button, self, actions)
             if dirty and self.save_button not in self.toolbar.children:
                 self.toolbar.insert(1, self.save_button)
@@ -215,11 +237,11 @@ class TextEditorView:
             self.line_count.text = caption
         if self.session is not None:
             markdown = self.session.kind == 'markdown'
-            if markdown and self.edit_mode not in self.source_tools.children:
-                self.source_tools.insert(0, self.edit_mode)
-            elif not markdown and self.edit_mode in self.source_tools.children:
-                self.source_tools.remove(self.edit_mode)
             source = not markdown or self.session.view.get('markdown_editor') == 'source'
+            if markdown and source and self.edit_mode not in self.source_tools.children:
+                self.source_tools.insert(0, self.edit_mode)
+            elif (not markdown or not source) and self.edit_mode in self.source_tools.children:
+                self.source_tools.remove(self.edit_mode)
             for control in (self.language_choice, self.line_count):
                 if source and control not in self.source_tools.children:
                     self.source_tools.add(control)
@@ -259,7 +281,7 @@ class TextEditorView:
             if self.formatted is None:
                 self.formatted = FormattedMarkdownInput(self.formatted_changed,
                     font_size=self.app.presentation.font_size('markdown'),
-                    stylesheet=self.app.presentation.css_variables())
+                    stylesheet=self.app.presentation.css_variables(), private=getattr(self.document, 'private', False))
                 self.app.presentation.bind_font(self.formatted.view, 'markdown', web=True, formatted=self.formatted)
             try:
                 self.formatted.load(self.document.text)

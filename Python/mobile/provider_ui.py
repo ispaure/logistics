@@ -274,6 +274,9 @@ class ProviderUI(FilesUI):
         self.crypt_text.readonly = True
         self._crypt_cancel = threading.Event()
         try:
+            workflow = getattr(self, '_provider_markdown', None)
+            if workflow is not None:
+                await workflow.flush()
             self.crypt_reader = await asyncio.to_thread(self._crypt_reader_store.save, self.crypt_reader, self.crypt_text.value, cancelled=self._crypt_cancel.is_set)
             self.crypt_title.text = private_label(Path(self.crypt_reader.name).name + (' · Saved encrypted locally' if getattr(self._crypt_reader_store, 'encrypted', True) else ' · Saved locally'))
         except Exception as error:

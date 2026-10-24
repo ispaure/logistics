@@ -5,6 +5,8 @@
     "access.py",
     "mobile/__init__.py",
     "mobile/markdown_editor.py",
+    "mobile/markdown_script.py",
+    "mobile/markdown_style.py",
     "mobile/notes_library.py",
     "mobile/provider_markdown.py",
     "mobile/ui.py",
