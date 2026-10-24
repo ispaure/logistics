@@ -194,6 +194,14 @@ records; arbitrary Markdown resources remain blocked.
 
 `mobile/storage.py`, `mobile/transport.py`, `mobile/presentation.py` and `mobile/ui.py` own mobile chat. The mobile host composes the view and supplies application presentation utilities. `streaming.py` owns SSE decoding shared by both transports; Qt networking stays in `transport.py`. Mobile retains its one-choice, text-only, 64 KiB event, 256 KiB response and timeout/cancellation limits.
 
+`ChatController.state` owns the current conversation reference, request activity,
+selection suppression and inventory refresh task. `ChatController.transcript` owns
+the WebView render epoch, task and incremental baseline. Controls remain directly
+on the controller; `ConversationSession` still owns generation publication and
+rollback. Chat UI methods read these records directly. Existing app `chat_*`
+accessors forward to the same records without copying state. Host capabilities
+are read-only references that follow the application's current services.
+
 ## Mobile source manifest
 
 `../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.

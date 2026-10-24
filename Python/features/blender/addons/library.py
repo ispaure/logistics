@@ -347,25 +347,7 @@ class AddonLibrary:
                         shutil.rmtree(target)
                     elif target.exists():
                         target.unlink()
-                for addon, relative in payloads:
-                    if addon.identity in retained:
-                        continue
-                    target = root / relative
-                    with zipfile.ZipFile(addon.package) as archive:
-                        for member in archive.infolist():
-                            check_cancelled(cancelled)
-                            if member.is_dir() or (addon.prefix and not member.filename.startswith(addon.prefix)):
-                                continue
-                            suffix = member.filename[len(addon.prefix):]
-                            output = target / relative_path(suffix) if addon.prefix or addon.kind == 'Extension' else target
-                            output.parent.mkdir(parents=True, exist_ok=True)
-                            with archive.open(member) as source, output.open('wb') as out:
-                                copy_stream(source, out, cancelled=cancelled)
-                            mode = (member.external_attr >> 16) & 0o777
-                            if os.name != 'nt' and mode:
-                                output.chmod(mode)
-                    if addon.identity == bluehole_source.IDENTITY:
-                        bluehole_source.preserve_environments(environments, target, cancelled=cancelled)
+                self._install_payloads(root, payloads, retained, environments, cancelled=cancelled)
                 deluxe_stamp = state.get('bluehole', {}).get('deluxe_stamp') if fallback else None
                 if bluehole['enabled'] and bluehole['deluxe'] and not fallback:
                     bluehole_addon = next(a for a in resolved if a.identity == bluehole_source.IDENTITY)
@@ -381,7 +363,18 @@ class AddonLibrary:
                 check_cancelled(cancelled)
                 staged = root / '.logistics-addons.tmp'
                 manager._contained(root, staged.name)
-                staged.write_text(json.dumps({'selected': sorted(set(identities)), 'installed': new, 'installed_bluehole': {'branch': installed_branch, 'commit': commit, 'version': new.get(bluehole_source.IDENTITY, {}).get('version', '')} if commit else None, 'bluehole': {**bluehole, 'commit': commit, 'deluxe_stamp': deluxe_stamp}}, indent=2), encoding='utf-8')
+                installed_bluehole = ({
+                    'branch': installed_branch,
+                    'commit': commit,
+                    'version': new.get(bluehole_source.IDENTITY, {}).get('version', ''),
+                } if commit else None)
+                selection = {
+                    'selected': sorted(set(identities)),
+                    'installed': new,
+                    'installed_bluehole': installed_bluehole,
+                    'bluehole': {**bluehole, 'commit': commit, 'deluxe_stamp': deluxe_stamp},
+                }
+                staged.write_text(json.dumps(selection, indent=2), encoding='utf-8')
                 staged.replace(root / '.logistics-addons.json')
             except BaseException:
                 for folder in folders:
@@ -391,6 +384,29 @@ class AddonLibrary:
                         shutil.copytree(backup / folder, root / folder, symlinks=True)
                 raise
         return root
+
+    def _install_payloads(self, root, payloads, retained, environments, *, cancelled):
+        """Install verified packages inside the caller's backup/rollback boundary."""
+        from features.blender.addons import bluehole as bluehole_source
+        for addon, relative in payloads:
+            if addon.identity in retained:
+                continue
+            target = root / relative
+            with zipfile.ZipFile(addon.package) as archive:
+                for member in archive.infolist():
+                    check_cancelled(cancelled)
+                    if member.is_dir() or (addon.prefix and not member.filename.startswith(addon.prefix)):
+                        continue
+                    suffix = member.filename[len(addon.prefix):]
+                    output = target / relative_path(suffix) if addon.prefix or addon.kind == 'Extension' else target
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    with archive.open(member) as source, output.open('wb') as out:
+                        copy_stream(source, out, cancelled=cancelled)
+                    mode = (member.external_attr >> 16) & 0o777
+                    if os.name != 'nt' and mode:
+                        output.chmod(mode)
+            if addon.identity == bluehole_source.IDENTITY:
+                bluehole_source.preserve_environments(environments, target, cancelled=cancelled)
 
     def _resolve_addons(self, release, root, identities):
         """Resolve regular selections from one preset catalog before any mutation."""

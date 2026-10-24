@@ -24,9 +24,9 @@ class ChatUI:
     def show_chat(self, widget=None, *, present=True, **kwargs):
         if not hasattr(self, 'chat_store'):
             self.chat_store = ChatStore(self.private_root / 'LM')
-            self.chat_current = None
-            self.chat_busy = self.chat_loading = False
-            self.chat_client = None
+            self.state.current = None
+            self.state.busy = self.state.loading = False
+            self.state.client = None
             self.chat_labels = {}
             try:
                 self.chat_profile, self.chat_profile_original = self.chat_store.profile()
@@ -38,7 +38,7 @@ class ChatUI:
             self._build_chat_controls()
             self._build_chat_configuration()
             self._build_chat_workspace()
-            self._chat_needs_initial_selection = True
+            self.state.needs_initial_selection = True
             self.refresh_chats()
             if error:
                 self.set_chat_status(error)
@@ -69,13 +69,13 @@ class ChatUI:
         self.chat_new = self.presentation.surface(toga.Button('New chat', on_press=self.new_chat,
             style=Pack(height=52, width=148, font_size=17, font_weight='bold')),
             radius=26, background='chat_background', foreground='text', outlined=True)
-        self.chat_render_ready = False
-        self.chat_render_revision = 0
-        self.chat_render_generation = 0
-        self.chat_render_task = None
-        self.chat_render_key = None
-        self.chat_render_entries = []
-        self.chat_force_latest = False
+        self.transcript.ready = False
+        self.transcript.revision = 0
+        self.transcript.generation = 0
+        self.transcript.task = None
+        self.transcript.key = None
+        self.transcript.entries = []
+        self.transcript.force_latest = False
         self.chat_transcript = ChatTranscript(on_navigation_starting=lambda widget, url, **kw: False,
             on_webview_load=self.chat_transcript_loaded, style=Pack(flex=1))
         self.presentation.surface(self.chat_transcript, radius=0, background='chat_background', outlined=False)
@@ -227,9 +227,9 @@ class ChatUI:
             self.chat_setup_box.remove(self.chat_setup)
         elif not hide_setup and self.chat_setup not in self.chat_setup_box.children:
             self.chat_setup_box.add(self.chat_setup)
-        generating = getattr(self, 'chat_generating', False)
-        self.chat_send.enabled = generating or (configured and not self.chat_busy)
-        self.chat_setup.enabled = not self.chat_busy
+        generating = self.state.generating
+        self.chat_send.enabled = generating or (configured and not self.state.busy)
+        self.chat_setup.enabled = not self.state.busy
 
     def sync_chat_navigation(self):
         """Place the iPhone drawer in the same native bar as Documents' menu."""
@@ -276,7 +276,7 @@ class ChatUI:
 
     def update_chat_header(self):
         sidebar = self.chat_drawer_open and self.adaptive.width() < 640
-        title = (self.chat_current or {}).get('title', 'New conversation')
+        title = (self.state.current or {}).get('title', 'New conversation')
         # Native ellipsis and explicit bounds stop long titles pushing the
         # action capsule outside the safe-area allocation on iPad and Duo.
         available = self.adaptive.content_width('chat')
@@ -347,7 +347,7 @@ class ChatUI:
         self.show_chat()
 
     def invoke_chat_action(self, callback):
-        if self.chat_busy or not self.active_host:
+        if self.state.busy or not self.active_host:
             return
         result = callback()
         if inspect.isawaitable(result):
@@ -364,7 +364,7 @@ class ChatUI:
         self.show_view(self.chat_config_view, destination='chat', route='chat-settings', title='Chat settings')
 
     def save_chat_configuration(self, widget=None, **kwargs):
-        if self.chat_busy:
+        if self.state.busy:
             return
         try:
             if not self.chat_model.value.strip():
@@ -385,19 +385,19 @@ class ChatUI:
             self._publish_chat_inventory(*self.chat_store.summaries(), authoritative=True)
             return
         self._publish_chat_inventory(*self.chat_store.cached_summaries())
-        self._chat_inventory_again = True
-        task = getattr(self, '_chat_inventory_task', None)
+        self.state.inventory_again = True
+        task = self.state.inventory_task
         if task is None or task.done():
             async def refresh():
-                while self.active_host and self._chat_inventory_again:
-                    self._chat_inventory_again = False
+                while self.active_host and self.state.inventory_again:
+                    self.state.inventory_again = False
                     records, warnings = await asyncio.to_thread(self.chat_store.summaries)
-                    if self.active_host and not self._chat_inventory_again:
+                    if self.active_host and not self.state.inventory_again:
                         self._publish_chat_inventory(records, warnings, authoritative=True)
-            self._chat_inventory_task = self.loop.create_task(refresh())
+            self.state.inventory_task = self.loop.create_task(refresh())
 
     def _publish_chat_inventory(self, records, warnings, *, authoritative=False):
-        self.chat_loading = True
+        self.state.loading = True
         labels = {}
         for record in records:
             label = record['title'][:60]
@@ -406,17 +406,17 @@ class ChatUI:
             labels[label] = record['id']
         self.chat_labels = labels
         self.chat_selector.items = list(labels)
-        if self.chat_current:
-            selected_label = next((label for label, key in labels.items() if key == self.chat_current['id']), None)
+        if self.state.current:
+            selected_label = next((label for label, key in labels.items() if key == self.state.current['id']), None)
             if selected_label is not None:
                 self.chat_selector.value = selected_label
-        self.chat_loading = False
+        self.state.loading = False
         self._project_chat_rows(labels)
         if warnings:
             self.set_chat_status(f'{len(warnings)} conversation(s) could not be read; originals preserved.')
-        if (authoritative and not self.chat_busy
-                and getattr(self, '_chat_needs_initial_selection', False)):
-            self._chat_needs_initial_selection = False
+        if (authoritative and not self.state.busy
+                and self.state.needs_initial_selection):
+            self.state.needs_initial_selection = False
             if self.chat_labels:
                 self.open_chat(next(iter(self.chat_labels.values())))
             else:
@@ -431,38 +431,38 @@ class ChatUI:
                 folder=False, thumbnail=False, icon=listing.row_icon)
                 for index, (label, key) in enumerate(labels.items())]
             selected = next((index for index, row in enumerate(listing.data)
-                if self.chat_current is not None and row.key == self.chat_current['id']), None)
+                if self.state.current is not None and row.key == self.state.current['id']), None)
             listing.select_index(selected)
         finally:
             listing.updating = False
 
     def _select_conversation_row(self, widget, **kwargs):
-        if widget.updating or self.chat_busy:
+        if widget.updating or self.state.busy:
             return
         row = widget.selection
         if (row is not None and row.key in self.chat_labels.values()
-                and (self.chat_current is None or row.key != self.chat_current['id'])):
+                and (self.state.current is None or row.key != self.state.current['id'])):
             self.open_chat(row.key)
 
     def checkpoint_chat(self):
-        if self.chat_current is None:
+        if self.state.current is None:
             return True
         try:
-            self.chat_store.save(self.chat_current)
+            self.chat_store.save(self.state.current)
             return True
         except (OSError, ValueError) as error:
             self.set_chat_status('Chat not saved: ' + str(error))
             return False
 
     def open_chat(self, key):
-        if self.chat_busy or not self.checkpoint_chat():
+        if self.state.busy or not self.checkpoint_chat():
             return
-        self._chat_needs_initial_selection = False
+        self.state.needs_initial_selection = False
         try:
-            self.chat_current = self.chat_store.load(key)
-            self.chat_loading = True
-            self.chat_prompt.value = self.chat_current['draft']
-            self.chat_loading = False
+            self.state.current = self.chat_store.load(key)
+            self.state.loading = True
+            self.chat_prompt.value = self.state.current['draft']
+            self.state.loading = False
             self.set_chat_status('')
             self.update_chat_transcript()
             self.refresh_chats()
@@ -471,23 +471,23 @@ class ChatUI:
             self.set_chat_status(str(error))
 
     def select_chat(self, widget, **kwargs):
-        if not self.chat_loading and not self.chat_busy and widget.value in self.chat_labels:
+        if not self.state.loading and not self.state.busy and widget.value in self.chat_labels:
             key = self.chat_labels[widget.value]
             # Android can deliver programmatic selection notifications after
             # chat_loading clears. Reopening the current chat republishes its
             # inventory and schedules another notification indefinitely.
-            if self.chat_current is None or key != self.chat_current['id']:
+            if self.state.current is None or key != self.state.current['id']:
                 self.open_chat(key)
 
     def new_chat(self, widget=None, **kwargs):
-        if self.chat_busy or not self.checkpoint_chat():
+        if self.state.busy or not self.checkpoint_chat():
             return
-        self._chat_needs_initial_selection = False
+        self.state.needs_initial_selection = False
         try:
-            self.chat_current = self.chat_store.new(self.chat_profile['settings'])
-            self.chat_loading = True
+            self.state.current = self.chat_store.new(self.chat_profile['settings'])
+            self.state.loading = True
             self.chat_prompt.value = ''
-            self.chat_loading = False
+            self.state.loading = False
             self.set_chat_status('')
             self.update_chat_transcript()
             self.refresh_chats()
@@ -497,57 +497,57 @@ class ChatUI:
 
     def chat_draft_changed(self, widget, **kwargs):
         self.resize_chat_composer()
-        if (not self.chat_loading and widget.value and self.chat_current is None
-                and getattr(self, '_chat_needs_initial_selection', False)):
+        if (not self.state.loading and widget.value and self.state.current is None
+                and self.state.needs_initial_selection):
             # Typing wins over a cold inventory result. Keep the new draft in
             # memory and use the normal queued save instead of opening an older
             # conversation (or clearing the composer) when discovery completes.
-            self._chat_needs_initial_selection = False
-            self.chat_current = conversation(self.chat_profile['settings'], profile_id='mobile')
-        if not self.chat_loading and self.chat_current is not None:
-            self.chat_current['draft'] = widget.value
-            self.chat_store.queue_save(self.chat_current, self.loop,
+            self.state.needs_initial_selection = False
+            self.state.current = conversation(self.chat_profile['settings'], profile_id='mobile')
+        if not self.state.loading and self.state.current is not None:
+            self.state.current['draft'] = widget.value
+            self.chat_store.queue_save(self.state.current, self.loop,
                 failed=lambda error: self.set_chat_status('Chat not saved: ' + str(error))
                     if self.active_host else None)
 
     def update_chat_transcript(self):
-        self.chat_render_revision += 1
+        self.transcript.revision += 1
         self.update_chat_header()
         self.schedule_chat_render()
 
     def chat_transcript_loaded(self, widget=None, **kwargs):
-        self.chat_render_ready = True
-        self.chat_render_revision += 1
-        self.chat_render_generation += 1
-        self.chat_render_key = None
-        self.chat_render_entries = []
+        self.transcript.ready = True
+        self.transcript.revision += 1
+        self.transcript.generation += 1
+        self.transcript.key = None
+        self.transcript.entries = []
         self.schedule_chat_render()
 
     def schedule_chat_render(self):
-        if self.chat_render_ready and (self.chat_render_task is None or self.chat_render_task.done()):
-            self.chat_render_task = self.loop.create_task(self.render_chat_transcript())
+        if self.transcript.ready and (self.transcript.task is None or self.transcript.task.done()):
+            self.transcript.task = self.loop.create_task(self.render_chat_transcript())
 
     async def render_chat_transcript(self):
         rendered = -1
         try:
-            while rendered != self.chat_render_revision:
-                rendered = self.chat_render_revision
-                generation = self.chat_render_generation
-                data = self.chat_current
+            while rendered != self.transcript.revision:
+                rendered = self.transcript.revision
+                generation = self.transcript.generation
+                data = self.state.current
                 if data is None:
                     return
                 if data['messages'] and data['messages'][-1]['status'] == 'streaming':
                     # One renderer owns each WebView; merge bursts while keeping
                     # all native control access on the UI loop.
                     await asyncio.sleep(.08)
-                force_latest, self.chat_force_latest = self.chat_force_latest, False
-                previous = self.chat_render_entries if self.chat_render_key == data['id'] else []
+                force_latest, self.transcript.force_latest = self.transcript.force_latest, False
+                previous = self.transcript.entries if self.transcript.key == data['id'] else []
                 messages = [dict(role=entry['role'], status=entry['status'], content=entry['content'])
                             for entry in data['messages']]
                 entries = await asyncio.to_thread(transcript_entries, messages, tuple(previous))
                 if not self.active_host:
                     return
-                if generation != self.chat_render_generation or self.chat_current is not data:
+                if generation != self.transcript.generation or self.state.current is not data:
                     rendered = -1
                     continue
                 start = 0
@@ -561,34 +561,34 @@ class ChatUI:
                 if not ready:
                     # The initial blank-page load may finish before set_content.
                     # Its next real load event will render the current record.
-                    if rendered == self.chat_render_revision:
-                        self.chat_render_ready = False
+                    if rendered == self.transcript.revision:
+                        self.transcript.ready = False
                         return
-                elif generation == self.chat_render_generation:
-                    self.chat_render_key, self.chat_render_entries = data['id'], entries
+                elif generation == self.transcript.generation:
+                    self.transcript.key, self.transcript.entries = data['id'], entries
         except (RuntimeError, ValueError) as error:
             self.set_chat_status('Conversation display unavailable: ' + str(error)[:200])
 
     async def chat_primary_action(self, widget=None, **kwargs):
-        if self.chat_busy:
-            if self.chat_generating:
+        if self.state.busy:
+            if self.state.generating:
                 self.cancel_chat()
         else:
             await self.send_chat()
 
     def set_chat_busy(self, busy, *, generating=False):
-        self.chat_busy = busy
-        self.chat_generating = busy and generating
+        self.state.busy = busy
+        self.state.generating = busy and generating
         for control in (self.chat_url, self.chat_key, self.chat_model, self.chat_models, self.chat_selector,
                         self.chat_new, self.chat_header_new, self.chat_refresh, self.chat_export, self.chat_actions_button,
                         self.chat_context, self.chat_max_tokens):
             control.enabled = not busy
-        self.presentation.apply_icon(self.chat_send, 'stop' if self.chat_generating else 'up',
-                   'Stop' if self.chat_generating else 'Send')
+        self.presentation.apply_icon(self.chat_send, 'stop' if self.state.generating else 'up',
+                   'Stop' if self.state.generating else 'Send')
         self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
         self.update_chat_readiness()
         self.chat_conversation_list.enabled = not busy
-        if not busy and getattr(self, '_chat_needs_initial_selection', False):
+        if not busy and self.state.needs_initial_selection:
             # Initial discovery can finish while Connect owns the controls.
             # Complete selection once idle instead of dropping it when the
             # guarded new/open actions decline to run during that request.
@@ -604,28 +604,28 @@ class ChatUI:
         return self.chat_profile
 
     def select_chat_model(self, widget, **kwargs):
-        if not self.chat_loading and widget.value:
+        if not self.state.loading and widget.value:
             self.chat_model.value = widget.value
 
     async def refresh_chat_models(self, widget=None, **kwargs):
-        if self.chat_busy:
+        if self.state.busy:
             return
         self.set_chat_busy(True)
         self.set_chat_status('Connecting to server…')
         try:
             profile = self.chat_fields()
-            self.chat_client = ChatClient(profile['base_url'], self.chat_key.value)
-            models = await asyncio.to_thread(self.chat_client.models)
+            self.state.client = ChatClient(profile['base_url'], self.chat_key.value)
+            models = await asyncio.to_thread(self.state.client.models)
             # Replacing Selection.items can fire on_change for its first item.
             # Retain the configured/manual model if the server still offers it.
             selected = profile['model'] if profile['model'] in models else (models[0] if models else '')
-            self.chat_loading = True
+            self.state.loading = True
             try:
                 self.chat_models.items = models
                 if selected:
                     self.chat_models.value = selected
             finally:
-                self.chat_loading = False
+                self.state.loading = False
             if models:
                 self.chat_model.value = selected
                 self.chat_fields()
@@ -634,21 +634,21 @@ class ChatUI:
         except Exception as error:
             self.set_chat_status('Models unavailable: ' + str(error)[:400])
         finally:
-            self.chat_client = None
+            self.state.client = None
             self.set_chat_busy(False)
 
     async def send_chat(self, widget=None, **kwargs):
-        if self.chat_busy or self.chat_current is None:
+        if self.state.busy or self.state.current is None:
             return
         prompt = self.chat_prompt.value.strip()
         if not prompt:
             self.set_chat_status('Enter a message first.')
             return
-        if len(self.chat_current['messages']) > 198:
+        if len(self.state.current['messages']) > 198:
             self.set_chat_status('This conversation has reached 200 messages. Start a new conversation.')
             return
         self.set_chat_busy(True, generating=True)
-        self.chat_cancelled = False
+        self.state.cancelled = False
         session = None
         transport = None
         response = None
@@ -658,14 +658,14 @@ class ChatUI:
             from features.lm.generation import GenerationCoordinator, GenerationInputs
             from features.lm.execution.mobile import MobileGenerationTransport
             profile = self.chat_fields()
-            data = self.chat_current
+            data = self.state.current
             session = ConversationSession(self.chat_store)
             session.attach(data)
             before = session.append_user(prompt, settings=profile['settings'], model=profile['model'],
                                          title_limit=60, retitle=True)
-            self.chat_client = ChatClient(profile['base_url'], self.chat_key.value)
-            transport = MobileGenerationTransport(self.chat_client, session,
-                current=lambda: self.active_host and self.chat_current is data)
+            self.state.client = ChatClient(profile['base_url'], self.chat_key.value)
+            transport = MobileGenerationTransport(self.state.client, session,
+                current=lambda: self.active_host and self.state.current is data)
             coordinator = GenerationCoordinator(session, transport)
             try:
                 plan = coordinator.prepare(GenerationInputs(profile))
@@ -673,19 +673,19 @@ class ChatUI:
                 session.rollback(before)
                 raise
             def published():
-                self.chat_loading = True
+                self.state.loading = True
                 self.chat_prompt.value = ''
-                self.chat_loading = False
+                self.state.loading = False
                 self.resize_chat_composer()
-                self.chat_force_latest = True
+                self.transcript.force_latest = True
                 self.update_chat_transcript()
             try:
                 result = coordinator.start(plan, self.chat_key.value, clear_draft=True, published=published)
             except (OSError, ValueError):
                 session.rollback(before)
-                self.chat_loading = True
+                self.state.loading = True
                 self.chat_prompt.value = data['draft']
-                self.chat_loading = False
+                self.state.loading = False
                 raise ValueError('The request was not sent because its recovery record could not be saved.')
             if not result.started:
                 raise ValueError(result.error)
@@ -694,10 +694,10 @@ class ChatUI:
             omitted = plan.metadata['omitted_turns']
             self.set_chat_status(f'Generating… {omitted} older turn(s) omitted from context.' if omitted else 'Generating…')
             reason = await transport.drain(changed=self.update_chat_transcript, checkpoint=self.checkpoint_chat)
-            session.complete_response('cancelled' if self.chat_cancelled else 'complete', '',
+            session.complete_response('cancelled' if self.state.cancelled else 'complete', '',
                                       dict(finish_reason=reason), token=response)
             assistant['finish_reason'] = reason
-            self.set_chat_status('Reply stopped; partial text preserved.' if self.chat_cancelled else '')
+            self.set_chat_status('Reply stopped; partial text preserved.' if self.state.cancelled else '')
         except ChatCancelled:
             if session is not None:
                 session.complete_response('cancelled', '', {}, token=response)
@@ -711,29 +711,29 @@ class ChatUI:
                 session.complete_response('failed', str(error)[:400], {}, token=response)
             self.set_chat_status('Chat failed: ' + str(error)[:400])
         finally:
-            self.chat_loading = False
+            self.state.loading = False
             if transport is not None:
                 await transport.retire()
-            elif self.chat_client:
-                self.chat_client.cancel()
-            self.chat_client = None
+            elif self.state.client:
+                self.state.client.cancel()
+            self.state.client = None
             self.checkpoint_chat()
             self.update_chat_transcript()
             self.refresh_chats()
             self.set_chat_busy(False)
 
     def cancel_chat(self, widget=None, **kwargs):
-        self.chat_cancelled = True
-        if self.chat_client:
-            self.chat_client.cancel()
+        self.state.cancelled = True
+        if self.state.client:
+            self.state.client.cancel()
         self.chat_send.enabled = False
         self.set_chat_status('Stopping…')
 
     async def export_chat(self, widget=None, **kwargs):
-        if self.chat_busy or self.chat_current is None:
+        if self.state.busy or self.state.current is None:
             return
         try:
-            content = export_chat(self.chat_current).encode('utf-8')
+            content = export_chat(self.state.current).encode('utf-8')
             done = await self.presentation.export_document(self, 'Conversation.md', content)
             self.set_chat_status('Conversation exported.' if done else 'Export cancelled.')
         except Exception as error:

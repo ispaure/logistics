@@ -1,7 +1,41 @@
 """Owned workflow state and explicit application services."""
 
-from services.workflow_host import HostAttribute, HostService
+from __future__ import annotations
+
+from asyncio import Task
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+from services.workflow_host import HostService, StateAttribute
 from features.lm.mobile.ui import ChatUI
+
+if TYPE_CHECKING:
+    from features.lm.mobile.transport import ChatClient
+
+
+@dataclass
+class ChatState:
+    """Conversation/request state; controls and stored records keep their owners."""
+    current: dict | None = None
+    busy: bool = False
+    loading: bool = False
+    generating: bool = False
+    cancelled: bool = False
+    client: ChatClient | None = None
+    inventory_task: Task | None = None
+    inventory_again: bool = False
+    needs_initial_selection: bool = False
+
+
+@dataclass
+class TranscriptState:
+    """One WebView's publication epoch, pending render and incremental baseline."""
+    ready: bool = False
+    revision: int = 0
+    generation: int = 0
+    task: Task | None = None
+    key: str | None = None
+    entries: list[dict[str, str]] = field(default_factory=list)
+    force_latest: bool = False
 
 
 class ChatController(ChatUI):
@@ -105,15 +139,34 @@ class ChatController(ChatUI):
 
     def __init__(self, app):
         self.app = app
+        self.state = ChatState()
+        self.transcript = TranscriptState()
 
-    _impl = HostAttribute("_impl")
-    active_host = HostAttribute("active_host")
-    adaptive = HostAttribute("adaptive")
-    loop = HostAttribute("loop")
-    main_window = HostAttribute("main_window")
-    native_host = HostAttribute("native_host")
-    preferences = HostAttribute("preferences")
-    private_root = HostAttribute("private_root")
-    routes = HostAttribute("routes")
+    chat_current = StateAttribute("state", "current")
+    chat_busy = StateAttribute("state", "busy")
+    chat_loading = StateAttribute("state", "loading")
+    chat_generating = StateAttribute("state", "generating")
+    chat_cancelled = StateAttribute("state", "cancelled")
+    chat_client = StateAttribute("state", "client")
+    _chat_inventory_task = StateAttribute("state", "inventory_task")
+    _chat_inventory_again = StateAttribute("state", "inventory_again")
+    _chat_needs_initial_selection = StateAttribute("state", "needs_initial_selection")
+    chat_render_ready = StateAttribute("transcript", "ready")
+    chat_render_revision = StateAttribute("transcript", "revision")
+    chat_render_generation = StateAttribute("transcript", "generation")
+    chat_render_task = StateAttribute("transcript", "task")
+    chat_render_key = StateAttribute("transcript", "key")
+    chat_render_entries = StateAttribute("transcript", "entries")
+    chat_force_latest = StateAttribute("transcript", "force_latest")
+
+    _impl = HostService("_impl")
+    active_host = HostService("active_host")
+    adaptive = HostService("adaptive")
+    loop = HostService("loop")
+    main_window = HostService("main_window")
+    native_host = HostService("native_host")
+    preferences = HostService("preferences")
+    private_root = HostService("private_root")
+    routes = HostService("routes")
     show_view = HostService("show_view")
     presentation = HostService("presentation")

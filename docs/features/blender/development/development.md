@@ -88,7 +88,10 @@ than inventing archives or selecting a different architecture silently.
 entrypoints. `_snapshot_packages` copies changed ZIPs into the transaction workspace
 and verifies digests before mutation. `_apply` retains Blue Hole fallback policy,
 resource backup, mutation, preference preparation, rollback and final selection
-publication under the existing `apply` installation lock. No second transaction
+publication under the existing `apply` installation lock. `_install_payloads`
+installs verified ZIP members inside that rollback boundary; final selection
+assembly names the installed Blue Hole snapshot separately from requested settings.
+No second transaction
 owner or persisted format is introduced. The page separately projects requested
 Blue Hole settings/installed state and regular catalog rows; only a successful
 current-preset refresh enables saving.

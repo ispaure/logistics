@@ -42,6 +42,30 @@ class WorkflowOwnershipTests(unittest.TestCase):
         with self.assertRaises(AttributeError):
             getattr(owner, 'undeclared_host_service')
 
+    def test_chat_state_aliases_share_one_owner_and_hosts_stay_independent(self):
+        from features.lm.mobile.controller import ChatController
+        app = self.app
+        owner = app.chat_controller()
+        other = ChatController(SimpleNamespace(active_host=True))
+        record = {'id': 'fixture', 'messages': [], 'draft': ''}
+        app.chat_current = record
+        self.assertIs(owner.state.current, record)
+        owner.state.busy = True
+        self.assertTrue(app.chat_busy)
+        app.chat_render_entries = [{'text': 'Retained transcript'}]
+        self.assertIs(app.chat_render_entries, owner.transcript.entries)
+        self.assertEqual(other.transcript.entries, [])
+        self.assertIsNone(other.state.current)
+        self.assertFalse(other.state.busy)
+        self.assertNotIn('chat_current', app.__dict__)
+        self.assertNotIn('chat_current', owner.__dict__)
+        with self.assertRaises(AttributeError):
+            other.active_host = False
+        other.app.active_host = False
+        self.assertFalse(other.active_host)
+        app.chat_busy = False
+        app.chat_current = None
+
     def test_transfer_cancel_does_not_cancel_an_independent_file_operation(self):
         app = self.app
         file_cancel, transfer_cancel = Event(), Event()
