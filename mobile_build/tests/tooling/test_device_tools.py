@@ -1,6 +1,7 @@
 """Protect identity and physical-device gates used by local deployment."""
 import copy
 import json
+import os
 import plistlib
 from pathlib import Path
 import shlex
@@ -80,6 +81,10 @@ class DeviceDeploymentTests(unittest.TestCase):
         with patch.object(device_tools, 'run', side_effect=[subprocess.CalledProcessError(1, 'deploy'), None]) as run:
             with self.assertRaisesRegex(RuntimeError, 'Deployment failed for: phone'):
                 device_tools.deploy_all(config, allow_wired=True)
+            self.assertTrue(all(call.args[0][1:3] == ['-m', 'mobile_build.deployment.device_tools']
+                                for call in run.call_args_list))
+            self.assertTrue(all(str(device_tools.ROOT.parent) in call.kwargs['env']['PYTHONPATH'].split(os.pathsep)
+                                for call in run.call_args_list))
         self.assertEqual(run.call_count, 2)
         self.assertEqual([call.args[0][-3:] for call in run.call_args_list],
                          [['--device', 'phone', '--allow-wired'], ['--device', 'tablet', '--allow-wired']])

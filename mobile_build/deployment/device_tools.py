@@ -208,13 +208,15 @@ def deploy_all(config, *, allow_wired=False):
                    for target in targets)):
         raise RuntimeError('device_ids must be a nonempty list of device UDIDs in .device.json.')
     failures = []
+    child_env = dict(os.environ)
+    child_env['PYTHONPATH'] = os.pathsep.join(filter(None, (str(ROOT.parent), child_env.get('PYTHONPATH'))))
     for target in dict.fromkeys(targets):
         print(f'\nDeploying Logistics to {target}...', flush=True)
-        command = [sys.executable, str(Path(__file__).resolve()), 'deploy', '--device', target]
+        command = [sys.executable, '-m', 'mobile_build.deployment.device_tools', 'deploy', '--device', target]
         if allow_wired:
             command.append('--allow-wired')
         try:
-            run(command)
+            run(command, env=child_env)
         except (RuntimeError, subprocess.CalledProcessError) as error:
             failures.append(target)
             print(f'Deployment failed for {target}: {error}', file=sys.stderr, flush=True)
