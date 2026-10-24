@@ -48,6 +48,17 @@ def configure_android_sources(project):
         if line.startswith('android.sourceSets.main.java.srcDir(') and line not in text.splitlines():
             text += '\n' + line + '\n'
     gradle.write_text(text)
+    # Chaquopy isolates pip from PIP_* environment variables. Forward the
+    # prepared wheel directory explicitly, including on reused projects.
+    wheel_links = os.environ.get('PIP_FIND_LINKS')
+    if wheel_links:
+        options = Path(project) / 'app/pip-options.txt'
+        lines = options.read_text().splitlines() if options.exists() else []
+        for link in shlex.split(wheel_links):
+            argument = '--find-links=' + link
+            if argument not in lines:
+                lines.append(argument)
+        options.write_text('\n'.join(lines) + '\n')
     # Media custom actions need resource IDs, including Android 13+ lock screens.
     import shutil
     resources = ROOT.parent / 'Python/features/books/mobile/android_res'

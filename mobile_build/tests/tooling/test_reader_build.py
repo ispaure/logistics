@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 import unittest
 import tomllib
 import xml.etree.ElementTree as ET
@@ -9,6 +10,7 @@ from mobile_build.cloud_build import configure_android_appearance, configure_and
 
 
 class ReaderBuildTests(unittest.TestCase):
+    @patch.dict('os.environ', PIP_FIND_LINKS='"/tmp/wheels with spaces"')
     def test_existing_android_project_gains_speech_java_sources(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -33,6 +35,8 @@ class ReaderBuildTests(unittest.TestCase):
             self.assertNotIn('tests.logisticsmobile', metadata.read_text())
             self.assertEqual((root / 'app/extract-packages.txt').read_text(), '')
             self.assertEqual(gradle.read_text(), first)
+            self.assertEqual((root / 'app/pip-options.txt').read_text(),
+                             '--find-links=/tmp/wheels with spaces\n')
             self.assertTrue(first.startswith(existing))
             self.assertEqual(first.count('payload/commonUtils/ui/native/android'), 1)
             self.assertEqual(first.count('payload/features/books/mobile/android'), 1)
