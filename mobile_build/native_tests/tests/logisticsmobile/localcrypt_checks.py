@@ -183,9 +183,17 @@ async def exercise_localcrypt(app, passed):
     assert first.crypt_text.value == 'First native memory-only draft'
     assert second.crypt_text.value == 'Second native memory-only draft'
     from unittest.mock import AsyncMock, patch
-    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as decision:
+    decision_ready, release_decision = asyncio.Event(), asyncio.Event()
+    async def cancel_dialog(dialog):
+        decision_ready.set()
+        await release_decision.wait()
+        return 'cancel'
+    with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=cancel_dialog)) as decision:
         app.request_close_session(first.session.id)
-        await app._document_close_tasks[first.session.id]
+        await asyncio.wait_for(decision_ready.wait(), timeout=30)
+        pending = app._document_close_tasks[first.session.id]
+        release_decision.set()
+        await pending
         decision.assert_awaited_once()
     assert not app.close_session(first.session.id, choice='cancel')
     first.resume_crypt()
