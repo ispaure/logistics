@@ -383,26 +383,21 @@ class BulkRenameWidget(qt.QWidget):
         path = self._folder_reveal_pending
         if path is None:
             return
-        index = self.folder_model.index(str(path))
-        if not index.isValid():
-            # A newly created branch can arrive after its parent load signal.
-            # Keep the request alive until the model inserts the folder row.
-            self._folder_reveal_timer.start(50)
-            return
-        # Empty folders may not expand in QTreeView, so expansion alone never
-        # asks QFileSystemModel to load them or emits directoryLoaded. Request
-        # that load explicitly before waiting for the branch to settle.
-        if self.folder_model.canFetchMore(index):
-            self.folder_model.fetchMore(index)
-        depth = 1
-        ancestor = index.parent()
-        while ancestor.isValid():
-            depth += 1
-            if self.folder_model.canFetchMore(ancestor):
-                self.folder_model.fetchMore(ancestor)
-            self.folder_tree.expand(ancestor)
-            ancestor = ancestor.parent()
-        self.folder_tree.expand(index)
+        branch = (*reversed(path.parents), path)
+        # A leaf index may not exist until its parent has been fetched. Load
+        # and expand from the filesystem root down, so retrying a missing leaf
+        # cannot leave its ancestors permanently unloaded.
+        for folder in branch:
+            index = self.folder_model.index(str(folder))
+            if not index.isValid():
+                self._folder_reveal_timer.start(50)
+                return
+            # Empty folders need an explicit load even when Qt will not expand
+            # them. Expansion alone does not guarantee directoryLoaded.
+            if self.folder_model.canFetchMore(index):
+                self.folder_model.fetchMore(index)
+            self.folder_tree.expand(index)
+        depth = len(branch)
         # A deep branch can indent beyond a narrow sidebar column, giving its
         # row a zero-width visual rect and preventing scrollTo from revealing it.
         width = depth * self.folder_tree.indentation() + self.folder_tree.fontMetrics().horizontalAdvance(path.name) + 48

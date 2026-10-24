@@ -73,6 +73,7 @@ class RclonePage(pyside.QWidget):
         self.load_operation.completed.connect(self._operation_completed)
         self._importing = None
         self._loading_package = None
+        self._discovering = None
 
         self._build_layout()
         self._connect_signals()
@@ -229,15 +230,14 @@ class RclonePage(pyside.QWidget):
         self.clear_sessions_button.clicked.connect(self._clear_sessions)
         self.lock_button.clicked.connect(self._lock_selected)
 
-    def refresh(self):
-        """Refresh credential packages and generated config state."""
+    def refresh(self, *, selected_package_path=None, message='', focus_password=False):
+        """Discover packages in a worker, retaining the previous list until success."""
 
         if self.load_operation.busy:
             return
-        selected_package_path = None
         current_item = self.credential_list.currentItem()
 
-        if current_item is not None:
+        if selected_package_path is None and current_item is not None:
             current_package = current_item.data(
                 pyside.Qt.ItemDataRole.UserRole
             )
@@ -245,19 +245,52 @@ class RclonePage(pyside.QWidget):
             if current_package is not None:
                 selected_package_path = current_package.path
 
-        self.config_directory.setText(
-            str(configuration.get_rclone_config_dir())
-        )
+        self._discovering = selected_package_path, message, focus_password, tuple(
+            (widget, widget.isEnabled()) for widget in self._credential_controls())
+        for widget in self._credential_controls():
+            widget.setEnabled(False)
 
-        self.package_directory.setText(str(credentials.config.LogisticsConfig().path_logistics_remote_cred))
-        self._refresh_credential_packages(selected_package_path)
+        def discover(report, cancelled):
+            directories = credentials.get_credential_package_directories()
+            packages = credentials.get_logistics_remote_credentials_zip_lst(
+                directories=directories, cancelled=cancelled)
+            return directories[0], packages
+
+        self.load_operation.start(discover, message='Finding credential packages…')
+
+    def _discovery_completed(self, values, error):
+        selected, message, focus_password, controls = self._discovering
+        self._discovering = None
+        self.load_operation.hide()
+        for widget, enabled in controls:
+            widget.setEnabled(enabled)
+        if values is not None and not error and not self.load_operation.cancelled.is_set():
+            directory, packages = values
+            try:
+                self._refresh_credential_packages(packages, selected)
+            except (OSError, ValueError) as failure:
+                error = str(failure)
+            else:
+                self.config_directory.setText(str(configuration.get_rclone_config_dir()))
+                self.package_directory.setText(str(directory))
+                self.status_label.setText(message)
+        elif not error:
+            self.status_label.setText('Credential refresh cancelled. Previous list kept.')
+        if error:
+            self.status_label.setText('Could not refresh credential packages. Previous list kept. ' + error)
+        available = self.credential_list.count() > 0
+        self.password_input.setEnabled(available)
+        self.load_button.setEnabled(available)
+        if not available:
+            self.remove_button.setEnabled(False)
+        elif focus_password and not error and not self.load_operation.cancelled.is_set():
+            self.password_input.setFocus()
         self._refresh_clear_all_state()
 
-    def _refresh_credential_packages(self, selected_package_path=None):
-        self.credential_list.blockSignals(True)
-        self.credential_list.clear()
-
-        packages = credentials.get_logistics_remote_credentials_zip_lst()
+    def _refresh_credential_packages(self, packages, selected_package_path=None):
+        # Resolve labels before changing the retained list. A filesystem error
+        # during preparation must not discard the existing selection or rows.
+        items = []
         selected_row = 0
         from collections import Counter
         names = Counter(package.name_without_ext.casefold() for package in packages)
@@ -284,7 +317,7 @@ class RclonePage(pyside.QWidget):
             item = pyside.QListWidgetItem(label)
             item.setToolTip(str(package.path))
             item.setData(pyside.Qt.ItemDataRole.UserRole, package)
-            self.credential_list.addItem(item)
+            items.append(item)
 
             if (
                 selected_package_path is not None
@@ -292,7 +325,11 @@ class RclonePage(pyside.QWidget):
             ):
                 selected_row = row
 
-        self.credential_list.blockSignals(False)
+        with pyside.QSignalBlocker(self.credential_list):
+            self.credential_list.clear()
+            for item in items:
+                self.credential_list.addItem(item)
+            self.credential_list.setCurrentRow(selected_row if items else -1)
 
         self.empty_notice.setVisible(not packages)
         if not packages:
@@ -311,7 +348,6 @@ class RclonePage(pyside.QWidget):
 
         self.password_input.setEnabled(True)
         self.load_button.setEnabled(True)
-        self.credential_list.setCurrentRow(selected_row)
         self._refresh_selected_package()
 
     def _credential_selection_changed(self, _current, _previous):
@@ -364,8 +400,7 @@ class RclonePage(pyside.QWidget):
             return
         from features.rclone.desktop_service import service
         service.credentials.lock()
-        self.refresh()
-        self.status_label.setText('Session credentials locked. Saved .conf files were kept.')
+        self.refresh(message='Session credentials locked. Saved .conf files were kept.')
 
     def _prepare_lock(self, paths):
         from services.documents.ui.private_views import prepare_credential_lock
@@ -382,8 +417,7 @@ class RclonePage(pyside.QWidget):
         path = configuration.get_credential_config_path(package.path).with_suffix('.session')
         if self._prepare_lock([path]):
             service.credentials.lock(path)
-            self.refresh()
-            self.status_label.setText('Package session locked. Saved credentials and ZIP were kept.')
+            self.refresh(message='Package session locked. Saved credentials and ZIP were kept.')
 
     def _refresh_clear_all_state(self):
         from features.rclone import session
@@ -433,6 +467,9 @@ class RclonePage(pyside.QWidget):
             message='Importing credential ZIP…')
 
     def _operation_completed(self, values, error):
+        if self._discovering is not None:
+            self._discovery_completed(values, error)
+            return
         if self._importing is None:
             self._credentials_loaded(values, error)
             return
@@ -441,13 +478,11 @@ class RclonePage(pyside.QWidget):
         for widget in self._credential_controls():
             widget.setEnabled(True)
         if values is not None and not error:
-            self._refresh_credential_packages(values)
-            self._refresh_clear_all_state()
-            self.status_label.setText('Credential ZIP imported. Enter its password, then choose Unlock.')
-            self.password_input.setFocus()
+            self.refresh(selected_package_path=values,
+                         message='Credential ZIP imported. Enter its password, then choose Unlock.',
+                         focus_password=True)
         else:
-            self.refresh()
-            self.status_label.setText(str(error) if error else 'Credential import cancelled.')
+            self.refresh(message=str(error) if error else 'Credential import cancelled.')
 
     def _choose_unlock_mode(self):
         if self.load_operation.busy:
@@ -608,13 +643,12 @@ class RclonePage(pyside.QWidget):
                 service.credentials.forget(path)
             except Exception as error:
                 failure = failure or error
-        self.refresh()
         if failure is not None:
-            self.status_label.setText('Some credential cleanup failed. Access may already be locked; retry forgetting.')
+            self.refresh(message='Some credential cleanup failed. Access may already be locked; retry forgetting.')
             return
-        self.status_label.setText(
+        self.refresh(message=(
             f'Forgot credentials for "{package.path.name}". Credential ZIP was kept.'
-        )
+        ))
 
     def _clear_all_configs(self):
         config_paths = configuration.get_all_conf_paths()
@@ -642,11 +676,9 @@ class RclonePage(pyside.QWidget):
         try:
             deleted_paths = service.credentials.forget()
         except Exception:
-            self.refresh()
-            self.status_label.setText('Some saved configs could not be removed. Access may already be locked; retry clearing.')
+            self.refresh(message='Some saved configs could not be removed. Access may already be locked; retry clearing.')
             return
 
-        self.refresh()
-        self.status_label.setText(
+        self.refresh(message=(
             f'Cleared {len(deleted_paths)} rclone .conf file(s).'
-        )
+        ))

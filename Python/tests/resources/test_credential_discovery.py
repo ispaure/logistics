@@ -1,4 +1,4 @@
-"""Credential roots aggregate without creating or sourcing external software folders."""
+"""Credential discovery selects one root without creating an optional Dropbox folder."""
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -24,7 +24,7 @@ class CredentialDiscoveryTests(unittest.TestCase):
                 self.assertEqual(personal_paths.get_marc_dropbox_root(),
                                  Path('/fixture/Yagi Dropbox/Marc-Andre Voyer'))
 
-    def test_checkout_and_existing_dropbox_packages_are_aggregated(self):
+    def test_existing_dropbox_takes_precedence_over_checkout_packages(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             local = root / 'checkout/Credentials/rclone'
@@ -36,7 +36,19 @@ class CredentialDiscoveryTests(unittest.TestCase):
                 (directory / 'not-a-package.txt').write_text('fixture')
             with patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(path_logistics_remote_cred=local)), patch.object(marcUtils, 'get_marc_dropbox_root', return_value=dropbox):
                 self.assertEqual({file.path for file in credentials.get_logistics_remote_credentials_zip_lst()},
-                                 {local.resolve() / 'package.zip', extra.resolve() / 'package.zip'})
+                                 {extra.resolve() / 'package.zip'})
+                self.assertEqual(credentials.get_credential_package_directories(), (extra,))
+                # An empty preferred folder still must not merge in local packages.
+                (extra / 'package.zip').unlink()
+                self.assertEqual(credentials.get_logistics_remote_credentials_zip_lst(), [])
+                from zipfile import ZipFile
+                incoming = root / 'incoming.zip'
+                with ZipFile(incoming, 'w') as archive:
+                    archive.writestr('fixture.txt', 'synthetic package')
+                self.assertEqual(credentials.import_credential_package(incoming), extra.resolve() / incoming.name)
+                self.assertFalse((local / incoming.name).exists())
+                self.assertEqual({file.path for file in credentials.get_logistics_remote_credentials_zip_lst()},
+                                 {extra.resolve() / incoming.name})
 
     def test_missing_dropbox_is_not_created_and_same_root_is_deduplicated(self):
         with TemporaryDirectory() as temporary:

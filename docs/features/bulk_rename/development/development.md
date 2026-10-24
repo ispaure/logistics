@@ -32,6 +32,8 @@ Qt does not expand, and retries queued row insertion/layout until the selected
 row has stable visible geometry. Already-populated ancestors need not emit a
 fresh load notification. A temporarily missing model index also retains the
 reveal retry, including when a new branch arrives after its parent's load signal.
+Each retry fetches and expands ancestors from the filesystem root down before
+requesting the leaf index, so an unloaded parent cannot stall a missing child.
 Later notifications do not reopen user-collapsed branches.
 The private `_FolderTree` view owns deferred layout correction, independently of
 filesystem scans and rename workers. Queued model sorting and row insertion

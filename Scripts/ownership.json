@@ -402,7 +402,9 @@
           "test_session_transitions.py",
           "test_document_navigation.py",
           "test_provider_opening.py",
-          "test_reading_publication.py"
+          "test_reading_publication.py",
+          "test_locations.py",
+          "test_composition_contracts.py"
         ],
         "desktop": [
           "test_workspace_policy.py"

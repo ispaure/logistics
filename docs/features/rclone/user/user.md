@@ -8,8 +8,10 @@ remote config. FUSE is optional and only needed for mounting.
 1. In an empty **Workspaces → Cloud** view, choose **+ rclone** to open credential
    setup. You can also open **Settings → rclone → Credential packages** and choose **Import credential ZIP…**.
    Select a `.zip` file. Logistics copies it into the configured credentials folder
-   (normally `Credentials/rclone/`), refreshes the list and selects it. The original
+   (normally `Credentials/rclone/`, or Marc's existing Dropbox credential folder), refreshes the list and selects it. The original
    ZIP is kept. **Refresh list** also finds packages added outside Logistics.
+   Scanning runs in the background. If it fails or is cancelled, the previous
+   package list remains available; retry **Refresh list** when the folder is accessible.
 2. Enter the selected ZIP's password and choose **Unlock…**. The popup compares
    **Session only** and **Persistent — save on this device** side by side.
 3. Return to **Workspaces → Cloud** (or **Home Server** for network shares),
@@ -133,7 +135,9 @@ See [Using Logistics](../../../user/user.md) for navigation and settings.
 
 
 Marc’s existing Dropbox credential folder (`Software/GIT/logistics/Credentials/rclone`)
-is also discovered automatically when present. Hover a package to see its location.
+is used instead of the local credential folder when present. Only that folder's
+packages are listed, and imports use the same folder. Otherwise Logistics uses
+the configured local credential folder. Hover a package to see its location.
 
 ## Choose a rclone download version
 

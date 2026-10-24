@@ -1076,6 +1076,13 @@ owned record. A missing attribute raises normally; there is no catch-all app
 fallback. Add a service or writable state field deliberately instead of broadening
 a feature controller's access to the host.
 
+The pinned-location controller owns its location store and error state; its host
+accessors are read-only. Remote pin navigation captures one client, credential
+generation, selector and ordinary remote-name list before identity lookup. Each
+lookup completion checks that the host and captured connection are still current
+before selecting a remote or navigating. Replaced connections and retired hosts
+cannot publish late navigation or lookup errors (`test_locations`).
+
 `composition.presentation` assembles rclone, Notes, library, speech, reader and
 file-operation presentation callbacks. Feature adapters receive these ports and
 remain independent of the mobile application import. Register new source owners

@@ -35,6 +35,7 @@ class CredentialImportTests(QtTestCase):
         page = RclonePage()
         self.addCleanup(page.deleteLater)
         self.addCleanup(page.close)
+        self.wait_until(lambda: not page.load_operation.busy)
         return page
 
     def test_import_copies_zip_without_unlocking_and_selects_it_from_empty_list(self):
@@ -93,6 +94,7 @@ class CredentialImportTests(QtTestCase):
         source = self.make_zip()
         (self.packages / 'Account.zip').write_bytes(source.read_bytes())
         page.refresh_button.click()
+        self.wait_until(lambda: not page.load_operation.busy)
         self.assertEqual(page.credential_list.count(), 1)
         bad = self.root / 'bad.zip'
         bad.write_bytes(b'invalid')
@@ -174,9 +176,67 @@ class CredentialImportTests(QtTestCase):
         self.assertTrue(page.remove_button.isEnabled())
         with patch('features.rclone.ui.page.ui.display_msg_box_ok_cancel', return_value=True):
             page.remove_button.click()
+        self.wait_until(lambda: not page.load_operation.busy)
         self.assertFalse(desktop_catalog.record_path(context).exists())
         self.assertTrue(copied.exists())
         self.assertTrue(page.management_group.isHidden())
+
+    def test_failed_refresh_preserves_rows_selection_password_and_retry(self):
+        credentials.import_credential_package(self.make_zip())
+        credentials.import_credential_package(self.make_zip('Other.zip'))
+        page = self.page()
+        page.credential_list.setCurrentRow(1)
+        selected = page._get_selected_package().path
+        page.password_input.setText('unsent-password')
+        with patch.object(credentials, 'get_logistics_remote_credentials_zip_lst',
+                          side_effect=PermissionError('unreadable package folder')):
+            page.refresh()
+            self.wait_until(lambda: not page.load_operation.busy)
+        self.assertEqual(page.credential_list.count(), 2)
+        self.assertEqual(page._get_selected_package().path, selected)
+        self.assertEqual(page.password_input.text(), 'unsent-password')
+        self.assertFalse(page.credential_list.signalsBlocked())
+        self.assertTrue(page.refresh_button.isEnabled())
+        self.assertIn('Could not refresh', page.status_label.text())
+        page.credential_list.setCurrentRow(0)
+        self.assertEqual(page.package_name.text(), 'Account')
+        page.refresh()
+        self.wait_until(lambda: not page.load_operation.busy)
+        self.assertEqual(page.credential_list.count(), 2)
+        self.assertEqual(page.status_label.text(), '')
+
+    def test_slow_refresh_is_off_thread_and_close_cancels_late_results(self):
+        from threading import Event, get_ident
+        credentials.import_credential_package(self.make_zip())
+        page = self.page()
+        selected = page._get_selected_package().path
+        started, release = Event(), Event()
+        gui_thread = get_ident()
+        worker_threads = []
+        def slow_scan(**kwargs):
+            worker_threads.append(get_ident())
+            started.set()
+            if not release.wait(3):
+                raise RuntimeError('test discovery timed out')
+            return []
+        with patch.object(credentials, 'get_logistics_remote_credentials_zip_lst', side_effect=slow_scan):
+            try:
+                page.refresh()
+                self.assertTrue(started.wait(1))
+                self.assertNotEqual(worker_threads, [gui_thread])
+                pulse = []
+                qt.QTimer.singleShot(0, lambda: pulse.append(True))
+                self.wait_until(lambda: bool(pulse))
+                self.assertTrue(page.load_operation.busy)
+                self.assertEqual(page.credential_list.count(), 1)
+                self.assertFalse(page.can_close())
+            finally:
+                release.set()
+                self.wait_until(lambda: not page.load_operation.busy)
+        self.assertEqual(page._get_selected_package().path, selected)
+        self.assertFalse(page.credential_list.signalsBlocked())
+        self.assertTrue(page.can_close())
+        self.assertIn('cancelled', page.status_label.text())
 
     def test_retention_popup_presents_parallel_choices_and_saved_config_caveat(self):
         package = self.root / 'Account.zip'

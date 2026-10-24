@@ -125,7 +125,10 @@ class BulkRenameWidgetTests(QtTestCase):
                     and self.widget._folder_reveal_pending is None):
                 return index
             time.sleep(.005)
-        self.fail(f'Folder did not become visible in tree: {path}')
+        self.fail(f'Folder did not become visible in tree: {path}; '
+                  f'pending={self.widget._folder_reveal_pending}; index_valid={index.isValid()}; '
+                  f'row={rectangle.getRect()}; viewport={self.widget.folder_tree.viewport().rect().getRect()}; '
+                  f'current={self.widget.folder_model.filePath(self.widget.folder_tree.currentIndex())}')
 
     def test_preview_bolds_changed_spans_and_prioritizes_filename_columns(self):
         from desktop.bulk_rename.preview import changed_spans, change_formats, preview_tooltip, RenamePreviewDelegate
@@ -213,6 +216,39 @@ class BulkRenameWidgetTests(QtTestCase):
         self.assertTrue(self.widget._folder_reveal_timer.isActive())
         self.wait_folder_visible(self.root)
         self.assertIsNone(self.widget._folder_reveal_pending)
+
+    def test_folder_reveal_loads_ancestors_before_requesting_a_missing_child(self):
+        self.wait_folder_visible(self.root)
+        child = self.root / 'Deferred child'
+        child.mkdir()
+        model = self.widget.folder_model
+        original_index = model.index
+        original_can_fetch = model.canFetchMore
+        original_fetch = model.fetchMore
+        requested = set()
+
+        def index(path, *args):
+            if path == str(child) and self.root not in requested:
+                return qt.QModelIndex()
+            return original_index(path, *args)
+
+        def can_fetch(index):
+            path = Path(model.filePath(index))
+            return (path == self.root and path not in requested) or original_can_fetch(index)
+
+        def fetch(index):
+            requested.add(Path(model.filePath(index)))
+            original_fetch(index)
+
+        # QFileSystemModel may have an ancestor index before it has loaded the
+        # children. Retrying only the missing leaf never starts that load.
+        with patch.object(model, 'index', side_effect=index), \
+                patch.object(model, 'canFetchMore', side_effect=can_fetch), \
+                patch.object(model, 'fetchMore', side_effect=fetch):
+            self.widget._folder_reveal_pending = child
+            self.widget._reveal_current_folder()
+            self.assertIn(self.root, requested)
+            self.wait_folder_visible(child)
 
     def test_empty_folder_stays_visible_and_async_loads_do_not_reopen_collapsed_branches(self):
         empty = self.root / 'Empty'

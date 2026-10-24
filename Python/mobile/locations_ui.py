@@ -44,13 +44,33 @@ class LocationsUI:
                     self.show_cloud()
                     if getattr(self, 'cloud_restore_task', None):
                         await self.cloud_restore_task
+                    if not self.active_host:
+                        return
+                    client, selector = self.cloud_client, self.cloud_remote
+                    generation = client.generation
+                    # Read the available names once. Workers and their results
+                    # belong to this connection and these controls, even if the
+                    # host replaces them while an identity lookup is running.
+                    remotes = tuple(remote for remote in selector.items
+                                    if remote not in self.cloud_crypt_remotes)
+                    def current():
+                        return (self.active_host and client is self.cloud_client
+                                and client.generation == generation and selector is self.cloud_remote)
                     matches = []
-                    for remote in self.cloud_remote.items:
-                        if remote not in self.cloud_crypt_remotes and await asyncio.to_thread(self.cloud_client.connection_identity, remote) == item['connection']:
+                    for remote in remotes:
+                        try:
+                            identity = await asyncio.to_thread(client.connection_identity, remote)
+                        except (OSError, ValueError, AttributeError):
+                            if not current():
+                                return
+                            raise
+                        if not current():
+                            return
+                        if identity == item['connection']:
                             matches.append(remote)
                     if len(matches) != 1:
                         raise ValueError('Pinned connection unavailable or changed. Load the original connection in Settings.')
-                    self.cloud_remote.value = matches[0]
+                    selector.value = matches[0]
                     await self.browser_cloud_location((matches[0], item['path']))
             except (OSError, ValueError, AttributeError) as error:
                 self.location_error = str(error)

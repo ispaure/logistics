@@ -14,28 +14,27 @@ from . import configuration
 
 
 def get_credential_package_directories() -> tuple[Path, ...]:
-    """Combine checkout credentials with Marc's existing Dropbox credential folder.
+    """Use Marc's existing Dropbox credential folder, otherwise the local folder.
 
-    The optional Dropbox location is read-only discovery: never create it, copy
-    packages, or use it as a software source.
+    Select one package root without creating the optional Dropbox location.
     """
     from services.personal_paths import get_marc_dropbox_root
     local = config.LogisticsConfig().path_logistics_remote_cred
     dropbox = get_marc_dropbox_root() / 'Software/GIT/logistics/Credentials/rclone'
-    roots = [local]
     if dropbox.is_dir() and dropbox.resolve() != local.resolve():
-        roots.append(dropbox)
-    return tuple(roots)
+        return (dropbox,)
+    return (local,)
 
 
-def get_logistics_remote_credentials_zip_lst() -> list[fileUtils.File]:
-    """Return packages from all existing credential roots, deduplicated by path."""
+def get_logistics_remote_credentials_zip_lst(*, directories=None, cancelled=lambda: False) -> list[fileUtils.File]:
+    """Return packages from the selected credential folder."""
     from commonUtils.filesystem.traversal import scan_directory, natural_path_key
     paths = set()
-    for root in get_credential_package_directories():
+    for root in get_credential_package_directories() if directories is None else directories:
         if not root.is_dir():
             continue
-        paths.update(path.resolve() for path in scan_directory(root, mask='*.zip', recursive=True))
+        paths.update(path.resolve() for path in scan_directory(
+            root, mask='*.zip', recursive=True, cancelled=cancelled))
     return [fileUtils.File(path) for path in sorted(paths, key=natural_path_key)]
 
 
@@ -87,7 +86,7 @@ def import_credential_package(source, *, cancelled=lambda: False):
     if not is_zipfile(BytesIO(content)):
         raise ValueError('This file is not a valid ZIP archive.')
     check_cancelled(cancelled)
-    root = config.LogisticsConfig().path_logistics_remote_cred
+    root = get_credential_package_directories()[0]
     destination = root / (source.stem + '.zip')
     if destination.is_symlink():
         raise ValueError('The destination package is a symbolic link. Choose a different ZIP name.')

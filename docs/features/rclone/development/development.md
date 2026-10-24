@@ -96,6 +96,22 @@ these boundaries; `python3 dev.py test-owner rclone` selects the feature suites.
 
 ## Credential contract
 
+Desktop package discovery selects Marc's existing Dropbox
+`Software/GIT/logistics/Credentials/rclone` folder when available, otherwise the
+configured local credential folder. It never combines the two lists. Imports
+and the displayed import folder use that same selection. Config and session keys
+retain their existing ZIP-basename identity.
+
+Desktop Settings discovers credential packages with a cancellable
+`OperationProgress` worker, including optional-root selection and recursive
+scanning. It retains the previous rows, selection and password until a successful
+scan is ready. Scan failures and cancellation keep the previous list available
+for retry. Row replacement blocks selection signals only within a scoped guard;
+closing during discovery requests cancellation and waits for worker retirement.
+Imports refresh through the same worker and select the imported ZIP on success.
+`test_credential_import_ui` covers failed refresh, retry, event-loop responsiveness
+and rejection of cancelled late results.
+
 With **Persistent — save on this device** selected, unlocking `Credentials/rclone/Personal.zip`
 creates `~/.config/rclone/Personal.conf` without changing the ZIP. With **Session only** selected,
 credentials remain in a process-local session identified by a virtual `.session`

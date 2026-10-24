@@ -113,6 +113,7 @@ class RcloneCredentialScreenTests(unittest.TestCase):
                  patch.object(credentials.ui, 'display_msg_box_ok') as popup:
                 page = RclonePage()
                 try:
+                    self._wait_for_load(page, app)
                     page.password_input.setText('synthetic-password')
                     page._load_selected_credentials(remember=True)
                     self.assertTrue(started.wait(1))
@@ -161,6 +162,7 @@ class RcloneCredentialScreenTests(unittest.TestCase):
                  patch.object(configuration, 'get_rclone_config_dir', return_value=root):
                 page = RclonePage()
                 try:
+                    self._wait_for_load(page, app)
                     page.password_input.setText('synthetic-password')
                     page._load_selected_credentials(remember=False)
                     self._wait_for_load(page, app)
@@ -180,6 +182,7 @@ class RcloneCredentialScreenTests(unittest.TestCase):
                     self.assertLess(layout.indexOf(page.remove_button), layout.indexOf(page.clear_sessions_button))
                     with patch('features.rclone.ui.page.ui.display_msg_box_ok_cancel', return_value=True):
                         page.remove_button.click()
+                    self._wait_for_load(page, app)
                     self.assertEqual(session.paths(), [])
                     self.assertFalse((root / 'Accounts.conf').exists())
                     self.assertTrue(package.is_file())
