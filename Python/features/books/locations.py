@@ -47,12 +47,15 @@ class ChapterText(HTMLParser):
     def __init__(self, html):
         super().__init__(convert_charrefs=True)
         self.parts, self.anchors, self.length, self.body = [], {}, 0, False
+        self.language = ''
         self.breaks = set()
         self.links, self._link = [], None
         self.feed(html)
         self.text = ''.join(self.parts)
 
     def handle_starttag(self, tag, attrs):
+        if tag in {'html', 'body'}:
+            self.language = dict(attrs).get('lang') or dict(attrs).get('xml:lang') or self.language
         if tag == 'body':
             self.body = True
         if self.body:
@@ -107,3 +110,23 @@ class ChapterText(HTMLParser):
             return None
         left, right = origins[found], origins[found + len(needle) - 1] + 1
         return utf16_length(self.text[:left]), utf16_length(self.text[:right])
+
+
+def book_boundaries(book):
+    """Approximate chapter weights from resource sizes without loading the book."""
+    sizes = getattr(book, 'resource_sizes', {})
+    weights = [max(1, sizes.get(path, 1)) for path in book.spine]
+    total = sum(weights) or 1
+    boundaries = [0]
+    for weight in weights:
+        boundaries.append(boundaries[-1] + weight / total)
+    boundaries[-1] = 1
+    return boundaries
+
+
+def book_location(boundaries, fraction):
+    from bisect import bisect_right
+    fraction = min(1, max(0, fraction))
+    index = min(len(boundaries) - 2, bisect_right(boundaries, fraction) - 1)
+    start, end = boundaries[index:index + 2]
+    return index, (fraction - start) / (end - start)

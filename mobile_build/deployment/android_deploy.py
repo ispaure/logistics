@@ -48,20 +48,9 @@ def deployment_environment():
 
 
 def discover_wireless(adb, env):
-    """Reconnect advertised TLS endpoints; pairing remains an explicit action."""
-    try:
-        services = run([str(adb), 'mdns', 'services'], env)
-    except (OSError, subprocess.SubprocessError):
-        return
-    for line in services.splitlines():
-        parts = line.split()
-        if len(parts) != 3 or parts[1] != '_adb-tls-connect._tcp':
-            continue
-        # adb itself authenticates each peer with the existing pairing keys.
-        try:
-            run([str(adb), 'connect', parts[2]], env)
-        except (OSError, subprocess.SubprocessError):
-            continue
+    """Reconnect advertised paired devices, including Bonjour-only macOS peers."""
+    from .wireless_adb import discover
+    discover(adb, env, run)
 
 
 def tools_environment(env):
@@ -88,7 +77,7 @@ def tools_environment(env):
 def select_device(output, requested=None, *, ask=input):
     states = {}
     for line in output.splitlines():
-        fields = line.split()
+        fields = line.rsplit(None, 1)
         if len(fields) >= 2 and fields[1] in ('device', 'offline', 'unauthorized'):
             states[fields[0]] = fields[1]
     online = [serial for serial, state in states.items() if state == 'device']

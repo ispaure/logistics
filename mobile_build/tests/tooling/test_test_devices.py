@@ -73,6 +73,19 @@ class TestDeviceDeployment(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['connection'], 'usb')
 
+    def test_android_inspects_bonjour_connection_names_with_spaces(self):
+        serial = 'adb-boox (2)._adb-tls-connect._tcp'
+        def run(command, env):
+            if command[-1] == 'devices':
+                return 'List of devices attached\n' + serial + '\tdevice\n'
+            return 'boox-hardware' if command[-1] == 'ro.serialno' else 'NoteAir5C'
+        with patch.object(devices.android, 'tools_environment', return_value=({}, Path('/adb'))), \
+                patch.object(devices.android, 'discover_wireless'), \
+                patch.object(devices.android, 'run', side_effect=run):
+            result = devices.android_devices()
+        self.assertEqual(result[0]['connection'], serial)
+        self.assertEqual(result[0]['id'], 'boox-hardware')
+
     def test_worker_builds_android_once_and_continues_after_install_failure(self):
         targets = [dict(platform='Android', name=n, connection=n, online=True) for n in ('boox', 's8')]
         targets += [dict(platform='iOS', name='phone', id='udid', online=True),
@@ -86,6 +99,29 @@ class TestDeviceDeployment(unittest.TestCase):
         build.assert_called_once_with(build_only=True, devices=['boox', 's8'])
         self.assertEqual(install.call_count, 2)
         self.assertEqual(ios.call_args.args[0][-3:], ['--device', 'udid', '--allow-wired'])
+
+    def test_repair_refresh_restarts_adb_before_inventory(self):
+        from mobile_build.deployment import wireless_adb
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(devices, 'WORKSPACES', Path(directory)), \
+                patch.object(devices.sys, 'argv', ['test_devices', '--list', '--repair-android']), \
+                patch.object(devices.android, 'tools_environment', return_value=({}, Path('/adb'))), \
+                patch.object(wireless_adb, 'restart') as restart, \
+                patch.object(devices, 'inventory', return_value=([], [])) as inventory:
+            devices.main()
+        restart.assert_called_once_with(Path('/adb'), {}, devices.android.run)
+        inventory.assert_called_once()
+
+    def test_repair_refuses_to_interrupt_a_deployment(self):
+        from mobile_build.deployment import wireless_adb
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(devices, 'WORKSPACES', Path(directory)), \
+                patch.object(devices.sys, 'argv', ['test_devices', '--list', '--repair-android']), \
+                patch.object(devices.fcntl, 'flock', side_effect=BlockingIOError), \
+                patch.object(wireless_adb, 'restart') as restart:
+            with self.assertRaisesRegex(RuntimeError, 'deployment is running'):
+                devices.main()
+        restart.assert_not_called()
 
     def test_no_devices_fails_before_build(self):
         with patch.object(devices.android, 'deploy') as build:

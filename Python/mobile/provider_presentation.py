@@ -164,11 +164,16 @@ def _mount_reader(self, view, controls, comic, neighbors):
     view.previous_page, view.next_page = page_buttons(self.previous_private_page, self.next_private_page)
     view.page_footer = PageFooter(view.previous_page, view.next_page, self.move_private_page,
                                   status=view.crypt_title if comic else None,
-                                  unit='chapter' if view.crypt_reader.book is not None else 'page')
+                                  unit='chapter' if view.crypt_reader.book is not None else 'page',
+                                  vertical=view.crypt_reader.kind == '.pdf')
     view.page_footer.sync(comic=view.crypt_reader.kind in {'.cbz', '.zip'},
                           count=len(view.crypt_reader.labels), index=0,
                           right_to_left=getattr(view.crypt_reader, 'right_to_left', False))
     if view.crypt_reader.book is not None:
+        async def seek(chapter, fraction):
+            self._provider_epub_target = ('fraction', fraction)
+            await self.move_private_page(chapter)
+        view.page_footer.set_book(view.crypt_reader.book, seek)
         panel = view.provider_epub_view
         view.page_footer.chapter_progress(0, len(view.crypt_reader.labels), panel.offset, panel.chapter.length)
     footer = view.page_footer.widget
@@ -189,9 +194,14 @@ def _mount_reader(self, view, controls, comic, neighbors):
                 self.app.adaptive.render()
         view.pdf_tools.on_state_change = tools_changed
         view.pdf_tools.refresh_control()
-    view.reading_frame = ReadingFrame(view.crypt_content, reader_controls,
+        # PDF progress follows the vertical page gesture, beside the reading area.
+        view.pdf_body = toga.Box(children=[view.crypt_content, footer], style=Pack(direction=ROW, flex=1))
+        reader_controls.remove(footer)
+    view.reading_frame = ReadingFrame(view.pdf_body if view.crypt_reader.kind == '.pdf' else view.crypt_content, reader_controls,
         margin=0, restore=view.reader_restore,
         top_controls=2 if view.crypt_reader.kind == '.pdf' else 1)
+    if view.crypt_reader.kind == '.pdf':
+        view.reading_frame.side_controls = [(view.pdf_body, footer)]
     view.crypt_view = view.reading_frame.widget
     view.crypt_view._image_preview_surface = bool(image)
     view.crypt_view._native_reader_toolbar = header
@@ -213,6 +223,9 @@ def _mount_reader(self, view, controls, comic, neighbors):
     view.previous_page.enabled = False
     view.next_page.enabled = (view.crypt_reader.comic_navigation.next(0) is not None if comic
                               else view.crypt_reader.book is not None or len(view.crypt_reader.labels) > 1)
+    if view.crypt_reader.kind == '.pdf':
+        from features.pdf.mobile.canvas import sync_pdf_progress
+        sync_pdf_progress(view)
 
 
 def _mount_editor(self, view, controls):
@@ -293,7 +306,8 @@ def prepare_epub_page(host, controller, view, content):
     controller._provider_epub_target = None
     offset = locations.get(book.spine[index], 0)
     if target is not None:
-        offset = content[1].anchors.get(target, 0) if isinstance(target, str) else target
+        offset = (round(content[1].length * target[1]) if isinstance(target, tuple)
+                  else content[1].anchors.get(target, 0) if isinstance(target, str) else target)
     from .palette import themed_chapter
     content = (themed_chapter(content[0], host.preferences.values['reading_theme']), content[1])
     def position_changed(value):

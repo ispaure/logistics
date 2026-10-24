@@ -94,12 +94,12 @@ for saved_document in (False, True):
     assert reader.crypt_content.children == [reader.crypt_formatted.view]
     assert reader.crypt_text.value == '# Packaged Markdown'
     assert app.private_sessions.close(reader.session.id, discard=True)
-    app.loop.run_until_complete(app.show_files())
+    app.loop.run_until_complete(app.show_files(location=('Local files', '')))
     created_name, renamed_name = 'PackagedFolder-' + str(saved_document), 'RenamedFolder-' + str(saved_document)
     app.file_name.value = created_name
     app.loop.run_until_complete(app.new_file_folder())
     provider = app.file_provider
-    assert (provider.root / created_name).is_dir()
+    assert (provider.root / created_name).is_dir(), (provider.root, app.file_path, app.file_status.value)
     assert type(app.file_operations()).__module__ == 'mobile.file_operations'
     app.browser_file_selected(provider.entry(created_name))
     app.file_name.value = renamed_name

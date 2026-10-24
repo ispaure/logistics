@@ -14,6 +14,37 @@ class SpeechOverlayTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_automatic_voice_follows_each_passage_and_reports_missing_language(self):
+        from commonUtils.ui.native.speech import NativeSpeech
+        from features.books.mobile.speech_view import ReadAloudPanel
+        class Voices(Engine):
+            voices = {'en-US · English': None, 'fr-FR · French': None}
+            default_voice = 'en-US · English'
+            voice_for_language = NativeSpeech.voice_for_language
+        text = ['Le petit garçon ouvre la porte de la maison. Il regarde le jardin et cherche son livre sur la table.']
+        async def source():
+            return SimpleNamespace(text=text[0]), 0, None
+        async def exercise():
+            panel = ReadAloudPanel(loop=self.app.loop, source=source, on_range=lambda *args: None,
+                                   close=lambda *args: None, engine=Voices(self.app.loop), app=self.app)
+            try:
+                await panel.ready_task
+                await panel.play()
+                self.assertEqual(panel.engine.calls[-1][1], 'fr-FR · French')
+                panel.session.stop()
+                text[0] = 'The little boy opened the door of the house. He looked into the garden and searched for the book on the table.'
+                await panel.play()
+                self.assertEqual(panel.engine.calls[-1][1], 'en-US · English')
+                panel.session.stop()
+                text[0] = 'Der kleine Junge öffnete die Tür des Hauses. Er schaute in den Garten und suchte das Buch auf dem Tisch.'
+                calls = len(panel.engine.calls)
+                await panel.play()
+                self.assertEqual(len(panel.engine.calls), calls)
+                self.assertIn('No installed voice for de', panel.status.text.replace('\n', ' '))
+            finally:
+                panel.dispose()
+        self.run_async(exercise())
+
     def test_overlay_preserves_document_children_and_uses_saved_voice(self):
         from mobile.markdown_speech import MarkdownSpeech
         class Voices(Engine):

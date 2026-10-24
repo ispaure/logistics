@@ -63,7 +63,8 @@ class DeploymentWindow(QWidget):
         layout.addLayout(row)
         hint = QLabel('Test devices: saved iPhones/iPads and authorized Android connections.\n'
                       'iOS and Android deploy together; devices on each platform run one at a time.\n'
-                      'Connect the S8+ by USB with USB debugging enabled. No Play Store needed.')
+                      'Samsung: USB debugging. Boox: Wireless debugging on the same Wi-Fi.\n'
+                      'Refresh reconnects paired devices; Repair Android restarts a stuck ADB connection.')
         hint.setWordWrap(True)
         layout.addWidget(hint)
         self.output = QPlainTextEdit()
@@ -73,6 +74,12 @@ class DeploymentWindow(QWidget):
         footer = QHBoxLayout()
         self.status = QLabel('Ready')
         footer.addWidget(self.status, 1)
+        repair = QPushButton('Repair Android')
+        repair.setToolTip('Restarts local ADB and reconnects paired wireless devices. '
+                          'Other active ADB connections will briefly disconnect.')
+        repair.clicked.connect(lambda: self.start('test_devices.py', ['--list', '--repair-android']))
+        self.actions.append(repair)
+        footer.addWidget(repair)
         logs = QPushButton('Open logs')
         logs.clicked.connect(self.open_logs)
         footer.addWidget(logs)

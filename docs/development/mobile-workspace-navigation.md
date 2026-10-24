@@ -1408,3 +1408,12 @@ a prepared replacement only after the host starts the transition. Rich EPUBs
 receive an explicit host motion flag both at load and on preference refresh;
 HTML contrast markers alone are insufficient on iOS. A same-page repaint
 keeps an active slide; a changed reading rectangle cancels it.
+
+## Document destination visibility on Apple devices
+
+An open document hides app destination navigation while keeping its own Back and
+title controls available. iPad uses the same policy as iPhone: the shared Apple
+adapter temporarily switches the tabs/sidebar container to tab-only mode, hides
+the tab bar, and restores the previous mode and sidebar visibility on return.
+Keyboard and fullscreen visibility use the same adapter path, so nested changes
+do not overwrite the original sidebar presentation.

@@ -14,8 +14,10 @@ Invalid and locked PDFs fail with an opening error.
 
 `services.documents.readers.PrivateReader` adapts PDFs to the existing mobile
 provider contract. Local PDFCopies, RemoteReaders and LocalCryptCopies all use
-this contract. ProviderUI routes PDF pages directly rather than through comic
-spread decoding. PDFCanvas owns vertical gestures; page-number conversion is
+this contract. `mobile.canvas.PDFNavigation` loads at most two pages and chooses
+pairs from their aspect ratios and the reading viewport. Publication commits the
+visible indices only after preparing the replacement. PDFCanvas owns vertical
+gestures; page-number conversion is
 one-based at the UI boundary and zero-based internally. PrivateSessions retains
 transient PDF sessions, excludes their content from recovery, clears native
 pixels on suspension, and drops PDF bytes on close or credential revocation.
@@ -23,7 +25,7 @@ pixels on suspension, and drops PDF bytes on close or credential revocation.
 `mobile.canvas.PDFTools` exposes an optional `on_state_change` callback so the
 host can keep its native pages/search icon and accessible name in sync when the
 panel opens or closes. The feature does not import host toolbar policy. The host
-places this panel above the page canvas and page navigation below it; invalid
+places this panel above the page canvas and vertical page navigation beside it; invalid
 numeric jumps retain feedback inside the panel even when filename labels are
 detached for the native title bar.
 
@@ -140,3 +142,18 @@ covers real PDF destinations, disclosure independence and stale-session guards.
 `limits.py` supplies the shared render edge. Backend toolkit imports stay lazy
 inside adapter construction, so a mobile import does not load Qt. Existing public
 backend class imports and the document facade remain available.
+
+## Adaptive spreads and external output
+
+PDF uses the existing bounded, RAM-only comic bitmap compositor and resize/zoom
+invalidation loop. Page gestures and buttons advance beyond the displayed spread;
+Back tests whether the previous two pages fit before choosing its anchor. Numeric
+jumps, contents and search still target individual pages. Fullscreen hides the
+vertical rail and tools, retaining the shared image canvas and magnifier.
+
+The PDF canvas opts into `mobile.external_display` through
+`_external_document_page`. It reuses the comics' scene registration, Android
+presentation, image publication and process-wide privacy gates; it does not create
+a second casting service. `reader_flow_probe.py` is the reusable Apple native
+rotation/chrome/progress probe. Host tests cover spread boundaries, dimensions,
+vertical scrubbing, session retirement and external privacy blanking.

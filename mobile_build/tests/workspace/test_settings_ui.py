@@ -212,3 +212,23 @@ class SettingsUITests(unittest.TestCase):
             self.assertIn('modified', text)
             self.assertIn('Platform: iOS / iPadOS', text)
             self.assertIn('Source: bbbbbbbbbbbb', text)
+
+    def test_about_finds_build_manifest_at_mobile_package_root(self):
+        with TemporaryDirectory() as directory:
+            package = Path(directory) / 'mobile'
+            settings = package / 'settings'
+            settings.mkdir(parents=True)
+            (package / 'source.json').write_text(json.dumps(dict(
+                logistics_commit='c' * 40,
+                logistics_committed_at='2026-10-24T12:34:00+00:00',
+                dirty=True, source_sha256='d' * 64)))
+            with patch('mobile.settings.information.__file__', str(settings / 'information.py')), \
+                    patch('mobile.settings.information.installed_build') as fallback, \
+                    patch('mobile.settings.information.sys.platform', 'android'):
+                text = build_information('0.1.5')
+            fallback.assert_not_called()
+            self.assertIn('0.1.5 · cccccccccc', text)
+            self.assertRegex(text, r'2026-10-24 \d{2}:\d{2}')
+            self.assertIn('modified', text)
+            self.assertIn('Platform: Android', text)
+            self.assertIn('Source: dddddddddddd', text)

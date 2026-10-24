@@ -75,6 +75,17 @@ def editor_blocks(text, *, image_source=None):
             result.append(dict(source=''.join(lines[cursor:start]), editable=False, html=''))
         source = ''.join(lines[start:end])
         rendered = parser.render(source) if start >= frontmatter else '<pre>' + escape(source) + '</pre>'
+        tokens = parser.parse(source) if editable else []
+        if (len(tokens) == 3 and tokens[0].type in ('paragraph_open', 'heading_open')
+                and all(child.type in ('text', 'strong_open', 'strong_close', 'em_open',
+                                       'em_close', 'code_inline') for child in (tokens[1].children or []))
+                and '\n' not in tokens[1].content and '\\' not in source
+                and not re.search(r'&(?:#\w+|\w+);', source)
+                and not (tokens[0].type == 'heading_open' and not source.startswith('#'))):
+            # Keep delimiters in the editable DOM just as Qt does. The original
+            # source remains the no-op baseline, including trailing newlines.
+            raw = source.rstrip('\r\n')
+            rendered = '<p><span data-live-source="">' + escape(raw) + '</span></p>'
         result.append(dict(source=source, editable=editable, html=rendered))
         cursor = end
     if cursor < len(lines):
@@ -90,7 +101,7 @@ def editor_blocks(text, *, image_source=None):
 def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet=''):
     nonce = uuid4().hex
     data = json.dumps(editor_blocks(text, image_source=image_source), ensure_ascii=True).replace('<', '\\u003c')
-    script = (_SCRIPT + LIVE_SCRIPT).replace('LIVE_PATTERNS', json.dumps(web_patterns())).replace('location.href = BRIDGE', 'location.href = ' + json.dumps(bridge)).replace('const blocks = DATA;', 'const blocks = ' + data + ';')
+    script = (_SCRIPT + LIVE_SCRIPT).replace('LIVE_ACTIVE', web_patterns()['active']).replace('LIVE_PATTERNS', json.dumps(web_patterns())).replace('location.href = BRIDGE', 'location.href = ' + json.dumps(bridge)).replace('const blocks = DATA;', 'const blocks = ' + data + ';')
     common = [('Bold', 'bold', ''), ('Italic', 'italic', ''), ('Undo', 'undo', ''), ('Redo', 'redo', '')]
     more = [('Strike', 'strikeThrough', ''), ('Bullets', 'insertUnorderedList', ''),
             ('Numbered', 'insertOrderedList', ''), ('Remove link', 'unlink', '')]

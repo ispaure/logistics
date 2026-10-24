@@ -22,7 +22,7 @@ def android_devices():
     android.discover_wireless(adb, env)
     devices = {}
     for line in android.run([str(adb), 'devices'], env).splitlines():
-        fields = line.split()
+        fields = line.rsplit(None, 1)
         if len(fields) != 2 or fields[1] != 'device':
             continue
         serial = fields[0]
@@ -179,10 +179,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--list', action='store_true')
     parser.add_argument('--platform', choices=('Android', 'iOS'))
+    parser.add_argument('--repair-android', action='store_true',
+                        help='Restart local ADB, then refresh paired Android connections')
     parser.add_argument('--device', help='Stable device ID from the device list')
     parser.add_argument('--worker-platform', choices=('Android', 'iOS'), help=argparse.SUPPRESS)
     parser.add_argument('--targets-file', type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.repair_android and (not args.list or args.worker_platform or args.targets_file):
+        parser.error('--repair-android requires --list and cannot run during a deployment worker.')
     if args.worker_platform or args.targets_file:
         if not args.worker_platform or not args.targets_file or args.list or args.platform or args.device:
             parser.error('Invalid platform worker arguments.')
@@ -193,6 +197,16 @@ def main():
         return
     if bool(args.platform) != bool(args.device) or (args.list and args.device):
         parser.error('Use --platform and --device together, without --list.')
+    if args.repair_android:
+        from .wireless_adb import restart
+        WORKSPACES.mkdir(parents=True, exist_ok=True)
+        with (WORKSPACES / 'deploy.lock').open('a') as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise RuntimeError('A test-device deployment is running. Wait before repairing Android.') from None
+            env, adb = android.tools_environment(android.deployment_environment())
+            restart(adb, env, android.run)
     devices, errors = inventory()
     if args.list:
         print(json.dumps(dict(devices=devices, errors=errors)))

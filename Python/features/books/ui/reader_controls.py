@@ -156,7 +156,8 @@ def _build_reading_area(page, header):
     page.text = BookText()
     page.speech = ReadAloud(page, lambda: reader_text(speech_widget(page), start=page.text.location()),
                             scope='the current chapter from this page', text_widget=lambda: speech_widget(page),
-                            start_provider=page.text.location)
+                            start_provider=page.text.location,
+                            language_provider=lambda: next(iter(page.book.values('language')), '') if page.book else '')
     page.speech.positionChanged.connect(page.follow_speech)
     page.menus.view.addAction(page.speech.action)
     page.speech.anchor = reader_button(page, 'Read aloud', action=page.speech.action, icon='speaker')

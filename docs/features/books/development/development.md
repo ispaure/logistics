@@ -408,3 +408,13 @@ changes leave the imported chapter intact. Automatic reading families still
 inherit interface font changes, and slate/dark themes still adopt shared accent
 tint changes. `test_books_reader.py` covers skipped imports, reading-size updates
 and successive slate color notifications.
+
+## Whole-book mobile progress
+
+`features.books.locations.book_boundaries` supplies the resource-size weights
+shared by desktop and mobile progress. This is an approximation that avoids
+rendering every spine resource. Mobile PageFooter combines the chapter weight
+with the current UTF-16 text offset; its normalized scrubber maps back to a
+chapter and relative passage position. Imported and provider readers defer that
+relative target until the selected chapter's text index is prepared, preserving
+existing saved-position and private-session ownership.

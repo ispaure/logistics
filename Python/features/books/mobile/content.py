@@ -78,7 +78,10 @@ def chapter_html(book, index, font_size=16, *, margin=16, theme='system', links=
             return '<' + tag + attributes + '>' + text + '</' + tag + '>'
         return '<span' + attributes + '>' + text + '</span>' if attributes else text
     content = render(body)
-    result = ('<!doctype html><html><head><meta charset="utf-8">'
+    language = (body.get('lang') or body.get('{http://www.w3.org/XML/1998/namespace}lang')
+                or root.get('lang') or root.get('{http://www.w3.org/XML/1998/namespace}lang')
+                or next(iter(book.values('language')), ''))
+    result = ('<!doctype html><html lang="' + escape(language, quote=True) + '"><head><meta charset="utf-8">'
               '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">'
               '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">'
               '<style>' + css(size, margin, theme, font_family=font_family, line_spacing=line_spacing, reading_width=reading_width, justify=justify) +

@@ -189,8 +189,9 @@ function revealCaret() {
 function scheduleCaretReveal() {
     if (caretFrame === null) caretFrame = requestAnimationFrame(revealCaret);
 }
+let applyingCommand = false;
 root.addEventListener('input', event => {
-    if (!event.isComposing) { renderTypedMarkup(); rememberEdit(); publish(); scheduleCaretReveal(); }
+    if (!event.isComposing && !applyingCommand) { renderTypedMarkup(); rememberEdit(); publish(); scheduleCaretReveal(); }
 });
 root.addEventListener('compositionend', () => { renderTypedMarkup(); rememberEdit(); publish(); scheduleCaretReveal(); });
 root.addEventListener('focusout', () => publish());
@@ -261,9 +262,17 @@ document.addEventListener('keydown', event => {
 });
 function command(name, value=null) {
     if (name === 'undo' || name === 'redo') { editHistory(name === 'redo'); return; }
-    if (!restoreRange()) return;
-    document.execCommand(name, false, value);
-    rememberEdit(); publish();
+    const selection = restoreRange();
+    if (!selection) return;
+    // Prefix removal and the browser command form one edit, including on engines
+    // that emit input synchronously during execCommand.
+    applyingCommand = true;
+    try {
+        if (name === 'formatBlock') prepareBlockStyle(selection);
+        document.execCommand(name, false, value);
+        renderTypedMarkup();
+    } finally { applyingCommand = false; }
+    rememberEdit(); publish(); scheduleCaretReveal();
 }
 document.querySelectorAll('[data-command]').forEach(button => {
     button.addEventListener('mousedown', event => event.preventDefault());

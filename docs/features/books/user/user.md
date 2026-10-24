@@ -62,8 +62,10 @@ Alt+Left/Right moves between chapters.
 
 Choose the **speaker** icon in the toolbar or **View → Read aloud…**. Select a passage
 first to read only that passage; otherwise reading starts at the visible page
-and continues through the current chapter. Choose a language, installed voice
-and speed, then press **Play**. The same button changes to **Pause** while speaking
+and continues through the current chapter. Language defaults to **Automatic (detect text)**,
+which detects the passage locally and chooses an installed voice in that language.
+For uncertain passages, the book’s language metadata provides a fallback. You can
+choose a language and voice manually. Set the speed, then press **Play**. The same button changes to **Pause** while speaking
 and **Resume** while paused. If the system engine cannot pause/resume, the button
 is disabled during playback; **Stop** ends playback. Closing the panel, opening another chapter
 or closing the reader also stops playback. Turning a page within the same chapter

@@ -14,6 +14,18 @@ from features.books.preferences import ReadingState
 
 
 class EPUBTests(unittest.TestCase):
+    def test_mobile_speech_index_retains_chapter_or_package_language(self):
+        from types import SimpleNamespace
+        from features.books.mobile.content import indexed_chapter
+        for declaration, expected in [('', 'fr'), ('xml:lang="ja"', 'ja'), ('lang="es"', 'es')]:
+            book = SimpleNamespace(spine=['chapter.xhtml'], values=lambda key: ['fr'],
+                read=lambda path: ('<html xmlns="http://www.w3.org/1999/xhtml" ' + declaration +
+                                   '><body><p>Text 😀 intact.</p></body></html>').encode())
+            _, chapter = indexed_chapter(book, 0)
+            self.assertEqual(chapter.language, expected)
+            self.assertEqual(chapter.text, 'Text 😀 intact.')
+            self.assertEqual(chapter.length, 15)
+
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

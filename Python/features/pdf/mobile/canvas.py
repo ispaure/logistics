@@ -37,3 +37,73 @@ class PDFTools:
         callback = getattr(self, 'on_state_change', None)
         if callback is not None:
             callback()
+
+
+class PDFNavigation:
+    """Bounded page-pair loading; keep the selected page as the spread anchor."""
+    def __init__(self, document):
+        self.document = document
+        self.indices = (0,)
+        self.viewport = (1, 1)
+        self.sizes = {}
+
+    def load(self, index, viewport):
+        from features.images.validation import image_dimensions
+        first = self.document.page(index)
+        self.sizes[index] = image_dimensions(first)
+        indices, data = (index,), [first]
+        width, height = viewport
+        if index + 1 < self.document.count:
+            second = self.document.page(index + 1)
+            self.sizes[index + 1] = image_dimensions(second)
+            ratios = [w / h for w, h in (self.sizes[index], self.sizes[index + 1])]
+            if width >= sum(ratios) * max(1, height):
+                indices, data = (index, index + 1), [first, second]
+        return indices, data
+
+    def next(self):
+        target = self.indices[-1] + 1
+        return target if target < self.document.count else None
+
+    def previous(self):
+        index = self.indices[0]
+        if index == 0:
+            return None
+        if index >= 2:
+            indices, _ = self.load(index - 2, self.viewport)
+            if len(indices) == 2:
+                return index - 2
+        return index - 1
+
+
+def pdf_viewport(owner):
+    width, height = owner.private_comic_viewport()
+    # Before its first native layout the canvas has no measured height. Do not
+    # mistake that transient one-point allocation for a very wide reading pane.
+    return width, height if height > 1 else max(1, owner.main_window.size.height)
+
+
+def watch_pdf_layout(owner):
+    """Use the same resize/zoom-aware invalidation loop as comic spreads."""
+    reader = owner.crypt_reader
+    task = getattr(owner, '_provider_layout_task', None)
+    if task is not None and not task.done():
+        return
+    from features.comics.mobile.presentation import watch_layout
+    owner._provider_layout_task = owner.loop.create_task(watch_layout(
+        alive=lambda: owner.crypt_reader is reader and owner.active_host,
+        available=lambda: not owner.cloud_busy and owner.manager.active is owner,
+        viewport=lambda: pdf_viewport(owner),
+        view=lambda: owner.crypt_image,
+        reload=owner.read_crypt_page,
+        changed=owner.format_services.layout_changed(),
+        initial=reader.pdf_navigation.viewport))
+
+
+def sync_pdf_progress(view):
+    navigation = view.crypt_reader.pdf_navigation
+    first, last = navigation.indices[0] + 1, navigation.indices[-1] + 1
+    count = view.crypt_reader.pdf.count
+    pages = str(first) if first == last else f'{first}–{last}'
+    view.page_footer.set_progress_text(f'{pages}/{count}', f'Pages {pages} of {count}')
+    view.next_page.enabled = navigation.next() is not None

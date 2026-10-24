@@ -86,7 +86,7 @@ section:empty { display: none; }
 #document .live-italic { font-style: italic; }
 #document .live-code { font-family: ui-monospace, monospace; background: var(--surface, ButtonFace); }
 #document .live-marker { color: GrayText; font-weight: normal; font-style: normal; }
-#document section:not(:focus-within) .live-marker { font-size: 0; }
+#document .live-marker { font-size: 0; }
 #document [data-live-heading] { font-weight: 700; line-height: 1.25; }
 #document [data-live-heading="1"] { font-size: 2em; }
 #document [data-live-heading="2"] { font-size: 1.55em; }

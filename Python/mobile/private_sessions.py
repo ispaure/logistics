@@ -30,6 +30,12 @@ class PrivateController(ReaderHost, ProviderUI):
         self.presentation_destination = self.app.native_host.state.destination
         self.privacy_gate = None
 
+    def watch_provider_layout(self):
+        if self.crypt_reader is not None and self.crypt_reader.kind == '.pdf':
+            from features.pdf.mobile.canvas import watch_pdf_layout
+            return watch_pdf_layout(self)
+        return self.provider_comic_controller().watch_provider_layout()
+
     @property
     def cloud_busy(self):
         return self.operation_busy

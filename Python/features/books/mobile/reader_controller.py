@@ -235,6 +235,10 @@ class EpubController:
         )
 
     async def prepare_page(self, reader, record, index, epoch):
+        async def seek(chapter, fraction):
+            self._epub_target = ('fraction', fraction)
+            await self.move_book_page(chapter)
+        self.page_footer.set_book(reader, seek)
         content, chapter_text = await asyncio.to_thread(
             indexed_chapter,
             reader,
@@ -262,10 +266,7 @@ class EpubController:
             saved.get("offset", 0) if saved.get("path") == reader.spine[index] else 0
         )
         if target is not None:
-            offset = (
-                chapter_text.anchors.get(target, 0)
-                if isinstance(target, str)
-                else target
-            )
+            offset = (round(chapter_text.length * target[1]) if isinstance(target, tuple)
+                      else chapter_text.anchors.get(target, 0) if isinstance(target, str) else target)
         offset = min(max(0, offset), chapter_text.length)
         return chapter_text, offset, content

@@ -11,8 +11,10 @@ ends of the document.
 
 On iOS the filename is centered in the native title bar. The magnifying-glass
 button opens **Pages and search**; **•••** holds the remaining PDF actions.
-Previous/Next, a slim page slider and a compact page-count badge share one
-footer row. Drag and release the round thumb to jump to a page. Fullscreen hides the
+Previous/Next and a vertical page slider sit beside the reading pane. Progress
+runs from top to bottom; drag and release the round thumb to jump to a page.
+When two pages fit side by side at full reading height, the reader shows both
+and Previous/Next turns by a spread. Resizing keeps the selected page visible. Fullscreen hides the
 title and controls. The PDF reader does not show EPUB chapter or speech actions.
 
 PDFs are read-only, limited to 32 MiB and 10,000 pages. Pages are fitted to the
@@ -78,3 +80,11 @@ extension; private-reader conceal and suspension release its image.
 
 Page changes use a short slide. **High Contrast / E Ink** disables page-turn
 motion on mobile. System reduced-motion preferences are respected.
+
+## External display
+
+PDFs use the same picture-only TV output as comics. Connect an external display
+or use the system's screen sharing controls; the current PDF page or spread is
+shown without the app's controls. Output clears when you leave the reader or the
+app becomes inactive. Protected-session gates also blank the output, including
+while another protected document is retained in the app.

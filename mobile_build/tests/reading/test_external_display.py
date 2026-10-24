@@ -105,6 +105,15 @@ class ExternalDisplayTests(unittest.TestCase):
         self.assertFalse(self.output.ios)
         self.assertIsNone(self.output.source)
 
+    def test_pdf_uses_same_output_and_privacy_gate_as_comics(self):
+        del self.canvas._external_comic_page
+        self.canvas._external_document_page = True
+        sync(self.host, select=True)
+        self.assertEqual(self.picture.image, 'page one')
+        self.privacy.gates = lambda: (object(),)
+        sync(self.host)
+        self.assertIsNone(self.picture.image)
+
     def test_disconnect_clears_and_forgets_external_image(self):
         sync(self.host, select=True)
         scene = NS(session=NS(persistentIdentifier='tv'))

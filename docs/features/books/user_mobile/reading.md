@@ -96,7 +96,13 @@ Tap the speaker again to reopen the same controls. Changing chapters,
 leaving a private reader or closing its session stops
 the engine and clears queued text. The app does not download voices or send text
 to a speech service. If no offline voice is available, use the operating system's
-speech settings to install one. Physical-device audio and accessibility ergonomics
+speech settings to install one. EPUB and Markdown read-aloud detect the passage’s
+language offline and choose a matching installed voice. EPUB chapter/package
+language declarations provide a fallback for short or ambiguous text. A saved
+voice is preferred when it matches the detected language. If that language has
+no installed voice, playback explains which language needs a voice. Detection
+runs when starting a passage; it does not switch voices sentence by sentence.
+Physical-device audio and accessibility ergonomics
 still need a device pass.
 
 Below Speed, **Timer** offers **Off** (the default), **15 min**, **30 min**,
@@ -110,8 +116,10 @@ the current word; Play resumes with a fresh full timer. Hiding the controls keep
 the timer active. The timer belongs to the open speech panel, is shared by mobile
 EPUB and Markdown read-aloud, and clears when that panel is disposed.
 
-In portrait and landscape, EPUB keeps Previous/Next and chapter progress in a
-compact footer. On iOS the native top bar centers the book title, with the chapter
+In portrait and landscape, EPUB keeps Previous/Next and whole-book progress in a
+compact footer. The percentage and scrubber cover the entire book, with chapter
+sizes used as approximate weights. Dragging the thumb seeks into the selected
+chapter; the badge also shows the current chapter number. On iOS the native top bar centers the book title, with the chapter
 browser on the left and speech and Actions on the right. **Appearance…**, chapter
 search and **Fullscreen** remain available in Actions. Comics use the same title
 bar and keep their page scrubber; neighboring-comic buttons appear when supported

@@ -16,7 +16,7 @@ from commonUtils.ui.native.forms import wrap_text, FittedLabel as SettingsLabel
 
 def build_information(version, path=None):
     """Use the staged snapshot on devices; Git is only a source-checkout fallback."""
-    path = Path(path) if path is not None else Path(__file__).with_name('source.json')
+    path = Path(path) if path is not None else Path(__file__).parents[1] / 'source.json'
     try:
         manifest = json.loads(path.read_text(encoding='utf-8'))
         identity = BuildVersion(version or 'Development build', manifest['logistics_commit'],

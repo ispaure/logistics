@@ -1,11 +1,11 @@
-"""Picture-only external comic output; no workspace, credentials or disk copies."""
+"""Picture-only external document output; no workspace, credentials or disk copies."""
 import weakref
 import json
 import os
 
 
 def comic_canvas(view):
-    if getattr(view, '_external_comic_page', False) and getattr(view, 'image', None) is not None:
+    if (getattr(view, '_external_comic_page', False) or getattr(view, '_external_document_page', False)) and getattr(view, 'image', None) is not None:
         return view
     for child in view.children:
         found = comic_canvas(child)
@@ -153,7 +153,7 @@ class ExternalComicDisplay:
             label.layer.setCornerRadius(14)
             label.setClipsToBounds(True)
             label.setUserInteractionEnabled(False)
-            label.setAccessibilityLabel('Casting comic to TV')
+            label.setAccessibilityLabel('Casting document to TV')
             label.setTranslatesAutoresizingMaskIntoConstraints(False)
             window.addSubview(label)
             safe = window.safeAreaLayoutGuide
@@ -230,7 +230,7 @@ class ExternalComicDisplay:
         picture.contentMode = 1  # scaleAspectFit, including letterboxing
         picture.clipsToBounds = True
         picture.userInteractionEnabled = False
-        picture.accessibilityLabel = 'Comic on external display'
+        picture.accessibilityLabel = 'Document on external display'
         controller.view = picture
         window.rootViewController = controller
         window.frame = scene.coordinateSpace.bounds

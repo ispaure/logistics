@@ -8,6 +8,7 @@ from toga.style.pack import COLUMN, ROW, CENTER
 from .speech import PlaybackTimer, SpeechSession
 from commonUtils.ui.native.speech import NativeSpeech
 from .speech_host import SpeechPresentation
+from commonUtils.runtime.speech_language import passage_language
 
 
 class ReadAloudPanel(toga.Box):
@@ -132,7 +133,7 @@ class ReadAloudPanel(toga.Box):
         if self.engine.ready:
             voices = sorted(self.engine.voices)
             saved = self.presentation.voice()
-            self.voice = saved if saved in voices else self.engine.default_voice or next((v for v in voices if v.startswith('en-US')), voices[0])
+            self.voice = saved if saved in voices else self.engine.default_voice or voices[0]
             self.play_button.enabled = True
             self.set_status('Select text, or read from here.')
         else:
@@ -175,7 +176,20 @@ class ReadAloudPanel(toga.Box):
                 self.session.stop()
                 self.set_status('Unlock the credential session before reading aloud.')
                 return
-            self.session.play(chapter.text, start, end, voice=self.voice,
+            # Detection runs off the UI thread and never stores the passage.
+            sample = chapter.text.encode('utf-16-le')[start * 2:None if end is None else end * 2].decode('utf-16-le')
+            language = await asyncio.to_thread(passage_language, sample, getattr(chapter, 'language', ''))
+            if self.closed or generation != self.session.generation:
+                return
+            if self.playback is not None and not self.playback.can_start():
+                self.session.stop()
+                self.set_status('Unlock the credential session before reading aloud.')
+                return
+            voice = self.engine.voice_for_language(language, self.voice)
+            if not voice:
+                self.set_status(f'No installed voice for {language}. Install an offline system voice for this language.')
+                return
+            self.session.play(chapter.text, start, end, voice=voice,
                 speed=float(self.speed_choice.value), breaks=getattr(chapter, 'breaks', ()))
 
     def pause(self, widget=None, **kwargs):

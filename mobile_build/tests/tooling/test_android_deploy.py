@@ -43,6 +43,7 @@ class AndroidDeployTests(unittest.TestCase):
             with patch.object(deploy, 'ROOT', root), patch.object(deploy, 'PROJECT', project), \
                     patch.object(deploy, 'refresh_sources') as refresh, \
                     patch.object(deploy, 'deployment_version', return_value=42), \
+                    patch.object(deploy, 'discover_wireless'), \
                     patch.object(deploy, 'compatible_apk', side_effect=lambda a, e, s, p: p), \
                     patch.object(deploy, 'tools_environment', return_value=({}, Path('/sdk/adb'))), \
                     patch.object(deploy, 'run', side_effect=run) as execute:
@@ -127,12 +128,15 @@ class AndroidDeployTests(unittest.TestCase):
 
     def test_wireless_discovery_uses_connect_services_and_never_pairs(self):
         calls = []
-        def run(command, env):
+        def run(command, env, **kwargs):
             calls.append(command)
             return ('List of discovered mdns services\n'
                     'paired\t_adb-tls-connect._tcp\t192.168.2.10:35001\n'
                     'pairing\t_adb-tls-pairing._tcp\t192.168.2.10:35002\n')
-        with patch.object(deploy, 'run', side_effect=run):
+        from mobile_build.deployment import wireless_adb
+        with patch.object(deploy, 'run', side_effect=run), \
+                patch.object(wireless_adb.platform, 'system', return_value='Linux'), \
+                patch.object(wireless_adb, '_reachable', return_value=True):
             deploy.discover_wireless('/sdk/adb', {})
         self.assertEqual(calls, [['/sdk/adb', 'mdns', 'services'],
                                  ['/sdk/adb', 'connect', '192.168.2.10:35001']])

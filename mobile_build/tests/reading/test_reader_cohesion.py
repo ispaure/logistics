@@ -102,7 +102,7 @@ class ReaderCohesionTests(unittest.TestCase):
             self.assertNotIn(owner.pdf_tools.widget, view.children)
             owner.toggle_private_reading_mode()
             self.assertIs(owner.pdf_tools.widget.parent, view)
-            self.assertLess(view.children.index(owner.pdf_tools.widget), view.children.index(owner.crypt_content))
+            self.assertLess(view.children.index(owner.pdf_tools.widget), view.children.index(owner.pdf_body))
             self.assertEqual(owner.pdf_tools.button.control_icon, 'find')
         from mobile_build.tests.reading.test_pdf_reader import native_pdf
         with patch('features.pdf.document.PDFDocument.open', native_pdf):

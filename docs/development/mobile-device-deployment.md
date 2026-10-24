@@ -208,3 +208,33 @@ Cloud workspace hierarchy. Local evidence is retained at
 All 44 appearance, workspace-hub and packaged-startup host checks passed.
 No uninstall or app-data reset was performed; this does not certify every
 feature workflow on the physical devices.
+
+## Wireless Android discovery and recovery
+
+The deployment window and Android CLI share `deployment/wireless_adb.py`.
+Discovery first checks ADB's TLS connect advertisements. On macOS, bounded
+Bonjour browse/resolve snapshots supplement an empty or incomplete ADB list,
+including renamed duplicate service instances after the tablet changes its port.
+Unreachable endpoints are skipped; IPv4 is preferred over scoped link-local IPv6.
+ADB still authenticates each connection using existing pairing keys. Pairing
+advertisements never trigger automatic pairing.
+
+A stale daemon can return “No route to host” even when the discovery process can
+open the advertised TCP port. With no ready Android devices, discovery restarts
+ADB once and reconnects reachable advertisements. It leaves a daemon serving a
+ready device running; the window's **Repair Android** action supplies explicit
+recovery in that case. Repairs run outside deployments, briefly interrupt ADB
+sessions, and never uninstall apps, clear storage or erase pairing keys.
+
+Focused `test_wireless_adb.py` contracts cover partial Bonjour snapshots, changed
+ports, duplicate advertisements, IPv4 ordering, stale-daemon recovery, preservation
+of ready-device connections and exclusion of pairing services. Saved private
+hardware IDs still deduplicate simultaneous USB and wireless transports.
+ADB service and connection names containing spaces, such as renamed `(2)`
+instances, remain valid discovery targets.
+
+If USB hardware is visible but absent from the deployment list, another ADB
+server can own its interface. Check the server used by other Android tools;
+`ADB_SERVER_SOCKET=tcp:localhost:<port>` lets the CLI and deployment window use
+that existing server. Restarting the default server cannot release an interface
+owned by a different server.

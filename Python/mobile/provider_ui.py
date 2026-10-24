@@ -301,6 +301,11 @@ class ProviderUI(FilesUI):
         publication = ReadingPublication.provider(controller, view)
         old_epub = getattr(view, 'provider_epub_view', None)
         prepared_spread = publish_spread = None
+        pdf_image = None
+        if kind == 'pdf-spread':
+            from features.comics.mobile.composite import compose_spread
+            pdf_viewport, (pdf_indices, pages) = content
+            pdf_image = compose_spread(pages, viewport=pdf_viewport)
         if view.crypt_reader.book is None and kind == 'spread':
             indices, _ = content
             prepared_spread, publish_spread = prepare_comic_spread(controller, view, content)
@@ -315,6 +320,10 @@ class ProviderUI(FilesUI):
                 from features.comics.mobile.presentation import place_page
                 place_page(prepared_spread, controller.format_services.page_region(view.crypt_content))
                 surface = prepared_spread
+            elif kind == 'pdf-spread':
+                view.crypt_image._external_document_page = True
+                view.crypt_image.image = pdf_image
+                surface = view.crypt_image
             elif kind == 'image':
                 view.crypt_image._external_comic_page = view.crypt_reader.kind in {'.cbz', '.zip'}
                 view.crypt_image.image = toga.Image(src=content)
@@ -326,6 +335,9 @@ class ProviderUI(FilesUI):
                                      keep=(view.crypt_image, view.crypt_text),
                                      retired=(old_epub,) if old_epub is not None else ()):
                 return
+        if kind == 'pdf-spread':
+            view.crypt_reader.pdf_navigation.indices = pdf_indices
+            view.crypt_reader.pdf_navigation.viewport = pdf_viewport
         if kind == 'spread':
             view.provider_spread = prepared_spread
             view.crypt_reader.comic_navigation.commit(indices)
@@ -357,7 +369,11 @@ class ProviderUI(FilesUI):
         self.crypt_read_page.enabled = False
         try:
             index = self.crypt_reader.labels.index(self.crypt_page.value)
-            self._provider_viewport = self.private_comic_viewport()
+            if self.crypt_reader.kind == '.pdf':
+                from features.pdf.mobile.canvas import pdf_viewport
+                self._provider_viewport = pdf_viewport(self)
+            else:
+                self._provider_viewport = self.private_comic_viewport()
             self._provider_comic_mode = self.private_comic_mode()
             self._provider_comic_sharing = self.format_services.comic_sharing()
             self._provider_comic_seam = self.private_comic_seam()
@@ -381,6 +397,9 @@ class ProviderUI(FilesUI):
                                chapter=(panel.offset, panel.chapter.length) if panel is not None else None)
             self.previous_page.enabled = reader.book is not None or (reader.comic_navigation.can_previous(index) if hasattr(reader, 'comic_navigation') else index > 0)
             self.next_page.enabled = reader.book is not None or (reader.comic_navigation.next(index) is not None if hasattr(reader, 'comic_navigation') else index + 1 < len(reader.labels))
+            if reader.kind == '.pdf':
+                from features.pdf.mobile.canvas import sync_pdf_progress
+                sync_pdf_progress(self)
         except Exception as error:
             self.crypt_title.text = private_label('Cannot read page: ' + str(error)[:200])
             if self.crypt_reader is not None:
@@ -446,6 +465,14 @@ class ProviderUI(FilesUI):
     def swipe_crypt_page(self, direction):
         if self.crypt_reader is None or self.crypt_reader.editable:
             return
+        if getattr(self.crypt_reader, 'kind', None) == '.pdf':
+            async def turn(direction):
+                if direction > 0:
+                    await self.next_private_page()
+                else:
+                    await self.previous_private_page()
+            schedule_swipe(self, direction, right_to_left=False, busy=self.cloud_busy, move=turn)
+            return
         if hasattr(self.crypt_reader, 'comic_navigation'):
             schedule_swipe(self, direction, right_to_left=getattr(self.crypt_reader, 'right_to_left', False),
                            busy=self.cloud_busy, move=self.move_provider_comic)
@@ -461,6 +488,23 @@ class ProviderUI(FilesUI):
         await self.read_crypt_page()
 
     async def previous_private_page(self, widget=None, **kwargs):
+        if self.crypt_reader is not None and self.crypt_reader.kind == '.pdf':
+            if self.cloud_busy:
+                return
+            reader = self.crypt_reader
+            token = self.workspace.token(self.session.id)
+            self.set_cloud_busy(True)
+            try:
+                target = await asyncio.to_thread(reader.pdf_navigation.previous)
+            except Exception as error:
+                if self.crypt_reader is reader and self.workspace.accepts(token):
+                    self.crypt_title.text = private_label('Cannot read previous pages: ' + str(error)[:200])
+                return
+            finally:
+                self.set_cloud_busy(False)
+            if self.crypt_reader is reader and self.workspace.accepts(token) and target is not None:
+                await self.move_private_page(target)
+            return
         if self.crypt_reader is not None and hasattr(self.crypt_reader, 'comic_navigation'):
             await self.move_provider_comic(-1)
             return
@@ -470,6 +514,11 @@ class ProviderUI(FilesUI):
             await self.move_private_page(self.crypt_reader.labels.index(self.crypt_page.value) - 1)
 
     async def next_private_page(self, widget=None, **kwargs):
+        if self.crypt_reader is not None and self.crypt_reader.kind == '.pdf':
+            target = self.crypt_reader.pdf_navigation.next()
+            if target is not None:
+                await self.move_private_page(target)
+            return
         if self.crypt_reader is not None and hasattr(self.crypt_reader, 'comic_navigation'):
             await self.move_provider_comic(1)
             return
@@ -595,7 +644,13 @@ class ProviderUI(FilesUI):
                 margin=int(self.preferences.values['reading_margin']),
                 theme=self.preferences.values['reading_theme'], links=True,
                 **options(self.preferences.values))
-        if reader.kind == '.pdf' or reader.book is not None or reader.editable or getattr(reader, 'image_document', False):
+        if reader.kind == '.pdf':
+            from features.pdf.mobile.canvas import PDFNavigation
+            if not hasattr(reader, 'pdf_navigation'):
+                reader.pdf_navigation = PDFNavigation(reader.pdf)
+            viewport = getattr(self, '_provider_viewport', (1, 1))
+            return 'pdf-spread', (viewport, reader.pdf_navigation.load(index, viewport))
+        if reader.book is not None or reader.editable or getattr(reader, 'image_document', False):
             return reader.page(index)
         from features.comics.mobile.navigation import provider_navigation
         if not hasattr(reader, 'comic_navigation'):

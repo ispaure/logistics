@@ -38,8 +38,15 @@ SDK, Go, signing, device and tester-group settings are reused.
 - **Firebase → Friends** builds/signs with the current Firebase parameters.
 - **TestFlight → Friends** archives/exports with the current TestFlight parameters;
   it retains the existing requirement for committed, clean release sources.
-- **Refresh** reads device availability again. **Open logs** opens the isolated
-  workspaces after test-device operations, or `mobile_build/logs` after tester operations;
+- **Refresh** rediscovers paired wireless Android devices, including macOS Bonjour
+  services missed by ADB. It resolves current ports and prefers reachable numeric
+  IPv4 endpoints before link-local IPv6. When a reachable service is blocked by
+  a stale ADB daemon and no Android device is ready, it restarts that daemon once.
+- **Repair Android** explicitly restarts ADB and refreshes paired connections.
+  Use it when a wireless device stays offline while other devices are connected;
+  active ADB sessions briefly disconnect. It keeps pairing keys and app data.
+- **Open logs** opens the deployment logs. The isolated
+  workspaces contain test-device logs; `mobile_build/logs` contains tester-operation logs;
   distribution output also identifies its build-specific log directory.
 
 Tester buttons ask once in the window after the build is prepared and verified,

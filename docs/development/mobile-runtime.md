@@ -670,6 +670,8 @@ Reflow fits only the sidebar and displayed category; hidden pages adopt the
 current width when revisited. Category highlights update only when their state
 changes, and Apple text fitting reuses a measurement label after checking the
 text/width/font cache. About's build-information lookup runs only on opening About.
+It reads the packaged `mobile/source.json` to show the version, commit, local
+commit time, modified status, platform and source snapshot identifier offline.
 Reload preferences explicitly rebuilds category factories; ordinary visits reuse
 their controls. Saving preferences reads only the controls already constructed,
 preserving preference values belonging to unopened categories.

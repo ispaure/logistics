@@ -36,6 +36,7 @@ def assert_preview_only_ui(test, owner):
             expected.add('View source text' if reading else 'View Markdown')
             if reading:
                 expected.add('Read aloud…')
+                expected.add('Find in this page…')
         if owner.app.adaptive.width() >= 640:
             expected.add('Open beside another document')
         test.assertEqual(actions, expected)
@@ -548,11 +549,11 @@ class RemoteReaderTests(unittest.TestCase):
                 owner = app.private_sessions.active
                 assert_preview_only_ui(self, owner)
                 owner.toggle_private_preview()
-                self.assertEqual(owner.crypt_preview_button.accessible_name, 'View source text')
+                self.assertEqual(owner.crypt_preview_button.accessible_name, 'View Markdown')
                 owner.toggle_private_preview()
                 self.assertTrue(owner.crypt_text.readonly)
                 owner.show_private_markdown_editor()
-                self.assertEqual(owner.crypt_markdown_mode, 'source')
+                self.assertEqual(owner.crypt_markdown_mode, 'preview')
                 self.assertIsNone(getattr(owner, 'crypt_formatted', None))
                 app.loop.run_until_complete(owner.save_crypt_metadata())
                 app.loop.run_until_complete(owner.show_crypt_save_as())

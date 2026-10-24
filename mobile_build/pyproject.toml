@@ -14,7 +14,7 @@ description = "Native document workspaces, readers, LM chat and managed rclone c
 # Keep the installed app identity; tools.py generates its launcher into the payload.
 sources = ["payload/logisticsmobile", "payload/mobile", "payload/commonUtils", "payload/features", "payload/services"]
 test_sources = ["native_tests/tests"]
-requires = ["markdown-it-py==4.2.0", "pygments==2.19.2", "pypdf==6.21.0"]
+requires = ["langdetect==1.0.9", "markdown-it-py==4.2.0", "pygments==2.19.2", "pypdf==6.21.0"]
 
 [tool.briefcase.app.logisticsmobile.macOS]
 requires = ["toga-cocoa==0.5.7"]

@@ -15,6 +15,9 @@ class Engine:
     def __init__(self, loop):
         self.calls, self.closed = [], False
 
+    def voice_for_language(self, language, preferred=''):
+        return preferred or self.default_voice
+
     def speak(self, *args):
         self.calls.append(args)
 

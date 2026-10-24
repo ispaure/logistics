@@ -1,5 +1,5 @@
 """Book-wide reading progress without eagerly rendering every chapter."""
-from bisect import bisect_right
+from features.books.locations import book_boundaries, book_location
 from commonUtils.ui import pyside as qt
 
 
@@ -17,11 +17,7 @@ class BookProgress(qt.QWidget):
         self.setEnabled(False)
 
     def set_book(self, book):
-        weights = [max(1, book.resource_sizes.get(path, 1)) for path in book.spine]
-        total = sum(weights)
-        self.boundaries = [0]
-        for weight in weights:
-            self.boundaries.append(self.boundaries[-1] + weight / total)
+        self.boundaries = book_boundaries(book)
         self.markers = []
         for entry in book.chapters:
             index = book.spine.index(entry.path)
@@ -71,6 +67,5 @@ class BookProgress(qt.QWidget):
         if event.button() == qt.Qt.MouseButton.LeftButton and self.isEnabled():
             track = self._track_rect()
             fraction = max(0, min(1, (event.position().x() - track.left()) / track.width()))
-            chapter = min(len(self.boundaries) - 2, bisect_right(self.boundaries, fraction) - 1)
-            start, end = self.boundaries[chapter:chapter + 2]
-            self.requested.emit(chapter, (fraction - start) / (end - start))
+            chapter, position = book_location(self.boundaries, fraction)
+            self.requested.emit(chapter, position)

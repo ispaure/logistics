@@ -67,6 +67,16 @@ class NativeSpeechTests(unittest.TestCase):
         self.assertFalse(engine.voices)
         self.assertIn('install voice data', engine.error)
 
+    def test_detected_language_overrides_english_and_retains_matching_saved_voice(self):
+        engine = self.engine()
+        engine.voices = {'en-US · English': object(), 'fr-FR · French': object(),
+                         'fr-CA · Canadian': object()}
+        engine.default_voice = 'en-US · English'
+        self.assertEqual(engine.voice_for_language('fr', 'en-US · English'), 'fr-FR · French')
+        self.assertEqual(engine.voice_for_language('fr', 'fr-CA · Canadian'), 'fr-CA · Canadian')
+        self.assertEqual(engine.voice_for_language('de', 'en-US · English'), '')
+        self.assertEqual(engine.voice_for_language('', 'fr-CA · Canadian'), 'fr-CA · Canadian')
+
     def test_closed_android_engine_and_late_native_events_are_ignored(self):
         engine = self.engine()
         engine.loop = asyncio.new_event_loop()

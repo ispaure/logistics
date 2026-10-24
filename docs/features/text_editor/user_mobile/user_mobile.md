@@ -16,8 +16,10 @@ In formatted editing, type `# Heading` (through six heading levels), `**bold**`,
 Select words and type `*` to surround them with emphasis; type a second `*`
 while they remain selected to make them bold. Underscores and backticks also
 wrap selections. Incomplete syntax, escaped markers and text inside code stay
-literal. Typed markers remain available while editing their block and collapse
-when that block loses focus. Toolbar Undo/Redo and hardware keyboard shortcuts
+literal. Inline markers show when the cursor touches or is inside their formatted
+span, or a selection overlaps it. Heading markers show anywhere in that heading.
+Moving elsewhere hides them, including within the same paragraph, following the
+desktop editor’s cursor rules. Toolbar Undo/Redo and hardware keyboard shortcuts
 work with these edits; Ctrl/Cmd+B and Ctrl/Cmd+I apply bold and italic.
 
 In Markdown preview and Notes Library, choose **••• → Find in this page…**

@@ -230,6 +230,20 @@ Otherwise fixed padding can scroll the caret above the document area even when
 the native editor panel itself stays in place. The Android keyboard probe checks
 native IME composition, caret bounds, ancestor scroll offsets, new documents and
 appending to the last Markdown block at phone sizes.
+Live bold, italic, inline-code and heading markers follow the caret/selection
+intervals used by desktop, rather than focus on the enclosing section. Inline
+markers reveal when the caret touches their span or a selection overlaps it;
+heading markers reveal across that heading. The grammar, inline parser adapter
+and interval contract live in `commonUtils.formats.markdown.editing`. Supported
+single-line paragraph/headings retain source delimiters when loaded; complex
+blocks retain their existing rich/source fallback. Native toolbar inline edits
+materialize source delimiters too. Visibility changes use a separate stylesheet,
+leaving editable HTML, source, dirty state and undo snapshots untouched.
+Browser regressions in `Python/tests/test_mobile_markdown_editing_dom.py` compare
+visibility against the desktop predicate, including UTF-16 positions, selections,
+paragraph transitions, loaded source and toolbar undo/redo. These host browser
+checks do not replace iOS WebKit or Android WebView device validation.
+
 IME composition is published only after completion. Native source/plain-text
 editing retains its platform caret behavior. Status and line-count captions are
 updated only when their text changes to avoid relaying out the editor on each key.
@@ -489,3 +503,27 @@ code literals, Unicode composition, repeated selection wrapping, deletion,
 Undo/Redo, toolbar formatting and escaped imports. It complements the mobile
 host editor/bridge tests and shared desktop live-edit tests. Browser and dummy
 host checks do not certify iOS/Android keyboard behavior on physical devices.
+
+The block-style toolbar consumes a live heading's typed prefix before applying
+the requested block style. Repeated heading choices therefore serialize one
+heading prefix; Paragraph removes the heading, and Quote/Code do not retain its
+display size. Prefix removal and the browser command share one Undo step. Live
+heading levels are refreshed after edits, including removal of inherited heading
+attributes from new paragraphs. DOM regressions cover these transitions, inline
+content, selected blocks, Unicode and 32-pixel base text.
+
+Live editor caret/history bookmarks count paragraph starts and explicit line
+breaks as well as UTF-16 text positions. Empty paragraphs therefore have distinct
+positions from the preceding text, so Enter, Shift+Enter and Undo/Redo do not
+restore the caret to the previous line when display spans are rebuilt. Whole-block
+selections normalize to the equivalent position inside their leading blocks.
+The production-HTML DOM suite covers following text after Enter, soft line breaks,
+blank paragraphs and Undo/Redo alongside delimiter wrapping and composition.
+
+`mobile_build/native_tests/tests/logisticsmobile/markdown_enter_probe.py` validates
+these operations in the native WebView using isolated documents. On 2026-10-24,
+the Boox Android run passed with real InputConnection Enter key events; the iOS
+simulator run passed using WebKit's paragraph command. Both runs also checked
+native multiline insertion in Markdown Source mode and plain text. This scope
+does not certify every software keyboard or physical iOS keyboard. Temporary QA
+apps were removed after collecting results; the main app and its data were kept.

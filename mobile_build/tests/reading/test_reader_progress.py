@@ -51,5 +51,36 @@ class ReaderProgressTests(unittest.TestCase):
         footer, _ = self.footer(unit='chapter')
         footer.sync(comic=False, count=12, index=2)
         footer.chapter_progress(2, 12, 25, 100)
-        self.assertEqual(footer.spacer.text, '3/12 · 25%')
-        self.assertEqual(footer.spacer.accessible_name, 'Chapter 3 of 12, 25% through chapter')
+        self.assertEqual(footer.spacer.text, '19% · 3/12')
+        self.assertEqual(footer.spacer.accessible_name, 'Chapter 3 of 12, 19% through book')
+
+    def test_book_weighted_scrub_seeks_within_a_chapter_and_single_chapter_is_enabled(self):
+        from types import SimpleNamespace
+        footer, _ = self.footer(unit='chapter')
+        seek = AsyncMock()
+        book = SimpleNamespace(spine=['short', 'long'], resource_sizes={'short': 100, 'long': 300})
+        footer.set_book(book, seek)
+        footer.sync(comic=False, count=2, index=1)
+        footer.chapter_progress(1, 2, 50, 100)
+        self.assertEqual(footer.slider.value, .625)
+        self.assertEqual(footer.spacer.text, '62% · 2/2')
+        footer.slider.value = .1
+        asyncio.run(footer.release(footer.slider))
+        seek.assert_awaited_once_with(0, .4)
+        footer.set_book(SimpleNamespace(spine=['one'], resource_sizes={}), seek)
+        footer.sync(comic=False, count=1, index=0)
+        footer.chapter_progress(0, 1, 50, 100)
+        self.assertTrue(footer.slider.enabled)
+        self.assertEqual(footer.slider.value, .5)
+
+    def test_pdf_vertical_track_increases_downward_and_commits_only_on_release(self):
+        footer, move = self.footer(vertical=True)
+        footer.sync(comic=False, count=5, index=0)
+        slider = footer.slider
+        slider.resize_track(slider, 44, 124)
+        slider.drag_track(slider, 22, 87)
+        self.assertEqual(slider.value, 3)
+        move.assert_not_called()
+        asyncio.run(slider.release_track(slider, 22, 87))
+        move.assert_awaited_once_with(3)
+        self.assertEqual(slider.value, 0)
