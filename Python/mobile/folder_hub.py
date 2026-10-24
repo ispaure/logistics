@@ -238,6 +238,11 @@ def discover_folder_choices(snapshot):
                 title = row['name']
                 key = title if title not in choices else title + ' (Local)'
                 choices[key] = dict(source='Local', kind='shared-local', value=title, name=title, copies=[])
+    else:
+        from .incoming_files import inbox_path
+        inbox_path(snapshot.private_root)
+        key = 'Inbox' if 'Inbox' not in choices else 'Inbox (received)'
+        choices[key] = dict(source='Local', kind='inbox', value='', name='Inbox', copies=[])
     return FolderDiscoveryResult(choices, tuple(crypt.items()) if roots else snapshot.crypt_locations)
 
 

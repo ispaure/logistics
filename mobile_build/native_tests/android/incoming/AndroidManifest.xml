@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="io.github.ispaure.logisticsincomingsender">
+  <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36"/>
+  <application android:label="Logistics Inbox Sender" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false">
+    <activity android:name=".IncomingSender" android:exported="true"/>
+    <provider android:name=".IncomingSender$Files" android:authorities="io.github.ispaure.logisticsincomingsender.files" android:exported="false" android:grantUriPermissions="true"/>
+  </application>
+</manifest>

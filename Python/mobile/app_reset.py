@@ -76,8 +76,14 @@ def finish_ios_reset(app, private_root):
         bundle = native_value(native_value(ObjCClass('NSBundle'), 'mainBundle'), 'bundleIdentifier')
         native_value(ObjCClass('NSUserDefaults'), 'standardUserDefaults').removePersistentDomainForName(bundle)
 
+    shared_intake = []
+    if (Path(private_root) / RESET_MARKER).exists():
+        group = ObjCClass('NSFileManager').defaultManager.containerURLForSecurityApplicationGroupIdentifier(
+            'group.io.github.ispaure.logisticsmobile')
+        if group is not None:
+            shared_intake.append(Path(str(group.path)) / 'Incoming')
     return finish_pending_reset(private_root,
-        (Path(app.paths.data), Path(app.paths.config).parent, Path(app.paths.cache),
+        (*shared_intake, Path(app.paths.data), Path(app.paths.config).parent, Path(app.paths.cache),
          library / 'WebKit', library / 'Cookies', library / 'Saved Application State',
          library.parent / 'tmp'), erase_keys=erase_keys)
 

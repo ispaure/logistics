@@ -53,12 +53,16 @@ def keychain_groups_match(actual, identity):
     return sorted(actual or default) == sorted(identity['keychain_access_groups'] or default)
 
 
-def export_options(team, profile=None, *, upload=False):
+def export_options(team, profile=None, *, upload=False, inbox_profile=None):
+    if inbox_profile and not profile:
+        raise ValueError('An Inbox profile requires the containing app profile too.')
     options = dict(method='app-store-connect', destination='upload' if upload else 'export',
                    teamID=team, signingStyle='manual' if profile else 'automatic',
                    manageAppVersionAndBuildNumber=False, uploadSymbols=True)
     if profile:
         options.update(signingCertificate='Apple Distribution', provisioningProfiles={BUNDLE: profile['UUID']})
+        if inbox_profile:
+            options['provisioningProfiles'][BUNDLE + '.inbox'] = inbox_profile['UUID']
     return options
 
 
@@ -153,15 +157,29 @@ def archive_release(args, workspace, identity, env):
         cloud_build.ios(project)
         pbx = project / 'Logistics Mobile.xcodeproj/project.pbxproj'
         data = signing_settings(json.loads(subprocess.check_output(['plutil', '-convert', 'json', '-o', '-', str(pbx)])), identity['team_id'])
-        profile = None
+        profile = inbox_profile = None
         if args.profile:
             profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(args.profile.resolve())]))
             validate_profile(profile, identity)
+            if not getattr(args, 'inbox_profile', None):
+                raise ValueError('Manual signing requires --inbox-profile for the Inbox extension as well as --profile for the app.')
+            inbox_profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(args.inbox_profile.resolve())]))
+            validate_profile(inbox_profile, dict(identity, bundle_id=BUNDLE + '.inbox',
+                application_identifier=identity['application_identifier'] + '.inbox', keychain_access_groups=[]))
+            from ..build_support.incoming_build import GROUP
+            if any(GROUP not in p.get('Entitlements', {}).get('com.apple.security.application-groups', [])
+                   for p in (profile, inbox_profile)):
+                raise ValueError('App and Inbox profiles must both authorize the Logistics App Group.')
             for obj in data['objects'].values():
                 settings = obj.get('buildSettings', {})
-                if settings.get('PRODUCT_BUNDLE_IDENTIFIER') == BUNDLE:
+                selected_profile = {BUNDLE: profile, BUNDLE + '.inbox': inbox_profile}.get(settings.get('PRODUCT_BUNDLE_IDENTIFIER'))
+                if selected_profile:
                     settings.update(CODE_SIGN_STYLE='Manual', CODE_SIGN_IDENTITY='Apple Distribution',
-                                    PROVISIONING_PROFILE_SPECIFIER=profile['UUID'])
+                                    PROVISIONING_PROFILE_SPECIFIER=selected_profile['UUID'])
+        for obj in data['objects'].values():
+            settings = obj.get('buildSettings', {})
+            if settings.get('PRODUCT_BUNDLE_IDENTIFIER') == BUNDLE + '.inbox':
+                settings['CURRENT_PROJECT_VERSION'] = args.build_number
         pbx.write_bytes(plistlib.dumps(data, sort_keys=False))
         info = project / 'LogisticsMobile/LogisticsMobile-Info.plist'
         metadata = normal_launcher(plistlib.loads(info.read_bytes()))
@@ -178,9 +196,10 @@ def archive_release(args, workspace, identity, env):
         run(command, workspace, env, workspace / 'logs/archive.log')
         report = inspect_app(workspace / 'Logistics.xcarchive/Products/Applications/Logistics Mobile.app', identity,
                              args.build_number, signed=not args.unsigned_check)
-        record = dict(identity=identity, build=report, source=manifest, profile_uuid=profile['UUID'] if profile else None)
+        record = dict(identity=identity, build=report, source=manifest, profile_uuid=profile['UUID'] if profile else None,
+                      inbox_profile_uuid=inbox_profile['UUID'] if inbox_profile else None)
         (workspace / 'release.json').write_text(json.dumps(record, indent=2) + '\n')
-        (workspace / 'ExportOptions.plist').write_bytes(plistlib.dumps(export_options(identity['team_id'], profile)))
+        (workspace / 'ExportOptions.plist').write_bytes(plistlib.dumps(export_options(identity['team_id'], profile, inbox_profile=inbox_profile)))
         print('Archive prepared: ' + str(workspace))
     except Exception:
         print('Incomplete workspace and diagnostics retained: ' + str(workspace), file=sys.stderr)
@@ -209,7 +228,8 @@ def export_release(workspace, env, *, upload=False):
             raise ValueError('Uploading is explicit: set TESTFLIGHT_UPLOAD=1 and run upload after reviewing the exported build.')
         external = prepare_external()
     profile = {'UUID': record['profile_uuid']} if record['profile_uuid'] else None
-    options = export_options(identity['team_id'], profile, upload=upload)
+    inbox_profile = {'UUID': record['inbox_profile_uuid']} if record.get('inbox_profile_uuid') else None
+    options = export_options(identity['team_id'], profile, upload=upload, inbox_profile=inbox_profile)
     destination = workspace / ('UploadOptions.plist' if upload else 'ExportOptions.plist')
     destination.write_bytes(plistlib.dumps(options))
     run(['xcodebuild', '-exportArchive', '-archivePath', str(workspace / 'Logistics.xcarchive'),
@@ -243,8 +263,11 @@ def main():
     parser.add_argument('--team')
     parser.add_argument('--expected-app-identifier')
     parser.add_argument('--profile', type=Path, help='Installed App Store profile for manual CI signing')
+    parser.add_argument('--inbox-profile', type=Path, help='Matching App Store profile for the Inbox extension')
     parser.add_argument('--unsigned-check', action='store_true', help='Local archive packaging check only; cannot export/upload')
     args = parser.parse_args()
+    if args.inbox_profile and not args.profile:
+        parser.error('--inbox-profile requires --profile for the containing app.')
     if args.unsigned_check and args.command not in ('plan', 'archive'):
         parser.error('--unsigned-check applies only to a local archive check.')
     identity = release_identity(args.team, args.expected_app_identifier)

@@ -18,6 +18,24 @@ def seed_download(store, name, data):
 
 
 class ResourceImportTests(unittest.TestCase):
+    def test_ios_inbox_import_identity_is_retained_without_plaintext_names(self):
+        from mobile.resource_imports import ResourceImports
+        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            private, documents = root / 'private', root / 'Documents'
+            private.mkdir()
+            inbox = documents / 'Inbox'
+            inbox.mkdir(parents=True)
+            source = inbox / 'shared.pdf'
+            source.write_bytes(b'fixture')
+            use_shared_local(private, documents)
+            self.addCleanup(_shared_local_roots.pop, private, None)
+            imports = ResourceImports(private, collection_root=documents / 'Local')
+            imports.remember(source, 'library', 'a' * 32)
+            self.assertEqual(ResourceImports(private).find(source)['resource'], 'a' * 32)
+            self.assertNotIn(source.name, imports.path.read_text())
+
     def test_ios_shared_local_epub_opens_and_reopens_without_duplicate_import(self):
         from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
         from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots

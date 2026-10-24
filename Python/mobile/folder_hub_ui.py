@@ -204,9 +204,11 @@ class FolderHubUI:
         self.folder_picker_header = toga.Box(style=Pack(direction=COLUMN))
         self.folder_source_actions = toga.Box(style=Pack(direction=ROW))
         self.folder_loading_box = toga.Box(style=Pack(direction=COLUMN))
+        self.app.incoming_notice = toga.Label(getattr(self.app, 'incoming_status',
+            'Files shared from other apps appear in Inbox.'), style=Pack(font_size=12, margin_top=4))
         box = toga.Box(children=[self.folder_source_tabs, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box,
-            folder_scroll(self.folder_list)],
+            folder_scroll(self.folder_list), self.app.incoming_notice],
             style=Pack(direction=COLUMN, margin=(8, 16, 12, 16), flex=1))
         self.update_folder_list(choices)
         host = self.app
@@ -575,6 +577,8 @@ class FolderHubUI:
             kind = 'local'
         if kind == 'shared-local':
             return await self.show_files(location=('Shared files', value))
+        if kind == 'inbox':
+            return await self.show_files(location=('Inbox', value))
         if kind == 'local':
             return await self.show_files(location=('Local files', value))
         if kind == 'crypt':

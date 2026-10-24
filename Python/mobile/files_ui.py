@@ -414,6 +414,9 @@ class FilesUI:
         shared = shared_files(self.private_root)
         if shared is not None:
             roots['Shared files'] = shared
+        else:
+            from .incoming_files import inbox_path
+            roots['Inbox'] = LocalFiles(inbox_path(self.private_root))
         return roots
 
     def file_provider_for(self, label):

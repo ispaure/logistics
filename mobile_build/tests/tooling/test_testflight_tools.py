@@ -34,6 +34,10 @@ class TestFlightWorkflowTests(unittest.TestCase):
         self.assertFalse(options['manageAppVersionAndBuildNumber'])
         self.assertEqual(export_options('ABCDEFGHIJ', {'UUID': 'profile'})['provisioningProfiles'], {BUNDLE: 'profile'})
         self.assertEqual(export_options('ABCDEFGHIJ', upload=True)['destination'], 'upload')
+        paired = export_options('ABCDEFGHIJ', {'UUID':'main'}, inbox_profile={'UUID':'inbox'})
+        self.assertEqual(paired['provisioningProfiles'], {BUNDLE:'main', BUNDLE + '.inbox':'inbox'})
+        with self.assertRaises(ValueError):
+            export_options('ABCDEFGHIJ', inbox_profile={'UUID':'inbox'})
 
     def test_baseline_rejects_changed_team_bundle_or_prefix(self):
         baseline = dict(bundle_id=BUNDLE, team_id='ABCDEFGHIJ', signing_identity=self.identity)

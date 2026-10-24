@@ -13,10 +13,10 @@ import subprocess
 import tomllib
 
 if __package__:
-    from .build_support import camera_build, icon_build, privacy_build, scene_build
+    from .build_support import camera_build, icon_build, privacy_build, scene_build, incoming_build
     from .deployment.deployment_paths import output_root
 else:
-    from build_support import camera_build, icon_build, privacy_build, scene_build
+    from build_support import camera_build, icon_build, privacy_build, scene_build, incoming_build
     from deployment.deployment_paths import output_root
 
 ROOT = Path(__file__).resolve().parent
@@ -101,6 +101,7 @@ def configure_android_appearance(project):
                  for action in query.findall('intent/action')):
         query.append(speech_queries.find('intent'))
     tree.write(manifest, encoding='utf-8', xml_declaration=True)
+    incoming_build.configure_android(project)
 
 
 def android():
@@ -154,9 +155,12 @@ def ios(project=None):
     pbx = project / 'Logistics Mobile.xcodeproj/project.pbxproj'
     data = json.loads(subprocess.check_output(['plutil', '-convert', 'json', '-o', '-', str(pbx)]))
     found = 0
-    for obj in data['objects'].values():
-        if obj.get('isa') != 'XCBuildConfiguration' or 'PRODUCT_BUNDLE_IDENTIFIER' not in obj.get('buildSettings', {}):
-            continue
+    objects = data['objects']
+    app_targets = [obj for obj in objects.values() if obj.get('productType') == 'com.apple.product-type.application']
+    if len(app_targets) != 1:
+        raise ValueError('Expected one containing iOS app.')
+    for key in objects[app_targets[0]['buildConfigurationList']]['buildConfigurations']:
+        obj = objects[key]
         found += 1
         settings = obj['buildSettings']
         for sdk, variant in [('iphonesimulator', 'simulator'), ('iphoneos', 'device')]:
@@ -168,6 +172,7 @@ def ios(project=None):
     if found != 2:
         raise ValueError('Unexpected Briefcase iOS build configuration; refusing to silently omit the bridge.')
     pbx.write_bytes(plistlib.dumps(data, sort_keys=False))
+    incoming_build.configure_ios(project)
 
 
 def licenses(destination=None):

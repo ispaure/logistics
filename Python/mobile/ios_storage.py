@@ -69,6 +69,7 @@ def prepare_storage(documents, private, *, exclude_backup, move):
     # in Files. No migration of files already in the shared root is needed.
     local = _unlinked(documents / 'Local')
     local.mkdir(exist_ok=True)
+    _unlinked(documents / 'Inbox').mkdir(exist_ok=True)
     use_shared_local(private, documents)
     return private
 

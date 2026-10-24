@@ -14,6 +14,7 @@ class PrivacyBuildTests(unittest.TestCase):
         project = root / 'Logistics Mobile.xcodeproj'
         project.mkdir()
         (project / 'project.pbxproj').write_bytes(plistlib.dumps({'objects': {
+            'app': {'productType': 'com.apple.product-type.application', 'buildPhases': ['resources']},
             'group': {'isa': 'PBXGroup', 'path': 'LogisticsMobile', 'children': []},
             'resources': {'isa': 'PBXResourcesBuildPhase', 'files': []}}}))
         framework = root / 'Support/Python.xcframework'

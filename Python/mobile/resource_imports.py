@@ -15,6 +15,9 @@ class ResourceImports:
         if collection_root is not None and Path(collection_root).is_symlink():
             raise ValueError('Import storage cannot be linked.')
         self.collection_root = Path(collection_root).resolve() if collection_root is not None else None
+        from features.rclone.mobile.storage_location import shared_documents_path
+        shared_root = shared_documents_path(Path(root))
+        self.shared_root = shared_root.resolve() if shared_root is not None else None
         self.path = self.root / 'resource-imports.json'
         self.items, self.error = {}, ''
         if self.path.exists():
@@ -45,6 +48,9 @@ class ResourceImports:
             # Preserve the pre-migration LocalFiles identity when iOS exposes
             # Local in Documents, or Android moves the collection to an SD card.
             identity = 'LocalFiles/' + relative.as_posix()
+        elif self.shared_root is not None and resolved.is_relative_to(self.shared_root):
+            relative = resolved.relative_to(self.shared_root)
+            identity = 'SharedFiles/' + relative.as_posix()
         else:
             raise ValueError('Choose a file in Local or private Downloads.')
         components = [path, *list(path.parents)[:max(0, len(relative.parts) - 1)]]

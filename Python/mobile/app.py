@@ -334,6 +334,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             self.workspace.active = None
         self.save_workspace()
 
+        from .incoming_files import start_receiving
+        start_receiving(self)
+
         # Explicit local developer launch only; ordinary launches do no capture.
         import os
         if os.environ.get('LOGISTICS_COMIC_LAYOUT_CHECK') == '1' and type(self.main_window._impl).__module__.startswith('toga_iOS.'):

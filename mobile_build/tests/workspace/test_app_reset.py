@@ -10,6 +10,31 @@ from mobile.app import LogisticsMobile
 
 
 class AppResetTests(unittest.TestCase):
+    def test_ios_reset_erases_only_this_groups_incoming_directory(self):
+        from types import SimpleNamespace
+        import sys
+        from mobile.app_reset import finish_ios_reset
+        group = self.root / 'AppGroup'
+        incoming = group / 'Incoming'
+        incoming.mkdir(parents=True)
+        (incoming / 'pending').write_bytes(b'synthetic import')
+        (group / 'other').write_bytes(b'preserve unrelated group files')
+        manager = Mock()
+        manager.containerURLForSecurityApplicationGroupIdentifier.return_value = SimpleNamespace(path=str(group))
+        defaults = Mock()
+        classes = {'NSFileManager':SimpleNamespace(defaultManager=manager),
+                   'NSBundle':SimpleNamespace(mainBundle=SimpleNamespace(bundleIdentifier='test.app')),
+                   'NSUserDefaults':SimpleNamespace(standardUserDefaults=defaults)}
+        objc = SimpleNamespace(ObjCClass=lambda name: classes[name])
+        app = SimpleNamespace(paths=SimpleNamespace(data=self.public,
+            config=self.root / 'Library/Application Support/Config', cache=self.root / 'Library/Caches'))
+        schedule_reset(self.private)
+        with patch.dict(sys.modules, {'rubicon.objc':objc}), patch('mobile.app_reset.erase_ios_keys'):
+            self.assertTrue(finish_ios_reset(app, self.private))
+        self.assertEqual(list(incoming.iterdir()), [])
+        self.assertTrue((group / 'other').exists())
+        manager.containerURLForSecurityApplicationGroupIdentifier.assert_called_once_with('group.io.github.ispaure.logisticsmobile')
+
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

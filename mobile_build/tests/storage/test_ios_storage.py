@@ -61,7 +61,7 @@ class IOSStorageTests(unittest.TestCase):
         self.assertEqual((self.private / 'Credentials/credentials.bin').read_bytes(), b'wrapped credentials')
         self.assertEqual((self.private / 'LocalCrypt/ciphertext').read_bytes(), b'encrypted offline copy')
         self.assertEqual(DocumentStore(self.private / 'Documents').open(document.id).text, '# saved')
-        self.assertEqual({p.name for p in self.documents.iterdir()}, {'Local'})
+        self.assertEqual({p.name for p in self.documents.iterdir()}, {'Local', 'Inbox'})
         self.assertFalse((self.private / 'LocalFiles').exists())
         self.exclude.assert_called_once_with(self.documents)
         # Imported files are local, while pull still resolves the original mapping.

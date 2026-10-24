@@ -123,6 +123,15 @@ class DeviceDeploymentTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             signing_settings({'objects': {}}, 'ABCDEFGHIJ')
 
+    def test_share_extension_uses_same_pinned_team_without_changing_identity(self):
+        data = self.project()
+        for name in ('debug', 'release'):
+            data['objects']['inbox-' + name] = {'isa':'XCBuildConfiguration',
+                'buildSettings':{'PRODUCT_BUNDLE_IDENTIFIER':BUNDLE + '.inbox'}}
+        signing_settings(data, 'ABCDEFGHIJ')
+        for name in ('debug', 'release'):
+            self.assertEqual(data['objects']['inbox-' + name]['buildSettings']['DEVELOPMENT_TEAM'], 'ABCDEFGHIJ')
+
     def test_normal_launcher_preserves_identity_version_and_permissions(self):
         info = {'CFBundleIdentifier': BUNDLE, 'MainModule': 'tests.logisticsmobile',
                 'CFBundleVersion': '0.1.5', 'NSLocalNetworkUsageDescription': 'LM server'}

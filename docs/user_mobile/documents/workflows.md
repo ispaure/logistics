@@ -1,5 +1,27 @@
 # Document workflows
 
+## Receive files from another app
+
+On iPhone or iPad, choose **Share → Logisticks**, wait for the receiving result,
+then tap **Done**. Open Logisticks and browse **Workspaces → Local → Inbox**.
+In the Files app the folder is **On My iPhone/iPad → Logisticks → Inbox**,
+beside **Local**. The share extension saves the attachments while the main app
+is closed; the main app moves complete handoffs into Inbox when opened.
+
+On Android, share one or more files to **Logisticks**, wait for the result, then
+tap **Open Logisticks**. Find them under **Workspaces → Local → Inbox** or choose
+**Inbox** in the file browser. Android Inbox stays in app storage even if the
+optional Local collection is on an SD card.
+
+Files are copied; the originals stay in the sending app. Existing Inbox files
+are preserved and duplicate names receive a numbered suffix. Unsupported or
+unreadable attachments show a failure result; share those files again. Cancel
+stops remaining work and retains files already received. This first receiving
+flow lands in ordinary, unencrypted Inbox storage; use the app's file actions to
+organize files afterward. It does not choose an encrypted destination inside
+the share sheet. Developer iOS builds require the app and extension's matching
+App Group provisioning; see [mobile preparation](../../development/mobile-preparation.md#incoming-files-and-inbox).
+
 ## Document workflow
 
 The app opens on **Home**, a landing page with Open/New actions and five recent

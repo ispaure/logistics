@@ -50,7 +50,9 @@ def configure_app_manifest(project):
         data = plistlib.loads(subprocess.check_output(['plutil', '-convert', 'xml1', '-o', '-', str(path)]))
     objects = data['objects']
     groups = [item for item in objects.values() if item.get('isa') == 'PBXGroup' and item.get('path') == 'LogisticsMobile']
-    resources = [item for item in objects.values() if item.get('isa') == 'PBXResourcesBuildPhase']
+    applications = [item for item in objects.values() if item.get('productType') == 'com.apple.product-type.application']
+    resources = [objects[key] for app in applications for key in app['buildPhases']
+                 if objects[key].get('isa') == 'PBXResourcesBuildPhase']
     if len(groups) != 1 or len(resources) != 1:
         raise ValueError('Expected the app resource phase and source group.')
     reference, build = 'A01900000000000000000001', 'A01900000000000000000002'

@@ -195,6 +195,13 @@ class SceneManager:
                 manager.scenes[identifier] = host
                 host.native_scene = scene
                 self.window.makeKeyAndVisible()
+                for context in options.URLContexts.allObjects():
+                    ObjCClass('LogisticsIncomingFiles').receiveURL(context.URL)
+
+            @objc_method
+            def scene_openURLContexts_(self, scene, contexts) -> None:
+                for context in contexts.allObjects():
+                    ObjCClass('LogisticsIncomingFiles').receiveURL(context.URL)
 
             @objc_method
             def stateRestorationActivityForScene_(self, scene):

@@ -1041,6 +1041,54 @@ failed switches can retain already verified destination trees for retry. The app
 exits after success so retained providers cannot continue using an old location.
 Root-level marker and private state must be preserved when manually moving cards.
 
+### Incoming files and Inbox
+
+`mobile/incoming_files.py` consumes complete native handoffs into ordinary Inbox
+storage. iOS uses `Documents/Inbox`, beside the file-sharing `Local` directory;
+Android uses the private data root's `Inbox`, independently of optional SD-card
+collection selection. Both are exposed in Workspaces and the existing local
+file browser. Inbox documents reuse normal resource-opening and private-copy
+identity tracking, including iOS's shared Documents root.
+
+Android's tracked `ReceiveActivity.java` accepts `ACTION_SEND` and
+`ACTION_SEND_MULTIPLE` content-URI streams, including ClipData fallback. It owns
+the temporary grants until copying finishes. iOS's native `IncomingFiles.m`
+handles file URLs from cold/warm UIKit scene activation; `ShareViewController.m`
+receives file representations inside their item-provider callbacks. Extension
+intake uses an App Group; the main app consumes it when opened. Extensions do
+not force-launch the app. Some document interaction menus present the extension
+through the same share sheet.
+
+`mobile_build/build_support/incoming_build.py` configures both generated native
+projects. iOS adds and embeds the `io.github.ispaure.logisticsmobile.inbox`
+extension and gives both targets the App Group
+`group.io.github.ispaure.logisticsmobile`. Enable that capability for both Apple
+app identifiers and refresh their provisioning profiles under the existing
+team. The main bundle identity remains unchanged. Automatic signing configures
+both targets; manual TestFlight archives require `--profile` and
+`--inbox-profile`, each authorizing the same App Group. Extension build numbers
+follow the containing archive. No provisioning material belongs in Git.
+
+Native receivers stream at bounded memory into private `.partial` directories,
+then atomically publish `.ready` directories with a filename record and payload.
+Intake is excluded from backup (Android no-backup storage; iOS resource values)
+and iOS applies file protection. Limit: 100 attachments, 1 GiB per file and a
+4 GiB queued-data ceiling; Android additionally caps each batch at 2 GiB.
+Interrupted partial handoffs expire after 24 hours when the consumer runs.
+Ready handoffs remain available for retry after publication failures. The Python
+consumer validates names, records and regular files, stages on the destination
+volume, verifies SHA-256, publishes with exclusive rename, flushes the directory,
+and only then removes the handoff. A private receipt makes interrupted cleanup
+retryable without a duplicate copy. Reset also erases the shared iOS intake.
+
+Focused tests cover publication conflicts, interruption, linked/traversal input,
+size limits, resource identities and repeated native project configuration.
+Reusable native sender fixtures live in `mobile_build/native_tests/android/incoming/`
+and `mobile_build/native_tests/ios/IncomingSender.m`; iOS menu tests use
+`IncomingFilesUITests.swift`. Keep generated projects, screenshots and test
+reports outside the wiki. Physical iPhone/iPad acceptance still requires properly
+provisioned App Group handoff; simulator results do not satisfy that gate.
+
 ### iOS shared Local storage
 
 `mobile/ios_storage.py` prepares production iOS storage before any

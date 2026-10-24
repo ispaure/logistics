@@ -71,8 +71,8 @@ credentials and settings. External services need their own accounts/software.
 
 The Android/iOS development app supports file browsing, text and Markdown editing,
 EPUB/comic/PDF reading, LM chat, and local or encrypted remote-folder workflows.
-It includes reviewed transfers, metadata editing, search, and adaptive document
-panes. See [mobile usage](docs/user_mobile/user_mobile.md) for supported workflows,
+It includes reviewed transfers, metadata editing, search, adaptive document
+panes, and an Inbox for files shared from other apps. See [mobile usage](docs/user_mobile/user_mobile.md) for supported workflows,
 storage choices, format limits and validation status.
 
 For local builds, paired-device installation, Firebase and TestFlight distribution,

@@ -73,7 +73,9 @@ def signing_settings(data, team):
     targets = [o['buildSettings'] for o in data['objects'].values()
                if o.get('isa') == 'XCBuildConfiguration'
                and 'PRODUCT_BUNDLE_IDENTIFIER' in o.get('buildSettings', {})]
-    if len(targets) != 2 or any(s['PRODUCT_BUNDLE_IDENTIFIER'] != BUNDLE for s in targets):
+    from collections import Counter
+    identities = Counter(s['PRODUCT_BUNDLE_IDENTIFIER'] for s in targets)
+    if identities not in (Counter({BUNDLE: 2}), Counter({BUNDLE: 2, BUNDLE + '.inbox': 2})):
         raise RuntimeError('Unexpected app identity/configurations; refusing to change them.')
     for settings in targets:
         existing = settings.get('DEVELOPMENT_TEAM')
@@ -101,11 +103,18 @@ def configured_ios_info():
 
 def prepare_project(team):
     data = json.loads(subprocess.check_output(['plutil', '-convert', 'json', '-o', '-', str(PBX)]))
-    PBX.write_bytes(plistlib.dumps(signing_settings(data, team), sort_keys=False))
+    signing_settings(data, team)
     info = plistlib.loads(INFO.read_bytes())
     # Briefcase update refreshes Python sources but leaves the generated plist's
     # original extra keys in place. Reapply the canonical platform settings.
-    info.update(configured_ios_info())
+    configured = configured_ios_info()
+    info.update(configured)
+    for obj in data['objects'].values():
+        settings = obj.get('buildSettings', {})
+        if settings.get('PRODUCT_BUNDLE_IDENTIFIER') == BUNDLE + '.inbox':
+            settings.update(CURRENT_PROJECT_VERSION=configured['CFBundleVersion'],
+                            MARKETING_VERSION=configured['CFBundleShortVersionString'])
+    PBX.write_bytes(plistlib.dumps(data, sort_keys=False))
     INFO.write_bytes(plistlib.dumps(normal_launcher(info)))
 
 
