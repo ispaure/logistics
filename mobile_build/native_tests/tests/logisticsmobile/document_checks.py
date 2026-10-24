@@ -77,6 +77,10 @@ async def exercise_documents(app, passed):
     app.new_document()
     b, b_session = app.current.id, app.editor_view.session.id
     app.name.value = 'Other.md'
+    # This case edits the native source control, not the formatted DOM. Keep
+    # that surface active so an inactive close cannot replace its draft with
+    # the WebView's earlier contents. Formatted-input flushing is tested below.
+    app.editor_view.edit_mode.value = 'Source'
     app.editor.value = 'B draft\n'
     assert app.editor is not a_editor
     app.show_locations()
