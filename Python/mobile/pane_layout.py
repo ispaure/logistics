@@ -10,7 +10,7 @@ class PaneLayout:
     trailing: float
 
 
-def panes(width, height, *, fold=None, browser_priority=False, gutter=16):
+def panes(width, height, *, fold=None, browser_priority=False, leading_fraction=None, gutter=16):
     """Allocate local points, including the whole fold's interaction margins."""
     width, height = max(1, width), max(1, height)
     if fold is not None:
@@ -24,4 +24,6 @@ def panes(width, height, *, fold=None, browser_priority=False, gutter=16):
     # Keep workspace labels usable, without taking half of a broad file browser.
     preferred = max(180, min(320, usable / 3)) if browser_priority else usable / 2
     leading = min(preferred, max(1, usable - 320)) if browser_priority else preferred
+    if leading_fraction is not None:
+        leading = usable * leading_fraction
     return PaneLayout('row', leading, gap, usable - leading)

@@ -236,7 +236,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(app.file_provider.root, documents / 'Local')
         self.assertEqual(app.file_browser.location_bar.folder_name.text, 'Local')
         self.assertEqual(app.file_source_buttons, {})
-        self.assertEqual(app.file_browser.location_bar.parent_button.control_icon, 'up')
+        self.assertEqual(app.file_browser.location_bar.parent_button.control_icon, 'back')
         app.loop.run_until_complete(app.browser_file_folder(next(iter(app.file_rows.values()))))
         self.assertEqual(app.file_path, 'Managed')
         app.loop.run_until_complete(app.parent_file_folder())

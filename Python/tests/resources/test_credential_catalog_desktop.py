@@ -39,6 +39,13 @@ class DesktopCredentialCatalogTests(unittest.TestCase):
         self.assertFalse(self.context.exists())
         service.credentials.lock(self.context)
         self.assertTrue(record.exists())
+        from features.rclone.ui_contributions import _get_remote_sources
+        with patch('models.folder_discovery.get_local_folders', return_value=[]), \
+                patch('features.rclone.localcrypt.mapping.connections', return_value=[]), \
+                patch('features.rclone.localcrypt.connections.connections', return_value=[]):
+            sources = _get_remote_sources()
+            self.assertEqual([source.context for source in sources], [self.context])
+            self.assertIn('(locked)', sources[0].name)
         script = '''
 from pathlib import Path
 import sys

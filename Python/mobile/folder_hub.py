@@ -79,8 +79,18 @@ def credential_choices(choices, remotes):
     def accepts(copy):
         source = copy.get('source_identity')
         return copy.get('remote') in remotes and (scope is None or not source or source == scope)
-    return {name: entry for name, entry in choices.items()
-            if any(accepts(copy) for copy in [entry, *entry.get('copies', ())])}
+    result = {}
+    for name, entry in choices.items():
+        if not any(accepts(copy) for copy in [entry, *entry.get('copies', ())]):
+            continue
+        if scope is None:
+            result[name] = entry
+            continue
+        copies = [copy for copy in entry.get('copies', ())
+                  if copy['source'] != 'Remote' or accepts(copy)]
+        primary = next((copy for copy in copies if accepts(copy)), entry)
+        result[name] = {**entry, **primary, 'copies': copies}
+    return result
 
 
 def source_choices(choices, source, network_remotes=()):
@@ -111,7 +121,8 @@ def folder_browse_copy(entry, source):
     if source == 'Local':
         return next((copy for copy in copies if copy['source'] in ('Local', 'LocalCrypt')), entry)
     if source == 'rclone':
-        return next((copy for copy in copies if copy['source'] == 'Remote'), entry)
+        return min((copy for copy in copies if copy['source'] == 'Remote'),
+                   key=lambda copy: copy.get('locked', False), default=entry)
     return entry
 
 
@@ -165,22 +176,23 @@ def _folder_copy_descriptors(snapshot, remotes, crypt):
             title = (name if not jobs[value]['prefix'] else jobs[value]['target']) if kind == 'job' else name
             remote = jobs[value]['remote'] if kind == 'job' else name if kind in ('crypt', 'remote') else None
             identity = jobs[value].get('identity') if kind == 'job' else None
-            remote_owners = [item for item in accounts.get(remote, {}).values()
-                             if not snapshot.source_packages or item[0] in loaded_sources]
+            remote_owners = list(accounts.get(remote, {}).values())
             owners = (remote_owners if kind == 'remote' else
                       [by_identity[identity]] if identity in by_identity else
                       list(accounts.get(remote, {}).values()) if remote else [])
             if not owners:
                 owners = [(('connection', identity) if identity else (), identity, '')]
             for account, connection, label in owners:
+                loaded = account in loaded_sources or not snapshot.source_packages and remote in snapshot.remote_names
                 payload = dict(source=source, kind=kind, value=(value, '') if kind == 'remote' else value,
                                name=title, remote=remote, source_identity=account,
                                connection_identity=connection, source_label=label,
                                catalog_category=catalog_category('rclone', label) if remote and label else None if remote else 'Local')
+                payload['locked'] = source == 'Remote' and bool(account) and not loaded
                 copy_id = (kind, str(value), account)
                 descriptors.append(FolderCopy(copy_id, title, account, source,
-                                               available=source != 'Remote' or account in loaded_sources or not account and remote in snapshot.remote_names,
-                                               locked=source == 'Remote' and bool(account) and account not in loaded_sources,
+                                               available=source != 'Remote' or loaded,
+                                               locked=payload['locked'],
                                                payload=payload))
     return descriptors
 
@@ -188,9 +200,10 @@ def _folder_copy_descriptors(snapshot, remotes, crypt):
 def discover_folder_choices(snapshot):
     """Read local directories and group known locations without mutating the snapshot."""
     jobs = snapshot.jobs
-    # Only loaded credentials declare Cloud remotes. Retained ZIP metadata still
-    # identifies local copies, but never manufactures online destinations.
-    remotes = sorted(set(snapshot.remote_names), key=str.casefold)
+    # Retained ZIP metadata declares known destinations without loading secrets.
+    # Transfer mappings and local folder names alone do not declare remotes.
+    remotes = sorted(set(snapshot.remote_names) | {remote for package in snapshot.retained_packages
+                                                  for remote in package['remotes']}, key=str.casefold)
     crypt = dict(snapshot.crypt_locations)
     roots = snapshot.crypt_roots
     if roots:
@@ -210,12 +223,12 @@ def discover_folder_choices(snapshot):
     groups = project_catalog(descriptors, grouping='name')
     for group in groups:
         copies = [dict(copy.payload) for copy in group.copies]
-        primary = min(copies, key=lambda copy: (copy['kind'] != 'job', copy['source'] == 'Remote'))
+        primary = min(copies, key=lambda copy: (copy['kind'] != 'job', copy['source'] == 'Remote', copy.get('locked', False)))
         entry = dict(primary, copies=copies, catalog_identity=group.identity,
                      available=group.available, locked=group.locked)
         if primary['kind'] == 'job':
             job = jobs[primary['value']]
-            entry['copies'] = [copy for copy in copies if copy['source'] != 'Remote']
+            entry['copies'] = [copy for copy in copies if copy['source'] != 'Remote' or copy.get('locked')]
             loaded = [record for record in snapshot.source_packages
                       if job['remote'] in record['remotes'] and (not job.get('identity')
                           or record.get('identities', {}).get(job['remote']) == job['identity'])]
@@ -259,7 +272,7 @@ def folder_row_presentation(title, entry, source, loaded_remotes, crypt_remotes)
     encrypted = ('LocalCrypt' in storage or ('Remote' in storage and (
         remote in crypt_remotes
         or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ())))))
-    state = ('unlocked' if remote in loaded_remotes else 'locked') if encrypted else None
+    state = ('locked' if target.get('locked') else 'unlocked' if remote in loaded_remotes else 'locked') if encrypted else None
     icon = 'folder_' + state if state else 'folder'
     description = storage + (', ' + state if state else '')
     return FolderRowPresentation(title, icon, description, state)

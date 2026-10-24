@@ -49,10 +49,10 @@ does not run Obsidian plugins.
 ## File browser locations and actions
 
 **Local File Browser** opens directly on the current folder, without a source
-button above it. The folder header has Back/Parent, Search and an upper-right
+button above it. The folder header has Back (‹), Search and an upper-right
 actions menu (circled ellipsis on iOS, vertical dots on Android). On iOS it opens
 Logistics’ shared Files directory, showing files and folders saved there alongside
-**Local**. Open Local to browse the managed folder; Parent folder
+**Local**. Open Local to browse the managed folder; Back
 returns to the shared directory. This is the existing
 `Local` folder in Apple’s Files app; no files are moved or duplicated. Its root
 cannot be renamed, moved or deleted from the outer browser; open it to manage its
@@ -87,8 +87,8 @@ the listing or locking the browser dismisses old row commands.
 The three dots beside a folder in the main Workspaces list also open an anchored
 menu, with Browse, Pull, Push and Delete commands as applicable. Transfer review
 and deletion confirmation still open after choosing a command.
-The listing starts directly below this header. iOS adds
-an input row only while search is open, keeping the folder actions in the top bar.
+The listing starts directly below this header. Opening Search adds an input row
+beneath the folder name and storage/status line. Folder actions remain in the top bar.
 Local file search includes files and folders in every subfolder beneath the
 current location. Typing pauses briefly before searching; clearing search restores
 the current folder's immediate children.
@@ -104,12 +104,14 @@ Server search filters the currently listed folder. Closing search restores the
 current folder listing.
 The top bar has no Sort control. The
 rows show filenames rather than full paths, shortening long names in the middle.
-File sizes remain available in **Details** instead of beside every filename. The
-**↑ Parent folder** control beside the folder status goes up one level in local
-and remote browsing on iOS and Android. At the current storage root it becomes
-**Back to Workspaces**.
+File sizes remain available in **Details** instead of beside every filename.
+On Android, the **‹ Back** control follows the same history as system Back:
+clear a search query, close the search field, then return to the previous folder
+or opening screen. When a folder was opened directly without a previous visit,
+Back falls back to its parent. On wide iOS Workspaces, Back sits above the detail
+pane and folder transitions leave the workspace list in place.
 
-Browser Back, Parent, Search and paging controls use borderless accent-colored
+Browser Back, Search and paging controls use borderless accent-colored
 icons in normal appearance. Android High contrast / E Ink keeps their black
 outlines and monochrome icons.
 

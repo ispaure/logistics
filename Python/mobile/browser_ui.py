@@ -105,7 +105,7 @@ class BrowserStatusLabel(toga.Label):
 
 
 class FolderLocationHeader(toga.Box):
-    """Current storage identity and a parent/root navigation control."""
+    """Current storage identity and a Back control."""
     def __init__(self, status, parent_button, *, actions=()):
         self.parent_button = parent_button
         self.folder_name = BrowserStatusLabel('Root', style=Pack(font_size=18, font_weight='normal'))
@@ -217,8 +217,7 @@ class FolderLocationHeader(toga.Box):
 
     def update(self, path, *, remote=False, encrypted=False, unlocked=False, name=None, session_only=False):
         self.folder_name.value = name if name is not None else PurePosixPath(path).name if path else 'Root'
-        apply_icon(self.parent_button, 'up' if path else 'back',
-                   'Parent folder' if path else 'Back to Workspaces')
+        apply_icon(self.parent_button, 'back', 'Back')
         browser_command(self.parent_button)
         kinds = [('storage_remote', 'Online folder')] if remote else [('storage_local', 'On-device folder')]
         if encrypted:
@@ -413,7 +412,15 @@ class FileBrowser(RecycledBrowser):
                 action.parent.remove(action)
         self.location_bar = self.location_header(status, parent_button,
             actions=(self.search_button,))
-        # The explicit parent control replaces the generic browser history row.
+        # The visible control follows the same state history as Android Back.
+        fallback = parent_button.on_press
+        def back(widget=None, **kwargs):
+            routes = getattr(parent_button.app or toga.App.app, 'routes', None)
+            if routes is not None and not routes.apple:
+                return routes.system_back()
+            return fallback(widget, **kwargs)
+        parent_button.on_press = back
+        # The explicit Back control replaces the generic browser history row.
         if self.navigation_controls in self.widget.children:
             self.widget.remove(self.navigation_controls)
         return self.location_bar
@@ -445,7 +452,9 @@ class FileBrowser(RecycledBrowser):
     def open_search(self, widget=None, **kwargs):
         if not self.search_open:
             header = getattr(self, 'location_bar', None)
-            if header is None:
+            if header is None or getattr(header, 'native_actions', None) is None:
+                # Inline folder titles/status remain above the expanding search.
+                # The browser body is mounted immediately beneath that header.
                 self.widget.insert(0, self.search_panel)
             else:
                 toolbar = getattr(header, 'native_actions', header)
@@ -456,10 +465,7 @@ class FileBrowser(RecycledBrowser):
                 self._search_toolbar_children = list(toolbar.children)
                 for child in self._search_toolbar_children:
                     toolbar.remove(child)
-                # UIKit keeps the folder title in its navigation bar. Inline
-                # headers keep Up, replacing the caption with the search field.
-                if toolbar is header:
-                    toolbar.add(header.parent_button)
+                # UIKit keeps the folder title and actions in its native bar.
                 toolbar.add(self.search_panel)
                 for child in self._search_toolbar_children:
                     if child not in (header.parent_button, header.caption, self.search_button) and not (
@@ -471,6 +477,9 @@ class FileBrowser(RecycledBrowser):
         self._start_local_index()
 
     def close_search(self, widget=None, **kwargs):
+        if type(self.search._impl).__module__.startswith('toga_iOS.'):
+            # Release keyboard ownership before detaching the focused field.
+            self.search._impl.native.resignFirstResponder()
         self._index_cancel.set()
         self._index_started = False
         self.search.value = ''

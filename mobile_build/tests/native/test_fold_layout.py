@@ -41,6 +41,10 @@ class FoldLayoutTests(unittest.TestCase):
         self.assertGreater(boox.trailing, boox.leading)
         self.assertGreaterEqual(boox.leading, 180)
         self.assertGreaterEqual(boox.trailing, 320)
+        duo = panes(960, 700, browser_priority=True, leading_fraction=.4)
+        self.assertAlmostEqual(duo.leading / (duo.leading + duo.trailing), .4)
+        self.assertEqual(panes(960, 700, fold=Division(440, 0, 60, 700),
+                               leading_fraction=.4), book)
 
     def test_unequal_pages_meet_at_seam_without_distortion(self):
         sizes = [(500, 1000), (800, 1000)]

@@ -158,15 +158,16 @@ def hierarchy_row_style(row, selected=False):
     return row
 
 
-def reserve_navigation(app):
+def reserve_navigation(app, *, view=None):
     """Reserve only the measured floating-bar overlap, for the active screen."""
     adapter = app.native_host.adapter
     if adapter is None or not hasattr(adapter, 'navigation'):
         return
-    body = app.routes.body()
-    if not body.children:
-        return
-    view = body.children[0]
+    if view is None:
+        body = app.routes.body()
+        if not body.children:
+            return
+        view = body.children[0]
     # Chat owns composer clearance; fullscreen comics hide their navigation.
     # Readers with controls still need room above a floating destination bar.
     if (view is getattr(app, 'chat_view', None) or getattr(view, '_comic_fullscreen', False)

@@ -173,6 +173,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             home.setNavigationBarHidden(hidden, animated=False)
 
     def uninstall(self):
+        columns = getattr(self, 'file_columns', None)
+        if columns is not None:
+            columns.close()
+            self.file_columns = None
         for frame in list(self.frames):
             frame.restore()
         self.last_layout = None
@@ -187,7 +191,9 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         adapter = self.app.native_host.adapter
         if adapter is not None and hasattr(adapter, 'navigation'):
             index = self.app.native_host.destinations.index(destination)
-            native = adapter.navigation[index].view
+            columns = getattr(self, 'file_columns', None)
+            native = (columns.controller.view if destination == 'files' and columns is not None
+                      else adapter.navigation[index].view)
             bounds, insets = native.bounds.size, native.safeAreaInsets
             if bounds.width > 0:
                 available = float(bounds.width - insets.left - insets.right)
@@ -353,27 +359,31 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             body = self.app.routes.body(destination)
             view = body.children[0] if body.children else None
             frame = getattr(view, '_workspace_frame', None)
-            from .fold_layout import division
+            from .fold_layout import division, has_fold
             fold = division(self.app, frame.row) if frame is not None else None
+            foldable = has_fold(self.app, frame.row) if frame is not None else False
             self.wide = self.wide or fold is not None
             if frame is not None and frame.destination == 'files':
                 minimum = 516 if self.app.preferences.values.get('android_eink') == 'true' else 640
                 self.wide = self.content_width('files', margin=0) >= minimum or fold is not None
+            from .ios_workspace_columns import sync
+            sync(self)
             # Only stacked panes allocate explicit heights. Keyboard/search
             # height changes must not unmount a side-by-side browser: UIKit
             # resigns its search field's first responder when it is detached.
             split_height = frame.row.layout.content_height if fold is not None and not fold.vertical else None
             layout = (id(frame), self.wide, self.layout_width, self.pinned,
                       tuple(self.menu_open.items()), frame.row.layout.content_width if frame else 0,
-                      fold, split_height,
+                      fold, foldable, split_height, self.content_width(frame.destination) if frame else 0,
                       self.app.preferences.values.get('android_eink'))
             if layout != self.last_layout:
-                transition = frame.begin_transition() if frame is not None else None
-                for item in list(self.frames):
-                    item.restore()
-                if frame is not None:
-                    frame.render()
-                    frame.finish_transition(transition)
+                if frame is None or not frame.reflow_split():
+                    transition = frame.begin_transition() if frame is not None else None
+                    for item in list(self.frames):
+                        item.restore()
+                    if frame is not None:
+                        frame.render()
+                        frame.finish_transition(transition)
                 self.last_layout = layout
             android = type(self.app._impl).__module__.startswith('toga_android.')
             if view is not None:
@@ -448,6 +458,9 @@ class WorkspaceFrame:
             self.main._impl.native.userInteractionEnabled = True
         self.main.style.flex = 1
         del self.main.style.width
+        columns = getattr(self.navigation, 'file_columns', None)
+        if columns is not None and columns.master is self:
+            return
         if list(self.row.children) == [self.main]:
             return
         for child in list(self.row.children):
@@ -545,6 +558,15 @@ class WorkspaceFrame:
                     self.header.add(self.pair)
             elif not self.pair.enabled and self.pair in self.header.children:
                 self.header.remove(self.pair)
+        columns = getattr(navigation, 'file_columns', None)
+        if columns is not None and destination == 'files':
+            if getattr(self, 'folder_root', False):
+                if not hasattr(self, 'folder_placeholder'):
+                    self.folder_placeholder = toga.Box(children=[toga.Label('Choose a workspace',
+                        style=Pack(margin=16))], style=Pack(direction=COLUMN, flex=1))
+                if self.folder_placeholder not in self.row.children:
+                    self.row.add(self.folder_placeholder)
+            return
         left = self._leading_pane(opened)
         if left is None:
             return
@@ -597,6 +619,72 @@ class WorkspaceFrame:
             self.row._impl.native.clipsToBounds = True
             self.main._impl.native.userInteractionEnabled = False
 
+    def reflow_split(self):
+        """Resize an existing pair without detaching focused/scrolling controls."""
+        if not self.navigation.wide or (self.destination == 'files' and
+                getattr(self.navigation, 'file_columns', None) is not None):
+            return False
+        left = self._leading_pane(self.navigation.menu_open[self.destination])
+        if left is None:
+            return False
+        right = self.folder_placeholder if left is self.main else self.main
+        if list(self.row.children) != [left, right]:
+            return False
+        before = self.split_frames()
+        self._render_split(left, self.navigation.menu_open[self.destination])
+        self.animate_split(before)
+        return True
+
+    def split_frames(self):
+        """Toga flattens Box descendants into the native container's siblings."""
+        if not type(self.row._impl).__module__.startswith('toga_iOS.'):
+            return ()
+        from ctypes import CDLL, c_bool
+        reduced = CDLL(None).UIAccessibilityIsReduceMotionEnabled
+        reduced.restype = c_bool
+        if reduced():
+            return ()
+
+        def frames(widget):
+            native = widget._impl.native
+            layer = native.layer.presentationLayer()
+            rect = layer.frame if layer is not None else native.frame
+            yield native, (float(rect.origin.x), float(rect.origin.y),
+                           float(rect.size.width), float(rect.size.height))
+            for child in widget.children:
+                yield from frames(child)
+        return tuple(frames(self.row))
+
+    def animate_split(self, before):
+        if not before:
+            return
+        from rubicon.objc import ObjCClass, Block, CGRect
+        # Pack updates Auto Layout constraints; flush them before reading target
+        # frames, otherwise the animation sees the unchanged, pre-layout views.
+        self.row._impl.container.native.layoutIfNeeded()
+        # Interpolate the actual native
+        # controls, including flattened descendants, rather than a Box snapshot.
+        changes = []
+        for native, previous in before:
+            rect = native.frame
+            target = (float(rect.origin.x), float(rect.origin.y),
+                      float(rect.size.width), float(rect.size.height))
+            if target != previous:
+                changes.append((native, previous, target))
+        if not changes:
+            return
+        for native, previous, target in changes:
+            native.frame = CGRect(previous[:2], previous[2:])
+
+        def animate():
+            for native, previous, target in changes:
+                native.frame = CGRect(target[:2], target[2:])
+        self.split_animation = Block(animate, None)
+        # BeginFromCurrentState + AllowUserInteraction: a reversal continues
+        # from the visible geometry and never disables the source tabs.
+        ObjCClass('UIView').animateWithDuration(.28, delay=0, options=(1 << 2) | (1 << 1),
+            animations=self.split_animation, completion=None)
+
     def _render_split(self, left, opened):
         """Apply the fold-aware allocation to the two retained panes."""
         navigation, destination = self.navigation, self.destination
@@ -606,11 +694,13 @@ class WorkspaceFrame:
         from .fold_layout import division, has_fold
         from .pane_layout import panes
         fold = division(navigation.app, self.row)
+        foldable = has_fold(navigation.app, self.row)
         priority = (destination == 'files' or opened) and (
-            has_fold(navigation.app, self.row) or
+            foldable or
             navigation.app.preferences.values.get('android_eink') == 'true')
         allocation = panes(available, self.row.layout.content_height or 1,
-                           fold=fold, browser_priority=priority)
+                           fold=fold, browser_priority=priority,
+                           leading_fraction=.4 if priority and foldable else None)
         right = self.folder_placeholder if left is self.main else self.main
         self.row.style.direction = ROW if allocation.axis == 'row' else COLUMN
         for pane, extent in ((left, allocation.leading), (right, allocation.trailing)):
@@ -624,6 +714,8 @@ class WorkspaceFrame:
         right.style.margin_left = allocation.gap if allocation.axis == 'row' else 0
         right.style.margin_top = allocation.gap if allocation.axis == 'column' else 0
         if left is self.main:
-            self.row.add(right)
+            if right not in self.row.children:
+                self.row.add(right)
             return
-        self.row.insert(0, left)
+        if left not in self.row.children:
+            self.row.insert(0, left)

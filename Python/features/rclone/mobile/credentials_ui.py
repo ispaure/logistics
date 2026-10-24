@@ -296,13 +296,15 @@ class CredentialWorkflow:
         if not hasattr(cloud.cloud_client, 'package_records'):
             name = getattr(cloud.cloud_client, 'package_name', '')
             records = [dict(package_name=name, remotes=loaded)] if name and loaded else []
-        catalog = CredentialCatalog(records)
+        retained = [dict(package_name=item['zip'], remotes=item['remotes'], saved=False)
+                    for item in cloud.retained_credential_associations()
+                    if item['zip'] not in {record['package_name'] for record in records}]
+        catalog = CredentialCatalog([*records, *retained])
         folders = cloud.folder_choices() if choices is None else choices
         available = {copy['remote'] for entry in folders.values()
                      for copy in entry.get('copies', ()) if copy.get('remote')}
         if choices is None:
             available.update(loaded)
-        available.intersection_update(loaded)
         return catalog.groups(available,
                               visible=lambda name: cloud.legacy_name_visible(name, prefix='legacy'))
 
@@ -447,7 +449,8 @@ class CredentialWorkflow:
             cloud.set_cloud_busy(True)
             ready = False
             try:
-                remember = await self.choose_credential_storage(cache.items[selected]['zip'])
+                remember = (await self.choose_credential_storage(cache.items[selected]['zip'])
+                            if destination == 'settings' else False)
                 if remember is None:
                     status.text = 'Unlock cancelled.'
                     return

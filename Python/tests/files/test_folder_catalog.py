@@ -30,7 +30,7 @@ class FolderCatalogTests(unittest.TestCase):
         self.assertNotEqual(scope, CredentialScope({'Drive'}, '/b/keys.zip'))
 
     def test_mobile_cloud_uses_loaded_package_identity_even_when_retained_names_match(self):
-        from mobile.folder_hub import FolderDiscoverySnapshot, discover_folder_choices, credential_choices
+        from mobile.folder_hub import FolderDiscoverySnapshot, discover_folder_choices, credential_choices, folder_browse_copy
         with TemporaryDirectory() as directory:
             first, second = dict(zip='A.zip', remotes=['Drive']), dict(zip='B.zip', remotes=['Drive'])
             snapshot = FolderDiscoverySnapshot(Path(directory), {}, ('Drive',), (first, second), (), {},
@@ -41,5 +41,10 @@ class FolderCatalogTests(unittest.TestCase):
             self.assertEqual(set(choices), {'All files', 'Drive', 'Received Files'})
             self.assertFalse(choices['Drive']['locked'])
             self.assertEqual(choices['Drive']['source_identity'], credential_source('B.zip'))
-            self.assertEqual(credential_choices(choices, CredentialScope({'Drive'}, 'A.zip')), {})
+            self.assertEqual(set(credential_choices(choices, CredentialScope({'Drive'}, 'A.zip'))), {'Drive'})
+            locked = next(copy for copy in choices['Drive']['copies'] if copy['source_label'] == 'A.zip')
+            self.assertTrue(locked['locked'])
+            self.assertEqual(folder_browse_copy(choices['Drive'], 'rclone')['source_label'], 'B.zip')
+            scoped = credential_choices(choices, CredentialScope({'Drive'}, 'A.zip'))
+            self.assertEqual(folder_browse_copy(scoped['Drive'], 'rclone')['source_label'], 'A.zip')
             self.assertEqual(set(credential_choices(choices, CredentialScope({'Drive'}, 'B.zip'))), {'Drive'})

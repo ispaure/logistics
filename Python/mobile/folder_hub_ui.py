@@ -263,6 +263,7 @@ class FolderHubUI:
         source_actions(self.app)
         visible = {name: entry for name, entry in visible.items()
                    if self.folder_path_visible(name) and self.folder_path_visible(entry.get('remote') or '')}
+        self.folder_picker_choices = {**choices, **visible}
         # Native selectors and retained metadata are relatively expensive. Read
         # them once, rather than once for every encrypted folder in the tree.
         crypt_remotes = set(getattr(self.app, 'cloud_crypt_remotes', ()))

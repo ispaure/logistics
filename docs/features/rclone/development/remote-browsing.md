@@ -26,8 +26,9 @@ Standalone File Browser windows retain their existing unlock dialog.
 Desktop Workspaces uses `services.folders.workspaces.workspace_remote_sources`
 to expose declared loaded credential sources. `CopyContext` associations and
 unassociated local folders remain available locally but do not create Cloud
-placeholders. Credential-package discovery uses saved configs and live sessions;
-remembered names alone do not declare online sources.
+placeholders. Credential-package discovery uses saved configs, live sessions and the persisted
+nonsecret session catalog. Catalog entries restore locked Cloud destinations
+with the matching credential ZIP path after a restart.
 A successful unlock refreshes lock icons and actions even if opening the browser
 then fails. Action detection captures the credential generation and discards or
 restarts results if credentials lock or are replaced while its worker runs.
@@ -46,6 +47,13 @@ remote, invalid crypt password setting, folder access, rate limit and network er
 unknown failures report the exit status. Raw provider text, tokens and paths are
 never included in the presented exception. Credential revocation takes precedence
 over command failure when a session is locked during a request.
+
+Mobile Workspaces projects loaded remotes and retained ZIP metadata into Cloud
+rows. Retained package names and connection identities allow password unlock
+before a session is loaded; local folder names and transfer mappings alone do
+not create Cloud destinations. Files and Home unlocks always load for the session
+without a retention chooser. The chooser remains in Settings credential-package
+unlock/import flows. Desktop workspace unlock already loads a session directly.
 
 Mobile listing requests use `mobile.browser_workflow.RemoteBrowserWorkflow` and
 `RemoteBrowserState`. The workflow receives captured connection/location inputs

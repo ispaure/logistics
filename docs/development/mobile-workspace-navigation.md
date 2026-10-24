@@ -151,7 +151,7 @@ Back restores the offset after native return and the final adaptive reflow:
 UIKit can otherwise move a retained table by one row without changing its bounds
 or insets. Queued restores are scoped to the returning folder route, so another
 navigation action keeps its own viewport. iOS omits the browser's separate parent button; Android
-keeps its existing parent and system Back policy. Embedded document drawers keep
+uses the same Back policy for its header chevron and system Back. Embedded document drawers keep
 their existing navigation policy. Home's full-page picker uses a scoped folder
 stack above its opening screen, with an explicit Cancel to trim that scope.
 Nested picker invocations keep separate browser owners, so cancelling the newer
@@ -199,6 +199,23 @@ refreshes retained menus; the picker also rejects compact invocation.
 multi-level pop callbacks, guarded Back, retained reader return, Home reveal,
 file selection and unsaved provider drafts. These mocked native and dummy-host
 checks do not certify physical iOS gesture rendering.
+
+## Native Workspaces detail containment
+
+`ios_workspace_columns.WorkspaceColumns` hosts the retained Workspaces overview
+beside the existing folder `UINavigationController` at wide allocations. The
+sidebar is outside the navigation controller, so native Back controls and
+interactive folder transitions belong to the detail pane. Returning to compact
+width restores the original tab controller and overview widgets without changing
+folder routes. Reserved fold divisions override the ordinary pane allocation;
+resize animation respects Reduce Motion and keeps the same widget owners.
+Android search adds its input beneath the existing folder title/status header.
+Its header chevron dispatches the same transient-state and folder-history policy
+as system Back. Focused coverage lives in `test_ios_workspace_columns.py`,
+`test_folder_location_header.py` and `test_android_back.py`.
+Synthetic local-folder simulator checks cover native Back, detail-only transition
+bounds, search, iPad rotation and iPhone compact/wide restoration. They do not
+establish physical fold-pose behavior or live provider operation.
 
 ## Home and Documents hub sections
 
@@ -1010,22 +1027,28 @@ compares actual connector endpoints, row centers and group bounds on iOS/Android
 `WorkspaceFrame` retains the Workspaces root's actual `main` container as the
 leading pane on wide folder-options, local/LocalCrypt, remote and workspace-browser
 routes. The root shows a choose-workspace placeholder before opening a folder.
-Frames return borrowed widgets to their owners before reflow, preserving source
+Frames return borrowed widgets to their owners when changing pane membership, preserving source
 control references, scroll position and browser state across Back and rotation.
 No duplicate folder picker is constructed for a detail route. Both existing
 ScrollContainers retain independent scrolling and native route history remains
 authoritative.
 
 Workspaces uses 640 points of allocated content width after rails and safe areas
-to choose two panes. The split normally divides that allocation equally.
-`fold_layout.seam_fraction(include_open=True)` also accepts fully open hinge
-status 3, alongside partial status 2, in landscape; other callers keep their
-existing partial-only policy. The row's converted window coordinate aligns the
-boundary to the physical midpoint, including asymmetric rails/insets. Hinge
-changes participate in the layout key even without a size change. Regression
+to choose two panes. Ordinary wide windows divide that allocation equally;
+flat foldable Workspaces reserve 40% of usable pane width for the source list.
+Active UIKit division regions override the ratio in the row's own coordinates,
+including the reserved interaction margins, for vertical or horizontal folds.
+Inactive regions identify a foldable window without forcing a seam split.
+Fold availability and allocated content width participate in the layout key,
+so late-arriving inactive geometry also updates a flat window's ratio.
+An existing pair resizes in place, retaining focused controls and scroll state.
+The retained-pair iOS path flushes Auto Layout constraints before reading target
+frames, then animates native controls over 0.28 seconds from their current
+presentation positions; Reduce Motion applies the final layout immediately.
+Regression
 coverage in `test_workspace_navigation` checks retained controls, compact/wide
 rotation, Back, content-width thresholds and posture-only reflow;
-`test_fold_layout` checks the full-open coordinate policy.
+`test_fold_layout` checks flat ratios and reserved-region allocation.
 
 The mobile Workspaces places rclone, Local and Network shares source controls
 above its credential row. `folder_hub.source_choices` partitions logical folders

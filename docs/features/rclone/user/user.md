@@ -34,7 +34,7 @@ Logistics does not create account credentials for you. Import accepts ZIPs up to
 1 MiB and never overwrites a different same-named package; rename the incoming ZIP
 if its name is already used. Import does not extract or unlock the ZIP.
 
-Choose **Session-Only** in the Unlock popup to use a package only for this
+In **Settings → rclone → Credential Packages**, choose **Session-Only** in the Unlock popup to use a package only for this
 Logistics session. Pressing Enter in the password field opens the same choice.
 Cancelling the popup does not unlock or save credentials. The ZIP is decrypted
 directly in memory, with no extracted
@@ -46,10 +46,11 @@ with a memory-only config and no secret command arguments. Existing saved config
 remain unchanged: choosing Session-Only does not delete an existing saved config.
 Unlocked credentials disappear when Logistics exits or you lock them. Remote
 names and the ZIP location are remembered in a small account catalogue; passwords,
-tokens and remote settings are not saved. Cloud and Home Server list only remotes
-from loaded credentials. To use a locked
-package again, open it in Settings and unlock it. Local or LocalCrypt folders and
-remembered remote names do not create Cloud placeholders. **Forget Credentials**
+tokens and remote settings are not saved. Cloud and Home Server keep these known
+remotes visible while locked, including remotes with no local copy. Open one and
+enter its ZIP password to unlock it for this session without a storage-choice
+popup. Settings still offers the storage choice. Local folder names alone do not
+create Cloud destinations. **Forget Credentials**
 removes remembered names as well; local contents are kept.
 
 The selected package reports **Locked**, **Session-Only** or **Persistent save**.
@@ -312,19 +313,19 @@ to these application support locations when first discovered. Decrypted Local fi
 stay in `Server/Local`. If both an old and new storage directory exist, Logistics
 preserves both and reports the conflict rather than replacing either copy.
 
-A loaded account can show folders that exist only remotely. After the account is
-unloaded, an existing saved Local or LocalCrypt copy keeps both its Local entry
-and a locked Cloud destination (Home Server for network-share packages). Copies
-of the same remote share one Cloud entry under their credential ZIP. Unlock it in
-Files to discover the package’s other remotes; actions appear after unlocking.
+A loaded account can show folders that exist only remotely. After its credentials
+are locked, the remembered package keeps its known Cloud destinations (Home Server
+for network-share packages). Existing Local and LocalCrypt copies remain in Local.
+Copies of the same remote share one Cloud entry under their credential ZIP. Unlock
+it in Files with the ZIP password; actions appear after unlocking.
 On desktop, the compact unlock form identifies the selected workspace. While
 Files is locked, the Actions pane collapses so the folder list has more room;
 it returns automatically after unlocking or selecting another browsable folder.
 Ordinary Local files remain browsable when only their remote actions need an
 unlock, so those credentials are requested in Actions instead.
-Unassociated rclone Local folders also have a Cloud placeholder under **Credentials
-required**; load the matching package in Settings and refresh. Connection records
-without a folder do not create entries.
+Unassociated rclone Local folders remain in Local; load their matching credential
+package in Settings to add Cloud destinations. Connection records without a folder
+do not create entries.
 
 Choose **Load for Session**, unlock the ZIP containing both the crypt
 remote and its direct backing remote, then use **Pull** and choose **LocalCrypt**. Open its

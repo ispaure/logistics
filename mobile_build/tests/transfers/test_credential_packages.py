@@ -97,8 +97,8 @@ class CredentialPackageTests(unittest.TestCase):
                 with patch.object(client, 'request', side_effect=AssertionError('No bridge I/O for icons')):
                     app.folder_source = 'rclone'
                     app.build_folder_picker()
-                    self.assertNotIn('Secret', app.folder_buttons)
-                    self.assertNotIn('RemoteOnly', app.folder_buttons)
+                    self.assertIn('Secret', app.folder_buttons)
+                    self.assertIn('RemoteOnly', app.folder_buttons)
                     self.assertFalse((root / 'LocalCryptFolders').exists())
 
     def test_crypt_metadata_uses_retained_aliases_without_reclassifying_other_accounts(self):
@@ -111,7 +111,7 @@ class CredentialPackageTests(unittest.TestCase):
                 aliases={'Secret': 'Secret @ Personal', 'Regular': 'Regular @ Personal'})
             self.assertEqual(CredentialPackages(vault, CacheClient()).items[key]['crypt_remotes'], ['Secret'])
 
-    def test_retained_packages_unlock_from_settings_and_do_not_infer_cloud_rows(self):
+    def test_retained_packages_show_locked_cloud_rows_and_unlock_from_settings(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             LogisticsMobile.storage_root = root
@@ -129,15 +129,17 @@ class CredentialPackageTests(unittest.TestCase):
             key = cache.remember(SimpleNamespace(name='Personal.zip', data=PACKAGE),
                                  {'Secret': 'a' * 64, 'RemoteOnly': 'a' * 64}, crypt_remotes=['Secret'])
             with patch.object(app, 'retained_packages', return_value=cache):
-                self.assertEqual(set(app.folder_choices()), {'All files', 'Received Files'})
-                self.assertEqual(app.credential_groups(), {'All': None})
+                self.assertEqual(set(app.folder_choices()), {'All files', 'Received Files', 'Secret', 'RemoteOnly'})
+                self.assertTrue(app.folder_choices()['RemoteOnly']['locked'])
+                self.assertIn('Personal', app.credential_groups())
                 app.show_cloud_connections()
                 app.cloud_retained_buttons[key].on_press()
                 self.assertEqual(app.routes.screens['settings'][-1][0], 'credential-package')
                 app.main_window._impl.dialog_responses['QuestionDialog'] = [False, False]
                 app.credential_unlock_password.value = 'wrong'
                 app.loop.run_until_complete(app.credential_unlock_button.on_press())
-                self.assertEqual(set(app.folder_choices()), {'All files', 'Received Files'})
+                self.assertEqual(set(app.folder_choices()), {'All files', 'Received Files', 'Secret', 'RemoteOnly'})
+                self.assertTrue(app.folder_choices()['RemoteOnly']['locked'])
                 self.assertEqual(app.credential_unlock_password.value, '')
                 app.credential_unlock_password.value = 'correct'
                 app.loop.run_until_complete(app.credential_unlock_button.on_press())
@@ -150,9 +152,9 @@ class CredentialPackageTests(unittest.TestCase):
                 store.target(job).mkdir(parents=True)
                 app.loop.run_until_complete(app.lock_cloud())
                 choices = app.folder_choices()
-                self.assertEqual(set(choices), {'All files', 'Received Files', 'Secret'})
-                self.assertEqual([copy['source'] for copy in choices['Secret']['copies']], ['LocalCrypt'])
-                self.assertEqual(app.credential_groups(), {'All': None})
+                self.assertEqual(set(choices), {'All files', 'Received Files', 'Secret', 'RemoteOnly'})
+                self.assertEqual({copy['source'] for copy in choices['Secret']['copies']}, {'LocalCrypt', 'Remote'})
+                self.assertIn('Personal', app.credential_groups())
                 self.assertTrue(cache.path(key).is_file())
 
     def test_session_import_retains_encrypted_zip_but_never_saves_decoded_credentials(self):
@@ -241,9 +243,11 @@ class CredentialPackageTests(unittest.TestCase):
                 app.cloud_remote.items = []
                 app.cloud_client.loaded = False
                 resumed = Mock()
-                with patch.object(app, 'retained_packages', return_value=cache):
-                    self.assertEqual(app.credential_groups(), {'All': None})
-                    app.main_window._impl.dialog_responses['QuestionDialog'] = [False, False]
+                with patch.object(app, 'retained_packages', return_value=cache), \
+                        patch('features.rclone.mobile.credentials_ui.CredentialWorkflow.choose_credential_storage',
+                              new_callable=AsyncMock) as choose, \
+                        patch.object(app.cloud_client, 'import_package', wraps=app.cloud_client.import_package) as load:
+                    self.assertIn('Personal', app.credential_groups())
                     self.assertFalse(app.require_remote_credentials('Secret', identity='a' * 64, resume=resumed))
                     self.assertEqual(app.routes.screens['files'][-1][0], 'unlock-credential')
                     app.credential_unlock_password.value = 'wrong'
@@ -253,6 +257,8 @@ class CredentialPackageTests(unittest.TestCase):
                     app.credential_unlock_password.value = 'correct'
                     app.loop.run_until_complete(app.credential_unlock_button.on_press())
                     resumed.assert_called_once_with()
+                    choose.assert_not_awaited()
+                    self.assertFalse(load.call_args.kwargs['remember'])
                     self.assertIn('Secret', [row.value for row in app.cloud_remote.items])
             finally:
                 app.main_window.close()

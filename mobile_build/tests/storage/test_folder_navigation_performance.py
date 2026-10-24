@@ -71,13 +71,12 @@ class FolderNavigationTests(unittest.TestCase):
         self.addCleanup(retained.stop)
         app.cloud_remote.items = []
         app.change_folder_source('rclone')
-        self.assertNotIn('Secret', app.folder_buttons)
-        # Retained metadata must not keep an online row alive after locking.
-        # Reloading creates a fresh row after the revoked one was removed.
+        self.assertIn('Secret', app.folder_buttons)
+        self.assertEqual(app.folder_buttons['Secret'].parent.children[0].control_icon, 'folder_locked')
+        # Retained metadata keeps the known connection available for unlock.
         app.cloud_remote.items = ['Secret']
         app.update_folder_list(app.folder_choices())
         restored = app.folder_buttons['Secret']
-        self.assertIsNot(restored, unlocked)
         self.assertEqual(restored.parent.children[0].control_icon, 'folder_unlocked')
         choices = app.folder_picker_choices
         choices['Secret']['name'] = 'Renamed'

@@ -69,9 +69,33 @@ class AndroidBackTests(unittest.TestCase):
                 drawer = app.adaptive.browser(destination)
                 self.assertTrue(drawer.parent_button.enabled)
                 self.assertEqual(drawer.parent_button.control_icon, 'back')
-                app.loop.run_until_complete(drawer.parent_button.on_press())
+                drawer.parent_button.on_press()
+                self.settle()
                 self.assertIs(app.body, origin)
                 self.assertEqual(app.native_host.state.destination, destination)
+
+    def test_folder_toolbar_back_retraces_search_and_previous_location(self):
+        app = self.app
+        root = app.private_root / 'LocalFiles'
+        (root / 'First').mkdir(parents=True)
+        (root / 'Second/Deep').mkdir(parents=True)
+        app.loop.run_until_complete(app.show_files(local_root=True))
+        app.loop.run_until_complete(app.browser_file_location(('Local files', 'First')))
+        app.loop.run_until_complete(app.browser_file_location(('Local files', 'Second/Deep')))
+        browser = app.file_browser
+        button = browser.location_bar.parent_button
+        self.assertEqual(button.control_icon, 'back')
+        browser.open_search()
+        browser.search.value = 'missing'
+        for query, opened in (('', True), ('', False)):
+            button.on_press()
+            self.settle()
+            self.assertEqual(browser.search.value, query)
+            self.assertEqual(browser.search_open, opened)
+            self.assertEqual(app.file_path, 'Second/Deep')
+        button.on_press()
+        self.settle()
+        self.assertEqual(app.file_path, 'First')
 
     def test_each_tab_root_returns_home_then_defers_to_android(self):
         self.app.show_documents_hub()

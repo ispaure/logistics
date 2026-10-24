@@ -42,8 +42,12 @@ def get_loaded_credential_config_paths() -> list[Path]:
     """Return available rclone configs independently of original ZIP packages."""
 
     # Generated configs remain usable after the original ZIP is moved away.
-    from . import session
-    return configuration.get_all_conf_paths() + session.paths()
+    from . import session, desktop_catalog
+    saved = configuration.get_all_conf_paths()
+    active = session.paths()
+    locked = [path for path in desktop_catalog.contexts()
+              if path not in active and path.with_suffix('.conf') not in saved]
+    return saved + active + locked
 
 
 def load_remote_from_zip_to_config(zip_path: str | Path, zip_pw: str, *, remember=True) -> bool:

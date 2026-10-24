@@ -18,8 +18,10 @@ deletion retain their confirmation dialogs.
 The editor-specific **Open / Save As** picker still waits for initial credential
 loading because it includes encrypted destinations.
 
-Workspaces's **Cloud** tab lists remotes supplied by currently loaded credentials,
-including remotes without a local copy. Retained, locked packages remain in
+Workspaces's **Cloud** tab lists remotes supplied by loaded credentials and known
+remotes from retained credential ZIPs, including remotes without a local copy.
+Opening a locked remote asks for its ZIP password and unlocks it for this session
+without asking how to store it. Retained packages also remain in
 **rclone connections → Credential Packages** for unlocking. Local folders remain
 in **Local** after credentials are locked or forgotten; their names and transfer
 mappings do not create Cloud destinations.
@@ -186,7 +188,7 @@ Retained ZIPs stay listed in **Credential Packages** while locked. Open a packag
 enter its password and tap **Unlock**, then choose storage in the popup. Wrong
 passwords keep the page available for retry. LocalCrypt copies can also request
 the matching ZIP password when opened. **Lock session** unloads active contexts
-and hides their Cloud rows while keeping local copies, retained ZIPs and saved
+and keeps known Cloud rows available for password unlock, along with local copies, retained ZIPs and saved
 credentials. Save or discard private edits before locking. Forgetting removes
 the chosen credential material as well as its encrypted open/recent list caches.
 

@@ -530,7 +530,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
                         self.navigation.render()
                     remove.assert_not_called()
             self.assertTrue(browser.search_open)
-            self.assertIs(browser.search_panel.parent, browser._search_toolbar)
+            self.assertIs(browser.search_panel.parent, browser.widget)
             self.assertEqual(list(frame.row.children), [frame.folder_master, frame.main])
         app.loop.run_until_complete(browser.close())
 
@@ -588,6 +588,33 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertEqual(frame.main.style.margin_top, 0)
             self.assertIs(app.file_browser, browser)
         app.loop.run_until_complete(browser.close())
+
+    def test_duo_repeated_folds_restore_forty_percent_without_remounting(self):
+        from mobile.fold_layout import Division
+        app = self.app
+        with patch.object(self.navigation, 'width', return_value=1000):
+            app.show_locations()
+            frame = app.body.children[0]._workspace_frame
+            # Inactive regions can become available after the first layout,
+            # with no change in active fold or window width.
+            with patch('mobile.fold_layout.has_fold', return_value=False):
+                self.navigation.render()
+                self.assertAlmostEqual(frame.main.style.width, frame.folder_placeholder.style.width)
+            with patch('mobile.fold_layout.has_fold', return_value=True), patch.object(
+                    frame.row, 'remove', wraps=frame.row.remove) as remove:
+                view = frame.view()
+                available = self.navigation.content_width('files',
+                    margin=view.style.margin_left + view.style.margin_right)
+                for _ in range(3):
+                    self.navigation.render()
+                    self.assertAlmostEqual(frame.main.style.width, (available - 16) * .4, delta=1)
+                    with patch('mobile.fold_layout.division', return_value=Division(480, 0, 36, 700)):
+                        self.navigation.render()
+                        self.assertEqual(frame.main.style.width, 480)
+                        self.assertEqual(frame.folder_placeholder.style.margin_left, 36)
+                self.navigation.render()
+                self.assertAlmostEqual(frame.main.style.width, (available - 16) * .4, delta=1)
+                remove.assert_not_called()
 
     def test_workspace_uses_allocated_width_after_the_tablet_rail(self):
         app = self.app

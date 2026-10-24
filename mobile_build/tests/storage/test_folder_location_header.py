@@ -39,8 +39,8 @@ class FolderLocationTests(unittest.TestCase):
                              ('Cloud' if online else 'On-device') +
                              ((' · Unlocked' if unlocked else ' · Locked') if encrypted else '') +
                              (' · LocalCrypt' if encrypted and not online else ''))
-            self.assertEqual(button.control_icon, 'up' if path else 'back')
-            self.assertEqual(button.accessible_name, 'Parent folder' if path else 'Back to Workspaces')
+            self.assertEqual(button.control_icon, 'back')
+            self.assertEqual(button.accessible_name, 'Back')
 
     def test_localcrypt_root_uses_folder_name_and_loaded_session_status(self):
         from types import SimpleNamespace
@@ -129,9 +129,9 @@ class FolderLocationTests(unittest.TestCase):
         self.assertNotIn(browser.search_panel, browser.widget.children)
         original = list(header.children)
         browser.search_button.on_press()
-        self.assertIn(browser.search_panel, header.children)
+        self.assertEqual(header.children, original)
+        self.assertIs(browser.search_panel.parent, browser.widget)
         self.assertTrue(browser.search_open)
-        self.assertNotIn(browser.search_panel, browser.widget.children)
         browser.search.value = 'test'
         browser.close_search_button.on_press()
         self.assertEqual(browser.search.value, '')
@@ -164,6 +164,19 @@ class FolderLocationTests(unittest.TestCase):
         self.assertEqual(header.children, [header.caption])
         header.status.value = ''
         self.assertEqual(header.children, [])
+
+    def test_ios_search_releases_keyboard_before_detaching_the_field(self):
+        from unittest.mock import Mock
+        from mobile.browser_ui import FileBrowser
+        browser = FileBrowser()
+        browser.open_search()
+        native = Mock()
+        native.resignFirstResponder.side_effect = lambda: self.assertTrue(browser.search_open)
+        with patch.object(type(browser.search._impl), '__module__', 'toga_iOS.widgets.textinput'), \
+                patch.object(browser.search._impl, 'native', native, create=True):
+            browser.close_search()
+        native.resignFirstResponder.assert_called_once()
+        self.assertFalse(browser.search_open)
 
     def test_standalone_search_retains_fixed_height_row(self):
         from mobile.browser_ui import FileBrowser
@@ -232,10 +245,11 @@ class FolderLocationTests(unittest.TestCase):
         self.assertIs(drawer.breadcrumb, header.folder_name)
         self.assertIs(header.children[-1], browser.search_button)
         self.assertNotIn(browser.navigation_controls, browser.widget.children)
+        original = list(header.children)
         browser.search_button.on_press()
-        self.assertIn(browser.search_panel, header.children)
+        self.assertEqual(header.children, original)
+        self.assertIs(browser.search_panel.parent, browser.widget)
         self.assertTrue(browser.search_open)
-        self.assertNotIn(browser.search_panel, browser.widget.children)
         browser.close_search_button.on_press()
         self.assertNotIn(browser.search_panel, browser.widget.children)
 

@@ -57,6 +57,7 @@
     "ios_reader_chrome.py",
     "ios_storage.py",
     "ios_toolbar.py",
+    "ios_workspace_columns.py",
     "keyboard.py",
     "layout_events.py",
     "library.py",
