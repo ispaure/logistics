@@ -110,7 +110,7 @@ def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet='')
     table_glyphs = {'insert': 'table', 'row': 'row_add', 'column': 'column_add',
                     'delete-row': 'row_delete', 'delete-column': 'column_delete'}
     table_menu = ''.join(icon_button(name, table_glyphs[action], f'data-table="{action}"') for name, action in tables)
-    toolbar = '<span class="mode-label">Formatted</span>' + buttons(common) + '<details><summary aria-label="Markdown formatting" title="Markdown formatting">' + formatting_svg('format') + '<span>Format</span></summary><div class="format-menu"><div class="compact-formatting">' + buttons(common) + '</div>' + style_menu + buttons(more) + (
+    toolbar = '<span class="mode-label" aria-hidden="true">Formatted</span>' + buttons(common) + '<details><summary aria-label="Markdown formatting" title="Markdown formatting">' + formatting_svg('format') + '<span aria-hidden="true">Format</span></summary><div class="format-menu"><div class="compact-formatting">' + buttons(common) + '</div>' + style_menu + buttons(more) + (
         icon_button('Inline code', 'code', 'id="inline-code"') +
         icon_button('Insert link', 'link', 'id="show-link" aria-haspopup="dialog"')) + table_menu + '</div></details>'
     link_dialog = ('<dialog id="link-dialog" aria-labelledby="link-title">'
