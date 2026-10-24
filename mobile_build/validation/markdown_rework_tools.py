@@ -34,7 +34,9 @@ def prepare(source, directory, *, native_library=None):
         "support = Path(__file__).resolve().parents[2] / 'Frameworks/MarkdownQASupport.dylib'\n"
         'if support.exists():\n import ctypes\n ctypes.CDLL(str(support))\n'
         "if '--keyboard' in sys.argv:\n"
-        ' from tests.logisticsmobile.editor_keyboard_probe import main\nelse:\n'
+        ' from tests.logisticsmobile.editor_keyboard_probe import main\n'
+        "elif '--adaptive' in sys.argv:\n"
+        ' from tests.logisticsmobile.markdown_adaptive_probe import main\nelse:\n'
         ' from tests.logisticsmobile.markdown_rework_probe import main\nmain().main_loop()\n')
     path = app / 'Info.plist'
     info = plistlib.loads(path.read_bytes())
@@ -47,7 +49,7 @@ def prepare(source, directory, *, native_library=None):
     return app
 
 
-def run(source, device, output, *, keyboard=False, timeout=240, native_library=None):
+def run(source, device, output, *, keyboard=False, adaptive=False, timeout=240, native_library=None):
     if output.exists():
         raise ValueError('Choose a fresh evidence output directory.')
     devices = json.loads(sim('list', 'devices', 'available', '--json'))['devices']
@@ -57,7 +59,8 @@ def run(source, device, output, *, keyboard=False, timeout=240, native_library=N
     cache = None
     installed = False
     console = None
-    folder = 'editor-keyboard-evidence' if keyboard else 'markdown-rework-evidence'
+    folder = ('editor-keyboard-evidence' if keyboard else
+              'markdown-adaptive-evidence' if adaptive else 'markdown-rework-evidence')
     with TemporaryDirectory(prefix='logistics-markdown-qa-') as build:
         app = prepare(source, Path(build), native_library=native_library)
         shutil.copyfile(app / 'app/markdown-qa-source.json', output / 'source.json')
@@ -70,7 +73,7 @@ def run(source, device, output, *, keyboard=False, timeout=240, native_library=N
             report.unlink(missing_ok=True)
             with (output / 'native-console.log').open('w') as stream:
                 console = subprocess.Popen(['xcrun', 'simctl', 'launch', '--console-pty', device, BUNDLE,
-                    *(['--keyboard'] if keyboard else [])], stdout=stream, stderr=subprocess.STDOUT)
+                    *(['--keyboard'] if keyboard else ['--adaptive'] if adaptive else [])], stdout=stream, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
                 if report.is_file():
@@ -118,7 +121,12 @@ if __name__ == '__main__':
     parser.add_argument('--device', required=True)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--keyboard', action='store_true')
+    parser.add_argument('--adaptive', action='store_true', help='Observe real window/fold/keyboard changes until a cache finish signal')
+    parser.add_argument('--timeout', type=int, default=240)
     parser.add_argument('--native-library', type=Path, help='Optional current native helper library for an older cached simulator shell')
     args = parser.parse_args()
-    report = run(args.app, args.device, args.output, keyboard=args.keyboard, native_library=args.native_library)
+    if args.keyboard and args.adaptive:
+        parser.error('Choose either --keyboard or --adaptive.')
+    report = run(args.app, args.device, args.output, keyboard=args.keyboard, adaptive=args.adaptive,
+                 timeout=args.timeout, native_library=args.native_library)
     print(json.dumps(dict(success=report['success'], keyboard=args.keyboard)))

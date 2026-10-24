@@ -295,6 +295,11 @@ class Probe(LogisticsMobile):
                 report['cases'].append(case)
                 native.requestFocus()
                 if source:
+                    # Samsung's IME can ignore programmatic focus alone.
+                    # Use a real native pointer sequence, as for WebView input,
+                    # before restoring the intended insertion position.
+                    tap(native, dict(x=24, y=24, width=int(native.getWidth())))
+                    await asyncio.sleep(.2)
                     native.setSelection(len(owner.document.text))
                     connection = native.onCreateInputConnection(EditorInfo())
                 else:
@@ -319,7 +324,14 @@ class Probe(LogisticsMobile):
                     tap(native, touch)
                     await asyncio.sleep(.4)
                 manager.showSoftInput(native, InputMethodManager.SHOW_IMPLICIT)
-                await asyncio.sleep(1)
+                for attempt in range(40):
+                    await asyncio.sleep(.15)
+                    if sample(owner, native)['keyboard']:
+                        break
+                    if attempt in (8, 20):
+                        native.requestFocus()
+                        manager.restartInput(native)
+                        manager.showSoftInput(native, InputMethodManager.SHOW_IMPLICIT)
                 connection = native.onCreateInputConnection(EditorInfo())
                 for index in range(40 if name == 'New.md' else 8):
                     # Exercise the IME's composition path, not JavaScript-only

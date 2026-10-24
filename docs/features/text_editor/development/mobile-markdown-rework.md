@@ -6,10 +6,10 @@ on iPhone, iPad, iPhone Duo and Android phones. Fix formatted editing on iOS and
 controls becoming inaccessible when the Android keyboard opens. Local and
 LocalCrypt must support reading and writing; cloud remotes must remain read-only.
 
-The implementation and automated native checks below are complete. Physical
-device signing, Duo inner-display/fold poses and the manual accessibility/window
-checks remain open acceptance gates. Do not treat simulator coverage as proof
-that those gates passed.
+The implementation, core physical-device checks and automated iPad keyboard/
+accessibility checks below are complete. Duo inner-display/fold poses and manual
+screen-reader, hardware-keyboard and multitasking-window checks remain open
+acceptance gates. Do not treat simulator coverage as proof that those gates passed.
 
 ## Execution instruction
 
@@ -260,15 +260,68 @@ Raw screenshots, source manifests, timings and logs remain outside the wiki.
 
 ## Remaining acceptance gates
 
-- Physical iPhone/iPad: Xcode reported **No Accounts**, and a provisioning profile
-  was unavailable for the separate QA bundle. The existing main-app identity was
-  preserved. Sign in and provision the QA identity before repeating native checks.
-- Physical Android reproduction, gesture/button navigation variants and vendor
-  keyboard differences remain unverified. No BOOX test package was installed.
 - Duo inner display, flat/partial/fold transitions and seam interaction remain
-  unverified; outer-display rotation is the only pose coverage recorded here.
-- iPad narrow multitasking windows, floating keyboard and hardware-keyboard focus,
-  physical selection handles/autocorrect/dictation, and VoiceOver/TalkBack focus
-  order require manual acceptance. Automated geometry and labels do not replace it.
+  unverified. The operator declined manual Device Hub pose changes. Public display
+  discovery identified the inner display, but targeting its inactive display did
+  not produce a native layout observation; one launch was rejected by the system
+  shell. Screen power/launch controls did not establish a hinge transition. The
+  original display state was restored. Outer rotation remains the verified scope.
+- iPad narrow multitasking layout remains unverified: the attempted corner gesture
+  entered the app switcher and scaled the window snapshot; the actual UIKit/DOM
+  viewport did not shrink. That run is excluded from narrow-window acceptance.
+- Hardware-keyboard focus/navigation, physical selection/autocorrect/dictation
+  and actual spoken VoiceOver/TalkBack traversal still require manual checks.
+  The automated accessibility audits below do not establish those outcomes.
+- Physical keyboard/vendor coverage now includes Samsung and BOOX, but additional
+  gesture-navigation and third-party keyboard combinations remain unverified.
 - Complete sustained memory-growth/background stress measurements and the remaining
   full interaction matrix before declaring every original acceptance gate complete.
+
+
+## Physical and adaptive follow-up — October 24, 2026
+
+Signing was unblocked after the operator signed into Xcode. The valid development
+profile included both paired devices. Its wildcard application and Keychain
+privileges were narrowed to the exact QA identity before signing; the main app's
+identity and shared storage were not granted to QA. Focused provisioning tests
+reject the main identity, its shared groups and devices outside the profile.
+
+| Target | Additional observed result |
+| --- | --- |
+| Physical iPhone 15 Pro Max, iOS 26.6.2 | Core formatting, final-input save, Markdown preservation, rotation, local library return, remote read-only and LocalCrypt save/lock passed. Actual formatted/Source/plain-text software-keyboard typing and caret/navigation restoration passed. |
+| Physical iPad Pro 11-inch, iPadOS 26.7.1 | The same core flow passed, followed by actual docked software-keyboard input/caret checks in formatted, Source and plain text. |
+| Physical Samsung SM-G955W, Android 9/API 28 | Core and LocalCrypt flow passed. Thirteen actual keyboard scenarios passed after using real pointer focus before IME input, including blank notes, large text, formatting/link interaction and rotation. |
+| Physical BOOX NoteAir5C | Core and LocalCrypt flow passed. Thirteen actual keyboard scenarios passed, including large text, formatting/link interaction and rotation. The vendor WebView originally panned the whole viewport; the formatted editor now keeps its native outer scroll at zero while preserving the DOM writing scroller. |
+| iPad simulator | XCTest drove the real docked → floating → native text entry → formatting/link dialog → docked sequence. The keyboard changed from 1032-point to 320-point width and returned to 1032. Native accessibility audits reported zero issues for hit regions, descriptions, traits and contrast in the editor, plus clipping in the open formatting menu. Repeated with dark appearance, Increase Contrast and the largest accessibility content-size category. |
+
+The expanded iPad audit found redundant small accessibility elements for the mode,
+Format caption and Block caption. Their visible text remains; accessibility uses
+the parent formatting control and explicitly named block-style selector. No audit
+issues were suppressed in the final assertion. A label-based XCTest query handles
+WebKit exposing the link popup control as an accessibility Other element.
+
+The Samsung also exposed an older Android libc boundary: LocalCrypt creation
+required atomic no-replace publication, while its libc lacked the exported
+`renameat2` wrapper. commonUtils now invokes the same ARM64 kernel operation when
+the wrapper is absent, retaining collision rejection and failing on unsupported
+kernels/filesystems. Its publication, resource-operation and rename regressions
+passed; the successful physical Samsung LocalCrypt round-trip validates this
+consumer path. The dependency update is explicit in Logistics.
+
+`markdown_adaptive_probe.py` observes actual native poses/keyboard changes while
+retaining a synthetic unsaved draft; it never injects hinge states. Use the
+simulator runner's `--adaptive --timeout 400` option and write its evidence-cache
+`finish` signal after interaction. `MarkdownAdaptiveUITests.swift` supplies the
+real iPad gesture and accessibility checks for an iOS UI-test target.
+`markdown_physical_tools.py` accepts a separately provisioned physical QA `.app`,
+checks device/profile membership, narrows entitlements, stages current source,
+re-signs it, collects native evidence and uninstalls only the QA identity. A cached
+native shell can accept an optional current QA native helper via `--native-library`;
+this remains targeted runtime validation rather than fresh release validation.
+
+All temporary QA packages from this follow-up were removed after saving evidence.
+Physical iPhone/iPad and Samsung inventories retained the main application. BOOX
+cleanup explicitly verified that only `io.github.ispaure.logisticsmobile` remained
+among Logistics packages. Simulator appearance, contrast and text-size settings
+and the Duo display power state were restored. Local test identifiers, screenshots,
+source manifests, XCTest results and logs remain outside the wiki.
