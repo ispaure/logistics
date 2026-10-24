@@ -234,8 +234,16 @@ async def exercise_ui_review(app):
                 break
             await asyncio.sleep(.05)
         assert app.files_view in app.body.children
-        assert app.file_storage.value == 'Local files' and app.file_path == ''
+        assert app.file_storage.value == app.local_browser_root() and app.file_path == ''
         assert app.file_browser.search.value == ''
+        # All files shows the ordinary shared/device root, containing Local
+        # and Received Files. Enter the collection before checking its files.
+        if app.file_storage.value != 'Local files':
+            from features.rclone.mobile.storage_location import collection_path
+            collection = collection_path(app.private_root).name
+            entry = next(entry for entry in app.file_browser.entries if entry.payload['path'] == collection)
+            await app.file_browser.activate_entry(entry)
+        assert app.file_storage.value == 'Local files' and app.file_path == ''
         assert any(entry.label == 'UI Review' for entry in app.file_browser.entries)
     dialog = toga.ConfirmDialog('Pull folder?', 'From: Example remote:/Comics\nTo: Local/Comics\n\nLocal files may be replaced or removed. Continue?')
     pending = asyncio.create_task(app.main_window.dialog(dialog))
