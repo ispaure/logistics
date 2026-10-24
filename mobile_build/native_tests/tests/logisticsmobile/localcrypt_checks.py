@@ -517,7 +517,10 @@ async def exercise_localcrypt(app, passed):
     browser.search_button.on_press()
     assert browser.search_open
     header = browser.location_bar
-    assert browser.search_panel.parent is getattr(header, 'native_actions', header)
+    # UIKit mounts search in native header actions; inline Android headers
+    # keep it in the browser body immediately beneath the folder header.
+    toolbar = getattr(header, 'native_actions', None)
+    assert browser.search_panel.parent is (toolbar if toolbar is not None else browser.widget)
     browser.search.value = 'nested-search'
     while browser.tasks:
         await asyncio.gather(*tuple(browser.tasks))
