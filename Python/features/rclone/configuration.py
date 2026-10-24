@@ -44,6 +44,10 @@ def get_rclone_remote_names(config_path: str | Path) -> list[str]:
         return loaded
 
     if not config_path.is_file():
+        if config_path.suffix == '.session':
+            from .desktop_catalog import read
+            record = read(config_path)
+            return list(record[1]) if record is not None else []
         return []
 
     config_file = txtType.TXTFile(config_path)

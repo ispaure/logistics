@@ -23,6 +23,7 @@ class PullChoiceTests(QtTestCase):
                      patch.object(actions, 'pull_remote') as local:
                     offered = _get_actions(entry)
                     self.assertEqual([action.name for action in offered], ['Pull'])
+                    self.assertFalse(offered[0].destructive)  # The retained transfer review is the approval step.
                     offered[0].callback()
                     if chooser:
                         choice.assert_called_once_with('Secret', context)

@@ -66,6 +66,10 @@ show their credential ZIP password form directly in Files. Enter the password an
 choose **Unlock** to browse; errors stay in the form. Selecting another folder
 cancels the attempt. Use the refresh icon in the folder-list panel below the source dropdown
 to reload folders while preserving your selection.
+When Cloud has no visible folders, **+ rclone** opens credential setup. Session-only
+accounts you have unlocked are remembered by remote name and ZIP location, and
+return locked after restarting. Select a remote to enter its ZIP password; listing
+these accounts does not connect to the server or save their credentials.
 Names starting with **Legacy-** (ignoring case) are hidden by default across all
 three sources. Use **Settings → Workspaces → Show Legacy (session only)** to reveal them.
 The choice survives refreshes and source changes, and resets to off on the next launch.

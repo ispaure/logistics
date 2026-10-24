@@ -21,7 +21,15 @@ forget = registry.forget
 revocation_check = registry.revocation_check
 launch = registry.launch
 credentials = registry.credentials
-package_path = registry.package_path
+
+
+def package_path(config_path):
+    package = registry.package_path(config_path)
+    if package is not None:
+        return package
+    from .desktop_catalog import read
+    record = read(config_path) if Path(config_path).suffix == '.session' else None
+    return record[0] if record is not None else None
 
 
 def read_package(path, password):

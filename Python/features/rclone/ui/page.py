@@ -22,6 +22,8 @@ class RclonePage(pyside.QWidget):
 
         self.package_name = pyside.QLabel('Select a credential package')
         self.package_path = pyside.QLabel()
+        self.package_name.setTextFormat(pyside.Qt.TextFormat.PlainText)
+        self.package_path.setTextFormat(pyside.Qt.TextFormat.PlainText)
         self.package_path.setWordWrap(True)
         self.package_path.setTextInteractionFlags(
             pyside.Qt.TextInteractionFlag.TextSelectableByMouse
@@ -37,14 +39,19 @@ class RclonePage(pyside.QWidget):
 
         self.password_input = pyside.QLineEdit()
         password_field(self.password_input)
-        self.password_input.setPlaceholderText('Credential archive password')
+        self.password_input.setPlaceholderText('Credential ZIP password')
         self.password_input.setMinimumHeight(self.password_input.sizeHint().height())
 
         self._active_modes = {}
-        self.load_button = pyside.QPushButton('Load on Disk')
-        self.load_session_button = pyside.QPushButton('Load for Session')
-        self.load_button.setToolTip('Save a same-named rclone config on disk.')
-        self.load_session_button.setToolTip('Keep credentials in memory until Logistics exits. Enables Cloud browsing and LocalCrypt creation.')
+        self.load_button = pyside.QPushButton('Unlock…')
+        self.load_button.setToolTip('Choose session-only or persistent credentials before unlocking.')
+        self.import_button = pyside.QPushButton('Import credential ZIP…')
+        self.refresh_button = pyside.QPushButton('Refresh list')
+        self.package_directory = pyside.QLabel()
+        self.package_directory.setWordWrap(True)
+        self.package_directory.setTextFormat(pyside.Qt.TextFormat.PlainText)
+        self.empty_notice = pyside.QLabel('No credentials yet. Import a password-protected credential ZIP to get started.')
+        self.empty_notice.setWordWrap(True)
         self.remove_button = pyside.QPushButton('Forget Credentials')
         self.lock_button = pyside.QPushButton('Lock Package')
 
@@ -63,7 +70,8 @@ class RclonePage(pyside.QWidget):
         self.status_label.setWordWrap(True)
 
         self.load_operation = OperationProgress(self)
-        self.load_operation.completed.connect(self._credentials_loaded)
+        self.load_operation.completed.connect(self._operation_completed)
+        self._importing = None
         self._loading_package = None
 
         self._build_layout()
@@ -82,10 +90,8 @@ class RclonePage(pyside.QWidget):
         title.setFont(title_font)
 
         description = pyside.QLabel(
-            'Load for Session keeps credentials in memory and makes its remotes available in Cloud '
-            '(or Home Server for network shares). Session-loaded crypt remotes can create LocalCrypt copies. '
-            'LocalCrypt files stay encrypted on disk after the session ends. '
-            'Load on Disk instead saves a same-named rclone config.'
+            'Add a credential ZIP, then unlock to connect. '
+            'Session-only remembers remote names for next time, never your password.'
         )
         description.setWordWrap(True)
 
@@ -104,6 +110,8 @@ class RclonePage(pyside.QWidget):
         splitter.setSizes([260, 740])
 
         root_layout.addWidget(splitter, 1)
+        root_layout.addWidget(self.load_operation)
+        root_layout.addWidget(self.status_label)
 
     def _create_packages_panel(self):
         widget = pyside.QWidget()
@@ -124,6 +132,9 @@ class RclonePage(pyside.QWidget):
         layout.addWidget(label)
         self.credential_list.setToolTip(help_label.text())
         help_label.deleteLater()
+        layout.addWidget(self.import_button)
+        layout.addWidget(self.refresh_button)
+        layout.addWidget(self.empty_notice)
         layout.addWidget(self.credential_list)
 
         return widget
@@ -147,25 +158,35 @@ class RclonePage(pyside.QWidget):
         package_form.setFieldGrowthPolicy(
             pyside.QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
         )
-        package_form.addRow('ZIP path:', self.package_path)
-        package_form.addRow('Generated config:', self.generated_config_path)
+        self.package_details = pyside.QWidget()
+        detail_form = pyside.QFormLayout(self.package_details)
+        detail_form.setContentsMargins(0, 0, 0, 0)
+        detail_form.addRow('Import folder:', self.package_directory)
+        detail_form.addRow('ZIP:', self.package_path)
+        detail_form.addRow('Saved config:', self.generated_config_path)
+        self.package_details.hide()
+        self.details_button = pyside.QToolButton()
+        self.details_button.setText('Package details')
+        self.details_button.setCheckable(True)
+        self.details_button.toggled.connect(self.package_details.setVisible)
         package_form.addRow('Status:', self.loaded_status)
         package_form.addRow('Password:', self.password_input)
 
         package_buttons = pyside.QHBoxLayout()
         package_buttons.addWidget(self.load_button)
-        package_buttons.addWidget(self.load_session_button)
         package_buttons.addWidget(self.lock_button)
 
         package_layout.addWidget(self.package_name)
         package_layout.addLayout(package_form)
         package_layout.addLayout(package_buttons)
+        package_layout.addWidget(self.details_button, alignment=pyside.Qt.AlignmentFlag.AlignLeft)
+        package_layout.addWidget(self.package_details)
 
-        remotes_group = pyside.QGroupBox('Configured Remotes')
+        remotes_group = pyside.QGroupBox('Remotes — unlock to connect')
         remotes_layout = pyside.QVBoxLayout(remotes_group)
         remotes_layout.addWidget(self.remote_list)
 
-        global_group = pyside.QGroupBox('rclone Configuration Folder')
+        global_group = self.management_group = pyside.QGroupBox('Credential management')
         global_layout = pyside.QVBoxLayout(global_group)
         global_layout.setSpacing(10)
 
@@ -185,9 +206,13 @@ class RclonePage(pyside.QWidget):
 
         layout.addWidget(package_group)
         layout.addWidget(remotes_group, 1)
+        self.manage_button = pyside.QToolButton()
+        self.manage_button.setText('Manage credentials…')
+        self.manage_button.setCheckable(True)
+        self.manage_button.toggled.connect(global_group.setVisible)
+        global_group.hide()
+        layout.addWidget(self.manage_button, alignment=pyside.Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(global_group)
-        layout.addWidget(self.load_operation)
-        layout.addWidget(self.status_label)
 
         return widget
 
@@ -195,11 +220,10 @@ class RclonePage(pyside.QWidget):
         self.credential_list.currentItemChanged.connect(
             self._credential_selection_changed
         )
-        self.password_input.returnPressed.connect(
-            lambda: self._load_selected_credentials(remember=False)
-        )
-        self.load_button.clicked.connect(lambda: self._load_selected_credentials(remember=True))
-        self.load_session_button.clicked.connect(lambda: self._load_selected_credentials(remember=False))
+        self.password_input.returnPressed.connect(self._choose_unlock_mode)
+        self.load_button.clicked.connect(self._choose_unlock_mode)
+        self.import_button.clicked.connect(self._import_credential_zip)
+        self.refresh_button.clicked.connect(self.refresh)
         self.remove_button.clicked.connect(self._remove_selected_config)
         self.clear_all_button.clicked.connect(self._clear_all_configs)
         self.clear_sessions_button.clicked.connect(self._clear_sessions)
@@ -225,6 +249,7 @@ class RclonePage(pyside.QWidget):
             str(configuration.get_rclone_config_dir())
         )
 
+        self.package_directory.setText(str(credentials.config.LogisticsConfig().path_logistics_remote_cred))
         self._refresh_credential_packages(selected_package_path)
         self._refresh_clear_all_state()
 
@@ -251,6 +276,10 @@ class RclonePage(pyside.QWidget):
             from features.rclone import session
             if session.names(config_path.with_suffix('.session')) is not None:
                 label += ' [Session]'
+            elif not config_path.is_file():
+                from features.rclone import desktop_catalog
+                if desktop_catalog.read(config_path.with_suffix('.session')) is not None:
+                    label += ' [Locked]'
 
             item = pyside.QListWidgetItem(label)
             item.setToolTip(str(package.path))
@@ -265,7 +294,9 @@ class RclonePage(pyside.QWidget):
 
         self.credential_list.blockSignals(False)
 
+        self.empty_notice.setVisible(not packages)
         if not packages:
+            self.lock_button.setEnabled(False)
             self.package_name.setText('No credential packages found')
             self.package_path.setText('')
             self.generated_config_path.setText('')
@@ -273,7 +304,6 @@ class RclonePage(pyside.QWidget):
             self.password_input.clear()
             self.password_input.setEnabled(False)
             self.load_button.setEnabled(False)
-            self.load_session_button.setEnabled(False)
             self.remove_button.setEnabled(False)
             self.remote_list.clear()
             self.remote_list.addItem('(No credential package selected)')
@@ -281,7 +311,6 @@ class RclonePage(pyside.QWidget):
 
         self.password_input.setEnabled(True)
         self.load_button.setEnabled(True)
-        self.load_session_button.setEnabled(True)
         self.credential_list.setCurrentRow(selected_row)
         self._refresh_selected_package()
 
@@ -309,12 +338,14 @@ class RclonePage(pyside.QWidget):
         from features.rclone import session
         is_session = session.names(config_path) is not None
         is_loaded = config_path.is_file() or is_session
+        from features.rclone import desktop_catalog
+        remembered = desktop_catalog.read(config_path) if config_path.suffix == '.session' else None
 
         self.package_name.setText(package.name_without_ext)
         self.package_path.setText(str(package.path))
-        self.generated_config_path.setText('Memory only — no file created' if config_path.suffix == '.session' else str(config_path))
-        self.loaded_status.setText('Session only' if is_session else ('Saved' if is_loaded else 'Not loaded'))
-        self.remove_button.setEnabled(is_loaded)
+        self.generated_config_path.setText('In memory — no saved credential config' if config_path.suffix == '.session' else str(config_path))
+        self.loaded_status.setText('Session only' if is_session else ('Saved' if is_loaded else 'Locked'))
+        self.remove_button.setEnabled(is_loaded or remembered is not None)
 
         remote_names = configuration.get_rclone_remote_names(config_path)
 
@@ -358,11 +389,16 @@ class RclonePage(pyside.QWidget):
         from features.rclone import session
         self.clear_sessions_button.setEnabled(bool(session.paths()))
         package = self._get_selected_package()
-        self.lock_button.setEnabled(package is not None and session.names(
-            configuration.get_credential_config_path(package.path).with_suffix('.session')) is not None)
-        self.clear_all_button.setEnabled(
-            bool(configuration.get_all_conf_paths())
-        )
+        unlocked = package is not None and session.names(
+            configuration.get_credential_config_path(package.path).with_suffix('.session')) is not None
+        self.lock_button.setEnabled(unlocked)
+        self.lock_button.setVisible(unlocked)
+        saved = bool(configuration.get_all_conf_paths())
+        self.clear_all_button.setEnabled(saved)
+        from features.rclone import desktop_catalog
+        known = bool(desktop_catalog.contexts())
+        self.manage_button.setVisible(saved or known or bool(session.paths()))
+        self.management_group.setVisible(self.manage_button.isChecked() and (saved or known or bool(session.paths())))
 
     def _get_selected_package(self):
         current = self.credential_list.currentItem()
@@ -376,9 +412,58 @@ class RclonePage(pyside.QWidget):
         path = configuration.get_credential_config_path(package.path)
         from features.rclone import session
         prefer_disk = self._active_modes.get(package.path, session.names(path.with_suffix('.session')) is None)
-        if not prefer_disk and session.names(path.with_suffix('.session')) is not None:
+        from features.rclone import desktop_catalog
+        if (not prefer_disk and session.names(path.with_suffix('.session')) is not None
+                or not path.is_file() and desktop_catalog.read(path.with_suffix('.session')) is not None):
             return path.with_suffix('.session')
         return path
+
+    def _import_credential_zip(self):
+        if self.load_operation.busy:
+            return
+        filename, _ = pyside.QFileDialog.getOpenFileName(
+            self, 'Import credential ZIP', '', 'Credential ZIP files (*.zip *.ZIP)')
+        if not filename:
+            return
+        self._importing = filename
+        for widget in self._credential_controls():
+            widget.setEnabled(False)
+        self.load_operation.start(lambda report, cancelled:
+            credentials.import_credential_package(filename, cancelled=cancelled),
+            message='Importing credential ZIP…')
+
+    def _operation_completed(self, values, error):
+        if self._importing is None:
+            self._credentials_loaded(values, error)
+            return
+        self._importing = None
+        self.load_operation.hide()
+        for widget in self._credential_controls():
+            widget.setEnabled(True)
+        if values is not None and not error:
+            self._refresh_credential_packages(values)
+            self._refresh_clear_all_state()
+            self.status_label.setText('Credential ZIP imported. Enter its password, then choose Unlock.')
+            self.password_input.setFocus()
+        else:
+            self.refresh()
+            self.status_label.setText(str(error) if error else 'Credential import cancelled.')
+
+    def _choose_unlock_mode(self):
+        if self.load_operation.busy:
+            return
+        package = self._get_selected_package()
+        if package is None:
+            return
+        if not self.password_input.text():
+            self.status_label.setText('Enter the credential ZIP password, then choose Unlock.')
+            self.password_input.setFocus()
+            return
+        from .credential_unlock import choose_credential_retention
+        remember = choose_credential_retention(package.path,
+            configuration.get_credential_config_path(package.path), self)
+        if remember is not None:
+            self._load_selected_credentials(remember=remember)
 
     def _load_selected_credentials(self, *, remember=True):
         if self.load_operation.busy:
@@ -430,7 +515,7 @@ class RclonePage(pyside.QWidget):
 
     def _credential_controls(self):
         return (self.credential_list, self.password_input, self.load_button,
-                self.load_session_button, self.remove_button, self.clear_all_button,
+                self.import_button, self.refresh_button, self.remove_button, self.clear_all_button,
                 self.clear_sessions_button, self.lock_button)
 
     def _credentials_loaded(self, values, error):
@@ -455,18 +540,20 @@ class RclonePage(pyside.QWidget):
             self._active_modes[package.path] = remember
             # Do not rescan credential roots (which may be cloud-backed) on completion.
             self.loaded_status.setText('Saved' if remember else 'Session only')
-            self.generated_config_path.setText(str(config_path) if remember else 'Memory only — no file created')
+            self.generated_config_path.setText(str(config_path) if remember else 'In memory — no saved credential config')
             self.remote_list.clear()
             self.remote_list.addItems(list(values.remotes))
             item = self.credential_list.currentItem()
-            label = item.text().replace(' [Saved]', '').replace(' [Session]', '')
+            label = item.text().replace(' [Saved]', '').replace(' [Session]', '').replace(' [Locked]', '')
             if remember or config_path.with_suffix('.conf').is_file():
                 label += ' [Saved]'
             if session.names(config_path.with_suffix('.session')) is not None:
                 label += ' [Session]'
             item.setText(label)
             self.remove_button.setEnabled(True)
-            self.status_label.setText(f'Loaded "{package.path.name}" locally. No connection has been made.')
+            self.status_label.setText(f'Unlocked "{package.path.name}" ({"saved on this device" if remember else "session only"}). '
+                                      'Return to Workspaces → Cloud or Home Server to browse or pull files. '
+                                      'No connection has been made yet.')
         else:
             self.remove_button.setEnabled(self.loaded_status.text() in ('Saved', 'Session only'))
             self.status_label.setText('Credential loading failed. Check the ZIP password and local file access.'
@@ -495,14 +582,16 @@ class RclonePage(pyside.QWidget):
 
         from features.rclone import session
         disk_path = configuration.get_credential_config_path(package.path)
+        from features.rclone import desktop_catalog
         paths = [path for path in (disk_path, disk_path.with_suffix('.session'))
-                 if path.is_file() or session.names(path) is not None]
+                 if path.is_file() or session.names(path) is not None
+                 or path.suffix == '.session' and desktop_catalog.read(path) is not None]
         if not paths:
             self.refresh()
             return
         confirmed = ui.display_msg_box_ok_cancel(
             'Remove Loaded rclone Config',
-            f'Forget the selected package’s saved and session credentials?\n\n'
+            f'Forget this package’s saved credentials, session and remembered remote names?\n\n'
             + '\n'.join(path.name for path in paths) + '\n\n'
             + f'The credential ZIP remains available at:\n{package.path}'
         )

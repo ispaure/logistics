@@ -128,6 +128,33 @@ class FoldersPage(pyside.QWidget):
         self.browser_notice.setWordWrap(True)
         self.browser_notice.setMargin(12)
         self.browser_stack.addWidget(self.browser_notice)
+        self.cloud_setup = pyside.QWidget()
+        setup_layout = pyside.QVBoxLayout(self.cloud_setup)
+        setup_layout.addStretch()
+        card = pyside.QWidget()
+        card.setMaximumWidth(420)
+        card_layout = pyside.QVBoxLayout(card)
+        card_layout.setSpacing(14)
+        title = pyside.QLabel('Connect your cloud storage')
+        font = title.font()
+        font.setBold(True)
+        font.setPointSizeF(point_size(setting_size(font) + 3))
+        title.setFont(font)
+        title.setAlignment(pyside.Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(title)
+        self.cloud_setup_note = pyside.QLabel()
+        self.cloud_setup_note.setWordWrap(True)
+        self.cloud_setup_note.setMinimumHeight(self.cloud_setup_note.fontMetrics().lineSpacing() * 4)
+        self.cloud_setup_note.setAlignment(pyside.Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(self.cloud_setup_note)
+        self.add_rclone_button = pyside.QPushButton('+ rclone')
+        self.add_rclone_button.setMinimumHeight(36)
+        self.add_rclone_button.setAccessibleName('Add an rclone account')
+        self.add_rclone_button.clicked.connect(self._add_rclone)
+        card_layout.addWidget(self.add_rclone_button, alignment=pyside.Qt.AlignmentFlag.AlignHCenter)
+        setup_layout.addWidget(card, alignment=pyside.Qt.AlignmentFlag.AlignHCenter)
+        setup_layout.addStretch()
+        self.browser_stack.addWidget(self.cloud_setup)
         self.panes = WorkspacePanes(self.browser_stack, self.details_tabs, self,
                                     sources=left_widget, locked=self.panes_locked)
         root_layout.addWidget(self.panes, 1)
@@ -474,6 +501,19 @@ class FoldersPage(pyside.QWidget):
         if self._closing:
             pyside.QTimer.singleShot(0, self.window().close)
 
+    def _add_rclone(self):
+        from desktop.settings.window import open_settings
+        page = open_settings(self.window(), category='feature:rclone')
+        page.scope_selector.setCurrentIndex(page.scope_selector.findData('personal'))
+        feature = page.panels.get('feature:rclone')
+        if feature is not None:
+            widget = feature.custom.get('credentials')
+            if widget is not None:
+                for tabs in feature.findChildren(pyside.QTabWidget):
+                    if tabs.indexOf(widget) >= 0:
+                        tabs.setCurrentWidget(widget)
+                widget.import_button.setFocus()
+
     def _show_empty_state(self, message=None):
         self.panes.set_actions_available(True)
         self._retire_actions_unlock()
@@ -493,7 +533,7 @@ class FoldersPage(pyside.QWidget):
         if message is None:
             message = ('No local copies were found for this source. Choose another source to browse its workspaces.'
                        if source_type == 'local' else
-                       'No loaded remote folders were found for this source. Load credentials in Settings to browse online.')
+                       'No visible remote folders. Add an account, choose another credential, or enable Legacy in Settings if needed.')
 
         label = pyside.QLabel(message)
         label.setWordWrap(True)
@@ -508,6 +548,15 @@ class FoldersPage(pyside.QWidget):
         info.setAlignment(pyside.Qt.AlignmentFlag.AlignTop)
         self.info_scroll.setWidget(info)
         self._clear_browser(message)
+        if (source_type == 'remote' and not self._entry_items
+                and self.source_tabs.tabText(self.source_tabs.currentIndex()) == 'Cloud'):
+            has_remotes = any(source.remote_names for source in selected_source[2])
+            self.cloud_setup_note.setText(
+                'No folders match this view. Choose another credential or enable Show Legacy in Settings.'
+                if has_remotes else
+                'Import a credential ZIP to add an account.\nRemembered accounts ask for a password.')
+            self.panes.set_actions_available(False)
+            self.browser_stack.setCurrentWidget(self.cloud_setup)
 
     def _show_entry(self, entry):
         self._retire_actions_unlock()

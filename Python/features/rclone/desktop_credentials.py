@@ -95,13 +95,17 @@ class DesktopCredentials:
             if path.suffix.casefold() not in {'.conf', '.session'}:
                 raise ValueError('Choose a saved config or credential session; original ZIPs are kept.')
         for path in paths:
-            existed = path.is_file() or session.names(path) is not None
+            from . import desktop_catalog
+            existed = path.is_file() or session.names(path) is not None or (
+                path.suffix == '.session' and desktop_catalog.read(path) is not None)
             try:
                 self.lock(path)
             except Exception as error:
                 failure = failure or error
             try:
                 path.unlink(missing_ok=True)
+                if path.suffix == '.session':
+                    desktop_catalog.forget(path)
                 if existed:
                     removed.append(path)
             except Exception as error:
@@ -146,6 +150,8 @@ class DesktopCredentials:
                     from .remote_resources import invalidate_config
                     invalidate_config(request.config)
                 else:
+                    from . import desktop_catalog
+                    desktop_catalog.remember(request.config, request.package, names)
                     session.remember(request.config, {name: dict(settings) for name, settings in values.items()},
                                      package_path=request.package)
                 return CredentialResult(request.config, names, request.remember)

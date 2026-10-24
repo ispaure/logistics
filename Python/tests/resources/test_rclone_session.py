@@ -30,7 +30,7 @@ class RcloneSessionTests(unittest.TestCase):
                 self.assertTrue(credentials.load_remote_from_zip_to_config(package, 'synthetic-zip-password', remember=False))
             context = config_path.with_suffix('.session')
             self.assertEqual(configuration.get_rclone_remote_names(context), ['Dépôt.alpha+user@example', 'Synthetic'])
-            self.assertEqual(list(root.iterdir()), [package])
+            self.assertEqual(set(root.iterdir()), {package, root / 'Accounts.session.json'})
             with patch.object(sync.cmdShellWrapper, 'run_command', return_value=CommandResult(0)) as run:
                 self.assertTrue(sync.rclone_sync('Synthetic:folder', root / 'local', config_path=context,
                                                 wait_for_output=True, executable_path='fixture-rclone'))
@@ -114,7 +114,7 @@ class RcloneCredentialScreenTests(unittest.TestCase):
                 page = RclonePage()
                 try:
                     page.password_input.setText('synthetic-password')
-                    page.load_button.click()
+                    page._load_selected_credentials(remember=True)
                     self.assertTrue(started.wait(1))
                     self.assertNotEqual(worker_threads, [gui_thread])
                     self.assertTrue(page.load_operation.busy)
@@ -133,7 +133,7 @@ class RcloneCredentialScreenTests(unittest.TestCase):
                     popup.assert_not_called()
                     with patch.object(session, 'read_package', side_effect=ValueError('synthetic decode failure')):
                         page.password_input.setText('wrong-password')
-                        page.load_session_button.click()
+                        page._load_selected_credentials(remember=False)
                         self._wait_for_load(page, app)
                     self.assertIn('failed', page.status_label.text())
                     self.assertTrue(page.load_button.isEnabled())
@@ -157,20 +157,20 @@ class RcloneCredentialScreenTests(unittest.TestCase):
             with open_archive(package, 'w', password='synthetic-password') as archive:
                 archive.writestr('Fixture.txt', '[Fixture]\ntype=local\n')
             with patch.object(credentials, 'get_logistics_remote_credentials_zip_lst', return_value=[File(package)]), \
-                 patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(temp_path=root / 'work')), \
+                 patch.object(credentials.config, 'LogisticsConfig', return_value=SimpleNamespace(temp_path=root / 'work', path_logistics_remote_cred=root)), \
                  patch.object(configuration, 'get_rclone_config_dir', return_value=root):
                 page = RclonePage()
                 try:
                     page.password_input.setText('synthetic-password')
-                    page.load_session_button.click()
+                    page._load_selected_credentials(remember=False)
                     self._wait_for_load(page, app)
                     self.assertEqual(page.loaded_status.text(), 'Session only')
                     self.assertEqual(page.remote_list.item(0).text(), 'Fixture')
                     self.assertIn('Accounts.zip', page.status_label.text())
                     self.assertEqual(page.password_input.text(), '')
-                    self.assertEqual(list(root.iterdir()), [package])
+                    self.assertEqual(set(root.iterdir()), {package, root / 'Accounts.session.json'})
                     page.password_input.setText('synthetic-password')
-                    page.load_button.click()
+                    page._load_selected_credentials(remember=True)
                     self._wait_for_load(page, app)
                     self.assertEqual(page.loaded_status.text(), 'Saved')
                     self.assertTrue((root / 'Accounts.conf').is_file())

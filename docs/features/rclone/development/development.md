@@ -47,6 +47,7 @@ own navigation. Read these owners when changing a particular responsibility:
 | Responsibility | Owner |
 | --- | --- |
 | Shared credential admissions, grants and service composition | `service.py`, `credential_loading.py` |
+| Remembered desktop session remote names and ZIP locations | `desktop_catalog.py` |
 | Desktop wiring / credential publication and revocation | `desktop_service.py` / `desktop_credentials.py` |
 | Native wiring / process-wide credential adapter | `mobile/service.py` / `mobile/credentials.py` |
 | Native ZIP/SMB preparation and cancellable workers | `mobile/credential_loading.py` |
@@ -95,13 +96,13 @@ these boundaries; `python3 dev.py test-owner rclone` selects the feature suites.
 
 ## Credential contract
 
-With **Save credentials locally** enabled, loading `Credentials/rclone/Personal.zip`
-creates `~/.config/rclone/Personal.conf` without changing the ZIP. With it disabled,
+With **Persistent — save on this device** selected, unlocking `Credentials/rclone/Personal.zip`
+creates `~/.config/rclone/Personal.conf` without changing the ZIP. With **Session only** selected,
 credentials remain in a process-local session identified by a virtual `.session`
 path; no plaintext config or extracted TXT is written. Forgetting or replacing a
 parent session also revokes private LocalCrypt reader sessions. Entries are `.txt` files starting with a rclone section
 header such as `[Media]`, followed by configuration lines. Forgetting a selected
-package removes its saved config and session credentials; Clear All removes every
+package removes its saved config, session credentials and remembered names; Clear All removes every
 directly contained `.conf`, including a legacy `rclone.conf`. Both preserve the ZIP.
 
 All `.conf` files in that directory are sources, including configs without a
@@ -717,3 +718,56 @@ Validation includes real CLI local/crypt backend fixtures in
 `test_cloud_browser_workflow.py`, `test_remote_readers.py` and Notes Library tests.
 These host tests exercise the shared mobile workflow; they do not constitute a
 physical Android or iOS device run.
+
+
+## Desktop credential import and unlock presentation
+
+`credentials.import_credential_package` reads a bounded (1 MiB) ZIP without
+extracting it and atomically publishes a copy into the configured
+`path_logistics_remote_cred` directory. It validates suffix/container, preserves
+the original and rejects replacement of a different same-named package, including
+publication races. Reimporting identical bytes is idempotent. Missing discovery
+roots produce an empty list rather than preventing first-run import.
+
+`ui.page.RclonePage` exposes Import and Refresh alongside the list. Import uses its
+existing cancellable OperationProgress owner, selects the copied package and keeps
+the user on the credential page. Unlock and password Return both open
+`ui.credential_unlock.CredentialUnlockDialog`, whose parallel session/persistent
+choices precede the existing credential service. Cancel performs no publication.
+Existing saved-config presence is disclosed; session-only does not remove it.
+
+Pull descriptions identify Cloud → Local or LocalCrypt. Initial session-crypt
+storage selection explains encryption and retention, followed by the existing
+mandatory transfer review. Pull contributions omit the redundant generic
+destructive-action prompt; the review and captured execution/preflight remain.
+`test_credential_import_ui.py` covers first-run discovery/import, selection,
+collisions, invalid/cancelled imports, refresh, retry and retention UI;
+`test_rclone_session.py` retains asynchronous publication/cancellation tests and
+`test_rclone_pull_choice.py` covers storage routing and review admission.
+
+
+## Remembered desktop session destinations
+
+Successful session credential publication writes `<account>.session.json` beside
+the user rclone configs. The bounded, versioned catalogue contains only schema,
+absolute ZIP path and remote names; passwords, tokens, remote settings and decrypted
+TXT/config bytes are excluded. `desktop_catalog` owns atomic publication, bounded
+validation and deletion. Session lock retains this record; explicit session Forget
+removes it. Failed/cancelled admissions do not create a record. Existing session-only
+packages populate the catalogue on their next successful unlock.
+
+Desktop source discovery merges remembered session destinations with active/saved
+configs and existing copy associations. A saved `.conf` suppresses a duplicate
+inactive session placeholder. Remembered names remain subject to existing remote
+exclusions and the session-scoped Legacy visibility filter. Their `.session`
+contexts and ZIP locations route into `WorkspaceUnlockView`; discovery itself
+neither decodes the ZIP nor contacts the server. The existing admission, close,
+revocation and late-result guards still own successful unlock and browsing.
+
+Cloud's empty Files pane offers + rclone, opening personal rclone credential
+settings and selecting the credential tab. Package paths and credential cleanup
+are collapsed behind separate details/management controls on the loader.
+`test_credential_catalog_desktop.py` verifies a fresh-process restart, persisted
+field allowlist, failed/cancelled publication, Forget and saved-config deduplication.
+`test_folder_sources_ui.py` covers the Cloud setup route, remembered locked names,
+inline password routing and Legacy visibility. Host validation uses offscreen Qt.

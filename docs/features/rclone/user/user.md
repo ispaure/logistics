@@ -5,33 +5,58 @@ remote config. FUSE is optional and only needed for mounting.
 
 ## Set up credentials
 
-1. Place your credential ZIP packages in the checkout's `Credentials/rclone/`
-   directory (or the configured credentials resource directory).
-2. Open **Settings → rclone → Credential packages** and load a package, entering its password when asked.
-3. Return to **Workspaces** and select the rclone source and credential.
-4. Select a remote. If a local folder has exactly the same name, it is associated
-   with that entry.
+1. In an empty **Workspaces → Cloud** view, choose **+ rclone** to open credential
+   setup. You can also open **Settings → rclone → Credential packages** and choose **Import credential ZIP…**.
+   Select a `.zip` file. Logistics copies it into the configured credentials folder
+   (normally `Credentials/rclone/`), refreshes the list and selects it. The original
+   ZIP is kept. **Refresh list** also finds packages added outside Logistics.
+2. Enter the selected ZIP's password and choose **Unlock…**. The popup compares
+   **Session only** and **Persistent — save on this device** side by side.
+3. Return to **Workspaces → Cloud** (or **Home Server** for network shares),
+   choose the credential and select a remote. Unlocking does not navigate away
+   from Settings or contact a server.
+4. Use **Pull** to download to this device. Review the destination and file changes
+   before starting. A local folder with exactly the same name is associated with
+   the remote entry.
 
-**Load on Disk** saves credentials for later use. Each saved package creates
-its own config, such as `~/.config/rclone/Personal.conf`.
+**Persistent — save on this device** writes a same-named rclone config, such as
+`~/.config/rclone/Personal.conf`, so its remotes remain available after restart.
+The saved config is not protected by the credential ZIP password. **Forget Credentials**
+removes saved access while keeping the ZIP.
+
 Credential ZIPs contain TXT entries with a remote section header as their first
 line and the remote's rclone settings below it. Every TXT entry must be encrypted
 with the package password; plain or mixed encrypted/plain packages are rejected
-by both desktop load options. Packages must be supplied separately;
-Logistics does not create account credentials for you.
+by both desktop unlock options. Packages must be supplied separately;
+Logistics does not create account credentials for you. Import accepts ZIPs up to
+1 MiB and never overwrites a different same-named package; rename the incoming ZIP
+if its name is already used. Import does not extract or unlock the ZIP.
 
-Choose **Load for Session** to use a package only for this Logistics session.
-Pressing Enter in the password field also loads for the session. The ZIP is decrypted directly in memory, with no extracted
+Choose **Session only** in the Unlock popup to use a package only for this
+Logistics session. Pressing Enter in the password field opens the same choice.
+Cancelling the popup does not unlock or save credentials. The ZIP is decrypted
+directly in memory, with no extracted
 TXT or `.conf` file. Its remotes appear in **Workspaces → Cloud** (or **Home Server**
 for network-share packages), including remotes with no local copy. Session-only
 does not mean local-only. Workspaces shows the package with a **(session)** label. Push,
 Pull and previews pass its settings to each rclone child in a private environment,
 with a memory-only config and no secret command arguments. Existing saved configs
-remain unchanged. Session credentials disappear when Logistics exits, or when you
-use **Forget Credentials** / **Lock All Session Credentials**. The cleanup controls appear in order: **Clear All Saved Configs**, **Forget
+remain unchanged: choosing Session only does not delete an existing saved config.
+Unlocked credentials disappear when Logistics exits or you lock them. Remote
+names and the ZIP location are remembered in a small account catalogue; passwords,
+tokens and remote settings are not saved. On later launches these remotes appear
+as **(locked)** in Cloud or Home Server. Select one and enter the ZIP password in
+the Files pane to connect. No network connection starts while listing locked
+accounts. Legacy folders stay hidden while **Show Legacy** is off, including
+remembered accounts. **Forget Credentials** removes the remembered names too;
+locking keeps them available for a later unlock.
+
+**Package details** expands the ZIP/config locations. **Manage credentials…**
+expands the cleanup controls; both stay out of the main unlock flow.
+The cleanup controls appear in order: **Clear All Saved Configs**, **Forget
 Credentials**, then **Lock All Session Credentials**. The first deletes saved
 rclone `.conf` files; **Forget Credentials** removes both saved and session
-credentials for the selected package and keeps its ZIP. Detached FUSE mounts
+credentials and remembered remote names for the selected package and keeps its ZIP. Detached FUSE mounts
 currently require saved configs.
 
 Short-lived desktop CLI processes do not return refreshed OAuth tokens to Logistics.
@@ -56,6 +81,14 @@ a cloud file provider, make it available locally before loading it offline.
 
 Use the selected folder's **Push…** or **Pull** action. Review the direction and
 available options before starting: the operation changes files at its destination.
+Pull means **Cloud → this device**. A regular **Local** copy contains readable,
+decrypted files that remain accessible after credentials lock or Logistics exits.
+When creating a copy from a session-unlocked crypt remote, choose **LocalCrypt**
+(recommended) to keep names and contents encrypted on disk, or **Regular Local copy**
+for readable files. Both stay on disk; LocalCrypt needs the matching credentials
+to read it. Saved-config pulls use regular Local storage. Pulling an existing
+LocalCrypt workspace updates that encrypted copy. The transfer review is the
+approval step; choosing a storage type alone does not start a download.
 If several credentials define the same remote name, choose the intended credential;
 its label does not change the local sync path. Mount paths are separated by config.
 

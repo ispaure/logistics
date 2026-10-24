@@ -68,17 +68,17 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
             item = entry.local.connection
             ui_actions.append(UIAction(name='Pull',
                 callback=lambda: actions.pull_encrypted_copy(entry.remote_name, config_path, item=item, review=True),
-                description='Refresh this LocalCrypt copy with ciphertext from its backing remote.', destructive=True))
+                description='Cloud → LocalCrypt: update this encrypted copy. Review changes before downloading.'))
         elif is_crypt and entry.local is None:
             from features.rclone.transfers.ui.pull_dialog import pull_new_copy
             ui_actions.append(UIAction(name='Pull',
                 callback=lambda: pull_new_copy(entry.remote_name, config_path),
-                description='Choose LocalCrypt (recommended) or a readable Local copy.', destructive=True))
+                description='Cloud → this device: choose encrypted LocalCrypt or readable Local files, then review.'))
         else:
             association = getattr(entry.remote_context, 'item', None)
             ui_actions.append(UIAction(name='Pull',
                 callback=lambda: actions.pull_remote(entry.remote_name, config_path, review=True, **({'package': association.package} if association else {})),
-                description='Sync decrypted files into the Local folder.', destructive=True))
+                description='Cloud → Local: download readable files that remain accessible after locking. Review changes first.'))
     return ui_actions
 
 
@@ -127,6 +127,9 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
     sources = []
     represented_copies = set()
     configs = credentials.get_loaded_credential_config_paths()
+    from . import desktop_catalog, session
+    configs += [path for path in desktop_catalog.contexts() if path not in configs
+                and path.with_suffix('.conf') not in configs]
     copies = connections()
     from features.rclone.localcrypt.connections import connections as local_connections
     links = local_connections()
@@ -135,7 +138,8 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
         folders = _matching_local_folders(config_path, local_folders=ordinary, copies=copies, local_links=links)
         represented_copies.update(folder.connection for folder in folders if isinstance(folder, LocalCryptFolder))
         sources.append(RemoteFolderSource(
-            name=config_path.stem + (' (session)' if config_path.suffix == '.session' else ''),
+            name=config_path.stem + ((' (session)' if session.names(config_path) is not None else ' (locked)')
+                                     if config_path.suffix == '.session' else ''),
             get_remote_names=lambda config_path=config_path: configuration.get_rclone_remote_names(config_path),
             context=config_path,
             get_local_folders=lambda folders=folders: folders))

@@ -33,6 +33,8 @@ def get_logistics_remote_credentials_zip_lst() -> list[fileUtils.File]:
     from commonUtils.filesystem.traversal import scan_directory, natural_path_key
     paths = set()
     for root in get_credential_package_directories():
+        if not root.is_dir():
+            continue
         paths.update(path.resolve() for path in scan_directory(root, mask='*.zip', recursive=True))
     return [fileUtils.File(path) for path in sorted(paths, key=natural_path_key)]
 
@@ -66,3 +68,35 @@ def load_remote_from_zip_to_config(zip_path: str | Path, zip_pw: str, *, remembe
         return False
     print_debug_msg(f'Successfully loaded remote credentials to "{config_path.name}"!', True)
     return True
+
+
+def import_credential_package(source, *, cancelled=lambda: False):
+    """Copy a bounded ZIP into the configured package folder without replacing one."""
+    from io import BytesIO
+    from zipfile import is_zipfile
+    from commonUtils.persistence import atomic_write_bytes
+    from commonUtils.runtime.operations import check_cancelled
+    source = Path(source)
+    if source.suffix.casefold() != '.zip':
+        raise ValueError('Choose a .zip credential package.')
+    check_cancelled(cancelled)
+    with source.open('rb') as stream:
+        content = stream.read(1024 * 1024 + 1)
+    if len(content) > 1024 * 1024:
+        raise ValueError('Credential ZIPs are limited to 1 MiB.')
+    if not is_zipfile(BytesIO(content)):
+        raise ValueError('This file is not a valid ZIP archive.')
+    check_cancelled(cancelled)
+    root = config.LogisticsConfig().path_logistics_remote_cred
+    destination = root / (source.stem + '.zip')
+    if destination.is_symlink():
+        raise ValueError('The destination package is a symbolic link. Choose a different ZIP name.')
+    if destination.exists():
+        with destination.open('rb') as stream:
+            existing = stream.read(1024 * 1024 + 1)
+        if existing == content:
+            return destination.resolve()
+        raise FileExistsError('A different credential ZIP has this name. Rename your ZIP before importing it.')
+    root.mkdir(parents=True, exist_ok=True)
+    atomic_write_bytes(destination, content, overwrite=False, validate=lambda: check_cancelled(cancelled))
+    return destination.resolve()

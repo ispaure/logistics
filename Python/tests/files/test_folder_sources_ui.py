@@ -151,6 +151,55 @@ class FolderSourceTests(QtTestCase):
     def entries(self, page):
         return [item.data(0, qt.Qt.ItemDataRole.UserRole) for item in page._entry_items.values()]
 
+    def test_empty_cloud_offers_rclone_setup_without_opening_a_connection(self):
+        from types import SimpleNamespace
+        page = self.page()
+        page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
+        self.wait(page)
+        self.assertIs(page.browser_stack.currentWidget(), page.cloud_setup)
+        scope = qt.QComboBox()
+        scope.addItem('Personal Settings', 'personal')
+        settings = SimpleNamespace(scope_selector=scope, panels={})
+        with patch('desktop.settings.window.open_settings', return_value=settings) as open_settings:
+            page.add_rclone_button.click()
+        self.assertEqual(open_settings.call_args.kwargs, {'category': 'feature:rclone'})
+        self.browser_factory.assert_not_called()
+
+    def test_remembered_session_names_are_locked_and_legacy_stays_hidden_until_enabled(self):
+        from features.rclone import desktop_catalog, configuration, session
+        from features.rclone.ui_contributions import _get_remote_sources
+        from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
+        context, package = self.root / 'Account.session', self.root / 'Account.zip'
+        package.touch()
+        desktop_catalog.remember(context, package, ['Books', 'Legacy-Books'])
+        self.enterContext(patch.object(configuration, 'get_rclone_config_dir', return_value=self.root))
+        self.enterContext(patch('models.folder_discovery.get_local_folders', return_value=[]))
+        self.enterContext(patch('features.rclone.localcrypt.mapping.connections', return_value=[]))
+        self.enterContext(patch('features.rclone.localcrypt.connections.connections', return_value=[]))
+        provider = RemoteFolderSourceContribution('rclone', _get_remote_sources)
+        self.remotes = [RegisteredContribution('rclone', 'rclone', provider)]
+        self.addCleanup(session.forget, context)
+        self.browser_patcher.stop()
+        page = self.page()
+        page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
+        self.wait(page)
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Books'])
+        self.assertIn('Account (locked)', [page.credential_combo.itemText(i) for i in range(page.credential_combo.count())])
+        self.assertIsNone(session.credentials(context))
+        page.show()
+        self.select_first(page)
+        self.wait(page)
+        self.assertIsInstance(page._browser_view, WorkspaceUnlockView)
+        self.assertEqual(page._browser_view.package, package.absolute())
+        # Listing/selection asks for a password but never decrypts or connects.
+        self.assertIsNone(session.credentials(context))
+        page.visibility.set_show_legacy(True)
+        self.wait(page)
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Books', 'Legacy-Books'])
+        page.visibility.set_show_legacy(False)
+        self.wait(page)
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Books'])
+
     def test_legacy_visibility_defaults_off_and_is_shared_for_the_session(self):
         self.local_folders = [self.folder('Books'), self.folder('Legacy-Books'),
                               self.folder('lEgAcY-Notes')]
