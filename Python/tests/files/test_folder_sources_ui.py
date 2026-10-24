@@ -188,7 +188,7 @@ class FolderSourceTests(QtTestCase):
         self.assertEqual(open_settings.call_args.kwargs, {'category': 'feature:rclone'})
         self.browser_factory.assert_not_called()
 
-    def test_remembered_names_require_loading_credentials_before_cloud_discovery(self):
+    def test_remembered_names_remain_discoverable_while_credentials_are_locked(self):
         from features.rclone import desktop_catalog, configuration, session
         from features.rclone.ui_contributions import _get_remote_sources
         context, package = self.root / 'Account.session', self.root / 'Account.zip'
@@ -204,7 +204,8 @@ class FolderSourceTests(QtTestCase):
         page = self.page()
         page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
         self.wait(page)
-        self.assertEqual(self.entries(page), [])
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Books'])
+        self.assertEqual(self.entries(page)[0].remote_context, context)
         session.remember(context, {'Books': {'type': 'drive'}, 'Legacy-Books': {'type': 'drive'}}, package_path=package)
         page.refresh()
         self.wait(page)
@@ -215,7 +216,7 @@ class FolderSourceTests(QtTestCase):
         session.forget(context)
         page.refresh()
         self.wait(page)
-        self.assertEqual(self.entries(page), [])
+        self.assertEqual([entry.name for entry in self.entries(page)], ['Books', 'Legacy-Books'])
 
     def test_legacy_visibility_defaults_off_and_is_shared_for_the_session(self):
         self.local_folders = [self.folder('Books'), self.folder('Legacy-Books'),

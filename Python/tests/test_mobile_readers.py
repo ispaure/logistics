@@ -105,7 +105,7 @@ class MobileReaderTests(unittest.TestCase):
         source = (b'<html><body onload="steal()"><script>steal()</script><style>body{color:red}</style>'
                   b'<p>Safe <strong>text</strong></p><a href="https://example.invalid">Link</a>'
                   b'<img src="https://example.invalid/track"/><img src="page.png" onerror="steal()"/></body></html>')
-        book = SimpleNamespace(spine=['chapter.xhtml'], members={'page.png'}, resource_sizes={'page.png': len(image)},
+        book = SimpleNamespace(values=lambda name: [], spine=['chapter.xhtml'], members={'page.png'}, resource_sizes={'page.png': len(image)},
                                read=lambda path: source if path == 'chapter.xhtml' else image)
         html = chapter_html(book, 0)
         self.assertIn('<strong>text</strong>', html)
@@ -126,7 +126,7 @@ class MobileReaderTests(unittest.TestCase):
                     '<script>steal()</script><image ' + attribute + '="images/cover.png" '
                     'onerror="steal()" width="100" height="200"/>'
                     '</svg></div></body></html>').encode()
-                book = SimpleNamespace(spine=['titlepage.xhtml'], members={'images/cover.png'},
+                book = SimpleNamespace(values=lambda name: [], spine=['titlepage.xhtml'], members={'images/cover.png'},
                     resource_sizes={'images/cover.png': len(image)},
                     read=lambda path: source if path == 'titlepage.xhtml' else image)
                 html = chapter_html(book, 0)
@@ -142,7 +142,7 @@ class MobileReaderTests(unittest.TestCase):
         source = (b'<html><body><svg><image href="https://example.invalid/cover.png"/>'
                   b'</svg></body></html>')
         read = Mock(return_value=source)
-        book = SimpleNamespace(spine=['titlepage.xhtml'], members=set(), resource_sizes={}, read=read)
+        book = SimpleNamespace(values=lambda name: [], spine=['titlepage.xhtml'], members=set(), resource_sizes={}, read=read)
         html = chapter_html(book, 0)
         read.assert_called_once_with('titlepage.xhtml')
         self.assertIn('Image omitted', html)

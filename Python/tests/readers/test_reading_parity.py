@@ -22,7 +22,7 @@ class ReadingParityTests(unittest.TestCase):
         source = (b'<!DOCTYPE html SYSTEM "https://example.invalid/xhtml.dtd">'
                   b'<html><body><p>One&nbsp;&mdash;&copy; &amp; two</p>'
                   b'<script>private-script-sentinel</script></body></html>')
-        book = SimpleNamespace(spine=['chapter.xhtml'], read=lambda path: source)
+        book = SimpleNamespace(spine=['chapter.xhtml'], read=lambda path: source, values=lambda name: [])
         desktop = desktop_html(book, 'chapter.xhtml', foreground='#000000', spacing=150)
         mobile = chapter_html(book, 0)
         for rendered in (desktop, mobile, chapter_text(book, 0)):

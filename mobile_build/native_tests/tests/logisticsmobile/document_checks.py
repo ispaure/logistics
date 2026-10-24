@@ -92,9 +92,17 @@ async def exercise_documents(app, passed):
     from unittest.mock import AsyncMock, patch
     # Exercise the session decision and await it before continuing native UI
     # work; the old route-based prompt needed no asynchronous dismissal.
-    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as decision:
+    decision_ready, release_decision = asyncio.Event(), asyncio.Event()
+    async def cancel_dialog(dialog):
+        decision_ready.set()
+        await release_decision.wait()
+        return 'cancel'
+    with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=cancel_dialog)) as decision:
         app.request_close_session(b_session)
-        await app._document_close_tasks[b_session]
+        await asyncio.wait_for(decision_ready.wait(), timeout=30)
+        pending = app._document_close_tasks[b_session]
+        release_decision.set()
+        await pending
         decision.assert_awaited_once()
     assert app.close_session(b_session, choice='cancel') is False
     assert b_session in app.workspace.sessions
