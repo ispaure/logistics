@@ -1,6 +1,7 @@
 """Isolated long-document typing and keyboard geometry checks."""
 import asyncio
 import json
+import sys
 from pathlib import Path
 import traceback
 from uuid import uuid4
@@ -36,6 +37,8 @@ MEASURE = """JSON.stringify((() => {
 
 class Probe(LogisticsMobile):
     def startup(self):
+        import logging
+        logging.getLogger().addHandler(logging.FileHandler(Path(self.paths.cache) / 'markdown-qa-python.log', mode='w'))
         self.storage_root = Path(self.paths.cache) / ('isolated-editor-keyboard-' + uuid4().hex)
         super().startup()
 
@@ -66,7 +69,6 @@ class Probe(LogisticsMobile):
             if ios:
                 controller = self.native_host.adapter.controller
                 report['tabs_before_keyboard'] = bool(controller.isTabBarHidden())
-                assert not report['tabs_before_keyboard']
             await asyncio.sleep(.7)
             await web.evaluate_javascript("""(() => {
                 const root = document.getElementById('document');
@@ -80,7 +82,7 @@ class Probe(LogisticsMobile):
             if type(self._impl).__module__.startswith('toga_iOS.'):
                 # JavaScript focus alone need not show the software keyboard.
                 # Activate the already-focused WebKit content's native responder.
-                from mobile.keyboard import native_value
+                from commonUtils.ui.native.keyboard import native_value
                 for child in native_value(native_value(web._impl.native.scrollView).subviews):
                     if 'WKContentView' in str(type(child)) or 'WKContentView' in str(child.objc_class):
                         child.becomeFirstResponder()
@@ -107,14 +109,15 @@ class Probe(LogisticsMobile):
             assert max(s['toolbar_top'] for s in report['markdown']) - min(
                 s['toolbar_top'] for s in report['markdown']) < 1
             if type(self._impl).__module__.startswith('toga_iOS.'):
-                report['filename_width'] = float(owner.name._impl.native.bounds.size.width)
-                assert report['filename_width'] >= 44, 'Filename field collapsed under the toolbar icons'
+                # The filename uses the native navigation title; the original
+                # Toga name input is intentionally unmounted on Apple hosts.
+                report['native_title'] = str(controller.navigationItem.title)
             await capture_window(self, output / 'markdown-typing.png')
             if type(self._impl).__module__.startswith('toga_iOS.'):
                 self.main_window._impl.native.endEditing(True)
                 await asyncio.sleep(.4)
                 report['tabs_after_markdown_dismissal'] = bool(controller.isTabBarHidden())
-                assert not report['tabs_after_markdown_dismissal']
+                assert report['tabs_after_markdown_dismissal'] == report['tabs_before_keyboard']
                 # Both plain text and Markdown Source use the same native input.
                 for name in ('Typing.txt', 'Source.md'):
                     document = self.store.create(name, ('A long editable line\n' * 150).encode())
@@ -124,6 +127,7 @@ class Probe(LogisticsMobile):
                     owner = self.editor_view
                     if name.endswith('.md'):
                         owner.edit_mode.value = 'Source'
+                    tabs_before = bool(controller.isTabBarHidden())
                     native = owner.editor._impl.native
                     from rubicon.objc import NSRange
                     native.becomeFirstResponder()
@@ -151,10 +155,10 @@ class Probe(LogisticsMobile):
                     await capture_window(self, output / (name + '.png'))
                     self.main_window._impl.native.endEditing(True)
                     for attempt in range(20):
-                        if not bool(controller.isTabBarHidden()):
+                        if bool(controller.isTabBarHidden()) == tabs_before:
                             break
                         await asyncio.sleep(.05)
-                    assert not bool(controller.isTabBarHidden()), (name, 'Destination tabs did not restore')
+                    assert bool(controller.isTabBarHidden()) == tabs_before, (name, 'Destination tabs did not restore')
             report['success'] = True
         except BaseException:
             report['error'] = traceback.format_exc()
@@ -192,7 +196,11 @@ class Probe(LogisticsMobile):
                 ancestry.append(dict(kind=str(parent.getClass().getName()), scroll=int(parent.getScrollY()), bounds=bounds(parent)))
                 parent = parent.getParent()
             secondary = owner.source_tools if hasattr(owner, 'source_tools') else owner.footer
-            return dict(editor=bounds(native), toolbar=bounds(owner.toolbar._impl.native),
+            bar = self._impl.native.getSupportActionBar()
+            toolbar = (bar.getCustomView() if getattr(self.native_host.adapter, '_reader_action_bar_active', False)
+                       else owner.toolbar._impl.native)
+            return dict(editor=bounds(native), toolbar=bounds(toolbar),
+                toolbar_visible=bool(toolbar.isShown() and (bar.isShowing() if getattr(self.native_host.adapter, '_reader_action_bar_active', False) else True)),
                 compact=self.native_host.adapter.keyboard_chrome is not None,
                 secondary_attached=secondary.parent is not None,
                 secondary_native_attached=secondary._impl.native_toplevel.getParent() is not None,
@@ -212,6 +220,15 @@ class Probe(LogisticsMobile):
                 event.recycle()
 
         try:
+            if '--landscape' in sys.argv:
+                self._impl.native.setRequestedOrientation(0)
+                for _ in range(80):
+                    if self._impl.native.getResources().getConfiguration().orientation == 2:
+                        break
+                    await asyncio.sleep(.1)
+                else:
+                    raise AssertionError('Landscape keyboard configuration did not become active.')
+                report['landscape'] = True
             await asyncio.sleep(1)
             from commonUtils.runtime.resources.local import LocalFiles
             from features.text_editor.resources import LocalTextCopies
@@ -221,7 +238,7 @@ class Probe(LogisticsMobile):
             cases = [(name, source, False) for name, source in (
                 ('Typing.txt', True), ('Source.md', True), ('Formatted.md', False),
                 ('New.txt', True), ('New.md', False), ('Append.md', False),
-                ('Heading.md', False), ('Large.md', False), ('Large-source.md', True))]
+                ('Heading.md', False), ('Large.md', False), ('Large-heading.md', False), ('Large-source.md', True))]
             cases += [(name, source, True) for name, source in (
                 ('Local-long.md', False), ('Local-short.md', False), ('Local-source.md', True))]
             for name, source, provider in cases:
@@ -229,11 +246,12 @@ class Probe(LogisticsMobile):
                 text = '' if name.startswith('New') else 'A long editable paragraph.\n\n' * 150
                 if 'short' in name:
                     text = '# Heading\n\nShort note'
-                if name == 'Heading.md':
+                if name in ('Heading.md', 'Large-heading.md'):
                     text += '\n\n# Editable heading'
-                font_size = self.preferences.values['font_size']
+                font_key = 'markdown_font_size' if name.endswith('.md') else 'text_font_size'
+                font_size = self.preferences.values[font_key]
                 if name.startswith('Large'):
-                    self.preferences.values['font_size'] = '32'
+                    self.preferences.values[font_key] = '32'
                 if provider:
                     (local / name).write_text(text)
                     assert await self.open_crypt(copies=LocalTextCopies(LocalFiles(local)), key=name, edit=True)
@@ -249,13 +267,13 @@ class Probe(LogisticsMobile):
                         # input still owns the software keyboard.
                         self.choose_document_type()
                         form = self.routes.body().children[0].content
-                        form.children[1].value = name
-                        form.children[3].value = ('Markdown (.md)' if name.endswith('.md') else 'Plain text (.txt)')
-                        field = form.children[1]._impl.native
+                        form.name_input.value = name
+                        form.type_selector.value = ('Markdown (.md)' if name.endswith('.md') else 'Plain text (.txt)')
+                        field = form.name_input._impl.native
                         field.requestFocus()
                         manager.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
                         await asyncio.sleep(.7)
-                        form.children[7]._impl.native.performClick()
+                        form.create_button._impl.native.performClick()
                         assert self.current.name == name
                     else:
                         document = self.store.create(name, text.encode())
@@ -265,12 +283,15 @@ class Probe(LogisticsMobile):
                     owner = self.editor_view
                     if name.endswith('.md') and source:
                         owner.edit_mode.value = 'Source'
-                self.preferences.values['font_size'] = font_size
                 if name == 'Large-source.md':
                     large_source = owner
                 await asyncio.sleep(.6)
                 native = owner.editor._impl.native if source else owner.formatted.view._impl.native
                 case = dict(name=name, before=sample(owner, native), samples=[])
+                if name.startswith('Large'):
+                    case['font_size'] = (float(native.getTextSize()) / float(native.getResources().getDisplayMetrics().density)
+                        if source else float(await owner.formatted.view.evaluate_javascript('parseFloat(getComputedStyle(document.body).fontSize)')))
+                    assert case['font_size'] >= 31, case
                 report['cases'].append(case)
                 native.requestFocus()
                 if source:
@@ -283,7 +304,7 @@ class Probe(LogisticsMobile):
                     touch = json.loads(await owner.formatted.view.evaluate_javascript(
                         "JSON.stringify({x:30,y:Math.max(root.getBoundingClientRect().top+5,"
                         "root.getBoundingClientRect().bottom-20),width:innerWidth})"))
-                    if name == 'Heading.md':
+                    if name in ('Heading.md', 'Large-heading.md'):
                         touch = json.loads(await owner.formatted.view.evaluate_javascript("""(() => {
                             const heading = root.querySelector('h1');
                             root.scrollTop += heading.getBoundingClientRect().top - root.getBoundingClientRect().top;
@@ -327,6 +348,7 @@ class Probe(LogisticsMobile):
                     assert len(owner.document.text.splitlines()) > 10, owner.document.text
                 for data in case['samples']:
                     assert data['keyboard'], 'Android software keyboard did not open'
+                    assert data['toolbar_visible'], data
                     assert data['toolbar'][1] >= data['visible_top'], data
                     assert abs(data['toolbar'][1] - case['samples'][0]['toolbar'][1]) <= 2, data
                     assert data['editor'][1] >= data['toolbar'][3] - 2, data
@@ -345,14 +367,16 @@ class Probe(LogisticsMobile):
                     else:
                         assert data['caret_top'] >= data['editor'][1] - 2, data
                         assert data['caret_bottom'] <= data['editor'][3] + 2, data
-                if not source and name == 'Formatted.md' and case['samples'][-1]['dom']['compact_menu']:
+                if not source and name == 'Formatted.md':
                     web = owner.formatted.view
                     button_point = """JSON.stringify((() => {
                         const bounds = document.querySelector(SELECTOR).getBoundingClientRect();
                         return {x:bounds.left+bounds.width/2,y:bounds.top+bounds.height/2,width:innerWidth};
                     })())"""
                     await web.evaluate_javascript("document.querySelector('nav details').open=true;")
-                    point = json.loads(await web.evaluate_javascript(button_point.replace('SELECTOR', json.dumps('.compact-formatting [data-command=bold]'))))
+                    selector = ('.compact-formatting [data-command=bold]' if case['samples'][-1]['dom']['compact_menu']
+                                else 'nav > [data-command=bold]')
+                    point = json.loads(await web.evaluate_javascript(button_point.replace('SELECTOR', json.dumps(selector))))
                     tap(native, point)
                     await asyncio.sleep(.3)
                     assert not await web.evaluate_javascript("document.querySelector('nav details').open")
@@ -389,6 +413,7 @@ class Probe(LogisticsMobile):
                 case['dismissed'] = sample(owner, native)
                 assert abs(case['dismissed']['toolbar'][1] - case['before']['toolbar'][1]) <= 2, case
                 assert abs(case['dismissed']['panel'][3] - case['before']['panel'][3]) <= 2, case
+                self.preferences.values[font_key] = font_size
             # Keep the IME open while rotating through rail/bottom navigation.
             # This also checks that the cached inactive bar is restored later.
             self.open_document(large_source.document.id)
@@ -428,7 +453,7 @@ class Probe(LogisticsMobile):
                                 caret_bottom=top + layout.getLineBottom(line),
                                 selection=int(native.getSelectionEnd()), text_tail=owner.editor.value[-120:])
                     report['rotation'].append(data)
-                    assert data['keyboard'] and data['toolbar'][1] >= data['visible_top'], data
+                    assert data['keyboard'] and data['toolbar_visible'] and data['toolbar'][1] >= data['visible_top'], data
                     assert data['editor'][3] <= data['visible_bottom'] + 2, data
                     assert data['caret_top'] >= data['editor'][1] - 2, data
                     assert data['caret_bottom'] <= data['editor'][3] + 2, data
@@ -438,7 +463,8 @@ class Probe(LogisticsMobile):
                 native.clearFocus()
                 await asyncio.sleep(.7)
                 assert self.native_host.adapter.keyboard_chrome is None
-                assert self.native_host.adapter.impl.native_navigationview.getVisibility() == 0
+                expected_visibility = 8 if getattr(self, '_document_tabs_hidden', False) else 0
+                assert self.native_host.adapter.impl.native_navigationview.getVisibility() == expected_visibility
                 assert activity.getSupportActionBar().isShowing()
                 assert owner.editor.value.replace(' rotation', '') == rotation_text
                 assert len(owner.editor.value) == len(rotation_text) + 3 * len(' rotation')

@@ -2,8 +2,8 @@
 
 For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
 
-Planned work: [Mobile Markdown editor and library rework](mobile-markdown-rework.md)
-defines the UI redesign, storage permissions, refactoring and native acceptance gates.
+The [Mobile Markdown editor and library rework](mobile-markdown-rework.md) records
+the redesign, storage permissions, refactoring and remaining native acceptance gates.
 
 An optional Logistics feature for plain text and code, independent of Books,
 Comics and the shared Markdown reader. Open **Settings → Text Editor → Open Text
@@ -385,3 +385,61 @@ normal-close fallback. `test_text_editor_recovery.py` covers both failure timing
 Recovery errors retain a nonempty failure state even when an exception supplies
 no message. This prevents a failed checkpoint from restarting automatic suspension
 or being treated as success; the normal close prompt remains available.
+
+
+## Mobile Markdown refresh
+
+`mobile/markdown_editor.py` owns block mapping and the native change protocol;
+`mobile/markdown_script.py` owns DOM input, serialization, selection and commands;
+`mobile/markdown_style.py` supplies the shared reading typography and adaptive
+writing/formatting layout. They remain offline and preserve untouched source
+blocks. Private provider previews and formatted surfaces use the memory-only
+WebView on supported native platforms.
+
+Formatted input is flushed from the live DOM before Save, explicit mode/reading
+commands and native close decisions. A replaced or closed page rejects a late
+snapshot. The existing source input remains the sole draft used by persistence,
+search and recovery. Remote Markdown opens rendered even when an entry point
+requests editing. `access.py` rejects remote/read-only providers and providers
+without replacement capability; persistence repeats that check. Read-only and
+writable sessions use distinct identities even when they share a cache root.
+
+The Android document action bar remains visible while editing with a software
+keyboard. Short windows tuck secondary rows; the primary actions still provide
+Source and Formatted commands. Very short WebViews use a floating Format button
+and a scrollable overlay rather than consuming another full toolbar row. Keyboard
+state and active-session changes invalidate layout even when native dimensions
+are unchanged, including document creation while the keyboard is open.
+
+The Notes Library presents its location and access state, loads folders on demand,
+and supplies local note creation, provider-scoped images and editing handoff.
+`mobile/library_editing.py` resolves Save/Discard/Cancel before returning to the
+retained browser. It refreshes the saved note and restores its reading position.
+Creation uses the provider’s exclusive create operation; remote libraries reject
+creation and editor invocation in handlers as well as hiding their controls.
+
+Focused checks include the Markdown editing/font/image/search/speech suites,
+`test_provider_markdown.py`, `test_markdown_access.py`,
+`test_markdown_library_workflow.py`, Notes Library/Obsidian, editor picker,
+keyboard/chrome, provider sessions and close/reader lifecycle regressions.
+The native bridge fixture additionally exercises LocalCrypt and encrypted-remote
+library reads without real credentials. Packaging and lint remain required.
+
+`markdown_rework_probe.py` checks native formatting, final-input saving, real
+rotation, library return, read-only remote policy and LocalCrypt save/lock behavior.
+`editor_keyboard_probe.py` exercises actual native input connections/composition,
+caret and toolbar geometry, formatting/link dialogs, new documents, 32-point text
+and rotation. It accepts `--landscape` on Android. Keep raw evidence outside the
+wiki. For an already built, current simulator application:
+
+```sh
+.venv/bin/python -m mobile_build.validation.markdown_rework_tools \
+  --app '/absolute/path/Logistics Mobile.app' --device SIMULATOR_UUID \
+  --output mobile_build/logs/markdown-acceptance
+```
+
+Add `--keyboard` for the keyboard probe. The helper stages a current source
+snapshot into a separate QA app, records its source manifest and native errors,
+and saves evidence before uninstalling that QA app. It never installs over the
+main application. Physical-device, fold-pose and accessibility acceptance gaps
+are tracked in the rework brief; host tests are not substitutes for native checks.

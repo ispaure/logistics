@@ -6,9 +6,10 @@ on iPhone, iPad, iPhone Duo and Android phones. Fix formatted editing on iOS and
 controls becoming inaccessible when the Android keyboard opens. Local and
 LocalCrypt must support reading and writing; cloud remotes must remain read-only.
 
-This is planned work. Completion requires the implementation and the acceptance
-evidence below; existing guides describing intended behavior are not proof that
-the reported defects are fixed.
+The implementation and automated native checks below are complete. Physical
+device signing, Duo inner-display/fold poses and the manual accessibility/window
+checks remain open acceptance gates. Do not treat simulator coverage as proof
+that those gates passed.
 
 ## Execution instruction
 
@@ -212,3 +213,62 @@ remains among Logistics packages; preserve that main app and all its data.
 
 The final handoff must name the changes, tests, device matrix results and any
 remaining acceptance gaps. Mark complete only after all required gates are met.
+
+
+## Implementation and validation record — October 24, 2026
+
+The existing offline block editor was retained and refactored into Python state,
+JavaScript interaction and shared reading/writing CSS. Formatted mode now uses
+clear heading/emphasis/list/code/table typography, a compact toolbar and an overlay
+Format panel. Short keyboard windows use a floating Format control. Read, formatted
+and exact-source modes share one draft; explicit DOM snapshots precede save, mode
+changes and close decisions. Late pages cannot replace a current draft. Untouched
+blocks retain their original source; edited nested fences retain their marker and
+info string, and tables retain alignment. Private WebViews are detached and cleared
+through their native memory-only lifecycle.
+
+Local and unlocked LocalCrypt support editing and new-note creation. Remote policy
+is enforced below the UI and repeated at persistence; encrypted cloud providers
+remain remote. The refreshed library exposes location/access context and a local
+pencil handoff, with Save/Discard/Cancel on return and refreshed saved content.
+Android retains its native document actions during typing. Keyboard dismissal and
+session changes restore secondary controls even when window dimensions repeat.
+
+| Validation surface | Observed result |
+| --- | --- |
+| Host regressions | Markdown editing, fonts, images, search, speech, access and library-return suites; provider modes and save guards; source input/picker; Notes Library with the real local encrypted bridge; keyboard/native chrome; responsiveness; private sessions and reader/close lifecycle passed. Packaging and lint passed. |
+| iPhone simulator, iOS 27 | Styled WKWebView content; final unnotified DOM save; Unicode; nested fence/table round-trip; Source/Formatted scroll retention; both landscape orientations; local library edit/save/return; remote rejection and LocalCrypt save/lock passed. Software keyboard probe passed. |
+| iPad simulator, iOS 27 | Core reading/editing/library/remote/LocalCrypt flow and rotation passed, including a dark appearance run. |
+| Dedicated iPhone Duo simulator, iOS 27.1 | Core flow and rotation passed on its outer display; the recorded pose was hinge status 1. This does not validate its inner display or fold transitions. |
+| Android phone emulator, API 35 | Core flow, real native WebView input and LocalCrypt save/lock passed. Thirteen software-keyboard scenarios passed in portrait and again in landscape, including native composition, blank/new notes, link formatting, large text, local-provider Source/Formatted editing and three rotations during input. |
+
+Native core checks asserted a 32 px heading against 16 px body text and bold weight
+700. Representative formatted readiness was below one second and the explicit
+final-input save below 0.1 seconds on the tested iPhone and Android emulator.
+These are diagnostic samples, not a general performance guarantee. Long-note mode
+switching retained the reading scroll offset. No broad memory-growth benchmark or
+physical-device performance claim is made.
+
+Native checks used separate QA bundle/package identities and synthetic notes and
+LocalCrypt fixtures. Apple checks staged current Python sources into an existing
+native shell; an optional QA-only native helper supplied current Inbox symbols
+missing from that cached shell. Android checks similarly overlaid current source
+and native helper classes into a separate signed QA APK. These checks validate the
+changed runtime paths; they are not fresh release archive/signing validation.
+Reusable drivers live under `mobile_build/native_tests` and `mobile_build/validation`.
+Raw screenshots, source manifests, timings and logs remain outside the wiki.
+
+## Remaining acceptance gates
+
+- Physical iPhone/iPad: Xcode reported **No Accounts**, and a provisioning profile
+  was unavailable for the separate QA bundle. The existing main-app identity was
+  preserved. Sign in and provision the QA identity before repeating native checks.
+- Physical Android reproduction, gesture/button navigation variants and vendor
+  keyboard differences remain unverified. No BOOX test package was installed.
+- Duo inner display, flat/partial/fold transitions and seam interaction remain
+  unverified; outer-display rotation is the only pose coverage recorded here.
+- iPad narrow multitasking windows, floating keyboard and hardware-keyboard focus,
+  physical selection handles/autocorrect/dictation, and VoiceOver/TalkBack focus
+  order require manual acceptance. Automated geometry and labels do not replace it.
+- Complete sustained memory-growth/background stress measurements and the remaining
+  full interaction matrix before declaring every original acceptance gate complete.

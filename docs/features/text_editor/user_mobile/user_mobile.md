@@ -3,9 +3,11 @@
 The mobile app provides its text editor in Documents and Workspaces.
 See the [Documents and editing](../../../user_mobile/documents/documents.md) guide for opening, editing, saving and exporting files.
 
-Markdown opens in preview. The top **pencil** icon (**Edit Markdown**) opens a single formatted editing
-surface; choose **Source** there for exact syntax. The Formatted/Source selector
-is hidden while reading. The top **page** icon returns to preview. Save is shown
+Markdown opens in preview. The top **pencil** icon (**Edit Markdown**) opens
+directly editable, formatted text. Use **••• → Source editing** for exact syntax,
+or **••• → Formatted editing** to return to styled writing. These commands remain
+available with the keyboard open. The mode selector is shown only in Source;
+formatted editing has its own compact formatting toolbar. The top **page** icon returns to preview. Save is shown
 only after text changes, and disappears after saving or reverting. Reading uses
 one compact top toolbar in portrait and landscape on iOS and Android, with no
 separate edit/save footer or duplicate file-drawer row.
@@ -50,8 +52,7 @@ destructive styling and a native **Delete / Cancel** confirmation.
 Close other app windows before deleting. Files opened directly from a folder
 continue to use that folder's file-management actions.
 Choose **New document** from Home to enter a name
-and select the file type before creating it. Markdown offers an optional title
-that becomes the first heading; the filename remains independently editable.
+and select the file type before creating it. The filename remains independent of the headings you add while editing.
 For a new Markdown document, tap anywhere in the blank writing area below the
 formatting toolbar to place the cursor and open the keyboard.
 The formatting toolbar stays above the writing area while the document scrolls.
@@ -63,10 +64,11 @@ that editor remains open. **Plain Text** disables highlighting; choose Automatic
 to resume detection. Changing language does not edit the document's text.
 On short phone screens or with enlarged text, the space around the caret shrinks
 to keep the current line inside the writing area above the keyboard.
-On Android, a short keyboard-sized window temporarily hides the app title and
-destination navigation to leave room for editing; both return when the keyboard
-closes. Secondary mode/language controls and the status row also return when the
-keyboard closes; Save remains in the main toolbar while editing. Source mode stays
+On Android, a short keyboard-sized window hides destination navigation and
+secondary mode/language controls while retaining the document action bar, including
+Save and **•••**. Hidden secondary controls return when the keyboard closes.
+In a very short formatted writing area, **Format** becomes a floating button;
+its scrollable panel keeps formatting and link controls reachable above the keyboard. Source mode stays
 inside the app in landscape. The formatting page is anchored to its viewport,
 and tight layouts reduce padding around the writing line.
 The main toolbar uses a compact row while the keyboard is open in a tight window.
@@ -137,11 +139,19 @@ Documents with a folder/page sidebar, note history and read-aloud controls.
 Folder and file icons identify each sidebar entry; the selected row is highlighted.
 When the sidebar and page appear side by side, navigation, edit and read-aloud
 controls sit above the Markdown page.
-Remote libraries have no search or recursive index; folders load only when
-expanded. Local filtering searches only loaded note names. Notes are read-only
-in this view and limited to 2 MiB. Hidden configuration is excluded and links
-stay inside the library.
+Remote libraries have no filename filter or recursive index; folders load only
+when expanded. Local filtering searches only loaded note names. Reading is
+limited to 2 MiB. Hidden configuration is excluded and links stay inside the library.
 
-On iOS, Home, Workspaces and the other destination tabs hide while the software
-keyboard is open, giving the document more writing space. They return when the
-keyboard closes. This applies to formatted Markdown, Source and plain text.
+Local and unlocked LocalCrypt libraries support editing. Tap the pencil to open
+the current note in formatted editing, or choose **••• → New note…** to create a
+Markdown file in the current note’s folder. Existing names are never overwritten.
+Choose **Return to Notes Library** from the editor’s actions to return to the same
+note; unsaved edits offer Save, Discard changes and Cancel. A failed save keeps the draft.
+The library refreshes the saved note and retains its reading position. Cloud
+remotes, including encrypted remotes, remain read-only in both the library and
+standalone Markdown viewer. Source inspection does not enable editing.
+
+On iOS, opening the keyboard preserves the document’s native title and actions
+while resizing the writing area. Keyboard dismissal restores the previous
+navigation visibility; destination tabs can remain hidden while a document is open.
