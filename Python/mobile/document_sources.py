@@ -62,12 +62,13 @@ def source_icons(app, session):
         try:
             cipher = source['type'] in {'crypt', 'download'}
             remote = client.resolve_remote(source['remote'], source['identity'], cipher=True) if cipher and hasattr(client, 'resolve_remote') else (
-                client.resolve_remote(source['remote'], source['identity']) if hasattr(client, 'resolve_remote') else source['remote'])
+                client.resolve_remote(source['remote'], None) if hasattr(client, 'resolve_remote') else source['remote'])
             # Badge rendering runs on the UI thread. Credential publication
             # already supplies fingerprints; never wait on the native bridge
             # once per row while an unrelated network operation holds its lock.
             field = 'crypt_identities' if cipher else 'identities'
-            unlocked = any(record.get(field, {}).get(remote) == source['identity']
+            unlocked = any(record.get(field, {}).get(remote) == source['identity'] if cipher
+                           else remote in record.get('remotes', ())
                            for record in getattr(client, 'package_records', ()))
         except (OSError, ValueError, AttributeError):
             pass
@@ -229,8 +230,14 @@ async def _reopen_file(app, source):
             ready = False
         if not ready and not await app.require_remote_credentials_async(remote, resume=resume):
             return False
-    elif not await app.require_remote_credentials_async(remote, identity=identity, resume=resume):
-        return False
+    else:
+        # Online history follows the named remote's current credentials. Old
+        # fingerprints can outlive ZIP reimports and must not force an unlock.
+        identity = None
+        if hasattr(client, 'resolve_remote'):
+            remote = client.resolve_remote(remote, None)
+        if not await app.require_remote_credentials_async(remote, resume=resume):
+            return False
     if hasattr(client, 'resolve_remote'):
         remote = client.resolve_remote(remote, identity, cipher=True) if cipher else client.resolve_remote(remote, identity)
     if source['type'] == 'remote':

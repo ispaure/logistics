@@ -30,10 +30,13 @@ class NativeCredentialState:
             aliases = item.get('aliases', {})
             hashes = item.get(field, {})
             for original, alias in aliases.items():
-                if hashes.get(alias) == identity and (name in (original, alias) or name.startswith(original + ' @ ')):
+                if (identity is None or hashes.get(alias) == identity) and (name in (original, alias) or name.startswith(original + ' @ ')):
                     if alias == name:
                         return alias
                     candidates.append(alias)
+        # Name-only history references share one remote across packages.
+        if candidates and identity is None:
+            return candidates[0]
         if len(set(candidates)) == 1:
             return candidates[0]
         return name  # Native identity checks refuse unavailable/ambiguous accounts.

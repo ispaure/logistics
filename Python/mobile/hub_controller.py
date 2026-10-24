@@ -16,6 +16,7 @@ class HubController(HubUI):
         "build_documents_hub",
         "search_documents",
         "refresh_document_list",
+        "clear_recent_documents",
         "open_document_category",
         "session_card",
         "session_summary",

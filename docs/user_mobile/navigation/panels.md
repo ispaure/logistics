@@ -194,18 +194,22 @@ On iPhone, plain text actions retain at least a 44-point-wide hit area around
 their text or icon, bounded by their own controls. Bordered rows and icon controls
 retain their full visible touch targets.
 
-LocalCrypt and private provider documents remain memory-only: their names, paths,
-content and previews do not enter Recent or the saved open-document manifest.
-They disappear from Home and the open-document list when their credential
-session is no longer current, and cannot reopen until unlocked. Recent contains
-up to six ordinary local/imported document identities. Pulling an
-unencrypted managed Local copy makes that copy an ordinary local file, which can appear
-in local document history independently of the original remote's lock state.
+Session-only provider document names and paths stay in memory while unlocked;
+password-protected credential packages can also retain encrypted open/recent
+references. They disappear from Home and Documents when credentials lock and
+can be restored after unlocking. These caches contain no document contents or
+unsaved edits. Saved-credential cloud references and ordinary local/imported
+files use app-private history. Recent keeps up to ten references. Pulling an
+unencrypted managed Local copy makes that copy an ordinary local file, which can
+appear in local history independently of the original remote's lock state.
 
 
 All open lists each opened document using its filename as the resume link, with
 a direct × close control beside it. Recent uses compact rows without document
-text previews. This layout is always used; there is no card-overview setting.
+text previews. Use the blue **Clear** button beside **Recent** in Documents to
+remove recent links, including encrypted history for currently unlocked
+credentials. Open documents and saved files are preserved. Cloud links reopen
+through the named remote’s current credentials. This layout is always used; there is no card-overview setting.
 On iPhone, tab selection waits for UIKit to finish changing its selected screen
 before laying out Documents or Chat, so their content and menus appear on the
 first tap.

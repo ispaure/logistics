@@ -35,6 +35,13 @@ class DocumentSourceTests(TestCase):
         self.assertIsNone(file_source(app, copies, 'Sensitive.md'))
         self.assertEqual(file_source(app, copies, 'Sensitive.md', session_only=True)['identity'], 'a' * 64)
 
+    def test_stale_online_history_badge_uses_loaded_remote_name(self):
+        app = self.app(saved=True)
+        app.cloud_client.package_records[0]['identities']['Drive'] = 'b' * 64
+        session = Session('', 'file-reference', 'a' * 64, 'pdf', title='Report.pdf')
+        session.source = dict(type='remote', remote='Drive', identity='a' * 64, key='Report.pdf')
+        self.assertEqual(source_icons(app, session)[-1], ('storage_unlocked', 'Connection unlocked'))
+
     def test_reference_roundtrip_ten_item_bound_and_reopen_metadata(self):
         with TemporaryDirectory() as directory:
             history = RecentDocuments(Path(directory))
@@ -106,7 +113,31 @@ class ReopenSourceTests(IsolatedAsyncioTestCase):
         source = dict(type='remote', remote='Drive', identity='a' * 64, key='Notes.md')
         self.assertFalse(await reopen_file(app, source))
         app.open_crypt.assert_not_awaited()
-        self.assertEqual(app.require_remote_credentials_async.await_args.kwargs['identity'], 'a' * 64)
+        self.assertNotIn('identity', app.require_remote_credentials_async.await_args.kwargs)
+
+    async def test_cloud_history_uses_current_connection_for_all_formats(self):
+        from unittest.mock import patch
+        from features.rclone.mobile.credential_state import NativeCredentialState
+        state = NativeCredentialState()
+        state.package_records = [dict(remotes=['Drive'], aliases={'Drive': 'Drive'},
+                                      identities={'Drive': 'b' * 64})]
+        async def require(remote, *, identity=None, resume=None):
+            return remote == 'Drive' and identity in (None, 'b' * 64)
+        app = SimpleNamespace(show_cloud=Mock(), cloud_client=SimpleNamespace(resolve_remote=state.resolve_remote),
+                              require_remote_credentials_async=AsyncMock(side_effect=require),
+                              open_crypt=AsyncMock(return_value=True))
+        copies = object()
+        resource = Mock()
+        resource.readers.return_value = copies
+        service = Mock()
+        service.remotes.open.return_value = resource
+        for filename in ('Notes.md', 'Notes.txt', 'Report.pdf', 'Book.epub', 'Comic.cbz'):
+            with self.subTest(filename=filename), patch('features.rclone.mobile.service.native_service', return_value=service):
+                source = dict(type='remote', remote='Drive @ Old package', identity='a' * 64, key=filename)
+                self.assertTrue(await reopen_file(app, source))
+                app.open_crypt.assert_awaited_with(copies=copies, key=filename)
+                self.assertEqual(service.remotes.open.call_args.args[0].remote, 'Drive')
+                self.assertIsNone(service.remotes.open.call_args.args[0].identity)
 
     async def test_local_text_reopens_with_original_provider_for_source_saves(self):
         with TemporaryDirectory() as directory:

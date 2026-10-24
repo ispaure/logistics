@@ -322,6 +322,21 @@ These contracts are covered by `test_folder_hub.py`, `test_settings_ui.py`,
 Host profiles measure Python work only; Android draw latency requires the native
 `performance_probe.py` with an attached device.
 
+## Loading cancellation and destination visibility
+
+Returning the Apple Documents split pane to its list calls `route_changed` after
+clearing `in_detail`. Cancelled or failed document loading therefore releases
+reader chrome ownership immediately, including the hidden destination bar,
+without depending on a later UIKit delegate or resize callback. Retained reader
+details still hide destinations when shown again. Flat Home/Workspaces routes
+keep their existing Back and loading-panel cleanup on Android and iOS.
+
+`test_file_loading.py` covers cancelled and failed split loads, ordinary Back,
+local imports and completed readers. `test_document_chrome.py` checks Apple and
+Android bar/keyboard restoration. The synthetic `loading_cancel_probe.py` checks
+real native destination visibility after cancelling blocked reads from Home,
+Workspaces and Documents; it never opens user files.
+
 ## Open/Save As lifecycle
 
 `app.editor_picker()` lazily creates one `EditorPicker` per host. It owns picker

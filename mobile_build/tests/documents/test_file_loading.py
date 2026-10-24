@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
 from unittest import TestCase
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from toga_dummy.utils import EventLog
 
 import toga
@@ -27,6 +27,39 @@ class FileLoadingTests(TestCase):
         self.path = self.app.private_root / 'loading.md'
         self.path.write_text('# Ready')
         self.copies = LocalTextCopies(LocalFiles(self.path.parent))
+
+    def test_cancelled_or_failed_split_loading_restores_destination_bar(self):
+        from mobile.document_sources import opening_status
+        app = self.app
+        async def exercise():
+            for failure in (ValueError, asyncio.CancelledError):
+                app.show_documents_hub()
+                origin = app.body
+                adaptive = app.adaptive
+                adaptive.split = Mock()
+                adaptive.secondary = Mock()
+                def present(panel, *, route, title):
+                    adaptive.detail_routes.append((route, panel, Mock()))
+                    adaptive.in_detail = True
+                    app.body = panel
+                    app.route_changed(panel)
+                def trim(count):
+                    adaptive.detail_routes = adaptive.detail_routes[:count]
+                try:
+                    with patch.object(adaptive, 'present', side_effect=present), \
+                            patch.object(adaptive, 'trim_details', side_effect=trim):
+                        with self.assertRaises(failure):
+                            with opening_status(app, dict(key='Pending.pdf')):
+                                self.assertTrue(app._document_tabs_hidden)
+                                raise failure()
+                        self.assertIs(app.body, origin)
+                        self.assertFalse(adaptive.in_detail)
+                        self.assertFalse(app._document_tabs_hidden)
+                finally:
+                    adaptive.split = None
+                    adaptive.detail_routes = []
+                    adaptive.in_detail = False
+        app.loop.run_until_complete(exercise())
 
     def test_real_byte_counts_switch_from_percentage_to_preparing(self):
         from mobile.document_sources import opening_status

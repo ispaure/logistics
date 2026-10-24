@@ -64,6 +64,10 @@ class FolderTreePresentation:
                 for entry in source_entries:
                     entry_labels[page._entry_key(entry)] = source.source.name
 
+        if source_type != 'local':
+            # Shared names in several credential packages denote the same remote.
+            entries = list({entry.name: entry for entry in reversed(entries)}.values())
+
         if not page.visibility.show_legacy:
             entries = [entry for entry in entries if not entry.name.casefold().startswith('legacy-')]
         entries.sort(key=lambda entry: (entry.name.casefold(), str(entry.remote_context)))
@@ -74,7 +78,6 @@ class FolderTreePresentation:
         name_counts = Counter(entry.name for entry in entries)
         copy_labels = {page._entry_key(entry): getattr(entry.local, 'storage_label', 'Local')
                        if entry.local is not None else 'Remote' for entry in entries}
-        copy_counts = Counter((entry.name, copy_labels[page._entry_key(entry)]) for entry in entries)
 
         page.folder_tree.clear()
         page._entry_items = {}
@@ -98,10 +101,6 @@ class FolderTreePresentation:
                 is_leaf = index == len(name_parts) - 1
                 if is_leaf and name_counts[entry.name] > 1:
                     item_path = (*item_path, entry_key)
-                    label = copy_labels[entry_key]
-                    if copy_counts[entry.name, label] > 1:
-                        label += ' · ' + entry_labels[entry_key]
-                    name_part = f'{name_part} [{label}]'
 
                 item = tree_items.get(item_path)
 

@@ -100,6 +100,25 @@ class HubDocumentTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_clear_recent_button_preserves_open_and_saved_documents(self):
+        import toga
+        from mobile.workspace import Session
+        app = self.app
+        saved = app.store.create('Keep.txt', b'Saved content')
+        app.recent_documents.remember(Session('closed', 'managed-text', saved.id, 'text'))
+        sessions = dict(app.workspace.sessions)
+        app.build_documents_hub()
+        button = next(widget for widget in widgets(app.document_recent_list)
+                      if isinstance(widget, toga.Button) and widget.text == 'Clear')
+        self.assertEqual(button._impl._surface_roles[1], 'accent')
+        app.loop.run_until_complete(button.on_press())
+        self.assertEqual(app.recent_documents.sessions(), [])
+        self.assertEqual(app.workspace.sessions, sessions)
+        self.assertEqual(app.store.open(saved.id).text, 'Saved content')
+        self.assertIn('No closed recent documents.', labels(app.document_recent_list))
+        from mobile.recent_documents import RecentDocuments
+        self.assertEqual(RecentDocuments(app.recent_documents.path.parent).sessions(), [])
+
     def test_locked_cloud_recent_renders_source_and_requests_credentials(self):
         from mobile.workspace import Session
         from unittest.mock import AsyncMock, patch
@@ -115,7 +134,7 @@ class HubDocumentTests(unittest.TestCase):
         app.build_documents_hub()
         with patch.object(app, 'require_remote_credentials_async', new_callable=AsyncMock, return_value=False) as unlock:
             app.loop.run_until_complete(app.recent_opener(recent)())
-            self.assertEqual(unlock.await_args.kwargs['identity'], 'a' * 64)
+            self.assertNotIn('identity', unlock.await_args.kwargs)
 
     def test_recent_cloud_open_shows_activity_until_finished_and_cleans_up_on_failure(self):
         import asyncio
@@ -340,7 +359,8 @@ class HubDocumentTests(unittest.TestCase):
         app.show_documents_hub()
         rows = [widget for widget in widgets(app.document_open_list) if hasattr(widget, 'session_id')]
         self.assertEqual(rows[0].session_id, active.id)
-        self.assertFalse(any(isinstance(widget, toga.Button) for widget in widgets(app.document_recent_list)))
+        self.assertEqual([widget.text for widget in widgets(app.document_recent_list)
+                          if isinstance(widget, toga.Button)], ['Clear'])
         app.document_search.value = 'No such filename'
         app.document_search.value = ''
         rows = [widget for widget in widgets(app.document_open_list) if hasattr(widget, 'session_id')]
@@ -391,6 +411,12 @@ class HubDocumentTests(unittest.TestCase):
     def test_home_browse_refreshes_local_root_after_other_views_and_search(self):
         import toga
         app = self.app
+        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        shared_directory = TemporaryDirectory()
+        self.addCleanup(shared_directory.cleanup)
+        shared = Path(shared_directory.name)
+        use_shared_local(app.private_root, shared)
+        self.addCleanup(_shared_local_roots.pop, app.private_root, None)
         def button(widget):
             if isinstance(widget, toga.Button) and widget.text == 'Workspaces':
                 return widget
@@ -408,15 +434,15 @@ class HubDocumentTests(unittest.TestCase):
             app.change_folder_source('Local')
             await app.folder_buttons['All files'].on_press()
             self.assertIn(app.files_view, app.body.children)
-            self.assertEqual(app.file_storage.value, 'Local files')
+            self.assertEqual(app.file_storage.value, 'Shared files')
             self.assertEqual(app.file_path, '')
             self.assertEqual(app.file_browser.search.value, '')
         async def exercise():
             await press_home()
-            root = app.private_root / 'LocalFiles'
+            root = shared
             (root / 'Notes').mkdir()
             (root / 'Notes' / 'Draft.md').write_text('# Draft')
-            await app.browser_file_location(('Local files', 'Notes'))
+            await app.browser_file_location(('Shared files', 'Notes'))
             app.file_browser.search.value = 'Missing filename'
             for view in (app.show_documents, app.show_settings, app.show_documents_hub):
                 view()

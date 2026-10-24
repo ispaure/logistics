@@ -382,6 +382,16 @@ class HubUI:
         self.documents_query = widget.value
         self.refresh_document_list()
 
+    async def clear_recent_documents(self, widget=None, **kwargs):
+        try:
+            self.app.credential_document_lists.clear_recent()
+            self.recent_documents.clear()
+        except (OSError, ValueError) as error:
+            await self.main_window.dialog(toga.InfoDialog('Could not clear recent documents', str(error)))
+            return
+        self.refresh_document_list()
+        self.refresh_hub('home')
+
     def refresh_document_list(self):
         if not hasattr(self, 'document_open_list'):
             return
@@ -406,7 +416,11 @@ class HubUI:
         entries.add(document_list(rows,
             'No matching open documents.' if query else 'No open documents.'))
         recent = self.recent_items(excluding=[session.identity for session in sessions])
-        self.document_recent_list.add(heading('Recent'))
+        clear = surface(toga.Button('Clear', on_press=self.clear_recent_documents,
+            style=Pack(height=44, margin_top=8)), radius=0, background='transparent',
+            foreground='accent', outlined=False, eink_outlined=False)
+        self.document_recent_list.add(toga.Box(children=[heading('Recent'), clear],
+            style=Pack(direction=ROW, align_items=CENTER, gap=12)))
         rows = []
         for session, summary in recent:
             if matches(summary):

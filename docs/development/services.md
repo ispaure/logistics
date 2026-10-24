@@ -45,7 +45,9 @@ paginated layout after grabbing the outgoing spread and before committing a turn
 `services.folders.catalog` is the pure shared desktop/mobile projection owner.
 Adapters supply `FolderCopy` descriptors with physical identity, logical name,
 credential-source identity, category, availability and lock state. `project_catalog`
-groups logically by `(source_identity, name)` or physically by copy identity,
+groups logically by `(source_identity, name)`, physically by copy identity, or by
+name for mobile Workspaces. Workspaces treats a shared remote name across
+credential packages as the same folder and keeps its displayed name unchanged. It
 retains input preference order and deduplicates equal physical copies within a
 group. A projection is available if any copy is available and locked only if all
 copies are locked. This metadata projection performs no discovery, credential

@@ -64,6 +64,37 @@ class CredentialDocumentListTests(unittest.TestCase):
         self.app.cloud_client = self.client
         self.cache = self.app.credential_document_lists
 
+    def test_clear_recent_preserves_encrypted_open_references(self):
+        self.client.unlock()
+        self.remember()
+        key = next(iter(self.cache.states))
+        opened = list(self.cache.states[key]['open'])
+        self.assertTrue(self.app.recent_documents.private_items)
+        self.cache.clear_recent()
+        self.assertEqual(self.cache.states[key]['recent'], [])
+        self.assertEqual(self.cache.states[key]['open'], opened)
+        self.cache.states.clear()
+        self.cache.refresh()
+        self.assertEqual(self.cache.states[key]['recent'], [])
+        self.assertEqual(self.cache.states[key]['open'], opened)
+        self.assertEqual(self.app.recent_documents.private_items, [])
+
+    def test_clear_recent_retires_a_pending_encrypted_history_write(self):
+        self.client.unlock()
+        async def exercise():
+            self.remember()
+            self.assertTrue(self.cache._queued_writes)
+            self.cache.clear_recent()
+            self.assertEqual(self.cache._queued_writes, {})
+            await asyncio.sleep(.1)
+            if self.cache._write_tasks:
+                await asyncio.gather(*self.cache._write_tasks)
+        self.app.loop.run_until_complete(exercise())
+        self.cache.states.clear()
+        self.cache.refresh()
+        self.assertEqual(self.app.recent_documents.private_items, [])
+        self.assertTrue(next(iter(self.cache.states.values()))['open'])
+
     def source(self, index=0, identity='b' * 64, remote='Drive'):
         return dict(type='remote', remote=remote, identity=identity, key=f'Sensitive/folder/file-{index}.md')
 

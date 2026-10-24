@@ -299,6 +299,22 @@ class CredentialDocumentLists:
         self.publish_recent()
         self.queue_views()
 
+    def clear_recent(self):
+        """Clear loaded encrypted history without closing its open documents."""
+        with _cache_io_lock:
+            for key, state in self.states.items():
+                if key in self.failed or not state['recent']:
+                    continue
+                previous = state['recent']
+                state['recent'] = []
+                try:
+                    self.write(key)
+                except BaseException:
+                    state['recent'] = previous
+                    self.publish_recent()
+                    raise
+            self.publish_recent()
+
     def closed(self, session):
         key = getattr(session, 'cache_id', None)
         if key not in self.states:

@@ -206,10 +206,8 @@ def discover_folder_choices(snapshot):
     # credential load updates this discovery snapshot.
     choices = {'All files': dict(source='Local', kind='shared-local', value='', name='Browse All Files', copies=[], browser_root=True)}
     descriptors = _folder_copy_descriptors(snapshot, remotes, crypt)
-    groups = project_catalog(descriptors)
-    counts = {}
-    for group in groups:
-        counts[group.name] = counts.get(group.name, 0) + 1
+    # A remote name denotes the same folder across credential packages.
+    groups = project_catalog(descriptors, grouping='name')
     for group in groups:
         copies = [dict(copy.payload) for copy in group.copies]
         primary = min(copies, key=lambda copy: (copy['kind'] != 'job', copy['source'] == 'Remote'))
@@ -226,13 +224,7 @@ def discover_folder_choices(snapshot):
         elif (primary['kind'] == 'crypt' and primary['remote'] in snapshot.remote_names
               and not any(copy['source'] == 'Remote' for copy in copies)):
             entry['copies'].append(dict(primary, source='Remote', kind='remote', value=(primary['remote'], '')))
-        key = group.name
-        if counts[key] > 1:
-            label = Path(primary['source_label']).stem if primary['source_label'] else primary['source']
-            key += ' (' + label + ')'
-            if key in choices:
-                key += ' ' + str(len(choices))
-        choices[key] = entry
+        choices[group.name] = entry
     from .incoming_files import inbox_path
     received = inbox_path(snapshot.private_root)
     from .local_sources import shared_files
@@ -241,10 +233,12 @@ def discover_folder_choices(snapshot):
         for row in shared.list():
             if row['directory'] and row['name'] not in ('Local', received.name):
                 title = row['name']
-                key = title if title not in choices else title + ' (Local)'
-                choices[key] = dict(source='Local', kind='shared-local', value=title, name=title, copies=[])
-    key = received.name if received.name not in choices else received.name + ' (received)'
-    choices[key] = dict(source='Local', kind='inbox', value='', name=received.name, copies=[])
+                copy = dict(source='Local', kind='shared-local', value=title, name=title)
+                if title in choices:
+                    choices[title]['copies'].append(copy)
+                else:
+                    choices[title] = dict(copy, copies=[])
+    choices[received.name] = dict(source='Local', kind='inbox', value='', name=received.name, copies=[])
     return FolderDiscoveryResult(choices, tuple(crypt.items()) if roots else snapshot.crypt_locations)
 
 

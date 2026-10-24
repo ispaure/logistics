@@ -96,15 +96,20 @@ metadata without decrypting the credential ZIP or calling the native bridge.
 Mobile connection admission resolves remote aliases and checks the published
 `identities` of every loaded package before probing the bridge. This keeps saved
 and session-only Workspaces usable together when a redundant identity probe
-would fail. A matching name alone never admits a different account identity;
-unavailable identities still use the retained-ZIP unlock/import flow. Host tests
+would fail. Online document history reopens the named remote using its current
+loaded credentials, including when the saved history fingerprint is stale after
+a ZIP reimport. Name-only alias resolution assumes that shared names across
+packages denote the same remote. Locked remotes still use the retained-ZIP
+unlock/import flow; encrypted local copies retain their identity checks. Host tests
 in `test_multi_credentials.py` cover mixed modes, a shared Dropbox name, opening
 a uniquely named Workspaces remote, alias resolution and identity mismatch.
 
 After credential unlock, validated open/recent entries restore in RAM; restored
 open entries are transient placeholders until selected. Restore never fetches
 remote file content. Explicit close updates the encrypted open list; credential
-lock preserves it. Forgetting retained credentials deletes list caches across
+lock preserves it. Documents has a blue **Clear** action beside **Recent**; it
+clears ordinary history and the recent lists of currently unlocked credential
+caches while preserving open references and saved files. Forgetting retained credentials deletes list caches across
 windows, and cache writes serialize with deletion. Malformed/authentication-failed
 archives are preserved; there is no plaintext cache fallback. Native tests cover
 AES strength, credential-password compatibility, authentication, tampering,

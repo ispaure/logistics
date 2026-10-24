@@ -1104,20 +1104,15 @@ class FolderSourceTests(QtTestCase):
         self.assertTrue(self.entries(page)[0].has_local)
         self.assertFalse(self.entries(page)[0].has_remote)
 
-    def test_same_named_remote_folders_keep_distinct_credentials_and_selection(self):
+    def test_shared_remote_name_appears_once_and_credential_filter_still_selects_it(self):
         self.remote(['Shared'], 'one')
         self.remote(['Shared'], 'two')
         page = self.page()
         page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
         self.wait(page)
-        self.assertEqual(len(page._entry_items), 2)
-        entry = next(entry for entry in self.entries(page) if entry.remote_context == Path('two'))
-        page.folder_tree.setCurrentItem(page._entry_items[page._entry_key(entry)])
-        selected_key = page._selected_entry_key
-        page.refresh()
-        self.wait(page)
-        self.assertEqual(page._selected_entry_key, selected_key)
-        self.assertEqual(page.folder_tree.currentItem().data(0, qt.Qt.ItemDataRole.UserRole).remote_context, Path('two'))
+        self.assertEqual(len(page._entry_items), 1)
+        item = next(iter(page._entry_items.values()))
+        self.assertEqual(item.text(0), 'Shared')
         page.credential_combo.setCurrentIndex(2)
         self.assertEqual(len(page._entry_items), 1)
         self.assertEqual(self.entries(page)[0].remote_context, Path('two'))

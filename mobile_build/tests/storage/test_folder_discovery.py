@@ -202,6 +202,29 @@ class FolderDiscoveryTests(TestCase):
         self.assertEqual(set(controller.discovery.cached_choices()), {'All files'})
         self.assertEqual(controller.discovery.cache, {})
 
+    def test_shared_remote_names_are_plain_and_visible_under_each_credential(self):
+        from mobile.folder_hub import credential_choices, source_choices, folder_browse_copy
+        from services.folders.catalog import CredentialScope
+        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        shared_directory = TemporaryDirectory()
+        self.addCleanup(shared_directory.cleanup)
+        shared = Path(shared_directory.name)
+        (shared / 'Drive').mkdir(parents=True)
+        use_shared_local(self.app.private_root, shared)
+        self.addCleanup(_shared_local_roots.pop, self.app.private_root, None)
+        snapshot = FolderDiscoverySnapshot(private_root=self.app.private_root, jobs={},
+            remote_names=('Drive',), retained_packages=(), crypt_locations=(), crypt_roots={},
+            source_packages=tuple(dict(package_name=name, remotes=['Drive'], identities={'Drive': 'a' * 64})
+                                  for name in ('One.zip', 'Two.zip')))
+        choices = discover_folder_choices(snapshot).choices
+        self.assertEqual(set(choices), {'All files', 'Drive', 'Received Files'})
+        cloud = source_choices(choices, 'rclone')
+        for package in ('One.zip', 'Two.zip'):
+            self.assertEqual(list(credential_choices(cloud, CredentialScope(['Drive'], package))), ['Drive'])
+        local = source_choices(choices, 'Local')
+        self.assertIn('Drive', local)
+        self.assertEqual(folder_browse_copy(local['Drive'], 'Local')['kind'], 'shared-local')
+
     def test_builder_does_not_mutate_snapshot_or_create_missing_crypt_directories(self):
         from copy import deepcopy
         from features.rclone.mobile.storage_location import collection_path

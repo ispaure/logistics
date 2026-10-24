@@ -146,6 +146,9 @@ class AdaptiveWorkspace:
             self.in_detail = False
             self.split.showColumn(0)
             self.app.body = self.app.routes.roots['documents']
+            # Returning from a loading/detail panel must also release its
+            # document chrome ownership, including hidden destination bars.
+            self.app.route_changed(self.app.body)
 
     def clear_details(self):
         self.trim_details(0)

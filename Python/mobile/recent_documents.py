@@ -118,3 +118,10 @@ class RecentDocuments:
         if items != self.items:
             atomic_write_json(self.path, items, max_bytes=MAX_HISTORY_BYTES, durable_directory=True)
             self.items = items
+
+    def clear(self):
+        """Clear reopen history while preserving documents and open sessions."""
+        atomic_write_json(self.path, [], max_bytes=MAX_HISTORY_BYTES, durable_directory=True)
+        self.items = []
+        self.private_items = []
+        self.error = ''

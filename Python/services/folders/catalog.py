@@ -55,16 +55,17 @@ class FolderProjection:
 
 
 def project_catalog(copies, *, grouping='logical'):
-    """Group by explicit source/scope or physical copy, never by displayed labels.
+    """Group by explicit source/scope, physical copy, or the host's shared name.
 
     Input order expresses adapter preference (for example loaded sync context
     before retained context). Equal physical copies are kept once in local views.
     """
-    if grouping not in {'logical', 'physical'}:
+    if grouping not in {'logical', 'physical', 'name'}:
         raise ValueError('Unknown folder catalog grouping.')
     groups = {}
     for copy in copies:
-        key = copy.identity if grouping == 'physical' else (copy.source_identity, copy.name)
+        key = (copy.identity if grouping == 'physical' else copy.name if grouping == 'name'
+               else (copy.source_identity, copy.name))
         members = groups.setdefault(key, [])
         if not any(previous.identity == copy.identity for previous in members):
             members.append(copy)
