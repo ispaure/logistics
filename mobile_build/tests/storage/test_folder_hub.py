@@ -1,5 +1,6 @@
 """Mobile masks, physical discovery, session associations and transfer destination safety."""
 import json
+from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -469,12 +470,13 @@ class FolderHubTests(unittest.TestCase):
         import asyncio
         import toga
         from mobile.app import LogisticsMobile
-        with TemporaryDirectory() as directory:
+        with TemporaryDirectory() as directory, ExitStack() as lifetime:
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-            self.addCleanup(app.loop.close)
-            self.addCleanup(app.main_window.close)
+            lifetime.callback(app.loop.close)
+            lifetime.callback(lambda: app.loop.run_until_complete(app.loop.shutdown_default_executor()))
+            lifetime.callback(app.main_window.close)
             app.show_locations()
             started, release = asyncio.Event(), asyncio.Event()
             self.assertFalse(app.folder_loading_box.children)
