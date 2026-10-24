@@ -41,6 +41,9 @@ preserve a selection that was visible
 before the model change. The deferred layout correction scrolls without expanding
 branches; a selection already outside the viewport is left alone, preserving
 manual scrolling. Hidden/closed widgets do not apply that correction.
+Scrolling also accounts for the selected folder's indentation: Qt may otherwise
+align the column's left edge after layout and hide a deep folder to the right
+of a narrow sidebar even though its selected row remains vertically visible.
 An embedding host should honor `widget.can_close()` (false while work is running,
 with cancellation requested) and retry closing on `widget.idle` if it initiated
 that close. Do not destroy a running widget or its worker.

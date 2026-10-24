@@ -306,6 +306,41 @@ class BulkRenameWidgetTests(QtTestCase):
         self.app.processEvents()
         self.assertFalse(tree.isExpanded(parent_index))
 
+    def test_late_model_layout_keeps_a_deep_folder_horizontally_visible(self):
+        from desktop.bulk_rename.widget import _FolderTree
+        model = qt.QStandardItemModel()
+        parent = model.invisibleRootItem()
+        for number in range(13):
+            folder = qt.QStandardItem(f'Folder {number}')
+            parent.appendRow(folder)
+            parent = folder
+        index = parent.index()
+        tree = _FolderTree(model)
+        self.addCleanup(tree.deleteLater)
+        self.addCleanup(tree.close)
+        tree.setHeaderHidden(True)
+        tree.setHorizontalScrollMode(qt.QAbstractItemView.ScrollMode.ScrollPerPixel)
+        tree.resize(200, 300)
+        tree.show()
+        tree.expandAll()
+        tree.setColumnWidth(0, 400)
+        tree.setCurrentIndex(index)
+        self.app.processEvents()
+        tree.horizontalScrollBar().setValue(200)
+        self.app.processEvents()
+
+        def visible():
+            rectangle = tree.visualRect(index)
+            return not rectangle.isEmpty() and tree.viewport().rect().intersects(rectangle)
+
+        self.assertTrue(visible())
+        # Qt's scrollTo can align the column's left edge, leaving the indented
+        # folder entirely to the right of a narrow viewport after layout.
+        model.layoutAboutToBeChanged.emit()
+        model.layoutChanged.emit()
+        self.app.processEvents()
+        self.assertTrue(visible(), f'Layout hid the folder: {tree.visualRect(index).getRect()}')
+
     def test_preview_apply_and_undo_use_background_work_and_preserve_data(self):
         self.assertEqual(len(self.widget.selected_paths()), 2)
         self.widget.controls.fields['prefix'].setText('new_')

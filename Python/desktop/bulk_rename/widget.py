@@ -34,6 +34,7 @@ class _FolderTree(qt.QTreeView):
     def __init__(self, model):
         super().__init__()
         self.setModel(model)
+        self.setHorizontalScrollMode(qt.QAbstractItemView.ScrollMode.ScrollPerPixel)
         self._was_visible = False
         self._layout_timer = qt.QTimer(self)
         self._layout_timer.setSingleShot(True)
@@ -42,6 +43,16 @@ class _FolderTree(qt.QTreeView):
         model.rowsAboutToBeInserted.connect(self._remember_visibility)
         model.layoutChanged.connect(self._layout_changed)
         model.rowsInserted.connect(self._layout_changed)
+
+    def scrollTo(self, index, hint=qt.QAbstractItemView.ScrollHint.EnsureVisible):
+        super().scrollTo(index, hint)
+        rectangle = self.visualRect(index)
+        if (not rectangle.isEmpty()
+                and (rectangle.left() >= self.viewport().width() or rectangle.right() < 0)):
+            # QTreeView can align the column instead of the indented label.
+            # Preserve the requested row's visibility after deferred layouts too.
+            scrollbar = self.horizontalScrollBar()
+            scrollbar.setValue(scrollbar.value() + rectangle.left() - self.indentation())
 
     def _remember_visibility(self, *_):
         if not self.isVisible():
@@ -183,7 +194,6 @@ class BulkRenameWidget(qt.QWidget):
         self.folder_tree.setHeaderHidden(True)
         self.folder_tree.header().setStretchLastSection(True)
         self.folder_tree.setColumnWidth(0, 240)
-        self.folder_tree.setHorizontalScrollMode(qt.QAbstractItemView.ScrollMode.ScrollPerPixel)
         self._folder_reveal_timer = qt.QTimer(self)
         self._folder_reveal_timer.setSingleShot(True)
         self._folder_reveal_timer.timeout.connect(self._reveal_current_folder)
@@ -406,7 +416,6 @@ class BulkRenameWidget(qt.QWidget):
         self.folder_tree.setCurrentIndex(index)
         self.folder_tree.doItemsLayout()
         self.folder_tree.scrollTo(index, qt.QAbstractItemView.ScrollHint.PositionAtCenter)
-        self.folder_tree.horizontalScrollBar().setValue(max(0, depth * self.folder_tree.indentation() - 20))
         # An index can exist before its parents' rows have arrived. Keep the
         # pending reveal until the selected folder is actually in the view.
         rectangle = self.folder_tree.visualRect(index)
