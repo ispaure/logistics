@@ -49,7 +49,7 @@ def prepare_managed_preview(owner, *, on_edit, valid):
     from commonUtils.ui.native.markdown_search import MarkdownPageSearch
     owner.preview_search = MarkdownPageSearch(owner.preview, owner.preview_box, insertion_index=1,
         valid=valid)
-    owner.preview.on_webview_load = owner.preview_search.loaded
+    owner.preview.on_webview_load = lambda widget=None, *args, **kwargs: owner.preview_search.loaded(widget, **kwargs)
     owner.preview_box._workspace_toolbar = owner.preview_toolbar
     owner.preview_box._native_reader_toolbar = owner.preview_toolbar
     owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.preview_actions_button]

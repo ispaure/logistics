@@ -228,7 +228,8 @@ class ProviderMarkdown:
         self.content.clear()
         self.content.add(preview)
         self.search = MarkdownPageSearch(preview, self.content, valid=lambda: not self.closed and self.host.valid(self.host.reader()))
-        preview.on_webview_load = self.search.loaded
+        search = self.search
+        preview.on_webview_load = lambda widget=None, *args, **kwargs: search.loaded(widget, **kwargs)
         self.host.bind_font(preview, web=True)
         self.search.loading()
         self.preview_text = self.source.value if rendered is not None else None

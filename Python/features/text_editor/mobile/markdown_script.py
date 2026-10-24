@@ -85,7 +85,9 @@ function serialize(node) {
         const rows = Array.from(node.rows, row => Array.from(row.cells, cell =>
             Array.from(cell.childNodes, inline).join('').replace(/\|/g, '\\|').replace(/\n/g, '<br>')));
         if (!rows.length) return '';
-        return '| ' + rows[0].join(' | ') + ' |\n| ' + rows[0].map(() => '---').join(' | ') + ' |\n'
+        const alignments = Array.from(node.rows[0].cells, cell =>
+            ({left:':---', right:'---:', center:':---:'}[cell.style.textAlign] || '---'));
+        return '| ' + rows[0].join(' | ') + ' |\n| ' + alignments.join(' | ') + ' |\n'
             + rows.slice(1).map(row => '| ' + row.join(' | ') + ' |').join('\n') + '\n\n';
     }
     case 'UL': case 'OL': {
@@ -93,17 +95,21 @@ function serialize(node) {
         return Array.from(node.children, (li, i) => {
             const value = Array.from(li.childNodes, child =>
                 ['UL','OL'].includes(child.nodeName) ? '\n' + serialize(child) :
-                ['P','DIV'].includes(child.nodeName) ? serialize(child) : inline(child)).join('').trimEnd();
+                /^(P|DIV|PRE|BLOCKQUOTE|TABLE|H[1-6])$/.test(child.nodeName) ? serialize(child) : inline(child)).join('').trimEnd();
             const marker = node.nodeName === 'OL' ? (start+i)+'. ' : '- ';
             return marker + value.split('\n').join('\n' + ' '.repeat(marker.length));
         }).join('\n') + '\n\n';
     }
     case 'PRE': {
         const raw = node.textContent.replace(/\n$/, '');
-        const fence = '`'.repeat(Math.max(2, ...Array.from(raw.matchAll(/`+/g), m => m[0].length)) + 1);
+        const original = node.dataset.markdownFence || '`';
+        const marker = original[0] === '~' ? '~' : '`';
+        const fence = marker.repeat(Math.max(2, original.length - 1,
+            ...Array.from(raw.matchAll(new RegExp(marker + '+', 'g')), m => m[0].length)) + 1);
         const code = node.querySelector('code');
-        const language = code && (code.className.match(/language-([\w+-]+)/) || [,''])[1] || '';
-        return fence + language + '\n' + raw + '\n' + fence + '\n\n';
+        const language = code && (code.className.match(/language-([^\s]+)/) || [,''])[1] || '';
+        const info = node.dataset.markdownInfo ?? language;
+        return fence + info + '\n' + raw + '\n' + fence + '\n\n';
     }
     default: return inline(node);
     }

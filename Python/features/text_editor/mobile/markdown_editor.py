@@ -27,6 +27,13 @@ def editor_blocks(text, *, image_source=None):
     if lines and not lines[-1]:
         lines.pop()
     parser = MarkdownIt('commonmark', {'html': False}).enable(['table', 'strikethrough'])
+    render_fence = parser.renderer.rules['fence']
+    def fence(renderer, items, index, options, env):
+        token = items[index]
+        metadata = ('<pre data-markdown-info="' + escape(token.info, quote=True)
+                    + '" data-markdown-fence="' + escape(token.markup, quote=True) + '">')
+        return render_fence(items, index, options, env).replace('<pre>', metadata, 1)
+    parser.add_render_rule('fence', fence)
     from commonUtils.ui.native.markdown_preview import embedded_image, wiki_image
     if image_source is not None:
         parser.inline.ruler.before('image', 'wiki_image', wiki_image)
@@ -240,6 +247,9 @@ def retire_webview(view):
         binding.dispose()
     clear_private = getattr(view, 'clear_private_content', None)
     if clear_private is not None:
+        parent = getattr(view, 'parent', None)
+        if parent is not None:
+            parent.remove(view)
         clear_private()
         return
     native = getattr(view._impl, 'native', None)

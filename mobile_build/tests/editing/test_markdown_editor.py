@@ -9,15 +9,24 @@ from features.text_editor.mobile.markdown_editor import editor_blocks, editor_ht
 
 
 class MarkdownEditorTests(unittest.TestCase):
+    def test_fence_metadata_survives_rendering_inside_an_editable_list(self):
+        source = '- Parent\n\n  ~~~~c++ title="example"\n  int value = 1;\n  ~~~~\n'
+        blocks = editor_blocks(source)
+        self.assertEqual(''.join(block['source'] for block in blocks), source)
+        self.assertTrue(blocks[0]['editable'])
+        self.assertIn('data-markdown-info="c++ title=&quot;example&quot;"', blocks[0]['html'])
+        self.assertIn('data-markdown-fence="~~~~"', blocks[0]['html'])
+
     def test_private_retirement_uses_the_memory_only_clearing_contract(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
         from features.text_editor.mobile.markdown_editor import retire_webview
         events = []
-        view = SimpleNamespace(_font_binding=SimpleNamespace(dispose=lambda: events.append('font')),
+        view = SimpleNamespace(parent=SimpleNamespace(remove=lambda view: events.append('detach')),
+            _font_binding=SimpleNamespace(dispose=lambda: events.append('font')),
             clear_private_content=lambda: events.append('private-clear'), set_content=Mock())
         retire_webview(view)
-        self.assertEqual(events, ['font', 'private-clear'])
+        self.assertEqual(events, ['font', 'detach', 'private-clear'])
         view.set_content.assert_not_called()
 
     def test_native_close_flushes_pending_input_before_deciding_whether_to_prompt(self):

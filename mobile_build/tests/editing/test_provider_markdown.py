@@ -42,6 +42,12 @@ class ProviderMarkdownTests(unittest.TestCase):
             self.assertEqual((self.files / 'First.md').read_bytes(), before)
         self.app.loop.run_until_complete(exercise())
 
+    def test_preview_load_accepts_android_positional_url(self):
+        workflow = self.owner._provider_markdown
+        workflow.search.ready = False
+        workflow.preview._font_binding._previous_load_handler(workflow.preview, "https://logistics.invalid/loaded/")
+        self.assertTrue(workflow.search.ready)
+
     def setUp(self):
         self.temporary = TemporaryDirectory()
         self.root = Path(self.temporary.name)

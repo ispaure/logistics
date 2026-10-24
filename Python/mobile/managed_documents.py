@@ -149,7 +149,9 @@ class ManagedDocumentWorkflows:
             opened = True
             session.title = self.current.name
             self.selector.items = list(self.labels)
-            self.selector.value = next((label for label, identity in self.labels.items() if identity == key), None)
+            selected = next((label for label, identity in self.labels.items() if identity == key), None)
+            if selected is not None:
+                self.selector.value = selected
             try:
                 self.preferences.save(last_document=key)
             except (OSError, ValueError) as error:
