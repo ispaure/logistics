@@ -13,6 +13,19 @@ class FolderLocationTests(unittest.TestCase):
     tearDown = ObsidianTests.tearDown
     run_async = ObsidianTests.run_async
 
+    def test_apple_header_back_calls_bound_async_handler_with_one_widget(self):
+        from types import SimpleNamespace
+        from mobile.browser_ui import FileBrowser
+        calls = []
+        async def parent(widget, *, event=None):
+            calls.append((widget, event))
+        button = icon_button('back', 'Back', on_press=parent)
+        browser = FileBrowser()
+        browser.attach_location_header(toga.Label('Folder'), button)
+        with patch.object(self.app, 'routes', SimpleNamespace(apple=True)):
+            self.run_async(button.on_press(event='native-press'))
+        self.assertEqual(calls, [(button, 'native-press')])
+
     def test_header_replaces_source_identity_when_location_changes(self):
         button = icon_button('up', 'Parent folder')
         header = FolderLocationHeader(toga.Label('Folder path'), button)

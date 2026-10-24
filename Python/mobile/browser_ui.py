@@ -418,7 +418,9 @@ class FileBrowser(RecycledBrowser):
             routes = getattr(parent_button.app or toga.App.app, 'routes', None)
             if routes is not None and not routes.apple:
                 return routes.system_back()
-            return fallback(widget, **kwargs)
+            # Toga's retained handler already binds this button as its first
+            # argument; forwarding it again breaks native Apple callbacks.
+            return fallback(**kwargs)
         parent_button.on_press = back
         # The explicit Back control replaces the generic browser history row.
         if self.navigation_controls in self.widget.children:
