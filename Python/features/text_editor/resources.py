@@ -1,5 +1,6 @@
 """Text-session adapters for ordinary provider-backed app documents."""
 from pathlib import Path
+from .access import can_write
 
 
 class TextReader:
@@ -37,9 +38,13 @@ class LocalTextCopies:
         from commonUtils.runtime.resources.selection import ResourceTextSession
         session = ResourceTextSession.open(read_provider if read_provider is not None else self.provider,
                                           key, cancelled=cancelled)
-        return TextReader(session.text.name, session.text.data, key=session.path, revision=session.text.revision)
+        reader = TextReader(session.text.name, session.text.data, key=session.path, revision=session.text.revision)
+        reader.read_only = not can_write(provider=self.provider)
+        return reader
 
     def save(self, reader, text, *, cancelled=lambda: False):
+        if not can_write(provider=self.provider, reader=reader):
+            raise ValueError('Remote Markdown is read-only. Create a local copy before editing.')
         from commonUtils.runtime.resources.selection import ResourceTextSession
         session = ResourceTextSession(self.provider, reader.key, reader.session)
         updated = session.save(text, cancelled=cancelled)

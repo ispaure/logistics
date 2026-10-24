@@ -264,7 +264,8 @@ class ProviderUI(FilesUI):
             self.set_cloud_busy(False)
 
     async def save_crypt(self, widget=None, **kwargs):
-        if getattr(self.crypt_reader, 'read_only', False):
+        from features.text_editor.access import can_write
+        if not can_write(provider=self._crypt_reader_store, reader=self.crypt_reader):
             return
         if self.cloud_busy or self.crypt_reader is None or not self.crypt_reader.editable:
             return

@@ -2,6 +2,7 @@
   "schema": 1,
   "modules": [
     "__init__.py",
+    "access.py",
     "mobile/__init__.py",
     "mobile/markdown_editor.py",
     "mobile/notes_library.py",

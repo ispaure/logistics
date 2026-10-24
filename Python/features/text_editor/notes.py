@@ -3,6 +3,7 @@ import posixpath
 from pathlib import PurePosixPath
 from contextlib import nullcontext
 from commonUtils.runtime.streams import read_up_to
+from .access import can_write
 
 MARKDOWN = {'.md', '.markdown'}
 MAX_NOTE = 2 * 1024 * 1024
@@ -25,6 +26,10 @@ class NotesLibrary:
     def __init__(self, provider, root=''):
         self.provider, self.root = provider, provider.relative(root)
         self.remote = bool(getattr(provider, 'remote_storage', False))
+
+    @property
+    def writable(self):
+        return can_write(provider=self.provider)
 
     def contained(self, path):
         path = self.provider.relative(path)

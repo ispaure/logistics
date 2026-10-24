@@ -44,6 +44,8 @@ class ProviderDocumentOpening:
                 kind, content = await asyncio.to_thread(owner.provider_page_content, reader, 0)
             else:
                 reader, kind, content = prepared
+            from features.text_editor.access import can_write
+            reader.read_only = not can_write(provider=copies, reader=reader)
             initial_preview, initial_preview_error = await self._prepare_initial_preview(
                 owner, reader, copies, content, edit=edit)
             check_cancelled(owner._crypt_cancel.is_set)
