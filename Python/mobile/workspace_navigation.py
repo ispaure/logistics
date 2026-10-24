@@ -359,9 +359,13 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             if frame is not None and frame.destination == 'files':
                 minimum = 516 if self.app.preferences.values.get('android_eink') == 'true' else 640
                 self.wide = self.content_width('files', margin=0) >= minimum or fold is not None
+            # Only stacked panes allocate explicit heights. Keyboard/search
+            # height changes must not unmount a side-by-side browser: UIKit
+            # resigns its search field's first responder when it is detached.
+            split_height = frame.row.layout.content_height if fold is not None and not fold.vertical else None
             layout = (id(frame), self.wide, self.layout_width, self.pinned,
                       tuple(self.menu_open.items()), frame.row.layout.content_width if frame else 0,
-                      fold, frame.row.layout.content_height if frame else 0,
+                      fold, split_height,
                       self.app.preferences.values.get('android_eink'))
             if layout != self.last_layout:
                 transition = frame.begin_transition() if frame is not None else None

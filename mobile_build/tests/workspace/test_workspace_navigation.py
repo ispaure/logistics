@@ -514,6 +514,26 @@ class WorkspaceNavigationTests(unittest.TestCase):
             self.assertIs(app.folder_source_tabs, controls)
         app.loop.run_until_complete(app.file_browser.close())
 
+    def test_workspace_search_keeps_its_pane_attached_when_keyboard_changes_height(self):
+        app = self.app
+        with patch.object(self.navigation, 'width', return_value=1100):
+            app.show_locations()
+            app.loop.run_until_complete(app.show_files(local_root=True))
+            frame = app.files_view._workspace_frame
+            browser = app.file_browser
+            browser.open_search()
+            with patch.object(frame.row.layout, 'content_height', 700):
+                self.navigation.render()
+            with patch.object(frame.row, 'remove', wraps=frame.row.remove) as remove:
+                for height in (500, 360, 500, 700):
+                    with patch.object(frame.row.layout, 'content_height', height):
+                        self.navigation.render()
+                    remove.assert_not_called()
+            self.assertTrue(browser.search_open)
+            self.assertIs(browser.search_panel.parent, browser._search_toolbar)
+            self.assertEqual(list(frame.row.children), [frame.folder_master, frame.main])
+        app.loop.run_until_complete(browser.close())
+
     def test_workspace_hinge_reflows_without_a_window_resize(self):
         app = self.app
         with patch.object(self.navigation, 'width', return_value=900):
@@ -560,6 +580,9 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 self.assertEqual(frame.row.style.direction, 'column')
                 self.assertEqual(frame.main.style.margin_top, 36)
                 self.assertEqual(frame.folder_master.style.height, 300)
+                with patch.object(frame.row.layout, 'content_height', 600):
+                    self.navigation.render()
+                    self.assertEqual(frame.main.style.height, 264)
             self.navigation.render()
             self.assertEqual(frame.row.style.direction, 'row')
             self.assertEqual(frame.main.style.margin_top, 0)

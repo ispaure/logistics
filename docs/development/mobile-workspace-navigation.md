@@ -19,6 +19,12 @@ The rotation/pairing/credential contracts in `test_workspace_navigation.py` and
 the real delayed-worker contracts in `test_folder_listing.py` cover this boundary.
 Native pose and chrome acceptance remain separate from dummy-backend results.
 
+The workspace layout signature includes content height only for a horizontal
+fold, where stacked panes need explicit heights. Keyboard and search-toolbar
+height changes otherwise leave the mounted panes attached, preserving UIKit's
+search first responder. `test_workspace_navigation.py` checks pane attachment
+through keyboard-sized height changes and stacked-pane height reallocation.
+
 On iOS, the Home root hides its native navigation bar because the page supplies
 the **Your workspace** heading. Home child routes restore the bar for Back;
 returning to the root hides it again. The native safe area still reserves the
