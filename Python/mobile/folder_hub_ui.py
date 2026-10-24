@@ -18,6 +18,23 @@ from .folder_hub_style import (
     source_actions, SOURCE_LABELS,
     folder_scroll,
 )
+from commonUtils.ui.native.forms import FittedLabel, fit_text
+
+
+def reflow_folder_notice(app, width=None):
+    """Fit the asynchronous incoming-files notice to its actual owning pane."""
+    notice = getattr(app, 'incoming_notice', None)
+    if notice is None:
+        return
+    if width is None:
+        columns = getattr(app.adaptive, 'file_columns', None)
+        if columns is not None:
+            native = columns.sidebar.native
+            safe = native.safeAreaInsets
+            width = float(native.bounds.size.width - safe.left - safe.right) - 24
+        else:
+            width = app.adaptive.content_width('files', margin=32)
+    fit_text(notice, max(24, width))
 
 
 
@@ -204,7 +221,7 @@ class FolderHubUI:
         self.folder_picker_header = toga.Box(style=Pack(direction=COLUMN))
         self.folder_source_actions = toga.Box(style=Pack(direction=ROW))
         self.folder_loading_box = toga.Box(style=Pack(direction=COLUMN))
-        self.app.incoming_notice = toga.Label(getattr(self.app, 'incoming_status',
+        self.app.incoming_notice = FittedLabel(getattr(self.app, 'incoming_status',
             'Files shared from other apps appear in Received Files.'), style=Pack(font_size=12, margin_top=4))
         box = toga.Box(children=[self.folder_source_tabs, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box,
@@ -216,6 +233,7 @@ class FolderHubUI:
             and (getattr(host, 'transfer_busy', False)
                  or (getattr(host, 'transfer_notification', False) and not getattr(host, 'transfer_complete', False))))
         self.folder_picker_view = box
+        reflow_folder_notice(self.app)
         return box
 
     @batch_surfaces()

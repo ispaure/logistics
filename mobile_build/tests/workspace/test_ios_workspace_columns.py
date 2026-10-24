@@ -41,12 +41,15 @@ class WorkspaceColumnsTests(TestCase):
 
     def test_sidebar_layout_keeps_its_assigned_column_frame(self):
         frame = object()
-        container = NS(native=NS(frame=frame, safeAreaInsets=NS(top=24, bottom=20, left=0, right=0)),
+        container = NS(native=NS(frame=frame, bounds=NS(size=NS(width=330)),
+                                safeAreaInsets=NS(top=24, bottom=20, left=0, right=0)),
                        content=NS(interface=Mock()))
         columns = object.__new__(WorkspaceColumns)
         columns.app, columns.sidebar_box = Mock(), Mock()
-        with patch('mobile.appearance.reserve_navigation') as reserve:
+        with patch('mobile.appearance.reserve_navigation') as reserve, \
+                patch('mobile.folder_hub_ui.reflow_folder_notice') as notice:
             columns.layout_sidebar(container)
+        notice.assert_called_once_with(columns.app, 306)
         reserve.assert_called_once_with(columns.app, view=columns.sidebar_box)
         self.assertIs(container.native.frame, frame)
         self.assertEqual((container.top_inset, container.bottom_inset), (24, 20))

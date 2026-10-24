@@ -279,11 +279,12 @@ async def exercise_ui_review(app):
     await asyncio.sleep(.2)
     header_controls = (browser.location_bar.parent_button, browser.search_button)
     if get_os() is OS.IOS:
-        viewport = browser.widget.root._impl.container.native
-        for control in (browser.search, browser.close_search_button, *header_controls):
-            native = control._impl.native
-            rect = native.convertRect(native.bounds, toView=viewport)
-            assert rect.origin.x >= -1 and rect.origin.x + rect.size.width <= viewport.bounds.size.width + 1, f'Browser control clipped: {type(control).__name__}: {rect}; viewport={viewport.bounds}'
+        # iPad may mount the browser header in the primary pane while its
+        # content container is in the detail pane. Audit mounted controls in
+        # their window (and UIKit bar items in their own bar), not that unrelated
+        # detail viewport or the unmounted Toga proxy for a native bar item.
+        from .rotation_checks import settled_visible_controls
+        assert await settled_visible_controls(app) >= 2, 'Browser search controls were not mounted'
     else:
         from java import jarray, jint
         viewport = app.main_window._impl.container.native_content

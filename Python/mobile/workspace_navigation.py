@@ -368,6 +368,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 self.wide = self.content_width('files', margin=0) >= minimum or fold is not None
             from .ios_workspace_columns import sync
             sync(self)
+            from .folder_hub_ui import reflow_folder_notice
+            reflow_folder_notice(self.app)
             # Only stacked panes allocate explicit heights. Keyboard/search
             # height changes must not unmount a side-by-side browser: UIKit
             # resigns its search field's first responder when it is detached.
