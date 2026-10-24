@@ -61,7 +61,7 @@ class IOSStorageTests(unittest.TestCase):
         self.assertEqual((self.private / 'Credentials/credentials.bin').read_bytes(), b'wrapped credentials')
         self.assertEqual((self.private / 'LocalCrypt/ciphertext').read_bytes(), b'encrypted offline copy')
         self.assertEqual(DocumentStore(self.private / 'Documents').open(document.id).text, '# saved')
-        self.assertEqual({p.name for p in self.documents.iterdir()}, {'Local', 'Inbox'})
+        self.assertEqual({p.name for p in self.documents.iterdir()}, {'Local'})
         self.assertFalse((self.private / 'LocalFiles').exists())
         self.exclude.assert_called_once_with(self.documents)
         # Imported files are local, while pull still resolves the original mapping.
@@ -82,6 +82,21 @@ class IOSStorageTests(unittest.TestCase):
         self.prepare()
         self.assertTrue(local.is_dir())
         self.assertEqual(list(local.iterdir()), [])
+
+    def test_system_inbox_is_never_created_or_modified(self):
+        inbox = self.documents / 'Inbox'
+        inbox.mkdir()
+        incoming = inbox / 'incoming.md'
+        incoming.write_bytes(b'# incoming document')
+        original = Path.mkdir
+        def protected_mkdir(path, *args, **kwargs):
+            if path == inbox:
+                raise PermissionError(1, 'Operation not permitted', str(path))
+            return original(path, *args, **kwargs)
+        with patch.object(Path, 'mkdir', protected_mkdir):
+            self.prepare()
+            self.prepare()
+        self.assertEqual(incoming.read_bytes(), b'# incoming document')
 
     def test_completed_layout_leaves_shared_root_files_in_place(self):
         self.prepare()

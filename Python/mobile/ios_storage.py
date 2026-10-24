@@ -69,7 +69,8 @@ def prepare_storage(documents, private, *, exclude_backup, move):
     # in Files. No migration of files already in the shared root is needed.
     local = _unlinked(documents / 'Local')
     local.mkdir(exist_ok=True)
-    _unlinked(documents / 'Inbox').mkdir(exist_ok=True)
+    # iOS creates and owns Inbox for incoming documents. Even mkdir(exist_ok=True)
+    # can fail with EPERM there on a physical device; leave it entirely to iOS.
     use_shared_local(private, documents)
     return private
 

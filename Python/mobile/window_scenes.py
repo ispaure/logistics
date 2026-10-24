@@ -171,7 +171,7 @@ class SceneManager:
                 identifier = sha256(str(session.persistentIdentifier).encode()).hexdigest()[:32]
                 from .workspace import uuid
                 requested_workspace = False
-                activities = list(options.userActivities.allObjects())
+                activities = list(options.userActivities.allObjects()) if options.userActivities is not None else []
                 if session.stateRestorationActivity is not None:
                     activities.append(session.stateRestorationActivity)
                 for activity in activities:
@@ -195,7 +195,7 @@ class SceneManager:
                 manager.scenes[identifier] = host
                 host.native_scene = scene
                 self.window.makeKeyAndVisible()
-                for context in options.URLContexts.allObjects():
+                for context in options.URLContexts.allObjects() if options.URLContexts is not None else ():
                     ObjCClass('LogisticsIncomingFiles').receiveURL(context.URL)
 
             @objc_method
