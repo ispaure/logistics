@@ -11,6 +11,15 @@ formatted editing has its own compact formatting toolbar. The top **page** icon 
 only after text changes, and disappears after saving or reverting. Reading uses
 one compact top toolbar in portrait and landscape on iOS and Android, with no
 separate edit/save footer or duplicate file-drawer row.
+In formatted editing, type `# Heading` (through six heading levels), `**bold**`,
+`*italic*`, underscores or backticks to see their formatting as you write.
+Select words and type `*` to surround them with emphasis; type a second `*`
+while they remain selected to make them bold. Underscores and backticks also
+wrap selections. Incomplete syntax, escaped markers and text inside code stay
+literal. Typed markers remain available while editing their block and collapse
+when that block loses focus. Toolbar Undo/Redo and hardware keyboard shortcuts
+work with these edits; Ctrl/Cmd+B and Ctrl/Cmd+I apply bold and italic.
+
 In Markdown preview and Notes Library, choose **••• → Find in this page…**
 to highlight text in the open note. A compact panel above the page shows the
 current match and total, with Previous/Next arrows and **Done**. Done clears page

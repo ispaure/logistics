@@ -68,6 +68,7 @@ SHARED_REQUIRED_MODULES = (
     'formats/image_headers.py',
     'formats/markdown/__init__.py',
     'formats/markdown/file.py',
+    'formats/markdown/editing.py',
     'formats/markdown/images.py',
     'formats/markdown/properties.py',
     'formats/markdown/wiki.py',

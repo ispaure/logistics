@@ -82,6 +82,16 @@ section:empty { display: none; }
 #document pre { white-space: pre; overflow-x: auto; padding: 12px; border-radius: 12px; background: var(--surface, ButtonFace); }
 #document code { font-family: ui-monospace, monospace; font-size: .88em; }
 #document :not(pre) > code { padding: .12em .3em; border-radius: 4px; background: var(--surface, ButtonFace); }
+#document .live-bold { font-weight: 700; }
+#document .live-italic { font-style: italic; }
+#document .live-code { font-family: ui-monospace, monospace; background: var(--surface, ButtonFace); }
+#document .live-marker { color: GrayText; font-weight: normal; font-style: normal; }
+#document section:not(:focus-within) .live-marker { font-size: 0; }
+#document [data-live-heading] { font-weight: 700; line-height: 1.25; }
+#document [data-live-heading="1"] { font-size: 2em; }
+#document [data-live-heading="2"] { font-size: 1.55em; }
+#document [data-live-heading="3"] { font-size: 1.25em; }
+#document [data-live-heading="4"] { font-size: 1.1em; }
 #document img { max-width: 100%; height: auto; border-radius: 8px; }
 #document table { border-collapse: collapse; max-width: 100%; display: block; overflow-x: auto; margin: .5em 0 1em; }
 #document td, #document th { border: 1px solid var(--border, GrayText); padding: 8px 12px; min-width: 5em; }
@@ -121,9 +131,9 @@ dialog label { font-size: .85em; } dialog input { font-size: 16px; border: 1px s
     nav > .icon-button, nav > .mode-label, nav summary span { display: none; }
     nav summary { width: 44px; padding: 0; background: var(--surface, ButtonFace); }
     #document { padding: 4px 56px 4px 12px; }
-    #document h1 { font-size: min(2em, calc(80vh - 6.4px)); font-size: min(2em, calc(80dvh - 6.4px)); }
-    #document h2 { font-size: min(1.55em, calc(80vh - 6.4px)); font-size: min(1.55em, calc(80dvh - 6.4px)); }
-    #document h3 { font-size: min(1.25em, calc(80vh - 6.4px)); font-size: min(1.25em, calc(80dvh - 6.4px)); }
+    #document h1, #document [data-live-heading="1"] { font-size: min(2em, calc(80vh - 6.4px)); font-size: min(2em, calc(80dvh - 6.4px)); }
+    #document h2, #document [data-live-heading="2"] { font-size: min(1.55em, calc(80vh - 6.4px)); font-size: min(1.55em, calc(80dvh - 6.4px)); }
+    #document h3, #document [data-live-heading="3"] { font-size: min(1.25em, calc(80vh - 6.4px)); font-size: min(1.25em, calc(80dvh - 6.4px)); }
     .compact-formatting { display: flex; flex-wrap: wrap; gap: 4px; }
     .format-menu { right: 56px; }
     dialog[open] { flex-direction: row; align-items: center; gap: 6px; padding: 4px; max-height: 100%; max-width: 100%; width: 100%; }

@@ -10,7 +10,9 @@ import toga
 from toga.style import Pack
 from markdown_it import MarkdownIt
 from commonUtils.ui.appearance.formatting_glyphs import formatting_svg
+from commonUtils.formats.markdown.editing import web_patterns
 from .markdown_script import SCRIPT as _SCRIPT
+from .markdown_live_script import LIVE_SCRIPT
 from .markdown_style import EDITOR_CSS
 
 
@@ -88,7 +90,7 @@ def editor_blocks(text, *, image_source=None):
 def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet=''):
     nonce = uuid4().hex
     data = json.dumps(editor_blocks(text, image_source=image_source), ensure_ascii=True).replace('<', '\\u003c')
-    script = _SCRIPT.replace('location.href = BRIDGE', 'location.href = ' + json.dumps(bridge)).replace('const blocks = DATA;', 'const blocks = ' + data + ';')
+    script = (_SCRIPT + LIVE_SCRIPT).replace('LIVE_PATTERNS', json.dumps(web_patterns())).replace('location.href = BRIDGE', 'location.href = ' + json.dumps(bridge)).replace('const blocks = DATA;', 'const blocks = ' + data + ';')
     common = [('Bold', 'bold', ''), ('Italic', 'italic', ''), ('Undo', 'undo', ''), ('Redo', 'redo', '')]
     more = [('Strike', 'strikeThrough', ''), ('Bullets', 'insertUnorderedList', ''),
             ('Numbered', 'insertOrderedList', ''), ('Remove link', 'unlink', '')]

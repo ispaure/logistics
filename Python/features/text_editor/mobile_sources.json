@@ -6,6 +6,7 @@
     "mobile/__init__.py",
     "mobile/library_editing.py",
     "mobile/markdown_editor.py",
+    "mobile/markdown_live_script.py",
     "mobile/markdown_script.py",
     "mobile/markdown_style.py",
     "mobile/notes_library.py",

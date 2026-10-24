@@ -464,3 +464,28 @@ snapshot into a separate QA app, records its source manifest and native errors,
 and saves evidence before uninstalling that QA app. It never installs over the
 main application. Physical-device, fold-pose and accessibility acceptance gaps
 are tracked in the rework brief; host tests are not substitutes for native checks.
+
+## Mobile live Markdown input
+
+The mobile formatted editor consumes commonUtils' portable live Markdown syntax
+rules, also used by the desktop editor. Its WebView adapter lives in
+`markdown_live_script.py`; source serialization, formatting commands and the
+native patch protocol remain in `markdown_script.py`. Syntax and delimiter
+choices belong to the shared owner, while DOM ranges, input/composition events,
+selection restoration and display spans belong to the WebView adapter.
+
+Display spans retain typed Markdown, including incomplete syntax. Patch comparison
+uses serialized content so presentation changes do not dirty untouched blocks.
+Imported escaped punctuation retains its literal meaning when adjacent text is
+edited. Rebuilding spans invalidates native browser undo nodes, so the adapter
+retains section snapshots for typing and toolbar operations, capped at 100 entries
+and approximately 8 MiB (with at least the most recent edit retained). Toolbar,
+hardware shortcuts and cancelable history input events use that history. Source
+mode continues to use the native text input's history.
+
+`Python/tests/test_mobile_markdown_editing_dom.py` exercises production HTML in
+Qt WebEngine with a mobile-sized viewport: character typing, headings/emphasis,
+code literals, Unicode composition, repeated selection wrapping, deletion,
+Undo/Redo, toolbar formatting and escaped imports. It complements the mobile
+host editor/bridge tests and shared desktop live-edit tests. Browser and dummy
+host checks do not certify iOS/Android keyboard behavior on physical devices.

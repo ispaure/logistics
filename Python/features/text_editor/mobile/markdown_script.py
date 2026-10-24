@@ -22,13 +22,13 @@ for (const [index, block] of blocks.entries()) {
         section.dataset.sourceOnly = 'true';
     }
     root.append(section);
-    block.originalHTML = section.innerHTML;
 }
-function inline(node) {
+function inline(node, raw=false) {
     if (node.nodeType === Node.TEXT_NODE)
-        return node.data.replace(/\\/g, '\\\\').replace(/([*_`\[\]<>])/g, '\\$1');
+        return raw ? node.data : node.data.replace(/\\/g, '\\\\').replace(/([*_`\[\]<>])/g, '\\$1');
+    if (node.dataset && 'liveSource' in node.dataset) raw = true;
     if (node.dataset && node.dataset.markdown) return node.dataset.markdown;
-    const text = Array.from(node.childNodes, inline).join('');
+    const text = Array.from(node.childNodes, child => inline(child, raw)).join('');
     switch (node.nodeName) {
     case 'STRONG': case 'B': return '**' + text + '**';
     case 'EM': case 'I': return '*' + text + '*';
@@ -74,16 +74,16 @@ function serialize(node) {
     }
     case 'DIV':
         if (node.className === 'table-scroll') return children();
-        return Array.from(node.childNodes, inline).join('').trimEnd() + '\n\n';
+        return Array.from(node.childNodes, child => inline(child)).join('').trimEnd() + '\n\n';
     case 'P':
         if (node.dataset.editorBoundary && !node.textContent) return '';
-        return Array.from(node.childNodes, inline).join('').trimEnd() + '\n\n';
+        return Array.from(node.childNodes, child => inline(child)).join('').trimEnd() + '\n\n';
     case 'H1': case 'H2': case 'H3': case 'H4': case 'H5': case 'H6':
-        return '#'.repeat(Number(node.nodeName[1])) + ' ' + Array.from(node.childNodes, inline).join('') + '\n\n';
+        return '#'.repeat(Number(node.nodeName[1])) + ' ' + Array.from(node.childNodes, child => inline(child)).join('') + '\n\n';
     case 'BLOCKQUOTE': return children().trimEnd().split('\n').map(s => '> ' + s).join('\n') + '\n\n';
     case 'TABLE': {
         const rows = Array.from(node.rows, row => Array.from(row.cells, cell =>
-            Array.from(cell.childNodes, inline).join('').replace(/\|/g, '\\|').replace(/\n/g, '<br>')));
+            Array.from(cell.childNodes, child => inline(child)).join('').replace(/\|/g, '\\|').replace(/\n/g, '<br>')));
         if (!rows.length) return '';
         const alignments = Array.from(node.rows[0].cells, cell =>
             ({left:':---', right:'---:', center:':---:'}[cell.style.textAlign] || '---'));
@@ -114,6 +114,7 @@ function serialize(node) {
     default: return inline(node);
     }
 }
+for (const section of root.children) blocks[Number(section.dataset.index)].originalSerialized = serialize(section);
 let revision = 0;
 const byteSizes = blocks.map(block => new TextEncoder().encode(block.source).length);
 let totalBytes = byteSizes.reduce((sum, size) => sum + size, 0);
@@ -123,11 +124,11 @@ function publish(notify=true) {
         let previousEnding = '';
         for (const section of root.children) {
             const index = Number(section.dataset.index), block = blocks[index];
-            const html = section.innerHTML;
-            if (html !== (block.publishedHTML ?? block.originalHTML)) {
-                if (html === block.originalHTML) changes.delete(index);
+            const sourceValue = serialize(section);
+            if (sourceValue !== (block.publishedSource ?? block.originalSerialized)) {
+                if (sourceValue === block.originalSerialized) changes.delete(index);
                 else {
-                    const edited = serialize(section).replace(/\n+$/, '');
+                    const edited = sourceValue.replace(/\n+$/, '');
                     const ending = block.source.match(/\n*$/)[0];
                     const prefix = block.source === '' && previousEnding ?
                         (previousEnding.endsWith('\n\n') ? '' : previousEnding.endsWith('\n') ? '\n' : '\n\n') : '';
@@ -137,7 +138,7 @@ function publish(notify=true) {
                 totalBytes -= byteSizes[index];
                 byteSizes[index] = new TextEncoder().encode(source).length;
                 totalBytes += byteSizes[index];
-                block.publishedHTML = html;
+                block.publishedSource = sourceValue;
             }
             const source = changes.has(index) ? changes.get(index) : block.source;
             if (source) previousEnding = source.slice(-2);
@@ -189,9 +190,9 @@ function scheduleCaretReveal() {
     if (caretFrame === null) caretFrame = requestAnimationFrame(revealCaret);
 }
 root.addEventListener('input', event => {
-    if (!event.isComposing) { publish(); scheduleCaretReveal(); }
+    if (!event.isComposing) { renderTypedMarkup(); rememberEdit(); publish(); scheduleCaretReveal(); }
 });
-root.addEventListener('compositionend', () => { publish(); scheduleCaretReveal(); });
+root.addEventListener('compositionend', () => { renderTypedMarkup(); rememberEdit(); publish(); scheduleCaretReveal(); });
 root.addEventListener('focusout', () => publish());
 root.addEventListener('focusin', scheduleCaretReveal);
 root.addEventListener('keyup', event => {
@@ -259,9 +260,10 @@ document.addEventListener('keydown', event => {
     if (event.key === 'Escape') document.querySelector('nav details').open = false;
 });
 function command(name, value=null) {
+    if (name === 'undo' || name === 'redo') { editHistory(name === 'redo'); return; }
     if (!restoreRange()) return;
     document.execCommand(name, false, value);
-    publish();
+    rememberEdit(); publish();
 }
 document.querySelectorAll('[data-command]').forEach(button => {
     button.addEventListener('mousedown', event => event.preventDefault());
@@ -361,9 +363,9 @@ function tableCommand(action) {
     range.selectNodeContents(section);
     selection.removeAllRanges(); selection.addRange(range);
     savedRange = range.cloneRange();
-    // A single native replacement keeps structural table edits undoable.
+    // Replace the complete section so table structure has one history entry.
     document.execCommand('insertHTML', false, replacement.innerHTML);
-    publish();
+    rememberEdit(); publish();
 }
 document.querySelectorAll('[data-table]').forEach(button => {
     button.addEventListener('mousedown', event => event.preventDefault());
