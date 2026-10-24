@@ -82,13 +82,18 @@ async def exercise_connections(app, fixtures, background_comic, passed):
     app.show_cloud_connections()
     assert app.native_host.state.destination == 'settings'
     app.cloud_retained_buttons[retained_key].on_press()
-    assert app.routes.screens['settings'][-1][0] == 'unlock-credential'
-    app.credential_unlock_password.value = 'incorrect-fixture-password'
-    await app.credential_unlock_button.on_press()
-    assert not app.loaded_remote_names()
-    assert app.credential_unlock_password.value == ''
-    app.credential_unlock_password.value = 'synthetic-fixture-password'
-    await app.credential_unlock_button.on_press()
+    assert app.routes.screens['settings'][-1][0] == 'credential-package'
+    # The package page asks how to retain credentials on every unlock. Choose
+    # Session-Only explicitly; neither failed nor successful unlock may change
+    # the already saved vault below.
+    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=False)) as storage_choice:
+        app.credential_unlock_password.value = 'incorrect-fixture-password'
+        await app.credential_unlock_button.on_press()
+        assert not app.loaded_remote_names()
+        assert app.credential_unlock_password.value == ''
+        app.credential_unlock_password.value = 'synthetic-fixture-password'
+        await app.credential_unlock_button.on_press()
+        assert storage_choice.await_count == 2
     assert app.loaded_remote_names() == ['Fixture'], app.credential_unlock_status.text
     assert await app.refresh_folder_hub()
     assert any(copy['source'] == 'Remote' for copy in app.folder_choices()['Fixture']['copies'])
