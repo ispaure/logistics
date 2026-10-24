@@ -103,7 +103,7 @@ def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet='')
                        for name, cmd, value in items)
     styles = [('Paragraph', 'p'), *[(f'Heading {level}', f'h{level}') for level in range(1, 7)],
               ('Quote', 'blockquote'), ('Code block', 'pre')]
-    style_menu = '<label>Block <select id="block-style" aria-label="Block style"><option value="" selected disabled>Choose style…</option>' + ''.join(
+    style_menu = '<label><span aria-hidden="true">Block</span> <select id="block-style" aria-label="Block style"><option value="" selected disabled>Choose style…</option>' + ''.join(
         f'<option value="{value}">{name}</option>' for name, value in styles) + '</select></label>'
     tables = [('Insert table', 'insert'), ('Add row', 'row'), ('Add column', 'column'),
               ('Delete row', 'delete-row'), ('Delete column', 'delete-column')]
@@ -154,6 +154,19 @@ class FormattedMarkdownInput:
         self.bridge = 'logistics-editor://' + uuid4().hex + '/'
         self.view = markdown_webview(private=private, on_navigation_starting=self.navigate,
                                     on_webview_load=self.loaded, style=Pack(flex=1))
+        self._viewport_lock = None
+        from commonUtils.ui.native.text_size import native_backend
+        if native_backend(self.view).startswith('toga_android.'):
+            from java import dynamic_proxy, jclass
+            class ViewportLock(dynamic_proxy(jclass('android.view.View$OnScrollChangeListener'))):
+                def onScrollChange(inner, native, x, y, old_x, old_y):
+                    # Only the DOM writing pane scrolls. Older/vendor WebViews
+                    # otherwise pan their entire viewport to reveal the caret,
+                    # moving the formatting toolbar outside the visible area.
+                    if x or y:
+                        native.scrollTo(0, 0)
+            self._viewport_lock = ViewportLock()
+            self.view._impl.native.setOnScrollChangeListener(self._viewport_lock)
 
     async def loaded(self, widget=None, url=None, **kwargs):
         if not self.closed and self.scroll_top:
@@ -237,6 +250,9 @@ class FormattedMarkdownInput:
         self._blocks = ()
         self.scroll_top = 0
         self.image_source = None
+        if self._viewport_lock is not None:
+            self.view._impl.native.setOnScrollChangeListener(None)
+            self._viewport_lock = None
         retire_webview(self.view)
 
 
