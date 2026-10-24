@@ -70,6 +70,9 @@ class EditorPickerTests(unittest.TestCase):
                             task = asyncio.create_task(app.refresh_editor_browser())
                             try:
                                 await self.wait_for_worker(started)
+                                # Loading is published synchronously at admission;
+                                # invalidation must prevent every later update.
+                                before = app.save_as_status.value
                                 if invalidation == 'cancel':
                                     app.cancel_cloud()
                                     self.assertTrue(picker._work.cancel.is_set())
@@ -150,6 +153,99 @@ class EditorPickerTests(unittest.TestCase):
                     release.set()
                     await task
         app.loop.run_until_complete(exercise())
+
+    def test_save_as_replacement_confirmation_and_revision_guard(self):
+        app = self.app
+        original = app.private_root / 'LocalFiles' / 'existing.md'
+        for decision in ('cancel', 'replace', 'changed', 'navigation'):
+            with self.subTest(decision=decision):
+                original.write_bytes(b'original')
+                app.loop.run_until_complete(app.show_text_destination('existing.md', b'draft'))
+                async def confirm(dialog):
+                    if decision == 'changed':
+                        original.write_bytes(b'changed while confirming')
+                    if decision == 'navigation':
+                        app.navigation_generation += 1
+                    return decision != 'cancel'
+                with patch.object(app.main_window, 'dialog', side_effect=confirm), patch.object(
+                        app, 'open_crypt', new_callable=AsyncMock, return_value=True) as opened:
+                    app.loop.run_until_complete(app.save_text_destination())
+                expected = b'draft' if decision == 'replace' else b'changed while confirming' if decision == 'changed' else b'original'
+                self.assertEqual(original.read_bytes(), expected, app.save_as_status.value)
+                if decision == 'replace':
+                    opened.assert_awaited_once()
+                else:
+                    opened.assert_not_awaited()
+                    self.assertEqual(app.save_as_data, b'draft')
+
+    def test_file_selection_only_changes_name_and_folder_navigation_preserves_it(self):
+        app, picker = self.app, self.app.editor_picker()
+        root = app.private_root / 'LocalFiles'
+        (root / 'Notes').mkdir()
+        (root / 'existing.md').write_bytes(b'original')
+        app.loop.run_until_complete(app.show_text_destination('draft.md', b'draft'))
+        row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'existing.md')
+        picker.browser_editor_selected(row)
+        self.assertEqual(picker.save_as_name.value, 'existing.md')
+        self.assertEqual((root / 'existing.md').read_bytes(), b'original')
+        app.loop.run_until_complete(picker.browser_editor_folder(dict(path='Notes')))
+        self.assertEqual(picker.save_as_name.value, 'existing.md')
+        self.assertEqual(picker.picker_folder.value, 'Notes')
+        self.assertIn('Notes', picker.picker_destination.text)
+
+    def test_picker_system_back_ascends_before_leaving_and_search_is_local(self):
+        app, picker = self.app, self.app.editor_picker()
+        root = app.private_root / 'LocalFiles'
+        (root / 'Notes').mkdir()
+        app.loop.run_until_complete(app.show_text_destination('draft.md', b'draft'))
+        app.loop.run_until_complete(picker.browser_editor_folder(dict(path='Notes')))
+        picker.editor_browser.open_search()
+        self.assertTrue(app.routes.system_back())
+        self.assertFalse(picker.editor_browser.search_open)
+        self.assertEqual(picker.picker_folder.value, 'Notes')
+        self.assertTrue(app.routes.system_back())
+        if app.routes.back_task is not None:
+            app.loop.run_until_complete(app.routes.back_task)
+        self.assertEqual(picker.picker_folder.value, '')
+        self.assertEqual(picker.save_as_data, b'draft')
+
+    def test_search_file_uses_its_containing_folder_without_saving(self):
+        app, picker = self.app, self.app.editor_picker()
+        root = app.private_root / 'LocalFiles'
+        (root / 'Notes').mkdir()
+        (root / 'Notes/existing.md').write_bytes(b'original')
+        app.loop.run_until_complete(app.show_text_destination('draft.md', b'draft'))
+        row = picker.editor_provider('Local files').entry('Notes/existing.md')
+        picker.browser_editor_selected(row)
+        app.loop.run_until_complete(picker.browser_editor_file(row))
+        self.assertEqual(picker.picker_folder.value, 'Notes')
+        self.assertEqual(picker.save_as_name.value, 'existing.md')
+        self.assertEqual((root / 'Notes/existing.md').read_bytes(), b'original')
+
+    def test_new_folder_preserves_filename_and_rejects_invalid_names(self):
+        app, picker = self.app, self.app.editor_picker()
+        app.loop.run_until_complete(app.show_text_destination('draft.md', b'draft'))
+        picker.toggle_editor_new_folder()
+        for invalid in ('../escape', 'nested/folder', ''):
+            picker.new_folder_name.value = invalid
+            app.loop.run_until_complete(picker.create_editor_folder())
+            self.assertEqual(picker.picker_folder.value, '')
+            self.assertTrue(picker.save_as_status.value)
+        picker.new_folder_name.value = 'Notes'
+        app.loop.run_until_complete(picker.create_editor_folder())
+        self.assertTrue((app.private_root / 'LocalFiles/Notes').is_dir())
+        self.assertEqual(picker.picker_folder.value, 'Notes')
+        self.assertEqual(picker.save_as_name.value, 'draft.md')
+        self.assertNotIn(picker.new_folder_form, picker.panel.children)
+
+    def test_filename_cannot_silently_change_the_destination_folder(self):
+        app, picker = self.app, self.app.editor_picker()
+        app.loop.run_until_complete(app.show_text_destination('nested/draft.md', b'draft'))
+        with patch.object(app.main_window, 'dialog', new_callable=AsyncMock) as dialog:
+            app.loop.run_until_complete(picker.confirm_editor_file())
+        dialog.assert_not_awaited()
+        self.assertIn('Invalid child name', picker.save_as_status.value)
+        self.assertEqual(picker.save_as_data, b'draft')
 
     def test_locked_source_cannot_publish_save_as(self):
         from features.rclone.mobile.session_privacy import ResumePassword

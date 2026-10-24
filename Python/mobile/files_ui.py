@@ -277,6 +277,18 @@ class FilesUI:
     def show_file_actions(self, widget=None, *, operation=None, **kwargs):
         if self.cloud_busy:
             return
+        if operation == 'move':
+            try:
+                provider, path = self.selected_file()
+            except ValueError as error:
+                self.file_status.value = str(error)
+                return
+            if not self.file_operations().host.allowed(True):
+                return
+            from .file_operations import FileOperationRequest
+            request = FileOperationRequest('move', provider, path)
+            return self.loop.create_task(self.editor_picker().show_destination(
+                path.rpartition('/')[2], request))
         box = self.file_operation_view.content
         for child in list(box.children):
             box.remove(child)

@@ -227,6 +227,14 @@ class MobileRoutes(Routes):
                 and adaptive.width() < 640 and app.chat_drawer_open):
             return self.invoke_back(app.toggle_chat_conversations)
 
+        picker = getattr(app, '_editor_picker', None)
+        if picker is not None and picker.visible(body):
+            action = picker.editor_browser.back_action()
+            if action is not None:
+                return self.invoke_back(action)
+            if picker.picker_folder.value:
+                return self.invoke_back(picker.parent_editor_folder)
+
         # Search is presentation state, not a reason to leave an editor.
         for owner in app.text_views.values():
             search = owner.search

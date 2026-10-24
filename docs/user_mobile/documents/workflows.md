@@ -28,7 +28,10 @@ are preserved and duplicate names receive a numbered suffix. Unsupported or
 unreadable attachments show a failure result; share those files again. Cancel
 stops remaining work and retains files already received. This first receiving
 flow lands in ordinary, unencrypted Received Files storage; use the app's file actions to
-organize files afterward. It does not choose an encrypted destination inside
+organize files afterward. Select a received file and choose **Move…**, browse a
+writable destination, optionally create a folder or edit the name, then tap
+**Move here**. Existing destination files are preserved; moving encrypted files
+to ordinary storage requires confirmation. It does not choose an encrypted destination inside
 the share sheet. Developer iOS builds require the app and extension's matching
 App Group provisioning; see [mobile preparation](../../development/mobile-preparation.md#incoming-files-and-inbox).
 
@@ -141,6 +144,19 @@ compact route stack below that threshold. Layout changes retain the same editor
 and session. The editor keeps its name, text, status, Save and Preview visible;
 **Actions** opens a native Apple button menu or Android popup for New, Import,
 Open from Files, Save a copy, Save As, Export and Close.
+
+**Save As** uses the file browser: select a storage location, tap folders to
+navigate, and use Back or search to find the destination. The filename and
+**Save here** action stay below the list. **New folder** creates and opens a
+folder without changing the filename. Tapping an existing file copies its name
+without saving; a search result also selects its containing folder. Saving to an existing filename asks for confirmation before
+replacement; cancelling preserves the draft and destination screen. If that file
+changes while confirmation is open, replacement fails and preserves its contents.
+For a bare name such as `Notes`, Save As keeps the source extension (`Notes.md`
+for a Markdown source); a draft without a supported extension uses `.txt`.
+The resolved filename appears above the destination. An explicit supported
+extension is kept; invalid names or unsupported extensions keep the draft open
+for correction. Local files are plaintext; LocalCrypt destinations remain encrypted.
 
 **Preview** renders common Markdown offline: tables, headings, nested bulleted
 and numbered lists, quotes, bold/italic/strikethrough text, rules, line breaks and

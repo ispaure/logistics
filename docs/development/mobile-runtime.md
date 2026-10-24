@@ -339,6 +339,22 @@ Workspaces and Documents; it never opens user files.
 
 ## Open/Save As lifecycle
 
+`EditorPicker.show_destination()` reuses the same provider browser and folder
+creation controls for Move. Its captured `FileOperationRequest` preserves source
+identity while destination selection remains separate from the item name.
+Confirmation executes the shared verified move primitive without overwriting.
+The existing busy/dirty-reader guard still applies; this does not retarget live
+edited documents or change incoming-file publication into Received Files.
+
+`destination_names.save_filename()` validates one child name, retains a supported
+source suffix for a basename, defaults otherwise to `.txt`, and rejects unsupported
+explicit suffixes. The form previews the resolved name. New-folder creation
+captures provider/folder and cancellation state, then enters the new folder only
+if that operation still belongs to the visible picker. Provider capabilities
+control New folder and confirmation; Open retains its separate completion policy.
+Focused tests live in `test_destination_workflows.py`; `destination_probe.py`
+provides disposable native tap checkpoints and native hidden-color assertions.
+
 `app.editor_picker()` lazily creates one `EditorPicker` per host. It owns picker
 widgets, rows, provider associations, source document, pending bytes, privacy gate
 and cancellation. The app's existing picker methods/attributes delegate to that
