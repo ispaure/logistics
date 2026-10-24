@@ -9,6 +9,17 @@ from features.text_editor.mobile.markdown_editor import editor_blocks, editor_ht
 
 
 class MarkdownEditorTests(unittest.TestCase):
+    def test_private_retirement_uses_the_memory_only_clearing_contract(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from features.text_editor.mobile.markdown_editor import retire_webview
+        events = []
+        view = SimpleNamespace(_font_binding=SimpleNamespace(dispose=lambda: events.append('font')),
+            clear_private_content=lambda: events.append('private-clear'), set_content=Mock())
+        retire_webview(view)
+        self.assertEqual(events, ['font', 'private-clear'])
+        view.set_content.assert_not_called()
+
     def test_native_close_flushes_pending_input_before_deciding_whether_to_prompt(self):
         from unittest.mock import AsyncMock, patch
         self.app.create_chosen_document('md')
@@ -41,12 +52,13 @@ class MarkdownEditorTests(unittest.TestCase):
         updates = []
         editor = FormattedMarkdownInput(updates.append)
         editor.load('# Before\r\n\r\nUntouched\r\n')
-        raw = json.dumps(dict(revision=1, changes=[[0, '# After 😀\r\n']]))
+        raw = json.dumps(dict(revision=1, changes=[[0, '# After 😀\r\n']], scroll=240))
         async def exercise():
             with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.widgets.webview'), \
                  patch.object(editor.view, 'evaluate_javascript', new=AsyncMock(return_value=raw)):
                 await editor.flush()
                 self.assertEqual(updates, ['# After 😀\r\n\r\nUntouched\r\n'])
+                self.assertEqual(editor.scroll_top, 240)
             async def replaced(script):
                 editor.load('# Replacement')
                 return raw

@@ -25,7 +25,9 @@ def native_resize_changed(app, widget):
     native, bar = adapter.impl.native, adapter.impl.native_navigationview
     geometry = (native.getWidth(), native.getHeight(), native.getPaddingLeft(), native.getPaddingTop(),
                 native.getPaddingRight(), native.getPaddingBottom(), bar.getWidth(), bar.getVisibility(),
-                adapter.mode, app.native_host.state.destination, id(app.body))
+                adapter.mode, app.native_host.state.destination, id(app.body),
+                getattr(adapter, 'keyboard_chrome', None) is not None,
+                getattr(getattr(app, 'workspace', None), 'active', None))
     if geometry == getattr(app, '_android_resize_geometry', None):
         return False
     app._android_resize_geometry = geometry

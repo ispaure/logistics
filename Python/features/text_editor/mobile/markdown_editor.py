@@ -1,6 +1,7 @@
 """Offline formatted Markdown input; untouched blocks retain their exact source."""
 from html import escape
 import json
+import math
 import re
 from urllib.parse import urlsplit, parse_qs
 from uuid import uuid4
@@ -142,8 +143,15 @@ class FormattedMarkdownInput:
         self.text = None
         self._blocks = ()
         self._revision = 0
+        self.scroll_top = 0
         self.bridge = 'logistics-editor://' + uuid4().hex + '/'
-        self.view = markdown_webview(private=private, on_navigation_starting=self.navigate, style=Pack(flex=1))
+        self.view = markdown_webview(private=private, on_navigation_starting=self.navigate,
+                                    on_webview_load=self.loaded, style=Pack(flex=1))
+
+    async def loaded(self, widget=None, url=None, **kwargs):
+        if not self.closed and self.scroll_top:
+            await self.view.evaluate_javascript('(function(){const root=document.getElementById("document");'
+                'if(root)root.scrollTop=' + json.dumps(self.scroll_top) + ';})()')
 
     def load(self, text):
         if self.closed or self.text == text:
@@ -183,6 +191,9 @@ class FormattedMarkdownInput:
                     if len(text.encode('utf-8')) > 1024 * 1024:
                         return False
                     self._revision = revision
+                    scroll = payload.get('scroll')
+                    if type(scroll) in (int, float) and math.isfinite(scroll):
+                        self.scroll_top = min(1_000_000_000, max(0, scroll))
                 except (ValueError, TypeError, KeyError):
                     return False
             elif set(values) == {'text'} and len(values['text']) == 1:
@@ -217,6 +228,7 @@ class FormattedMarkdownInput:
         self.changed = None
         self.text = None
         self._blocks = ()
+        self.scroll_top = 0
         self.image_source = None
         retire_webview(self.view)
 
@@ -226,6 +238,10 @@ def retire_webview(view):
     binding = getattr(view, '_font_binding', None)
     if binding is not None:
         binding.dispose()
+    clear_private = getattr(view, 'clear_private_content', None)
+    if clear_private is not None:
+        clear_private()
+        return
     native = getattr(view._impl, 'native', None)
     if native_backend(view).startswith('toga_iOS.') and native is not None:
         native.stopLoading()

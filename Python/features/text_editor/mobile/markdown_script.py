@@ -139,7 +139,7 @@ function publish(notify=true) {
         if (totalBytes > 1024 * 1024) throw Error('Formatted editing is limited to 1 MiB.');
         // Cumulative changed blocks tolerate a WebView coalescing navigation events.
         // Untouched source never crosses the bridge again; no document is persisted.
-        const patch = {revision: ++revision, changes: Array.from(changes)};
+        const patch = {revision: ++revision, changes: Array.from(changes), scroll: root.scrollTop};
         if (notify) location.href = BRIDGE + '?patch=' + encodeURIComponent(JSON.stringify(patch));
         document.getElementById('notice').textContent = '';
         return patch;

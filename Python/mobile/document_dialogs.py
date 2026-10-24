@@ -4,10 +4,10 @@ from toga.dialogs import Dialog
 
 
 class DocumentDialog(Dialog):
-    def __init__(self, title, message, *, delete=False):
+    def __init__(self, title, message, *, delete=False, discard_label='Quit without saving'):
         self.title, self.message = title, message
         self.choices = ([('Delete', 'delete', 2)] if delete else
-                        [('Save', 'save', 0), ('Quit without saving', 'discard', 2)])
+                        [('Save', 'save', 0), (discard_label, 'discard', 2)])
         self.choices.append(('Cancel', 'cancel', 1))
 
     def _show(self, window):

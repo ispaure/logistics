@@ -4,6 +4,25 @@ from mobile import keyboard
 
 
 class AndroidEditorLayoutTests(unittest.TestCase):
+    def test_keyboard_state_and_document_changes_invalidate_identical_native_geometry(self):
+        from mobile.layout_events import native_resize_changed
+        native = NS(**{name: lambda: 0 for name in ('getWidth', 'getHeight', 'getPaddingLeft',
+            'getPaddingTop', 'getPaddingRight', 'getPaddingBottom', 'getVisibility')})
+        backend = type('AndroidApp', (), {'__module__': 'toga_android.app'})()
+        window = object()
+        adapter = NS(impl=NS(native=native, native_navigationview=native), mode='bottom', keyboard_chrome=None)
+        app = NS(main_window=window, _impl=backend, native_host=NS(adapter=adapter,
+            state=NS(destination='documents')), body=object(), workspace=NS(active='first'))
+        self.assertTrue(native_resize_changed(app, window))
+        self.assertFalse(native_resize_changed(app, window))
+        adapter.keyboard_chrome = object()
+        self.assertTrue(native_resize_changed(app, window))
+        self.assertFalse(native_resize_changed(app, window))
+        adapter.keyboard_chrome = None
+        self.assertTrue(native_resize_changed(app, window))
+        app.workspace.active = 'second'
+        self.assertTrue(native_resize_changed(app, window))
+
     def test_short_ime_layout_retains_controls_and_restores_after_dismissal(self):
         import toga
         from toga.style import Pack

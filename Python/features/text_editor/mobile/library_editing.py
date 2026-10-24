@@ -21,7 +21,8 @@ def attach_return(app, library, owner):
             return
         if owner.private_dirty():
             choice = await app.main_window.dialog(DocumentDialog(
-                'Save changes before returning?', 'Save this note or discard its unsaved changes.'))
+                'Save changes before returning?', 'Save this note or discard its unsaved changes.',
+                discard_label='Discard changes'))
             if not library.valid() or owner.session.id not in app.workspace.sessions:
                 return
             if choice == 'save':

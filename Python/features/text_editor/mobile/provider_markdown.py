@@ -46,6 +46,7 @@ class ProviderMarkdown:
         self.pending = self.token = self.menu_state = self.mode = None
         self.closed = False
         self.private = private
+        self.scroll_top = 0
         self.preview_button = host.icon_button('view', 'View Markdown', on_press=self.request_preview)
         toolbar.insert(len(toolbar.children) - 1, self.preview_button)
         host.apply_icon(save, 'save', 'Save Markdown')
@@ -112,6 +113,7 @@ class ProviderMarkdown:
             if self.speech.button in self.toolbar.children:
                 self.toolbar.remove(self.speech.button)
         if self.formatted is not None:
+            self.scroll_top = self.formatted.scroll_top
             self.formatted.dispose()
             if self.formatted.view in self.content.children:
                 self.content.remove(self.formatted.view)
@@ -301,6 +303,7 @@ class ProviderMarkdown:
                 self.source.value = text
         formatted = FormattedMarkdownInput(changed, font_size=self.host.font_size(),
             stylesheet=self.host.stylesheet(), image_source=lambda: self.host.image_source(reader), private=self.private)
+        formatted.scroll_top = self.scroll_top
         try:
             formatted.load(self.source.value)
         except ValueError as error:

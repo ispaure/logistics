@@ -40,6 +40,11 @@ def widget():
 
 
 class AndroidReaderChromeTests(unittest.TestCase):
+    def test_startup_before_native_adapter_is_installed(self):
+        self.app.native_host.adapter = None
+        sync(self.app, self.view, 'documents')
+        self.bar.setCustomView.assert_not_called()
+
     def setUp(self):
         self.bar = Mock()
         self.bar.getDisplayOptions.return_value = 11
@@ -176,6 +181,18 @@ class AndroidReaderChromeTests(unittest.TestCase):
         self.adapter.keyboard_chrome = None
         sync(self.app, self.view, 'documents')
         self.bar.show.assert_called_once()
+
+    def test_editing_actions_remain_reachable_while_keyboard_hides_application_bars(self):
+        self.view._keyboard_actions_required = True
+        self.adapter.keyboard_chrome = (Mock(), 8, self.bar, False)
+        sync(self.app, self.view, 'documents')
+        self.bar.show.assert_called_once()
+        self.bar.hide.assert_not_called()
+        self.assertTrue(self.adapter.keyboard_chrome[3])
+        self.assertIsNotNone(self.action._impl.native.parent)
+        sync(self.app, NS(), 'files')
+        self.assertFalse(self.adapter._reader_action_bar_keep_keyboard)
+        self.assertFalse(self.adapter.keyboard_chrome[3])
 
     def test_closing_with_keyboard_open_cannot_restore_retired_reader_bar(self):
         sync(self.app, self.view, 'documents')

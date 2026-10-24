@@ -55,7 +55,7 @@ def compact_private_view(self, view):
             view.crypt_preview_button = view._provider_markdown.preview_button
             view.crypt_edit_mode = view._provider_markdown.edit_mode
             view.crypt_markdown_footer = footer
-        if footer.children:
+        if footer.children or view.crypt_reader.kind in {'.md', '.markdown'}:
             controls.append(footer)
     if not view.crypt_reader.editable:
         _mount_reader(self, view, controls, comic, neighbors)
@@ -218,6 +218,7 @@ def _mount_reader(self, view, controls, comic, neighbors):
 def _mount_editor(self, view, controls):
     markdown = view.crypt_reader.kind in {'.md', '.markdown'}
     view.crypt_view = toga.Box(children=controls, style=Pack(direction=COLUMN, margin=0 if markdown else 12, flex=1))
+    view.crypt_view._keyboard_actions_required = True
     if markdown:
         view.crypt_view._workspace_toolbar = view.reader_toolbar
         view._native_reading_buttons = view._provider_markdown.native_buttons

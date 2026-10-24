@@ -18,13 +18,18 @@ def set_bar_visibility(adapter, bar, visible):
         navigation, visibility, title, showing = keyboard
         if title == bar:
             adapter.keyboard_chrome = (navigation, visibility, title, visible)
-            bar.hide()
+            if visible and getattr(adapter, '_reader_action_bar_keep_keyboard', False):
+                bar.show()
+            else:
+                bar.hide()
             return
     bar.show() if visible else bar.hide()
 
 
 def sync(app, view, destination):
     adapter = app.native_host.adapter
+    if adapter is None:
+        return
     bar = app._impl.native.getSupportActionBar()
     if bar is None:
         return
@@ -34,6 +39,7 @@ def sync(app, view, destination):
             or (privacy is not None and privacy.saved_content is not None)):
         controls = None
     if controls is None:
+        adapter._reader_action_bar_keep_keyboard = False
         if getattr(adapter, '_reader_action_bar_active', False):
             release_buttons(adapter)
             adapter._reader_action_bar_title.setText('')
@@ -56,6 +62,7 @@ def sync(app, view, destination):
     if not getattr(adapter, '_reader_action_bar_active', False):
         adapter._reader_action_bar_options = bar.getDisplayOptions()
     adapter._reader_action_bar_active = True
+    adapter._reader_action_bar_keep_keyboard = bool(getattr(view, '_keyboard_actions_required', False))
     frame = getattr(view, '_workspace_frame', None)
     menu = frame.menu if frame is not None else getattr(view, '_workspace_menu_button', None)
     leading = []

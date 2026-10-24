@@ -83,6 +83,7 @@ class TextEditorView:
             self.preview_button, self.actions_button], style=Pack(direction=ROW))
         box.add(self.toolbar)
         box._workspace_toolbar = self.toolbar
+        box._keyboard_actions_required = True
         box._native_reader_toolbar = self.toolbar
         box._native_reader_status = self.status
         box._native_reader_title = lambda: self.document.name if self.document else 'New document'

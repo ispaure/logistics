@@ -14,6 +14,16 @@ from mobile.app import LogisticsMobile
 
 
 class ProviderMarkdownTests(unittest.TestCase):
+    def test_source_controls_can_mount_after_opening_a_clean_formatted_document(self):
+        owner = self.owner
+        workflow = owner._provider_markdown
+        self.assertIs(workflow.footer.parent, owner.crypt_view)
+        self.assertEqual(workflow.footer.style.height, 0)
+        workflow.edit_mode.value = 'Source'
+        self.assertIs(workflow.edit_mode.parent, workflow.footer)
+        self.assertIs(workflow.footer.parent, owner.crypt_view)
+        self.assertNotEqual(workflow.footer.style.height, 0)
+
     def test_remote_markdown_opens_rendered_and_rejects_edit_and_save(self):
         remote = LocalFiles(self.files)
         remote.remote_storage = True

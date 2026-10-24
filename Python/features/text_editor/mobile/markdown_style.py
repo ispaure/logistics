@@ -31,6 +31,7 @@ button:focus-visible, summary:focus-visible, select:focus-visible {
     outline: 2px solid var(--accent, Highlight); outline-offset: -2px;
 }
 button[disabled] { opacity: .45; cursor: default; }
+nav, dialog { font-size: 1rem; line-height: 1.4; }
 nav {
     flex: 0 0 var(--toolbar-height); display: flex; align-items: center; gap: 2px;
     padding: 4px 8px; z-index: 2; background: var(--window, Canvas);
@@ -110,5 +111,25 @@ dialog label { font-size: .85em; } dialog input { font-size: 16px; border: 1px s
     #document { padding: 4px 12px 16px; }
     dialog { padding: 8px; } dialog h2 { display: none; }
     .dialog-actions { margin-top: 4px; }
+}
+@media (max-height: 180px) {
+    .format-menu { top: 0; left: 4px; right: 112px; max-height: 100%; padding: 4px; gap: 4px; }
+}
+@media (max-height: 160px) {
+    :root { --toolbar-height: 0px; }
+    nav { position: absolute; top: 0; right: 4px; width: 44px; height: 44px; padding: 0; border: 0; }
+    nav > .icon-button, nav > .mode-label, nav summary span { display: none; }
+    nav summary { width: 44px; padding: 0; background: var(--surface, ButtonFace); }
+    #document { padding: 4px 56px 4px 12px; }
+    #document h1 { font-size: min(2em, calc(80vh - 6.4px)); font-size: min(2em, calc(80dvh - 6.4px)); }
+    #document h2 { font-size: min(1.55em, calc(80vh - 6.4px)); font-size: min(1.55em, calc(80dvh - 6.4px)); }
+    #document h3 { font-size: min(1.25em, calc(80vh - 6.4px)); font-size: min(1.25em, calc(80dvh - 6.4px)); }
+    .compact-formatting { display: flex; flex-wrap: wrap; gap: 4px; }
+    .format-menu { right: 56px; }
+    dialog[open] { flex-direction: row; align-items: center; gap: 6px; padding: 4px; max-height: 100%; max-width: 100%; width: 100%; }
+    .link-fields { flex: 1; min-width: 0; }
+    dialog label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .dialog-actions { margin: 0; gap: 4px; }
+    .dialog-actions button { padding: 0 8px; }
 }
 '''
