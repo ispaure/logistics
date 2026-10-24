@@ -57,6 +57,7 @@ class CredentialImportUITests(unittest.TestCase):
             try:
                 app.cloud_client = Client()
                 app.show_cloud()
+                self.assertEqual(app.cloud_import.text, 'Unlock')
                 self.assertFalse(app.cloud_import.enabled)
                 with patch('mobile.pickers.pick_document', new=AsyncMock()) as no_picker:
                     app.loop.run_until_complete(app.import_cloud_package(app.cloud_password))

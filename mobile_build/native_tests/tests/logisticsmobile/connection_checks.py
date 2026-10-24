@@ -15,7 +15,7 @@ async def exercise_connections(app, fixtures, background_comic, passed):
     assert 'offline read check passed' in app.cloud_status.value, app.cloud_status.value
     credentials = fixtures / 'credentials.zip'
     credentials.write_bytes(base64.b64decode(AES_CREDENTIALS))
-    assert app.cloud_import.text == 'Load remotes' and not app.cloud_import.enabled
+    assert app.cloud_import.text == 'Unlock' and not app.cloud_import.enabled
     with patch('mobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
         await app.choose_cloud_package()
         assert app.cloud_import.enabled and 'credentials.zip' in app.cloud_selected_zip.text
