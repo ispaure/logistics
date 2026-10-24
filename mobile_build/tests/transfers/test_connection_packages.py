@@ -153,7 +153,7 @@ class ConnectionPackageTests(unittest.TestCase):
         import json
         self.app.preferences.save(remote_packages=json.dumps([
             dict(zip='Forgotten.zip', remotes=['Secret'], session_only=False)]))
-        self.assertEqual(set(self.app.credential_groups()), {'All', 'Personal', 'Work'})
+        self.assertEqual(set(self.app.credential_groups()), {'All', 'Personal', 'Work', 'Backups'})
 
     def test_other_scene_forgetting_saved_package_removes_cached_settings_row(self):
         import json

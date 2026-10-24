@@ -24,6 +24,7 @@ class MobileWorkflowTests(unittest.TestCase):
         from zipfile import ZipFile
         app = self.app
         app.loop.run_until_complete(app.show_files())
+        app.loop.run_until_complete(app.browser_file_location(('Local files', '')))
         root = app.private_root / 'LocalFiles' / 'Shelf'
         root.mkdir()
         (root / 'Notes.md').write_text('# Keep my draft')
@@ -81,6 +82,7 @@ class MobileWorkflowTests(unittest.TestCase):
         from PIL import Image
         app = self.app
         app.loop.run_until_complete(app.show_files())
+        app.loop.run_until_complete(app.browser_file_location(('Local files', '')))
         root = app.private_root / 'LocalFiles'
         page = BytesIO()
         Image.new('RGB', (2, 3)).save(page, format='WEBP')
@@ -106,6 +108,7 @@ class MobileWorkflowTests(unittest.TestCase):
     def test_tapping_file_opens_correct_provider_preview_keeps_draft_and_close_clears_it(self):
         app = self.app
         app.loop.run_until_complete(app.show_files())
+        app.loop.run_until_complete(app.browser_file_location(('Local files', '')))
         root = app.private_root / 'LocalFiles'
         (root / 'Notes.md').write_text('# Original\n')
         app.loop.run_until_complete(app.browse_files())
@@ -259,6 +262,7 @@ class MobileWorkflowTests(unittest.TestCase):
         from unittest.mock import patch
         app = self.app
         app.loop.run_until_complete(app.show_files())
+        app.loop.run_until_complete(app.browser_file_location(('Local files', '')))
         root = app.private_root / 'LocalFiles'
         (root / 'Older').mkdir()
         (root / 'Older' / 'Old.txt').write_text('old')
@@ -297,6 +301,7 @@ class MobileWorkflowTests(unittest.TestCase):
     def test_item_menu_selects_the_exact_file_without_opening_or_changing_source(self):
         app = self.app
         app.loop.run_until_complete(app.show_files())
+        app.loop.run_until_complete(app.browser_file_location(('Local files', '')))
         root = app.private_root / 'LocalFiles'
         (root / 'One.md').write_text('one')
         (root / 'Two.md').write_text('two')

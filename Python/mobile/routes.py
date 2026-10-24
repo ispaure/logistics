@@ -258,7 +258,14 @@ class MobileRoutes(Routes):
                 return self.invoke_back(action)
             # A direct Workspaces shortcut may have no earlier folder visit.
             if getattr(app, path_name, ''):
-                return self.invoke_back(parent)
+                async def ascend(browser=browser, parent=parent, path_name=path_name):
+                    previous = getattr(app, path_name, '')
+                    await parent()
+                    if getattr(app, path_name, '') != previous:
+                        # Ascending from a direct shortcut must not create a
+                        # Back entry into the child we have just left.
+                        browser.history.locations[:] = browser.history.locations[-1:]
+                return self.invoke_back(ascend)
 
         action = app.reader_back_action(body)
         if action is not None:

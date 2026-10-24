@@ -251,7 +251,10 @@ def discover_folder_choices(snapshot):
                     choices[title]['copies'].append(copy)
                 else:
                     choices[title] = dict(copy, copies=[])
-    choices[received.name] = dict(source='Local', kind='inbox', value='', name=received.name, copies=[])
+    title = received.name
+    while title in choices:
+        title += ' (received)'
+    choices[title] = dict(source='Local', kind='inbox', value='', name=received.name, copies=[])
     return FolderDiscoveryResult(choices, tuple(crypt.items()) if roots else snapshot.crypt_locations)
 
 

@@ -1,5 +1,17 @@
 # Local iPhone and iPad deployment
 
+Mobile packaging installs binary distributions only. Before deploying or preparing
+TestFlight/Firebase builds, build the pinned pure-Python language detector wheel
+and expose it to the child package installers (run from the repository root):
+
+```sh
+mobile_build/.venv/bin/python -m pip wheel --wheel-dir mobile_build/.tools/python-wheels langdetect==1.0.9
+export PIP_FIND_LINKS="$PWD/mobile_build/.tools/python-wheels"
+```
+
+The native build and TestFlight GitHub workflows prepare the same wheel in their
+temporary directories. Generated wheels stay outside tracked source.
+
 For the combined PySide test-device and tester-distribution window, use
 `mobile_build/deploy_test_devices.command`; see the
 [window guide](mobile-launchers.md#simple-deployment-window). It reuses the iOS

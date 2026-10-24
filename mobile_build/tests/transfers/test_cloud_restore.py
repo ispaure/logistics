@@ -102,7 +102,7 @@ class CloudRestoreTests(IsolatedAsyncioTestCase):
                     service.assert_called_once_with(client)
                     if kind == 'remote':
                         location = service.return_value.remotes.open.call_args.args[0]
-                        self.assertEqual((location.remote, location.identity), ('Drive', 'identity'))
+                        self.assertEqual((location.remote, location.identity), ('Drive', None))
                     else:
                         location = service.return_value.localcrypt.open.call_args.args[0]
                         self.assertEqual((location.remote, location.namespace, location.create), ('Drive', 'copy', False))

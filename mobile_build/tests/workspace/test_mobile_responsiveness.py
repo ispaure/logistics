@@ -91,7 +91,7 @@ class ResponsivenessTests(unittest.TestCase):
             app.change_folder_source('rclone')
             def icon():
                 return app.folder_buttons['Secret'].parent.children[0].control_icon
-            self.assertNotIn('Secret', app.folder_buttons)
+            self.assertEqual(icon(), 'folder_locked')
             cloud_rows = app.folder_list.children[0]
             app.change_folder_source('Local')
             app.cloud_client.package_records = (dict(package_name='Fixture.zip', remotes=['Secret']),)
@@ -106,7 +106,7 @@ class ResponsivenessTests(unittest.TestCase):
             # Explicit refresh must notice a lock even with unchanged names.
             app.cloud_client.package_records = ()
             app.loop.run_until_complete(app.refresh_folder_hub())
-            self.assertNotIn('Secret', app.folder_buttons)
+            self.assertEqual(icon(), 'folder_locked')
             app.change_folder_source('Local')
             self.assertEqual(icon(), 'folder_locked')
 

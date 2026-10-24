@@ -131,7 +131,9 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertEqual([child.control_icon for child in app.remote_browser.location_bar.storage_icons.children],
                                  ['storage_remote', 'folder_unlocked'])
                 for expected in ('Books', '', ''):
-                    await app.cloud_up.on_press()
+                    app.cloud_up.on_press()
+                    if app.routes.back_task is not None:
+                        await app.routes.back_task
                     self.assertEqual(app.cloud_path, expected)
                     self.assertEqual(app.cloud_location.value, expected)
                     self.assertEqual(toolbar.folder_name.value, expected or 'Files')
