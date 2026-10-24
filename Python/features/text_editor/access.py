@@ -14,5 +14,8 @@ def can_write(*, provider=None, reader=None):
             seen.add(id(source))
             if getattr(source, 'remote_storage', False) or getattr(source, 'read_only', False):
                 return False
+            capabilities = getattr(source, 'capabilities', None)
+            if capabilities is not None and not capabilities.replace:
+                return False
             source = getattr(source, 'provider', None)
     return True

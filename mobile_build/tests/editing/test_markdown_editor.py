@@ -9,6 +9,31 @@ from features.text_editor.mobile.markdown_editor import editor_blocks, editor_ht
 
 
 class MarkdownEditorTests(unittest.TestCase):
+    def test_native_close_flushes_pending_input_before_deciding_whether_to_prompt(self):
+        from unittest.mock import AsyncMock, patch
+        self.app.create_chosen_document('md')
+        owner = self.app.editor_view
+        async def final_input():
+            owner.editor.value = '# Final composition\n'
+        async def exercise():
+            with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.widgets.webview'), \
+                 patch.object(owner.formatted, 'flush', new=AsyncMock(side_effect=final_input)), \
+                 patch.object(self.app, 'document_close_dialog', return_value=True) as dialog:
+                self.assertTrue(self.app.request_close_session(owner.session.id))
+                await owner._markdown_close_task
+                dialog.assert_called_once()
+                self.assertIn(owner.session.id, self.app.workspace.sessions)
+                self.assertEqual(owner.document.text, '# Final composition\n')
+            with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.widgets.webview'), \
+                 patch.object(owner.formatted, 'flush', new=AsyncMock(side_effect=ValueError('Input unavailable'))), \
+                 patch.object(self.app, 'document_close_dialog') as dialog:
+                self.assertTrue(self.app.request_close_session(owner.session.id))
+                await owner._markdown_close_task
+                dialog.assert_not_called()
+                self.assertIn(owner.session.id, self.app.workspace.sessions)
+                self.assertIn('Input unavailable', owner.status.text)
+        self.app.loop.run_until_complete(exercise())
+
     def test_save_flushes_the_final_dom_patch_and_rejects_replaced_pages(self):
         import json
         from unittest.mock import AsyncMock, patch
@@ -40,9 +65,9 @@ class MarkdownEditorTests(unittest.TestCase):
         _tuck_control(owner.source_tools, True)
         self.assertIsNone(owner.source_tools.parent)
         actions = dict(owner.actions.actions)
-        actions['Source editing']()
+        self.app.loop.run_until_complete(actions['Source editing']())
         self.assertEqual(owner.editor_area.children, [owner.editor])
-        actions['Formatted editing']()
+        self.app.loop.run_until_complete(actions['Formatted editing']())
         self.assertEqual(owner.editor_area.children, [owner.formatted.view])
         _tuck_control(owner.source_tools, False)
 

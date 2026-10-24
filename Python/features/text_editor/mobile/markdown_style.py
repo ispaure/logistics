@@ -1,5 +1,14 @@
 """Responsive writing surface; formatting overlays never resize the document."""
 
+READING_CSS = '''
+html body{max-width:800px;margin:0 auto;padding:20px 24px 32px;box-sizing:border-box;line-height:1.65}
+html body h1{font-size:2em}html body h2{font-size:1.55em}html body h3{font-size:1.25em}
+html body h1,html body h2,html body h3{letter-spacing:-.02em}
+html body pre{border:0;border-radius:12px;background:var(--surface,ButtonFace)}
+html body blockquote{border-left-color:var(--accent,GrayText)}
+@media(max-width:380px){html body{padding:16px}}
+'''
+
 EDITOR_CSS = r'''
 :root { color-scheme: light dark; --toolbar-height: 56px; }
 * { box-sizing: border-box; }
@@ -27,7 +36,7 @@ nav {
     padding: 4px 8px; z-index: 2; background: var(--window, Canvas);
     border-bottom: 1px solid var(--border, ButtonFace);
 }
-.mode-label { flex: 1; font-size: .8em; font-weight: 600; padding: 0 8px; }
+.mode-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8em; font-weight: 600; padding: 0 8px; }
 .icon-button { width: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 .icon-button svg, summary svg { width: 20px; height: 20px; pointer-events: none; }
 nav details { margin-left: auto; }
@@ -95,6 +104,7 @@ dialog label { font-size: .85em; } dialog input { font-size: 16px; border: 1px s
 #apply-link { color: var(--accent, Highlight); font-weight: 600; }
 #link-error { font-size: .8em; } #link-error:empty { display: none; }
 @media (max-width: 380px) { .mode-label { display: none; } #document { padding: 16px; } }
+@media (max-width: 360px) { summary span { display: none; } }
 @media (max-height: 260px) {
     :root { --toolbar-height: 48px; } nav { padding: 0 4px; }
     #document { padding: 4px 12px 16px; }

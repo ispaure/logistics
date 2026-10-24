@@ -69,8 +69,32 @@ class SessionTransitions:
             return False
         return host.checkpoint()
 
-    def request_close_session(self, key):
+    def request_close_session(self, key, *, _markdown_flushed=False):
         host = self.host
+        if not _markdown_flushed:
+            owner = host.text_views.get(key) or host.provider_sessions().controllers.get(key)
+            formatted = getattr(owner, 'formatted', None)
+            area = getattr(owner, 'editor_area', None)
+            workflow = getattr(owner, '_provider_markdown', None)
+            if workflow is not None:
+                formatted, area = workflow.formatted, workflow.content
+            if formatted is not None and area is not None and formatted.view in area.children:
+                from commonUtils.ui.native.text_size import native_backend
+                if native_backend(formatted.view).startswith(('toga_iOS.', 'toga_android.')):
+                    if getattr(owner, '_markdown_close_task', None) is None:
+                        async def flush_then_close():
+                            try:
+                                await formatted.flush()
+                                if host.active_host and key in host.workspace.sessions:
+                                    self.request_close_session(key, _markdown_flushed=True)
+                            except ValueError as error:
+                                target = getattr(owner, 'status', None) or getattr(owner, 'crypt_title', None)
+                                if target is not None:
+                                    target.text = str(error)
+                            finally:
+                                owner._markdown_close_task = None
+                        owner._markdown_close_task = host.loop.create_task(flush_then_close())
+                    return True
         if host.visible_reader() == key:
             host.__dict__.setdefault('_reader_closing', set()).add(key)
         readers = getattr(host, 'readers', None)

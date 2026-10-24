@@ -14,6 +14,24 @@ from mobile.app import LogisticsMobile
 
 
 class ProviderMarkdownTests(unittest.TestCase):
+    def test_remote_markdown_opens_rendered_and_rejects_edit_and_save(self):
+        remote = LocalFiles(self.files)
+        remote.remote_storage = True
+        async def exercise():
+            self.assertTrue(await self.app.open_crypt(copies=LocalTextCopies(remote), key='First.md', edit=True))
+            owner = self.app.private_sessions.active
+            workflow = owner._provider_markdown
+            self.assertTrue(owner.crypt_reader.read_only)
+            self.assertEqual(owner.crypt_content.children, [workflow.preview])
+            self.assertIsNone(workflow.edit_mode)
+            await workflow.choose_mode('Formatted')
+            self.assertIsNone(workflow.formatted)
+            before = (self.files / 'First.md').read_bytes()
+            owner.crypt_text.value = '# Programmatic mutation'
+            await owner.save_crypt()
+            self.assertEqual((self.files / 'First.md').read_bytes(), before)
+        self.app.loop.run_until_complete(exercise())
+
     def setUp(self):
         self.temporary = TemporaryDirectory()
         self.root = Path(self.temporary.name)

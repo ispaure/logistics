@@ -167,6 +167,9 @@ class PrivateSessions:
         if root is None:
             raise ValueError('Provider sessions require a stable storage namespace.')
         namespace = str(Path(root).resolve())
+        from features.text_editor.access import can_write
+        if not can_write(provider=copies):
+            namespace = 'read-only:' + namespace
         return sha256((namespace + '\0' + str(key)).encode()).hexdigest()
 
     def available(self, key):

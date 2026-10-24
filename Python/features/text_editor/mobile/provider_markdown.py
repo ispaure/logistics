@@ -46,7 +46,7 @@ class ProviderMarkdown:
         self.pending = self.token = self.menu_state = self.mode = None
         self.closed = False
         self.private = private
-        self.preview_button = host.icon_button('view', 'View Markdown', on_press=self.toggle_preview)
+        self.preview_button = host.icon_button('view', 'View Markdown', on_press=self.request_preview)
         toolbar.insert(len(toolbar.children) - 1, self.preview_button)
         host.apply_icon(save, 'save', 'Save Markdown')
         if save in footer.children:
@@ -86,7 +86,7 @@ class ProviderMarkdown:
                 actions[0:0] = [('Formatted editing', lambda: self.choose_mode('Formatted')),
                                 ('Source editing', lambda: self.choose_mode('Source'))]
             mode = ('View source text' if getattr(reader, 'read_only', False) else 'Edit Markdown') if reading else 'View Markdown'
-            actions.insert(0, (mode, self.toggle_preview))
+            actions.insert(0, (mode, self.request_preview))
             if reading:
                 actions.insert(0, ('Read aloud…', self.speech.show))
                 if self.search is not None:
@@ -255,10 +255,25 @@ class ProviderMarkdown:
         self.clear()
         self.show_editor()
 
-    def choose_mode(self, value):
+    async def request_preview(self, widget=None, **kwargs):
+        try:
+            await self.flush()
+        except ValueError as error:
+            self.host.error(str(error))
+            return
+        self.toggle_preview()
+
+    async def choose_mode(self, value):
         reader = self.host.reader()
         if (self.closed or reader is None or getattr(reader, 'read_only', False)
                 or not self.host.valid(reader)):
+            return
+        try:
+            await self.flush()
+        except ValueError as error:
+            self.host.error(str(error))
+            return
+        if self.closed or not self.host.valid(reader):
             return
         if self.edit_mode.value != value:
             self.edit_mode.value = value

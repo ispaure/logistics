@@ -62,7 +62,7 @@ class TextEditorView:
             ('Rename document…', self.rename_document), ('Find and replace…', self.toggle_search),
             ('Formatted editing', lambda: self.choose_mode('Formatted')),
             ('Source editing', lambda: self.choose_mode('Source')),
-            ('View document', app.show_preview),
+            ('View document', self.read),
             ('Open documents', app.show_documents_hub), ('New document', app.choose_document_type),
             ('Open beside another document', lambda: app.adaptive.show_pair_picker()),
             ('Import…', lambda: app.import_document(origin=self)), ('Open from Files…', app.show_editor_open),
@@ -76,7 +76,7 @@ class TextEditorView:
         # A visible left-hand editor still owns its toolbar commands.
         self.save_button.on_press = lambda widget, **kw: self.actions.invoke(self.save)
         self.preview_button = icon_button('view', 'View document',
-            on_press=lambda widget, **kw: self.actions.invoke(app.show_preview))
+            on_press=lambda widget, **kw: self.actions.invoke(self.read))
         self.find_button = icon_button('find', 'Find and replace', on_press=self.toggle_search)
         self.toolbar = toga.Box(children=[self.name,
             self.find_button,
@@ -111,9 +111,26 @@ class TextEditorView:
         self.app.refresh_reader_exit(self.document_view)
         self.app.adaptive.render()
 
-    def choose_mode(self, value):
+    async def choose_mode(self, value):
         if self.session is not None and self.session.kind == 'markdown':
+            if not await self.flush():
+                return
             self.edit_mode.value = value
+
+    async def flush(self):
+        session = self.session
+        try:
+            if self.formatted is not None and self.formatted.view in self.editor_area.children:
+                await self.formatted.flush()
+            return (self.app.active_host and self.session is session
+                    and session is not None and session.id in self.app.workspace.sessions)
+        except ValueError as error:
+            self.status.text = str(error)
+            return False
+
+    async def read(self):
+        if await self.flush() and self.app.editor_view is self:
+            self.app.show_preview()
 
     async def save(self):
         document, session = self.document, self.session

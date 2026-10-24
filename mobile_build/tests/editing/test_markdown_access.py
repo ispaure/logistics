@@ -16,6 +16,7 @@ class MarkdownAccessTests(unittest.TestCase):
         remote = SimpleNamespace(remote_storage=True)
         self.assertFalse(can_write(provider=SimpleNamespace(provider=remote)))
         self.assertFalse(can_write(reader=SimpleNamespace(read_only=True)))
+        self.assertFalse(can_write(provider=SimpleNamespace(capabilities=SimpleNamespace(replace=False))))
         remote.provider = remote
         self.assertFalse(can_write(provider=remote))
 

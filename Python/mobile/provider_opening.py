@@ -94,7 +94,7 @@ class ProviderDocumentOpening:
     async def _prepare_initial_preview(self, owner, reader, copies, content, *, edit):
         initial_preview = None
         initial_preview_error = None
-        if (not edit and reader.editable and not getattr(reader, 'read_only', False)
+        if ((not edit or getattr(reader, 'read_only', False)) and reader.editable
                 and reader.kind in {'.md', '.markdown'}):
             from .preview import markdown_preview, reader_image_source
             try:
@@ -108,8 +108,8 @@ class ProviderDocumentOpening:
     async def _publish_view(self, owner, view, reader, *, edit, initial_preview, initial_preview_error):
         owner.clear_private_reader(discard=True)
         view.adopt(owner)
-        if reader.editable and not getattr(reader, 'read_only', False) and reader.kind in {'.md', '.markdown'}:
-            if edit:
+        if reader.editable and reader.kind in {'.md', '.markdown'}:
+            if edit and not getattr(reader, 'read_only', False):
                 owner.show_private_markdown_editor()
             elif initial_preview_error is not None:
                 owner.crypt_title.text = private_label(initial_preview_error)

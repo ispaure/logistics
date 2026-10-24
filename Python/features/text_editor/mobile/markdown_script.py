@@ -214,6 +214,11 @@ document.addEventListener('selectionchange', () => {
 });
 function restoreRange(rangeOverride=null) {
     const selection = getSelection();
+    if (!rangeOverride && selection.rangeCount && root.contains(selection.getRangeAt(0).commonAncestorContainer)
+        && !editableRange(selection.getRangeAt(0))) {
+        document.getElementById('notice').textContent = 'Select text within one editable block, or use Source for this change.';
+        return null;
+    }
     if (rangeOverride && editableRange(rangeOverride)) savedRange = rangeOverride.cloneRange();
     else if (root.contains(document.activeElement) && selection.rangeCount && editableRange(selection.getRangeAt(0)))
         savedRange = selection.getRangeAt(0).cloneRange();
@@ -248,7 +253,7 @@ document.addEventListener('keydown', event => {
     if (event.key === 'Escape') document.querySelector('nav details').open = false;
 });
 function command(name, value=null) {
-    restoreRange();
+    if (!restoreRange()) return;
     document.execCommand(name, false, value);
     publish();
 }
@@ -262,6 +267,7 @@ document.getElementById('block-style').addEventListener('change', event => {
 });
 document.getElementById('inline-code').addEventListener('click', () => {
     const selection = restoreRange();
+    if (!selection) return;
     const code = document.createElement('code');
     code.textContent = selection.toString() || 'code';
     command('insertHTML', code.outerHTML);
@@ -272,6 +278,7 @@ const linkError = document.getElementById('link-error');
 let linkRange = null;
 document.getElementById('show-link').addEventListener('click', () => {
     const selection = restoreRange();
+    if (!selection) return;
     linkRange = selection.getRangeAt(0).cloneRange();
     const node = selection.anchorNode;
     const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
@@ -297,6 +304,7 @@ function applyLink() {
     }
     linkDialog.close();
     const selection = restoreRange(linkRange);
+    if (!selection) return;
     if (selection.isCollapsed) {
         const anchor = document.createElement('a');
         anchor.setAttribute('href', href);
@@ -310,6 +318,7 @@ linkTarget.addEventListener('keydown', event => {
 });
 function tableCommand(action) {
     const selection = restoreRange();
+    if (!selection) return;
     if (action === 'insert') {
         command('insertHTML', '<table><thead><tr><th>Header</th><th>Header</th></tr></thead><tbody><tr><td>Cell</td><td>Cell</td></tr></tbody></table><p><br></p>');
         return;
