@@ -110,7 +110,8 @@ class MarkdownSpeechTests(unittest.TestCase):
                 owner = self.app.private_sessions.active
                 self.assertNotIn(owner.crypt_edit_mode, owner.crypt_markdown_footer.children)
                 owner.toggle_private_preview()
-                self.assertIn(owner.crypt_edit_mode, owner.crypt_markdown_footer.children)
+                self.assertNotIn(owner.crypt_edit_mode, owner.crypt_markdown_footer.children)
+                self.assertIn('Source editing', dict(owner._provider_markdown.actions_menu.actions))
                 owner.toggle_private_preview()
                 self.assertNotIn(owner.crypt_edit_mode, owner.crypt_markdown_footer.children)
                 speech = owner.markdown_speech
@@ -134,8 +135,8 @@ class MarkdownSpeechTests(unittest.TestCase):
             await owner.open_note('Vault/Home.md')
             speech = owner.speech
             with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
-                self.assertIn(speech.button, owner.view.children[0].children)
-                speech.button.on_press()
+                self.assertNotIn(speech.button, owner.toolbar.children)
+                dict(owner.reader_actions.actions)['Read aloud…']()
                 panel = speech.panel
                 await panel.ready_task
                 with patch.object(owner.web, 'evaluate_javascript', return_value=self.javascript_result('Home\nA readable note.')):

@@ -51,6 +51,7 @@ class VaultBrowser:
         self.library = NotesLibrary(provider, root)
         self.root = self.library.root
         self.history, self.history_index = [], -1
+        self.positions = {}
         self.session = None
         self.client = host.client()
         self.generation = getattr(self.client, "generation", None)
@@ -65,12 +66,15 @@ class VaultBrowser:
         self.notice = toga.Label("", style=Pack(font_size=12))
         self.tree = toga.Box(
             children=[
-                toga.Label("Markdown notes", style=Pack(font_size=18)),
+                toga.Label("Notes Library", style=Pack(font_size=20, font_weight='bold', margin_bottom=4)),
+                toga.Label(('Remote' if self.library.remote else 'LocalCrypt' if provider.private else 'Local')
+                           + (' · Editable' if self.library.writable else ' · Read-only'),
+                           style=Pack(font_size=12, margin_bottom=12)),
                 toga.ScrollContainer(
                     content=self.rows, horizontal=False, style=Pack(flex=1)
                 ),
             ],
-            style=Pack(direction=COLUMN, flex=1),
+            style=Pack(direction=COLUMN, flex=1, margin=12),
         )
         self.title = toga.Label(
             "Choose a Markdown note", style=Pack(font_size=18, flex=1)
@@ -146,7 +150,7 @@ class VaultBrowser:
                 on_change=lambda w: self.render_tree(),
                 style=Pack(height=48),
             )
-            self.tree.insert(1, self.search)
+            self.tree.insert(2, self.search)
         self.toolbar = toga.Box(
             children=[
                 self.menu,
@@ -159,13 +163,19 @@ class VaultBrowser:
             ],
             style=Pack(direction=ROW),
         )
+        if not self.library.writable:
+            self.toolbar.remove(self.edit)
         self.view = toga.Box(
             children=[self.toolbar, self.notice, self.sidebar.view],
             style=Pack(direction=COLUMN, flex=1),
         )
+        self.view._keyboard_actions_required = True
         self.reader_actions_button = self.host.presentation.icon_button(
             "more", "Note actions"
         )
+        self.toolbar.remove(self.up_button)
+        self.toolbar.remove(self.speech.button)
+        self.toolbar.add(self.reader_actions_button)
         self.view._workspace_menu_button = self.menu
         self.view._native_reader_toolbar = self.toolbar
         self.view._native_reader_title = (
@@ -208,7 +218,7 @@ class VaultBrowser:
                 self.toolbar.parent.remove(self.toolbar)
             parent.insert(0, self.toolbar)
         self.rows.style.width = (
-            self.sidebar.policy.sidebar_width if self.sidebar.expanded else available
+            max(0, self.sidebar.policy.sidebar_width - 24) if self.sidebar.expanded else max(0, available - 24)
         )
         self.menu.enabled = self.host.apple or not self.sidebar.expanded
 
@@ -216,13 +226,11 @@ class VaultBrowser:
         if hasattr(self, "reader_actions"):
             self.reader_actions.dispose()
         actions = []
+        if self.library.writable:
+            actions.append(("New note…", self.new_note))
         if self.path is not None:
             actions.append(("Find in this page…", self.show_page_search))
             actions.append(("Read aloud…", self.speech.show))
-        if self.back_button.enabled:
-            actions.append(("Previous note", lambda: self.navigate_history(-1)))
-        if self.forward_button.enabled:
-            actions.append(("Next note", lambda: self.navigate_history(1)))
         if self.up_button.enabled:
             actions.append(("Browse parent folder", self.browse_parent))
         actions.append(("All documents", self.host.show_documents))
@@ -349,6 +357,7 @@ class VaultBrowser:
     async def open_note(self, path, *, remember=True, fragment=""):
         if not self.valid():
             return False
+        await self.remember_position()
         self.speech.close()
         self.epoch += 1
         epoch = self.epoch
@@ -359,7 +368,7 @@ class VaultBrowser:
 
             def read():
                 data = self.library.read(path, cancelled=lambda: not self.valid())
-                html = self.host.preview(data.decode("utf-8-sig"))
+                html = self.host.preview(data.decode("utf-8-sig"), image_source=self.library.image_source(path))
                 if self.provider.private and len(html.encode("utf-8")) > MAX_NOTE:
                     raise ValueError(
                         "Private preview exceeds the 2 MiB memory-only limit."
@@ -389,7 +398,7 @@ class VaultBrowser:
             self.pending_fragment = fragment
             self.page_search.loading()
             self.web.set_content(self.base, html)
-            self.edit.enabled = True
+            self.edit.enabled = self.library.writable
             self.speech.button.enabled = True
             self.notice.text = ""
             self.back_button.enabled = self.history_index > 0
@@ -448,11 +457,27 @@ class VaultBrowser:
             + ");if(h)h.scrollIntoView();})()"
         )
 
-    def page_loaded(self, widget=None, **kwargs):
+    def page_loaded(self, widget=None, url=None, **kwargs):
         self.page_search.loaded(reveal=not bool(self.pending_fragment))
         if self.pending_fragment:
             fragment, self.pending_fragment = self.pending_fragment, ""
             self.scroll_fragment(fragment)
+        elif self.path in self.positions:
+            self.web.evaluate_javascript('window.scrollTo(0,' + str(self.positions[self.path]) + ')')
+
+    async def remember_position(self):
+        from commonUtils.ui.native.text_size import native_backend
+        if self.path is None or not native_backend(self.web).startswith(('toga_iOS.', 'toga_android.')):
+            return
+        path = self.path
+        try:
+            position = await self.web.evaluate_javascript('window.scrollY')
+            if self.valid() and self.path == path and isinstance(position, (int, float)):
+                self.positions[path] = max(0, int(position))
+        except Exception:
+            # A retired page has no position to retain. Reading still owns the
+            # original note and no source content crosses this presentation path.
+            return
 
     def back_action(self):
         """Close compact browsing before retracing note links."""
@@ -481,22 +506,57 @@ class VaultBrowser:
             self.sidebar.show_sidebar()
             self.render_tree()
 
-    def present(self):
+    def present(self, *, destination=None):
         if self.valid() and self.session is not None:
-            self.destination = self.host.destination()
+            self.destination = destination or self.host.destination()
             self.host.workspace.activate(self.session.id)
             return self.host.show_view(
                 self.view,
+                destination=self.destination,
                 route="notes-library:" + self.session.id,
                 title=self.session.title,
             )
 
     async def open_editor(self, widget=None, **kwargs):
-        if not self.valid() or self.path is None:
+        if not self.valid() or self.path is None or not self.library.writable:
             return False
+        await self.remember_position()
         return await self.host.open_editor(
             self.provider, self.path, self.destination, self.library.remote, self.client
         )
+
+    def new_note(self, widget=None, **kwargs):
+        if not self.valid() or not self.library.writable:
+            return False
+        name = toga.TextInput(placeholder='Untitled.md', style=Pack(height=48))
+        status = toga.Label('')
+        create = toga.Button('Create note', style=Pack(height=48))
+        async def submit(widget=None, **kwargs):
+            if not self.valid() or not self.library.writable:
+                return
+            create.enabled = False
+            try:
+                parent = posixpath.dirname(self.path) if self.path else self.root
+                path = await asyncio.to_thread(self.library.create, name.value, parent,
+                                              cancelled=lambda: not self.valid())
+                if not self.valid():
+                    return
+                await self.load_folder(parent)
+                self.present()
+                if await self.open_note(path):
+                    await self.open_editor()
+            except (OSError, ValueError) as error:
+                if self.valid():
+                    status.text = fill(str(error)[:180], width=28)
+            finally:
+                create.enabled = True
+        create.on_press = submit
+        form = toga.Box(children=[toga.Label('New Markdown note', style=Pack(font_size=20)),
+            toga.Label('File name'), name, status, create,
+            toga.Button('Cancel', on_press=lambda widget: self.present(), style=Pack(height=48))],
+            style=Pack(direction=COLUMN, margin=16))
+        panel = toga.ScrollContainer(content=form, horizontal=False, style=Pack(flex=1))
+        return self.host.show_view(panel, destination=self.destination, route='notes-new', title='New note')
 
     def show_page_search(self, widget=None, **kwargs):
         if self.valid() and self.path is not None:
@@ -521,6 +581,7 @@ class VaultBrowser:
         self.edit.enabled = False
         self.notice.text = "Reopen Notes Library from the location actions."
         self.history.clear()
+        self.positions.clear()
         if self.session is not None and self.session.id in self.host.workspace.sessions:
             self.host.workspace.close(self.session.id, guard=lambda session: True)
         self.session = None

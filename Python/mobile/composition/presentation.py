@@ -174,7 +174,11 @@ def notes_host(app):
         copies, key = (
             source if source is not None else (LocalTextCopies(provider), path)
         )
-        return await app.open_crypt(copies=copies, key=key, destination=destination)
+        opened = await app.open_crypt(copies=copies, key=key, destination=destination, edit=True)
+        if opened:
+            from features.text_editor.mobile.library_editing import attach_return
+            attach_return(app, app.vault_browser, getattr(getattr(app, 'private_sessions', None), 'active', None))
+        return opened
 
     return NotesHost(
         presentation=app.presentation,
@@ -200,8 +204,8 @@ def notes_host(app):
         middle_filename=middle_filename,
         entry_icon=entry_icon,
         highlight_entry=highlight_entry,
-        preview=lambda text: obsidian.markdown_preview(
-            text, int(app.preferences.values["markdown_font_size"]), local_links=True
+        preview=lambda text, **kwargs: obsidian.markdown_preview(
+            text, int(app.preferences.values["markdown_font_size"]), local_links=True, **kwargs
         ),
     )
 

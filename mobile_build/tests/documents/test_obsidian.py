@@ -83,7 +83,10 @@ class ObsidianTests(unittest.TestCase):
         self.assertIs(owner.toolbar.parent, owner.article)
         self.assertIs(owner.article.children[0], owner.toolbar)
         self.assertTrue(all(button.parent is owner.toolbar for button in
-            (owner.back_button, owner.forward_button, owner.up_button, owner.speech.button)))
+            (owner.back_button, owner.forward_button, owner.reader_actions_button)))
+        self.assertIsNone(owner.up_button.parent)
+        self.assertIsNone(owner.speech.button.parent)
+        self.assertIn('Read aloud…', [label for label, _ in owner.reader_actions.actions])
         owner.reflow(390)
         self.assertIs(owner.toolbar.parent, owner.view)
         owner.reflow(900)
@@ -91,6 +94,7 @@ class ObsidianTests(unittest.TestCase):
             self.assertTrue(self.run_async(owner.open_editor()))
             self.assertEqual(opened.call_args.kwargs['key'], 'Vault/Projects/Plan.MD')
             self.assertIs(opened.call_args.kwargs['copies'].provider, self.provider)
+            self.assertTrue(opened.call_args.kwargs['edit'])
         with patch.object(self.app, 'folder_path_visible', side_effect=lambda path, **kw: 'Projects' not in path):
             self.app.refresh_folder_visibility()
             self.assertEqual(paths(), ['Vault/Home.md'])

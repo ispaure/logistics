@@ -79,6 +79,29 @@ class NotesLibrary:
         data.decode('utf-8-sig')
         return data
 
+    def create(self, name, parent=None, *, cancelled=lambda: False):
+        from io import BytesIO
+        from .names import document_name
+        if not self.writable:
+            raise ValueError('Remote Notes Libraries are read-only.')
+        name = document_name(name)
+        if PurePosixPath(name).suffix.lower() not in MARKDOWN:
+            name += '.md'
+        path = self.contained(posixpath.join(self.root if parent is None else parent, name))
+        with operation(self.provider, cancelled):
+            self.provider.create_file(path, BytesIO(b''), cancelled=cancelled)
+        return path
+
+    def image_source(self, path):
+        from urllib.parse import unquote, urlsplit
+        from commonUtils.ui.native.markdown_images import folder_image_source
+        load = folder_image_source(self.provider, self.contained(path))
+        def image(target):
+            parsed = urlsplit(target)
+            self.contained(posixpath.normpath(posixpath.join(posixpath.dirname(path), unquote(parsed.path))))
+            return load(target)
+        return image
+
     def link(self, current, target):
         from urllib.parse import unquote, urlsplit
         link = urlsplit(target)
