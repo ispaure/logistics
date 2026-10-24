@@ -77,6 +77,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertFalse(hasattr(app, 'cloud_view'))
                 self.assertFalse(app.loop.run_until_complete(app.open_picker_folder(copy)))
                 self.assertEqual(app.routes.screens['files'][-1][0], 'unlock-credential')
+                app.main_window._impl.dialog_responses['QuestionDialog'] = [False, False]
                 app.credential_unlock_password.value = 'wrong'
                 app.loop.run_until_complete(app.credential_unlock_button.on_press())
                 self.assertIn('Unlock failed', app.credential_unlock_status.text)
@@ -258,7 +259,11 @@ class FolderHubTests(unittest.TestCase):
                     await app.open_picker_folder(entry)
                     browse.assert_awaited_once_with(preserve_path=True)
                     self.assertEqual(app.cloud_location.value, job['prefix'])
+                pending = app.folder_controller().discovery.task
+                if pending is not None:
+                    await pending
             app.loop.run_until_complete(check())
+            app.loop.run_until_complete(app.loop.shutdown_default_executor())
 
     def test_return_to_hub_and_options_never_enter_native_discovery(self):
         from mobile.app import LogisticsMobile
@@ -316,6 +321,7 @@ class FolderHubTests(unittest.TestCase):
                         await task
                     self.assertEqual(app.routes.screens['files'][-1][0], 'folder-options')
             app.loop.run_until_complete(check())
+            app.loop.run_until_complete(app.loop.shutdown_default_executor())
 
     def test_refresh_uses_loaded_sources_during_transfer_and_updates_only_changed_rows(self):
         from mobile.app import LogisticsMobile
@@ -631,8 +637,8 @@ class FolderHubTests(unittest.TestCase):
                 app.refresh_transfer_status()
                 self.assertEqual(view.children[2].children, [])
                 app.transfer_notification = False
-                self.assertIsInstance(view.children[-1], toga.ScrollContainer)
-                self.assertIs(view.children[-1].content, app.folder_list)
+                scroll = next(child for child in view.children if isinstance(child, toga.ScrollContainer))
+                self.assertIs(scroll.content, app.folder_list)
                 self.assertEqual(set(app.folder_buttons), {'Loaded drive'})
                 self.assertFalse(any(isinstance(child, toga.Selection) for child in view.children))
                 self.assertFalse(hasattr(app, 'folder_refresh_button'))
@@ -652,6 +658,10 @@ class FolderHubTests(unittest.TestCase):
                 self.assertFalse(app.routes.screens['files'])
                 self.assertIn('Comics', app.folder_picker_choices)
                 # A newly imported credential is reflected without rebuilding the root.
+                from types import SimpleNamespace
+                app.cloud_client = SimpleNamespace(generation=0, cancel=lambda: None, package_records=[
+                    dict(package_name='Loaded.zip', remotes=['Loaded drive']),
+                    dict(package_name='Other.zip', remotes=['Restored later'])])
                 app.remember_credential_association('Loaded.zip', ['Loaded drive'], session_only=True)
                 app.set_cloud_busy(False)
                 self.assertIn('Loaded', app.folder_credentials)
@@ -780,8 +790,9 @@ class FolderHubTests(unittest.TestCase):
                 app.main_window.close()
                 app.loop.close()
 
-    def test_locked_localcrypt_mapping_keeps_online_action_and_unlock_guard(self):
+    def test_locked_localcrypt_mapping_stays_local_without_inferred_cloud(self):
         from mobile.app import LogisticsMobile
+        from mobile.folder_hub import source_choices
         class Client(MirrorClient):
             def crypt_remotes(self): return []
             def cancel(self): pass
@@ -794,31 +805,18 @@ class FolderHubTests(unittest.TestCase):
             app.cloud_client = Client()
             app.show_cloud(present=False)
             job, _ = app.mirror_store().create(app.cloud_client, 'Secret', 'folder', storage='LocalCrypt')
-            app.cloud_remote.items = []
+            app.set_loaded_remote_names([])
             app.show_locations()
             entry = app.folder_picker_choices[job['target']]
             app.show_picker_folder(entry)
             labels = [button.text for button, _ in app.folder_action_controls]
             self.assertIn('Browse LocalCrypt', labels)
-            self.assertIn('Browse Remote', labels)
-            self.assertIn('Pull…', labels)
-            self.assertIn('Push…', labels)
-            self.assertNotIn('Secret', app.loaded_remote_names())
-            online = next(copy for copy in entry['copies'] if copy['source'] == 'Remote')
-            with patch.object(app, 'require_remote_credentials_async', return_value=False) as require:
-                with patch.object(app, 'browse_cloud', new=AsyncMock()) as browse:
-                    self.assertFalse(app.loop.run_until_complete(app.open_picker_folder(online)))
-                    browse.assert_not_awaited()
-                    self.assertEqual(require.call_args.args, ('Secret',))
-                    self.assertEqual(require.call_args.kwargs['identity'], job['identity'])
-                    resume = require.call_args.kwargs['resume']
-            app.cloud_remote.items = ['Secret']
-            with patch.object(app, 'require_remote_credentials_async', return_value=True):
-                with patch.object(app, 'browse_cloud', new=AsyncMock()) as browse:
-                    app.loop.run_until_complete(resume())
-                    self.assertEqual(app.cloud_remote.value, 'Secret')
-                    self.assertEqual(app.cloud_location.value, job['prefix'])
-                    browse.assert_awaited_once_with(preserve_path=True)
+            self.assertNotIn('Browse Remote', labels)
+            self.assertFalse(source_choices(app.folder_choices(), 'rclone'))
+            self.assertTrue(app.mirror_store().target(job).is_dir())
+            app.set_loaded_remote_names(['Secret'])
+            app.show_locations()
+            self.assertIn(job['target'], source_choices(app.folder_choices(), 'rclone'))
 
     def test_all_three_storage_buttons_and_missing_crypt_copy(self):
         from mobile.app import LogisticsMobile
@@ -843,8 +841,8 @@ class FolderHubTests(unittest.TestCase):
                 self.assertCountEqual(buttons(), ['Browse Local', 'Browse LocalCrypt', 'Browse Remote'])
                 store.target(crypt).rename(store.target(crypt).with_name('not-the-mapped-copy'))
                 self.assertCountEqual(buttons(), ['Browse Local', 'Browse Remote'])
-                app.cloud_remote.items = []
-                self.assertCountEqual(buttons(), ['Browse Local', 'Browse Remote'])
+                app.set_loaded_remote_names([])
+                self.assertCountEqual(buttons(), ['Browse Local'])
             finally:
                 app.main_window.close()
                 app.loop.close()

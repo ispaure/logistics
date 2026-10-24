@@ -20,7 +20,7 @@ class FileOperationTests(unittest.TestCase):
         LogisticsMobile.storage_root = self.root
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
         self.run_async = self.app.loop.run_until_complete
-        self.run_async(self.app.show_files())
+        self.run_async(self.app.show_files(location=('Local files', '')))
         self.source = self.app.file_provider
         (self.source.root / 'first.txt').write_text('First')
         (self.source.root / 'second.txt').write_text('Second')

@@ -28,7 +28,10 @@ class FolderNavigationTests(unittest.TestCase):
 
     def test_source_round_trip_reuses_native_rows_and_renders_once(self):
         app = self.folder_app()
-        app.cloud_remote.items = ['Drive', 'Mac']
+        app.cloud_client = SimpleNamespace(generation=0, cancel=lambda: None, package_records=[
+            dict(package_name='Personal.zip', remotes=['Drive']),
+            dict(package_name='Session network shares', remotes=['Mac'])])
+        app.set_loaded_remote_names(['Drive', 'Mac'])
         app.remember_credential_association('Personal.zip', ['Drive'], session_only=True)
         app.remember_credential_association('Session network shares', ['Mac'], session_only=True)
         app.show_locations()
@@ -68,18 +71,18 @@ class FolderNavigationTests(unittest.TestCase):
         self.addCleanup(retained.stop)
         app.cloud_remote.items = []
         app.change_folder_source('rclone')
-        locked = app.folder_buttons['Secret']
-        self.assertIs(locked, unlocked)
-        self.assertIs(locked.parent.children[0], indicator)
-        self.assertEqual(indicator.control_icon, 'folder_locked')
-        self.assertIn('locked', locked.accessible_name)
-        self.assertNotIn('unlocked', locked.accessible_name)
-        # A changed mapping may reuse its original dict; cache keys must own a
-        # snapshot rather than compare the same, now-mutated object to itself.
+        self.assertNotIn('Secret', app.folder_buttons)
+        # Retained metadata must not keep an online row alive after locking.
+        # Reloading creates a fresh row after the revoked one was removed.
+        app.cloud_remote.items = ['Secret']
+        app.update_folder_list(app.folder_choices())
+        restored = app.folder_buttons['Secret']
+        self.assertIsNot(restored, unlocked)
+        self.assertEqual(restored.parent.children[0].control_icon, 'folder_unlocked')
         choices = app.folder_picker_choices
         choices['Secret']['name'] = 'Renamed'
         app.update_folder_list(choices)
-        self.assertIs(app.folder_buttons['Secret'], locked)
+        self.assertIs(app.folder_buttons['Secret'], restored)
         self.assertEqual(app.folder_picker_choices['Secret']['name'], 'Renamed')
 
     def test_large_encrypted_tab_reads_credential_state_a_constant_number_of_times(self):
@@ -225,7 +228,7 @@ class FolderNavigationTests(unittest.TestCase):
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
             async def check():
                 app.show_cloud(present=False)
-                await app.show_files()
+                await app.show_files(location=('Local files', ''))
                 folder = app.file_provider.root / 'books'
                 folder.mkdir()
                 (folder / 'page.jpg').write_bytes(b'preview fixture')

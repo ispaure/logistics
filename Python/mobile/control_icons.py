@@ -5,6 +5,8 @@ from toga.style import Pack
 
 # Paths use a shared 24-point grid. Keep the fallback readable on desktop/test hosts.
 ICONS = {
+    'archive': ('archivebox', '▤', (((3, 3), (21, 3), (21, 8), (3, 8), (3, 3)),
+                                  ((5, 8), (5, 21), (19, 21), (19, 8)), ((10, 12), (14, 12)))),
     'folder_hub': ('folder', '▱', (((3, 6), (9, 6), (11, 9), (21, 9), (21, 20), (3, 20), (3, 6)),)),
     'books': ('books.vertical', '▥', (((3, 4), (8, 4), (8, 21), (3, 21), (3, 4)),
                                      ((10, 4), (15, 4), (15, 21), (10, 21), (10, 4)),

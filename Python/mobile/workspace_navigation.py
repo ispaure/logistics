@@ -159,8 +159,18 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         if adapter is not None and hasattr(adapter, 'navigation'):
             home = adapter.navigation[self.app.native_host.destinations.index('home')]
             home.topViewController.navigationItem.title = 'Home'
-            home.setNavigationBarHidden(False, animated=False)
+            self.sync_home_bar()
         self.render()
+
+    def sync_home_bar(self):
+        adapter = self.app.native_host.adapter
+        if adapter is None or not hasattr(adapter, 'navigation'):
+            return
+        home = adapter.navigation[self.app.native_host.destinations.index('home')]
+        # Home owns its heading. Nested routes still need UIKit's Back button.
+        hidden = not bool(self.app.routes.screens['home'])
+        if bool(home.isNavigationBarHidden()) != hidden:
+            home.setNavigationBarHidden(hidden, animated=False)
 
     def uninstall(self):
         for frame in list(self.frames):
@@ -321,6 +331,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             return
         self.rendering = True
         try:
+            self.sync_home_bar()
             adapter = self.app.native_host.adapter
             if (adapter is not None and type(self.app._impl).__module__.startswith('toga_android.')
                     and adapter.impl.native.getWidth() > 0):

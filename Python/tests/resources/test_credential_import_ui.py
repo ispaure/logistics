@@ -139,7 +139,7 @@ class CredentialImportTests(QtTestCase):
             with patch('features.rclone.ui.credential_unlock.choose_credential_retention', return_value=remember):
                 page.load_button.click()
             self.wait_until(lambda: not page.load_operation.busy)
-            self.assertEqual(page.loaded_status.text(), 'Saved' if remember else 'Session only')
+            self.assertEqual(page.loaded_status.text(), 'Persistent save' if remember else 'Session-Only')
             self.assertEqual((self.configs / 'Protected.conf').exists(), remember)
             self.assertEqual(page.remote_list.item(0).text(), 'Fixture')
             self.assertEqual((self.packages / 'Protected.zip').read_bytes(), source.read_bytes())
@@ -249,7 +249,7 @@ class CredentialImportTests(QtTestCase):
                 captions = ' '.join(label.text() for label in dialog.findChildren(qt.QLabel))
                 self.assertIn('in memory', captions)
                 self.assertIn('not protected by the ZIP password', captions)
-                self.assertIn('Session only does not delete it', captions)
+                self.assertIn('Session-Only does not delete it', captions)
                 self.assertEqual(dialog.session_button.parentWidget().parentWidget(), dialog)
                 if remember is None:
                     dialog.reject()

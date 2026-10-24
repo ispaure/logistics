@@ -81,9 +81,9 @@ class CloudUI(LocalCryptUI):
         """Construct retained connection, browser and download controls."""
         self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=self.choose_cloud_package, style=Pack(height=44))
         self.cloud_selected_zip = toga.Label('No ZIP selected', style=Pack(font_size=14))
-        self.cloud_import_message = toga.Label(import_hint('Choose a ZIP, then enter its password and tap Load remotes.'), style=Pack(font_size=14))
+        self.cloud_import_message = toga.Label(import_hint('Choose a ZIP, then enter its password and tap Unlock.'), style=Pack(font_size=14))
         self.cloud_password = PasswordInput(placeholder='ZIP password (if encrypted)', on_confirm=self.import_cloud_package, style=Pack(flex=1, height=44))
-        self.cloud_import = toga.Button('Load remotes', on_press=self.import_cloud_package, style=Pack(height=44, font_weight='bold'))
+        self.cloud_import = toga.Button('Unlock', on_press=self.import_cloud_package, style=Pack(height=44, font_weight='bold'))
         self.cloud_probe = toga.Button('Check rclone engine', on_press=self.probe_cloud, style=Pack(height=44))
         self.cloud_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
         self.cloud_package = toga.Label('Credential package: none', style=Pack(font_size=14))
@@ -102,8 +102,8 @@ class CloudUI(LocalCryptUI):
         self.remote_browser.search.placeholder = 'Search this folder'
         self.cloud_open = toga.Button('Open folder', on_press=self.open_cloud_folder, style=Pack(height=44))
         self.cloud_cancel = toga.Button('Cancel request', on_press=self.cancel_cloud, style=Pack(height=44))
-        self.cloud_clear = toga.Button('Forget saved credentials', on_press=self.clear_cloud, style=Pack(height=44))
-        self.cloud_lock = toga.Button('Lock connections', on_press=self.lock_cloud, style=Pack(height=48))
+        self.cloud_clear = toga.Button('Forget all saved credentials', on_press=self.clear_cloud, style=Pack(height=44))
+        self.cloud_lock = toga.Button('Lock session', on_press=self.lock_cloud, style=Pack(height=48))
         self.cloud_retained_box = toga.Box(style=Pack(direction=COLUMN))
         self.cloud_status = NativeBrowser.status_label(value=error or 'Choose saved or session-only credentials, then import a ZIP. Its password is never saved.',
                                                    style=Pack(height=20, margin_top=14, margin_bottom=14))
@@ -117,10 +117,10 @@ class CloudUI(LocalCryptUI):
         self.cloud_connections_status = ui.settings.note(error)
         self.cloud_import_entry = toga.Button('Import credential ZIP…', on_press=self.begin_cloud_import, style=Pack(height=48))
         troubleshooting, self.cloud_settings_toggle = ui.settings.disclosure('Advanced & troubleshooting', [
-            ui.settings.group([self.cloud_reload, self.cloud_probe, self.cloud_clear])])
-        self.cloud_connections_view = ui.settings.page('rclone connections',
-            'Your cloud storage, ready when you need it.', [
-                ui.settings.heading('CREDENTIAL PACKAGES'), self.cloud_retained_box,
+            ui.settings.group([self.cloud_reload, self.cloud_probe]),
+            ui.settings.heading('Credential removal'), ui.settings.group([self.cloud_clear])])
+        self.cloud_connections_view = ui.settings.page('Credential Packages',
+            '', [self.cloud_retained_box,
                 self.cloud_import_entry, ui.settings.note('Import a package exported from Logistics desktop.'),
                 ui.settings.heading('SESSION'), ui.settings.group([self.cloud_lock]),
                 ui.settings.note('Lock to stop access until you unlock again. This also locks SMB connections.'),
@@ -130,8 +130,7 @@ class CloudUI(LocalCryptUI):
                 self.cloud_choose, self.cloud_selected_zip,
                 ui.settings.group([ui.settings.field('ZIP password (if encrypted)', self.cloud_password)]),
                 self.cloud_import, self.cloud_import_message,
-                ui.settings.heading('STORAGE'), ui.settings.group([self.cloud_remember]),
-                ui.settings.note('Off keeps decoded credentials in memory. Password-protected ZIPs are retained encrypted for future unlocking. The ZIP password is never saved.')])
+                ui.settings.note('Unlock to choose Session-Only or Persistent credential storage. Password-protected ZIPs are retained for future unlocking. The ZIP password is never saved.')])
         # Build each route in its final shape. Browser controls belong only to
         # the browser header; advanced actions never temporarily adopt them.
         self.cloud_advanced_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
@@ -370,8 +369,8 @@ class CloudUI(LocalCryptUI):
     def loaded_package_label(self):
         return self.credential_workflow.loaded_package_label()
 
-    def credential_groups(self, choices=None):
-        return self.credential_workflow.credential_groups(choices)
+    def credential_groups(self, choices=None, *, loaded_remotes=None):
+        return self.credential_workflow.credential_groups(choices, loaded_remotes=loaded_remotes)
 
     def home_unlock_candidates(self):
         return self.credential_workflow.home_unlock_candidates()
@@ -526,6 +525,17 @@ class CloudUI(LocalCryptUI):
     async def clear_cloud(self, widget=None, **kwargs):
         if self.cloud_busy or self.cloud_client is None:
             return
+        client, origin = self.cloud_client, self.navigation_generation
+        generation = getattr(client, 'generation', 0)
+        if widget is not None:
+            if not await self.main_window.dialog(toga.ConfirmDialog('Forget all saved credentials?',
+                    'WARNING: This removes ALL saved and session credentials, retained credential ZIPs, and encrypted open/recent file lists from this device. '
+                    'Every associated remote will disappear from Cloud. You must import the packages again to reconnect. This cannot be undone.\n\n'
+                    'Cloud files and local folders will not be deleted.')):
+                return
+            if (self.cloud_busy or self.cloud_client is not client or self.navigation_generation != origin
+                    or getattr(client, 'generation', 0) != generation):
+                return
         self.set_cloud_busy(True)
         try:
             if not self.clear_private_reader():
@@ -542,13 +552,18 @@ class CloudUI(LocalCryptUI):
             self.cloud_rows = {}
             self.cloud_open_remote = None
             self.cloud_password.value = ''
+            if hasattr(self, 'credential_unlock_password'):
+                self.credential_unlock_password.value = ''
             self.cloud_pending_zip = None
             self.cloud_selected_zip.text = 'No ZIP selected'
-            self.cloud_import_message.text = import_hint('Choose a ZIP, then enter its password and tap Load remotes.')
+            self.cloud_import_message.text = import_hint('Choose a ZIP, then enter its password and tap Unlock.')
             self.cloud_package.text = 'Credential package: none'
             self.preferences.save(remote_packages='[]')
             self.session_credential_packages = []
             self.app.credential_document_lists.forget_memory()
+            self.app.folder_controller().discovery.invalidate()
+            if hasattr(self.app, 'folder_list'):
+                self.app.update_folder_list(self.app.folder_choices())
             self.cloud_status.value = 'Saved and session credentials and encrypted document lists forgotten. Private downloads remain available.'
         except Exception:
             self.cloud_status.value = 'Some credential cleanup failed. Access may already be locked and saved data partly removed. Unlock the device and retry forgetting.'

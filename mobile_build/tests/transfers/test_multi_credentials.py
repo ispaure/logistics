@@ -4,7 +4,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from features.rclone.mobile.credential_state import NativeCredentialState
 from mobile.app import LogisticsMobile
 
 
@@ -37,8 +38,8 @@ class MultiCredentialUITests(unittest.TestCase):
                 self.assertEqual(app.credential_groups(), {'All':None, 'Personal':{'Main'}, 'Legacy':{'Legacy-Books'}})
                 app.change_show_legacy(SimpleNamespace(value=False))
                 self.assertEqual(app.credential_groups(), {'All':None, 'Personal':{'Main'}})
-        self.assertIn('Personal.zip (saved)', app.loaded_package_label())
-        self.assertIn('Legacy.zip (session only)', app.loaded_package_label())
+        self.assertIn('Personal.zip (Persistent save)', app.loaded_package_label())
+        self.assertIn('Legacy.zip (Session-Only)', app.loaded_package_label())
 
     def test_saving_another_package_does_not_forget_session_associations(self):
         app = self.app
@@ -53,3 +54,44 @@ class MultiCredentialUITests(unittest.TestCase):
             remotes=['Dropbox @ Legacy abc', 'Books @ Legacy abc'],
             aliases={'Dropbox':'Dropbox @ Legacy abc','Books':'Books @ Legacy abc'})]
         self.assertEqual(self.app.visible_remote_names(self.client.package_records[0]['remotes']), ['Books @ Legacy abc'])
+
+    def test_loaded_accounts_use_published_identities_after_second_package(self):
+        app = self.app
+        state = NativeCredentialState()
+        state.package_records = (
+            dict(package_name='Personal.zip', saved=True, remotes=['Main', 'Dropbox'],
+                 aliases={'Main': 'Main', 'Dropbox': 'Dropbox'},
+                 identities={'Main': 'a' * 64, 'Dropbox': 'c' * 64}),
+            dict(package_name='Session.zip', saved=False, remotes=['SessionRemote', 'Dropbox @ Session abc'],
+                 aliases={'SessionRemote': 'SessionRemote', 'Dropbox': 'Dropbox @ Session abc'},
+                 identities={'SessionRemote': 'b' * 64, 'Dropbox @ Session abc': 'd' * 64}))
+        self.client.package_records = state.package_records
+        self.client.resolve_remote = state.resolve_remote
+        self.client.connection_identity = Mock(side_effect=OSError('Bridge unavailable'))
+        app.set_loaded_remote_names(['Main', 'SessionRemote'])
+        with patch.object(app, 'show_cloud_connections') as setup:
+            for remote, identity in [('Main', 'a' * 64), ('SessionRemote', 'b' * 64), ('Dropbox', 'd' * 64)]:
+                with self.subTest(identity=identity):
+                    self.assertTrue(app.require_remote_credentials(remote, identity=identity))
+                    self.assertTrue(app.loop.run_until_complete(
+                        app.require_remote_credentials_async(remote, identity=identity)))
+            app.show_locations()
+            entry = next(copy for folder in app.folder_choices().values()
+                         for copy in folder.get('copies', ()) if copy.get('remote') == 'Main')
+            async def browse(*, preserve_path):
+                app.cloud_open_remote = app.cloud_remote.value
+                app.cloud_path = app.cloud_location.value
+            with patch.object(app, 'browse_cloud', side_effect=browse):
+                self.assertTrue(app.loop.run_until_complete(app.open_picker_folder(entry)))
+            setup.assert_not_called()
+        self.client.connection_identity.assert_not_called()
+
+    def test_loaded_name_does_not_admit_a_different_account(self):
+        self.client.package_records[0]['identities'] = {'Main': 'a' * 64}
+        self.client.connection_identity = Mock(return_value='a' * 64)
+        with patch.object(self.app, 'retained_packages', return_value=None), \
+                patch.object(self.app, 'show_cloud_connections') as setup:
+            self.assertFalse(self.app.require_remote_credentials('Main', identity='b' * 64))
+            self.assertFalse(self.app.loop.run_until_complete(
+                self.app.require_remote_credentials_async('Main', identity='b' * 64)))
+            self.assertEqual(setup.call_count, 2)

@@ -30,6 +30,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         self._path = None
         self._loading = False
         self._render_revision = 0
+        self._rendered_colors = None
         self._closing = False
         build_controls(self)
         self.navigation = BookNavigation(self)
@@ -39,7 +40,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.save_timer.timeout.connect(self._save_state)
         self._set_busy(False)
         from commonUtils.ui.appearance.styling import styling
-        styling().changed.connect(self._settings_changed)
+        styling().changed.connect(self._shared_settings_changed)
         from commonUtils.ui.settings.monitor import subscribe_settings
         from features.settings import settings_store
         store = settings_store(Path(__file__).parents[1] / 'config.ini')
@@ -126,6 +127,23 @@ class BooksPage(Bookmarks, qt.QWidget):
     def _check_settings(self):
         if defaults() != self._settings:
             self._settings_changed()
+
+    def _shared_settings_changed(self):
+        if defaults() != self._settings:
+            self._settings_changed()
+            return
+        if not self.book:
+            return
+        colors = THEMES[self.theme.currentData()]
+        if self.theme.currentData() in ('dark', 'slate'):
+            from commonUtils.ui.appearance.theme import configured_colors
+            theme = configured_colors(True)
+            colors = theme.surface, theme.text
+        # Automatic reading fonts inherit UI typography. Slate/dark readers
+        # adopt the shared tint; other shared preferences do not reimport EPUB.
+        if (self.reading_font() != self.text.document().defaultFont()
+                or colors != self._rendered_colors):
+            self._appearance_changed()
 
     def _settings_changed(self):
         self._settings = defaults()
@@ -391,6 +409,7 @@ class BooksPage(Bookmarks, qt.QWidget):
             from commonUtils.ui.appearance.theme import configured_colors
             colors = configured_colors(True)
             background, foreground = colors.surface, colors.text
+        self._rendered_colors = background, foreground
         self.reading_area.setStyleSheet(f'background-color: {background};')
         self.text.setMaximumWidth(self.reading_width.value())
         html = chapter_html(self.book, path, foreground=foreground, spacing=self.spacing.value())

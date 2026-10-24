@@ -14,6 +14,13 @@ and disappear when credentials are locked or forgotten.
 Use **Import…** for a standalone EPUB or comic. EPUB and
 CBZ/ZIP imports create private copies; the selected source is never
 changed. Imports open directly and remain available through document sessions.
+**Show in folder** reveals the original local file when its saved path is still
+available, including after reopening from Recent or restarting. If the original
+is missing or its path was never recorded (including system-picker imports), the
+command is **Show cached copy in folder** and reveals the private Library copy.
+Older imports can learn their source when reopened from Local after closing the
+reader. LocalCrypt readers use encrypted storage and memory-only decrypted
+content, separate from these saved Library imports.
 On iOS, EPUBs opened from **Workspaces → Local** can live in the shared
 **Files → Logistics → Local** folder. Their import history stays in private app
 storage; reopening the same Local file reuses its imported book and reading

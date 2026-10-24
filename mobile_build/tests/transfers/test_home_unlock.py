@@ -72,11 +72,12 @@ class HomeUnlockTests(unittest.TestCase):
             header.children[1].on_press()
             self.assertEqual(app.native_host.state.destination, 'home')
             self.assertEqual(app.routes.screens['home'][-1][0], 'unlock-credential')
-            selector = next(child for child in app.body.children[0].children if isinstance(child, toga.Selection))
+            selector = next(child for child in app.body.children[0].content.children if isinstance(child, toga.Selection))
             self.assertEqual([item.value for item in selector.items], ['Personal.zip', 'Work.zip'])
             app.credential_unlock_password.value = 'discard on selection'
             selector.value = 'Work.zip'
             self.assertEqual(app.credential_unlock_password.value, '')
+            app.main_window._impl.dialog_responses['QuestionDialog'] = [False, False]
             app.credential_unlock_password.value = 'wrong'
             app.loop.run_until_complete(app.credential_unlock_button.on_press())
             self.assertIn('Unlock failed', app.credential_unlock_status.text)

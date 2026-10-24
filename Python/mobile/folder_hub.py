@@ -100,7 +100,8 @@ def source_choices(choices, source, network_remotes=()):
         if source == 'Local':
             return any(copy['source'] in ('Local', 'LocalCrypt')
                        for copy in [entry, *entry.get('copies', ())])
-        return owner(entry) == source
+        return (owner(entry) == source and (source != 'rclone' or any(copy['source'] == 'Remote'
+                for copy in [entry, *entry.get('copies', ())])))
     return {name: entry for name, entry in choices.items() if visible(entry)}
 
 
@@ -164,7 +165,10 @@ def _folder_copy_descriptors(snapshot, remotes, crypt):
             title = (name if not jobs[value]['prefix'] else jobs[value]['target']) if kind == 'job' else name
             remote = jobs[value]['remote'] if kind == 'job' else name if kind in ('crypt', 'remote') else None
             identity = jobs[value].get('identity') if kind == 'job' else None
-            owners = ([by_identity[identity]] if identity in by_identity else
+            remote_owners = [item for item in accounts.get(remote, {}).values()
+                             if not snapshot.source_packages or item[0] in loaded_sources]
+            owners = (remote_owners if kind == 'remote' else
+                      [by_identity[identity]] if identity in by_identity else
                       list(accounts.get(remote, {}).values()) if remote else [])
             if not owners:
                 owners = [(('connection', identity) if identity else (), identity, '')]
@@ -184,11 +188,9 @@ def _folder_copy_descriptors(snapshot, remotes, crypt):
 def discover_folder_choices(snapshot):
     """Read local directories and group known locations without mutating the snapshot."""
     jobs = snapshot.jobs
-    # Retained metadata is a discovery index, never permission to browse.
-    # Opening any locked remote still goes through the matching ZIP guard.
-    retained = snapshot.retained_packages
-    remotes = sorted(set(snapshot.remote_names) | {
-        remote for package in retained for remote in package['remotes']}, key=str.casefold)
+    # Only loaded credentials declare Cloud remotes. Retained ZIP metadata still
+    # identifies local copies, but never manufactures online destinations.
+    remotes = sorted(set(snapshot.remote_names), key=str.casefold)
     crypt = dict(snapshot.crypt_locations)
     roots = snapshot.crypt_roots
     if roots:
@@ -202,7 +204,7 @@ def discover_folder_choices(snapshot):
                 crypt[label] = remote
     # Rendering and menu opening must never enter the native bridge. A
     # credential load updates this discovery snapshot.
-    choices = {'All files': dict(source='Local', kind='local', value='', name='Browse All Files', copies=[], browser_root=True)}
+    choices = {'All files': dict(source='Local', kind='shared-local', value='', name='Browse All Files', copies=[], browser_root=True)}
     descriptors = _folder_copy_descriptors(snapshot, remotes, crypt)
     groups = project_catalog(descriptors)
     counts = {}
@@ -216,8 +218,13 @@ def discover_folder_choices(snapshot):
         if primary['kind'] == 'job':
             job = jobs[primary['value']]
             entry['copies'] = [copy for copy in copies if copy['source'] != 'Remote']
-            entry['copies'].append(dict(primary, source='Remote', kind='job-remote', value=job['id']))
-        elif primary['kind'] == 'crypt' and not any(copy['source'] == 'Remote' for copy in copies):
+            loaded = [record for record in snapshot.source_packages
+                      if job['remote'] in record['remotes'] and (not job.get('identity')
+                          or record.get('identities', {}).get(job['remote']) == job['identity'])]
+            if loaded or not snapshot.source_packages and job['remote'] in snapshot.remote_names:
+                entry['copies'].append(dict(primary, source='Remote', kind='job-remote', value=job['id']))
+        elif (primary['kind'] == 'crypt' and primary['remote'] in snapshot.remote_names
+              and not any(copy['source'] == 'Remote' for copy in copies)):
             entry['copies'].append(dict(primary, source='Remote', kind='remote', value=(primary['remote'], '')))
         key = group.name
         if counts[key] > 1:
@@ -226,23 +233,18 @@ def discover_folder_choices(snapshot):
             if key in choices:
                 key += ' ' + str(len(choices))
         choices[key] = entry
+    from .incoming_files import inbox_path
+    received = inbox_path(snapshot.private_root)
     from .local_sources import shared_files
     shared = shared_files(snapshot.private_root)
     if shared is not None:
-        # Imported folders and mapped copies stay individually accessible.
-        # The shared directory is a separate browse action below the list.
-        choices['All files'] = dict(source='Local', kind='shared-local', value='',
-                                    name='Browse All Files', copies=[], browser_root=True)
         for row in shared.list():
-            if row['directory'] and row['name'] != 'Local':
+            if row['directory'] and row['name'] not in ('Local', received.name):
                 title = row['name']
                 key = title if title not in choices else title + ' (Local)'
                 choices[key] = dict(source='Local', kind='shared-local', value=title, name=title, copies=[])
-    else:
-        from .incoming_files import inbox_path
-        inbox_path(snapshot.private_root)
-        key = 'Inbox' if 'Inbox' not in choices else 'Inbox (received)'
-        choices[key] = dict(source='Local', kind='inbox', value='', name='Inbox', copies=[])
+    key = received.name if received.name not in choices else received.name + ' (received)'
+    choices[key] = dict(source='Local', kind='inbox', value='', name=received.name, copies=[])
     return FolderDiscoveryResult(choices, tuple(crypt.items()) if roots else snapshot.crypt_locations)
 
 

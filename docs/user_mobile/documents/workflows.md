@@ -3,21 +3,31 @@
 ## Receive files from another app
 
 On iPhone or iPad, choose **Share → Logisticks**, wait for the receiving result,
-then tap **Done**. Open Logisticks and browse **Workspaces → Local → Inbox**.
-In the Files app the folder is **On My iPhone/iPad → Logisticks → Inbox**,
-beside **Local**. The share extension saves the attachments while the main app
-is closed; the main app moves complete handoffs into Inbox when opened.
+then tap **Done**. Open Logisticks and browse **Workspaces → Local → Received Files**.
+**Browse All Files** also shows **Received Files** beside **Local**. In Apple's
+Files app the same folder is **On My iPhone/iPad → Logisticks → Received Files**.
+The share extension saves attachments while the main app is closed; the main app
+publishes complete handoffs into Received Files when opened.
 
 On Android, share one or more files to **Logisticks**, wait for the result, then
-tap **Open Logisticks**. Find them under **Workspaces → Local → Inbox** or choose
-**Inbox** in the file browser. Android Inbox stays in app storage even if the
-optional Local collection is on an SD card.
+tap **Open Logisticks**. Find them under **Workspaces → Local → Received Files**,
+**Browse All Files → Received Files**, or the **Received Files** browser location.
+With a selected collection drive, the folder is `<drive>/Logistics/Received Files`,
+beside `Local` and `LocalCrypt`. With app internal storage selected, it remains
+private to the app. Received Files follows the collection drive; when that drive
+is unavailable, completed incoming handoffs wait in app storage until it returns.
 
-Files are copied; the originals stay in the sending app. Existing Inbox files
+The app uses the name **Received Files** on both platforms. On iOS this avoids
+the system-owned `Documents/Inbox`, which apps cannot write to. Existing legacy
+Inbox contents are copied and verified into Received Files, with the originals
+retained. If Received Files already contains items, the legacy tree is kept in a
+**Previous Inbox** subfolder (numbered when needed), preserving both sets of files.
+
+Files are copied; the originals stay in the sending app. Existing received files
 are preserved and duplicate names receive a numbered suffix. Unsupported or
 unreadable attachments show a failure result; share those files again. Cancel
 stops remaining work and retains files already received. This first receiving
-flow lands in ordinary, unencrypted Inbox storage; use the app's file actions to
+flow lands in ordinary, unencrypted Received Files storage; use the app's file actions to
 organize files afterward. It does not choose an encrypted destination inside
 the share sheet. Developer iOS builds require the app and extension's matching
 App Group provisioning; see [mobile preparation](../../development/mobile-preparation.md#incoming-files-and-inbox).

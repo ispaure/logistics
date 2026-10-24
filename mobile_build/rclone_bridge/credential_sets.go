@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -31,6 +33,94 @@ var credentialSets = map[string]*credentialSet{}
 var credentialView *vaultStorage
 var savedCredentials *vaultStorage
 var latestCredential string
+
+// Remove the whole owning package, including an older saved version shadowed
+// by a session import. Other packages keep their aliases, modes and token stores.
+func forgetCredentialPackage(label string, unopened *vaultStorage) error {
+	if !validLabel(label) {
+		return errors.New("choose a credential package to forget")
+	}
+	ensureCredentialSets()
+	id := packageID(label)
+	root := savedCredentials
+	if root == nil {
+		root = unopened
+	}
+	selected := credentialSets[id]
+	if selected != nil {
+		selected.storage.mu.Lock()
+		defer selected.storage.mu.Unlock()
+	}
+	if root != nil {
+		if err := forgetSavedCredentialPackage(root, id); err != nil {
+			return err
+		}
+	}
+	ciphers := snapshotCryptCiphers(nil)
+	shutdownClients()
+	if selected != nil {
+		selected.storage.detachLocked()
+		delete(credentialSets, id)
+	}
+	if key, ok := documentListKeys[id]; ok {
+		clear(key.password)
+		delete(documentListKeys, id)
+	}
+	if latestCredential == label {
+		latestCredential = ""
+		labels := []string{}
+		for _, set := range credentialSets {
+			labels = append(labels, set.storage.values.Label)
+		}
+		sort.Strings(labels)
+		if len(labels) > 0 {
+			latestCredential = labels[0]
+		}
+	}
+	publishCredentialSets()
+	publishCryptCiphers(ciphers)
+	return nil
+}
+
+// Call with the selected package's mutex held, then release the parent before
+// publishing. Token callbacks acquire these locks in the same order.
+func forgetSavedCredentialPackage(root *vaultStorage, id string) error {
+	root.mu.Lock()
+	defer root.mu.Unlock()
+	remaining := map[string]snapshot{}
+	for key, value := range root.values.Packages {
+		if key != id {
+			remaining[key] = copySnapshot(value)
+		}
+	}
+	if len(root.values.Packages) == 0 && len(root.values.Remotes) > 0 && packageID(root.values.Label) != id {
+		remaining[packageID(root.values.Label)] = copySnapshot(root.values)
+	}
+	if len(remaining) == 0 {
+		current, err := readVault(root.path)
+		if err != nil || !bytes.Equal(current, root.expected) {
+			return vaultError
+		}
+		if err := os.Remove(root.path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		root.expected = nil
+		root.values = snapshot{Remotes: map[string]map[string]string{}}
+	} else {
+		ids := []string{}
+		for key := range remaining {
+			ids = append(ids, key)
+		}
+		sort.Strings(ids)
+		next := copySnapshot(remaining[ids[0]])
+		next.Packages = remaining
+		if err := root.save(next); err != nil {
+			return err
+		}
+		root.values = next
+	}
+	return nil
+}
 
 func packageID(label string) string {
 	sum := sha256.Sum256([]byte(label))

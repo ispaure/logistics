@@ -26,6 +26,120 @@ class NotesLibraryDesktopTests(QtTestCase):
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
 
+    def test_real_localcrypt_and_crypt_remote_open_and_read_notes(self):
+        from io import BytesIO
+        from features.rclone import executable, session
+        from features.rclone.remote_resources import RemoteResources
+        from features.rclone.localcrypt.backend import CryptResources
+        from tests.local_crypt_fixture import crypt_fixture
+        binary = executable.get_rclone_path()
+        if not binary.is_file():
+            self.skipTest('Pinned rclone executable not installed')
+        with self.temporary_directory() as directory, crypt_fixture(directory, binary) as fixture:
+            fixture.provider.mkdir('.obsidian')
+            fixture.provider.mkdir('Nested')
+            fixture.provider.create_file('Nested/Next.md', BytesIO(b'# Nested note'))
+            # Seed the synthetic cloud crypt with the same vault marker and nested note.
+            environment, source, destination = session.launch(
+                fixture.context, str(fixture.item.data), str(fixture.cloud))
+            from commonUtils.integrations.wrappers.cmdShellWrapper.binary import run_bytes
+            run_bytes([str(binary), '--config', session.NULL_CONFIG,
+                       'copy', '--create-empty-src-dirs', source, destination], environment=environment, max_output=0)
+            for remote in (False, True):
+                with self.subTest(remote=remote):
+                    factory = (lambda: RemoteResources(fixture.context, 'Secret', binary=binary)) if remote else (
+                        lambda: CryptResources(fixture.item, binary=binary))
+                    window = NotesLibraryWindow(factory, 'Encrypted fixture', remote=remote)
+                    window.show()
+                    self.wait_until(lambda: not window.progress.busy)
+                    self.assertIsNotNone(window.library, window.progress.message.text())
+                    self.assertEqual(window.viewer.allow_edit, not remote)
+                    self.assertEqual(window.viewer.edit_button.isChecked(), not remote)
+                    self.assertIn('note.md', window.items)
+                    window.open_note('note.md')
+                    self.wait_until(lambda: not window.progress.busy)
+                    self.assertIn('Original note', window.viewer.browser.toPlainText(), window.viewer.status.text())
+                    window.items['Nested'].setExpanded(True)
+                    self.wait_until(lambda: not window.progress.busy)
+                    window.open_note('Nested/Next.md')
+                    self.wait_until(lambda: not window.progress.busy)
+                    self.assertIn('Nested note', window.viewer.browser.toPlainText(), window.viewer.status.text())
+                    if not remote:
+                        for mode in ('formatted', 'source'):
+                            window.viewer.set_edit_mode(mode)
+                            window.viewer.active_editor().insertPlainText('Edited ' + mode + '. ')
+                            window.viewer.save_document()
+                            self.wait_until(lambda: not window.progress.busy)
+                            self.assertFalse(window.viewer.is_modified, window.viewer.status.text())
+                            self.assertIn(('Edited ' + mode).encode(), fixture.provider.read_bytes('Nested/Next.md'))
+                    from shiboken6 import isValid
+                    provider = window.provider
+                    session.forget(provider.context)
+                    self.wait_until(lambda: not isValid(window) or window.locked)
+                    self.assertEqual(window.storage.data, b'')
+                    self.assertTrue(provider.closed)
+                    if isValid(window):
+                        window.close()
+
+    def test_action_uses_only_selected_storage_context(self):
+        from dataclasses import replace
+        from features.text_editor.notes_actions import sources
+        from features.rclone.desktop_service import service
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            entry = FolderEntry('Notes', local=LocalFolder(root), remote_name='Notes',
+                                remote_source='rclone', remote_context=root / 'keys.conf')
+            with patch.object(service.remotes, 'open', side_effect=lambda location: LocalFiles(root)) as remote:
+                local_actions = actions(replace(entry, storage_scope='local'))
+                remote.assert_not_called()
+                self.assertEqual([action.name for action in local_actions], ['Open Notes Library'])
+                cloud_actions = actions(replace(entry, storage_scope='remote'))
+                remote.assert_called_once()
+                self.assertEqual([action.name for action in cloud_actions], ['Open Notes Library'])
+                with patch('features.text_editor.ui.notes_library.open_notes') as opened:
+                    cloud_actions[0].callback()
+                    self.assertTrue(opened.call_args.kwargs['remote'])
+                    local_actions[0].callback()
+                    self.assertFalse(opened.call_args.kwargs['remote'])
+            self.assertEqual([item[0] for item in sources(replace(entry, local=None, storage_scope='local'))], [])
+
+    def test_workspace_library_starts_editing_and_saves_in_local_context(self):
+        with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Discard):
+            with self.temporary_directory() as directory:
+                root = Path(directory)
+                self.fixture(root)
+                window = NotesLibraryWindow(lambda: LocalFiles(root), 'Notes')
+                window.show()
+                self.wait_until(lambda: not window.progress.busy)
+                window.open_note('Home.md')
+                self.wait_until(lambda: not window.progress.busy)
+                self.assertTrue(window.viewer.allow_edit)
+                self.assertTrue(window.viewer.edit_button.isChecked())
+                window.viewer.set_edit_mode('source')
+                window.viewer.editor.insertPlainText('Edited locally. ')
+                window.viewer.save_document()
+                self.wait_until(lambda: not window.progress.busy)
+                self.assertIn('Edited locally.', (root / 'Home.md').read_text(), window.viewer.status.text())
+                self.assertFalse(window.viewer.is_modified)
+                window.viewer.editor.insertPlainText('Unsaved ')
+                with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Cancel):
+                    window.open_note('Nested/Next.md')
+                    self.assertFalse(window.progress.busy)
+                    self.assertFalse(window.prepare_close())
+                    self.assertEqual(window.history[window.index], 'Home.md')
+                with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Discard) as prompt:
+                    window.open_note('Nested/Next.md')
+                    self.wait_until(lambda: not window.progress.busy)
+                    prompt.assert_called_once()
+                self.assertTrue(window.viewer.edit_button.isChecked())
+                window.viewer.editor.insertPlainText('Saved on close. ')
+                with patch.object(qt.QMessageBox, 'warning', return_value=qt.QMessageBox.StandardButton.Save):
+                    self.assertFalse(window.prepare_close())
+                from shiboken6 import isValid
+                self.wait_until(lambda: not isValid(window) or not window.progress.busy)
+                self.assertIn('Saved on close.', (root / 'Nested/Next.md').read_text())
+
     def test_note_reads_complete_short_chunks_and_enforce_the_total_preview_limit(self):
         from contextlib import contextmanager
         from io import BytesIO

@@ -24,6 +24,8 @@ def rclone_host_ui(app):
         connection_note,
         connection_heading,
         connection_disclosure,
+        credential_package_row,
+        CredentialStorageContent,
     )
 
     return MobileHostUI(
@@ -51,6 +53,8 @@ def rclone_host_ui(app):
             note=connection_note,
             heading=connection_heading,
             disclosure=connection_disclosure,
+            package_row=credential_package_row,
+            storage_content=CredentialStorageContent,
         ),
         record_folder=lambda *args, **kwargs: record(app, *args, **kwargs),
         opening_status=lambda source, **kwargs: opening_status(app, source, **kwargs),
@@ -194,6 +198,7 @@ def notes_host(app):
         ),
         folder_visible=lambda *args, **kwargs: app.folder_path_visible(*args, **kwargs),
         show_documents=app.show_documents_hub,
+        close_session=app.request_close_session,
         show_view=app.show_view,
         destination=lambda: app.native_host.state.destination,
         render=app.adaptive.render,

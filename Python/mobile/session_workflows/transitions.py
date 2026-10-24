@@ -218,12 +218,9 @@ class SessionTransitions:
         closing = host.__dict__.setdefault('_reader_closing', set())
         leaving = key in closing
         closing.discard(key)
-        if not leaving or target is None:
-            host.show_documents_hub()
-            return
-        destination, route, drawer = target
         # Retire every presentation of this closed session, including a close
-        # prompt or a retained reader in another destination's stack.
+        # prompt or a retained reader in another destination's stack. List/menu
+        # closes must do this too, even without a visible-reader exit intent.
         for current, screens in host.routes.screens.items():
             index = next((i for i, (name, panel, _) in enumerate(screens)
                           if name in ('private:' + key, 'reader:' + key, 'close:' + key,
@@ -231,11 +228,16 @@ class SessionTransitions:
                           or any(getattr(child, '_reader_session_id', None) == key for child in panel.children)), None)
             if index is not None:
                 host.routes.trim(current, index)
+                host.routes.render(current)
         details = host.adaptive.detail_routes
         index = next((i for i, (_, panel, _) in enumerate(details)
                       if any(getattr(child, '_reader_session_id', None) == key for child in panel.children)), None)
         if index is not None:
             host.adaptive.trim_details(index)
+        if not leaving or target is None:
+            host.show_documents_hub()
+            return
+        destination, route, drawer = target
         screens = host.routes.screens[destination]
         count = next((i + 1 for i, screen in enumerate(screens) if screen[0] == route), 0)
         host.routes.trim(destination, count)

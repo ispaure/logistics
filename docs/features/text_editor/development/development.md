@@ -311,13 +311,34 @@ through EOF or the 2 MiB ceiling plus one using `runtime.streams.read_up_to`, th
 apply the existing size, cancellation and revision checks before decoding.
 Desktop `notes_actions.py` contributes the
 location command; `ui/notes_library.py` owns its lazy Documents window and
-cooperative workers. Mobile resolves the same location scopes in
+cooperative workers. Its credential observer uses a Python bound method that
+emits the Qt revocation signal, because the session registry holds observers with
+`weakref.WeakMethod`; a Qt signal's built-in `emit` method cannot be registered
+directly. The workspace action entry carries `storage_scope` while retaining both
+local and remote endpoints for transfer contributions. Notes probes only that
+scope. Local viewers enable editing by default; Cloud viewers remain read-only.
+`PageStorage` publishes local saves on a worker through `ResourceTextSession`,
+checks original bytes and revisions, and retains drafts on failure. Navigation
+and closing resolve unsaved changes before retiring the current note.
+`test_notes_library_desktop.py` exercises real rclone LocalCrypt and
+crypt-remote listing, nested note reads and revocation. Mobile's
+`test_notes_library.py` covers both encrypted sources with the host native bridge
+when `LOGISTICS_MOBILE_BRIDGE` points to its shared library, using only synthetic
+credentials and an in-memory remote. Mobile resolves the same location scopes in
 `mobile.notes_actions` and presents them through the retained adaptive
 reader. `mobile/notes_library.py` owns that presentation through a declared
 `NotesHost` contract. The host retains entry-point routing, workspace sessions,
 provider resolution and credential lifetimes. The shared native private WebView
 supplies memory-only rendering; Notes Library containment and URL policy remain
 feature-owned.
+
+Mobile libraries publish separate Close and page-history controls to the native
+toolbar. The **×** calls `NotesHost.close_session` through the host's session-close
+workflow, retiring the library even when page history or compact browsing is
+active. The visible **‹ / ›** controls only navigate note history; they stay
+disabled at its ends. The documentation reader uses the same controls, with
+Close returning through its host route. Android system Back retains its
+browse-panel, page-history, then exit ordering.
 
 Remote providers never get a search widget or recursive index. Private note data
 stays in memory and credential revocation retires the document. See the

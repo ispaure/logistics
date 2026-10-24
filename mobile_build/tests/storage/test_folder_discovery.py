@@ -215,7 +215,7 @@ class FolderDiscoveryTests(TestCase):
         self.assertEqual(snapshot, before)
         self.assertEqual(result.crypt_locations, ())
         self.assertFalse(path.exists())
-        self.assertEqual(set(result.choices), {'All files', 'Drive'})
+        self.assertEqual(set(result.choices), {'All files', 'Drive', 'Received Files'})
 
     def test_shutdown_retires_successful_scan_without_publishing(self):
         try:

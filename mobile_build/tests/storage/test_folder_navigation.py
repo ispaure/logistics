@@ -107,6 +107,38 @@ class FolderStackTests(TestCase):
         self.assertFalse(self.routes.screens['files'])
         self.assertEqual(self.routes.body().children[0].text, 'Workspaces')
 
+    def test_all_files_keeps_shared_root_when_local_provider_changes(self):
+        for native in (False, True):
+            with self.subTest(native=native):
+                self.view._folder_entry_location = ('Shared files', '')
+                record(self.app, self.view, self.browser, 'browser', 'Shared files', '', self.navigate)
+                self.routes.show(self.view, destination='files', route='browser')
+                shared = self.routes.screens['files'][0]
+                self.show('')
+                self.show('Projects')
+                self.assertEqual(len(self.routes.screens['files']), 3)
+                self.assertIs(self.routes.screens['files'][0], shared)
+                for expected in (('Local files', ''), ('Shared files', '')):
+                    if native:
+                        nav = self.navigation[self.host.destinations.index('files')]
+                        nav.viewControllers.pop()
+                        self.routes.native_popped(nav)
+                    else:
+                        self.routes.back()
+                    self.finish()
+                    self.assertEqual(self.loaded[-1], expected)
+                    self.assertIs(self.routes.body().children[0], self.view)
+                self.routes.back()
+                self.assertFalse(self.routes.screens['files'])
+                self.assertEqual(self.routes.body().children[0].text, 'Workspaces')
+
+    def test_direct_local_shortcut_does_not_gain_shared_root(self):
+        self.view._folder_entry_location = ('Local files', '')
+        self.show('')
+        self.assertEqual(len(self.routes.screens['files']), 1)
+        self.routes.back()
+        self.assertEqual(self.routes.body().children[0].text, 'Workspaces')
+
     def test_workspace_shortcut_native_pop_returns_directly_to_overview(self):
         self.view._folder_entry_location = ('Local files', 'Projects')
         self.show('Projects')

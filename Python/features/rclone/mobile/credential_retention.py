@@ -23,6 +23,7 @@ class NativeCredentialForget:
     # or erasure of the independent saved-credential vault.
     packages: Callable[[], object] = field(repr=False)
     document_cache_root: Path
+    package_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -53,7 +54,28 @@ def retain(client, request):
 
 def forget(client, request):
     if request is not None and not isinstance(request, NativeCredentialForget):
-        raise ValueError('This runtime forgets all saved credentials together.')
+        raise ValueError('Choose credential material to forget.')
+    if request is not None and request.package_name is not None:
+        from .document_lists import forget_cache
+        keys = [record['document_cache_id'] for record in getattr(client, 'package_records', ())
+                if record['package_name'] == request.package_name and record.get('document_cache_id')]
+        client.forget_package(request.package_name)
+        def forget_package():
+            store = request.packages()
+            if store is not None:
+                if store.client is not client:
+                    raise ValueError('This package store belongs to another credential client.')
+                store.forget_package(request.package_name)
+        failure = None
+        operations = [forget_package, *(lambda key=key: forget_cache(request.document_cache_root, key) for key in keys)]
+        for operation in operations:
+            try:
+                operation()
+            except Exception as error:
+                failure = failure or error
+        if failure is not None:
+            raise failure
+        return
     failure = None
     operations = [client.clear]
     if request is not None:

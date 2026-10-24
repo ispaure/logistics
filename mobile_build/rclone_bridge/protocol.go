@@ -121,7 +121,7 @@ func encodeReply(action string, result any, err error) string {
 	} else {
 		reply["result"] = result
 		switch action {
-		case "import", "vault_open", "add_smb", "clear":
+		case "import", "vault_open", "add_smb", "clear", "forget_package":
 			credentialEpoch++
 			info := vaultInfo()
 			info["epoch"] = credentialEpoch

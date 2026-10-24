@@ -14,7 +14,8 @@ class FolderEntry:
     Represents one logical Logistics folder across local and remote storage.
 
     A folder may exist locally, remotely, or in both places. Remote source
-    context is intentionally opaque to the core model.
+    context is intentionally opaque to the core model. storage_scope captures the
+    selected workspace view without removing either transfer endpoint.
     """
 
     name: str
@@ -22,6 +23,7 @@ class FolderEntry:
     remote_name: str | None = None
     remote_source: str | None = None
     remote_context: Any = None
+    storage_scope: str | None = None
 
     @property
     def has_local(self) -> bool:

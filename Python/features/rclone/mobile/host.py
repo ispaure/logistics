@@ -72,3 +72,5 @@ class ConnectionPresentation:
     note: Callable[[str], Any]
     heading: Callable[[str], Any]
     disclosure: Callable[[str, list[Any]], tuple[Any, Any]]
+    package_row: Callable[[str, str, Callable], Any]
+    storage_content: Callable[[str, bool, Callable], Any]

@@ -23,6 +23,7 @@
     "document_lists_seal",
     "file_archive",
     "file_thumbnail",
+    "forget_package",
     "image_thumbnail",
     "import",
     "list",

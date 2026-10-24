@@ -83,6 +83,34 @@ class DocumentDeletionTests(unittest.TestCase):
         self.assertEqual(self.app.store.open(owner.document.id).text, 'Retain me')
         self.assertIn('read-only', owner.status.text)
 
+    def test_close_or_delete_from_other_tab_retires_hidden_editor_and_preview(self):
+        app = self.app
+        for destination, other in (('home', 'documents'), ('documents', 'home')):
+            for preview in (False, True):
+                for action in ('close', 'delete'):
+                    with self.subTest(destination=destination, preview=preview, action=action):
+                        app.show_home() if destination == 'home' else app.show_documents_hub()
+                        origin = app.routes.body(destination)
+                        app.new_document(extension='md' if preview else 'txt')
+                        app.show_documents(resume=True, edit=not preview)
+                        owner = app.editor_view
+                        key = owner.session.id
+                        self.assertEqual(app.visible_reader(), key)
+                        app.routes.return_to(other)
+                        self.assertIsNone(app.visible_reader())
+                        if action == 'delete':
+                            self.assertTrue(self.delete(owner)[0])
+                        else:
+                            self.assertTrue(app.request_close_session(key))
+                        self.assertNotIn(key, app.workspace.sessions)
+                        self.assertNotIn(key, app.text_views)
+                        self.assertEqual(app.routes.screens[destination], [])
+                        app.routes.return_to(destination)
+                        self.assertIs(app.body, origin)
+                        self.assertIsNone(app.visible_reader())
+                        self.assertFalse(app._document_tabs_hidden)
+                        self.assertEqual(app.store.path(owner.document.id, '.json').exists(), action == 'close')
+
     def test_deleting_current_document_resumes_neighbor_without_recreating_recovery(self):
         app = self.app
         neighbor = app.editor_view

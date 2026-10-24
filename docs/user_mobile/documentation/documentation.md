@@ -40,6 +40,12 @@ are already reading that folder page, it opens the parent folder's page. At the
 guide root, README.md or index.md can serve as the folder page. Buttons are disabled
 when there is no destination. Browsing and search state stay in place.
 
+The **×** button closes documentation and returns to the screen that opened it,
+even after following links. The separate **‹ / ›** buttons revisit previous and
+next pages, like a web browser; they are disabled when there is no page to visit.
+Android system Back closes the compact browse panel first, then revisits previous
+pages, and leaves documentation once you reach the first page.
+
 ## Search in the window
 
 Type in Search documentation, then choose File names & titles or Page text. Search

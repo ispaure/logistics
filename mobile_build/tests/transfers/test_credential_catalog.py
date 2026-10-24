@@ -10,21 +10,20 @@ class CredentialCatalogTests(unittest.TestCase):
 
     def test_equal_basenames_keep_distinct_package_scopes(self):
         catalog = CredentialCatalog([self.package('/one/Account.zip'), self.package('/two/Account.zip')])
-        groups = catalog.groups([], {'Cloud'}, visible=lambda _: True)
+        groups = catalog.groups({'Cloud'}, visible=lambda _: True)
         self.assertEqual(list(groups), ['All', 'Account', 'Account (2)'])
         self.assertEqual(groups['Account'].source_identity[1], '/one/Account.zip')
         self.assertEqual(groups['Account (2)'].source_identity[1], '/two/Account.zip')
 
     def test_explicit_folder_snapshot_limits_remotes_but_keeps_loaded_group(self):
         catalog = CredentialCatalog([self.package('Loaded.zip')])
-        associations = [dict(zip='Locked.zip', remotes=['Offline'])]
-        groups = catalog.groups(associations, set(), visible=lambda _: True)
+        groups = catalog.groups(set(), visible=lambda _: True)
         self.assertEqual(list(groups), ['All', 'Loaded'])
         self.assertEqual(set(groups['Loaded']), set())
 
     def test_loaded_snapshot_replaces_retained_names_without_merging_packages(self):
         catalog = CredentialCatalog([self.package('Account.zip', ('Fresh',))])
-        groups = catalog.groups([dict(zip='Account.zip', remotes=['Stale'])], {'Fresh', 'Stale'}, visible=lambda _: True)
+        groups = catalog.groups({'Fresh', 'Stale'}, visible=lambda _: True)
         self.assertEqual(set(groups['Account']), {'Fresh'})
 
     def test_alias_exclusions_use_original_name_and_snapshot_is_detached(self):

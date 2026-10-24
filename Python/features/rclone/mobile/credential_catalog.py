@@ -41,31 +41,24 @@ class CredentialCatalog:
     def label(self, fallback=''):
         if not self.packages:
             return 'Credential package: ' + (fallback or 'none')
-        return 'Loaded:\n' + '\n'.join(package.name + (' (saved)' if package.saved else ' (session only)')
+        return 'Loaded:\n' + '\n'.join(package.name + (' (Persistent save)' if package.saved else ' (Session-Only)')
                                       for package in self.packages)
 
-    def groups(self, associations, available, *, visible):
+    def groups(self, available, *, visible):
         groups = {'All': None}
         available = set(available)
-        by_package = {item['zip']: item for item in associations}
-        loaded = {package.name for package in self.packages}
         for package in self.packages:
-            by_package[package.name] = dict(zip=package.name, remotes=package.remotes)
-        for item in by_package.values():
-            package = item['zip']
-            if package in NETWORK_PACKAGES or not visible(Path(package).name):
+            if package.name in NETWORK_PACKAGES or not visible(Path(package.name).name):
                 continue
-            remotes = set(item['remotes']) & available
-            if not remotes and package not in loaded:
-                continue
-            name = Path(package).name
+            remotes = set(package.remotes) & available
+            name = Path(package.name).name
             base = name[:-4] if name.lower().endswith('.zip') else name
             title = base
             number = 2
             while title in groups:
                 title = f'{base} ({number})'
                 number += 1
-            groups[title] = CredentialScope(remotes, package)
+            groups[title] = CredentialScope(remotes, package.name)
         return groups
 
 

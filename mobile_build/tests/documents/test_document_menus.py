@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.app import LogisticsMobile
-from mobile.document_sources import show_in_folder
+from mobile.document_sources import folder_action, show_in_folder
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 from mobile_build.tests.reading.test_pdf_reader import PDF, native_pdf
 from mobile_build.tests.reading.test_remote_readers import RemoteClient
@@ -134,21 +134,54 @@ class DocumentMenuTests(TestCase):
         with patch('features.pdf.document.PDFDocument.open', native_pdf):
             self.run_async(exercise())
 
-    def test_imported_library_copy_has_a_folder_action_for_both_book_types(self):
+    def test_imported_source_survives_store_reload_and_missing_source_reveals_cached_copy(self):
         app = self.app
         epub, comic = make_books(self.root)
         store = app.reader_manager().catalog.library_store
         async def exercise():
             for path in (epub, comic):
                 record = store.import_book(LocalDocuments(), path)
+                from mobile.library import LibraryStore
+                # Simulate restart: no runtime source map, freshly loaded records.
+                app._document_folder_sources = {}
+                app.reader_manager().catalog.library_store = LibraryStore(store.root)
                 self.assertTrue(await app.open_book(record['id']))
                 owner = app.readers.active
                 self.assertIn('Show in folder', self.labels(owner.reader_actions))
                 self.assertTrue(await show_in_folder(app, owner.session))
                 drawer = app.adaptive.browser('files')
+                self.assertEqual(Path(drawer.provider.root), path.parent)
+                await drawer.browser.close()
+                path.unlink()
+                owner.reader_actions.refresh()
+                labels = self.labels(owner.reader_actions)
+                self.assertIn('Show cached copy in folder', labels)
+                self.assertNotIn('Show in folder', labels)
+                self.assertEqual(labels.count('Show cached copy in folder'), 1)
+                self.assertLess(labels.index('Show cached copy in folder'), labels.index('All documents'))
+                self.assertTrue(await show_in_folder(app, owner.session))
+                drawer = app.adaptive.browser('files')
                 self.assertEqual(Path(drawer.provider.root), store.root)
                 await drawer.browser.close()
                 self.assertTrue(app.close_session(owner.session.id))
+        self.run_async(exercise())
+
+    def test_legacy_import_with_unknown_source_reveals_cached_copy(self):
+        import json
+        app = self.app
+        epub, _ = make_books(self.root)
+        store = app.reader_manager().catalog.library_store
+        record = store.import_book(LocalDocuments(), epub)
+        record.pop('source_path')
+        store.path(record['id'], '.json').write_text(json.dumps(record))
+        async def exercise():
+            self.assertTrue(await app.open_book(record['id']))
+            owner = app.readers.active
+            self.assertEqual(folder_action(app, owner.session)[0][0], 'Show cached copy in folder')
+            self.assertTrue(await show_in_folder(app, owner.session))
+            drawer = app.adaptive.browser('files')
+            self.assertEqual(Path(drawer.provider.root), store.root)
+            await drawer.browser.close()
         self.run_async(exercise())
 
     def test_reveal_remote_file_returns_to_its_cloud_or_server_tab(self):

@@ -51,7 +51,7 @@ class SavedFilesController:
             row = toga.Box(style=Pack(direction=COLUMN, margin_top=12))
             row.add(toga.Label(item['name']))
             row.add(toga.Label(f"{item['kind']} · {stored_size(item['size'])}", style=Pack(font_size=12)))
-            row.add(toga.Label('Saved import · original source was not recorded', style=Pack(font_size=12)))
+            row.add(toga.Label('Saved import · private reading copy', style=Pack(font_size=12)))
             async def delete(widget=None, key=item['id'], **kw):
                 await self.delete_saved_file(key)
             row.add(toga.Button('Delete local copy…', on_press=delete, style=Pack(height=48)))

@@ -284,26 +284,37 @@ def folder_location(app, session, owner=None):
             return dict(remote=copies.remote, key=reader.key)
     source = (getattr(session, 'history_source', None) or getattr(session, 'source', None)
               or getattr(app, '_document_folder_sources', {}).get((session.provider, session.resource)))
-    if source and source.get('type') == 'local':
-        path = local_document_path(app, source['path'])
-        if path.is_file():
-            return dict(path=path)
+    store = None
     if session.provider == 'library':
         readers = getattr(app, 'readers', None)
         controller = getattr(readers, 'controllers', {}).get(session.id)
         store = getattr(owner or controller, 'library_store', None)
+        if store is not None and not source:
+            try:
+                record, _ = store.read_record(session.resource)
+                if record.get('source_path'):
+                    source = dict(type='local', path=record['source_path'])
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+    if source and source.get('type') == 'local':
+        path = local_document_path(app, source['path'])
+        if path.is_file():
+            return dict(path=path, cached=bool(store and path.resolve().is_relative_to(store.root)))
+    if session.provider == 'library':
         if store is not None:
             suffix = '.cbz' if session.kind == 'comic' else '.epub'
             path = store.path(session.resource, suffix)
             if path.is_file():
-                return dict(path=path)
+                return dict(path=path, cached=True)
     return None
 
 
 def folder_action(app, session, owner=None):
-    if folder_location(app, session, owner) is None:
+    location = folder_location(app, session, owner)
+    if location is None:
         return []
-    return [('Show in folder', lambda: show_in_folder(app, session, owner))]
+    title = 'Show cached copy in folder' if location.get('cached') else 'Show in folder'
+    return [(title, lambda: show_in_folder(app, session, owner))]
 
 
 async def show_in_folder(app, session, owner=None):
@@ -335,6 +346,13 @@ async def show_in_folder(app, session, owner=None):
             for label in app.ordinary_file_roots():
                 candidate = app.file_provider_for(label)
                 if not candidate.private and path.resolve().is_relative_to(Path(candidate.root).resolve()):
+                    relative = path.resolve().relative_to(Path(candidate.root).resolve()).as_posix()
+                    try:
+                        candidate.entry(relative)
+                    except (OSError, ValueError):
+                        # A physical ancestor can be a restricted browse root;
+                        # only use it when this specific file is admitted.
+                        continue
                     matching.append((len(Path(candidate.root).parts), label, candidate))
             if matching:
                 _, label, provider = max(matching, key=lambda item: item[0])

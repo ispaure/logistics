@@ -67,6 +67,21 @@ class ResourceImportTests(unittest.TestCase):
             app.loop.run_until_complete(app.open_download(path=path))
             self.assertEqual(app.reader_manager().active.session.id, identity)
             self.assertEqual(len(app.readers.catalog.library_store.items()[0]), 1)
+            # Legacy imports acquire a persistent source when reopened from Local.
+            import json
+            store = app.readers.catalog.library_store
+            key = owner.session.resource
+            self.assertTrue(app.close_session(identity))
+            record, _ = store.read_record(key)
+            record.pop('source_path')
+            store.path(key, '.json').write_text(json.dumps(record))
+            app._document_folder_sources = {}
+            self.assertTrue(app.loop.run_until_complete(app.open_download(path=path)))
+            self.assertEqual(store.read_record(key)[0]['source_path'], str(path))
+            # A second open of an active reader must not invalidate progress.
+            self.assertTrue(app.loop.run_until_complete(app.open_download(path=path)))
+            active = app.reader_manager().active
+            store.progress(active.book_record, active.book_record['position'])
 
     def test_relocated_collection_keeps_existing_identity_and_rejects_other_paths(self):
         from mobile.resource_imports import ResourceImports

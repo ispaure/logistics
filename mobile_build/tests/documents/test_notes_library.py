@@ -1,6 +1,8 @@
 """Location actions, bounded remote access and Notes Library document ownership."""
 import base64
 import json
+import os
+import unittest
 import shutil
 from unittest.mock import patch
 import mobile_build.tests.documents.test_obsidian as test_obsidian
@@ -32,13 +34,99 @@ class Client:
         raise AssertionError(action)
 
 
-import unittest
-
-
 class NotesLibraryTests(unittest.TestCase):
     setUp = test_obsidian.ObsidianTests.setUp
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
+
+    def test_close_and_page_history_are_separate_controls(self):
+        from mobile.obsidian import open_vault
+        from commonUtils.runtime.resources.local import LocalFiles
+
+        async def exercise():
+            for width in (390, 900):
+                with self.subTest(width=width):
+                    self.app.show_documents_hub()
+                    owner = await open_vault(self.app, LocalFiles(self.root), 'Vault', 'documents')
+                    owner.reflow(width)
+                    panel = self.app.body
+                    key = owner.session.id
+                    self.assertIs(owner.view._reader_close_button, owner.close_button)
+                    self.assertEqual(owner.close_button.control_icon, 'close')
+                    self.assertEqual(owner.view._native_reader_buttons()[:2],
+                                     [owner.back_button, owner.forward_button])
+                    self.assertFalse(owner.back_button.enabled)
+                    self.assertFalse(owner.forward_button.enabled)
+                    await owner.open_note('Vault/Home.md')
+                    await owner.open_note('Vault/Projects/Plan.MD')
+                    self.assertTrue(owner.back_button.enabled)
+                    self.assertFalse(owner.forward_button.enabled)
+                    await owner.back_button.on_press()
+                    self.assertEqual(owner.path, 'Vault/Home.md')
+                    self.assertFalse(owner.back_button.enabled)
+                    self.assertTrue(owner.forward_button.enabled)
+                    self.assertIs(self.app.body, panel)
+                    await owner.forward_button.on_press()
+                    self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+                    owner.sidebar.show_sidebar()
+                    owner.close_button.on_press()
+                    self.assertNotIn(key, self.app.workspace.sessions)
+                    self.assertTrue(owner.cancelled.is_set())
+                    self.assertIsNone(owner.path)
+                    self.assertIsNot(self.app.body, panel)
+
+        self.run_async(exercise())
+
+    @unittest.skipUnless(os.environ.get('LOGISTICS_MOBILE_BRIDGE'), 'Host native bridge required')
+    def test_native_localcrypt_and_crypt_remote_actions_read_and_lock(self):
+        from io import BytesIO
+        from pathlib import Path
+        from uuid import uuid4
+        from features.rclone.mobile.cloud import CloudClient
+        from features.rclone.localcrypt.mobile.resources import encrypted_storage
+        fixture = json.loads(Path('mobile_build/native_tests/tests/logisticsmobile/localcrypt_fixture.json').read_text())
+        self.app.show_cloud(present=False)
+        async def exercise():
+            restore = getattr(self.app, 'cloud_restore_task', None)
+            if restore is not None:
+                await restore
+            client = self.app.cloud_client = CloudClient(library=os.environ['LOGISTICS_MOBILE_BRIDGE'])
+            client.request('import', package=fixture['package'], password='synthetic-resume-password',
+                           package_name='Synthetic.zip', session_only=True)
+            try:
+                provider = encrypted_storage(self.app.private_root, client, 'Secret')
+                provider.mkdir('.obsidian')
+                provider.create_file('.obsidian/config.ini', BytesIO(b'[Fixture]'))
+                provider.mkdir('Nested')
+                provider.create_file('Home.md', BytesIO(b'# Private home'))
+                provider.create_file('Nested/Next.md', BytesIO(b'# Private nested note'))
+                client.request('mirror_sync', remote='Secret', path='', identity=client.connection_identity('Secret'),
+                               local_path=str(provider.root.resolve()), run=uuid4().hex, push=True)
+                for kind, source, value in [('crypt', 'Local', 'Secret'), ('remote', 'Cloud', ('Secret', ''))]:
+                    with self.subTest(kind=kind):
+                        status = toga.Label('')
+                        button = toga.Button('Open Notes Library')
+                        box = toga.Box(children=[status])
+                        self.app.show_view(box, destination='files', route='encrypted-notes-action')
+                        entry = dict(source=source, kind=kind, value=value, name='Secret')
+                        await offer_notes(self.app, entry, box, button, status)
+                        self.assertIn(button, box.children, status.text)
+                        await button.on_press()
+                        owner = self.app.vault_browser
+                        self.assertIsNotNone(owner)
+                        self.assertTrue(await owner.open_note('Home.md'), owner.notice.text)
+                        await owner.toggle_folder('Nested')
+                        self.assertTrue(await owner.open_note('Nested/Next.md'), owner.notice.text)
+                        await owner.navigate_history(-1)
+                        self.assertEqual(owner.path, 'Home.md')
+                client.clear()
+                self.assertFalse(await owner.open_note('Home.md'))
+                self.app.clear_private_catalog()
+                self.assertIsNone(owner.path)
+            finally:
+                client.clear()
+        self.run_async(exercise())
+
     def test_actions_open_local_in_workspaces_and_close_session(self):
         from features.rclone.mobile.storage_location import collection_path
         folder = collection_path(self.app.private_root) / 'Notes'

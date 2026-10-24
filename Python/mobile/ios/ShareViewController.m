@@ -14,7 +14,7 @@
     self.status = [[UILabel alloc] init];
     self.status.numberOfLines = 0;
     self.status.textAlignment = NSTextAlignmentCenter;
-    self.status.text = @"Receiving files into Inbox…";
+    self.status.text = @"Receiving files into Received Files…";
     self.doneButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.doneButton setTitle:@"Cancel remaining files" forState:UIControlStateNormal];
     [self.doneButton addTarget:self action:@selector(done) forControlEvents:UIControlEventTouchUpInside];
@@ -62,7 +62,7 @@
         if (success) saved++; else failed++;
     }
     dispatch_async(dispatch_get_main_queue(), ^{
-        self.status.text = [NSString stringWithFormat:@"%lu file(s) received. Open Logisticks to find them in Inbox.%@", (unsigned long)saved,
+        self.status.text = [NSString stringWithFormat:@"%lu file(s) received. Open Logisticks to find them in Received Files.%@", (unsigned long)saved,
             failed ? @" Some files could not be received; share them again." : @""];
         [self.doneButton setTitle:@"Done" forState:UIControlStateNormal];
     });

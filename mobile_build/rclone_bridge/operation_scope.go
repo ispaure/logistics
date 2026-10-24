@@ -30,7 +30,7 @@ func scopedOperation(action string) (context.Context, func()) {
 	}
 	serial.Lock()
 	switch action {
-	case "import", "clear", "vault_open", "add_smb":
+	case "import", "clear", "vault_open", "add_smb", "forget_package":
 		credentialScope.Lock()
 		ctx, stop := operation(action)
 		return ctx, func() { stop(); credentialScope.Unlock(); serial.Unlock() }

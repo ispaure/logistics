@@ -1118,6 +1118,10 @@ draft rules and writer ownership stay with their sources. Async dirty-dialog
 answers capture the workspace token before opening and revalidate it plus the
 active host before Save/Discard. A surviving session ID alone is insufficient.
 Busy-reader exits await pending operations without releasing their owner early.
+Successful closes and managed-document deletions retire that session's retained
+routes across all tabs and the Documents detail pane, including actions taken
+from a list while the reader is hidden in another tab. Source return navigation
+still depends on an explicit reader exit; route cleanup does not.
 `HostLifecycle` delegates replacement/exit preservation to this coordinator;
 reader/session facade methods keep their existing host call signatures.
 

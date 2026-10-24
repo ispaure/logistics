@@ -41,7 +41,7 @@ class CollectionStorageTests(unittest.TestCase):
         self.assertTrue(describe_location(self.private, None)['active'])
         description = describe_location(self.private, self.volume)
         self.assertFalse(description['active'])
-        self.assertEqual([state for _, state in description['folders']], ['not created', 'not created'])
+        self.assertEqual([state for _, state in description['folders']], ['not created', 'not created', 'not created'])
         self.assertFalse((self.volume / 'Logistics').exists())
         start_empty_location(self.private, self.volume)
         self.assertTrue(describe_location(self.private, self.volume)['active'])

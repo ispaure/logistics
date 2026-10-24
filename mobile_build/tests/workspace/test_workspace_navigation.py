@@ -171,6 +171,8 @@ class WorkspaceNavigationTests(unittest.TestCase):
                     [('Personal.zip', 'Main'), ('LegacyArchive.zip', 'Old'),
                      ('legacy.zip', 'Old2'), ('MyLegacy.zip', 'Other')]]
         app.show_cloud(present=False)
+        app.cloud_client = SimpleNamespace(generation=0, cancel=lambda: None, package_records=[
+            dict(package_name=item['zip'], remotes=item['remotes']) for item in packages])
         for package in packages:
             app.remember_credential_association(package['zip'], package['remotes'], session_only=True)
         app.set_loaded_remote_names(['Main', 'Old', 'Old2', 'Other'])
@@ -247,21 +249,43 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 self.assertFalse(app.loop.run_until_complete(drawer.open_file({'path': 'comic.cbz'})))
         self.assertIn('archive is damaged', drawer.status.text)
 
-    def test_home_title_matches_tab_without_about_command(self):
+    def test_home_heading_does_not_reserve_an_extra_native_bar(self):
         import toga
         from types import SimpleNamespace
         from unittest.mock import Mock
         self.assertNotIn(toga.Command.ABOUT, self.app.commands)
         original = self.app.native_host.adapter
         bars = [Mock() for _ in self.app.native_host.destinations]
+        bars[0].isNavigationBarHidden.return_value = False
         self.app.native_host.adapter = SimpleNamespace(navigation=bars)
         try:
             with patch.object(self.navigation, 'render'):
                 self.navigation.install()
             self.assertEqual(bars[0].topViewController.navigationItem.title, 'Home')
-            bars[0].setNavigationBarHidden.assert_called_once_with(False, animated=False)
+            bars[0].setNavigationBarHidden.assert_called_once_with(True, animated=False)
             self.assertEqual(self.app.native_host.labels[0], 'Home')
         finally:
+            self.app.native_host.adapter = original
+
+    def test_home_child_routes_keep_back_bar_and_root_hides_it_again(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        original = self.app.native_host.adapter
+        bars = [Mock() for _ in self.app.native_host.destinations]
+        self.app.native_host.adapter = SimpleNamespace(navigation=bars)
+        screens = self.app.routes.screens['home']
+        try:
+            screens.append(('fixture', None, None))
+            bars[0].isNavigationBarHidden.return_value = True
+            self.navigation.sync_home_bar()
+            bars[0].setNavigationBarHidden.assert_called_once_with(False, animated=False)
+            screens.pop()
+            bars[0].setNavigationBarHidden.reset_mock()
+            bars[0].isNavigationBarHidden.return_value = False
+            self.navigation.sync_home_bar()
+            bars[0].setNavigationBarHidden.assert_called_once_with(True, animated=False)
+        finally:
+            screens.clear()
             self.app.native_host.adapter = original
 
     def test_apple_tab_signal_reads_selection_after_native_switch(self):

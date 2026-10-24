@@ -78,7 +78,7 @@ class StorageUI:
             current = str(base) if selection(self.private_root) else 'App internal storage'
         except (OSError, ValueError) as error:
             current = 'Unavailable: ' + str(error)
-        box.add(SettingsLabel('Currently used for Local and LocalCrypt:\n' + current))
+        box.add(SettingsLabel('Currently used for Local, LocalCrypt and Received Files:\n' + current))
         box.add(SettingsLabel('Choose a location to inspect. Choosing it here does not change where files are stored.'))
         self.collection_drives = android_drives(self)
         try:
@@ -104,10 +104,10 @@ class StorageUI:
         self.collection_empty = toga.Button('Start empty here — keep old files…', on_press=self.start_empty_collection, style=Pack(height=48))
         self.collection_erase = toga.Button('Erase collection files at this location…', on_press=self.wipe_collection_storage, style=Pack(height=48))
         for button, explanation in (
-            (self.collection_copy, 'Copies and verifies Local + LocalCrypt. Keeps the original files. Stops if the destination has different files; no merge or overwrite.'),
+            (self.collection_copy, 'Copies and verifies Local + LocalCrypt + Received Files. Keeps the original files. Stops if the destination has different files; no merge or overwrite.'),
             (self.collection_existing, 'Switches to files already at the selected location without scanning or copying their contents. Current files stay where they are. These files may be an older backup; LocalCrypt needs its original credentials.'),
-            (self.collection_empty, 'Selects empty Local + LocalCrypt folders without copying anything. Current files stay where they are. Refuses a destination that already contains files.'),
-            (self.collection_erase, 'Permanently deletes only the two collection folders shown above and interrupted copy folders at that location. Does not switch location. Disabled for the collection currently in use.')):
+            (self.collection_empty, 'Selects empty Local + LocalCrypt + Received Files folders without copying anything. Current files stay where they are. Refuses a destination that already contains files.'),
+            (self.collection_erase, 'Permanently deletes only the three collection folders shown above and interrupted copy folders at that location. Does not switch location. Disabled for the collection currently in use.')):
             box.add(button, SettingsLabel(explanation))
         box.add(SettingsLabel('All four actions keep private app documents, credentials, settings and metadata. For a full app reset, use Settings → Reset.'))
         box.add(toga.Button('Refresh drives / permission', on_press=self.show_collection_storage, style=Pack(height=48)))
@@ -206,7 +206,7 @@ class StorageUI:
             from .settings.forms import SettingsLabel, fit_section, fit_text
             width = max(280, self.app.adaptive.content_width('settings'))
             progress_box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-            heading = {'copy': 'Moving Local + LocalCrypt', 'recover': 'Selecting existing collection',
+            heading = {'copy': 'Moving Local + LocalCrypt + Received Files', 'recover': 'Selecting existing collection',
                        'empty': 'Preparing empty folders', 'wipe': 'Erasing files at selected location'}[action]
             progress_box.add(SettingsLabel(heading, style=Pack(font_size=22, margin_bottom=16)))
             if action == 'copy':
@@ -233,8 +233,15 @@ class StorageUI:
                                                         current_file, width, fit_text=fit_text)
 
             operation = {'copy': switch_location, 'recover': recover_location, 'wipe': wipe_destination, 'empty': start_empty_location}[action]
-            changed = await asyncio.to_thread(operation, self.private_root, volume,
-                                             progress=lambda event: loop.call_soon_threadsafe(render, event))
+            def change_storage():
+                from commonUtils.persistence.publication import mutation_lock
+                from .incoming_files import inbox_path
+                with mutation_lock:
+                    if action == 'copy':
+                        inbox_path(self.private_root)
+                    return operation(self.private_root, volume,
+                        progress=lambda event: loop.call_soon_threadsafe(render, event))
+            changed = await asyncio.to_thread(change_storage)
             progress_bar.stop()
             progress_bar.max = 100
             progress_bar.value = 100
@@ -267,12 +274,12 @@ class StorageUI:
     def _collection_prompt(self, action, volume):
         destination = str(volume / 'Logistics') if volume else 'app internal storage'
         prompts = {
-            'copy': ('Change collection drive?', 'Copy Local and LocalCrypt to ' + destination +
+            'copy': ('Change collection drive?', 'Copy Local, LocalCrypt and Received Files to ' + destination +
                      '? Different destination files stop the copy. Original copies remain as a backup.'),
-            'empty': ('Start empty at this location?', 'Create and use empty Local and LocalCrypt folders in ' + destination + '? No files are copied or erased. Current files stay at their old location. The destination must be empty.'),
-            'recover': ('Use existing files here without copying?', 'Use the existing Local and LocalCrypt collections in ' + destination +
+            'empty': ('Start empty at this location?', 'Create and use empty Local, LocalCrypt and Received Files folders in ' + destination + '? No files are copied or erased. Current files stay at their old location. The destination must be empty.'),
+            'recover': ('Use existing files here without copying?', 'Use the existing Local, LocalCrypt and Received Files collections in ' + destination +
                         '? This does not copy or merge your current collection. A retained backup may be older and omit recent changes. LocalCrypt still needs its original credentials.'),
-            'wipe': ('Permanently erase these collection folders?', 'Delete ' + str(volume / 'Logistics/Local' if volume else self.private_root / 'LocalFiles') + ' and ' + str(volume / 'Logistics/LocalCrypt' if volume else self.private_root / 'LocalCryptFolders') + ', plus interrupted .storage-copy-* folders at ' + destination + '? The files cannot be recovered by Logistics. Other folders, private credentials, settings and metadata are kept. The location currently in use cannot be erased.'),
+            'wipe': ('Permanently erase these collection folders?', 'Delete ' + str(volume / 'Logistics/Local' if volume else self.private_root / 'LocalFiles') + ' and ' + str(volume / 'Logistics/LocalCrypt' if volume else self.private_root / 'LocalCryptFolders') + ', ' + str(volume / 'Logistics/Received Files' if volume else self.private_root / 'Received Files') + ', plus interrupted .storage-copy-* folders at ' + destination + '? The files cannot be recovered by Logistics. Other folders, private credentials, settings and metadata are kept. The location currently in use cannot be erased.'),
         }
         title, message = prompts[action]
         if action != 'wipe':

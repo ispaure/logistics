@@ -61,7 +61,7 @@ class NativeCredentialState:
                         self.package_privacy[label] = gate
                     else:
                         self.package_privacy.pop(label, None)
-                if records:
+                if records or action == 'forget_package':
                     labels = {item['package_name'] for item in records if not item['saved']}
                     self.package_privacy = {name: gate for name, gate in self.package_privacy.items() if name in labels}
             self.session_privacy = next(iter(self.package_privacy.values()), None)

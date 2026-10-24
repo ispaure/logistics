@@ -4,7 +4,7 @@
   "bundle_id": "io.github.ispaure.logisticsmobile",
   "external_group": "Friends",
   "locale": "en-US",
-  "what_to_test": "New: instant burst camera at the bottom of Home on iPhone. Allow Camera and Add Photos access, then hold the shutter to capture. Try front, main, ultra wide and telephoto cameras where available, and adjust 1–30 pictures per second in the viewer or Settings → Camera. Verify both screens share saved preferences after relaunch. Actual capture speed depends on processing; photos save individually to Photos. Check release-to-stop, lens switching between bursts and returning to Home. Existing document, Markdown, EPUB and comic workflows remain available. Report device, OS, build, steps and results through TestFlight feedback; use disposable test files.",
+  "what_to_test": "Received Files now appears in Workspaces, Browse All Files and the iOS Files app beside Local. Existing Inbox files are preserved during migration. Check sharing files into Logistics, duplicate filenames, opening received documents and returning to their folders. Try credential-package unlock, Session-Only and persistent storage choices, Forget Credentials, Local/LocalCrypt navigation, Notes libraries, EPUB/comic readers and appearance settings. Use disposable files and report device, OS, build, steps and results through TestFlight feedback.",
   "processing_timeout_seconds": 1800,
   "poll_interval_seconds": 30
 }

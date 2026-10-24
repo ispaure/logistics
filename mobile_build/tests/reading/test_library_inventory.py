@@ -22,6 +22,19 @@ class LibraryInventoryTests(TestCase):
         self.path = self.store.path(self.key, '.json')
         self.path.write_text(json.dumps(self.record))
 
+    def test_source_path_validation_and_backfill_preserve_reading_state(self):
+        self.store.remember_source(self.key, self.store.root.parent / 'original.epub')
+        restored = LibraryStore(self.store.root).read_record(self.key)[0]
+        self.assertEqual(restored['position'], self.record['position'])
+        self.assertEqual(restored['bookmarks'], self.record['bookmarks'])
+        self.assertEqual(restored['source_path'], str(self.store.root.parent / 'original.epub'))
+        before = self.path.read_bytes()
+        self.store.remember_source(self.key, self.store.path(self.key, '.epub'))
+        self.assertEqual(self.path.read_bytes(), before)
+        for source in ('relative.epub', 5, ''):
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                LibraryStore.decode_record(self.key, json.dumps(dict(self.record, source_path=source)).encode())
+
     def test_warm_scan_reuses_validation_and_returned_records_are_isolated(self):
         self.store.items()
         with patch.object(self.store, 'decode_record', side_effect=AssertionError('Unchanged record')):

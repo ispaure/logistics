@@ -235,7 +235,7 @@ def _destination(private_root, volume):
     base = _unlinked(volume / 'Logistics' if volume is not None else private_root)
     if volume is not None and (base.is_relative_to(private_root) or private_root.is_relative_to(base)):
         raise ValueError('Collection locations cannot contain each other.')
-    names = ('Local', 'LocalCrypt') if volume is not None else ('LocalFiles', 'LocalCryptFolders')
+    names = ('Local', 'LocalCrypt', 'Received Files') if volume is not None else ('LocalFiles', 'LocalCryptFolders', 'Received Files')
     return base, [_unlinked(base / name) for name in names]
 
 
@@ -258,7 +258,7 @@ def _activate(private_root, volume, base):
 
 
 def recover_location(private_root, volume, *, progress=None):
-    """Select retained folders without walking or reading either collection."""
+    """Select retained folders without walking or reading the collections."""
     report = _Progress(progress)
     report.update('Checking location')
     base, trees = _destination(private_root, volume)
@@ -377,7 +377,7 @@ class _PlannedTree:
 
 
 def _verify_collection_copy(trees, report):
-    """Revalidate both destination trees and active sources before pointer publication."""
+    """Revalidate all destination trees and active sources before pointer publication."""
     report.update('Final verification')
     for tree in trees:
         if tree.snapshot and _inventory(tree.target, report) != tree.snapshot:
@@ -387,7 +387,7 @@ def _verify_collection_copy(trees, report):
 
 
 def switch_location(private_root, volume, *, progress=None):
-    """Copy/verify both trees, then commit the private pointer. Keep source backup.
+    """Copy/verify Local, LocalCrypt and Received Files, then commit the private pointer. Keep source backup.
 
     Existing destination files are never merged or replaced. Uncommitted copied
     trees can be reused on retry only if every byte matches the active source.
@@ -406,21 +406,22 @@ def switch_location(private_root, volume, *, progress=None):
     if source_base.is_relative_to(destination_base) or destination_base.is_relative_to(source_base):
         raise ValueError('Collection locations cannot contain each other.')
     sources = [collection_path(private_root, crypt) for crypt in (False, True)]
+    sources.append(source_base / 'Received Files')
     destinations = [destination_base / name for name in (
-        ('Local', 'LocalCrypt') if volume is not None else ('LocalFiles', 'LocalCryptFolders'))]
+        ('Local', 'LocalCrypt', 'Received Files') if volume is not None else ('LocalFiles', 'LocalCryptFolders', 'Received Files'))]
     report = _Progress(progress)
     report.update('Checking source files')
     trees = [_PlannedTree(source, target, _inventory(source, report))
              for source, target in zip(sources, destinations)]
     report.update('Checking destination files')
-    # Check all conflicts before publishing either tree.
+    # Check all conflicts before publishing any tree.
     for tree in trees:
         existing = _inventory(tree.target, report)
         if existing and tree.snapshot and existing != tree.snapshot:
             raise FileExistsError('Destination already contains different files: ' + str(tree.target))
     needed = sum(tree.required_bytes for tree in trees)
     if shutil.disk_usage(volume or private_root).free < needed + 1024 * 1024:
-        raise OSError('Not enough free space to copy both collections.')
+        raise OSError('Not enough free space to copy the collections.')
     destination_base.mkdir(parents=True, exist_ok=True)
     marker = _unlinked(destination_base / MARKER)
     if volume is not None and marker.exists():

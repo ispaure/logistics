@@ -1,4 +1,4 @@
-"""Expose only Local in iOS Documents; private state lives in Application Support."""
+"""Expose Local and Received Files in iOS Documents; private state lives in Application Support."""
 import json
 from pathlib import Path
 
@@ -47,7 +47,7 @@ def prepare_storage(documents, private, *, exclude_backup, move):
     else:
         legacy = any((documents / name).exists() for name in LEGACY_NAMES)
         # Inbox is owned by iOS document import, not private application state.
-        names = sorted(p.name for p in documents.iterdir() if p.name != 'Inbox') if legacy else []
+        names = sorted(p.name for p in documents.iterdir() if p.name not in ('Inbox', 'Received Files')) if legacy else []
         state = dict(phase='private', names=names)
         atomic_write_json(journal, state, durable_directory=True)
 
@@ -72,6 +72,8 @@ def prepare_storage(documents, private, *, exclude_backup, move):
     # iOS creates and owns Inbox for incoming documents. Even mkdir(exist_ok=True)
     # can fail with EPERM there on a physical device; leave it entirely to iOS.
     use_shared_local(private, documents)
+    from .incoming_files import inbox_path
+    inbox_path(private)
     return private
 
 

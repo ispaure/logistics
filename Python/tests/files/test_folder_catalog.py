@@ -29,7 +29,7 @@ class FolderCatalogTests(unittest.TestCase):
         self.assertEqual(deepcopy(scope).source_identity, scope.source_identity)
         self.assertNotEqual(scope, CredentialScope({'Drive'}, '/b/keys.zip'))
 
-    def test_mobile_adapter_preserves_separate_locked_and_loaded_package_scopes(self):
+    def test_mobile_cloud_uses_loaded_package_identity_even_when_retained_names_match(self):
         from mobile.folder_hub import FolderDiscoverySnapshot, discover_folder_choices, credential_choices
         with TemporaryDirectory() as directory:
             first, second = dict(zip='A.zip', remotes=['Drive']), dict(zip='B.zip', remotes=['Drive'])
@@ -38,7 +38,8 @@ class FolderCatalogTests(unittest.TestCase):
             with patch('mobile.folder_hub.hub_entries', return_value=[('Drive', (), [('Remote', ('remote', 'Drive'))])]), \
                  patch('mobile.local_sources.shared_files', return_value=None):
                 choices = discover_folder_choices(snapshot).choices
-            self.assertEqual(set(choices), {'All files', 'Drive (A)', 'Drive (B)'})
-            self.assertTrue(choices['Drive (A)']['locked'])
-            self.assertFalse(choices['Drive (B)']['locked'])
-            self.assertEqual(set(credential_choices(choices, CredentialScope({'Drive'}, 'A.zip'))), {'Drive (A)'})
+            self.assertEqual(set(choices), {'All files', 'Drive', 'Received Files'})
+            self.assertFalse(choices['Drive']['locked'])
+            self.assertEqual(choices['Drive']['source_identity'], credential_source('B.zip'))
+            self.assertEqual(credential_choices(choices, CredentialScope({'Drive'}, 'A.zip')), {})
+            self.assertEqual(set(credential_choices(choices, CredentialScope({'Drive'}, 'B.zip'))), {'Drive'})

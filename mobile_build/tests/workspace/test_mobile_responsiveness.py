@@ -91,8 +91,8 @@ class ResponsivenessTests(unittest.TestCase):
             app.change_folder_source('rclone')
             def icon():
                 return app.folder_buttons['Secret'].parent.children[0].control_icon
-            self.assertEqual(icon(), 'folder_locked')
-            locked_rows = app.folder_list.children[0]
+            self.assertNotIn('Secret', app.folder_buttons)
+            cloud_rows = app.folder_list.children[0]
             app.change_folder_source('Local')
             app.cloud_client.package_records = (dict(package_name='Fixture.zip', remotes=['Secret']),)
             app.show_home()
@@ -101,12 +101,12 @@ class ResponsivenessTests(unittest.TestCase):
             app.change_folder_source('rclone')
             # The cached native hierarchy is updated in place when only its
             # credential state changes; returning to it must not rebuild rows.
-            self.assertIs(app.folder_list.children[0], locked_rows)
+            self.assertIs(app.folder_list.children[0], cloud_rows)
             self.assertEqual(icon(), 'folder_unlocked')
             # Explicit refresh must notice a lock even with unchanged names.
             app.cloud_client.package_records = ()
             app.loop.run_until_complete(app.refresh_folder_hub())
-            self.assertEqual(icon(), 'folder_locked')
+            self.assertNotIn('Secret', app.folder_buttons)
             app.change_folder_source('Local')
             self.assertEqual(icon(), 'folder_locked')
 

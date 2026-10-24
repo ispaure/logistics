@@ -84,10 +84,8 @@ static const unsigned long long LogisticsFileLimit = 1024ULL * 1024 * 1024;
 }
 + (void)receiveURL:(NSURL *)url {
     if (!url.isFileURL) return;
-    NSString *documents = [NSFileManager.defaultManager URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask].firstObject.path;
-    NSString *inbox = [[documents stringByAppendingPathComponent:@"Inbox"] stringByAppendingString:@"/"];
-    // UIKit's copy-mode Open in has already delivered a durable Inbox file.
-    if ([url.URLByResolvingSymlinksInPath.path hasPrefix:inbox]) return;
+    // System Documents/Inbox URLs must also be staged: the durable editable
+    // destination is Documents/Received Files, not the system-owned Inbox.
     // Acquire the grant before returning to UIKit; balance after the worker.
     BOOL access = [url startAccessingSecurityScopedResource];
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{

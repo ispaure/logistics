@@ -15,6 +15,28 @@ class PageStorage:
         if path != self.path:
             raise ValueError('Open notes through the Notes Library navigation.')
         return self.data
+    def submit_write(self, path, data, expected, completed):
+        owner = self.window
+        if owner.progress.busy or owner.locked or owner.library is None:
+            completed('Notes Library is busy or locked.')
+            return
+        if path != self.path:
+            completed('Save notes through their selected library context.')
+            return
+        relative = owner.library.contained(path.relative_to(owner.provider.root.resolve()).as_posix())
+        owner.pending = ('save', data, completed)
+        owner.tree.setEnabled(False)
+        owner.viewer.setEnabled(False)
+        def write(report, cancelled):
+            from commonUtils.runtime.resources.selection import ResourceTextSession
+            session = ResourceTextSession.open(owner.provider, relative, max_bytes=2 * 1024 * 1024,
+                                               cancelled=cancelled)
+            if session.text.data != expected:
+                raise ValueError('Note changed. Reopen it before saving.')
+            session.publish(owner.provider, relative, data, expected_revision=session.text.revision,
+                            cancelled=cancelled)
+        owner.progress.start(write, message='Saving note…')
+
     def load_resource(self, *args):
         return None
     def open_link(self, path, fragment=''):
@@ -38,10 +60,11 @@ class NotesLibraryWindow(qt.QMainWindow):
         self.provider = self.library = None
         self.release = self.unsubscribe = lambda: None
         self.closing = self.locked = False
+        self.pending_close = False
         self.history, self.index = [], -1
         self.items, self.loaded = {}, set()
         self.storage = PageStorage(self)
-        self.viewer = MarkdownViewer(storage=self.storage)
+        self.viewer = MarkdownViewer(storage=self.storage, allow_edit=not remote)
         self.viewer.browser.setPlaceholderText('Choose a Markdown note from the sidebar.')
         self.viewer.back_button.hide()
         self.viewer.forward_button.hide()
@@ -113,6 +136,7 @@ class NotesLibraryWindow(qt.QMainWindow):
                 raise
         self.progress.start(initial, message='Opening Notes Library…')
         self.tree.setEnabled(False)
+        self.viewer.setEnabled(False)
 
     def list_folder(self, path):
         if self.progress.busy or self.library is None or self.locked:
@@ -139,8 +163,11 @@ class NotesLibraryWindow(qt.QMainWindow):
         except ValueError as error:
             self.viewer.status.setText(str(error))
             return
+        if not self.viewer.can_close():
+            return
         self.viewer.speech.stop()
         self.pending = ('note', path, remember, fragment, index)
+        self.viewer.setEnabled(False)
         self.tree.setEnabled(False)
         self.progress.start(lambda report, cancelled: self.library.read(path, cancelled=cancelled), message='Opening note…')
 
@@ -153,6 +180,19 @@ class NotesLibraryWindow(qt.QMainWindow):
             self.idle.emit()
             return
         self.tree.setEnabled(True)
+        self.viewer.setEnabled(self.storage.path is not None or (kind == 'note' and not error))
+        if kind == 'save':
+            data, completed = values
+            if not error:
+                self.storage.data = data
+            completed(error)
+            self.progress.hide()
+            self.idle.emit()
+            if self.pending_close and not error:
+                self.close()
+            else:
+                self.pending_close = False
+            return
         if error:
             self.viewer.status.setText(error)
             self.idle.emit()
@@ -161,7 +201,7 @@ class NotesLibraryWindow(qt.QMainWindow):
             self.provider, self.release, self.library, rows = result
             if getattr(self.provider, 'private', False) and hasattr(self.provider, 'context'):
                 from features.rclone import session
-                self.unsubscribe = session.on_forget(self.provider.context, self.revoked.emit)
+                self.unsubscribe = session.on_forget(self.provider.context, self.credentials_revoked)
                 if session.credentials(self.provider.context) is None:
                     self.retire()
                     return
@@ -185,11 +225,19 @@ class NotesLibraryWindow(qt.QMainWindow):
             self.storage.path, self.storage.data = (self.provider.root / path).resolve(), result
             self.viewer.history.clear()
             self.viewer.history_index = -1
+            # Leaving was confirmed before the read. Keep the old draft on read
+            # failure, then retire it here without prompting a second time.
+            self.viewer._sync_formatted()
+            self.viewer.editor.document().setModified(False)
+            self.viewer.formatted_editor.document().setModified(False)
             self.viewer.open_document(self.storage.path, fragment=fragment)
             self.back.setEnabled(self.index > 0)
             self.forward.setEnabled(self.index < len(self.history) - 1)
             self.up.setEnabled(True)
         self.idle.emit()
+
+    def credentials_revoked(self):
+        self.revoked.emit()
 
     def check_provider(self):
         try:
@@ -266,6 +314,9 @@ class NotesLibraryWindow(qt.QMainWindow):
             self.close()
 
     def prepare_close(self):
+        if not self.closing and not self.locked and not self.viewer.can_close():
+            self.pending_close = self.viewer.document_state.save_pending
+            return False
         self.closing = True
         self.progress.request_cancel()
         return not self.progress.busy

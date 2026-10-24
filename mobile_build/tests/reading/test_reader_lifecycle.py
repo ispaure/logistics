@@ -123,6 +123,27 @@ class ReaderLifecycleTests(TestCase):
         self.assertIs(self.app.body, origin)
         self.assertFalse(self.app._document_tabs_hidden)
 
+    def test_closing_hidden_provider_and_library_readers_retires_source_routes(self):
+        from mobile_build.native_tests.tests.logisticsmobile.compact_reading_probe import epub_bytes
+        app = self.app
+        for name, content in (('hidden.txt', b'Saved text'), ('hidden.epub', epub_bytes())):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.write_bytes(content)
+                self.assertTrue(self.run_async(app.open_download(path=path)))
+                key = app.visible_reader()
+                self.assertIsNotNone(key)
+                app.routes.return_to('documents')
+                self.assertIsNone(app.visible_reader())
+                self.assertTrue(app.request_close_session(key))
+                self.assertNotIn(key, app.workspace.sessions)
+                self.assertFalse(any(route.startswith(('private:', 'reader:'))
+                                     for route, *_ in app.routes.screens['files']))
+                app.routes.return_to('files')
+                self.assertIs(app.body, self.origin)
+                self.assertIsNone(app.visible_reader())
+                self.assertFalse(app._document_tabs_hidden)
+
     def test_resuming_from_a_new_screen_in_the_same_tab_updates_back_origin(self):
         self.app.create_chosen_document('txt')
         owner = self.app.editor_view

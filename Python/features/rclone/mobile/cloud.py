@@ -71,10 +71,10 @@ class CloudClient:
         self.free.restype = None
 
     def request(self, action, **values):
-        if action in {'import', 'clear', 'vault_open', 'add_smb'}:
+        if action in {'import', 'clear', 'vault_open', 'add_smb', 'forget_package'}:
             # Serialize publication with the native commit across iPad scenes;
             # local reads and transfers keep their independent native scopes.
-            blocking = action == 'clear'
+            blocking = action in {'clear', 'forget_package'}
             if not self.credential_state.lock.acquire(blocking=blocking):
                 raise CredentialBusyError()
             try:
@@ -107,7 +107,7 @@ class CloudClient:
                 from commonUtils.archives.zip_access import ArchivePasswordError
                 raise ArchivePasswordError(reply.get('error', 'Inner ZIP password required.'))
             raise ValueError(reply.get('error', 'Remote operation failed.'))
-        if action in {'import', 'clear', 'vault_open', 'add_smb'}:
+        if action in {'import', 'clear', 'vault_open', 'add_smb', 'forget_package'}:
             info = reply.get('credential_state')
             if not isinstance(info, dict):
                 info = self.request('vault_info') if action != 'clear' else {}
@@ -194,6 +194,13 @@ class CloudClient:
             finally:
                 if getattr(self, 'vault', None) is not None:
                     self.vault.forget()
+
+    def forget_package(self, name):
+        # Read a locked vault without restoring its other packages into memory.
+        with self.credential_state.lock:
+            values = self.vault.unlock() if self.vault is not None else None
+            info = self.request('forget_package', package_name=name, **(values or {}))
+            self.package_name = info['package_name']
 
 
 def download_name(path):

@@ -248,6 +248,11 @@ class FolderNavigation:
         desired = [FolderScreen(info.view, info.browser, info.navigate, info.source, path, info.kind,
                                base=info.base, scope=info.scope)
                    for path in paths]
+        if (entry_source, entry_path, info.source) == ('Shared files', '', 'Local files'):
+            # iOS Documents exposes Local as a child, but opening it switches
+            # providers. Keep its shared parent in the same native Back stack.
+            desired.insert(0, FolderScreen(info.view, info.browser, info.navigate, 'Shared files', '',
+                                          info.kind, base=info.base, scope=info.scope))
         screens = routes.screens[destination]
         # A workspace shortcut returns directly to the overview. Only folders
         # below its entry point belong in this navigation stack.
@@ -259,7 +264,7 @@ class FolderNavigation:
         if keep < len(screens):
             routes.trim(destination, keep)
         for entry in desired:
-            if entry.path == info.path:
+            if (entry.source, entry.path) == (info.source, info.path):
                 self.forget(destination, entry.route)
             if (destination, entry.route) not in self.screens:
                 self.screens[destination, entry.route] = entry
@@ -268,7 +273,7 @@ class FolderNavigation:
                 retained.view, retained.browser, retained.navigate = info.view, info.browser, info.navigate
             title = entry.title
             retained = self.screens[destination, entry.route]
-            if entry.path == info.path:
+            if (entry.source, entry.path) == (info.source, info.path):
                 view = info.view
             elif entry.route not in [screen[0] for screen in routes.screens[destination]]:
                 if hasattr(info.browser, 'search_provider'):
@@ -279,7 +284,7 @@ class FolderNavigation:
             else:
                 view = None
             if entry.route in [screen[0] for screen in routes.screens[destination]]:
-                if entry.path == info.path:
+                if (entry.source, entry.path) == (info.source, info.path):
                     Routes.show(routes, view, destination=destination, route=entry.route, title=title)
                 elif retained.preview is not None:
                     panel = next(panel for route, panel, _ in routes.screens[destination]
@@ -293,7 +298,7 @@ class FolderNavigation:
         for route, panel, _ in routes.screens[destination]:
             retained = self.screens.get((destination, route))
             if retained is not None and retained.snapshot is not None:
-                if retained.path != info.path:
+                if (retained.source, retained.path) != (info.source, info.path):
                     panel._impl.native.addSubview(retained.snapshot)
                 else:
                     clear_snapshot(retained)
@@ -303,7 +308,7 @@ class FolderNavigation:
             if retained is None or container is None:
                 continue
             browser = (retained.preview.browser if retained.preview is not None
-                       and retained.path != info.path else retained.browser)
+                       and (retained.source, retained.path) != (info.source, info.path) else retained.browser)
             header = getattr(browser, 'location_bar', None)
             if header is not None:
                 title = retained.title

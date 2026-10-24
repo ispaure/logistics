@@ -137,7 +137,7 @@ DOCUMENT_GROUPS = (
     ('Appearance…', 'Fullscreen', 'Reading mode', 'Fit comic page', 'Fit image'),
     ('File actions…', 'Reader tools…', 'Open / Metadata…', 'Rename document…',
      'Edit metadata…', 'Info…', 'Save', 'Save a copy', 'Save As…', 'Export…'),
-    ('Open beside another document', 'Show in folder', 'All documents',
+    ('Open beside another document', 'Show in folder', 'Show cached copy in folder', 'All documents',
      'New document', 'Open from Files…', 'Import…'),
     ('Close document', 'Delete document…'),
 )
@@ -250,7 +250,10 @@ class ActionMenu:
             app = getattr(host, 'app', host)
             session = getattr(host, 'session', None)
             from .document_sources import folder_action
-            if not any(title == 'Show in folder' for title, _ in actions):
+            folder_titles = {'Show in folder', 'Show cached copy in folder'}
+            if session is not None and session.provider == 'library':
+                actions = [item for item in actions if item[0] not in folder_titles]
+            if not any(title in folder_titles for title, _ in actions):
                 actions.extend(folder_action(app, session, host))
             aliases = {'Open documents': 'All documents', 'Close private document': 'Close document',
                        'Close comic': 'Close document'}

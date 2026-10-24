@@ -120,8 +120,8 @@ combined archive/reading-record size and each import's size. Incomplete or unrea
 records appear under their internal identifier where possible. Local/LocalCrypt
 folders and remote previews held only in RAM are separate from this inventory.
 On iOS these imports live in private app storage and do not appear in Files.
-Older import records do not identify their original source; the inventory says
-so rather than guessing whether a copy originally came from cloud storage.
+The inventory identifies these as private reading copies. Older imports may lack
+an original source path; their reader offers **Show cached copy in folder**.
 
 **Close** in All open keeps the saved file and its progress. To reclaim
 space, use **Delete local copy…**, or **Delete all local copies…** to clear the
@@ -155,6 +155,12 @@ appearance, separately from the app's system-following surfaces and reader theme
 
 ### Local / LocalCrypt location
 
+Files shared from other apps appear in **Received Files** in Workspaces and
+**Browse All Files**. On iOS, Files shows **Logisticks/Received Files** beside
+**Local**. Android keeps Received Files alongside the selected Local and LocalCrypt
+collections. Legacy Inbox contents are copied without overwriting existing files;
+see [receiving files](../documents/workflows.md#receive-files-from-another-app).
+
 On iPhone and iPad, **Local lives in `Logisticks/Local`** in Apple's
 Files app under **On My iPhone/iPad**. Launch the app once to create the `Local`
 folder, even before pulling any remotes. The app recreates it on later launches
@@ -181,31 +187,31 @@ the update is installed, so the previous storage layout can be visible to a
 trusted computer until the updated app has been opened and migration completes.
 
 On Android, open **Settings → Workspaces → Local / LocalCrypt location…**.
-One setting controls both collections. Selecting a drive in the list only
+One setting controls Local, LocalCrypt and Received Files. Selecting a drive in the list only
 inspects it; it does not switch storage. The page shows the current location,
-whether the selected location is in use, and the exact Local and LocalCrypt
+whether the selected location is in use, and the exact Local, LocalCrypt and Received Files
 paths and whether they are empty or contain files.
 
-On Android 11 and newer, the two shared-drive folders are `<drive>/Logistics/Local` and
-`<drive>/Logistics/LocalCrypt`. Internal copies use the app's private
-`LocalFiles` and `LocalCryptFolders`. Enable **All files access** using
+On Android 11 and newer, the shared-drive folders are `<drive>/Logistics/Local`,
+`<drive>/Logistics/LocalCrypt` and `<drive>/Logistics/Received Files`. Internal copies use the app's private
+`LocalFiles`, `LocalCryptFolders` and `Received Files`. Enable **All files access** using
 **Allow SD card / shared storage access…** before accessing shared drives.
 
 On Android 7–10 (including Android 9 on a Galaxy S8+), drive choices use
 Logistics' app-owned device-storage or SD-card directory. No storage permission
 is required. On an SD card the collections are normally under
 `<card>/Android/data/io.github.ispaure.logisticsmobile/files/Logistics/Local`
-and `LocalCrypt` beside it; the page shows the exact paths. These versions cannot
+with `LocalCrypt` and `Received Files` beside it; the page shows the exact paths. These versions cannot
 use arbitrary SD-card folders through this setting. Android deletes the app-owned
 folders when you uninstall Logistics or clear its app data, including through
 the app's Reset action. Keep a separate backup before doing so.
 
 | Action | Result | Files kept |
 | --- | --- | --- |
-| **Copy current files here, then use them…** | Copies and verifies both collections, then selects the destination. Different destination files stop the operation; nothing is merged or overwritten. | Original files remain at the previous location. Matching copied files can be reused after an interrupted copy. |
-| **Use existing files here — no copy…** | Selects the two collection folders already at this location. This is what the old “Recover” button meant. It does not restore newer changes, merge folders or copy the current collection. | Current files stay at their old location. The selected files may be an older backup. Original credentials are still needed for LocalCrypt. |
+| **Copy current files here, then use them…** | Copies and verifies all three folders, then selects the destination. Different destination files stop the operation; nothing is merged or overwritten. | Original files remain at the previous location. Matching copied files can be reused after an interrupted copy. |
+| **Use existing files here — no copy…** | Selects the collection folders already at this location. This is what the old “Recover” button meant. It does not restore newer changes, merge folders or copy the current collection. | Current files stay at their old location. The selected files may be an older backup. Original credentials are still needed for LocalCrypt. |
 | **Start empty here — keep old files…** | Creates/selects empty collection folders without copying. Refuses a location containing files. Works even if the previously selected card is unavailable. | Current files stay at their old location. Private documents, credentials and metadata remain. |
-| **Erase collection files at this location…** | Permanently deletes only the displayed Local and LocalCrypt folders, their contents, interrupted `.storage-copy-*` folders and the location marker. Does not select another location. | Unrelated folders, private documents, credentials, settings and metadata remain. Disabled/refused for the collection currently in use. |
+| **Erase collection files at this location…** | Permanently deletes only the displayed Local, LocalCrypt and Received Files folders, their contents, interrupted `.storage-copy-*` folders and the location marker. Does not select another location. | Unrelated folders, private documents, credentials, settings and metadata remain. Disabled/refused for the collection currently in use. |
 
 For retained shared-drive folders on Android 11 and newer, after reinstalling or
 resetting the app, select the SD card and choose **Use

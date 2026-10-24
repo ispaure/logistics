@@ -6,14 +6,15 @@ from features.text_editor.notes import vault_root
 
 def sources(entry):
     result = []
-    if entry.local is not None:
+    remote_scope = entry.storage_scope == 'remote' or (entry.storage_scope is None and entry.local is None)
+    if not remote_scope and entry.local is not None:
         if getattr(entry.local, 'private', False):
             from features.rclone.desktop_service import service
             result.append(('LocalCrypt', lambda: service.localcrypt.open(entry.local.connection), False))
         else:
             from commonUtils.runtime.resources.local import LocalFiles
             result.append(('Local', lambda: LocalFiles(entry.local.path), False))
-    if entry.remote_source == 'rclone' and entry.remote_name is not None and entry.remote_context is not None:
+    if remote_scope and entry.remote_source == 'rclone' and entry.remote_name is not None and entry.remote_context is not None:
         def remote():
             from features.rclone.desktop_service import service
             from features.rclone.remote_access import DesktopRemoteLocation
@@ -42,6 +43,7 @@ def actions(entry):
         def launch(factory=factory, remote=remote):
             from .ui.notes_library import open_notes
             return open_notes(factory, entry.name, remote=remote)
-        commands.append(UIAction(name='Open Notes Library' + (' (' + label + ')' if len(found) > 1 else ''),
-            callback=launch, description='Browse Markdown notes in Documents. Remote libraries have no search or recursive index.'))
+        commands.append(UIAction(name='Open Notes Library',
+            callback=launch, description=('Read cloud notes in Documents.' if remote else
+                         'Edit Markdown notes in this local copy in Documents.')))
     return commands

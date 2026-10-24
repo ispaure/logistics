@@ -105,17 +105,17 @@ class IncomingTests(unittest.TestCase):
         private = self.root / 'Private'
         use_shared_local(private, documents)
         self.addCleanup(_shared_local_roots.pop, private, None)
-        self.assertEqual(inbox_path(private), documents / 'Inbox')
+        self.assertEqual(inbox_path(private), documents / 'Received Files')
 
     def test_existing_workspace_named_inbox_is_not_replaced(self):
         from mobile.folder_hub import FolderDiscoverySnapshot, discover_folder_choices
-        folder = self.root / 'LocalFiles/Inbox'
+        folder = self.root / 'LocalFiles/Received Files'
         folder.mkdir(parents=True)
         (folder / 'keep.txt').write_bytes(b'existing workspace')
         snapshot = FolderDiscoverySnapshot(self.root, {}, (), (), (), {})
         choices = discover_folder_choices(snapshot).choices
-        self.assertEqual(choices['Inbox']['kind'], 'local')
-        self.assertEqual(choices['Inbox (received)']['kind'], 'inbox')
+        self.assertEqual(choices['Received Files']['kind'], 'local')
+        self.assertEqual(choices['Received Files (received)']['kind'], 'inbox')
         self.assertEqual((folder / 'keep.txt').read_bytes(), b'existing workspace')
 
     def test_stale_destination_temporary_is_recovered(self):
@@ -165,6 +165,6 @@ class IncomingTests(unittest.TestCase):
         self.addCleanup(app.main_window.close)
         self.delivery()
         consume(self.queue, self.inbox)
-        app.loop.run_until_complete(app.show_files(location=('Inbox', '')))
+        app.loop.run_until_complete(app.show_files(location=('Received Files', '')))
         self.assertEqual(app.file_provider.root, self.inbox)
         self.assertEqual([row['name'] for row in app.file_rows.values()], ['hello.txt'])

@@ -153,6 +153,21 @@ class CredentialPackages:
         return [(key, item) for key, item in self.items.items()
                 if remote in item['remotes'] and (identity is None or item['remotes'][remote] == identity)]
 
+    def forget_package(self, name):
+        """Erase only retained ZIPs owned by this exact package filename."""
+        from .document_lists import forget_cache
+        keys = [key for key, item in self.items.items() if item['zip'] == name]
+        for key in keys:
+            forget_cache(self.document_cache_root, key)
+            self.path(key).unlink(missing_ok=True)
+        remaining = {key: item for key, item in self.items.items() if key not in keys}
+        if remaining:
+            atomic_write_json(self.index, remaining, max_bytes=128 * 1024)
+        else:
+            self.vault.forget()
+            self.index.unlink(missing_ok=True)
+        self._publish_items(remaining)
+
     def forget(self):
         from .document_lists import forget_cache
         # Attempt independent erasures even if a key store or a cache unlink

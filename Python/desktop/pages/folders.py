@@ -45,6 +45,16 @@ class FoldersPage(pyside.QWidget):
         self.source_tabs = pyside.QTabBar()
         self.source_tabs.setExpanding(True)
         self.source_tabs.setAccessibleName('Folder sources')
+        self.local_source_tabs = pyside.QTabBar()
+        self.local_source_tabs.setExpanding(True)
+        self.local_source_tabs.setAccessibleName('Local folder sources')
+        for name in ('Dropbox', 'Rclone', 'Others'):
+            self.local_source_tabs.addTab(name)
+        self.local_source_tabs.setCurrentIndex(1)
+        self.cloud_source_tabs = pyside.QTabBar()
+        self.cloud_source_tabs.setExpanding(True)
+        self.cloud_source_tabs.setAccessibleName('Cloud folder sources')
+        self.cloud_source_tabs.addTab('rclone')
         self.credential_combo = pyside.QComboBox()
         self.credential_label = pyside.QLabel('Credential')
         self._remote_sources = []
@@ -61,6 +71,12 @@ class FoldersPage(pyside.QWidget):
         self.refresh_button.setAccessibleName('Refresh folders')
         self.refresh_button.setAutoRaise(True)
         self.refresh_button.clicked.connect(self.refresh)
+        self.rclone_credentials_button = pyside.QToolButton()
+        self.rclone_credentials_button.setText('+')
+        self.rclone_credentials_button.setToolTip('Open rclone credentials')
+        self.rclone_credentials_button.setAccessibleName('Open rclone credentials')
+        self.rclone_credentials_button.setAutoRaise(True)
+        self.rclone_credentials_button.clicked.connect(self._add_rclone)
         self.discovery = OperationProgress(self)
         self.discovery.completed.connect(self._discovered)
         self.details = OperationProgress(self)
@@ -109,16 +125,26 @@ class FoldersPage(pyside.QWidget):
         header = pyside.QHBoxLayout()
         header.addWidget(self.source_tabs, 1)
         left_layout.addLayout(header)
+        left_layout.addWidget(self.local_source_tabs)
+        left_layout.addWidget(self.cloud_source_tabs)
         left_layout.addWidget(self.credential_label)
-        left_layout.addWidget(self.credential_combo)
-        self.folder_list_panel = pyside.QWidget()
+        credential_row = pyside.QHBoxLayout()
+        credential_row.addWidget(self.credential_combo, 1)
+        credential_row.addWidget(self.rclone_credentials_button)
+        credential_row.addWidget(self.refresh_button)
+        left_layout.addLayout(credential_row)
+        self.folder_list_panel = pyside.QFrame()
+        self.folder_list_panel.setFrameShape(pyside.QFrame.Shape.StyledPanel)
+        self.folder_tree.setFrameShape(pyside.QFrame.Shape.NoFrame)
         folder_list_layout = pyside.QVBoxLayout(self.folder_list_panel)
         folder_list_layout.setContentsMargins(0, 0, 0, 0)
         folder_list_layout.setSpacing(0)
-        folder_list_toolbar = pyside.QHBoxLayout()
-        folder_list_toolbar.addStretch(1)
-        folder_list_toolbar.addWidget(self.refresh_button)
-        folder_list_layout.addLayout(folder_list_toolbar)
+        self.home_server_notice = pyside.QLabel('Pending Implementation')
+        pending_font = self.home_server_notice.font()
+        pending_font.setItalic(True)
+        self.home_server_notice.setFont(pending_font)
+        self.home_server_notice.setAlignment(pyside.Qt.AlignmentFlag.AlignCenter)
+        folder_list_layout.addWidget(self.home_server_notice)
         folder_list_layout.addWidget(self.folder_tree, 1)
         left_layout.addWidget(self.folder_list_panel, 1)
 
@@ -172,6 +198,7 @@ class FoldersPage(pyside.QWidget):
     def _connect_signals(self):
         self.source_tabs.currentChanged.connect(self._source_changed)
         self.credential_combo.currentIndexChanged.connect(self._credential_changed)
+        self.local_source_tabs.currentChanged.connect(self._local_source_changed)
         self.folder_tree.currentItemChanged.connect(self._selection_changed)
         self.visibility.changed.connect(self.tree_presentation.refresh)
 
@@ -262,6 +289,11 @@ class FoldersPage(pyside.QWidget):
         # then reconcile it without blocking the tab switch.
         self.refresh()
 
+    def _local_source_changed(self, _index):
+        self._selected_entry_key = None
+        self._refresh_credentials()
+        self.tree_presentation.refresh()
+
     def _credential_changed(self, _index):
         self._selected_entry_key = None
         self.tree_presentation.refresh()
@@ -270,20 +302,20 @@ class FoldersPage(pyside.QWidget):
         return self.source_tabs.tabData(self.source_tabs.currentIndex())
 
     def _refresh_credentials(self, selected_credential=None):
-        """Offer provider groups locally and credential groups for remote sources."""
-
+        """Filter local rclone copies and Cloud by their credential group."""
         selected_source = self._get_selected_source()
         is_remote = selected_source is not None and selected_source[0] == 'remote'
+        category = self.source_tabs.tabText(self.source_tabs.currentIndex())
+        local_rclone = not is_remote and self.local_source_tabs.tabText(self.local_source_tabs.currentIndex()) == 'Rclone'
+        cloud = is_remote and category == 'Cloud'
+        sources = (selected_source[2] if cloud else
+                   [source for source in self._sources.remote_sources if source.feature_name == 'rclone'])
         with pyside.QSignalBlocker(self.credential_combo):
             self.credential_combo.clear()
-            if is_remote:
-                self.credential_combo.addItem('All', None)
-                for source in selected_source[2]:
+            self.credential_combo.addItem('All', None)
+            if cloud or local_rclone:
+                for source in sources:
                     self.credential_combo.addItem(source.source.name, source.source.context)
-            else:
-                for name in ('Dropbox', 'Rclone', 'Others'):
-                    self.credential_combo.addItem(name, name)
-                self.credential_combo.setCurrentIndex(self.credential_combo.findData('Rclone'))
             if selected_credential is not None:
                 for index in range(self.credential_combo.count()):
                     current = self.credential_combo.itemData(index)
@@ -295,9 +327,14 @@ class FoldersPage(pyside.QWidget):
                     if current == selected_credential or same_account:
                         self.credential_combo.setCurrentIndex(index)
                         break
-        self.credential_label.setText('Credential' if is_remote else 'Source')
-        self.credential_label.setVisible(True)
-        self.credential_combo.setVisible(True)
+        self.local_source_tabs.setVisible(not is_remote)
+        self.cloud_source_tabs.setVisible(cloud)
+        self.credential_label.setText('Credential')
+        self.credential_label.setVisible(cloud or local_rclone)
+        self.credential_combo.setVisible(cloud or local_rclone)
+        self.rclone_credentials_button.setVisible(cloud or local_rclone)
+        self.refresh_button.setVisible(cloud or local_rclone)
+        self.home_server_notice.setVisible(category == 'Home Server')
 
     @staticmethod
     def _entry_key(entry):
@@ -619,7 +656,9 @@ class FoldersPage(pyside.QWidget):
         layout.addWidget(self._tools_status)
         layout.addStretch()
         self.detail_scroll.setWidget(widget)
-        self._detail_pending = entry
+        from dataclasses import replace
+        self._detail_pending = replace(entry, storage_scope=(
+            'remote' if self._get_selected_source()[0] == 'remote' else 'local'))
         if self.details.busy:
             self.details.request_cancel()
         else:

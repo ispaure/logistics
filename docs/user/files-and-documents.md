@@ -66,10 +66,10 @@ show their credential ZIP password form directly in Files. Enter the password an
 choose **Unlock** to browse; errors stay in the form. Selecting another folder
 cancels the attempt. Use the refresh icon in the folder-list panel below the source dropdown
 to reload folders while preserving your selection.
-When Cloud has no visible folders, **+ rclone** opens credential setup. Session-only
-accounts you have unlocked are remembered by remote name and ZIP location, and
-return locked after restarting. Select a remote to enter its ZIP password; listing
-these accounts does not connect to the server or save their credentials.
+When Cloud has no visible folders, **+ rclone** opens credential setup. Unlock
+a credential package in Settings to load its remotes. Remembered names and local
+copy associations do not create Cloud destinations after credentials lock or are
+forgotten; local folders remain available under Local.
 Names starting with **Legacy-** (ignoring case) are hidden by default across all
 three sources. Use **Settings → Workspaces → Show Legacy (session only)** to reveal them.
 The choice survives refreshes and source changes, and resets to off on the next launch.
@@ -237,19 +237,24 @@ the dividers to give the hierarchy or details more room. Actions opens by defaul
 switch to Info for the selected workspace’s local and remote availability and paths.
 Local folders normally live under
 `~/Server/Local`. **Local** includes all available local copies, including detected
-Dropbox account folders and rclone-linked Local and LocalCrypt copies. **Cloud**
+Dropbox account folders and rclone-linked Local and LocalCrypt copies. On desktop,
+choose **Dropbox**, **Rclone** or **Others** in the Local source tabs. Rclone also
+has a credential filter, initially **All**, like Cloud. Cloud keeps its single
+**rclone** source tab visible even without loaded credentials. Refresh and **+**
+appear beside the credential filter only in Local → Rclone and Cloud → rclone;
+**+** opens rclone credentials in Settings. Home Server has no credential dropdown and
+shows an italic **Pending Implementation** notice.
+**Cloud**
 contains remotes from loaded rclone credentials, including **Load for Session**,
 and browses them online even when no local copy exists. Session-only credentials
 can also create LocalCrypt copies from crypt remotes; those encrypted copies
-remain on disk after the credentials lock. A saved Local or LocalCrypt association
-keeps its Cloud destination visible
-while its credential ZIP is locked. Folders sharing a ZIP are grouped under one
-credential; unlocking it updates all lock icons and discovers its other remotes.
-Unassociated rclone Local folders appear under **Credentials required** in Cloud;
-load the matching credential package in Settings and refresh to connect them.
-A folder can appear in both
-Local and Cloud; each tab opens its corresponding storage. **Home Server** contains
-rclone sources (including locked associations) from the `Network shares` or `Session network shares`
+remain on disk after the credentials lock. Cloud lists only remotes declared by
+loaded credentials. Local mappings and remembered remote names do not create
+Cloud placeholders; unlock the package in Settings to reconnect. Forgetting a
+package removes all its remotes while keeping local contents.
+A folder can appear in both Local and Cloud while its credentials are loaded;
+each tab opens its corresponding storage. **Home Server** contains loaded
+rclone sources from the `Network shares` or `Session network shares`
 credential package, matching mobile's explicit package grouping. Other rclone
 sources remain in Cloud; protocols alone do not determine the category.
 
@@ -259,7 +264,8 @@ Blue open-lock and orange closed-lock folder glyphs distinguish
 unlocked and locked credential-backed locations. LocalCrypt opens through the credential
 unlock flow and private browser. An unavailable location shows a browsing status;
 it does not silently fall back to another copy. Switching source tabs refreshes folder
-sources in the background while keeping the cached list available. Use
+sources in the background while keeping the cached list available; returning to
+Workspaces also refreshes them. The source list does not refresh continuously. Use
 **Refresh folders** to retry a failed discovery or reload the current source
 after adding folders or configs. A failed refresh keeps the last displayed list
 and reports the error in the bottom notice row.
@@ -444,5 +450,8 @@ On a location's Workspaces actions page, **Open Notes Library** is offered when
 its root contains an `.obsidian` directory. It opens a document under Documents
 with an expandable folder/page sidebar and Back/Forward/Up navigation. Remote
 libraries have no search or recursive index; local filtering only filters loaded
-names. Notes are read-only here; private content remains in memory and stops
-being available when its credentials are retired.
+names. On desktop, the action opens only its selected Local or Cloud context.
+Local and LocalCrypt libraries start in edit mode and save to that same copy;
+Formatted and Source editing are both available. Cloud libraries remain read-only.
+Push and Pull retain both transfer endpoints in the actions panel. Private
+content remains in memory and stops being available when its credentials retire.

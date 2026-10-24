@@ -34,6 +34,37 @@ class ReaderTests(QtTestCase):
         self.page._loaded(EPUBBook(self.path))
         self.app.processEvents()
 
+    def test_unrelated_shared_styling_skips_chapter_import_but_reading_changes_apply(self):
+        from commonUtils.ui.appearance.styling import styling
+        controller = styling()
+        original = dict(controller.values)
+        self.addCleanup(lambda: controller.values.update(original))
+        with patch.object(self.page, '_render', wraps=self.page._render) as render:
+            controller.changed.emit()
+            controller.values['code_font_size_int'] += 1
+            controller.changed.emit()
+            render.assert_not_called()
+            self.appearance_stores[0].save({('Styling', 'reading_font_size_int'): '18'})
+            controller.changed.emit()
+            render.assert_called_once()
+            self.assertEqual(self.page.text.document().defaultFont(), self.page.reading_font())
+            render.reset_mock()
+            controller.changed.emit()
+            render.assert_not_called()
+
+    def test_shared_accent_reimports_slate_chapter_only_when_effective_colors_change(self):
+        from dataclasses import replace
+        from commonUtils.ui.appearance.theme import configured_colors
+        self.page._save_appearance('theme', 'slate')
+        self.app.processEvents()
+        colors = replace(configured_colors(True), surface='#203040')
+        with patch('commonUtils.ui.appearance.theme.configured_colors', return_value=colors), \
+                patch.object(self.page, '_render', wraps=self.page._render) as render:
+            self.page._shared_settings_changed()
+            self.page._shared_settings_changed()
+            render.assert_called_once()
+            self.assertIn('#203040', self.page.text.styleSheet())
+
     def test_reader_header_and_window_use_filename_with_extension(self):
         self.assertEqual(self.page.title.text(), self.path.name)
         window = BookWindow(EPUBBook(self.path))

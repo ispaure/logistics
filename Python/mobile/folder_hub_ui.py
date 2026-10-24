@@ -205,7 +205,7 @@ class FolderHubUI:
         self.folder_source_actions = toga.Box(style=Pack(direction=ROW))
         self.folder_loading_box = toga.Box(style=Pack(direction=COLUMN))
         self.app.incoming_notice = toga.Label(getattr(self.app, 'incoming_status',
-            'Files shared from other apps appear in Inbox.'), style=Pack(font_size=12, margin_top=4))
+            'Files shared from other apps appear in Received Files.'), style=Pack(font_size=12, margin_top=4))
         box = toga.Box(children=[self.folder_source_tabs, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box,
             folder_scroll(self.folder_list), self.app.incoming_notice],
@@ -237,7 +237,7 @@ class FolderHubUI:
             self.folder_configured_sources.add('Network shares')
         if configured - network_remotes:
             self.folder_configured_sources.add('rclone')
-        credentials = self.credential_groups(source_choices(choices, 'rclone', network_remotes))
+        credentials = self.credential_groups(source_choices(choices, 'rclone', network_remotes), loaded_remotes=loaded_remotes)
         if credentials != self.folder_credentials:
             self.folder_credentials = credentials
             selected = self.selected_folder_credential()
@@ -578,7 +578,7 @@ class FolderHubUI:
         if kind == 'shared-local':
             return await self.show_files(location=('Shared files', value))
         if kind == 'inbox':
-            return await self.show_files(location=('Inbox', value))
+            return await self.show_files(location=('Received Files', value))
         if kind == 'local':
             return await self.show_files(location=('Local files', value))
         if kind == 'crypt':
@@ -624,7 +624,6 @@ class FolderHubUI:
         if (refresh_choices and not busy and hasattr(self, 'folder_list') and host is not None
                 and host.state.destination == 'files' and not self.routes.screens['files']):
             choices = self.folder_choices()
-            credentials = self.credential_groups(source_choices(choices, 'rclone', self.network_share_remotes()))
             self.update_folder_list(choices)
         status = getattr(self, 'folder_picker_status', None)
         if status is not None and not getattr(self, '_folder_opening', False):

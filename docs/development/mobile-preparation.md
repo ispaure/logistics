@@ -1013,11 +1013,12 @@ same two-pixel centering and fullscreen-height assertions still apply.
 
 ## Android collection drive selection
 
-`features/rclone/mobile/storage_location.py` owns the shared Local/LocalCrypt
+`features/rclone/mobile/storage_location.py` owns the Local/LocalCrypt/Received Files
 location. Private `collection-storage.json` records the selected volume and a
 random identity matching `<volume>/Logistics/.logistics-storage`. Unconfigured
 Android installs retain the existing private `LocalFiles`/`LocalCryptFolders` layout.
-Configured drives use `Logistics/Local` and `Logistics/LocalCrypt`; neither
+Configured drives use `Logistics/Local`, `Logistics/LocalCrypt` and
+`Logistics/Received Files`; neither
 credentials nor `mirror-jobs.json` move. All provider, Workspaces, library and
 transfer destination resolution uses this boundary. Retained collection providers
 revalidate the selected marker before filesystem operations. No missing-card
@@ -1031,7 +1032,7 @@ access supports the existing native rclone bridge and ordinary SD-card folders.
 It is distinct from document import/export URI grants.
 
 Switching is blocked during active cloud/transfers and while provider readers are
-open. It checkpoints managed text, prevents new cloud mutations, inventories both
+open. It checkpoints managed text, prevents new cloud mutations, inventories all three
 trees, checks free space, copies into unique staging directories, flushes copied
 file bytes and compares SHA-256 inventories. Symlinks, hardlinks and special files
 are refused during migration. Different nonempty destination collections are
@@ -1043,12 +1044,30 @@ Root-level marker and private state must be preserved when manually moving cards
 
 ### Incoming files and Inbox
 
-`mobile/incoming_files.py` consumes complete native handoffs into ordinary Inbox
-storage. iOS uses `Documents/Inbox`, beside the file-sharing `Local` directory;
-Android uses the private data root's `Inbox`, independently of optional SD-card
-collection selection. Both are exposed in Workspaces and the existing local
-file browser. Inbox documents reuse normal resource-opening and private-copy
-identity tracking, including iOS's shared Documents root.
+`mobile/incoming_files.py` consumes complete native handoffs into ordinary
+**Received Files** storage. iOS uses `Documents/Received Files`, beside the
+file-sharing `Local` directory; Android uses `<collection-base>/Received Files`
+(`Logistics/Received Files` on a selected drive). App internal storage keeps the
+folder private. Workspaces, Browse All Files and the browser location picker use
+the same name and destination. Android's `DeviceFiles` provider admits only Local
+and Received Files; private state and raw LocalCrypt paths are rejected, including
+direct requests. It is excluded from physical filesystem search indexing.
+
+Legacy private and system `Inbox` trees are copied with SHA-256 inventory
+verification and durable private `inbox-upgrade-*.json` receipts. Sources remain
+as backups. An occupied destination gets a uniquely named `Previous Inbox`
+subfolder; retries reuse the journaled destination instead of duplicating files.
+Changed destinations stop migration and preserve both copies. iOS receipts avoid
+absolute container paths so restores can resume. Startup creates Received Files
+even before the first share. It never creates or writes Apple's system
+`Documents/Inbox`; UIKit URLs in that directory now enter the normal native queue.
+
+Android collection copying, recovery, empty-location checks and explicit inactive
+location erasure include Received Files. The storage UI serializes these actions
+with intake and migrates legacy Inbox before copying. Intake pauses during a
+storage change. If a selected drive is unavailable, ready handoffs stay queued;
+there is no silent internal fallback. Received documents reuse normal resource
+opening and private-copy identity tracking.
 
 Android's tracked `ReceiveActivity.java` accepts `ACTION_SEND` and
 `ACTION_SEND_MULTIPLE` content-URI streams, including ClipData fallback. It owns
@@ -1081,8 +1100,14 @@ volume, verifies SHA-256, publishes with exclusive rename, flushes the directory
 and only then removes the handoff. A private receipt makes interrupted cleanup
 retryable without a duplicate copy. Reset also erases the shared iOS intake.
 
-Focused tests cover publication conflicts, interruption, linked/traversal input,
+Focused tests (`test_received_files.py`, `test_incoming_files.py` and
+`test_ios_storage.py`) cover visible roots, legacy-copy conflicts and retries,
+collection-drive copying, publication conflicts, interruption, linked/traversal input,
 size limits, resource identities and repeated native project configuration.
+The reusable `received_files_probe.py` QA entry point checks the real iOS
+Documents root, legacy-byte preservation, Browse All Files navigation and native
+URL intake. These checks passed on an iOS 27 simulator on October 24, 2026;
+physical-device share-extension and Android native acceptance remain separate.
 Reusable native sender fixtures live in `mobile_build/native_tests/android/incoming/`
 and `mobile_build/native_tests/ios/IncomingSender.m`; iOS menu tests use
 `IncomingFilesUITests.swift`. Keep generated projects, screenshots and test
@@ -1119,9 +1144,9 @@ the shared Local root from both iCloud and computer device backups. It does not
 enable iCloud Drive synchronization. The feature's process-local shared-root
 registration is rebuilt each launch, avoiding persisted absolute iOS container
 paths. `collection_path(private_root)` resolves to `Documents/Local`, while crypt
-paths remain in their existing private location. Startup creates `Local` on every
+paths remain in their existing private location. Startup creates `Local` and `Received Files` on every
 launch, including fresh installs, completed journals and after deletion in Files,
-so the shared Documents container has a visible child before any remote is pulled.
+so both ordinary folders are visible before any remote is pulled or file is shared.
 No migration is added for files previously pulled directly into Documents; files
 beside `Local` remain untouched and outside Workspaces's Local collection. Mapping records retain their relative targets and stay private;
 arbitrary computer imports do not create mapping records. Android's drive switch

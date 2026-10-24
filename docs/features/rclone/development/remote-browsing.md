@@ -24,12 +24,10 @@ late results. Unlock resumes the selected location and updates all affected lock
 Standalone File Browser windows retain their existing unlock dialog.
 
 Desktop Workspaces uses `services.folders.workspaces.workspace_remote_sources`
-to group `CopyContext` associations by session context and ZIP identity. A locked
-account remains in Cloud/Home Server, with one remote destination for its Local
-and LocalCrypt copies. Loaded account snapshots take precedence. Local rclone
-folders without an association receive a credential-required Cloud placeholder;
-selecting it never browses the local copy as a remote. Unlocking refreshes discovery,
-preserves the credential/selected root and browser, and exposes additional remotes.
+to expose declared loaded credential sources. `CopyContext` associations and
+unassociated local folders remain available locally but do not create Cloud
+placeholders. Credential-package discovery uses saved configs and live sessions;
+remembered names alone do not declare online sources.
 A successful unlock refreshes lock icons and actions even if opening the browser
 then fails. Action detection captures the credential generation and discards or
 restarts results if credentials lock or are replaced while its worker runs.
@@ -94,6 +92,14 @@ metadata for the exact matching document-cache identity. Alias translation keeps
 the retained index's remote names, so another loaded account with the same names
 cannot change a regular folder's classification. Locked rendering reads this
 metadata without decrypting the credential ZIP or calling the native bridge.
+
+Mobile connection admission resolves remote aliases and checks the published
+`identities` of every loaded package before probing the bridge. This keeps saved
+and session-only Workspaces usable together when a redundant identity probe
+would fail. A matching name alone never admits a different account identity;
+unavailable identities still use the retained-ZIP unlock/import flow. Host tests
+in `test_multi_credentials.py` cover mixed modes, a shared Dropbox name, opening
+a uniquely named Workspaces remote, alias resolution and identity mismatch.
 
 After credential unlock, validated open/recent entries restore in RAM; restored
 open entries are transient placeholders until selected. Restore never fetches

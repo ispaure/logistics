@@ -778,22 +778,39 @@ predates this follow-up; its screen and revocation protections are unchanged.
 
 ## Mobile Workspaces visibility and Settings unlocking
 
-Workspaces combines `CloudUI.loaded_remote_names` with retained ZIP remote names.
-Retained names allow online-only folders to remain discoverable while locked;
-all opens still use `require_remote_credentials_async` and the matching ZIP's
-password guard. Optional `crypt_remotes` metadata preserves encryption icons
-without retaining decoded credentials. Older indexes without it remain readable.
-Mirror records with an existing physical target contribute local rows while locked.
-Credential groups intersect their associated remotes with the available Hub rows.
+Workspaces uses `CloudUI.loaded_remote_names` for Cloud destinations. Retained ZIP
+metadata identifies local copies and encryption types, but does not create online
+rows. Existing physical mirror targets remain visible locally while locked or
+forgotten. Matching package and connection identities keep same-named accounts
+separate; a local mapping cannot manufacture a remote destination.
 
-Settings' rclone connections page enumerates retained ZIP labels independently of
-Workspaces. Its unlock action uses the same password-only session import as a
-local-copy unlock, with no required remote/folder selection. Wrong passwords leave
-the prompt open; success publishes a generation-stamped remote list and returns
-to Workspaces. The explicit session lock uses native `clear` without deleting the
-saved vault or retained-package key, clears selectors/private catalog state, and
-preserves the existing save/discard guard for private edits. Saved-vault reload
-remains an explicit separate action after locking.
+Settings lists retained and loaded packages as archive rows. Each package page
+shows its status, password, Unlock action and its own Loaded remotes. Unlock opens
+`CredentialStorageDialog`, which uses the shared desktop retention explanations.
+Cancel changes no credentials. Session-Only and persistent loads share the native
+publication path. The first page retains session locking and troubleshooting.
+
+`NativeCredentialForget.package_name` selects one package; `None` removes all.
+The bridge's `forget_package` action erases the selected saved snapshot, including
+an older saved version hidden by a session import, and revokes its active context,
+resume gate and document-list key. A locked saved vault is read without loading
+its other packages. Other package aliases, modes and token stores survive.
+`CredentialPackages.forget_package` removes the retained ZIP and encrypted lists
+and publishes the new index to other scenes. Both visible removal actions confirm
+before mutation; all-credential removal uses a severe warning. Session locking
+keeps saved material and retained ZIPs; neither removal path deletes local folders.
+
+Host tests cover package navigation, all retention choices and cancellation,
+scoped forgetting, shared retained indexes and local-only discovery after removal.
+Go tests cover saved/session isolation, shadowed saved copies, locked-vault removal,
+last-package deletion and persistence failure. Native phone layout still requires
+device validation after these changes.
+
+Package removal takes the package mutex before the shared saved-vault mutex,
+matching OAuth token-save callbacks. The parent lock is released before publishing
+the remaining contexts. Known document-list caches are erased independently of a
+retained-package index failure, with partial failures reported for retry. Folder
+rendering reuses one loaded-remote snapshot when building credential filters.
 
 Historical validation (2026-10-15, before retained online-only rows stayed visible):
 225 mobile host tests passed, including the no-local-folder Settings

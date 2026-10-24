@@ -58,6 +58,23 @@ func executeRequest(ctx context.Context, action string, request bridgeRequest) (
 		clear(data)
 	case "vault_info":
 		result = vaultInfo()
+	case "forget_package":
+		var unopened *vaultStorage
+		if savedCredentials == nil && request.Path != "" {
+			var key []byte
+			key, err = base64.StdEncoding.DecodeString(request.Key)
+			if err == nil {
+				unopened, err = openVault(request.Path, request.ID, key)
+			}
+			clear(key)
+			if unopened != nil {
+				defer unopened.detach()
+			}
+		}
+		if err == nil {
+			err = forgetCredentialPackage(request.Label, unopened)
+		}
+		result = vaultInfo()
 	case "list":
 		result, err = list(ctx, request.Remote, request.Path)
 	case "remote_cache_open":

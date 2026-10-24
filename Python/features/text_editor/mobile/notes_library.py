@@ -32,6 +32,7 @@ class NotesHost:
     content_width: Callable
     folder_visible: Callable
     show_documents: Callable
+    close_session: Callable
     show_view: Callable
     destination: Callable
     render: Callable
@@ -176,12 +177,22 @@ class VaultBrowser:
         self.toolbar.remove(self.up_button)
         self.toolbar.remove(self.speech.button)
         self.toolbar.add(self.reader_actions_button)
+        self.close_button = self.host.presentation.icon_button(
+            "close", "Close Notes Library", on_press=self.close
+        )
+        self.toolbar.insert(0, self.close_button)
+        self.view._reader_close_button = self.close_button
+        for button in (self.back_button, self.forward_button):
+            button._toolbar_group = 'page-history'
+            button._toolbar_priority = True
         self.view._workspace_menu_button = self.menu
         self.view._native_reader_toolbar = self.toolbar
         self.view._native_reader_title = (
             lambda: PurePosixPath(self.path).name if self.path else "Notes Library"
         )
         self.view._native_reader_buttons = lambda: [
+            self.back_button,
+            self.forward_button,
             *(
                 [self.edit if not self.library.remote else self.speech.button]
                 if self.path
@@ -496,6 +507,11 @@ class VaultBrowser:
             self.back_button.enabled = index > 0
             self.forward_button.enabled = index < len(self.history) - 1
             self.refresh_reader_actions()
+            self.host.render()
+
+    def close(self, widget=None, **kwargs):
+        if self.session is not None:
+            return self.host.close_session(self.session.id)
 
     async def browse_parent(self, widget=None, **kwargs):
         if self.path is not None:

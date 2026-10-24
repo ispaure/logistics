@@ -148,6 +148,9 @@ func (s *vaultStorage) failure() bool {
 func (s *vaultStorage) detach() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.detachLocked()
+}
+func (s *vaultStorage) detachLocked() {
 	clear(s.key)
 	s.key = nil
 	s.path = ""

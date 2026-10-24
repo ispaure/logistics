@@ -183,7 +183,7 @@ class RclonePage(pyside.QWidget):
         package_layout.addWidget(self.details_button, alignment=pyside.Qt.AlignmentFlag.AlignLeft)
         package_layout.addWidget(self.package_details)
 
-        remotes_group = pyside.QGroupBox('Remotes — unlock to connect')
+        remotes_group = pyside.QGroupBox('Loaded remotes')
         remotes_layout = pyside.QVBoxLayout(remotes_group)
         remotes_layout.addWidget(self.remote_list)
 
@@ -305,10 +305,10 @@ class RclonePage(pyside.QWidget):
                 label += f' — {package.path.parent}'
 
             if config_path.is_file():
-                label += ' [Saved]'
+                label += ' [Persistent save]'
             from features.rclone import session
             if session.names(config_path.with_suffix('.session')) is not None:
-                label += ' [Session]'
+                label += ' [Session-Only]'
             elif not config_path.is_file():
                 from features.rclone import desktop_catalog
                 if desktop_catalog.read(config_path.with_suffix('.session')) is not None:
@@ -380,7 +380,7 @@ class RclonePage(pyside.QWidget):
         self.package_name.setText(package.name_without_ext)
         self.package_path.setText(str(package.path))
         self.generated_config_path.setText('In memory — no saved credential config' if config_path.suffix == '.session' else str(config_path))
-        self.loaded_status.setText('Session only' if is_session else ('Saved' if is_loaded else 'Locked'))
+        self.loaded_status.setText('Session-Only' if is_session else ('Persistent save' if is_loaded else 'Locked'))
         self.remove_button.setEnabled(is_loaded or remembered is not None)
 
         remote_names = configuration.get_rclone_remote_names(config_path)
@@ -574,23 +574,23 @@ class RclonePage(pyside.QWidget):
         if values is not None and not error:
             self._active_modes[package.path] = remember
             # Do not rescan credential roots (which may be cloud-backed) on completion.
-            self.loaded_status.setText('Saved' if remember else 'Session only')
+            self.loaded_status.setText('Persistent save' if remember else 'Session-Only')
             self.generated_config_path.setText(str(config_path) if remember else 'In memory — no saved credential config')
             self.remote_list.clear()
             self.remote_list.addItems(list(values.remotes))
             item = self.credential_list.currentItem()
-            label = item.text().replace(' [Saved]', '').replace(' [Session]', '').replace(' [Locked]', '')
+            label = item.text().replace(' [Persistent save]', '').replace(' [Session-Only]', '').replace(' [Locked]', '')
             if remember or config_path.with_suffix('.conf').is_file():
-                label += ' [Saved]'
+                label += ' [Persistent save]'
             if session.names(config_path.with_suffix('.session')) is not None:
-                label += ' [Session]'
+                label += ' [Session-Only]'
             item.setText(label)
             self.remove_button.setEnabled(True)
             self.status_label.setText(f'Unlocked "{package.path.name}" ({"saved on this device" if remember else "session only"}). '
                                       'Return to Workspaces → Cloud or Home Server to browse or pull files. '
                                       'No connection has been made yet.')
         else:
-            self.remove_button.setEnabled(self.loaded_status.text() in ('Saved', 'Session only'))
+            self.remove_button.setEnabled(self.loaded_status.text() in ('Persistent save', 'Session-Only'))
             self.status_label.setText('Credential loading failed. Check the ZIP password and local file access.'
                                       if error else 'Credential loading cancelled.')
         self._refresh_clear_all_state()

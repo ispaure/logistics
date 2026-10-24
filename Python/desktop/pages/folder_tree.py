@@ -42,9 +42,15 @@ class FolderTreePresentation:
 
         if source_type == 'local':
             entries = local_entries(page._sources)
-            category = page.credential_combo.currentData()
+            category = page.local_source_tabs.tabText(page.local_source_tabs.currentIndex())
             if category is not None:
                 entries = [entry for entry in entries if local_entry_category(entry, page._sources) == category]
+            credential = page.credential_combo.currentData()
+            if category == 'Rclone' and credential is not None:
+                paths = {entry.local.path for source in page._remote_sources
+                         if source.source.context == credential
+                         for entry in remote_entries(source, page._local_folders) if entry.local is not None}
+                entries = [entry for entry in entries if entry.local.path in paths]
             entry_labels.update((page._entry_key(entry), str(entry.local.path)) for entry in entries)
         else:
             _source_type, _feature_name, sources = selected_source

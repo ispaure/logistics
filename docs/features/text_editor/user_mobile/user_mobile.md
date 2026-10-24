@@ -31,7 +31,8 @@ On iOS, text and Markdown editors share the readers' native title bar. The
 filename stays centered, and **Save** appears beside the reading/actions controls
 only while there are unsaved changes. Use **Actions → Rename document…** to change
 a managed document's name. Notes Library shows the current note's filename and
-moves previous/next history and parent-folder commands into **•••**.
+keeps **‹ / ›** page-history buttons visible beside its reading controls. Use
+**×** to close the library from any page; the parent-folder command is in **•••**.
 Markdown and editable Notes Library pages put **Read aloud…** in **•••** to leave
 room for their titles. When a managed editor has unsaved changes, Save takes
 the primary action slot; **View document** remains available in **•••**.

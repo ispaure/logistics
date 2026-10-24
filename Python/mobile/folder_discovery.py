@@ -37,7 +37,7 @@ class FolderDiscovery:
         self.cache = {}
         self.cache_stamp = None
         # Never show a previous connection's names while its replacement loads.
-        return {'All files': dict(source='Local', kind='local', value='',
+        return {'All files': dict(source='Local', kind='shared-local', value='',
                                   name='Browse All Files', copies=[], browser_root=True)}
 
     def request(self):

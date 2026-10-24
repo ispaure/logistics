@@ -18,20 +18,16 @@ deletion retain their confirmation dialogs.
 The editor-specific **Open / Save As** picker still waits for initial credential
 loading because it includes encrypted destinations.
 
-Workspaces's **Cloud** tab includes remotes from retained password-protected ZIPs
-even before a local copy exists. Tap a locked remote to enter its ZIP password and
-continue browsing online. A wrong password leaves it locked.
+Workspaces's **Cloud** tab lists remotes supplied by currently loaded credentials,
+including remotes without a local copy. Retained, locked packages remain in
+**rclone connections → Credential Packages** for unlocking. Local folders remain
+in **Local** after credentials are locked or forgotten; their names and transfer
+mappings do not create Cloud destinations.
 
 In Workspaces's **Cloud** and **Local** tabs, encrypted folders show a combined
 folder-and-lock icon before their name. Blue open padlocks mean unlocked;
-orange closed padlocks mean locked. Each folder reports its own state, including
-mixed states within one group. Ordinary folders use a plain folder icon.
-Cloud crypt folders use the lock icon even when there is no local copy. Unlocking
-an older retained session-only ZIP repairs missing folder-type metadata, so the
-crypt folders remain marked as locked after locking again or restarting. Older
-entries without that metadata need one successful unlock before their type can
-be shown correctly.
-Group headings and nesting remain expanded and cannot be collapsed.
+orange closed padlocks mean locked. Each folder reports its own state. Ordinary
+folders use a plain folder icon. Group headings remain expanded.
 
 The online browser loads filenames and sizes without fetching thumbnails, in
 both list and tile views. The current folder name stays in the header. Loading,
@@ -44,9 +40,9 @@ request. The elapsed time is a wait indicator, not a download percentage.
 Tap **Import credential ZIP…** to open the separate import page and select your
 existing Logistics credential package. Use **Choose credential ZIP…** to select
 a different ZIP. Its filename appears under the button. Enter its password, then tap
-**Load remotes** below the password field, or press Return. Leave the password
+**Unlock** below the password field, or press Return. Leave the password
 blank for an unencrypted ZIP. A failed load clears the password and keeps the
-selected ZIP ready: correct the password and tap **Load remotes** again without
+selected ZIP ready: correct the password and tap **Unlock** again without
 selecting the file again. After loading, choose a remote and tap **Browse folder**.
 The ZIP password is never saved; selecting a ZIP alone does not load credentials
 or connect to a remote. TXT entries must each contain one `[Remote name]`
@@ -119,27 +115,35 @@ label, storage and lock icons, and the search button. It omits item
 counts and the Sort control. Progress and **Cancel** appear only
 while a request is running.
 
-**Save credentials on this device** is enabled by default. Turn it off before
-importing to keep decoded credentials and the ZIP password only in memory for
-this app session. Settings autosave never saves them. The original password-protected
-ZIP is retained under device encryption for future password-only unlocking.
-Unencrypted ZIPs must be selected again next time. A session-only
-import leaves saved packages unchanged; **Reload saved credentials** reloads
-saved packages while keeping currently loaded session-only packages active. Multiple
-saved and session-only packages are supported together. Each ZIP filename
-appears above the remote selector, so the package and its remote names stay associated.
+After entering a package password, tap **Unlock**. A popup offers
+**Session-Only** and **Persistent credential storage** as selectable cards. Tap a
+card to choose immediately, or use **Cancel** at the bottom. Cards and Cancel have
+outlines, including in high-contrast mode. The cards contain explanations matching
+the desktop choices. Cancel leaves credentials unchanged. Session-Only keeps
+decoded credentials in memory until locking or exiting. Persistent storage keeps
+them available after restart using the device-protected encrypted vault. The saved
+credentials are not protected by the ZIP password. The ZIP password is never saved.
+Password-protected ZIPs are retained under device encryption with either choice;
+unencrypted ZIPs must be selected again next time. Settings autosave never stores
+session credentials.
+
+The package page separates **Credential removal** from **Loaded remotes**.
+
+Multiple saved and session-only packages can remain loaded together. A Session-Only
+load does not delete an older persistent copy of that package. **Reload saved
+credentials** keeps currently loaded session-only packages active.
 
 Saved settings and refreshed OAuth tokens use an AES-256-GCM encrypted private
 vault. Android Keystore protects its key, and the files are outside Android backup;
 iOS Keychain stores a device-only key available while the device is unlocked, and
 the vault folder is excluded from backup. Saved credentials restore during app
-startup, before Home appears, without contacting a remote. Recent and Documents
+startup in the background, without contacting a remote. Recent and Documents
 show the restored connection state; opening a cloud file waits for any pending
 restoration and continues directly. Session-only ZIPs still require their password
 after restarting the app. The ZIP password is never saved, and neither
 mode rewrites the source ZIP. A locked device, missing key or damaged vault stops
 restoration; there is no plaintext fallback or silent replacement of saved data.
-Unlock the device and reload, or use **Forget saved credentials** before reimporting.
+Unlock the device and reload, or use **Forget all saved credentials** before reimporting.
 
 Password-protected session-only credential ZIPs also have an **AES-256 ZIP** cache
 for their open and recent file lists. It uses the same credential ZIP password,
@@ -149,7 +153,7 @@ The cache keeps no passwords, document contents or unsaved edits. Locking a sess
 preserves the encrypted cache while removing the visible entries. Unencrypted
 credential ZIPs do not enable password-protected list caching.
 
-**Forget saved credentials** unloads the active session and removes the saved
+**Forget all saved credentials** unloads the active session and removes the saved
 ciphertext, its known protected key, retained ZIPs and encrypted open/recent list
 caches in every window, while preserving private downloads. If cleanup reports a
 partial failure, unlock the device and retry forgetting. Private
@@ -157,36 +161,42 @@ downloads follow the platform's normal app-data backup policy. Interactive OAuth
 account setup remains future work. Session-only token updates are lost on exit;
 providers that rotate refresh tokens may require a fresh credential package.
 
-The main rclone page groups loaded packages with their saved or session-only
-status and shows **Unlock** for retained, locked ZIPs. Import fields live on
-the import page. **Reload saved credentials**, **Check rclone engine**, and
-**Forget saved credentials** are under the initially collapsed
-**Advanced & troubleshooting** section. **Lock connections** also locks active
-SMB sessions.
+The **rclone connections** page has a **Credential Packages** heading and archive
+rows named after each imported ZIP, without `.zip`. Tap one to open its package
+page. The top title uses the package name, followed by **Locked**, **Persistent
+save** or **Session-Only** status, its password field and **Unlock**. **Loaded
+remotes** lists only that package's active remotes. Tap a remote to browse it.
+**Forget this credential package**, below the remotes, confirms removal of the
+whole package and every remote it supplies. Other packages and local files remain.
+
+The first page retains **Session → Lock session** and its explanation. Locking
+keeps retained ZIPs and persistent credentials and also locks SMB sessions.
+**Advanced & troubleshooting** contains **Reload saved credentials**, **Check
+rclone engine** and **Forget all saved credentials**. The last action displays a
+severe confirmation warning before removing all credential packages, saved and
+session credentials, and encrypted open/recent lists. Cloud files, local folders
+and downloaded contents are not deleted. Reimport the packages to reconnect.
 
 SMB setup has its own **Settings → Workspaces → SMB shares…** page; see
 [SMB and Mac shared folders](localcrypt.md#smb-and-mac-shared-folders).
 
 ### Locked credentials and Workspaces
 
-Retained session-only ZIPs keep their remote names visible in Workspaces even
-while locked and without a downloaded copy. Their credential filter remains
-available. Tapping one asks for the matching ZIP password before browsing.
-Wrong passwords keep the prompt open. The Settings connection page also offers
-**Unlock** for each retained ZIP. Use **Choose credential ZIP** for a new ZIP or
-one that was not retained. **Lock connections** clears decoded credentials
-while keeping discoverable remote names, local copies, retained ZIPs and saved
-credentials. Save or discard private edits
-before locking. **Forget saved credentials** also removes retained ZIPs, keys and encrypted
-open/recent list caches.
+Retained ZIPs stay listed in **Credential Packages** while locked. Open a package,
+enter its password and tap **Unlock**, then choose storage in the popup. Wrong
+passwords keep the page available for retry. LocalCrypt copies can also request
+the matching ZIP password when opened. **Lock session** unloads active contexts
+and hides their Cloud rows while keeping local copies, retained ZIPs and saved
+credentials. Save or discard private edits before locking. Forgetting removes
+the chosen credential material as well as its encrypted open/recent list caches.
 
 ### Multiple credential packages on Android and iOS
 
-Load each ZIP with **Save credentials on this device** set independently. For
-example, load Personal with it on and Legacy with it off. Both remain active and
+Choose storage independently in each ZIP’s Unlock popup. For example, load
+Personal with persistent storage and Legacy with Session-Only. Both remain active and
 appear as separate credential groups in Workspaces; select **All** to see all
-available folders. Connections lists each loaded package with **saved** or
-**session only** status. **Show Legacy** still controls Legacy-prefixed groups
+available folders. Connections lists each loaded package with **Persistent save** or
+**Session-Only** status. **Show Legacy** still controls Legacy-prefixed groups
 and folders on both platforms.
 
 Up to 32 loaded packages are supported, with up to 64 configured remotes per
@@ -210,8 +220,8 @@ key; package vaults use a new header which older builds refuse to load.
 
 Loading a previously saved filename as session-only does not erase its older
 saved copy; use Forget saved credentials if you want to remove saved secrets.
-**Lock connections** unloads all active contexts. **Forget saved credentials**
-retains its existing explicit all-credentials removal behavior.
+**Lock session** unloads all active contexts. **Forget this credential package** removes just that package, including an older saved
+copy. **Forget all saved credentials** removes all packages after confirmation.
 
 ## Folder search scope
 

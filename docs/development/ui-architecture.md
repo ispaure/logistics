@@ -80,3 +80,57 @@ Provider declarations are still resolved on the GUI thread; only provider I/O an
 tool availability checks run in workers. Private folders never reach tools that
 have not declared backend-aware support. Folder controller and source UI tests
 cover the boundary.
+
+## Desktop performance assessment (October 24, 2026)
+
+The first measured bottleneck was applying a saved accent color. A local macOS
+Qt 6.12 offscreen fixture used the shared appearance settings editor and five
+text browsers, each with 100 repeated prose/inline-code/fenced-code groups.
+Three successive color saves were profiled with `cProfile`; settings paths were
+temporary and no personal configuration was edited.
+
+The median edit/save/apply/event-drain cycle fell from approximately **1.18 s to
+0.13 s** after the shared theme/font changes. Theme/font application alone fell
+from approximately **1.05 s to 0.0013 s**. The dominant original cost was
+`QApplication.setStyleSheet`, which repolished existing widgets on every accent
+change. These are fixture measurements, not an end-to-end timing of a running
+Logistics session; document readers and contributed pages can add work.
+The implementation and font-role contracts belong in commonUtils' own styling
+guide. Raw profiling output remains outside the wiki.
+
+The follow-up pass retains settings controls after successful saves and checks
+effective LM message appearance before reimporting Markdown. The same appearance
+fixture now measures roughly **1–3 ms for Save**, and **3–6 ms for the whole
+save/apply/event-drain cycle**. Existing fields, previews, selected tab, focus,
+text selection and scroll survive Save. Explicit Reload still rebuilds the form;
+conflict baselines and inheritance indicators refresh after each successful save.
+
+A separate offscreen LM fixture used 100 message browsers, each with ten repeated
+prose/inline-code/fenced-code groups. A theme transition followed by a styling
+notification previously imported 200 documents. It now imports 100, with median
+time decreasing from **1.29 s to 0.58 s** across three transitions. Reading/code
+font changes still render; unrelated font-role notifications skip message imports.
+Books likewise skips chapter imports for unrelated shared preferences while
+retaining reading-font changes and shared tint changes for slate/dark readers.
+
+Startup was profiled with temporary personal settings, first with shipped defaults,
+then with Git, IDE and LM enabled. Feature initialization took about 0.06 s;
+main-window construction took 0.49 s / 0.67 s respectively. In the latter fixture,
+File Browser construction took 0.14 s, Git 0.13 s, Settings 0.065 s, LM 0.028 s,
+Workspaces 0.013 s and IDE 0.004 s. First show plus five event drains added 0.11 s.
+This isolated fixture has no real projects, accounts or conversation history, and
+imports before the measured interval are excluded. It does not estimate full cold
+startup or a user's populated session.
+
+Lazy page construction remains a separate follow-up: measure a populated session
+and memory first, then preserve feature toggles, direct IDE/file opening, close
+guards and background task ownership. The current lifecycle is retained; the
+measurements above identify File Browser and Git as the first constructors to
+investigate.
+
+Validation for the appearance change covers shared theme/styling, rendered pixels,
+Markdown presentation, browser polish and status-line fonts, plus Logistics'
+landing, LM, Books and Git appearance tests. Follow-up tests cover retained settings
+controls, repeated saves, both scopes, inheritance resets, external edits, duplicate
+LM signals, code/reading font changes and selective Books rendering. Offscreen checks do not certify native
+Windows/Linux rendering or the latency of an already-open desktop session.

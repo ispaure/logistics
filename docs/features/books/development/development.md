@@ -398,3 +398,13 @@ so failed construction releases outgoing animation snapshots. Do not replace the
 shared publication sequence with another format-specific container-clear path.
 See [mobile publication ownership](../../../development/mobile-runtime.md#reader-publication-boundary)
 for failure boundaries and focused/native verification.
+
+
+## Shared appearance refreshes
+
+The EPUB reader compares effective preferences, reading font and rendered colors
+before responding to a shared styling notification. Unrelated UI/browser/code
+changes leave the imported chapter intact. Automatic reading families still
+inherit interface font changes, and slate/dark themes still adopt shared accent
+tint changes. `test_books_reader.py` covers skipped imports, reading-size updates
+and successive slate color notifications.

@@ -121,6 +121,50 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn(navigation.options['Help'],
                       navigation.detail.children if navigation.wide else self.app.body.children)
 
+    def test_close_and_page_history_are_separate_controls(self):
+        from mobile.documentation_ui import show_documentation
+        root = Path(self.temporary.name).resolve() / 'docs'
+        root.mkdir()
+        first, second, third = (root / name for name in ('docs.md', 'next.md', 'last.md'))
+        first.write_text('# Home\n\n[Next](next.md)')
+        second.write_text('# Next\n\n[Last](last.md)')
+        third.write_text('# Last')
+        for width in (390, 900):
+            with self.subTest(width=width):
+                self.app.show_settings()
+                origin = self.app.body
+                owner = show_documentation(self.app, root, first)
+                owner.reflow(width)
+                panel = self.app.body
+                self.assertFalse(owner.back_button.enabled)
+                self.assertFalse(owner.forward_button.enabled)
+                self.assertTrue(owner.close_button.enabled)
+                self.assertIs(owner.view._reader_close_button, owner.close_button)
+                self.assertEqual(owner.close_button.control_icon, 'close')
+                self.assertEqual(owner.view._native_reader_buttons()[:2],
+                                 [owner.back_button, owner.forward_button])
+                owner.follow_link(owner.web, 'next.md')
+                owner.follow_link(owner.web, 'last.md')
+                self.assertTrue(owner.back_button.enabled)
+                self.assertFalse(owner.forward_button.enabled)
+                owner.show_browse()
+                for expected in (second, first):
+                    owner.back_button.on_press()
+                    self.assertEqual(owner.path, expected)
+                    self.assertIs(self.app.body, panel)
+                self.assertFalse(owner.back_button.enabled)
+                self.assertTrue(owner.forward_button.enabled)
+                owner.forward_button.on_press()
+                self.assertEqual(owner.path, second)
+                owner.open_page(third)
+                with patch.object(self.app.routes, 'guard', return_value=False):
+                    owner.close_button.on_press()
+                self.assertIs(self.app.body, panel)
+                owner.show_browse()
+                owner.close_button.on_press()
+                self.assertIs(self.app.body, origin)
+                self.assertEqual(owner.path, third)
+
     def test_documentation_speaker_opens_current_page_and_stops_on_navigation(self):
         import json
         from unittest.mock import AsyncMock

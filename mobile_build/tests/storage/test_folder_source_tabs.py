@@ -22,15 +22,20 @@ class FolderSourceTabTests(unittest.TestCase):
         self.directory.cleanup()
 
     def test_tabs_isolate_sources_and_reset_rclone_credential(self):
+        from types import SimpleNamespace
         app = self.app
-        app.cloud_remote.items = ['Personal drive', 'Work drive', 'Home Mac']
+        app.cloud_client = SimpleNamespace(generation=0, cancel=lambda: None, package_records=[
+            dict(package_name='Personal.zip', remotes=['Personal drive']),
+            dict(package_name='Work.zip', remotes=['Work drive']),
+            dict(package_name='Session network shares', remotes=['Home Mac'])])
+        app.set_loaded_remote_names(['Personal drive', 'Work drive', 'Home Mac'])
         app.remember_credential_association('Personal.zip', ['Personal drive'], session_only=True)
         app.remember_credential_association('Work.zip', ['Work drive'], session_only=True)
         app.remember_credential_association('Session network shares', ['Home Mac'], session_only=True)
         (app.private_root / 'LocalFiles' / 'Notes').mkdir(parents=True)
         app.show_locations()
         self.assertEqual(app.folder_source, 'Local')
-        self.assertEqual(set(app.folder_buttons), {'All files', 'Notes'})
+        self.assertEqual(set(app.folder_buttons), {'All files', 'Notes', 'Received Files'})
         app.change_folder_source('rclone')
         self.assertEqual(set(app.folder_buttons), {'Personal drive', 'Work drive'})
         self.assertEqual(set(app.folder_credentials), {'All', 'Personal', 'Work'})
@@ -39,7 +44,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app.folder_source_buttons['rclone'].on_press()
         self.assertEqual(app.folder_credential.value, 'Personal')
         app.folder_source_buttons['Local'].on_press()
-        self.assertEqual(set(app.folder_buttons), {'All files', 'Notes'})
+        self.assertEqual(set(app.folder_buttons), {'All files', 'Notes', 'Received Files'})
         self.assertFalse(app.folder_picker_header.children)
         app.folder_source_buttons['Network shares'].on_press()
         self.assertEqual(set(app.folder_buttons), {'Home Mac'})
@@ -173,6 +178,34 @@ class FolderSourceTabTests(unittest.TestCase):
             self.assertGreaterEqual(control.style.height, 48)
             self.assertEqual(control.style.font_size * 96 / 72, 16)
 
+    def test_all_files_local_back_returns_to_shared_root_before_workspaces(self):
+        app = self.app
+        documents = Path(self.directory.name) / 'Documents'
+        (documents / 'Local').mkdir(parents=True)
+        (documents / 'note.md').write_text('# Shared root')
+        use_shared_local(app.private_root, documents)
+        for system_back in (False, True):
+            with self.subTest(system_back=system_back):
+                app.show_locations()
+                overview = app.body
+                app.loop.run_until_complete(app.folder_buttons['All files'].on_press())
+                browser = app.body
+                local = next(row for row in app.file_rows.values() if row['name'] == 'Local')
+                app.loop.run_until_complete(app.browser_file_folder(local))
+                if system_back:
+                    self.assertTrue(app.routes.system_back())
+                    app.loop.run_until_complete(app.routes.back_task)
+                else:
+                    app.loop.run_until_complete(app.parent_file_folder())
+                self.assertIs(app.body, browser)
+                self.assertEqual(app.file_provider.root, documents)
+                self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Local', 'Received Files', 'note.md'})
+                if system_back:
+                    self.assertTrue(app.routes.system_back())
+                else:
+                    app.loop.run_until_complete(app.parent_file_folder())
+                self.assertIs(app.body, overview)
+
     def test_ios_local_tab_opens_files_beside_local_and_other_subfolders(self):
         app = self.app
         documents = Path(self.directory.name) / 'Documents'
@@ -183,7 +216,7 @@ class FolderSourceTabTests(unittest.TestCase):
         use_shared_local(app.private_root, documents)
         app.show_locations()
         app.change_folder_source('Local')
-        self.assertEqual(set(app.folder_buttons), {'All files', 'Managed', 'Notes'})
+        self.assertEqual(set(app.folder_buttons), {'All files', 'Managed', 'Notes', 'Received Files'})
         self.assertEqual(list(app.folder_buttons)[-1], 'All files')
         self.assertEqual(app.folder_buttons['All files'].text, 'Browse All Files')
         app.loop.run_until_complete(app.folder_buttons['All files'].on_press())
@@ -195,7 +228,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertIs(app.file_browser.location_bar.children[-1], app.file_actions_button)
         self.assertEqual(app.file_actions_button.control_icon, 'overflow')
         self.assertIsNone(app.file_storage.parent)
-        self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Local', 'Notes', 'note.md'})
+        self.assertEqual({row['name'] for row in app.file_rows.values()}, {'Local', 'Notes', 'Received Files', 'note.md'})
         collection = next(row for row in app.file_rows.values() if row['name'] == 'Local')
         self.assertNotIn('display_name', collection)
         self.assertIn('Local', [row.title for row in app.file_browser.native_list.data])
@@ -446,7 +479,7 @@ class FolderSourceTabTests(unittest.TestCase):
         class Client(MirrorClient):
             def cancel(self): pass
         app.cloud_client = Client()
-        app.cloud_remote.items = ['Remote', 'Secret']
+        app.set_loaded_remote_names(['Remote', 'Secret'])
         store = app.mirror_store()
         jobs = [store.create(app.cloud_client, remote, 'folder', storage=storage)[0]
                 for remote, storage in [('Remote', 'Local'), ('Secret', 'LocalCrypt')]]

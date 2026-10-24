@@ -71,6 +71,9 @@ class DownloadWorkflow:
             if imported is not None:
                 remember_folder(imported['provider'], imported['resource'])
                 if imported['provider'] == 'library':
+                    if not any(session.identity == ('library', imported['resource'])
+                               for session in cloud.app.workspace.sessions.values()):
+                        cloud.reader_manager().catalog.library_store.remember_source(imported['resource'], selected)
                     return await cloud.open_book(imported['resource'], destination=destination)
                 elif cloud.open_document(imported['resource']):
                     cloud.show_documents(resume=True, destination=destination)

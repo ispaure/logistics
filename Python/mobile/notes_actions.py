@@ -58,8 +58,11 @@ def resolve_source(app, entry):
     if kind in ('job', 'job-remote') and job is None:
         raise ValueError('This location mapping is no longer available.')
     if kind == 'shared-local':
-        from .local_sources import shared_files
-        return shared_files(app.private_root), value
+        from .local_sources import device_files
+        return device_files(app.private_root), value
+    if kind == 'inbox':
+        from .incoming_files import inbox_path
+        return LocalFiles(inbox_path(app.private_root)), value
     if kind == 'local':
         return LocalFiles(collection_path(app.private_root)), value
     if kind == 'job' and not job['crypt']:

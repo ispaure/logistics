@@ -17,6 +17,21 @@ from test_native_credential_service import Client, Package
 
 
 class RetentionTests(unittest.TestCase):
+    def test_package_metadata_failure_does_not_skip_its_known_document_list_erasure(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache = root / ('a' * 64)
+            cache.mkdir()
+            (cache / ('b' * 64 + '.zip')).write_bytes(b'encrypted list fixture')
+            client = Client()
+            client.package_records = (dict(package_name='Fixture.zip', document_cache_id='a' * 64),)
+            client.forget_package = Mock()
+            packages = Mock(side_effect=OSError('Package index unavailable'))
+            with self.assertRaisesRegex(OSError, 'Package index unavailable'):
+                native_service(client).credentials.forget(NativeCredentialForget(packages, root, 'Fixture.zip'))
+            client.forget_package.assert_called_once_with('Fixture.zip')
+            self.assertFalse(cache.exists())
+
     def test_retain_resolves_alias_identity_and_rejects_stale_or_foreign_store(self):
         client = Client()
         client.connection_identity = Mock(return_value='a' * 64)

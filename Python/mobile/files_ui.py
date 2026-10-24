@@ -377,8 +377,9 @@ class FilesUI:
         if not self.app.routes.folders.restoring:
             self.app.routes.folders.capture()
         label, path = location
-        if label == 'Shared files' and (path == 'Local' or path.startswith('Local/')):
-            location = ('Local files', path.removeprefix('Local').lstrip('/'))
+        local_name = collection_path(self.private_root).name
+        if label == 'Shared files' and (path == local_name or path.startswith(local_name + '/')):
+            location = ('Local files', path.removeprefix(local_name).lstrip('/'))
         if self.cloud_busy and not self.can_browse_local(location[0]):
             return False
         self.file_changing_location = True
@@ -409,14 +410,10 @@ class FilesUI:
         return 'Shared files' if 'Shared files' in self.ordinary_file_roots() else 'Local files'
 
     def ordinary_file_roots(self):
-        from .local_sources import shared_files
-        roots = {'Local files': None}
-        shared = shared_files(self.private_root)
-        if shared is not None:
-            roots['Shared files'] = shared
-        else:
-            from .incoming_files import inbox_path
-            roots['Inbox'] = LocalFiles(inbox_path(self.private_root))
+        from .local_sources import device_files
+        from .incoming_files import inbox_path
+        roots = {'Local files': None, 'Shared files': device_files(self.private_root),
+                 'Received Files': LocalFiles(inbox_path(self.private_root))}
         return roots
 
     def file_provider_for(self, label):

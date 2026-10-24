@@ -263,3 +263,15 @@ and signal ownership; menu assembly does not create a second session owner.
 feature retains `[DONE]`, JSON validation, choices, tool fragments, response limits,
 finish reasons and usage. It preserves partial text on later record failures and
 keeps desktop/mobile response-policy differences in their transports.
+
+
+## Desktop appearance refreshes
+
+`ui/conversation_view.MessageBrowser.refresh_font` compares the effective reading
+font, embedded-code family/size and application palette cache key before forcing
+another Markdown import. Theme and shared-styling notifications for the same
+appearance therefore render each message once. Unrelated font roles do not import
+message documents. Actual content/stream updates still use `set_source`, retaining
+cursor selection through imports. Local font/chrome stylesheets are set only when
+their text changes. `test_lm_appearance.py` covers duplicate signals, reading/code
+changes, selection retention and subsequent content updates.

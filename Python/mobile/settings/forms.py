@@ -117,6 +117,18 @@ def connection_note(text):
                    radius=0, background='transparent', foreground='muted', outlined=False, eink_outlined=False)
 
 
+def credential_package_row(name, status, on_press):
+    from ..control_icons import button_icons
+    from ..appearance import list_button, surface
+    button = toga.Button(name, on_press=on_press, style=Pack(height=68))
+    # Toga's public Button setter drops newlines; retain both lines for fitting.
+    button._impl.set_text(name + '\n' + status)
+    surface(list_button(button), radius=0, background='transparent', foreground='text', outlined=False)
+    button_icons(button, [('archive', '')])
+    disclosure(button)
+    return button
+
+
 def connection_heading(text):
     from ..appearance import surface
     return surface(SettingsLabel(text, style=Pack(font_size=12, font_weight='bold', margin_top=16, margin_bottom=8)),
@@ -169,8 +181,9 @@ class ConnectionSettingsPage(toga.ScrollContainer):
     def __init__(self, app, title, subtitle, children):
         from ..appearance import surface
         self.owner = app
-        content = toga.Box(children=[SettingsLabel(title, style=Pack(font_size=27, font_weight='bold', margin_bottom=8)),
-                                     connection_note(subtitle), *children],
+        content = toga.Box(children=[
+            *([SettingsLabel(title, style=Pack(font_size=27, font_weight='bold', margin_bottom=8))] if title else []),
+            *([connection_note(subtitle)] if subtitle else []), *children],
                            style=Pack(direction=COLUMN, margin=20))
         surface(content, radius=0, background='settings_background', outlined=False, eink_outlined=False)
         super().__init__(horizontal=False, content=content, style=Pack(flex=1))
@@ -195,3 +208,44 @@ def switch_row(app, title, switch, explanation):
     row._settings_note = connection_note(explanation)
     row._settings_note.style.font_size = 13
     return row
+
+
+class CredentialStorageContent(toga.Box):
+    """Whole-card credential choices with a separate, always visible Cancel."""
+    def __init__(self, package, saved, finish):
+        from features.rclone.credential_storage import (
+            SESSION_TITLE, SESSION_DESCRIPTION, PERSISTENT_TITLE,
+            PERSISTENT_DESCRIPTION, SAVED_COPY_NOTE, SHARED_NOTE,
+        )
+        from ..appearance import surface, list_button, accessible_name
+        self.cards = []
+        for title, description, value in (
+                (SESSION_TITLE, SESSION_DESCRIPTION, False),
+                (PERSISTENT_TITLE, PERSISTENT_DESCRIPTION +
+                 ' Saved credentials use device-protected encrypted storage.', True)):
+            button = toga.Button(title, on_press=lambda widget, choice=value, **kw: finish(choice),
+                                 style=Pack(margin_bottom=12, font_size=15))
+            # Keep the source for the shared multiline fitting logic.
+            button._impl.set_text(title + '\n' + description)
+            accessible_name(button, title + '. ' + description)
+            surface(list_button(button), radius=12, foreground='text', outlined=True)
+            self.cards.append(button)
+        self.body = toga.Box(children=[
+            SettingsLabel('Unlock credential ZIP', style=Pack(font_size=24, font_weight='bold', margin_bottom=12)),
+            connection_note(f'How should Logistics keep credentials from {package}? Tap a card to choose.'),
+            *self.cards,
+            *([connection_note(SAVED_COPY_NOTE)] if saved else []), connection_note(SHARED_NOTE)],
+            style=Pack(direction=COLUMN))
+        scroll = toga.ScrollContainer(content=self.body, horizontal=False, style=Pack(flex=1))
+        self.cancel = surface(toga.Button('Cancel', on_press=lambda widget, **kw: finish(None),
+                                         style=Pack(height=48, margin_top=12)),
+                              radius=8, foreground='text', outlined=True)
+        super().__init__(children=[scroll, self.cancel], style=Pack(direction=COLUMN, flex=1, margin=20))
+        for widget in (self, self.body, scroll):
+            surface(widget, radius=0, background='settings_background', outlined=False, eink_outlined=False)
+        self._fitted_width = None
+
+    def reflow(self, width):
+        if width > 0 and width != self._fitted_width:
+            self._fitted_width = width
+            fit_section(self.body, max(24, width - 40))

@@ -4,7 +4,7 @@ import math
 from datetime import datetime
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.styling import styling
-from commonUtils.ui.markdown.presentation import MarkdownBrowser, style_document
+from commonUtils.ui.markdown.presentation import MarkdownBrowser, style_document, monospace_family, code_point_size
 from .image_view import ScreenshotView
 from .icons import action_button
 
@@ -13,6 +13,7 @@ class MessageBrowser(MarkdownBrowser):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.source = None
+        self._appearance = None
         self.setOpenLinks(False)
         self.setOpenExternalLinks(False)
         self.setVerticalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -30,9 +31,16 @@ class MessageBrowser(MarkdownBrowser):
 
     def refresh_font(self):
         font = styling().font('reading')
+        appearance = (font.key(), monospace_family(), code_point_size(), qt.QApplication.palette().cacheKey())
+        if appearance == self._appearance:
+            return
+        self._appearance = appearance
         family = font.family().replace('\\', '\\\\').replace('"', '\\"')
-        self.setStyleSheet(f'QTextBrowser {{ background: transparent; border: none; font-family: "{family}"; font-size: {font.pointSizeF()}pt; }}')
-        self.document().setDefaultFont(font)
+        stylesheet = f'QTextBrowser {{ background: transparent; border: none; font-family: "{family}"; font-size: {font.pointSizeF()}pt; }}'
+        if self.styleSheet() != stylesheet:
+            self.setStyleSheet(stylesheet)
+        if self.document().defaultFont() != font:
+            self.document().setDefaultFont(font)
         if self.source is not None:
             self.set_source(self.source, force=True)
 
@@ -120,9 +128,12 @@ class Bubble(qt.QFrame):
         # Local stylesheets can retain the previous Base palette; always obtain
         # theme colors from the application, rather than sampling the bubble.
         muted = qt.QApplication.palette().color(qt.QPalette.ColorRole.PlaceholderText).name()
-        self.timestamp.setStyleSheet(f'color: {muted}; font-size: {point_size(6.75)}pt;')
-        if self.role == 'user':
-            self.setStyleSheet('QFrame#userBubble { background: palette(alternate-base); border-radius: 12px; }')
+        stylesheet = f'color: {muted}; font-size: {point_size(6.75)}pt;'
+        if self.timestamp.styleSheet() != stylesheet:
+            self.timestamp.setStyleSheet(stylesheet)
+        stylesheet = 'QFrame#userBubble { background: palette(alternate-base); border-radius: 12px; }'
+        if self.role == 'user' and self.styleSheet() != stylesheet:
+            self.setStyleSheet(stylesheet)
 
     def update_entry(self, entry):
         name = 'You' if self.role == 'user' else 'Assistant'

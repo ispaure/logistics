@@ -45,7 +45,7 @@ class FileUITests(unittest.TestCase):
                 (app.private_root / 'LocalFiles').mkdir(exist_ok=True)
                 (app.private_root / 'LocalFiles/note.txt').write_text('local fixture')
                 with patch.object(CollectionFiles, 'list', restoring):
-                    self.assertTrue(app.loop.run_until_complete(app.show_files()))
+                    self.assertTrue(app.loop.run_until_complete(app.show_files(location=('Local files', ''))))
                 self.assertIn('Local files', [row.value for row in app.file_storage.items])
                 self.assertEqual(app.file_storage.value, 'Local files')
                 self.assertFalse(app.file_browser.closed)
@@ -262,7 +262,7 @@ class FileUITests(unittest.TestCase):
             async def check():
                 app.cloud_client = Client()
                 app.show_cloud()
-                await app.show_files()
+                await app.show_files(location=('Local files', ''))
                 root = app.private_root / 'LocalFiles'
                 (root / 'books').mkdir()
                 (root / 'books/page2.md').write_text('two')

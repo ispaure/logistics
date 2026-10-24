@@ -127,9 +127,7 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
     sources = []
     represented_copies = set()
     configs = credentials.get_loaded_credential_config_paths()
-    from . import desktop_catalog, session
-    configs += [path for path in desktop_catalog.contexts() if path not in configs
-                and path.with_suffix('.conf') not in configs]
+    from . import session
     copies = connections()
     from features.rclone.localcrypt.connections import connections as local_connections
     links = local_connections()

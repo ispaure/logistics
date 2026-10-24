@@ -74,7 +74,7 @@ class CredentialImportUITests(unittest.TestCase):
                     app.loop.run_until_complete(app.import_cloud_package())
                     self.assertEqual(app.cloud_password.value, '')
                     self.assertTrue(app.cloud_import.enabled)
-                    self.assertIn('tap Load remotes again', app.cloud_import_message.text.replace('\n', ' '))
+                    self.assertIn('tap Unlock again', app.cloud_import_message.text.replace('\n', ' '))
                     app.cloud_password.value = 'correct'
                     app.loop.run_until_complete(app.import_cloud_package())
                     self.assertEqual(picker.await_count, 1)

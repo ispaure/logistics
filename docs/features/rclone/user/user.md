@@ -13,7 +13,7 @@ remote config. FUSE is optional and only needed for mounting.
    Scanning runs in the background. If it fails or is cancelled, the previous
    package list remains available; retry **Refresh list** when the folder is accessible.
 2. Enter the selected ZIP's password and choose **Unlock…**. The popup compares
-   **Session only** and **Persistent — save on this device** side by side.
+   **Session-Only** and **Persistent credential storage** side by side.
 3. Return to **Workspaces → Cloud** (or **Home Server** for network shares),
    choose the credential and select a remote. Unlocking does not navigate away
    from Settings or contact a server.
@@ -21,7 +21,7 @@ remote config. FUSE is optional and only needed for mounting.
    before starting. A local folder with exactly the same name is associated with
    the remote entry.
 
-**Persistent — save on this device** writes a same-named rclone config, such as
+**Persistent credential storage** writes a same-named rclone config, such as
 `~/.config/rclone/Personal.conf`, so its remotes remain available after restart.
 The saved config is not protected by the credential ZIP password. **Forget Credentials**
 removes saved access while keeping the ZIP.
@@ -34,7 +34,7 @@ Logistics does not create account credentials for you. Import accepts ZIPs up to
 1 MiB and never overwrites a different same-named package; rename the incoming ZIP
 if its name is already used. Import does not extract or unlock the ZIP.
 
-Choose **Session only** in the Unlock popup to use a package only for this
+Choose **Session-Only** in the Unlock popup to use a package only for this
 Logistics session. Pressing Enter in the password field opens the same choice.
 Cancelling the popup does not unlock or save credentials. The ZIP is decrypted
 directly in memory, with no extracted
@@ -43,15 +43,17 @@ for network-share packages), including remotes with no local copy. Session-only
 does not mean local-only. Workspaces shows the package with a **(session)** label. Push,
 Pull and previews pass its settings to each rclone child in a private environment,
 with a memory-only config and no secret command arguments. Existing saved configs
-remain unchanged: choosing Session only does not delete an existing saved config.
+remain unchanged: choosing Session-Only does not delete an existing saved config.
 Unlocked credentials disappear when Logistics exits or you lock them. Remote
 names and the ZIP location are remembered in a small account catalogue; passwords,
-tokens and remote settings are not saved. On later launches these remotes appear
-as **(locked)** in Cloud or Home Server. Select one and enter the ZIP password in
-the Files pane to connect. No network connection starts while listing locked
-accounts. Legacy folders stay hidden while **Show Legacy** is off, including
-remembered accounts. **Forget Credentials** removes the remembered names too;
-locking keeps them available for a later unlock.
+tokens and remote settings are not saved. Cloud and Home Server list only remotes
+from loaded credentials. To use a locked
+package again, open it in Settings and unlock it. Local or LocalCrypt folders and
+remembered remote names do not create Cloud placeholders. **Forget Credentials**
+removes remembered names as well; local contents are kept.
+
+The selected package reports **Locked**, **Session-Only** or **Persistent save**.
+Its remote section is titled **Loaded remotes**.
 
 **Package details** expands the ZIP/config locations. **Manage credentials…**
 expands the cleanup controls; both stay out of the main unlock flow.
@@ -484,7 +486,7 @@ Workspaces keeps **Pull** and **Push...** available for LocalCrypt entries. Sele
 
 ### Session privacy
 
-Desktop **Session only** keeps decoded credentials in the running application.
+Desktop **Session-Only** keeps decoded credentials in the running application.
 It does not expire when you navigate away or put the computer to sleep. Forgetting
 or replacing the credential session revokes open private providers, clears their
 caches and hides their document/browser/metadata windows. Reopen after unlocking;

@@ -25,14 +25,24 @@ class DocumentationReader(MarkdownWikiView):
         self.speech.button.enabled = self.path is not None
         from .control_icons import apply_icon
         apply_icon(self.page_search.button, 'find', 'Find in this page')
+        apply_icon(self.back_button, 'back', 'Previous page')
+        apply_icon(self.forward_button, 'forward', 'Next page')
+        for button in (self.back_button, self.forward_button):
+            button._toolbar_group = 'page-history'
+            button._toolbar_priority = True
         self.navigation.add(self.speech.button)
         from .workspace_navigation import menu_button
         from .control_icons import icon_button
         self.reader_menu = menu_button(self.toggle_browse, label='Browse documentation')
         self.reader_actions_button = icon_button('more', 'Documentation actions')
+        self.close_button = icon_button('close', 'Close documentation',
+            on_press=lambda widget=None, **kw: app.routes.back())
+        self.navigation.insert(0, self.close_button)
+        self.view._reader_close_button = self.close_button
         self.view._workspace_menu_button = self.reader_menu
         self.view._native_reader_toolbar = self.navigation
-        self.view._native_reader_buttons = lambda: [self.speech.button, self.reader_actions_button]
+        self.view._native_reader_buttons = lambda: [self.back_button, self.forward_button,
+            self.speech.button, self.reader_actions_button]
         self.view._native_reader_title = lambda: self.title.text
         self.view._native_reader_hidden = [self.title]
         self.refresh_reader_actions()
@@ -61,10 +71,6 @@ class DocumentationReader(MarkdownWikiView):
             self.reader_actions.dispose()
         from .action_menu import FeatureCommands
         actions = []
-        if self.back_button.enabled:
-            actions.append(('Previous page', self.back))
-        if self.forward_button.enabled:
-            actions.append(('Next page', self.forward))
         if self.up_button.enabled:
             actions.append(('Parent folder page', self.up))
         actions.append(('Find in this page…', self.show_page_search))
@@ -73,8 +79,17 @@ class DocumentationReader(MarkdownWikiView):
 
     def update_navigation(self):
         super().update_navigation()
+        # A native controller pop would skip the wiki's page history. Keep
+        # UIKit's pop gesture disabled while the Back button retraces pages.
+        self.view.page_swipes_at_edges = self.history_index > 0
         if hasattr(self, 'reader_actions_button'):
             self.refresh_reader_actions()
+
+    def navigate_history(self, offset):
+        opened = super().navigate_history(offset)
+        if hasattr(self, 'reader_actions_button'):
+            self.host_app.adaptive.render()
+        return opened
 
     def filter(self, widget=None, **kwargs):
         super().filter(widget, **kwargs)

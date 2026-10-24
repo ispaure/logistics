@@ -19,6 +19,11 @@ The rotation/pairing/credential contracts in `test_workspace_navigation.py` and
 the real delayed-worker contracts in `test_folder_listing.py` cover this boundary.
 Native pose and chrome acceptance remain separate from dummy-backend results.
 
+On iOS, the Home root hides its native navigation bar because the page supplies
+the **Your workspace** heading. Home child routes restore the bar for Back;
+returning to the root hides it again. The native safe area still reserves the
+status bar.
+
 ## Persistent local filename search
 
 `mobile.local_search.LocalSearch` adapts the desktop SQLite directory cache for
@@ -116,7 +121,11 @@ reserved regions. Geometry and retained-owner contracts are covered by
 successfully listed Workspaces folder. A local workspace shortcut starts its
 stack at the selected folder: Back from that folder returns to the retained
 Workspaces overview, and subfolders return to their parent within that workspace.
-Browse All Files starts at the storage root. Other direct reveals retain their
+Browse All Files starts at the storage root. On iOS, entering **Local** from
+the shared Documents root switches providers while retaining that shared root
+as its native Back destination. Back from Local returns to Browse All Files;
+the next Back returns to Workspaces. Folder identity includes both provider and
+path, since both provider roots have an empty path. Other direct reveals retain their
 folder ancestry.
 Local, LocalCrypt, remote and full-page workspace browsers publish successful
 locations with `record`; failed listings do not advance the stack. UIKit Back,

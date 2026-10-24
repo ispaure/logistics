@@ -61,7 +61,7 @@ class IOSStorageTests(unittest.TestCase):
         self.assertEqual((self.private / 'Credentials/credentials.bin').read_bytes(), b'wrapped credentials')
         self.assertEqual((self.private / 'LocalCrypt/ciphertext').read_bytes(), b'encrypted offline copy')
         self.assertEqual(DocumentStore(self.private / 'Documents').open(document.id).text, '# saved')
-        self.assertEqual({p.name for p in self.documents.iterdir()}, {'Local'})
+        self.assertEqual({p.name for p in self.documents.iterdir()}, {'Local', 'Received Files'})
         self.assertFalse((self.private / 'LocalFiles').exists())
         self.exclude.assert_called_once_with(self.documents)
         # Imported files are local, while pull still resolves the original mapping.
@@ -97,6 +97,23 @@ class IOSStorageTests(unittest.TestCase):
             self.prepare()
             self.prepare()
         self.assertEqual(incoming.read_bytes(), b'# incoming document')
+
+    def test_upgrade_keeps_existing_received_files_visible_and_legacy_imports_preserved(self):
+        (self.documents / 'LocalFiles').mkdir()
+        received = self.documents / 'Received Files'
+        received.mkdir()
+        (received / 'keep.txt').write_bytes(b'visible user file')
+        inbox = self.documents / 'Inbox'
+        inbox.mkdir()
+        (inbox / 'old.txt').write_bytes(b'legacy import')
+        self.prepare()
+        self.assertEqual((received / 'keep.txt').read_bytes(), b'visible user file')
+        self.assertEqual((received / 'Previous Inbox/old.txt').read_bytes(), b'legacy import')
+        self.assertEqual((inbox / 'old.txt').read_bytes(), b'legacy import')
+        received.rename(self.documents / 'Saved Received Files')
+        self.prepare()
+        self.assertTrue(received.is_dir())
+        self.assertEqual(list(received.iterdir()), [])
 
     def test_completed_layout_leaves_shared_root_files_in_place(self):
         self.prepare()
