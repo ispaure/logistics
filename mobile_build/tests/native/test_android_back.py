@@ -74,6 +74,26 @@ class AndroidBackTests(unittest.TestCase):
                 self.assertIs(app.body, origin)
                 self.assertEqual(app.native_host.state.destination, destination)
 
+    def test_folder_toolbar_root_returns_to_explicit_workspace_origin(self):
+        app = self.app
+        (app.private_root / 'LocalFiles' / 'navigation').mkdir(parents=True)
+        self.assertTrue(app.loop.run_until_complete(app.show_files()))
+        app.show_view(toga.Label('Earlier reader'), destination='files', route='earlier-reader')
+        app.show_locations()
+        self.assertTrue(app.loop.run_until_complete(app.show_files(location=('Local files', ''))))
+        browser = app.file_browser
+        browser.history.clear()
+        folder = next(entry for entry in browser.entries if entry.label == 'navigation')
+        app.loop.run_until_complete(browser.activate_entry(folder))
+        self.assertEqual(app.file_path, 'navigation')
+        browser.location_bar.parent_button.on_press()
+        self.settle()
+        self.assertEqual(app.file_path, '')
+        browser.location_bar.parent_button.on_press()
+        self.settle()
+        self.assertFalse(self.routes.screens['files'])
+        self.assertEqual(app.native_host.state.destination, 'files')
+
     def test_folder_toolbar_back_retraces_search_and_previous_location(self):
         app = self.app
         root = app.private_root / 'LocalFiles'

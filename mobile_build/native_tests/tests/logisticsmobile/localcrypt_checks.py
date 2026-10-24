@@ -549,6 +549,11 @@ async def exercise_localcrypt(app, passed):
     assert browser.search_panel.parent is None
     # Start a fresh navigation case and exercise the visible header control.
     # The generic history button is detached from this browser's presentation.
+    # Earlier reader cases leave routes underneath the browser; enter from
+    # Workspaces explicitly before asserting that root Back returns there.
+    app.show_locations()
+    assert await app.show_files(location=(crypt_label, '')), app.file_status.value
+    browser = app.file_browser
     browser.history.clear()
     async def folder_back():
         import inspect
