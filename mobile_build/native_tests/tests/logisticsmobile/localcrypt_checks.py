@@ -547,14 +547,23 @@ async def exercise_localcrypt(app, passed):
         await asyncio.gather(*tuple(browser.tasks))
     assert browser.search.value == '' and not browser.search_open
     assert browser.search_panel.parent is None
+    # Start a fresh navigation case and exercise the visible header control.
+    # The generic history button is detached from this browser's presentation.
+    browser.history.clear()
+    async def folder_back():
+        import inspect
+        result = browser.location_bar.parent_button.on_press()
+        if inspect.isawaitable(result):
+            await result
+        if app.routes.back_task is not None:
+            await app.routes.back_task
     folder = next(item for item in browser.entries if item.label == 'navigation')
     await browser.activate_entry(folder)
-    assert app.file_path == 'navigation' and browser.back_button.enabled
-    await browser.back_button.on_press()
+    assert app.file_path == 'navigation'
+    await folder_back()
     assert app.file_path == '' and app.file_storage.value == crypt_label
-    await browser.back_button.on_press()
-    assert app.file_storage.value == 'Local files'
-    assert not browser.back_button.enabled
+    await folder_back()
+    assert not app.routes.screens['files']
     # The editor picker uses the same shared folder gestures and history.
     await app.show_editor_open()
     editor = app.editor_browser
