@@ -27,7 +27,6 @@
     "composition/presentation.py",
     "control_icons.py",
     "document_choices.py",
-    "document_dialogs.py",
     "document_sources.py",
     "documentation_ui.py",
     "documents.py",

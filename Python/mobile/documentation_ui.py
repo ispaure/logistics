@@ -1,7 +1,7 @@
 """Settings entry for the shared native Markdown wiki and bundled Logistics guides."""
 from pathlib import Path
 from commonUtils.ui.native.markdown import MarkdownWikiView
-from commonUtils.ui.native.markdown_images import local_image_source
+from commonUtils.formats.markdown.image_sources import local_image_source
 from .preview import markdown_preview
 from .markdown_speech import MarkdownSpeech
 from .browser_ui import entry_icon, middle_filename

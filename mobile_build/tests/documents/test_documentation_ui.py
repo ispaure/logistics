@@ -338,7 +338,7 @@ class DocumentationTests(unittest.TestCase):
 class DocumentationImageTests(unittest.TestCase):
     def test_native_wiki_renders_sized_gif_and_keeps_custom_renderer_compatible(self):
         from commonUtils.tests.formats.test_gif_headers import GIF
-        from commonUtils.ui.native.markdown_images import local_image_source
+        from commonUtils.formats.markdown.image_sources import local_image_source
         with TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'docs.md').write_text('# GIF\n\n![[colors #1.GIF|70]]\n')

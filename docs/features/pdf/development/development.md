@@ -1,6 +1,10 @@
 # PDF Reader implementation
 
 `features.pdf` owns PDF registration, desktop launching and native page rendering.
+Its mobile canvas reuses Comics’ viewport invalidation loop and Images’ bounded
+page-dimension validation. These presentation dependencies are declared in
+`Scripts/architecture.json`.
+
 It declares a PDF file type and a document launcher, with lazy desktop imports.
 `mobile_sources.json` is included in the mobile source owners in `mobile_build/tools.py`.
 

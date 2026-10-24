@@ -11,7 +11,7 @@ def attach_return(app, library, owner):
     destination = library.destination
 
     async def return_to_library():
-        from mobile.document_dialogs import DocumentDialog
+        from .document_dialogs import DocumentDialog
         if not library.valid() or owner.session.id not in app.workspace.sessions:
             return
         try:

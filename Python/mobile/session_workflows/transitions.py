@@ -184,7 +184,7 @@ class SessionTransitions:
     def document_close_dialog(self, key, title, save, discard):
         host = self.host
         import inspect
-        from ..document_dialogs import DocumentDialog
+        from features.text_editor.mobile.document_dialogs import DocumentDialog
         pending = host.__dict__.setdefault('_document_close_tasks', {})
         if key in pending:
             return True

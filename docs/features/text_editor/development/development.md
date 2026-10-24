@@ -297,7 +297,7 @@ Desktop widgets and controllers live in feature-owned `ui/`. Registration stays 
 ## Mobile Markdown image resolution
 
 Folder-backed reader stores expose their rooted `provider` and the reader's
-relative `key`. The mobile host uses `commonUtils.ui.native.markdown_images.folder_image_source`
+relative `key`. The mobile host uses `commonUtils.formats.markdown.image_sources.folder_image_source`
 to build a per-render image source from this pair
 for both preview and formatted editing. Path normalization permits parent paths
 within the provider root, rejects external/absolute paths and delegates all I/O

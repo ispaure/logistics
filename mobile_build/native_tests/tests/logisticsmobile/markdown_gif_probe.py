@@ -63,7 +63,7 @@ class MarkdownGifProbe(toga.App):
 
     async def probe(self):
         from commonUtils.runtime.resources.local import LocalFiles
-        from commonUtils.ui.native.markdown_images import folder_image_source
+        from commonUtils.formats.markdown.image_sources import folder_image_source
         from mobile.preview import markdown_preview
         from features.text_editor.mobile.markdown_editor import FormattedMarkdownInput
         result = dict(success=False, backend=type(self.web._impl).__module__, samples=[])

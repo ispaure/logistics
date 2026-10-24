@@ -39,7 +39,7 @@ class PendingCloseTests(unittest.IsolatedAsyncioTestCase):
                     loop=asyncio.get_running_loop(), main_window=SimpleNamespace(dialog=dialog))
                 transitions = SessionTransitions(host)
                 save, discard = Mock(), Mock()
-                with patch('mobile.document_dialogs.DocumentDialog'):
+                with patch('features.text_editor.mobile.document_dialogs.DocumentDialog'):
                     transitions.document_close_dialog(session.id, 'Synthetic', save, discard)
                     task = host._document_close_tasks[session.id]
                     await asyncio.sleep(0)

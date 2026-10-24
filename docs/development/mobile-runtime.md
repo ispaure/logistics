@@ -383,7 +383,7 @@ Main reader/editor surfaces expose `_reader_session_id` and
 `_reader_close_button`. The native bars mount this Close control in place of
 Back; secondary tools, metadata and appearance routes keep Back. Inline tools
 switch that same leading control to Back through `reader_tool_back` and restore
-Close when dismissed. `document_dialogs.py` supplies window-modal UIKit alerts
+Close when dismissed. `features.text_editor.mobile.document_dialogs` supplies window-modal UIKit alerts
 and Android AlertDialogs: Save/discard/cancel for dirty sessions and metadata,
 and destructive Delete/cancel for stored-document deletion. No close-decision
 route is pushed. The iOS destructive role and Android red command text also

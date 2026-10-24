@@ -94,7 +94,7 @@ class NotesLibrary:
 
     def image_source(self, path):
         from urllib.parse import unquote, urlsplit
-        from commonUtils.ui.native.markdown_images import folder_image_source
+        from commonUtils.formats.markdown.image_sources import folder_image_source
         load = folder_image_source(self.provider, self.contained(path))
         def image(target):
             parsed = urlsplit(target)

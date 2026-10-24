@@ -1,7 +1,7 @@
 """Mobile Markdown renderer with Logistics appearance roles."""
 from commonUtils.ui.native.markdown_preview import markdown_body, markdown_preview as _markdown_preview
 from .palette import css_variables
-from commonUtils.ui.native.markdown_images import folder_image_source
+from commonUtils.formats.markdown.image_sources import folder_image_source
 from features.text_editor.mobile.markdown_style import READING_CSS
 
 __all__ = ['markdown_body', 'markdown_preview']

@@ -4,6 +4,7 @@
     "__init__.py",
     "access.py",
     "mobile/__init__.py",
+    "mobile/document_dialogs.py",
     "mobile/library_editing.py",
     "mobile/markdown_editor.py",
     "mobile/markdown_live_script.py",

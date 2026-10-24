@@ -628,7 +628,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                        'Its saved content and recovery copy will be permanently removed from this device.')
             if owner.document.modified:
                 warning += ' Your unsaved changes will be lost.'
-            from .document_dialogs import DocumentDialog
+            from features.text_editor.mobile.document_dialogs import DocumentDialog
             if await self.main_window.dialog(DocumentDialog(
                     'Delete ' + owner.document.name + '?', warning, delete=True)) != 'delete':
                 return False

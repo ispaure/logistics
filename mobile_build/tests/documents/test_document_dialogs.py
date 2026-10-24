@@ -4,7 +4,7 @@ from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from mobile.document_dialogs import DocumentDialog
+from features.text_editor.mobile.document_dialogs import DocumentDialog
 
 
 class DocumentDialogTests(TestCase):
