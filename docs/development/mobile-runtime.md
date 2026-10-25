@@ -339,6 +339,18 @@ Workspaces and Documents; it never opens user files.
 
 ## Open/Save As lifecycle
 
+New-document naming delegates to `EditorPicker.show_document_creation()`. Its
+destination picker offers ordinary browsable roots and unlocked LocalCrypt roots,
+including encrypted roots with no offline files yet. It publishes empty bytes
+through the existing non-overwriting resource operation, verifies the reopened
+file and enters provider editing. It never creates a `DocumentStore` copy.
+Encrypted destinations use `encrypted_copies()`; direct remote destinations are
+rejected. Successful creation retires both creation forms so closing the reader
+returns to the opening screen. Cancelling the picker returns to the name form.
+Host coverage is in `test_document_creation.py`; the isolated native
+`document_creation_probe.py` checks ordinary and encrypted creation/edit/save with
+the compiled bridge through `markdown_rework_tools --creation`.
+
 `EditorPicker.show_destination()` reuses the same provider browser and folder
 creation controls for Move. Its captured `FileOperationRequest` preserves source
 identity while destination selection remains separate from the item name.

@@ -10,6 +10,26 @@ from features.lm.storage import Store
 
 
 class ConversationSessionTests(unittest.TestCase):
+    def test_reasoning_and_elapsed_time_save_separately_without_entering_model_context(self):
+        from features.lm.domain import build_request
+        self.session.data['model'] = 'fixture'
+        self.session.append_user('Question')
+        with patch('features.lm.session.monotonic', side_effect=[100, 273]):
+            self.session.begin_response({})
+            token = self.session.response_token
+            self.assertTrue(self.session.append_reasoning('Provider explanation', token=token))
+            self.session.append_delta('Answer', token=token)
+            self.session.complete_response('complete', '', {}, token=token)
+        self.session.save()
+        saved = self.store.load(self.session.data['id'])['messages'][-1]
+        self.assertEqual(saved['reasoning'], 'Provider explanation')
+        self.assertEqual(saved['elapsed_seconds'], 173)
+        self.assertEqual(saved['content'], 'Answer')
+        self.assertFalse(self.session.append_reasoning('Late', token=token))
+        self.session.append_user('Next question')
+        payload, _ = build_request(self.session.data)
+        self.assertNotIn('Provider explanation', str(payload))
+
     def setUp(self):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

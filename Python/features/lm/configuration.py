@@ -2,6 +2,13 @@
 from .domain import validate_settings
 
 
+def response_notifications_enabled():
+    from pathlib import Path
+    from commonUtils.configuration.settings import get_setting
+    return get_setting('Chat', 'response_notifications_bool', True,
+                       path=Path(__file__).with_name('config.ini'))
+
+
 def validate(values):
     def read(section, key, default, cast):
         return cast(values.get((section, key), default))

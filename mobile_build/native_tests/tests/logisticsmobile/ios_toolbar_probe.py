@@ -109,14 +109,14 @@ class ToolbarProbe(LogisticsMobile):
             self.show_home()
             self.choose_document_type()
             sample = await self.record('new-document')
-            assert sample['pinned'] == ['Create document'], sample
+            assert sample['pinned'] == ['Choose location…'], sample
             self.routes.back()
             assert self.create_chosen_document('md', name='Toolbar.md', content='# Toolbar')
             await self.record('markdown-editor')
             self.editor_view.editor.value = '# Toolbar changed'
             self.adaptive.render()
             sample = await self.record('editor-dirty')
-            assert sample['pinned'] == ['Save document'], sample
+            assert sample['pinned'] == ['Save'], sample
             assert sample['leading'][0] == 'Close document', sample
             await self.press(self.editor_view.save_button)
             assert not self.editor_view.document.modified

@@ -7,11 +7,21 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.status_line import StatusLine
 from commonUtils.ui.tasks.operations import ResultWorker
 from commonUtils.ui.code_editor.search import SearchPanel
+from commonUtils.ui.workspaces.scoped_tabs import ScopedTabBar
 from commonUtils.persistence.text import read_text_file
 from features.ide.ui.documents import EditorDocument
 from features.ide.ui.browser import ProjectBrowser
 from features.ide.ui.navigation import Navigation
 from features.ide.ui.autosave import pause_autosave
+
+
+class _FileTabBar(ScopedTabBar):
+    def tabInserted(self, index):
+        super().tabInserted(index)
+        button = self.tabButton(index, qt.QTabBar.ButtonPosition.RightSide)
+        if button is not None:
+            button.setFixedSize(20, 20)
+            button.setIconSize(qt.QSize(16, 16))
 
 
 class _OpenTarget(NamedTuple):
@@ -146,9 +156,10 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
     def add_group(self):
         if len(self.groups) >= 3:
             return None
-        from commonUtils.ui.workspaces.scoped_tabs import ScopedTabBar
         group = qt.QTabWidget()
-        group.setTabBar(ScopedTabBar(group, self.editors, lambda: self.groups, self.drop_editor, self.can_drop_editor))
+        group.setTabBar(_FileTabBar(group, self.editors, lambda: self.groups, self.drop_editor, self.can_drop_editor))
+        # Keep file tabs compact independently of the outer project headers.
+        group.tabBar().setStyleSheet('QTabBar::tab { padding: 0px 10px; }')
         group.setMinimumWidth(max(160, self.fontMetrics().horizontalAdvance('M') * 16))
         group.setTabsClosable(True)
         group.tabCloseRequested.connect(lambda index: self.close_document(group.widget(index)))

@@ -154,7 +154,10 @@ for the field details.
 Sync progress opens in **Workspace actions** on the left rail. Each job has its own
 tab with transfer statistics and logs; completed and failed jobs remain available
 until you close them. A red badge marks results you haven't viewed. Completion
-and errors also use system notifications when the platform supports them.
+and errors also use system notifications when the platform supports them, unless
+you are already viewing that job in the focused window. Notifications still
+appear when another job or feature is selected, another app has focus, or the
+job's window is minimized.
 Closing a running job cancels it and waits for its process to stop.
 
 ## Choose the sync scope

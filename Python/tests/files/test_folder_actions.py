@@ -78,6 +78,25 @@ class FolderActionTests(QtTestCase):
         self.wait(lambda: self.page.count == 0)
         self.assertTrue(not isValid(window) or not window.busy)
 
+    def test_completion_notifications_follow_job_visibility_and_window_focus(self):
+        with patch.object(self.host, 'isActiveWindow', return_value=True) as active, \
+                patch.object(self.host, 'isMinimized', return_value=False) as minimized:
+            for selected, focused, reduced, expected in (
+                    (True, True, False, False),
+                    (False, True, False, True),
+                    (True, False, False, True),
+                    (True, True, True, True)):
+                with self.subTest(selected=selected, focused=focused, minimized=reduced):
+                    active.return_value = focused
+                    minimized.return_value = reduced
+                    self.notice.reset_mock()
+                    window = self.start('import time; time.sleep(.1)')
+                    self.tabs.setCurrentWidget(self.page if selected else self.tabs.widget(0))
+                    self.wait(lambda: window.result is not None)
+                    self.assertEqual(self.notice.called, expected)
+                    self.assertEqual(self.page.records[window]['unseen'], expected)
+                    self.assertIn('Complete', window.windowTitle())
+
     def test_unavailable_system_notifications_leave_the_job_and_badge_intact(self):
         window = self.start("import time; time.sleep(.1)")
         self.tabs.setCurrentIndex(0); self.wait(lambda: window.result is not None)

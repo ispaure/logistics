@@ -387,7 +387,7 @@ class MainWindow(pyside.Window):
 
     def _create_feature_page(self, contribution):
         page = contribution.create_page(self.dlg)
-        if contribution.page_id == 'git.workspace':
+        if contribution.page_id in ('git.workspace', 'lm.chat'):
             page.working_file_opener = self._open_git_file_in_ide
         settings_requested = getattr(page, 'feature_settings_requested', None)
         if settings_requested is not None:

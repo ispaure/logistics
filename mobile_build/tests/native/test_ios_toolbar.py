@@ -83,6 +83,9 @@ class ToolbarTests(TestCase):
         self.assertEqual(nav.leadingItemGroups[0].barButtonItems, [close._ios_action_item])
         self.assertEqual(nav.pinnedTrailingGroup.barButtonItems, [save._ios_action_item])
         self.assertEqual(save._ios_action_item.style, 2)
+        self.assertEqual(save._ios_action_item.title, 'Save')
+        self.assertIsNone(save._ios_action_item.image)
+        self.assertIs(save._ios_action_item.target, save._impl.native)
         self.assertEqual(nav.trailingItemGroups[0].barButtonItems, [find._ios_action_item, more._ios_action_item])
 
     def test_duo_system_overflow_loads_refreshed_actions_and_restores_on_horizontal_pose(self):

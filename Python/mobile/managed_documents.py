@@ -196,6 +196,17 @@ class ManagedDocumentWorkflows:
         previous = self.current
         self.new_document(extension=extension, name=name, content=content)
         if self.current is not previous:
+            # Creation is complete. Retire its form before the editor captures
+            # its Close destination, while failures retain the form for retry.
+            destination = self.native_host.state.destination
+            details = self.adaptive.detail_routes
+            if (destination == 'documents' and self.adaptive.split is not None
+                    and details and details[-1][0] == 'new-document'):
+                self.adaptive.trim_details(len(details) - 1)
+            else:
+                screens = self.routes.screens[destination]
+                if screens and screens[-1][0] == 'new-document':
+                    self.routes.trim(destination, len(screens) - 1)
             self.show_documents(edit=True)
             return True
         return False

@@ -61,6 +61,11 @@ keeps its selection signal blocker. The helpers issue no Git queries and add no
 state owner. Worker sequencing, refresh coalescing, draft vetoes, mutation commands
 and repository-path capture remain in the existing view/job/backend owners.
 
+Saved repositories can finish loading while their pane is hidden at startup.
+Navigation selection is deferred until the tree is shown and laid out, so macOS
+accessibility receives a selection with an available row. Showing the pane restores
+the row for the current File status, History or Search view.
+
 Machine stdout and diagnostics are kept separate. Temporary files prevent pipe
 deadlocks and excessive memory capture; stderr progress streams on POSIX and is
 shown at completion on Windows. Machine responses are capped at 8 MiB and fail

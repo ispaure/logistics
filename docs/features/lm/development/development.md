@@ -10,8 +10,10 @@ The [user guide](../user/user.md) describes available workflows and limits.
 | `configuration.py` | Central settings validation |
 | `storage.py` | Platform LM root, nested folders, profiles, edit leases, optimistic revisions, export |
 | `transport.py` | Qt asynchronous HTTP, bounded text/tool SSE decoding, request cancellation |
-| `agent.py` | Read-only tool rounds, context/call limits and cooperative worker ownership |
-| `project_tools.py` | Project path/exclusion checks, bounded file listing, text search and line reads |
+| `agent.py` | Project tool rounds, context/call limits and cooperative worker ownership |
+| `changes.py` | Turn snapshot comparison and unified patch generation |
+| `undo.py` | Exact-context reverse patches for guarded turn Undo |
+| `project_tools.py` | Project path/exclusion checks, bounded file listing, text search, line reads and optional exact text edits |
 | `session.py` | Conversation record, edit lease, dirty state, publication and streaming response transitions; no widget dependencies |
 | `generation.py` | Request preparation and publish-before-dispatch orchestration over captured inputs; no widgets |
 | `ui/page.py` | Navigation, UI value collection, generation presentation, GUI-thread timers, save feedback and close prompts |
@@ -19,6 +21,8 @@ The [user guide](../user/user.md) describes available workflows and limits.
 | `ui/composer.py`, `ui/mode_tabs.py` | Enter/Shift+Enter, screenshot paste/drop, sampling controls and Chat/Code tabs |
 | `ui/profiles.py` | Identity-preserving server profile editor |
 | `ui/ide_context.py` | Lazy project registration lookup and GUI-thread editor snapshots |
+| `ui/changes.py` | Edited-files cards and right-hand saved diff preview |
+| `ui/project_edits.py` | GUI-thread edit dispatch, live buffer validation and publication |
 | `ui/conversation_actions.py` | Conversation creation, moves, forks, menus and export coordinated with the page |
 | `ui/conversation_tree.py` | Tree drag requests; storage operations stay outside the widget |
 | `ui/conversation_view.py` | Incremental native Markdown bubbles and bounded message sizing |
@@ -101,7 +105,7 @@ is coalesced at 50 ms and Markdown rendering at 80 ms. Requests have an inactivi
 timeout and bounded response/frame sizes. HTTP redirects are not followed, TLS
 errors are not bypassed, and remote error bodies are never displayed. JSON text/tool
 responses are accepted when a server ignores streaming. Ordinary Chat rejects tool calls;
-Code mode routes them through the read-only agent.
+Code mode routes them through the project agent.
 Transcript resource loading and automatic link navigation are disabled.
 
 Enter sends only from the composer; Shift+Enter inserts a newline. Other fields
@@ -139,9 +143,9 @@ recovery, publication rollback and retained partial output without chat widgets.
 timeouts, stop/close, failures, profiles and recovery. Real LM Studio and native
 Windows/Linux behavior require separate smoke checks.
 
-## Read-only Code mode
+## Code mode and optional direct edits
 
-Additive `mode` and `project_id` fields preserve legacy version-one conversations.
+Additive `mode`, `project_id` and boolean `allow_edits` fields preserve legacy version-one conversations.
 Sidebar Chat/Code tabs filter the library and restore separate mode selections;
 creation assigns the mode, and navigation cannot change an existing record’s mode.
 Attachments are reviewed composer text, retained with the user's message rather
@@ -161,9 +165,93 @@ Tool paths must remain inside the resolved project root, respect configured
 exclusions, and traverse no links. POSIX disk reads use directory-relative
 no-follow opens; other platforms validate paths before opening. Regular UTF-8
 files are limited to 256 KiB. Reads return at most 200 lines/10,000 characters;
-searches cap directory traversal, bytes read and result count. No file mutation,
-shell command, executable loading or network tool exists. The model receives
+searches cap directory traversal, bytes read and result count. No shell command,
+executable loading or network tool exists. The model receives
 plain data and cannot expand the tool set.
+
+`allow_edits` defaults to false and is captured with the request; the checkbox is
+unavailable during generation. Only enabled Code requests expose `edit_file`.
+Editable reads use current disk text; read-only requests retain editor snapshots.
+The edit tool requires a prior read version and a unique exact text replacement
+in an existing UTF-8 file, bounded to 256 KiB. It retains original bytes as its
+conflict baseline and uses the shared atomic text writer with expected bytes,
+retaining permissions, BOM and line endings. The Git index is never changed.
+
+`ui/project_edits.py` queues edit requests from the tool worker to the GUI thread.
+It validates every matching live IDE buffer, refusing modified/stale/read-only
+buffers and pending/failed autosaves before writing. The bounded write and buffer
+publication run in the same GUI callback so typing cannot intervene. Successful
+edits update each shared document through an undo edit block, advance its disk
+snapshot and reset its modified flag. Cancellation is checked both in the worker
+and the queued callback; completed saves remain on cancellation. Atomic writes
+check disk bytes before staging and promotion; arbitrary external processes are
+not transactional with the final rename. New files, deletes and renames are not
+part of this tool. `test_lm_edits.py` covers editor synchronization/undo, pending
+text/autosave conflicts, disk conflicts, BOM/CRLF, path boundaries, worker dispatch
+and preserving staged plus unrelated unstaged text. HTTP fixtures exercise the
+model's read/edit/continuation sequence and persisted toggle.
+
+### Persisted changes for each response
+
+`changes.py` generates unified patches from the text before the first successful
+edit and after the last edit of a file. The tools retain these baselines only for
+the request; assistant messages persist an optional `changes` list containing
+`path`, `patch`, `added`, `removed` and optional boolean `undone`. Records validate at most 24 unique paths,
+text patch bounds and nonnegative counts. No full snapshots are sent to the model
+or added to the request context. Patches retain no-final-newline markers. Net-zero
+edits disappear from the summary. A file changed by another writer after an AI
+save cannot receive another edit during that turn, preventing that writer's
+changes from entering the turn diff.
+
+After every successful save, `ProjectEditDispatcher.changes_saved` publishes the
+current list on the GUI thread. The page attaches it to the active assistant
+message and immediately checkpoints before the next model request. Completion,
+cancellation and failure preserve it independently of tool metadata. A checkpoint
+failure stops generation with the existing export/recovery feedback; saved file
+edits and in-memory patches remain available. A crash between a file save and its
+conversation checkpoint can still lose that edit's history.
+
+`ui/changes.py` owns the clickable file card and a lazy right-hand pane using
+`features.git.ui.preview.Preview`, without repository commands or hunk mutation
+controls. Selection resolves only saved message data; paths never trigger a disk
+read. Conversation changes clear the pane, while streaming updates refresh the
+selected response's saved patch. JSON exports, moves and forks retain the message
+fields. Old records without `changes` show no card. `test_lm_changes.py` covers
+aggregation, no-final-newline patches, validation, isolation from model context,
+click-through viewer reuse, reopening, cancelled response persistence and failed
+checkpoint recovery; the HTTP edit fixture verifies end-to-end saved patches.
+
+### Guarded Undo
+
+`undo.py` parses saved unified patches and reverse-applies them to current text
+using unique exact post-edit hunk matches, including unchanged context and
+no-final-newline markers. It permits line shifts and unrelated later text but
+refuses changed/ambiguous context, malformed patches, overlapping/reordered hunks
+and context-free insertions into nonempty files. There is no fuzz or full-file
+reset. Matching is bounded to the project tool's 256 KiB file limit and stops
+after finding a second candidate. Existing patch-only records are supported.
+
+The card's Undo signal resolves the selected assistant message, its original
+registered project ID and captured root. A changed/missing registration refuses
+the operation; current picker selection cannot retarget historical changes.
+`ProjectEditDispatcher.undo_changes` preflights all pending files through the
+project path/exclusion policy, reverse patch, file permissions and live editor
+checks. Only then does it publish guarded atomic writes on the GUI thread,
+revalidating each file's path, editor state and expected disk bytes at promotion.
+Open buffers receive the same undoable publication used for model edits. The
+Git index is untouched. Generation and connection requests disable Undo.
+
+Each saved file gets `undone=true` and an immediate conversation checkpoint;
+retries skip it and keep the original patch as history. A conflict during
+preflight changes no files. External writes can still race after preflight, so a
+late conflict or checkpoint failure stops remaining writes and reports partial
+progress without attempting a destructive rollback. In-memory progress survives
+publication errors for retry/export; a crash between file save and checkpoint
+can leave disk ahead of history, in which case strict patch matching prevents
+blind reapplication. `test_lm_undo.py` covers multi-hunk shifts, conflicts,
+ambiguity, blank files/newline markers, card clicks/reopening, staged data,
+pending/live buffers, original project identity, symlinks, BOM/CRLF/permissions,
+racing writers and checkpoint failure with retry.
 
 Project-tool unit tests cover boundaries, binary/large files, snapshots and
 context budgets. HTTP/Qt fixtures cover fragmented SSE and JSON tool calls,
@@ -264,6 +352,25 @@ feature retains `[DONE]`, JSON validation, choices, tool fragments, response lim
 finish reasons and usage. It preserves partial text on later record failures and
 keeps desktop/mobile response-policy differences in their transports.
 
+The shared decoder bounds and accumulates plain-text `reasoning` and
+`reasoning_content` separately from answer text. The desktop transport emits
+`reasoning_delta` for SSE and JSON replies, preserving received reasoning on
+stop/failure; `AgentClient` includes it in the aggregate response size limit.
+`ConversationSession.append_reasoning` uses the same response ownership guard as
+answer deltas. Completion records `elapsed_seconds` using a monotonic clock from
+response publication through all tool rounds. Optional reasoning and timing
+fields are validated and saved without changing the record version; request
+building uses answer content only.
+
+Desktop bubbles use an in-flow, selectable reasoning browser under the activity
+header. The header shows live wall-clock elapsed time until monotonic completion
+timing is available; its dropdown exists only when reasoning text was returned.
+It opens during reasoning and folds on answer text unless manually toggled.
+Legacy records retain a plain Response/status header. Mobile consumes the shared
+decoder without a reasoning UI. Fixture tests in `test_lm_streaming`,
+`test_lm_session` and `test_lm_ui` cover separate deltas, limits, persistence,
+follow-up context exclusion, JSON fallback and inline expansion.
+
 
 ## Desktop appearance refreshes
 
@@ -275,3 +382,24 @@ message documents. Actual content/stream updates still use `set_source`, retaini
 cursor selection through imports. Local font/chrome stylesheets are set only when
 their text changes. `test_lm_appearance.py` covers duplicate signals, reading/code
 changes, selection retention and subsequent content updates.
+
+The desktop composer is a bottom-aligned sibling overlay on the full-height
+transcript in `layout.py`'s `message_surface` grid. Its right-hand grid column
+reserves the transcript scrollbar's width. `LMPage.fit_composer` measures native
+wrapped block heights and limits the dock to about half the message surface,
+including its toolbar and attachment previews. Dock resize/layout events update
+the transcript's bottom layout margin; the last bubble can scroll fully above
+the composer while the draft stays in place during history scrolling.
+The existing model selector is hosted in the composer's bottom toolbar and stays
+disabled during generation. User bubble palettes derive from the theme's accent
+(`Link`) color with contrasting text. `test_lm_appearance` covers the overlay,
+bottom clearance, scrollbar access, resizing and live theme changes.
+
+`ui/answer_speech.py` owns a lazy, single-answer read-aloud session for each
+desktop transcript. It uses commonUtils' `SpeechSession` and `QtSpeechEngine`
+with the installed engine's default voice and normal speed, without the reader's
+settings panel. Only the rendered answer document is spoken. Repeated clicks
+stop playback, another answer replaces it, and hide/close, conversation changes
+or message removal stop queued utterances. The engine is disposed with the view.
+`test_lm_speech.py` uses a silent adapter to verify toggling, chunking, stale
+completion rejection, default parameters, unavailable voices and view lifetime.

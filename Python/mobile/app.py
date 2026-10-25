@@ -502,7 +502,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         if self.routes.apple:
             from .ios_toolbar import prepare_form
             form_actions = {
-                'new-document': dict(primary='Create document', cancel='Cancel'),
+                'new-document': dict(primary='Choose location…', cancel='Cancel'),
                 'chat-settings': dict(primary='Save & return to chat', back='Back to conversation'),
                 'transfer-settings': dict(primary='Save settings', cancel='Cancel'),
                 'unlock-credential': dict(primary='Unlock', cancel='Cancel'),

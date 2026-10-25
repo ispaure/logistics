@@ -5,6 +5,13 @@ from .domain import MAX_TEXT
 from commonUtils.runtime.streams.sse import SSEDataDecoder, SSERecordLimit
 
 
+def response_reasoning(delta):
+    text = delta.get('reasoning_content') or delta.get('reasoning') or ''
+    if not isinstance(text, str):
+        raise ValueError('Unsupported reasoning response format.')
+    return text
+
+
 class StreamDecoder:
     """SSE framing accepts arbitrary UTF-8/network boundaries and CRLF lines."""
 
@@ -18,6 +25,7 @@ class StreamDecoder:
         self.finish_reason = None
         self.usage = None
         self.text = ""
+        self.reasoning_text = ''
 
     def feed(self, chunk):
         try:
@@ -83,8 +91,10 @@ class StreamDecoder:
             text = delta.get("content") or ""
             if not isinstance(text, str):
                 raise ValueError("Only text responses are supported.")
-            if len(self.text) + len(text) > MAX_TEXT:
+            reasoning = response_reasoning(delta)
+            if len(self.text) + len(text) + len(self.reasoning_text) + len(reasoning) > MAX_TEXT:
                 raise ValueError("Response exceeds the text size limit.")
+            self.reasoning_text += reasoning
             self.text += text
             fragments.append(text)
             if choice.get("finish_reason") is not None:

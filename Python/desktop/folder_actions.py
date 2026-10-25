@@ -40,7 +40,7 @@ class FolderActionsPage(DocumentsPage):
             return False
         dock = record['dock']
         if dock.isFloating():
-            return dock.isVisible() and dock.isActiveWindow()
+            return dock.isVisible() and dock.isActiveWindow() and not dock.isMinimized()
         pane = self.workspace.active_view
         return (self.isVisible() and self.window().isActiveWindow() and not self.window().isMinimized()
                 and pane is not None and pane.document is window)
@@ -53,15 +53,12 @@ class FolderActionsPage(DocumentsPage):
         record['unseen'] = not self._viewed(window)
         window.setWindowTitle(f"{record['name']} · {label}")
         self.changed.emit()
-        if not self.closing:
+        if not self.closing and record['unseen']:
             notice = self.notify(f"{record['name']} · {label}", result.error or 'Open Workspace actions for details.',
                         failed=result.state != 'cancelled' and not result.succeeded,
                         outcome='cancelled' if result.state == 'cancelled' else None)
             if notice is not None:
                 record['notice_id'] = notice.id
-                if not record['unseen']:
-                    from .notifications import notification_service
-                    notification_service().acknowledge(notice.id)
 
     @property
     def tray(self):

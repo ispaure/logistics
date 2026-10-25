@@ -39,11 +39,16 @@ def bar_item(button, *, prominent=False, symbol=None):
         button._impl.set_enabled = set_enabled
     title = getattr(button, 'accessible_name', None) or native.accessibilityLabel or button.text or ''
     item.accessibilityLabel = str(title)
-    item.title = str(button.text or title) if getattr(button, 'control_icon', None) is None else str(title)
+    icon = getattr(button, 'control_icon', None)
+    item.title = ('Save' if icon == 'save' else
+                  str(button.text or title) if icon is None else str(title))
     symbol = symbol or getattr(button, '_toolbar_symbol', None)
     if getattr(button, 'control_icon', None) == 'overflow':
         symbol = 'ellipsis'
-    if getattr(button, 'control_icon', None) != 'close':
+    if icon == 'save':
+        # The download-shaped icon is ambiguous for saving an edited document.
+        item.image = None
+    elif icon != 'close':
         item.image = (ObjCClass('UIImage').systemImageNamed(symbol) if symbol
                       else native.imageForState(0))
     item.menu = native.menu

@@ -77,6 +77,30 @@ class MagnifierProbe(LogisticsMobile):
                     impl.hold = gesture = SimpleNamespace(locationInView=location,enabled=True)
                     impl.show_magnifier(gesture)
                     less, more = impl.lens_less, impl.lens_more
+                    # Moving a live lens must translate the existing native
+                    # layers, retain their sizes, and keep the sampled pixels
+                    # centered without rebuilding the overlay or buttons.
+                    parent = impl.native.superview
+                    if callable(parent):parent = parent()
+                    picture = impl.lens_picture
+                    initial_size = (picture.bounds.size.width, picture.bounds.size.height)
+                    for fraction in (.25, .75, .5):
+                        def moved(target):
+                            return impl.picture.convertPoint(CGPoint(impl.picture.bounds.size.width*fraction,
+                                impl.picture.bounds.size.height*.65),toView=target)
+                        impl.show_magnifier(SimpleNamespace(locationInView=moved))
+                        assert impl.lens_picture == picture and impl.lens_less == less and impl.lens_more == more
+                        assert (picture.bounds.size.width, picture.bounds.size.height) == initial_size
+                        from commonUtils.ui.native.image_canvas import magnifier_geometry
+                        rect = impl.native.convertRect(impl.native.bounds,toView=parent)
+                        thumb = moved(parent)
+                        geometry = magnifier_geometry(rect.size.width,rect.size.height,
+                            thumb.x-rect.origin.x,thumb.y-rect.origin.y)
+                        sample = impl.picture.convertPoint(CGPoint(rect.origin.x+geometry[4],
+                            rect.origin.y+geometry[5]),fromView=parent)
+                        scale = canvas.magnifier_zoom/100*float(impl.native.zoomScale)
+                        assert abs(picture.frame.origin.x+sample.x*scale-geometry[2]/2)<.01
+                        assert abs(picture.frame.origin.y+sample.y*scale-geometry[3]/2)<.01
                     def click(button):button.sendActionsForControlEvents(64)
                     def enabled(button):return bool(button.isEnabled())
                     parent = impl.native.superview
@@ -141,6 +165,7 @@ class MagnifierProbe(LogisticsMobile):
             class Engine:
                 ready, error, default_voice = True, '', 'Offline test voice'
                 voices = {'Offline test voice': None}
+                def voice_for_language(self, language, preferred):return self.default_voice
                 def speak(self, *args):pass
                 def stop(self):pass
                 def close(self):pass

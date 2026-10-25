@@ -199,11 +199,13 @@ class HubDocumentTests(unittest.TestCase):
         app.new_hub_document()
         form = app.body.children[0].content
         form.name_input.value = 'My notes'
-        form.create_button.on_press()
-        self.assertEqual(app.current.name, 'My notes.txt')
-        self.assertNotEqual(app.current.id, first)
+        app.loop.run_until_complete(form.create_button.on_press())
+        app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
+        owner = app.private_sessions.active
+        self.assertEqual(owner.crypt_reader.name, 'My notes.txt')
+        self.assertEqual(app.current.id, first)
         self.assertEqual(app.native_host.state.destination, 'home')
-        self.assertIn(app.document_view, app.body.children)
+        self.assertIn(owner.crypt_view, app.body.children)
         self.assertEqual(app.store.open(first).text, 'Retain my draft')
 
     def test_hubs_split_whole_sections_and_restore_compact_order(self):
@@ -500,10 +502,7 @@ class HubDocumentTests(unittest.TestCase):
         app.editor.value = 'first first'
         first = app.editor_view
         first.search.query.value = 'first'
-        app.new_hub_document()
-        form = app.body.children[0].content
-        form.name_input.value = 'Second'
-        form.create_button.on_press()
+        app.create_chosen_document('txt', name='Second.txt')
         app.editor.value = 'second'
         second = app.editor_view
         second.search.query.value = 'second'
@@ -776,7 +775,7 @@ class HubDocumentTests(unittest.TestCase):
         form = app.body.children[0].content
         for invalid in ('', '../bad'):
             form.name_input.value = invalid
-            form.create_button.on_press()
+            app.loop.run_until_complete(form.create_button.on_press())
             self.assertIs(app.current, previous)
             self.assertTrue(form.error_label.text)
             self.assertEqual(len(app.store.documents()[0]), count)
@@ -787,9 +786,10 @@ class HubDocumentTests(unittest.TestCase):
         form.name_input.value = 'Notes.txt'
         form.type_selector.value = 'Markdown (.md)'
         form.type_selector.value = 'Plain text (.txt)'
-        form.create_button.on_press()
-        self.assertEqual(app.current.name, 'Notes.txt')
-        self.assertEqual(app.current.text, '')
+        app.loop.run_until_complete(form.create_button.on_press())
+        app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
+        self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Notes.txt')
+        self.assertEqual(app.private_sessions.active.crypt_text.value, '')
 
     def test_markdown_choice_and_independent_chat_destination(self):
         app = self.app
@@ -800,10 +800,11 @@ class HubDocumentTests(unittest.TestCase):
                           if isinstance(widget, toga.TextInput)], ['File name'])
         form.name_input.value = 'Trip.markdown'
         form.type_selector.value = 'Markdown (.md)'
-        form.create_button.on_press()
-        self.assertEqual(app.current.name, 'Trip.markdown')
-        self.assertEqual(app.current.text, '')
-        self.assertEqual(app.editor_view.session.kind, 'markdown')
+        app.loop.run_until_complete(form.create_button.on_press())
+        app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
+        self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Trip.markdown')
+        self.assertEqual(app.private_sessions.active.crypt_text.value, '')
+        self.assertEqual(app.private_sessions.active.session.kind, 'markdown')
         document_routes = list(app.routes.screens['documents'])
         app.native_host.root.current_tab = 'Chat'
         app.native_host._selected(app.native_host.root)

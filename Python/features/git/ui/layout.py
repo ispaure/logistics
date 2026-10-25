@@ -8,6 +8,7 @@ from .history import HistoryPanel
 from .search import SearchPanel
 from .preview import Preview
 from .chrome import toolbar_button, WORKSPACE_STYLE
+from .navigation import NavigationTree
 
 
 class RepositoryLayout:
@@ -94,7 +95,8 @@ class RepositoryLayout:
         sidebar_layout = qt.QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(4, 4, 4, 4)
         sidebar_layout.setSpacing(4)
-        self.refs = qt.QTreeWidget()
+        self.refs = NavigationTree()
+        self.refs.shown.connect(lambda: self._select_navigation(self.views.currentIndex()))
         self.refs.setHeaderHidden(True)
         self.refs.setMinimumWidth(156)
         self.refs.setIconSize(qt.QSize(14,14))

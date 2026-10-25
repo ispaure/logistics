@@ -62,6 +62,57 @@ class DocumentNavigationTests(TestCase):
                 app.set_cloud_busy(False)
         app.loop.run_until_complete(exercise())
 
+    def test_created_document_close_returns_to_origin_without_creation_form(self):
+        app = self.app
+        for destination in ('home', 'documents', 'files'):
+            for kind, choice in [('Plain text (.txt)', 'save'), ('Markdown (.md)', 'discard')]:
+                with self.subTest(destination=destination, kind=kind, choice=choice):
+                    if destination == 'home':
+                        app.show_home()
+                    elif destination == 'documents':
+                        app.show_documents_hub()
+                    else:
+                        app.loop.run_until_complete(app.show_files(local_root=True))
+                        app.loop.run_until_complete(app.browser_file_location(('Local files', 'Fixtures')))
+                    origin = app.body
+                    routes = [screen[0] for screen in app.routes.screens[destination]]
+                    app.choose_document_type()
+                    form = app.body.children[0].content
+                    form.name_input.value = 'Created ' + destination + ' ' + choice
+                    form.type_selector.value = kind
+                    app.loop.run_until_complete(form.create_button.on_press())
+                    app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
+                    owner = app.private_sessions.active
+                    self.assertNotIn('new-document', [screen[0] for screen in app.routes.screens[destination]])
+                    owner.crypt_text.value = 'Keep the ordinary unsaved-change decision'
+                    close = owner.crypt_view._reader_close_button
+                    close.on_press()
+                    app.loop.run_until_complete(self.answer_close('cancel'))
+                    self.assertEqual(app.visible_reader(), owner.session.id)
+                    close.on_press()
+                    app.loop.run_until_complete(self.answer_close(choice))
+                    self.assertEqual(app.native_host.state.destination, destination)
+                    self.assertIs(app.body, origin)
+                    self.assertEqual([screen[0] for screen in app.routes.screens[destination]], routes)
+
+    def test_failed_creation_keeps_form_and_cancel_returns_to_origin(self):
+        app = self.app
+        app.show_home()
+        origin = app.body
+        app.choose_document_type()
+        panel = app.body
+        form = panel.children[0].content
+        form.name_input.value = 'Could not create'
+        app.loop.run_until_complete(form.create_button.on_press())
+        picker = app.editor_picker()
+        with patch('commonUtils.runtime.resources.mutations.save_resource_and_reopen', side_effect=OSError('No space')):
+            app.loop.run_until_complete(picker.confirm_editor_file())
+        self.assertIn('No space', picker.save_as_status.value)
+        picker.cancel_text_destination()
+        self.assertIs(app.body, panel)
+        form.cancel_button.on_press()
+        self.assertIs(app.body, origin)
+
     def test_tab_selection_uses_the_incoming_destinations_document_state(self):
         app = self.app
         app.show_documents_hub()

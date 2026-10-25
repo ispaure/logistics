@@ -1,4 +1,4 @@
-"""Read-only agent orchestration with asynchronous, cooperatively cancelled tools."""
+"""Project agent orchestration with asynchronous, cooperatively cancelled tools."""
 from copy import deepcopy
 import json
 from commonUtils.ui import pyside as qt
@@ -9,6 +9,7 @@ from .transport import Client
 
 class AgentClient(qt.QObject):
     delta = qt.Signal(str)
+    reasoning_delta = qt.Signal(str)
     models = qt.Signal(list)
     completed = qt.Signal(str, str, object)
     activity = qt.Signal(str)
@@ -17,6 +18,7 @@ class AgentClient(qt.QObject):
         super().__init__(parent)
         self.http = Client(self)
         self.http.delta.connect(self._delta)
+        self.http.reasoning_delta.connect(self._reasoning_delta)
         self.http.models.connect(self.models.emit)
         self.http.completed.connect(self._completed)
         self.worker = None
@@ -91,6 +93,16 @@ class AgentClient(qt.QObject):
         self.payload = None
         self.completed.emit(status, error, metadata)
 
+    def _reasoning_delta(self, text):
+        if self.total_text + len(text) > MAX_TEXT:
+            self.overflow = True
+            self.http.failure = 'Response exceeds the text size limit.'
+            if self.http.reply is not None:
+                self.http.reply.abort()
+            return
+        self.total_text += len(text)
+        self.reasoning_delta.emit(text)
+
     def _completed(self, status, error, metadata):
         calls = metadata.get('tool_calls') or []
         if self.overflow:
@@ -119,7 +131,7 @@ class AgentClient(qt.QObject):
                 if self.round_text:
                     self._delta('\n\n')
                 self.round_text = ''
-                self.activity.emit('Reading project… ' + ', '.join(
+                self.activity.emit('Using project tools… ' + ', '.join(
                     call['function']['name'] + ' ' + call['function']['arguments'][:160] for call in calls))
                 tools = self.tools
                 def execute():
@@ -139,7 +151,7 @@ class AgentClient(qt.QObject):
                             self._finish('cancelled', '', {})
                             return
                         if worker.error:
-                            raise ValueError('Project files could not be read.')
+                            raise ValueError('Project tool execution failed.')
                         for call, result in zip(calls, worker.result):
                             self.payload['messages'].append(dict(role='tool', tool_call_id=call['id'], content=result))
                             self.steps.append(dict(name=call['function']['name'], arguments=call['function']['arguments'], result=result))

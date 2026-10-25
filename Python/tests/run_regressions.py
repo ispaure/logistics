@@ -3,6 +3,7 @@ import argparse
 import faulthandler
 from fnmatch import fnmatchcase
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -13,8 +14,10 @@ from time import monotonic
 import unittest
 from unittest.mock import patch
 
+from regression_timing import TimedResult, TimingReport, default_report, timestamp
 
-def run_isolated(directory, pattern, interval, include_patterns=()):
+
+def run_isolated(directory, pattern, interval, include_patterns=(), report=None):
     """Give independent GUI test files their own QApplication and native state."""
     modules = sorted(path for path in directory.rglob(pattern)
                      if path.is_file() and all(fnmatchcase(path.name, extra) for extra in include_patterns))
@@ -23,13 +26,38 @@ def run_isolated(directory, pattern, interval, include_patterns=()):
         return 1
     failed = []
     for path in modules:
+        started_at = timestamp()
+        started = monotonic()
         print(f'Running isolated test file: {path.relative_to(directory)}', flush=True)
         command = [sys.executable, str(Path(__file__).resolve()), str(path.parent),
                    '--pattern', path.name, '--single-file', '--traceback-after', str(interval)]
-        try:
-            code = subprocess.run(command, timeout=300).returncode
-        except subprocess.TimeoutExpired:
-            code = 124
+        with TemporaryDirectory(prefix='logistics-test-timing-') as temporary:
+            child_report = Path(temporary) / 'timing.json'
+            command.extend(['--report', str(child_report), '--timing-child'])
+            try:
+                code = subprocess.run(command, timeout=300).returncode
+                outcome = 'passed' if code == 0 else 'failed'
+                if code < 0:
+                    outcome = 'crashed'
+            except subprocess.TimeoutExpired:
+                code = 124
+                outcome = 'timeout'
+            if report is not None:
+                records = []
+                child_complete = False
+                if child_report.exists():
+                    child_data = json.loads(child_report.read_text(encoding='utf-8'))
+                    records = child_data['tests']
+                    child_complete = child_data['complete']
+                relative = str(path.relative_to(directory))
+                report.data['tests'].extend(dict(row, file=relative) for row in records)
+                report.data['modules'].append({
+                    'path': relative, 'started_at': started_at, 'finished_at': timestamp(),
+                    'duration_seconds': monotonic() - started, 'exit_code': code,
+                    'outcome': outcome, 'test_report_available': child_report.exists(),
+                    'test_report_complete': child_complete,
+                })
+                report.save()
         if code:
             failed.append(str(path.relative_to(directory)))
             print(f'{path.name}: FAIL ({code})', file=sys.stderr, flush=True)
@@ -62,6 +90,9 @@ def main():
                         help='Run each matching test file in a fresh process, including nested directories')
     parser.add_argument('--traceback-after', type=float, default=60,
                         help='Seconds between safe progress reports; crash tracebacks remain enabled')
+    parser.add_argument('--report', type=Path,
+                        help='JSON timing report (default: timestamped file under test-results/test-timings)')
+    parser.add_argument('--timing-child', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.traceback_after <= 0:
         parser.error('--traceback-after must be positive')
@@ -74,8 +105,25 @@ def main():
             available = False
         if not available:
             parser.error(f'Required test dependency is unavailable: {name}. Use the owning suite environment.')
+    report = TimingReport(args.report or default_report(args.directory), args.directory,
+                          args.pattern, args.isolate_modules)
+    report.data['include_patterns'] = args.include_pattern
+    report.save()
+    try:
+        code = run_with_report(args, report)
+    except BaseException:
+        report.save()
+        raise
+    report.save(complete=True, exit_code=code)
+    if not args.timing_child:
+        report.summarize()
+    return code
+
+
+def run_with_report(args, report):
     if args.isolate_modules:
-        return run_isolated(args.directory.resolve(), args.pattern, args.traceback_after, args.include_pattern)
+        return run_isolated(args.directory.resolve(), args.pattern, args.traceback_after,
+                            args.include_pattern, report)
     # Keep default storage and preferences away from the contributor's live data,
     # including during test discovery. Children running isolated modules create
     # their own scope; ordinary helper subprocesses inherit private cache roots.
@@ -91,10 +139,10 @@ def main():
             'LOCALAPPDATA': str(home / 'AppData' / 'Local'),
         }
         with patch.dict(os.environ, environment), patch.object(Path, 'home', return_value=home):
-            return run_suite(args)
+            return run_suite(args, report)
 
 
-def run_suite(args):
+def run_suite(args, report):
     # The runner itself lives in Python/tests. A mobile suite can contain the
     # same module name (e.g. test_pdf_reader); discovery must import its own file
     # even when its directory already appears later in PYTHONPATH.
@@ -102,14 +150,11 @@ def run_suite(args):
     faulthandler.enable()
     status = {'test': 'test discovery', 'started': monotonic(), 'completed': 0}
 
-    class ProgressResult(unittest.TextTestResult):
-        def startTest(self, test):
-            status.update(test=test.id(), started=monotonic())
-            super().startTest(test)
-
-        def stopTest(self, test):
-            status['completed'] += 1
-            super().stopTest(test)
+    def result_factory(*result_args, **result_kwargs):
+        result = TimedResult(*result_args, **result_kwargs)
+        result.report = report
+        result.status = status
+        return result
 
     stopped = Event()
     reporter = Thread(target=report_stalls, args=(args.traceback_after, stopped, status), daemon=True)
@@ -142,7 +187,7 @@ def run_suite(args):
         if suite.countTestCases() == 0:
             print('No tests discovered.', file=sys.stderr)
             return 1
-        result = unittest.TextTestRunner(verbosity=2, resultclass=ProgressResult).run(suite)
+        result = unittest.TextTestRunner(verbosity=2, resultclass=result_factory).run(suite)
         return int(not result.wasSuccessful())
     finally:
         stopped.set()

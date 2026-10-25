@@ -225,6 +225,55 @@ class FolderDiscoveryTests(TestCase):
         self.assertIn('Drive', local)
         self.assertEqual(folder_browse_copy(local['Drive'], 'Local')['kind'], 'shared-local')
 
+    def test_stale_sync_mapping_does_not_hide_loaded_cloud_credentials(self):
+        from mobile.folder_hub import folder_browse_copy, folder_row_presentation, credential_choices
+        from services.folders.catalog import CredentialScope
+        from features.rclone.transfers.mobile.jobs import copy_target, remote_location
+        remote = 'Server-Lib-Calibre'
+        job = dict(id='1' * 32, remote=remote, identity='a' * 64, cipher_identity='',
+                   crypt=False, prefix='', target=remote)
+        copy_target(self.app.private_root, job).mkdir(parents=True)
+        package = dict(package_name='Server.zip', remotes=[remote, 'Sibling'],
+                       identities={remote: 'b' * 64, 'Sibling': 'c' * 64})
+        snapshot = FolderDiscoverySnapshot(self.app.private_root, {job['id']: job},
+            tuple(package['remotes']), (), (), {}, (package,))
+        entry = discover_folder_choices(snapshot).choices[remote]
+        cloud = folder_browse_copy(entry, 'rclone')
+        self.assertEqual(cloud['kind'], 'remote')
+        self.assertEqual(cloud['value'], (remote, ''))
+        self.assertEqual(cloud['connection_identity'], 'b' * 64)
+        self.assertEqual(folder_browse_copy(entry, 'Local')['kind'], 'job')
+        scoped = credential_choices({remote: entry}, CredentialScope([remote], 'Server.zip'))
+        self.assertIn(remote, scoped)
+        self.assertEqual(folder_row_presentation(remote, scoped[remote], 'rclone',
+                         set(package['remotes']), {remote}).state, 'unlocked')
+        # Cloud browsing may use the loaded connection; the old transfer must
+        # still reject it instead of silently retargeting existing local files.
+        client = SimpleNamespace(connection_identity=lambda name: 'b' * 64)
+        with self.assertRaisesRegex(ValueError, 'matching connection'):
+            remote_location(client, job)
+        self.assertEqual(job['identity'], 'a' * 64)
+
+    def test_matching_sync_replaces_only_its_own_package_cloud_target(self):
+        from mobile.folder_hub import folder_browse_copy, credential_choices
+        from services.folders.catalog import CredentialScope
+        from features.rclone.transfers.mobile.jobs import copy_target
+        job = dict(id='1' * 32, remote='Calibre', identity='a' * 64, cipher_identity='',
+                   crypt=False, prefix='', target='Calibre')
+        copy_target(self.app.private_root, job).mkdir(parents=True)
+        packages = tuple(dict(package_name=name, remotes=['Calibre'], identities={'Calibre': identity * 64})
+                         for name, identity in [('Mapped.zip', 'a'), ('Other.zip', 'b')])
+        snapshot = FolderDiscoverySnapshot(self.app.private_root, {job['id']: job},
+                                           ('Calibre',), (), (), {}, packages)
+        entry = discover_folder_choices(snapshot).choices['Calibre']
+        for package, kind, identity in [('Mapped.zip', 'job-remote', 'a'), ('Other.zip', 'remote', 'b')]:
+            scoped = credential_choices({'Calibre': entry}, CredentialScope(['Calibre'], package))
+            self.assertIn('Calibre', scoped)
+            target = folder_browse_copy(scoped['Calibre'], 'rclone')
+            self.assertEqual(target['kind'], kind)
+            self.assertEqual(target['connection_identity'], identity * 64)
+            self.assertFalse(target['locked'])
+
     def test_builder_does_not_mutate_snapshot_or_create_missing_crypt_directories(self):
         from copy import deepcopy
         from features.rclone.mobile.storage_location import collection_path

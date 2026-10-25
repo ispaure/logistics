@@ -10,6 +10,7 @@ class GenerationInputs:
     profile: dict
     project: Any = None
     buffers: Any = None
+    edit_dispatch: Any = None
 
 
 @dataclass(frozen=True)
@@ -40,11 +41,18 @@ class GenerationCoordinator:
                 raise ValueError('Choose a registered IDE project. Register one in IDE, then refresh projects.')
             if self.project_tools is None:
                 raise ValueError('Project tools are unavailable in this host.')
-            tools, tool_specs = self.project_tools(project, inputs.buffers)
+            if data.get('allow_edits', False):
+                if inputs.edit_dispatch is None:
+                    raise ValueError('Live editor protection is unavailable in this host.')
+                tools, tool_specs = self.project_tools(project, inputs.buffers,
+                    allow_edits=True, edit_dispatch=inputs.edit_dispatch)
+            else:
+                tools, tool_specs = self.project_tools(project, inputs.buffers)
         payload, metadata = build_request(data, tools=tool_specs,
                                          project_name=tools.name if tools else None)
         if tools:
-            metadata.update(project_id=project.id, project_name=project.name, project_root=str(project.root))
+            metadata.update(project_id=project.id, project_name=project.name, project_root=str(project.root),
+                            allow_edits=bool(data.get('allow_edits', False)))
         metadata['base_url'] = inputs.profile['base_url']
         return PreparedGeneration(dict(inputs.profile), payload, metadata, tools)
 

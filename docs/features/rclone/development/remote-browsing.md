@@ -10,6 +10,14 @@ builders populate the retained CloudController fields;
 they introduce no account, request or cancellation owner. Credential workflows and
 the remote listing service remain independent from this construction boundary.
 
+Mobile Workspaces keeps each loaded account's Cloud destination independently of
+its local sync mappings. A matching mapping replaces only its own account's
+browse target with the mapped folder scope. If the saved connection identity no
+longer matches, the loaded Cloud destination stays available and unlocked;
+Pull/Push retain their existing identity checks and do not retarget the local
+copy. `test_folder_discovery.py` covers stale mappings, credential filtering and
+multiple packages declaring the same remote name.
+
 Desktop hosts `RemoteBrowserView` in the existing File Browser workspace. Its
 `RemoteLocation` carries config identity, remote name and relative directory;
 cloning a tab retains all three. Workspaces selection and the browser's

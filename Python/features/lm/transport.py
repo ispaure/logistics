@@ -30,11 +30,12 @@ def rejection_hint(body):
     return ''
 
 
-from .streaming import StreamDecoder
+from .streaming import StreamDecoder, response_reasoning
 
 
 class Client(QObject):
     delta = Signal(str)
+    reasoning_delta = Signal(str)
     models = Signal(list)
     completed = Signal(str, str, object)  # status, safe error, metadata
 
@@ -50,6 +51,7 @@ class Client(QObject):
         self.total_bytes = 0
         self.pending = ''
         self.delivered_chars = 0
+        self.delivered_reasoning = 0
         if timeout_ms is None:
             from commonUtils.configuration.settings import get_setting
             seconds = get_setting('Connection', 'timeout_seconds_int', 180,
@@ -87,6 +89,7 @@ class Client(QObject):
         self.decoder = StreamDecoder(allow_tools=bool(payload and payload.get('tools')))
         self.pending = ''
         self.delivered_chars = 0
+        self.delivered_reasoning = 0
         self.cancelled = False
         self.failure = ''
         if payload is None:
@@ -110,6 +113,11 @@ class Client(QObject):
             self.reply.abort()
 
     def _flush(self):
+        if self.decoder is not None:
+            reasoning = self.decoder.reasoning_text[self.delivered_reasoning:]
+            if reasoning:
+                self.delivered_reasoning += len(reasoning)
+                self.reasoning_delta.emit(reasoning)
         if self.pending:
             text, self.pending = self.pending, ''
             self.delivered_chars += len(text)
@@ -189,8 +197,11 @@ class Client(QObject):
                 if calls and not self.decoder.allow_tools:
                     raise ValueError('Unsupported tool call')
                 text = choice['message'].get('content') or ''
-                if not isinstance(text, str) or len(text) > MAX_TEXT:
+                reasoning = response_reasoning(choice['message'])
+                if not isinstance(text, str) or len(text) + len(reasoning) > MAX_TEXT:
                     raise ValueError('Invalid text')
+                if reasoning:
+                    self.reasoning_delta.emit(reasoning)
                 self.delta.emit(text)
                 metadata = {'finish_reason': choice.get('finish_reason'), 'usage': data.get('usage'), 'tool_calls': calls}
             elif not (self.decoder.done or self.decoder.finished):

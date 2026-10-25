@@ -1,6 +1,7 @@
 """LM workspace presentation and navigation, backed by an owned conversation session."""
 from commonUtils.ui.appearance.typography import point_size
 from copy import deepcopy
+from math import ceil
 
 from commonUtils.ui import pyside as qt
 from ..domain import validate_settings
@@ -11,6 +12,7 @@ from ..screenshots import encode_screenshot, MAX_IMAGES
 from .image_view import ScreenshotView
 from ..generation import GenerationCoordinator, GenerationInputs
 from .ide_context import registered_projects, editor_context
+from .project_edits import ProjectEditDispatcher
 from .icons import chat_icon, action_button
 from .layout import build_layout
 from .menus import build_menus
@@ -71,6 +73,8 @@ class LMPage(qt.QWidget):
         self.last_conversations = {}
         self.mode_search = {}
         self.session = ConversationSession(self.store)
+        self.project_edits = ProjectEditDispatcher(self)
+        self.project_edits.changes_saved.connect(self.record_changes)
         from ..execution.desktop import project_tools
         self.generation = GenerationCoordinator(self.session, self.client, project_tools=project_tools)
         session = self.session
@@ -104,6 +108,14 @@ class LMPage(qt.QWidget):
 
     def _bind_session_controls(self):
         """Retain timers and bind widgets/transport to the existing session owner."""
+        self.composer_fit_timer = qt.QTimer(self)
+        self.composer_fit_timer.setSingleShot(True)
+        self.composer_fit_timer.setInterval(0)
+        self.composer_fit_timer.timeout.connect(self.fit_composer)
+        self.chat_body.installEventFilter(self)
+        self.message_surface.installEventFilter(self)
+        self.composer_dock.installEventFilter(self)
+        self.composer.viewport().installEventFilter(self)
         self.save_timer = qt.QTimer(self)
         self.save_timer.setSingleShot(True)
         self.save_timer.setInterval(700)
@@ -130,6 +142,9 @@ class LMPage(qt.QWidget):
         for widget in (self.temperature, self.top_p, self.context, self.max_tokens):
             widget.valueChanged.connect(self.changed)
         self.client.delta.connect(self.append_delta)
+        self.transcript.speech_error.connect(self.status.setText)
+        if hasattr(self.client, 'reasoning_delta'):
+            self.client.reasoning_delta.connect(self.append_reasoning)
         self.client.models.connect(self.models_loaded)
         self.client.completed.connect(self.completed)
         if hasattr(self.client, 'activity'):
@@ -154,19 +169,51 @@ class LMPage(qt.QWidget):
         accent = palette.color(qt.QPalette.ColorRole.Highlight).name()
         font = self.styling.font('reading')
         family = font.family().replace('\\', '\\\\').replace('"', '\\"')
-        self.composer_frame.setStyleSheet(f'QFrame#lmComposerFrame {{ background: {base}; border: 1px solid {border}; border-radius: 12px; }}')
+        self.composer_frame.setStyleSheet(f'QFrame#lmComposerFrame {{ background: {base}; border: 1px solid {border}; border-radius: 20px; }}')
         muted = palette.color(qt.QPalette.ColorRole.PlaceholderText).name()
         self.disclaimer.setStyleSheet(f'color: {muted}; font-size: {point_size(max(6, self.styling.values["ui_font_size_int"] - .75))}pt;')
         self.composer.setStyleSheet(f'QPlainTextEdit {{ background: transparent; border: none; padding: 8px; font-family: "{family}"; font-size: {font.pointSizeF()}pt; }}')
         self.composer.document().setDefaultFont(font)
-        self.send_button.setStyleSheet(f'QToolButton {{ border: 1px solid {border}; border-radius: 21px; background: {accent}; }} QToolButton:disabled {{ background: {base}; }}')
+        self.send_button.setStyleSheet(f'QToolButton {{ border: 1px solid {border}; border-radius: 15px; background: {accent}; }} QToolButton:disabled {{ background: {base}; }}')
+        self.model.setStyleSheet('QComboBox { border: none; background: transparent; padding: 2px 4px; }')
+        self.model.refresh_name()
         self.transcript.setFrameShape(qt.QFrame.Shape.NoFrame)
         self.search.setStyleSheet(f'QLineEdit {{ border: 1px solid {border}; border-radius: 8px; padding: 7px; }}')
         self.fit_composer()
 
     def fit_composer(self):
-        lines = max(2, self.composer.document().blockCount())
-        self.composer.setFixedHeight(min(150, lines * self.composer.fontMetrics().lineSpacing() + 20))
+        if getattr(self, '_fitting_composer', False):
+            return
+        self._fitting_composer = True
+        try:
+            editor = self.composer
+            document = editor.document()
+            # Hidden editors can retain their old viewport size until Qt lays out.
+            chrome = max(0, editor.height() - editor.viewport().height())
+            minimum = 2 * editor.fontMetrics().lineSpacing() + 2 * document.documentMargin() + chrome
+            # The draft overlays the transcript, with matching scroll padding below messages.
+            available = min(self.height(), self.message_surface.height())
+            dock_chrome = max(0, self.composer_dock.sizeHint().height() - editor.height())
+            maximum = max(minimum, available // 2 - dock_chrome)
+            height = document.documentMargin() + chrome
+            block = document.begin()
+            while block.isValid() and height < maximum:
+                # Force layout of wrapped/off-screen blocks, not just paragraph counts.
+                height += document.documentLayout().blockBoundingRect(block).height()
+                block = block.next()
+            # Qt needs a little rounding slack to fit the last full text line.
+            height = ceil(min(maximum, max(minimum, height + 2)))
+            if editor.height() != height:
+                editor.setFixedHeight(height)
+            self.transcript.set_bottom_inset(self.composer_dock.height() + 8)
+        finally:
+            self._fitting_composer = False
+
+    def eventFilter(self, watched, event):
+        if event.type() in (qt.QEvent.Type.Resize, qt.QEvent.Type.LayoutRequest):
+            if hasattr(self, 'composer_fit_timer'):
+                self.composer_fit_timer.start()
+        return super().eventFilter(watched, event)
 
     def dragEnterEvent(self, event):
         if Composer.image_source(event.mimeData()) and (self.data is None or self.lease is not None):
@@ -297,7 +344,8 @@ class LMPage(qt.QWidget):
         self.changed()
         project = self.projects.get(self.project_picker.currentData())
         if project:
-            self.status.setText(f'Code mode: {project.name}. Project text may be sent to the selected server. Read-only access follows IDE exclusions.')
+            access = 'Edits save directly' if self.allow_edits.isChecked() else 'Read-only access'
+            self.status.setText(f'Code mode: {project.name}. Project text may be sent to the selected server. {access}; IDE exclusions apply.')
 
     def attachment_context(self):
         return self.attachments.attachment_context()
@@ -476,6 +524,7 @@ class LMPage(qt.QWidget):
         if data.get('mode') == 'code':
             self.load_projects()
         self.project_picker.setCurrentIndex(self.project_picker.findData(data.get('project_id', '')))
+        self.allow_edits.setChecked(data.get('allow_edits', False))
         self.composer.setPlainText(data['draft'])
         self.draft_images = deepcopy(data.get('draft_images', []))
         self.refresh_draft_images()
@@ -499,6 +548,7 @@ class LMPage(qt.QWidget):
         self.data['draft'] = self.composer.toPlainText()
         self.data['draft_images'] = deepcopy(self.draft_images)
         self.data['project_id'] = self.project_picker.currentData() or ''
+        self.data['allow_edits'] = self.allow_edits.isChecked()
         self.data['model'] = self.model.currentText().strip()
         self.data['profile_id'] = self.profile.currentData() or ''
         self.data['settings'] = validate_settings(dict(
@@ -579,7 +629,7 @@ class LMPage(qt.QWidget):
         self.model.setCurrentText(current or (models[0] if models else ''))
         self.loading = False
         self.changed()
-        self.status.setText(f'Connected. {len(models)} models available.' if models else 'Connected, but no models were listed. Load a model on the server or enter its ID.')
+        self.status.setText(f'Connected. {len(models)} models available.' if models else 'Connected, but no models were listed. Load a model on the server and refresh models.')
 
     def send(self):
         if self.client.busy:
@@ -617,7 +667,7 @@ class LMPage(qt.QWidget):
                 project = self.projects.get(key)
                 if project is not None:
                     buffers, _ = self.context_buffers(project)
-            plan = self.generation.prepare(GenerationInputs(profile, project, buffers))
+            plan = self.generation.prepare(GenerationInputs(profile, project, buffers, self.project_edits.dispatch))
         except ValueError as error:
             self.status.setText(str(error))
             return False
@@ -652,10 +702,85 @@ class LMPage(qt.QWidget):
         self.update_controls()
         return True
 
+    def record_changes(self, changes):
+        if self.active_message is None:
+            return
+        self.active_message['changes'] = deepcopy(changes)
+        self.dirty = True
+        # Publish after each successful edit, before another model round starts.
+        # A later failed/cancelled response still retains its already-saved edits.
+        self.checkpoint()
+        self.render()
+
+    def undo_changes(self, message_id):
+        if self.client.busy or self.data is None or self.lease is None or not self.persist():
+            return
+        entry = next((item for item in self.data['messages'] if item['id'] == message_id), None)
+        if not entry or not any(not item.get('undone', False) for item in entry.get('changes', [])):
+            return
+        changes = entry['changes']
+        previous = sum(bool(item.get('undone')) for item in changes)
+        try:
+            from pathlib import Path
+            request = entry.get('request', {})
+            project = self.context_projects().get(request.get('project_id'))
+            if project is None or not request.get('project_root') or project.root.resolve() != Path(request['project_root']).resolve():
+                raise ValueError('The original IDE project registration is missing or its root changed.')
+            def saved():
+                self.dirty = True
+                if not self.persist():
+                    raise ValueError('Undo progress could not be saved. Stop here and export or retry saving the conversation.')
+            self.project_edits.undo_changes(project, changes, saved)
+            count = sum(bool(item.get('undone')) for item in changes) - previous
+            self.status.setText(f'Undid this response’s changes in {count} file{"s" if count != 1 else ""}. Later unrelated edits were retained.')
+        except (OSError, ValueError) as error:
+            count = sum(bool(item.get('undone')) for item in changes) - previous
+            progress = f'{count} file(s) already reverted; remaining files were not reverted. ' if count else 'No files were reverted. '
+            self.status.setText('Undo stopped. ' + progress + str(error))
+        self.render()
+        self.update_controls()
+
+    def show_changes(self, message_id, path):
+        entry = next((item for item in self.data['messages'] if item['id'] == message_id), None) if self.data else None
+        if entry and entry.get('changes'):
+            key = (self.data['id'], message_id)
+            if not self.changes_pane.isHidden() and self.changes_pane.key == key and self.changes_pane.files.currentData() == path:
+                self.changes_pane.hide()
+                return
+            was_hidden = self.changes_pane.isHidden()
+            self.changes_pane.show_changes((self.data['id'], message_id), entry['changes'], path)
+            if was_hidden:
+                width = max(600, self.content_splitter.width())
+                self.content_splitter.setSizes([width // 2, width // 2])
+
+    def edit_changed_file(self, message_id, path):
+        entry = next((item for item in self.data['messages'] if item['id'] == message_id), None) if self.data else None
+        if not entry or path not in {item['path'] for item in entry.get('changes', [])}:
+            return
+        try:
+            from pathlib import Path
+            from ..project_tools import ProjectTools
+            request = entry.get('request', {})
+            project = self.context_projects().get(request.get('project_id'))
+            if project is None or not request.get('project_root') or project.root.resolve() != Path(request['project_root']).resolve():
+                raise ValueError('The original IDE project registration is missing or its root changed.')
+            target = ProjectTools(project).path(path)
+            if not target.is_file():
+                raise ValueError('This file no longer exists.')
+            opener = getattr(self, 'working_file_opener', None)
+            if opener is None or not opener(target):
+                raise ValueError('Enable and open the IDE workspace to edit this file.')
+        except (OSError, ValueError) as error:
+            self.status.setText(f'Could not open file in IDE: {error}')
+
     def append_delta(self, text):
         if not self.session.append_delta(text):
             return
         if not self.render_timer.isActive():
+            self.render_timer.start()
+
+    def append_reasoning(self, text):
+        if self.session.append_reasoning(text) and not self.render_timer.isActive():
             self.render_timer.start()
 
     def checkpoint(self):
@@ -674,12 +799,22 @@ class LMPage(qt.QWidget):
                 self.status.setText('Response saved.' if status == 'complete' else 'Stopped. Partial response saved and excluded from future context.')
             if metadata.get('finish_reason') == 'length':
                 self.status.setText('Response reached the output limit. Increase maximum response tokens and regenerate if needed.')
+            if status == 'complete' and not error and not self.discard_approved:
+                from ..configuration import response_notifications_enabled
+                if response_notifications_enabled() and not self.response_is_visible():
+                    from desktop.notifications import notify
+                    notify('lm', 'LM Chat · New AI reply',
+                           'Your AI reply is ready.', native=True)
         elif error:
             self.status.setText(error)
         elif status == 'cancelled':
             self.status.setText('Connection check stopped.')
         self.update_controls()
         self.idle.emit()
+
+    def response_is_visible(self):
+        window = self.window()
+        return self.isVisible() and window.isActiveWindow() and not window.isMinimized()
 
     def render(self):
         self.render_timer.stop()
@@ -688,6 +823,14 @@ class LMPage(qt.QWidget):
         bottom = self.transcript.key != current or bar.value() >= bar.maximum() - 12
         old = bar.value()
         self.transcript.sync(self.data)
+        self.disclaimer.setVisible(not self.data or not self.data['messages'])
+        pane = self.changes_pane
+        if pane.key is not None:
+            entry = next((item for item in self.data['messages'] if item['id'] == pane.key[1]), None) if self.data else None
+            if self.data is None or pane.key[0] != self.data['id'] or not entry or not entry.get('changes'):
+                pane.clear()
+            elif not pane.isHidden() and pane.records != entry['changes']:
+                pane.show_changes(pane.key, entry['changes'], pane.files.currentData())
         self.transcript.body.layout().activate()
         bar.setValue(bar.maximum() if bottom else old)
 
@@ -701,12 +844,14 @@ class LMPage(qt.QWidget):
         self.project_box.setVisible(self.mode.currentData() == 'code')
         self.project_box.setEnabled(editable and not busy)
         code = self.mode.currentData() == 'code'
-        for widget in (self.project_picker, self.project_refresh, self.attach_button, self.selection_button):
+        for widget in (self.project_picker, self.project_refresh):
             widget.setVisible(code)
+        self.attach_button.setEnabled(editable and not busy)
+        self.selection_button.setEnabled(editable and code and not busy)
+        self.model.setEnabled(not busy)
         self.settings_box.setEnabled(editable and not busy)
         self.composer.setEnabled(editable)
-        self.composer.setPlaceholderText('Draft your next message… Send after the current request finishes · Shift+Enter for a new line'
-            if busy else 'Message…  Enter to send · Shift+Enter for a new line')
+        self.composer.setPlaceholderText('Enter Message')
         self.send_button.setEnabled(busy or editable)
         action = 'Stop generation / connection check' if busy else 'Send message'
         self.send_button.setIcon(chat_icon('stop' if busy else 'send'))

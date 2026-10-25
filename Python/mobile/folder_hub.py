@@ -228,11 +228,15 @@ def discover_folder_choices(snapshot):
                      available=group.available, locked=group.locked)
         if primary['kind'] == 'job':
             job = jobs[primary['value']]
-            entry['copies'] = [copy for copy in copies if copy['source'] != 'Remote' or copy.get('locked')]
             loaded = [record for record in snapshot.source_packages
                       if job['remote'] in record['remotes'] and (not job.get('identity')
                           or record.get('identities', {}).get(job['remote']) == job['identity'])]
             if loaded or not snapshot.source_packages and job['remote'] in snapshot.remote_names:
+                # Replace only this mapping's matching account. Other loaded
+                # accounts remain independently browsable; a stale mapping must
+                # never remove their unlocked Cloud destinations.
+                entry['copies'] = [copy for copy in copies if copy['source'] != 'Remote'
+                                   or copy['source_identity'] != primary['source_identity']]
                 entry['copies'].append(dict(primary, source='Remote', kind='job-remote', value=job['id']))
         elif (primary['kind'] == 'crypt' and primary['remote'] in snapshot.remote_names
               and not any(copy['source'] == 'Remote' for copy in copies)):

@@ -50,8 +50,12 @@ and uses destructive styling. Pull/Push direction is shown for mapped copies.
 Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
 the entire device filesystem. Choose **New document** from Home. Enter a file
 name and select **Plain text (.txt)** or **Markdown (.md)**, then tap
-**Create document**. The selected extension is added when needed. New documents start
-empty. **Cancel** creates nothing.
+**Choose location…**. The selected extension is added when needed. Choose the
+destination folder in Local, All files, Received Files or an unlocked LocalCrypt
+location, then tap **Create document**. New documents start empty in that browsable
+folder; LocalCrypt stores them encrypted. No private app-storage destination is
+offered. Cloud locations remain read-only; use reviewed Push to upload changes.
+**Cancel** before creation creates nothing.
 **Open file** from Home or Documents opens a browser. Use the folder arrow to go
 up; at the root, Back returns to the hub. Android Back first clears search or
 retraces visited folders, then returns to the hub.
@@ -73,7 +77,8 @@ open, recent and other saved documents; Home provides Open/New actions.
 
 Choose a document from **All open** in Documents or **Recent** on its main page,
 or use **Actions → New document**. Edit its name in the name field and
-its contents in the text area. **Save** publishes the edited file inside the app.
+its contents in the text area. For a document created in a chosen folder, **Save**
+writes edits to that file; LocalCrypt saves stay encrypted.
 Text, source files and Markdown share the native source editor. Markdown can
 show a live formatted preview while you edit. See [Text and Markdown](documents.md#text-and-markdown).
 

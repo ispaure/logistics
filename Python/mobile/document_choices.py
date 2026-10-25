@@ -8,13 +8,15 @@ CHOICES = (('Plain text (.txt)', 'txt'), ('Markdown (.md)', 'md'))
 
 
 def choose_document_type(app):
+    destination = app.native_host.state.destination
+    origin = (destination, len(app.routes.screens[destination]), len(app.adaptive.detail_routes))
     box = toga.Box(style=Pack(direction=COLUMN, margin=16))
     name = toga.TextInput(placeholder='File name', style=Pack(height=48))
     error = toga.Label('', style=Pack(margin_top=8))
     kind = toga.Selection(items=[label for label, extension in CHOICES],
                           style=Pack(height=48))
 
-    def create(widget, **kwargs):
+    async def create(widget, **kwargs):
         if not app.active_host:
             return
         extension = dict(CHOICES)[kind.value]
@@ -28,11 +30,10 @@ def choose_document_type(app):
         except ValueError as exc:
             error.text = str(exc)
             return
-        if not app.create_chosen_document(extension, name=filename, content=''):
-            error.text = app.status.text
+        await app.editor_picker().show_document_creation(filename, origin)
 
     box.name_input, box.type_selector, box.error_label = name, kind, error
-    box.create_button = toga.Button('Create document', on_press=create, style=Pack(height=48))
+    box.create_button = toga.Button('Choose location…', on_press=create, style=Pack(height=48))
     box.cancel_button = toga.Button('Cancel', on_press=lambda widget, **kw: app.routes.back(),
                                     style=Pack(height=48))
     box.add(toga.Label('File name'), name, toga.Label('File type'), kind, error,

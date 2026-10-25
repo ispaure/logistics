@@ -141,6 +141,39 @@ and test execution. The platform workflow sets this path during installation and
 persists it through `GITHUB_ENV` so later fixture subprocesses can find browser
 tooling after application caches are isolated.
 
+### Test timing and maintenance
+
+Every host regression run through `dev.py test` or `dev.py test-owner` saves a
+timestamped JSON report under ignored `test-results/test-timings/` and prints
+the ten slowest tests and files. The runner also accepts `--report PATH` when
+invoked directly. Desktop, mobile and shared matrix legs produce separate reports.
+Direct `python -m unittest` invocations bypass this reporting.
+
+Reports include UTC start/end timestamps, elapsed seconds, test IDs and outcomes,
+suite selection, interpreter and host platform. Individual test durations include
+`setUp`, the test body, `tearDown` and test cleanups. File durations include process
+startup, imports/discovery, class/module fixtures and shutdown. The suite total
+also includes runner overhead. Class/module fixture failures appear as synthetic
+events with zero test duration; their time belongs to the file total. Failed
+subtests mark their parent test as failed. Skips and expected failures remain
+distinct from passes.
+
+The parent checkpoints the report after each isolated file. Crashes and the
+existing 300-second file timeout retain file elapsed time and exit status even
+when the child cannot finish a test report. `complete` means the runner finished,
+not that tests passed; inspect `exit_code` and outcomes as well. Incomplete child
+reports cannot establish which tests ran before a crash or timeout. An interrupted
+run retains completed files, but its active file may be absent.
+
+Compare repeated runs with the same selection, interpreter and host before
+treating a timing difference as a regression. Review slow files for repeated
+setup, polling/sleeps and redundant expensive integration checks. Runtime alone
+does not justify removing a test. Keep protection for data loss, encryption,
+save/reopen and recovery paths; consolidate duplicate assertions only when the
+behavior remains covered. Review critical workflows for real outcomes, failure
+paths and platform checks even if their existing unit tests are fast. Timing
+reports do not measure coverage or prove a test's value.
+
 ## Make your first change
 
 1. Find your workflow in the [code map](code-map.md), then read its owning user

@@ -3,6 +3,15 @@ from commonUtils.ui import pyside as qt
 from .chrome import action_icon
 
 
+class NavigationTree(qt.QTreeWidget):
+    shown = qt.Signal()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.doItemsLayout()
+        self.shown.emit()
+
+
 def populate_navigation(page, snapshot):
     tree = page.refs
     expanded = ({tree.topLevelItem(i).text(0): tree.topLevelItem(i).isExpanded()

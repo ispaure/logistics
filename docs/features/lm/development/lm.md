@@ -74,10 +74,11 @@ excluded. Budgeting is approximate and the model context limit is configured by
 the user. The UI does not promise cross-conversation memory or model training.
 
 See [implementation contracts](development.md) and
-[user behavior](../user/user.md). Code mode adds a bounded read-only execution contract: a conversation selects an
+[user behavior](../user/user.md). Code mode adds a bounded project execution contract: a conversation selects an
 IDE registration, snapshots open editor text on the GUI thread, and offers
-list/search/read tools scoped to that root and its exclusions. Ordinary Chat
-continues rejecting tools. No mutation or shell tool is provided. `agent.py` owns
+list/search/read tools scoped to that root and its exclusions. An optional
+`allow_edits` toggle enables conflict-checked exact text edits to existing files. Ordinary Chat
+continues rejecting tools. Edits save directly after live editor validation on the GUI thread; no shell tool is provided. `agent.py` owns
 the HTTP/tool loop and cooperative ResultWorker lifecycle; busy remains true
 through tool execution and subsequent requests. Tool definitions/results share
 the configured context budget. JSON response metadata retains tool activity;

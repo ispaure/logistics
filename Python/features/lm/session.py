@@ -5,6 +5,7 @@ switching records, and retains this owner until asynchronous work has settled.
 Store failures propagate so the presentation can offer retry/export/discard.
 """
 from copy import deepcopy
+from time import monotonic
 
 from .domain import message
 
@@ -115,6 +116,7 @@ class ConversationSession:
             raise
         self.generation += 1
         self.active_message = entry
+        self._response_started = monotonic()
         return entry
 
     def append_delta(self, text, *, token=None):
@@ -131,7 +133,15 @@ class ConversationSession:
         entry, self.active_message = self.active_message, None
         entry['status'] = status
         entry['response'] = metadata
+        entry['elapsed_seconds'] = max(0, monotonic() - self._response_started)
         if error:
             entry['error'] = error
+        self.dirty = True
+        return True
+
+    def append_reasoning(self, text, *, token=None):
+        if self.active_message is None or (token is not None and not self.accepts_response(token)):
+            return False
+        self.active_message['reasoning'] = self.active_message.get('reasoning', '') + text
         self.dirty = True
         return True

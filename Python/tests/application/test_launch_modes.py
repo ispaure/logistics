@@ -102,6 +102,15 @@ class LaunchModeTests(QtTestCase):
         self.assertFalse(git.working_file_opener('/project/file.py'))
         ide.open_registered_file.assert_not_called()
 
+    def test_lm_file_handoff_reuses_the_ide_destination(self):
+        page = self.window._create_feature_page(PageContribution('LM Chat', 'lm.chat', qt.QWidget))
+        self.addCleanup(page.deleteLater)
+        ide = self.window._launch_targets()['ide']
+        ide.open_registered_file = Mock(return_value=True)
+        self.assertTrue(page.working_file_opener('/project/file.py'))
+        ide.open_registered_file.assert_called_once_with('/project/file.py')
+        self.assertIs(self.window.tabs.currentWidget(), ide)
+
     def test_landing_choices_reuse_pages_and_full_hub_restores_sidebar(self):
         window = self.window
         self.assertIn(window.header_menus.fullscreen.action, window.header_menus.menu.actions())

@@ -1,9 +1,11 @@
 """Project attachment selection and bounded draft publication for desktop LM."""
 from pathlib import Path
+import re
 from typing import Protocol, Any
 
 from commonUtils.ui import pyside as qt
 from ..project_tools import ProjectTools
+from ..screenshots import MAX_IMAGES, encode_screenshot, read_clipboard_image_file
 
 
 class AttachmentHost(Protocol):
@@ -12,9 +14,12 @@ class AttachmentHost(Protocol):
     project_picker: Any
     composer: Any
     status: Any
+    draft_images: Any
 
     def context_projects(self) -> dict: ...
     def context_buffers(self, project) -> tuple: ...
+    def refresh_draft_images(self): ...
+    def changed(self): ...
 
 
 class AttachmentController:
@@ -43,6 +48,25 @@ class AttachmentController:
     def attach_files(self):
         page = self.page
         try:
+            if page.client.busy:
+                raise ValueError('Wait for the current response to finish before attaching files.')
+            if page.mode.currentData() != 'code':
+                paths, _ = qt.QFileDialog.getOpenFileNames(page, 'Attach text files')
+                attachments = []
+                total = len(page.composer.toPlainText().encode('utf-8'))
+                for path in paths:
+                    with Path(path).open('rb') as source:
+                        content = source.read(65537)
+                    total += len(content)
+                    if total > 65536:
+                        raise ValueError('Attached context and draft are limited to 64 KiB. Choose smaller text files.')
+                    text = content.decode('utf-8-sig')
+                    # Keep backticks in pasted files from ending their surrounding fence.
+                    fence = '`' * max(3, max((len(part) for part in re.findall(r'`+', text)), default=0) + 1)
+                    attachments.append(f'Attached file: {Path(path).name}\n{fence}\n{text}\n{fence}')
+                if attachments:
+                    self.append_attachment('\n\n'.join(attachments))
+                return
             tools, _ = self.attachment_context()
             paths, _ = qt.QFileDialog.getOpenFileNames(page, 'Attach project text files', str(tools.root))
             attachments = []
@@ -79,6 +103,24 @@ class AttachmentController:
                 selected = selections[labels.index(label)]
             path, line, text = selected
             self.append_attachment(f'IDE selection: {path}, starting at line {line}\n```\n{text}\n```')
+        except (ValueError, OSError) as error:
+            page.status.setText(str(error))
+
+    def attach_images(self):
+        page = self.page
+        try:
+            if page.client.busy:
+                raise ValueError('Wait for the current response to finish before attaching files.')
+            paths, _ = qt.QFileDialog.getOpenFileNames(page, 'Attach images', '',
+                'Images (*.png *.jpg *.jpeg *.webp *.tif *.tiff *.bmp *.gif)')
+            if len(paths) + len(page.draft_images) > MAX_IMAGES:
+                raise ValueError('Attach at most four screenshots per message.')
+            records = [encode_screenshot(read_clipboard_image_file(path)) for path in paths]
+            if records:
+                page.draft_images.extend(records)
+                page.refresh_draft_images()
+                page.changed()
+                page.status.setText('Images attached. Image input requires a vision-capable model.')
         except (ValueError, OSError) as error:
             page.status.setText(str(error))
 

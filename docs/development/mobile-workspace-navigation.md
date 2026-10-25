@@ -273,6 +273,12 @@ retained panel content without adding a controller. One native Back/pop therefor
 returns to the opening screen, while the editor buffer and preview WebView remain
 owned by the same text session.
 
+Successful new-document creation retires its `new-document` form before showing
+the editor, so reader Close captures the screen beneath the form. Failed
+creation retains the form for retry or Cancel. `test_document_navigation.py`
+covers creation from Home, Documents and a retained folder browser, including
+unsaved-change decisions and returning to the original panel.
+
 ## File loading panels
 
 `document_sources.opening_status` presents a temporary `file-loading:` route with
@@ -1329,7 +1335,8 @@ Toga. It does not mount fixed horizontal custom views or add manual glass gaps.
 Folder actions and reader tools therefore participate in UIKit's horizontal and
 vertical layouts; related comic navigation and document tools use distinct groups.
 Close occupies the leading navigation group with native Back suppressed. Save
-uses a prominent pinned trailing group. Reader titles use UIKit's normal title
+uses a prominent pinned trailing group with the visible title **Save**, so the
+completion action cannot be mistaken for Download. Reader titles use UIKit's normal title
 allocation instead of reserving horizontal space for actions that may be vertical.
 Transfer status keeps its meaningful text and its own group and higher priority.
 

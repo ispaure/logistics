@@ -274,6 +274,25 @@ class GitUITests(QtTestCase):
         self.assertEqual(path.read_text(),'local\nincoming\n')
         self.assertFalse(any(change.conflict for change in self.repo.status().changes))
 
+    def test_hidden_repository_defers_navigation_selection_until_shown(self):
+        self.page.hide()
+        self.open()
+        self.page.views.setCurrentIndex(1)
+        self.page.refresh()
+        self.wait()
+        self.assertIsNone(self.page.refs.currentItem())
+        self.page.show()
+        self.app.processEvents()
+        self.assertIs(self.page.refs.currentItem(), self.page.workspace_items[1])
+        self.assertFalse(self.page.refs.visualItemRect(self.page.workspace_items[1]).isEmpty())
+        self.page.hide()
+        self.page.views.setCurrentIndex(0)
+        self.page.refresh()
+        self.wait()
+        self.page.show()
+        self.app.processEvents()
+        self.assertIs(self.page.refs.currentItem(), self.page.workspace_items[0])
+
     def test_workspace_navigation_reparents_preview_and_spans_commit_composer(self):
         self.commit_fixture(); self.open()
         self.assertEqual(self.page.refs.topLevelItem(0).text(0),'WORKSPACE')

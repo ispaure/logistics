@@ -52,6 +52,37 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({'error': {'message': reason}}).encode())
             return
         self.send_response(200)
+        if self.server.mode in ('reasoning', 'reasoning_json'):
+            if self.server.mode == 'reasoning_json':
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(dict(choices=[dict(message=dict(content='Answer', reasoning_content='Provider notes'),
+                                                               finish_reason='stop')])).encode())
+                return
+            self.send_header('Content-Type', 'text/event-stream')
+            self.end_headers()
+            self.wfile.write(b'data: {"choices":[{"delta":{"reasoning":"Provider notes"}}]}\n\n')
+            self.wfile.flush()
+            self.server.release.wait(3)
+            try:
+                self.wfile.write(b'data: {"choices":[{"delta":{"content":"Answer"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
+        if self.server.mode == 'tools_edit':
+            results = [m for m in data['messages'] if m['role'] == 'tool']
+            if len(results) < 2:
+                name = 'read_file' if not results else 'edit_file'
+                args = (dict(path='main.py', start_line=1, end_line=2) if not results else
+                        dict(path='main.py', version=json.loads(results[-1]['content'])['version'],
+                             old_text='disk value', new_text='edited value'))
+                call = dict(id=f'edit-{len(results)}', type='function',
+                            function=dict(name=name, arguments=json.dumps(args)))
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'choices': [{'message': {'content': None, 'tool_calls': [call]},
+                                                         'finish_reason': 'tool_calls'}]}).encode())
+                return
         if self.server.mode.startswith('tools'):
             tool_reply = not any(m['role'] == 'tool' for m in data['messages']) or self.server.mode == 'tools_forever'
             if tool_reply:
@@ -155,6 +186,65 @@ class LMUITests(QtTestCase):
         self.page.composer.setPlainText(text)
         self.page.send()
 
+    def test_completed_reply_notifies_once_and_setting_can_disable_it(self):
+        with patch('features.lm.configuration.response_notifications_enabled', return_value=True), \
+                patch('desktop.notifications.notify') as notify:
+            self.chat()
+            self.until(lambda: not self.page.client.busy)
+            notify.assert_called_once_with('lm', 'LM Chat · New AI reply',
+                                           'Your AI reply is ready.', native=True)
+            self.page.completed('complete', '', {})
+            notify.assert_called_once()
+        with patch('features.lm.configuration.response_notifications_enabled', return_value=False), \
+                patch('desktop.notifications.notify') as notify:
+            self.chat('Another question')
+            self.until(lambda: not self.page.client.busy)
+            notify.assert_not_called()
+
+    def test_reply_notifications_follow_chat_visibility_and_window_focus(self):
+        self.page.show()
+        with patch('features.lm.configuration.response_notifications_enabled', return_value=True), \
+                patch('desktop.notifications.notify') as notify, \
+                patch.object(self.page, 'isActiveWindow', return_value=True) as active, \
+                patch.object(self.page, 'isMinimized', return_value=False) as minimized:
+            self.chat()
+            self.until(lambda: not self.page.client.busy)
+            notify.assert_not_called()
+
+            # Another feature is selected, but the Logistics window is active.
+            self.page.hide()
+            self.chat('Reply while another feature is open')
+            self.until(lambda: not self.page.client.busy)
+            notify.assert_called_once()
+            notify.reset_mock()
+
+            self.page.show()
+            active.return_value = False
+            self.chat('Reply while another app is focused')
+            self.until(lambda: not self.page.client.busy)
+            notify.assert_called_once()
+            notify.reset_mock()
+
+            active.return_value = True
+            minimized.return_value = True
+            self.chat('Reply while minimized')
+            self.until(lambda: not self.page.client.busy)
+            notify.assert_called_once()
+
+    def test_failed_and_cancelled_replies_do_not_notify(self):
+        with patch('features.lm.configuration.response_notifications_enabled', return_value=True), \
+                patch('desktop.notifications.notify') as notify:
+            self.server.mode = 'truncated'
+            self.chat()
+            self.until(lambda: not self.page.client.busy)
+            self.assertEqual(self.page.data['messages'][-1]['status'], 'failed')
+            self.server.mode = 'slow'
+            self.chat('Cancel this')
+            self.until(lambda: bool(self.page.active_message['content']))
+            self.page.client.cancel()
+            self.until(lambda: not self.page.client.busy)
+            notify.assert_not_called()
+
     def test_injected_project_context_does_not_discover_ide_widgets(self):
         from types import SimpleNamespace
         project = object()
@@ -180,6 +270,32 @@ class LMUITests(QtTestCase):
         self.page.mode.setCurrentIndex(1)
         self.page.project_picker.setCurrentIndex(self.page.project_picker.findData(project.id))
         return project
+
+    def test_allow_edits_persists_and_model_applies_a_direct_edit(self):
+        self.configure_code()
+        self.assertFalse(self.page.allow_edits.isChecked())
+        self.page.allow_edits.setChecked(True)
+        self.server.mode = 'tools_edit'
+        with patch('features.lm.ui.page.editor_context', return_value=({}, [])):
+            self.chat('Change disk value to edited value')
+            self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.page.data['messages'][-1]['status'], 'complete')
+        self.assertEqual((Path(self.temp.name) / 'main.py').read_text(), 'edited value\nsecond line\n')
+        saved = self.store.load(self.page.data['id'])
+        self.assertTrue(saved['allow_edits'])
+        self.assertTrue(saved['messages'][-1]['request']['allow_edits'])
+        steps = saved['messages'][-1]['response']['tool_steps']
+        self.assertTrue(json.loads(steps[-1]['result'])['edited'])
+        changes = saved['messages'][-1]['changes']
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0]['path'], 'main.py')
+        self.assertIn('-disk value', changes[0]['patch'])
+        self.assertIn('+edited value', changes[0]['patch'])
+        self.page.show_changes(saved['messages'][-1]['id'], 'main.py')
+        self.assertEqual(self.page.changes_pane.preview.raw_patch, changes[0]['patch'])
+        self.page.allow_edits.setChecked(False)
+        self.page.restore()
+        self.assertTrue(self.page.allow_edits.isChecked())
 
     def test_code_tools_stream_and_json_feed_snapshot_back_then_save_answer(self):
         self.configure_code()
@@ -859,7 +975,7 @@ class LMUITests(QtTestCase):
         QTest.keyClick(self.page.system, qt.Qt.Key.Key_Return)
         self.assertTrue(self.page.system.toPlainText().endswith('\n'))
         self.assertEqual(len(self.server.requests), before)
-        self.assertIn('Shift+Enter', self.page.composer.placeholderText())
+        self.assertEqual(self.page.composer.placeholderText(), 'Enter Message')
 
     def test_empty_enter_does_not_send_or_insert_newline(self):
         self.page.conversations.new_conversation()
@@ -997,6 +1113,165 @@ class LMUITests(QtTestCase):
         self.page.transcript.bubbles[entry['id']].copy_button.click()
         self.assertEqual(self.app.clipboard().text(), entry['content'])
 
+    def test_composer_plus_attaches_text_in_chat_atomically_with_a_size_limit(self):
+        self.page.conversations.new_conversation()
+        path = Path(self.temp.name) / 'example.txt'
+        path.write_text('Sample\n```\nnested fence\n```\n')
+        self.page.composer.setPlainText('Draft')
+        with patch.object(qt.QFileDialog, 'getOpenFileNames', return_value=([str(path)], '')):
+            self.page.attach_text_action.trigger()
+        draft = self.page.composer.toPlainText()
+        self.assertIn('Attached file: example.txt', draft)
+        self.assertIn('````\nSample\n```', draft)
+        path.write_bytes(b'x' * 65537)
+        with patch.object(qt.QFileDialog, 'getOpenFileNames', return_value=([str(path)], '')):
+            self.page.attach_text_action.trigger()
+        self.assertEqual(self.page.composer.toPlainText(), draft)
+        self.assertIn('64 KiB', self.page.status.text())
+        image_path = Path(self.temp.name) / 'screenshot.png'
+        image = qt.QImage(40, 30, qt.QImage.Format.Format_RGB32)
+        image.fill(qt.QColor('red'))
+        image.save(str(image_path))
+        self.assertEqual([action.text() for action in self.page.attach_button.menu().actions()],
+                         ['Attach text files…', 'Attach images…'])
+        with patch.object(qt.QFileDialog, 'getOpenFileNames', return_value=([str(image_path)], '')):
+            self.page.attach_image_action.trigger()
+        self.assertEqual(len(self.page.draft_images), 1)
+        self.assertEqual(self.page.composer.toPlainText(), draft)
+        # A bad file in a multi-image selection must not publish a partial batch.
+        with patch.object(qt.QFileDialog, 'getOpenFileNames', return_value=([str(image_path), str(path)], '')):
+            self.page.attach_image_action.trigger()
+        self.assertEqual(len(self.page.draft_images), 1)
+
+    def test_composer_model_picker_controls_the_sent_request_and_saved_model(self):
+        self.page.conversations.new_conversation()
+        self.page.model.addItem('another-model')
+        self.page.model.setCurrentIndex(self.page.model.findText('another-model'))
+        self.page.composer.setPlainText('Use the selected model')
+        self.page.send_button.click()
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(self.server.requests[-1]['model'], 'another-model')
+        self.assertEqual(self.store.load(self.page.data['id'])['model'], 'another-model')
+
+    def test_reasoning_streams_inline_then_collapses_and_survives_reopening(self):
+        self.server.mode = 'reasoning'
+        self.chat()
+        entry = self.page.data['messages'][-1]
+        self.until(lambda: bool(entry.get('reasoning')))
+        self.page.render()
+        bubble = self.page.transcript.bubbles[entry['id']]
+        self.assertTrue(bubble.work_button.text().startswith('Working'))
+        self.assertTrue(bubble.work_button.isChecked())
+        self.assertFalse(bubble.reasoning_browser.isHidden())
+        self.assertEqual(bubble.reasoning_browser.source, 'Provider notes')
+        self.server.release.set()
+        self.until(lambda: not self.page.client.busy)
+        self.assertEqual(entry['content'], 'Answer')
+        self.assertFalse(bubble.work_button.isChecked())
+        self.assertTrue(bubble.reasoning_browser.isHidden())
+        self.assertTrue(bubble.work_button.text().startswith('Worked for'))
+        bubble.work_button.click()
+        self.assertFalse(bubble.reasoning_browser.isHidden())
+        bubble.work_button.click()
+        self.assertTrue(bubble.reasoning_browser.isHidden())
+        saved = self.store.load(self.page.data['id'])['messages'][-1]
+        self.assertEqual(saved['reasoning'], 'Provider notes')
+        self.assertGreaterEqual(saved['elapsed_seconds'], 0)
+        from features.lm.ui.conversation_view import Bubble
+        reopened = Bubble(saved)
+        self.addCleanup(reopened.deleteLater)
+        self.assertTrue(reopened.reasoning_browser.isHidden())
+        reopened.work_button.click()
+        self.assertEqual(reopened.reasoning_browser.source, 'Provider notes')
+
+    def test_json_reasoning_and_plain_response_activity_fallback(self):
+        self.server.mode = 'reasoning_json'
+        self.chat()
+        self.until(lambda: not self.page.client.busy)
+        entry = self.page.data['messages'][-1]
+        self.assertEqual(entry['reasoning'], 'Provider notes')
+        bubble = self.page.transcript.bubbles[entry['id']]
+        self.assertTrue(bubble.work_button.isEnabled())
+        self.server.mode = 'json'
+        self.chat('Next')
+        self.until(lambda: not self.page.client.busy)
+        entry = self.page.data['messages'][-1]
+        bubble = self.page.transcript.bubbles[entry['id']]
+        self.assertFalse(bubble.work_button.isEnabled())
+        self.assertTrue(bubble.work_button.text().startswith('Worked for'))
+        self.assertTrue(bubble.reasoning_browser.isHidden())
+
+    def test_code_panels_copy_only_their_contents_in_both_message_roles(self):
+        from features.lm.ui.conversation_view import Bubble
+        source = ('Prose with `inline code`.\n\n````python\n'
+                  'def example():\n    return "😀"\n\n# done\n````\n\n'
+                  'Between panels.\n\n~~~\nsecond block\n~~~\n')
+        for role in ('user', 'assistant'):
+            with self.subTest(role=role):
+                bubble = Bubble(message(role, source))
+                self.addCleanup(bubble.deleteLater)
+                bubble.resize(500, 600)
+                bubble.show()
+                self.app.processEvents()
+                browser = bubble.browser
+                self.assertEqual(len(browser.code_buttons), 2)
+                for (frame, button), expected in zip(browser.code_buttons, (
+                        'def example():\n    return "😀"\n\n# done', 'second block')):
+                    button.click()
+                    self.assertEqual(self.app.clipboard().text(), expected)
+                    self.assertEqual(button.accessibleName(), 'Copy code')
+                    rect = browser.document().documentLayout().frameBoundingRect(frame)
+                    code = browser.document().documentLayout().blockBoundingRect(
+                        browser.document().findBlock(frame.firstPosition()))
+                    self.assertGreaterEqual(button.x(), rect.center().x())
+                    self.assertLess(button.geometry().bottom(), code.top())
+                bubble.copy_button.click()
+                self.assertEqual(self.app.clipboard().text(), source)
+                # Streaming replaces the native document and its copy targets.
+                browser.set_source('```text\nupdated')
+                self.assertEqual(len(browser.code_buttons), 1)
+                browser.code_buttons[0][1].click()
+                self.assertEqual(self.app.clipboard().text(), 'updated')
+                browser.set_source('Only prose and `inline code`.')
+                self.assertEqual(browser.code_buttons, [])
+
+    def test_user_messages_keep_pasted_headers_and_line_breaks_literal(self):
+        from features.lm.ui.conversation_view import Bubble
+        source = ('Please add this header:\n\n'
+                  '# ' + '-' * 110 + '\n'
+                  '# AUTHORSHIP INFORMATION\n\n'
+                  "__author__ = 'Marc-André Voyer'\n"
+                  "__license__ = 'MIT License'\n\n"
+                  '<b>literal HTML</b> and *literal stars*\n'
+                  '    indented text\n')
+        bubble = Bubble(message('user', source))
+        self.addCleanup(bubble.deleteLater)
+        self.assertEqual(bubble.browser.document().toPlainText(), source)
+        block = bubble.browser.document().begin()
+        while block.isValid():
+            self.assertEqual(block.blockFormat().headingLevel(), 0)
+            block = block.next()
+        self.assertEqual(bubble.browser.code_buttons, [])
+        bubble.copy_button.click()
+        self.assertEqual(self.app.clipboard().text(), source)
+        # Literal prose surrounding explicit fences also survives formatting.
+        bubble.browser.set_source('# literal heading 😀\n\n```python\nx = 1\n```\n\n__literal__\nnext line')
+        rendered = bubble.browser.document().toPlainText()
+        self.assertIn('# literal heading 😀', rendered)
+        self.assertIn('__literal__\nnext line', rendered)
+        self.assertEqual(len(bubble.browser.code_buttons), 1)
+        bubble.browser.code_buttons[0][1].click()
+        self.assertEqual(self.app.clipboard().text(), 'x = 1')
+
+    def test_disclaimer_only_shows_for_empty_conversations(self):
+        self.page.conversations.new_conversation()
+        self.assertFalse(self.page.disclaimer.isHidden())
+        self.page.data['messages'].append(message('user', 'First message'))
+        self.page.render()
+        self.assertTrue(self.page.disclaimer.isHidden())
+        self.page.conversations.new_conversation()
+        self.assertFalse(self.page.disclaimer.isHidden())
+
     def test_reply_footer_actions_and_compact_composer(self):
         self.chat('First question')
         self.until(lambda: not self.page.client.busy)
@@ -1011,10 +1286,14 @@ class LMUITests(QtTestCase):
         latest = self.page.transcript.bubbles[last]
         self.assertTrue(earlier.retry_button.isHidden())
         self.assertFalse(latest.retry_button.isHidden())
-        self.assertGreaterEqual(latest.copy_button.y(), latest.browser.geometry().bottom())
+        # Scrollbar visibility can queue another layout pass after showing the panel.
+        self.until(lambda: latest.copy_button.y() >= latest.browser.geometry().bottom())
+        self.assertGreater(latest.timestamp.x(), latest.retry_button.geometry().right())
+        self.assertLessEqual(latest.timestamp.x() - latest.retry_button.geometry().right(), 8)
         self.assertIs(self.page.send_button.parent(), self.page.composer_frame)
-        self.assertLess(self.page.send_button.y(), self.page.composer.geometry().bottom())
-        self.assertGreater(self.page.send_button.geometry().bottom(), self.page.composer.y())
+        self.until(lambda: self.page.send_button.y() > self.page.composer.geometry().bottom())
+        self.assertLessEqual(self.page.send_button.width(), 32)
+        self.assertLess(self.page.model.geometry().right(), self.page.send_button.x())
         self.assertTrue(self.page.save_error.isHidden())
         self.assertEqual(self.page.disclaimer.text(), 'Language Models can make mistakes. Check important info.')
         latest.copy_button.click()
@@ -1067,7 +1346,7 @@ class LMUITests(QtTestCase):
                          ['File', 'Edit', 'Conversation', 'View', 'Server'])
         self.assertEqual(self.page.status.contentsMargins().bottom(), 0)
         content = self.page.status.parentWidget()
-        self.assertEqual(content.layout().contentsMargins().bottom(), 8)
+        self.assertLessEqual(content.layout().contentsMargins().bottom(), 4)
 
     def test_tree_move_persists_conversation_and_folder_destinations(self):
         self.page.conversations.new_conversation()

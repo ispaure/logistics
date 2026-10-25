@@ -85,7 +85,7 @@ start with the [mobile build and release handbook](docs/development/mobile-handb
 | [Bulk Rename](docs/features/bulk_rename/user/user.md) | Preview and apply changes to many filenames at once |
 | [Text Editor](docs/features/text_editor/user/user.md) | Edit text and code in tabs, search/replace, see Git change markers, and preserve file encodings |
 | [IDE](docs/features/ide/user/user.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, search project files, and autosave with Git change markers |
-| [LM Chat](docs/features/lm/user/user.md) | Chat with an existing LM server, paste screenshots, discuss IDE projects with read-only file tools, and save conversations locally |
+| [LM Chat](docs/features/lm/user/user.md) | Chat with an existing LM server, paste screenshots, read and optionally edit IDE project files with saved change previews, and save conversations locally |
 | [Books](docs/features/books/user/user.md) and [Comics](docs/features/comics/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
 | [PDF Reader](docs/features/pdf/user/user.md) | Read and search local, remote and LocalCrypt PDFs on desktop and mobile, jump to page numbers, and swipe vertically |
 | [Archives](docs/features/archives/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |

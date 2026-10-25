@@ -314,7 +314,9 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         self._filter_refs(self.ref_filter.text())
 
     def _select_navigation(self, index):
-        if hasattr(self, 'workspace_items'):
+        if hasattr(self, 'workspace_items') and self.refs.isVisible():
+            # Hidden startup trees have no accessible rows yet. Their show
+            # event restores selection once Qt has created the visible layout.
             with qt.QSignalBlocker(self.refs):
                 self.refs.setCurrentItem(self.workspace_items[index])
 

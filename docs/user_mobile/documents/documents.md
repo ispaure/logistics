@@ -14,6 +14,19 @@ documents** lists other saved text and Markdown files. **Search documents**
 filters all three sections by filename. **Open Books & Comics library** is available
 below those lists. Empty lists show plain informational text without a rounded block.
 
+To create a document, enter its name and choose Plain text or Markdown, then tap
+**Choose location…**. Select a folder in **Local**, **All files**, **Received Files**
+or an unlocked **LocalCrypt** location, then tap **Create document**. The file is
+created in that folder and appears when you browse it from All files. **Save**
+writes edits back to the same file. LocalCrypt files stay encrypted on disk;
+cloud locations are read-only and receive changes through reviewed **Push**.
+New documents do not use the private saved-document store. Existing saved
+documents remain available in Documents.
+
+After **Create document** opens your new file, **×** closes it and returns to the
+screen where you opened New document. It does not reopen the completed creation
+form. Unsaved edits still offer Save, Quit without saving and Cancel.
+
 In a book, comic or provider-backed document reader, open the **…** actions menu
 and choose **All documents** to return to the Documents list without closing the
 document. Opening a document from Home or Workspaces keeps that tab selected.
@@ -82,7 +95,7 @@ parent folders, then returns to the Workspaces overview at the storage root.
 The action appears for folder-backed local, encrypted and remote documents.
 Local imports opened from the app's file browser retain their source location
 for the current app run. Imported copies without a known accessible source,
-new app-owned documents and locked private sessions omit the action.
+older app-owned documents and locked private sessions omit the action.
 
 ## Books and comics
 
