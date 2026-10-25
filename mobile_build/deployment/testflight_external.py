@@ -36,9 +36,8 @@ def credentials():
     reference = auth_reference()
     saved = json.loads(reference.read_text()) if reference.exists() else {}
     if AUTH == ROOT / '.testflight-auth.json':
-        from build_manager.profiles import load_profile
-        from .manager_settings import profile_path
-        profile = load_profile(profile_path(ROOT))
+        from .manager_settings import authentication_references
+        profile = authentication_references(ROOT)
         if profile.get('auth.key_reference'):
             saved['key_path'] = profile['auth.key_reference']
     value = {name: os.environ.get(env) or saved.get(name)
@@ -57,9 +56,8 @@ def credentials():
 def auth_reference():
     if AUTH != ROOT / '.testflight-auth.json':
         return AUTH
-    from build_manager.profiles import load_profile
-    from .manager_settings import profile_path
-    return Path(load_profile(profile_path(ROOT)).get('auth.testflight_reference') or AUTH)
+    from .manager_settings import authentication_references
+    return Path(authentication_references(ROOT).get('auth.testflight_reference') or AUTH)
 
 
 def token(auth, now=None):

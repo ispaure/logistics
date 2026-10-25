@@ -52,8 +52,14 @@ VARIABLES = {
 
 def settings(root, *, overrides=None):
     configured = defaults(root)
-    values, sources = effective(configured, load_profile(profile_path(root)), os.environ,
-                                overrides, variables=VARIABLES)
+    from build_manager.settings import Field, resolve
+    account = json.loads(os.environ.get('LOGISTICS_MANAGER_ACCOUNT_DEFAULTS', '{}'))
+    schema = {key: Field(value, account=key.startswith('auth.'),
+                        machine=key.startswith(('tools.', 'vm.', 'ios.', 'android.')),
+                        guarded=key in {'testflight.app_id', 'testflight.bundle_id', 'firebase.bundle_id'},
+                        variable=VARIABLES.get(key)) for key, value in configured.items()}
+    values, sources = resolve(schema, account=account, profile=load_profile(profile_path(root)),
+                              environment=os.environ, overrides=overrides)
     validate(values, configured)
     return values, sources
 
@@ -144,3 +150,10 @@ def record_prepared_artifact(record):
     temporary = path.with_suffix('.tmp')
     temporary.write_text(json.dumps(record, indent=2) + '\n')
     temporary.replace(path)
+
+
+def authentication_references(root):
+    account = json.loads(os.environ.get('LOGISTICS_MANAGER_ACCOUNT_DEFAULTS', '{}'))
+    if set(account) - {'auth.testflight_reference', 'auth.key_reference'}:
+        raise ValueError('Shared accounts may supply protected auth references only.')
+    return dict(account, **{key: value for key, value in load_profile(profile_path(root)).items() if key.startswith('auth.')})

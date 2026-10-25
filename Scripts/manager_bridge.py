@@ -14,6 +14,8 @@ def main():
     if request.get('schema') != 1:
         raise ValueError('Unsupported bridge schema.')
     from Scripts.build_project import LogisticsProject
+    import os
+    os.environ['LOGISTICS_MANAGER_ACCOUNT_DEFAULTS'] = json.dumps(request.get('account_defaults', {}))
     project = LogisticsProject(ROOT)
     values = request.get('values', {})
     action = request['action']

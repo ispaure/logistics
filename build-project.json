@@ -55,5 +55,8 @@
       "label": "Include sequential iPad coverage",
       "default": false
     }
+  },
+  "account_fields": {
+    "testflight": "auth.testflight_reference"
   }
 }

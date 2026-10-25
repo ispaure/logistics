@@ -111,7 +111,15 @@ class LogisticsProject:
         plan = self._make_plan(operation, target, backend, **options)
         snapshot = self.private / 'snapshots' / plan.source.get('fingerprint', '')
         resources = (str(snapshot.with_suffix('.lock')),) if (snapshot / '.manager-source.json').is_file() else ()
-        return replace(plan, resource_locks=resources,
+        settings_snapshot = plan.source.get('effective_settings')
+        phases = plan.phases
+        if settings_snapshot:
+            from build_manager.profiles import save_profile
+            reference = Path(plan.workspace) / 'settings' / (uuid4().hex + '.json')
+            save_profile(reference, settings_snapshot['values'], allowed=manager_settings.defaults(self.mobile))
+            phases = tuple(replace(phase, environment=dict(phase.environment,
+                LOGISTICS_MANAGER_PROFILE=str(reference), LOGISTICS_MANAGER_ACCOUNT_DEFAULTS='{}')) for phase in phases)
+        return replace(plan, phases=phases, resource_locks=resources,
                        source=dict(plan.source, plan_preparation_seconds=time.monotonic()-started))
 
     def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag=''):
@@ -123,7 +131,8 @@ class LogisticsProject:
         source.update(host=platform.platform(), architecture=platform.machine())
         source['app_version'] = manager_settings.app_version(self.mobile,
             revision=None if revision == 'working-tree' else source['logistics_commit'])
-        options, _ = manager_settings.settings(self.mobile)
+        options, origins = manager_settings.settings(self.mobile)
+        source['effective_settings'] = dict(values=options, origins=origins)
         workspace = self.private / 'workspaces' / target
         if backend == 'GitHub':
             return self.github_plan(operation, target, source, workspace, options, revision, release_tag)
@@ -139,7 +148,8 @@ class LogisticsProject:
         snapshot = self.private / 'snapshots' / source['fingerprint']
         materialize(self.root, snapshot, revision)
         env = dict(PYTHONPATH=os.pathsep.join((str(snapshot), str(snapshot / 'Python'))),
-                   QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1')
+                   QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1',
+                   LOGISTICS_MANAGER_ACCOUNT_DEFAULTS=os.environ.get('LOGISTICS_MANAGER_ACCOUNT_DEFAULTS', '{}'))
         python = options['tools.desktop_python']
         if target == 'macos':
             if sys.platform != 'darwin':
