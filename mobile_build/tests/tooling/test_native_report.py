@@ -361,3 +361,23 @@ class NativeReportTests(unittest.TestCase):
                 self.assertFalse(Path('logs/ios-native-ui.json').exists())
             finally:
                 os.chdir(previous)
+
+    def test_local_ios_cached_app_requires_exact_dirty_manifest(self):
+        import os
+        from unittest.mock import patch
+        source=dict(self.report()['source'],dirty=True,source_sha256='c'*64)
+        def revision(argv, **kwargs):
+            return source['commonUtils_commit' if 'commonUtils' in argv[2] else 'logistics_commit']
+        with TemporaryDirectory() as directory, patch.object(ui_tools.subprocess,'check_output',side_effect=revision):
+            previous=Path.cwd();os.chdir(directory)
+            try:
+                project=Path('build/logisticsmobile/ios/xcode');app=project/'build/Debug-iphonesimulator/Logistics Mobile.app'
+                (app/'app/mobile').mkdir(parents=True);(app/'Logistics Mobile').write_bytes(b'synthetic')
+                (project/'briefcase.toml').write_text('[briefcase]\n');(app/'Info.plist').write_bytes(plistlib.dumps(dict(MainModule='tests.logisticsmobile')))
+                Path('payload').mkdir();Path('payload/source.json').write_text(json.dumps(source))
+                manifest=app/'app/mobile/source.json';manifest.write_text(json.dumps(source))
+                with self.assertRaisesRegex(ValueError,'different source'):ui_tools.verify_prebuilt_ios()
+                ui_tools.verify_prebuilt_ios(local=True)
+                manifest.write_text(json.dumps(dict(source,source_sha256='d'*64)))
+                with self.assertRaisesRegex(ValueError,'different source'):ui_tools.verify_prebuilt_ios(local=True)
+            finally:os.chdir(previous)

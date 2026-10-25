@@ -38,6 +38,13 @@ async def _prepare(transfers, transfer):
         raise
 
 
+def _display_review(session):
+    snapshot = session.scan.snapshot()
+    # A worker can finish between snapshot() and can_approve(). Never enable
+    # full approval while the rendered comparison is still visibly partial.
+    return snapshot.text(), snapshot.complete and session.can_approve()
+
+
 class TransferReviewUI:
     def show_local_push(self, folder):
         if self.cloud_busy or getattr(self, 'transfer_busy', False):
@@ -195,14 +202,15 @@ class TransferReviewUI:
         try:
             while True:
                 state = session.poll()
+                full_ready = False
                 if not session.valid():
                     paths.text = 'Connection locked or changed.'
                     details.value = ''
                 else:
-                    text = session.scan.snapshot().text()
+                    text, full_ready = _display_review(session)
                     if text != previous:
                         details.value, previous = text, text
-                confirm.enabled = session.can_approve()
+                confirm.enabled = full_ready
                 early.enabled = session.can_approve(incomplete=True)
                 notices = dict(stopping='Stopping comparison…', checking='Checking that the completed review is still current…',
                     changed='Files changed or could not be checked. Review the current results and confirm again.',

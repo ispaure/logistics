@@ -131,3 +131,24 @@ class TransferCancellationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(asyncio.CancelledError):
             await task
         self.assertTrue(retired.is_set())
+
+
+class ReviewPresentationRaceTests(unittest.TestCase):
+    def test_worker_completion_cannot_enable_full_approval_over_partial_details(self):
+        from types import SimpleNamespace
+        from features.rclone.transfers.review import ReviewSnapshot
+        from features.rclone.transfers.mobile.review_ui import _display_review
+        state = {'complete': False}
+        def snapshot():
+            captured = ReviewSnapshot((), state['complete'], 'synthetic')
+            # Deterministically reproduce completion between the UI's snapshot
+            # and approval-capability reads, rather than relying on thread speed.
+            state['complete'] = True
+            return captured
+        session = SimpleNamespace(scan=SimpleNamespace(snapshot=snapshot), can_approve=lambda: state['complete'])
+        text, enabled = _display_review(session)
+        self.assertIn('Partial review', text)
+        self.assertFalse(enabled)
+        text, enabled = _display_review(session)
+        self.assertIn('Review complete', text)
+        self.assertTrue(enabled)

@@ -253,3 +253,36 @@ run's container, retrieves evidence, and removes only the owned guest workspace.
 Public image/package caches remain reusable. One transient Parallels transport
 failure was retained before the isolated successful lifetime proof; failed
 transports remain failures and are never converted to successful test evidence.
+
+## Sequential local iOS validation
+
+For Test/iOS select **This Mac — iOS Simulators**. Inspect the selected Xcode/SDK,
+ordinary iPhone and required Duo runtime/model before launch; optional iPad is
+last in the sequence and requires independent-window proof. A missing Duo is an
+error, never a request to use another ordinary phone. Device names/UDIDs in local
+settings identify templates only. Each operation creates new ownership-labelled
+simulators and deletes only those UUIDs after collecting their separate reports;
+existing simulator data, physical devices and TestFlight are separate operations.
+
+The app is built in test mode once for the exact source/toolchain/configuration.
+Reuse checks its embedded staged manifest, test entry point and complete bundle
+content/permissions digest. Local dirty source requires an exact curated manifest;
+the clean-source hosted verifier remains strict. Every selected device runs the
+canonical 33 native cases and all 260 rotation audits; Duo and selected iPad retain
+their additional native contracts. Reports include build, simulator startup,
+per-section native timings and owned teardown. The UI distinguishes phase elapsed
+time from total elapsed time and streams local case/section checkpoints.
+Cancellation stops active work, prevents later devices from starting, and still
+runs ownership-checked cleanup. Failed devices retain diagnostics and do not
+prevent independent selected devices from collecting useful failure evidence.
+
+Actual M3 Max acceptance completed all three devices in order in 1,259.9 seconds:
+47.7 seconds build, iPhone 400.4, Duo 400.0 and iPad 411.6, with all strict cases,
+rotations and selected independent windows passing. These execution timings use
+prepared tools and exclude source-plan inspection/copy time. Matching warm bundle
+verification reused the identical binary in 1.49 seconds, without another native
+suite or installation. A cancelled diagnostic run also proved that remaining
+devices stayed unstarted and its owned simulator was removed. Local validation
+found a new replacement-confirmation fixture mismatch and a real review-display
+race; the corrected native flows passed on all three families. Raw proof remains
+in ignored result directories. No hosted job or distribution is implied.

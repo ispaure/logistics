@@ -33,7 +33,9 @@ class LogisticsProject:
         self.private = self.mobile / '.tools/build-manager'
         self.results_directory = self.root / 'test-results/build-manager'
 
-    def backend_options(self, target):
+    def backend_options(self, target, operation='Test'):
+        if target == 'ios' and operation == 'Test':
+            return ('This Mac — iOS Simulators', 'GitHub')
         return ('Local Parallels VM', 'GitHub') if target in ('linux', 'windows') else ('This Mac', 'GitHub')
 
     def settings_view(self):
@@ -72,7 +74,7 @@ class LogisticsProject:
 
     def make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag=''):
         setup_started = time.monotonic()
-        if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target):
+        if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target, operation):
             raise ValueError('Unsupported operation/platform/backend selection.')
         if pattern and (not pattern.endswith('.py') or '/' in pattern or '\\' in pattern):
             raise ValueError('Use a focused test filename/glob, not a path or command.')
@@ -205,7 +207,55 @@ class LogisticsProject:
                     (Phase('windows', command, str(snapshot), timeout=5400, artifacts=(str(results / 'result.json'),)),),
                     str(workspace), backend='Local Parallels VM')
 
+    def ios_simulator_plan(self, source, snapshot, workspace, options, env, pattern, include_ipad):
+        if sys.platform != 'darwin':
+            raise ValueError('Local iOS simulator validation requires macOS.')
+        if pattern:
+            raise ValueError('Native iOS acceptance runs the canonical complete native plan; filename filters apply to host contracts.')
+        from build_manager.apple_simulators import AppleSimulators
+        from mobile_build.validation.ui_tools import select_ios_device
+        env = dict(env)
+        if options['tools.xcode']:
+            env['DEVELOPER_DIR'] = options['tools.xcode']
+        env.update(PATH=str(self.mobile/'.tools/go/bin')+os.pathsep+os.environ.get('PATH',''),
+                   PIP_FIND_LINKS=str(self.mobile/'.tools/release-wheels'))
+        client = AppleSimulators(env)
+        inventory = client.devices()['devices']
+        selected = []
+        kinds = ('iphone', 'duo', 'ipad') if include_ipad else ('iphone', 'duo')
+        for kind in kinds:
+            configured = options['ios.'+kind]
+            rows = [(runtime, row) for runtime, devices in inventory.items() for row in devices
+                    if row.get('isAvailable') and (not configured or configured in (row['udid'], row['name']))]
+            candidate = select_ios_device({'devices': {runtime: [row for rt,row in rows if rt == runtime] for runtime,_ in rows}}, ipad=kind=='ipad', duo=kind=='duo')
+            matches = [(runtime,row) for runtime,row in rows if row['udid']==candidate]
+            runtime, row = matches[0]
+            model = row.get('deviceTypeIdentifier')
+            if not model:
+                raise ValueError('Selected simulator lacks an explicit device model.')
+            selected.append(dict(kind=kind, model=model, runtime=runtime, template=row['udid']))
+        source = dict(source, simulator_toolchain=client.toolchain(), simulator_sequence=selected, device_lifecycle='create owned disposable simulator; delete after evidence')
+        run = workspace / ('simulators-' + uuid4().hex)
+        python = options['tools.mobile_python']
+        base = (python, '-m', 'Scripts.ios_backend')
+        build_report = run/'build.json'
+        phases = [Phase('ios-build', (*base,'build','--root',str(snapshot),'--result',str(build_report)), str(snapshot),
+                        timeout=3600, environment=env, kind='build', artifacts=(str(build_report),))]
+        for row in selected:
+            kind = row['kind']
+            report = run/kind/'result.json'
+            lease = run/(kind+'-lease.json')
+            phases.append(Phase(kind, (*base,'test','--root',str(snapshot),'--kind',kind,'--model',row['model'],
+                          '--runtime',row['runtime'],'--lease',str(lease),'--result',str(report)), str(snapshot),
+                          timeout=2100, environment=env, dependencies=('ios-build',), artifacts=(str(report),)))
+            phases.append(Phase(kind+'-cleanup', (*base,'cleanup','--root',str(snapshot),'--lease',str(lease)), str(snapshot),
+                          timeout=180, environment=env, always=True, kind='cleanup'))
+        return Plan('Logistics', 'Sequential native iOS validation', source, tuple(phases), str(workspace),
+                    backend='This Mac — iOS Simulators')
+
     def mobile_plan(self, operation, target, source, snapshot, workspace, options, env, pattern, build_override, include_ipad):
+        if operation == 'Test' and target == 'ios':
+            return self.ios_simulator_plan(source, snapshot, workspace, options, env, pattern, include_ipad)
         if operation in ('Prepare TestFlight', 'Prepare Firebase'):
             expected = 'ios' if operation == 'Prepare TestFlight' else 'android'
             if target != expected:

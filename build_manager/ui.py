@@ -1,6 +1,7 @@
 """Optional Qt presentation for an explicitly supplied project adapter."""
 import json
 import os
+import subprocess
 from uuid import uuid4
 
 from PySide6.QtCore import QElapsedTimer, QProcess, QTimer, Signal
@@ -111,6 +112,7 @@ class ManagerPanel(QWidget):
         from .redaction import Redactor
         self.redact = Redactor(os.environ.get(name) for name in ('GH_TOKEN', 'GITHUB_TOKEN', 'FIREBASE_TOKEN'))
         self.elapsed = QElapsedTimer()
+        self.phase_elapsed = QElapsedTimer()
         self.clock = QTimer(self)
         self.clock.setInterval(1000)
         self.clock.timeout.connect(self.show_elapsed)
@@ -126,6 +128,7 @@ class ManagerPanel(QWidget):
         self.platform.addItems(project.platforms)
         self.backend = QComboBox()
         self.platform.currentTextChanged.connect(self.refresh_backends)
+        self.operation.currentTextChanged.connect(self.refresh_backends)
         self.revision = QLineEdit('working-tree')
         self.pattern = QLineEdit()
         self.pattern.setPlaceholderText('Blank: full declared suite; filename glob: focused contracts')
@@ -173,7 +176,7 @@ class ManagerPanel(QWidget):
 
     def refresh_backends(self, *_):
         self.backend.clear()
-        self.backend.addItems(self.project.backend_options(self.platform.currentText()))
+        self.backend.addItems(self.project.backend_options(self.platform.currentText(), self.operation.currentText()))
 
     def invalidate(self, *_):
         self.plan = None
@@ -193,7 +196,7 @@ class ManagerPanel(QWidget):
                 self.backend.currentText(), revision=self.revision.text(), pattern=self.pattern.text(),
                 build_override=self.build_override.text(), include_ipad=self.include_ipad.isChecked(),
                 release_tag=self.release_tag.text())
-        except (ValueError, OSError, RuntimeError) as error:
+        except (ValueError, OSError, RuntimeError, subprocess.SubprocessError) as error:
             self.status.setText(str(error))
             self.invalidate()
             return
@@ -204,7 +207,7 @@ class ManagerPanel(QWidget):
     def verify_settings(self):
         try:
             self.plan = self.project.verification_plan()
-        except (ValueError, OSError, RuntimeError) as error:
+        except (ValueError, OSError, RuntimeError, subprocess.SubprocessError) as error:
             self.status.setText(str(error))
             return
         self.preview.setPlainText(json.dumps(self.plan.data(), indent=2))
@@ -235,6 +238,7 @@ class ManagerPanel(QWidget):
 
     def set_busy(self, busy):
         if busy:
+            self.phase_elapsed.invalidate()
             self.elapsed.start()
             self.current_phase = 'queued'
             self.clock.start()
@@ -249,7 +253,8 @@ class ManagerPanel(QWidget):
         self.busy_changed.emit(busy)
 
     def show_elapsed(self):
-        self.status.setText(f'{self.current_phase}; {self.elapsed.elapsed() / 1000:.0f}s elapsed')
+        phase = self.phase_elapsed.elapsed()/1000 if self.phase_elapsed.isValid() else 0
+        self.status.setText(f'{self.current_phase}; phase {phase:.0f}s; total {self.elapsed.elapsed()/1000:.0f}s')
 
     def read_output(self):
         self.buffer += bytes(self.process.readAllStandardOutput()).decode('utf-8', errors='replace')
@@ -263,6 +268,8 @@ class ManagerPanel(QWidget):
             if event.get('type') == 'output':
                 self.preview.appendPlainText(event['text'].rstrip())
             elif event.get('type') == 'phase':
+                if event['status'] == 'running':
+                    self.phase_elapsed.start()
                 self.current_phase = event['id'] + ': ' + event['status']
                 self.show_elapsed()
             elif event.get('type') == 'error':

@@ -26,7 +26,7 @@ class OtherProject:
         self.results_directory = root / 'results'
         self.root, self.effect, self.code = root, effect, code
 
-    def backend_options(self, target):
+    def backend_options(self, target, operation='Test'):
         return ('Local fixture',)
 
     def make_plan(self, *args, **kwargs):
@@ -93,3 +93,13 @@ class ManagerUITests(unittest.TestCase):
         panel.cancel_operation()
         self.assertEqual(self.finish(panel)['status'], 'cancelled')
         panel.close()
+
+
+    def test_preflight_process_error_is_visible_without_starting_work(self):
+        import subprocess
+        panel=ManagerPanel(OtherProject(self.root))
+        with patch.object(panel.project,'make_plan',side_effect=subprocess.CalledProcessError(3,['synthetic-read-only-preflight'])):
+            panel.inspect_plan()
+        self.assertIsNone(panel.plan)
+        self.assertFalse(panel.start.isEnabled())
+        self.assertIn('synthetic-read-only-preflight',panel.status.text())

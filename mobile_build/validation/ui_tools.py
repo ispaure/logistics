@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import time
+from threading import Event, Thread
 
 PREFIX = 'LOGISTICS_NATIVE_UI_RESULT='
 REPO = Path(__file__).resolve().parents[2]
@@ -90,11 +91,31 @@ def simulator_report(device, started_ns, *, diagnostics=None):
     return json.loads(raw)
 
 
+def _progress(path, stopped):
+    """Tail immutable checkpoint strings only; never inspect live native frames."""
+    with path.open(errors='replace') as stream:
+        while True:
+            line = stream.readline()
+            if not line:
+                if stopped.wait(.1):
+                    return
+                continue
+            if 'LOGISTICS_NATIVE_CASE=' in line:
+                print('Native checkpoint: '+line.split('LOGISTICS_NATIVE_CASE=',1)[1].strip(),flush=True)
+            elif 'LOGISTICS_NATIVE_TIMING=' in line:
+                try:
+                    row = json.loads(line.split('LOGISTICS_NATIVE_TIMING=',1)[1])
+                except ValueError:
+                    continue
+                if row.get('name') in {'navigation','documents','readers','scenes','chat','connections','localcrypt','ui-review','rotation-panel'}:
+                    print('Native section: '+row['name']+' '+json.dumps(row.get('details',{}))+' '+str(round(row['elapsed_s'],2))+'s',flush=True)
+
+
 def run(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False):
     if no_update:
         if target != 'ios':
             raise ValueError('Shared test application reuse is supported only for iOS.')
-        verify_prebuilt_ios()
+        verify_prebuilt_ios(local=local)
     command = [sys.executable, '-m', 'briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
     if no_update:
@@ -114,17 +135,31 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
     # iOS also exercises the added rotation matrix; allow 30 minutes per device.
     timeout = 2400 if target == 'android' else 1800
     with path.open('w') as stream:
-        process = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+        stopped = Event()
+        progress = Thread(target=_progress,args=(path,stopped),daemon=True) if local else None
+        if progress:progress.start()
+        process = None
         try:
+            process = subprocess.Popen(command, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
             code = process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGTERM)
+        except BaseException as error:
+            if process is None:
+                raise
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
-            raise RuntimeError(f'Native app UI run exceeded {timeout // 60} minutes; see retained logs.') from None
+            if isinstance(error, subprocess.TimeoutExpired):
+                raise RuntimeError(f'Native app UI run exceeded {timeout // 60} minutes; see retained logs.') from None
+            raise
+        finally:
+            stopped.set()
+            if progress:progress.join(timeout=2)
     output = logs / (target + ('-native-ui-local.json' if local else '-native-ui.json'))
     manifest = Path('payload/source.json') if local else None
     report = None
@@ -162,7 +197,7 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
     return report
 
 
-def verify_prebuilt_ios():
+def verify_prebuilt_ios(*, local=False):
     """Fail instead of silently rebuilding a missing or mismatched shared app."""
     project = Path('build/logisticsmobile/ios/xcode')
     app = project / 'build/Debug-iphonesimulator/Logistics Mobile.app'
@@ -176,7 +211,7 @@ def verify_prebuilt_ios():
     expected = json.loads(Path('payload/source.json').read_text())
     root = subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip()
     shared = subprocess.check_output(['git', '-C', str(REPO / 'Python/commonUtils'), 'rev-parse', 'HEAD'], text=True).strip()
-    if (source != expected or source.get('dirty') is not False
+    if (source != expected or (not local and source.get('dirty') is not False)
             or source.get('logistics_commit') != root or source.get('commonUtils_commit') != shared):
         raise ValueError('Shared iOS test application came from a different source.')
 

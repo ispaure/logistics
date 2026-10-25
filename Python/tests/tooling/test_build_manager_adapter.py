@@ -115,3 +115,21 @@ class ManagerAdapterTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Guest is unavailable'):
                 project.make_plan('Test', 'linux', 'Local Parallels VM')
             snapshot.assert_not_called()
+
+    def test_ios_sequence_has_one_build_strict_families_and_owned_cleanup(self):
+        project = LogisticsProject(Path(__file__).resolve().parents[3])
+        values = manager_settings.defaults(project.mobile)
+        def row(kind):
+            return dict(udid=kind, name=kind, isAvailable=True, state='Shutdown', deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.'+kind)
+        inventory = {'devices': {'com.apple.CoreSimulator.SimRuntime.iOS-27-1': [row('iPhone-18-Pro'),row('iPhone-Duo'),row('iPad-Pro')]}}
+        with patch('Scripts.build_project.sys.platform','darwin'), patch('build_manager.apple_simulators.AppleSimulators') as client:
+            client.return_value.devices.return_value = inventory
+            client.return_value.toolchain.return_value = {'xcode':'Synthetic Xcode','sdk':'Synthetic SDK'}
+            plan = project.ios_simulator_plan({}, project.root, project.private/'fixture-ios', values, {}, '', True)
+            self.assertEqual([phase.id for phase in plan.phases], ['ios-build','iphone','iphone-cleanup','duo','duo-cleanup','ipad','ipad-cleanup'])
+            self.assertEqual([row['kind'] for row in plan.source['simulator_sequence']], ['iphone','duo','ipad'])
+            self.assertTrue(all(phase.always for phase in plan.phases if phase.kind=='cleanup'))
+            self.assertTrue(all(phase.dependencies==('ios-build',) for phase in plan.phases if phase.id in ('iphone','duo','ipad')))
+            inventory['devices']['com.apple.CoreSimulator.SimRuntime.iOS-27-1'].pop(1)
+            with self.assertRaisesRegex(RuntimeError,'Duo'):
+                project.ios_simulator_plan({},project.root,project.private/'fixture-ios',values,{},'',False)

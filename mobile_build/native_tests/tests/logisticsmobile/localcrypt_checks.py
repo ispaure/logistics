@@ -418,8 +418,36 @@ async def exercise_localcrypt(app, passed):
     await app.show_crypt_save_as()
     app.save_as_storage.value = crypt_label
     app.save_as_name.value = 'saved-as.md'
-    await app.save_text_destination()
-    assert 'failed' in app.save_as_status.value.lower()
+    # Existing destinations now require native replacement confirmation. Cancel
+    # it and verify both the current document and encrypted bytes stay intact.
+    original_dialog = app.main_window.dialog
+    replacements = []
+    async def cancel_replacement(dialog):
+        import toga
+        from commonUtils.runtime.platform import get_os, OS
+        assert isinstance(dialog, toga.ConfirmDialog)
+        task = asyncio.create_task(original_dialog(dialog))
+        try:
+            await asyncio.sleep(.2)
+            native = dialog._impl.native
+            if get_os() is OS.IOS:
+                assert str(native.title) == 'Replace “saved-as.md”?' and native.presentingViewController is not None
+                native.dismissViewControllerAnimated(False, completion=None)
+                dialog._impl.response(False)
+            else:
+                assert native.isShowing()
+                native.getButton(-2).performClick()
+            replacements.append('cancelled')
+            return await asyncio.wait_for(task, 5)
+        finally:
+            if not task.done():
+                task.cancel()
+    from features.rclone.localcrypt.mobile.resources import encrypted_copies
+    destination_before = encrypted_copies(provider).open('saved-as.md').data
+    with patch.object(app.main_window, 'dialog', side_effect=cancel_replacement):
+        await asyncio.wait_for(app.save_text_destination(), 30)
+    assert replacements == ['cancelled'], 'Replacement did not show the native confirmation'
+    assert encrypted_copies(provider).open('saved-as.md').data == destination_before
     assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None).key == 'local-copy.md'
     app.cancel_text_destination()
     await close_copy()
