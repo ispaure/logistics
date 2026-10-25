@@ -381,3 +381,42 @@ class NativeReportTests(unittest.TestCase):
                 manifest.write_text(json.dumps(dict(source,source_sha256='d'*64)))
                 with self.assertRaisesRegex(ValueError,'different source'):ui_tools.verify_prebuilt_ios(local=True)
             finally:os.chdir(previous)
+
+    def test_local_checkpoints_are_streamed_from_a_real_child_log(self):
+        from contextlib import redirect_stdout
+        import io
+        import sys
+        import time
+        from threading import Event,Thread
+        with TemporaryDirectory() as directory:
+            path=Path(directory)/'native.log';path.touch();stopped=Event();output=io.StringIO()
+            worker=Thread(target=ui_tools._progress,args=(path,stopped))
+            section=json.dumps(dict(name='rotation-panel',details={'panel':'synthetic'},elapsed_s=1.25))
+            code='print("LOGISTICS_NATIVE_CASE=synthetic-native");print('+repr('LOGISTICS_NATIVE_TIMING='+section)+')'
+            with redirect_stdout(output):
+                worker.start()
+                try:
+                    with path.open('w') as stream:subprocess.run([sys.executable,'-c',code],stdout=stream,check=True,timeout=10)
+                    deadline=time.monotonic()+2
+                    while 'Native section:' not in output.getvalue() and time.monotonic()<deadline:time.sleep(.01)
+                finally:stopped.set();worker.join(timeout=2)
+            self.assertFalse(worker.is_alive())
+            self.assertIn('Native checkpoint: synthetic-native',output.getvalue())
+            self.assertIn('Native section: rotation-panel',output.getvalue())
+            self.assertIn('1.25s',output.getvalue())
+
+    def test_failed_local_launch_stops_its_progress_reader(self):
+        import os
+        from threading import Event
+        from unittest.mock import patch
+        retired=Event();original=ui_tools._progress
+        def progress(path,stopped):
+            try:original(path,stopped)
+            finally:retired.set()
+        with TemporaryDirectory() as directory:
+            previous=Path.cwd();os.chdir(directory)
+            try:
+                with patch.object(ui_tools,'_progress',side_effect=progress), patch.object(ui_tools.subprocess,'Popen',side_effect=OSError('synthetic missing tool')):
+                    with self.assertRaisesRegex(OSError,'synthetic missing tool'):ui_tools.run('ios','synthetic',local=True)
+                self.assertTrue(retired.is_set())
+            finally:os.chdir(previous)
