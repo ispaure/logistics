@@ -13,6 +13,17 @@ async def exercise_notebooks(app):
     result = await panel.web.evaluate_javascript("JSON.stringify({canvas:!!document.getElementById('paper'),pen:typeof PointerEvent,tools:document.getElementById('tool').options.length})")
     properties = json.loads(result)
     assert properties['canvas'] and properties['pen'] == 'function' and properties['tools'] == 8
+    retired = panel.web
+    await panel.new()
+    await wait_for_text(panel.web, 'Notebook')
+    assert retired.on_navigation_starting._raw is None
+    panel.navigate(retired, panel.bridge.url + '?command=ignored')
+    assert panel.bridge.sequence == 0
+    status = await panel.web.evaluate_javascript("send({op:'stroke',points:[],padding:'x'.repeat(8*1024*1024)});document.getElementById('status').textContent")
+    assert 'too large' in status
+    sizes = json.loads(await panel.web.evaluate_javascript("document.querySelector('details').open=true;JSON.stringify({header:document.querySelector('header').getBoundingClientRect().height,body:document.body.clientHeight,page:document.getElementById('viewport').clientHeight})"))
+    assert sizes['page'] > 0 and sizes['header'] <= sizes['body'] * .55, sizes
+    await panel.web.evaluate_javascript("document.querySelector('details').open=false")
     await panel.web.evaluate_javascript("send({op:'stroke',points:[[100,100,.2],[120,130,.8]],tool:12,color:6,width:3})")
     for _ in range(100):
         if panel.editor.notebook.page(0).strokes:
@@ -41,4 +52,6 @@ async def exercise_notebooks(app):
     from features.notebooks.notebook import Notebook
     imported = Notebook.read(exported)
     assert not imported.page(0).warning and imported.page(0).strokes[0].tool == 12
+    panel.library()
+    assert panel.web is None
     app.show_home()

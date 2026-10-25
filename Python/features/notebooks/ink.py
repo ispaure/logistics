@@ -16,6 +16,7 @@ TOOLS = {'Fineliner': 17, 'Ballpoint': 15, 'Pencil': 14, 'Mechanical pencil': 13
          'Marker': 16, 'Paintbrush': 12, 'Calligraphy': 21, 'Highlighter': 18}
 COLORS = {'Black': 0, 'Gray': 1, 'White': 2, 'Yellow': 3, 'Green': 4, 'Pink': 5, 'Blue': 6, 'Red': 7}
 MAX_POINTS = 100_000
+MAX_PAGE_POINTS = 1_000_000
 
 
 def encode(blocks):
@@ -81,8 +82,10 @@ class InkPage:
                 raise ValueError('This page has text, highlights or unknown objects. Ink editing is disabled; all bytes are preserved.')
             mapping = {id(b.item.value): b for b in page._blocks if isinstance(b, ss.SceneLineItemBlock)}
             total = 0
-            def visit(group):
+            def visit(group, depth=0):
                 nonlocal total
+                if depth > 1:
+                    raise ValueError('Nested ink groups are preserved but cannot yet be edited.')
                 if group.anchor_id is not None:
                     raise ValueError('Text-anchored ink is preserved but cannot yet be edited.')
                 key = f'{group.node_id.part1}:{group.node_id.part2}'
@@ -90,14 +93,18 @@ class InkPage:
                     page.layers.append((key, group.label.value or 'Layer', group.visible.value))
                 for child in group.children.values():
                     if isinstance(child, si.Group):
-                        visit(child)
+                        visit(child, depth + 1)
                     elif isinstance(child, si.Line):
+                        if depth == 0:
+                            raise ValueError('Ink outside a layer is preserved but cannot yet be edited.')
                         block = mapping[id(child)]
                         if block.item.deleted_length:
                             continue
                         total += len(child.points)
-                        if total > 1_000_000:
+                        if total > MAX_PAGE_POINTS:
                             raise ValueError('Too many ink points.')
+                        if not math.isfinite(child.thickness_scale) or child.thickness_scale <= 0:
+                            raise ValueError('Invalid ink thickness scale.')
                         points = [[p.x + WIDTH / 2, p.y, p.pressure / 255, p.width / 4] for p in child.points]
                         if any(not all(math.isfinite(v) for v in p) for p in points):
                             raise ValueError('Non-finite ink coordinates.')

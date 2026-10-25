@@ -7,6 +7,12 @@ def launch(parent=None):
     return open_workspace(parent)
 
 
+def new_document(parent=None):
+    window = launch(parent)
+    window.centralWidget().new()
+    return window
+
+
 def activate(context):
     from .ui.workspace import open_workspace
     return open_workspace(path=context.path)
@@ -26,4 +32,4 @@ def register():
         pages=[PageContribution('Notebooks', 'notebooks', create_page, order=5,
             navigation_icon='notebooks', launch_description=FEATURE_DESCRIPTION)],
         document_launchers=[DocumentLauncherContribution('rmdoc', 'reMarkable Notebook', launch,
-            'notebooks', 15, new_document=launch, description=FEATURE_DESCRIPTION)])
+            'notebooks', 15, new_document=new_document, description=FEATURE_DESCRIPTION)])

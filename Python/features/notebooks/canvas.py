@@ -1,18 +1,21 @@
 """Offline vector notebook surface shared by native mobile and desktop hosts."""
 import json
+from .bridge import MAX_COMMAND
 
 
 def editor_html(state, bridge, *, console_bridge=False):
     data = json.dumps(state, ensure_ascii=True).replace('<', '\\u003c')
-    return (HTML.replace('__STATE__', data).replace('__BRIDGE__', json.dumps(bridge))
-            .replace('__SEND_COMMAND__', 'console.info(command)' if console_bridge else 'location.href=command'))
+    return (HTML.replace('__BRIDGE__', json.dumps(bridge))
+            .replace('__MAX_COMMAND__', str(MAX_COMMAND))
+            .replace('__SEND_COMMAND__', 'console.info(command)' if console_bridge else 'location.href=command')
+            .replace('__STATE__', data))
 
 
 HTML = r'''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
 <style>
 *{box-sizing:border-box}body{margin:0;font:15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#e7e7e3;color:#20221e;display:flex;flex-direction:column;height:100dvh}
-header{background:#fafaf7;border-bottom:1px solid #aaa;padding:8px;flex:none}#title{font-weight:650;font-size:18px;margin:0 4px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header{max-height:50dvh;overflow:auto;background:#fafaf7;border-bottom:1px solid #aaa;padding:8px;flex:none}#title{font-weight:650;font-size:18px;margin:0 4px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0}button,select,input{font:inherit;color:inherit;background:white;border:1px solid #888;border-radius:7px;min-height:38px;padding:5px 9px}button:disabled{opacity:.4}button.active{background:#222;color:white}input[type=number]{width:65px}#status{font-size:12px;margin:5px 4px;white-space:pre-wrap}#viewport{overflow:auto;flex:1;min-height:0;padding:12px;text-align:center;overscroll-behavior:contain}canvas{background:white;box-shadow:0 1px 8px #0003;touch-action:none;display:block;margin:auto}#warning{color:#7b2600;max-width:650px;text-align:left;margin:auto}details{font-size:14px}summary{cursor:pointer;padding:6px}label{white-space:nowrap}#pageinfo{min-width:72px;text-align:center}
 </style></head><body><header><div id="title"></div><div class="row">
 <select id="tool" aria-label="Brush"></select><select id="color" aria-label="Ink color"></select><label>Width <input id="width" type="number" min=".25" max="32" step=".25" value="2"></label>
@@ -26,7 +29,7 @@ header{background:#fafaf7;border-bottom:1px solid #aaa;padding:8px;flex:none}#ti
 const $=id=>document.getElementById(id),canvas=$('paper'),ctx=canvas.getContext('2d');
 const palette=['#171717','#888888','#ffffff','#ffe154','#64b464','#f3a1c2','#2468cc','#c63131'];
 function send(action){$('status').textContent=['export','library','transfer','page'].includes(action.op)?'Opening…':'Saving…';queue.push(action);pump()}
-function pump(){if(busy||!queue.length)return;busy=true;let action=queue[0];const command=bridge+'?command='+encodeURIComponent(JSON.stringify({sequence:++seq,action}));__SEND_COMMAND__;}
+function pump(){if(busy||!queue.length)return;let action=queue[0];const command=bridge+'?command='+encodeURIComponent(JSON.stringify({sequence:seq+1,action}));if(command.length>__MAX_COMMAND__){queue=[];$('status').textContent='Command too large. Draw a shorter stroke.';return}busy=true;seq++;__SEND_COMMAND__;}
 window.notebookUpdate=function(next,error){state=next;busy=false;queue.shift();$('status').textContent=error||'Saved on this device. Export a copy to share.';if(error)queue=[];render();pump()};
 function options(id,values){let el=$(id),old=el.value;el.replaceChildren();for(let [name,value] of values){let o=document.createElement('option');o.textContent=name;o.value=value;el.append(o)}if([...el.options].some(o=>o.value===old))el.value=old}
 function render(){

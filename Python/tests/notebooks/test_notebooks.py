@@ -5,8 +5,10 @@ from pathlib import Path
 import struct
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 from urllib.parse import quote
 from zipfile import ZipFile
+from uuid import uuid4
 
 from features.notebooks._vendor.rmscene import scene_stream as ss
 from features.notebooks._vendor.rmscene.tagged_block_common import HEADER_V6
@@ -204,6 +206,97 @@ class NotebookTests(unittest.TestCase):
         self.assertIsNone(bridge.command('https://evil/?command='+payload))
         self.assertEqual(bridge.command(bridge.url+'?command='+payload),{'op':'undo'})
         self.assertIsNone(bridge.command(bridge.url+'?command='+payload))
+
+    def test_empty_damaged_ink_is_not_replaced_with_a_blank_scene(self):
+        members = read_archive(self.book.to_bytes())
+        path = f'{self.book.id}/{self.book.pages[0].id}.rm'
+        members[path] = b''
+        imported = Notebook.read(archive(members))
+        self.assertTrue(imported.page(0).warning)
+        key = self.repo.create(imported)
+        self.assertEqual(read_archive(self.repo.open(key).to_bytes())[path], b'')
+
+    def test_invalid_scale_and_nested_groups_preserve_bytes_read_only(self):
+        from features.notebooks.ink import encode
+        from features.notebooks._vendor.rmscene import scene_items as si
+        from features.notebooks._vendor.rmscene.crdt_sequence import CrdtSequenceItem
+        from features.notebooks._vendor.rmscene.tagged_block_common import CrdtId, LwwValue
+        ink = InkPage.blank()
+        ink.add([[10, 20, .5]])
+        blocks = list(ss.read_blocks(BytesIO(ink.to_bytes())))
+        line = next(b for b in blocks if isinstance(b, ss.SceneLineItemBlock))
+        line.item.value.thickness_scale = float('inf')
+        invalid = encode(blocks)
+        preserved = InkPage.read(invalid)
+        self.assertIn('thickness scale', preserved.warning)
+        self.assertEqual(preserved.to_bytes(), invalid)
+        node, layer, end = CrdtId(2, 1), CrdtId(0, 11), CrdtId(0, 0)
+        nested = InkPage.blank().raw + encode([
+            ss.AuthorIdsBlock({2: uuid4()}),
+            ss.SceneTreeBlock(node, end, True, layer),
+            ss.TreeNodeBlock(si.Group(node, label=LwwValue(CrdtId(2, 3), 'Nested'))),
+            ss.SceneGroupItemBlock(layer, CrdtSequenceItem(CrdtId(2, 2), end, end, 0, node)),
+        ])[len(HEADER_V6):]
+        preserved = InkPage.read(nested)
+        self.assertIn('Nested ink groups', preserved.warning)
+        self.assertEqual(preserved.to_bytes(), nested)
+
+    def test_edit_limit_failure_keeps_previous_ink_editable_and_recoverable(self):
+        self.draw()
+        with patch('features.notebooks.ink.MAX_PAGE_POINTS', 3):
+            with self.assertRaisesRegex(ValueError, 'Too many ink points'):
+                self.draw()
+            restored = self.repo.open(self.key)
+            self.assertFalse(restored.page(0).warning)
+            self.assertEqual(len(restored.page(0).strokes), 1)
+            self.assertFalse(self.book.page(0).warning)
+            self.assertEqual(len(self.book.page(0).strokes), 1)
+        self.draw()
+        self.assertEqual(len(self.repo.open(self.key).page(0).strokes), 2)
+
+    def test_cleanup_failure_after_manifest_publication_is_not_a_failed_edit(self):
+        with patch.object(Path, 'iterdir', side_effect=OSError('temporarily unavailable')):
+            self.draw()
+        self.assertEqual(len(self.book.page(0).strokes), 1)
+        self.assertEqual(len(self.repo.open(self.key).page(0).strokes), 1)
+        self.editor.apply(dict(op='undo'))
+        self.assertEqual(len(self.repo.open(self.key).page(0).strokes), 0)
+
+    def test_modern_page_delete_undo_redo_and_reorder_keep_recoverable_order(self):
+        self.book.add_page()
+        members = read_archive(self.book.to_bytes())
+        content = json.loads(members[self.book.id + '.content'])
+        ids = content.pop('pages')
+        content['cPages'] = dict(pages=[dict(id=key, idx=dict(value=chr(98+i))) for i,key in enumerate(ids)])
+        members[self.book.id + '.content'] = json.dumps(content).encode()
+        book = Notebook.read(archive(members))
+        key = self.repo.create(book)
+        editor = Editor(book, lambda current: self.repo.save(key, current))
+        for op, expected in [('delete-page', ids[1:]), ('undo', ids), ('redo', ids[1:]), ('undo', ids)]:
+            editor.apply(dict(op=op))
+            self.assertEqual([p.id for p in self.repo.open(key).pages], expected)
+            self.assertEqual([p.id for p in Notebook.read(book.to_bytes()).pages], expected)
+
+    def test_notebook_titles_cannot_replace_canvas_template_instructions(self):
+        from features.notebooks.canvas import editor_html
+        title = '__BRIDGE__ __MAX_COMMAND__ __SEND_COMMAND__ __STATE__ </script>'
+        self.book.metadata['visibleName'] = title
+        html = editor_html(self.editor.state(), 'logistics-notebook://fixture/')
+        encoded = html.split("'use strict';let state=", 1)[1].split(',bridge=', 1)[0]
+        self.assertEqual(json.loads(encoded)['name'], title)
+
+    def test_invalid_page_operations_do_not_partially_mutate_the_notebook(self):
+        self.book.add_page()
+        before = [p.id for p in self.book.pages]
+        members = dict(self.book.members)
+        for target in (-1, 999, 1.5, True, '1'):
+            for operation in (lambda: self.book.move_page(0, target),
+                              lambda: self.book.add_page(target),
+                              lambda: self.book.copy_page(self.book, 0, target)):
+                with self.subTest(target=target), self.assertRaises(ValueError):
+                    operation()
+                self.assertEqual([p.id for p in self.book.pages], before)
+                self.assertEqual(self.book.members, members)
 
 
 if __name__=='__main__':

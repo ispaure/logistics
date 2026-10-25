@@ -569,8 +569,7 @@ class FilesUI:
                 if self.app.select_destination('notebooks') is False:
                     return False
                 self.app.native_host.activate('notebooks')
-                await self.app.notebook_panel.open_path(provider._locate(path))
-                return True
+                return await self.app.notebook_panel.open_path(provider._locate(path))
             source = encrypted_document(provider, path)
             if source is not None:
                 self.crypt_password.value = self.file_password.value

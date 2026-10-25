@@ -6,6 +6,8 @@ an existing notebook into a local working copy. The source file is unchanged.
 The workspace lists saved copies for reopening. Use **Export .rmdoc** to save a
 separate archive through the file dialog, then transfer it to your tablet using
 a method supported by your reMarkable model and firmware.
+The desktop document chooser also lists **reMarkable Notebook**; its **New**
+action opens a newly created notebook directly.
 
 Choose Fineliner, Ballpoint, Pencil, Mechanical pencil, Marker, Paintbrush,
 Calligraphy or Highlighter, plus an ink color and width. Drag on the page to draw.
@@ -30,7 +32,8 @@ At least one page must remain. Copied pages receive fresh page identities.
 This is experimental format support. It edits ordinary v6 native ink in notebook
 archives with legacy page lists or modern `cPages` metadata. It preserves opaque
 archive members and untouched scene frames. Typed text, text-anchored ink, image
-objects, unknown scene types and older ink versions show a preservation warning
+objects, nested ink groups, invalid scene geometry, unknown scene types and older
+ink versions show a preservation warning
 and disable ink editing on that page. Cross-notebook copying of unsupported pages
 is disabled because their resource dependencies cannot yet be guaranteed.
 PDF/EPUB-backed archives are rejected without changing the source.
@@ -39,7 +42,10 @@ The page surface uses 1404 × 1872 notebook units. Existing templates are preser
 but are not rendered behind the ink. Stroke selection currently moves one stroke;
 there is no multi-stroke lasso, partial eraser, OCR, cloud sync or exact brush
 texture simulation. Archives are limited to 32 MiB compressed, 128 MiB expanded,
-4096 members and 1000 pages. Error messages leave the source copy available.
+4096 members and 1000 pages. Very long strokes or densely populated pages can
+reach editing limits; rejected edits keep the previous saved content. Error
+messages leave the source copy available. Expanded drawing controls scroll so
+the page remains available in short windows.
 
 A successfully encoded archive is not proof of editability on every tablet.
 Physical Boox pressure/palm behavior and reMarkable import/select/move/erase checks

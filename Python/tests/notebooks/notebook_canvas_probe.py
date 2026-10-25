@@ -106,6 +106,16 @@ def main(output):
                 return fail('Notebook HTML did not load.')
             loaded_once = True
             def ready():
+                workspace.web.page().runJavaScript("document.querySelector('details').open=true;JSON.stringify({header:document.querySelector('header').getBoundingClientRect().height,body:document.body.clientHeight,page:document.getElementById('viewport').clientHeight})", toolbar)
+            def toolbar(encoded):
+                sizes = json.loads(encoded)
+                if sizes['page'] <= 0 or sizes['header'] > sizes['body'] * .55:
+                    return fail('Expanded notebook toolbar hides the page: ' + encoded)
+                workspace.web.page().runJavaScript("document.querySelector('details').open=false")
+                workspace.web.page().runJavaScript("send({op:'stroke',points:[],padding:'x'.repeat(8*1024*1024)});document.getElementById('status').textContent", rejected)
+            def rejected(status):
+                if 'too large' not in str(status):
+                    return fail('Oversized canvas command did not report an error.')
                 workspace.web.page().runJavaScript("document.getElementById('tool').value='12';document.getElementById('color').value='6';JSON.stringify(document.getElementById('paper').getBoundingClientRect())", draw)
             qt.QTimer.singleShot(300, ready)
 

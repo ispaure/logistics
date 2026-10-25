@@ -41,6 +41,12 @@ def json_bytes(value):
     return json.dumps(value, ensure_ascii=False, allow_nan=False, indent=2).encode('utf-8')
 
 
+def page_index(index, count, *, insertion=False):
+    if type(index) is not int or not 0 <= index < count + int(insertion):
+        raise ValueError('Page destination is out of range.')
+    return index
+
+
 def read_archive(data):
     if len(data) > MAX_ARCHIVE:
         raise ValueError('RMDOC imports are limited to 32 MiB compressed.')
@@ -140,26 +146,28 @@ class Notebook:
         page = self.pages[index]
         if page.ink is None:
             raw = self.members.get(f'{self.id}/{page.id}.rm')
-            page.ink = InkPage.read(raw) if raw else InkPage.blank()
+            page.ink = InkPage.read(raw) if raw is not None else InkPage.blank()
         return page.ink
 
     def add_page(self, at=None):
         if len(self.pages) >= MAX_PAGES:
             raise ValueError('A notebook is limited to 1000 pages.')
+        at = len(self.pages) if at is None else page_index(at, len(self.pages), insertion=True)
         page = Page(str(uuid4()), ink=InkPage.blank())
-        self.pages.insert(len(self.pages) if at is None else at, page)
+        self.pages.insert(at, page)
         self.structure_dirty = True
         return page
 
     def delete_page(self, index):
+        page_index(index, len(self.pages))
         if len(self.pages) <= 1:
             raise ValueError('Keep at least one page in a notebook.')
         self.structure_dirty = True
         return self.pages.pop(index)
 
     def move_page(self, index, target):
-        if not 0 <= target < len(self.pages):
-            raise ValueError('Page destination is out of range.')
+        page_index(index, len(self.pages))
+        page_index(target, len(self.pages))
         self.pages.insert(target, self.pages.pop(index))
         self.structure_dirty = True
 
@@ -167,6 +175,8 @@ class Notebook:
         """Copy opaque page data with a fresh ID. Never remove the source first."""
         if len(self.pages) >= MAX_PAGES:
             raise ValueError('A notebook is limited to 1000 pages.')
+        page_index(index, len(source.pages))
+        at = len(self.pages) if at is None else page_index(at, len(self.pages), insertion=True)
         original = source.pages[index]
         if source is not self and source.page(index).warning:
             raise ValueError('This page contains unsupported objects; cross-notebook copy is disabled to preserve referenced assets.')
@@ -188,7 +198,7 @@ class Notebook:
                 staged[self.id + parts[0][len(source.id):] + '/' + identity + parts[1][len(original.id):]] = data
         self.members.update(staged)
         page = Page(identity, record, original.template)
-        self.pages.insert(len(self.pages) if at is None else at, page)
+        self.pages.insert(at, page)
         self.structure_dirty = True
         return page
 

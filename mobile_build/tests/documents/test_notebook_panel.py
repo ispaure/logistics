@@ -82,6 +82,75 @@ class NotebookPanelTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(),original)
         self.assertEqual(len(panel.repository.open(panel.key).pages),2)
 
+    def test_invalid_workspace_import_reports_failure(self):
+        from unittest.mock import patch
+        from commonUtils.runtime.resources.local import LocalFiles
+        path = Path(self.temp.name) / 'damaged.rmdoc'
+        path.write_bytes(b'not a ZIP')
+        owner = self.app.read_managed_file.__self__
+        self.app.loop.run_until_complete(self.app.show_files())
+        with patch.object(owner, 'selected_file', return_value=(LocalFiles(path.parent), path.name)):
+            result = self.app.loop.run_until_complete(owner.read_managed_file())
+        self.assertFalse(result)
+        self.assertIn('Invalid RMDOC', self.app.notebook_panel.status.text)
+
+    def test_retired_canvas_and_busy_commands_do_not_consume_current_sequence(self):
+        import json
+        from urllib.parse import quote
+        self.app.select_destination('notebooks')
+        panel = self.app.notebook_panel
+        self.app.loop.run_until_complete(panel.new())
+        old = panel.web
+        self.app.loop.run_until_complete(panel.new())
+        self.assertIsNone(old.on_navigation_starting._raw)
+        command = panel.bridge.url + '?command=' + quote(json.dumps(dict(sequence=1,action=dict(op='rename',name='Current'))))
+        panel.navigate(old, command)
+        self.assertEqual(panel.bridge.sequence, 0)
+        panel.busy = True
+        panel.navigate(panel.web, command)
+        self.assertEqual(panel.bridge.sequence, 0)
+        panel.busy = False
+        panel.navigate(panel.web, command)
+        self.assertTrue(panel.busy)
+        self.app.loop.run_until_complete(asyncio.sleep(.1))
+        self.assertEqual(panel.editor.notebook.name, 'Current')
+        self.assertFalse(panel.busy)
+
+    def test_disposal_during_import_cannot_reopen_canvas(self):
+        from threading import Event
+        self.app.select_destination('notebooks')
+        panel = self.app.notebook_panel
+        started, released = Event(), Event()
+        def read():
+            started.set()
+            if not released.wait(5):
+                raise TimeoutError('fixture was not released')
+            return Notebook.new('Pending')
+        async def scenario():
+            loading = asyncio.create_task(panel.load(read))
+            try:
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                self.assertFalse(await panel.new())
+                panel.dispose()
+            finally:
+                released.set()
+            self.assertFalse(await loading)
+            self.assertIsNone(panel.web)
+            self.assertFalse(panel.busy)
+        self.app.loop.run_until_complete(scenario())
+
+    def test_failed_canvas_acknowledgement_offers_reopen_of_saved_content(self):
+        from unittest.mock import AsyncMock, patch
+        self.app.select_destination('notebooks')
+        panel = self.app.notebook_panel
+        self.app.loop.run_until_complete(panel.new())
+        key = panel.key
+        with patch.object(panel.web, 'evaluate_javascript', AsyncMock(side_effect=RuntimeError('view unavailable'))):
+            self.app.loop.run_until_complete(panel.perform(dict(op='rename', name='Saved content')))
+        self.assertIsNone(panel.web)
+        self.assertIn('Reopen it to resume', panel.status.text)
+        self.assertEqual(panel.repository.open(key).name, 'Saved content')
+
 
 if __name__=='__main__':
     unittest.main()

@@ -111,6 +111,25 @@ The focused native entry point is `tests.logisticsmobile.notebook_probe`; it use
 synthetic private storage and publishes `notebook-result.json` in its cache.
 It must run only in a separately identified QA application with owned cleanup.
 
+The subsequent desktop/edge-case review adds isolated registry and document
+launcher coverage: the optional desktop feature contributes a page, an RMDOC
+launcher and file activation, and New creates a notebook directly. Retired canvas
+events cannot reach a replacement notebook. Mobile imports and commands reserve
+their busy state before yielding, reject stale WebViews and retire replaced
+canvases. Failed imports return failure to Workspaces; failed acknowledgements
+offer reopening of the saved copy. Expanded controls scroll within half the view.
+Template substitutions precede user state insertion, so titles containing marker
+strings cannot corrupt the editor. Oversized commands report an error without
+advancing the bridge sequence. New ink must remain readable before recovery is
+published; limits are 100,000 points per stroke and 1,000,000 points per page.
+Empty damaged scenes, invalid thickness scales and nested groups are preserved
+read-only. Invalid page indices are rejected before mutation, and a cleanup
+failure after manifest publication does not roll back an already-saved edit.
+The review passed 23 desktop/model tests and eight mobile workflow tests,
+correctness lint, the real desktop canvas probe and focused Android/iPhone native
+checks, including QA app and disposable-device cleanup.
+These checks supplement rather than replace the earlier broad native suites.
+
 Physical acceptance still requires writing with the Boox stylus, measuring the
 reported pressure/palm behavior, exporting a synthetic notebook and importing it
 on the actual reMarkable model/firmware. Select, move and erase exported strokes

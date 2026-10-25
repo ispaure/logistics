@@ -3,6 +3,7 @@ import json
 from urllib.parse import urlsplit, parse_qs
 from uuid import uuid4
 
+MAX_COMMAND = 8 * 1024 * 1024
 
 class Bridge:
     def __init__(self):
@@ -10,7 +11,7 @@ class Bridge:
         self.sequence = 0
 
     def command(self, url):
-        if len(url) > 8 * 1024 * 1024 or url.split('?', 1)[0] != self.url:
+        if len(url) > MAX_COMMAND or url.split('?', 1)[0] != self.url:
             return None
         try:
             values = parse_qs(urlsplit(url).query, strict_parsing=True)

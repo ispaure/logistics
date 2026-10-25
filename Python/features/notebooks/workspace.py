@@ -47,12 +47,16 @@ class Repository:
         pages = []
         normalized = []
         for index, page in enumerate(notebook.pages):
-            raw = notebook.page(index).to_bytes()
+            ink = notebook.page(index)
+            raw = ink.to_bytes()
+            decoded = InkPage.read(raw)
+            if decoded.warning and not ink.warning:
+                raise ValueError('This edit exceeds the supported ink scene: ' + decoded.warning)
             digest = sha256(raw).hexdigest()
             target = directory / (digest + '.rm')
             if not target.exists():
                 atomic_write_bytes(target, raw)
-            normalized.append(InkPage.read(raw))
+            normalized.append(decoded)
             pages.append(dict(id=page.id, record=page.record, template=page.template, ink=digest))
         # Copied page sidecars and unknown document members remain in a bounded base.
         # This archive is updated only by structural changes, never per pen sample.
@@ -79,12 +83,12 @@ class Repository:
         # Keep only objects referenced by the published manifest. In-memory undo
         # owns its page objects and recreates their blobs if later restored.
         retained = {p['ink'] + '.rm' for p in pages} | {base_name, 'base.rmdoc', 'state.json'}
-        for path in directory.iterdir():
-            if path.name not in retained and path.suffix in ('.rm', '.rmdoc'):
-                try:
+        try:
+            for path in directory.iterdir():
+                if path.name not in retained and path.suffix in ('.rm', '.rmdoc'):
                     path.unlink(missing_ok=True)
-                except OSError:
-                    pass  # Published recovery remains valid; retry pruning on the next save.
+        except OSError:
+            pass  # Published recovery remains valid; retry pruning on the next save.
 
     @serialize_mutation
     def open(self, key):

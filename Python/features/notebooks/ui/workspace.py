@@ -46,11 +46,13 @@ class NotebookWorkspace(qt.QWidget):
         location = root or Path(qt.QStandardPaths.writableLocation(qt.QStandardPaths.StandardLocation.AppLocalDataLocation)) / 'notebooks'
         self.repository = Repository(location)
         self.editor = None
+        self.web = None
         self.busy = False
         self.layout = qt.QVBoxLayout(self)
         self.library()
 
     def clear(self):
+        self.web = None
         while self.layout.count():
             item = self.layout.takeAt(0)
             widget = item.widget()
@@ -73,11 +75,17 @@ class NotebookWorkspace(qt.QWidget):
             actions.addWidget(button)
         self.status = qt.QLabel('')
         self.layout.addWidget(self.status)
+        listing = qt.QWidget()
+        listing_layout = qt.QVBoxLayout(listing)
         for key, name in self.repository.list():
             button = qt.QPushButton(name)
             button.clicked.connect(lambda checked=False, key=key: self.reopen(key))
-            self.layout.addWidget(button)
-        self.layout.addStretch()
+            listing_layout.addWidget(button)
+        listing_layout.addStretch()
+        scroll = qt.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(listing)
+        self.layout.addWidget(scroll)
 
     def new(self):
         try:
@@ -116,9 +124,14 @@ class NotebookWorkspace(qt.QWidget):
         self.web = QWebEngineView(self)
         page = CanvasPage(self.web, self.bridge)
         self.web.setPage(page)
-        page.command.connect(self.perform)
+        page.command.connect(lambda action: self.deliver(page, action))
         self.web.setHtml(editor_html(self.editor.state(), self.bridge.url, console_bridge=True))
         self.layout.addWidget(self.web)
+
+    def deliver(self, page, action):
+        # A queued event from a retired canvas must not edit the next notebook.
+        if self.web is not None and self.web.page() is page:
+            self.perform(action)
 
     def perform(self, action):
         if self.busy:
