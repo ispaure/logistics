@@ -7,6 +7,7 @@ SECTIONS = {
 }
 HELP = {
     'tools.desktop_python': 'Python executable for desktop tests and tools on this computer.',
+    'tools.manager_checkout': 'Reviewed local manager checkout for guest setup when its exact project pin is not published yet. Blank explicitly installs the remote pin; local sources and their real commonUtils pin are verified before transfer.',
     'tools.mobile_python': 'Python executable in the mobile build environment on this computer.',
     'tools.xcode': 'Xcode Developer directory for this run. Blank uses the selected system Xcode; it does not change that selection.',
     'tools.android_sdk': 'Android SDK directory containing platform tools, emulator and system images.',
