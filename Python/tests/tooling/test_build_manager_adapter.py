@@ -79,7 +79,7 @@ class ManagerAdapterTests(unittest.TestCase):
         from Scripts.validation_plans import desktop_checks
         root = Path(__file__).resolve().parents[3]
         project = LogisticsProject(root)
-        with patch('Scripts.build_project.sys.platform', 'darwin'), patch('Scripts.build_project.identity', return_value=dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture')), \
+        with patch('Scripts.build_project.sys.platform', 'darwin'), patch('Scripts.build_project.platform.system', return_value='Darwin'), patch('Scripts.build_project.identity', return_value=dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture')), \
                 patch('Scripts.build_project.materialize'), patch('build_manager.local.inspect_python', return_value={'system': 'Darwin'}):
             plan = project.make_plan('Test', 'macos', 'This Mac')
         names = [phase.id for phase in plan.phases]
@@ -88,7 +88,7 @@ class ManagerAdapterTests(unittest.TestCase):
         self.assertTrue(all(phase.dependencies == ('environment',) for phase in plan.phases[1:]))
         self.assertTrue(all(phase.environment['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] == '1' for phase in plan.phases))
         self.assertEqual(plan.source['toolchain']['system'], 'Darwin')
-        with patch('Scripts.build_project.sys.platform', 'darwin'), patch('Scripts.build_project.identity', return_value=dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture')), \
+        with patch('Scripts.build_project.sys.platform', 'darwin'), patch('Scripts.build_project.platform.system', return_value='Darwin'), patch('Scripts.build_project.identity', return_value=dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture')), \
                 patch('Scripts.build_project.materialize'), patch('build_manager.local.inspect_python', return_value={'system': 'Darwin'}):
             focused = project.make_plan('Test', 'macos', 'This Mac', pattern='test_dev_commands.py')
         command = focused.phases[1].argv
@@ -105,7 +105,7 @@ class ManagerAdapterTests(unittest.TestCase):
         values = manager_settings.defaults(root / 'mobile_build')
         values.update({'vm.linux': 'Synthetic Ubuntu', 'vm.fedora': 'Synthetic Fedora'})
         source = dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture', selection='working-tree')
-        with patch('Scripts.build_project.identity', return_value=source), patch('Scripts.build_project.materialize') as snapshot, \
+        with patch('Scripts.build_project.sys.platform', 'darwin'), patch('Scripts.build_project.identity', return_value=source), patch('Scripts.build_project.materialize') as snapshot, \
                 patch('Scripts.build_project.manager_settings.settings', return_value=(values, {})), \
                 patch('build_manager.parallels.Parallels') as provider:
             provider.return_value.selected.side_effect = [dict(uuid='ubuntu-id', name='Synthetic Ubuntu', status='stopped'),
@@ -116,7 +116,7 @@ class ManagerAdapterTests(unittest.TestCase):
             self.assertTrue(all(phase.cwd == str(project.private / 'snapshots/fixture') for phase in plan.phases))
             self.assertTrue(all(phase.artifacts for phase in plan.phases))
             snapshot.assert_called_once()
-        with patch('Scripts.build_project.identity', return_value=source), patch('Scripts.build_project.materialize') as snapshot, \
+        with patch('Scripts.build_project.sys.platform', 'darwin'), patch('Scripts.build_project.identity', return_value=source), patch('Scripts.build_project.materialize') as snapshot, \
                 patch('Scripts.build_project.manager_settings.settings', return_value=(values, {})), \
                 patch('build_manager.parallels.Parallels') as provider:
             provider.return_value.selected.side_effect = ValueError('Guest is unavailable')
