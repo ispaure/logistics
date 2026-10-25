@@ -37,6 +37,8 @@ class LogisticsProject:
 
     def __init__(self, root):
         self.root = Path(root).resolve()
+        descriptor = self.root / 'build-project.json'
+        self.test_suites = json.loads(descriptor.read_text()).get('test_suites', []) if descriptor.is_file() else []
         self.mobile = self.root / 'mobile_build'
         self.interpreter = self.root / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
         self.runner_directory = self.root
@@ -120,6 +122,9 @@ class LogisticsProject:
     def make_plan(self, operation, target, backend, **options):
         from dataclasses import replace
         started = time.monotonic()
+        from Scripts.manager_suites import selection, with_reports, with_host_gates, acceptance_phase
+        suite = options.pop('suite', '')
+        selection(self.root, suite, operation, target, backend, options.get('pattern', ''))
         workflow = operation in ('Reviewed TestFlight workflow','Reviewed Firebase workflow')
         requested_operation = operation
         if workflow:
@@ -129,8 +134,21 @@ class LogisticsProject:
             clean(self.root, apply=True)
         except (OSError, RuntimeError) as error:
             print('Build retention incomplete: ' + str(error), flush=True)
-        plan = self._make_plan(operation, target, backend, **options)
+        plan = self._make_plan(operation, target, backend, suite=suite, **options)
         if workflow:
+            validation_options = dict(options)
+            if target == 'ios':
+                validation_options['include_ipad'] = True  # Required release inventory, independent of standalone test choices.
+            validation = self._make_plan('Test', target, self.backend_options(target, 'Test')[0], **validation_options)
+            if any(validation.source.get(key) != plan.source.get(key)
+                   for key in ('fingerprint', 'logistics_commit', 'commonUtils_commit')):
+                raise ValueError('Native validation and preparation must use the exact same source.')
+            host_python = validation.source.get('effective_settings', {}).get('values', {}).get('tools.desktop_python', str(self.interpreter))
+            validation = with_host_gates(validation, host_python)
+            gate = acceptance_phase(validation, target)
+            # Required native/runtime gates and owned cleanup precede signing.
+            plan = replace(plan, phases=(*validation.phases, gate,
+                *(replace(phase, dependencies=(*phase.dependencies, gate.id)) for phase in plan.phases)))
             preparation = plan.phases[-1]
             report = Path(preparation.artifacts[0])
             receipt = report.with_name(report.stem+'-distribution.json')
@@ -139,6 +157,17 @@ class LogisticsProject:
                 dependencies=(preparation.id,),environment=dict(preparation.environment),kind='distribution',
                 effect='upload',provider='testflight' if target=='ios' else 'firebase',artifacts=(str(receipt),))
             plan = replace(plan,operation=requested_operation,phases=(*plan.phases,upload))
+        if suite == 'android.native':
+            plan = replace(plan, phases=tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name != 'android-runtime-tools'))
+                for phase in plan.phases if phase.id not in {'android-runtime','android-runtime-tools'}))
+        elif suite == 'android.runtime':
+            plan = replace(plan, phases=tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name != 'android-build'))
+                for phase in plan.phases if phase.id not in {'android-native','android-build'}))
+        if suite:
+            plan = replace(plan, source=dict(plan.source, test_suite=suite))
+        if options.get('pattern'):
+            plan = replace(plan, source=dict(plan.source, focused_test_pattern=options['pattern']))
+        plan = with_reports(plan, target)
         snapshot = self.private / 'snapshots' / plan.source.get('fingerprint', '')
         resources = (str(snapshot.with_suffix('.lock')),) if (snapshot / '.manager-source.json').is_file() else ()
         plan = declare_resources(plan,target)
@@ -162,7 +191,7 @@ class LogisticsProject:
         return replace(plan, phases=phases, secret_environment=secrets, resource_locks=(*plan.resource_locks,*resources),
                        source=dict(plan.source,destination=destination,plan_preparation_seconds=time.monotonic()-started))
 
-    def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag=''):
+    def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag='', suite=''):
         if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target, operation):
             raise ValueError('Unsupported operation/platform/backend selection.')
         if pattern and (not pattern.endswith('.py') or '/' in pattern or '\\' in pattern):
@@ -198,7 +227,11 @@ class LogisticsProject:
             if operation != 'Test':
                 raise ValueError('Desktop Build is not implemented by the existing source-package workflow; select Test or GitHub release.')
             commands = [('focused', ['dev.py', 'test', 'desktop', pattern, '--python', python], 600)] if pattern else desktop_checks(expected_system, workspace / 'reports')
-            if not pattern:
+            if suite in {'portable.contracts', 'desktop.ui'}:
+                directory = 'Python/tests/tooling' if suite == 'portable.contracts' else 'Python/tests/application'
+                commands = [(suite, ['Python/tests/run_regressions.py', directory, '--isolate-modules',
+                                     '--pattern', pattern or 'test*.py'], 900)]
+            if not pattern and not suite:
                 commands += [('release-tooling', ['-m', 'unittest', 'discover', '-s', '.github/scripts', '-p', 'test_*.py'], 300)]
             env['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] = '1'
             prerequisites = Phase('environment', (python, '-m', 'Scripts.local_desktop'), str(snapshot),
@@ -474,7 +507,8 @@ def declare_resources(plan, target):
             requirements['provider.destination:'+phase.provider+':'+plan.project]=1
         phases.append(replace(phase,resources=requirements,stop_grace=5 if target in {'ios','android'} else phase.stop_grace))
     resources=dict(plan.resources)
-    if target in {'ios','android'} and plan.effect=='test':resources['host.mobile-device-session']=1
+    if target in {'ios','android'} and (plan.effect=='test' or any(phase.id in {'android-native','iphone','duo'} for phase in plan.phases)):
+        resources['host.mobile-device-session']=1
     return replace(plan,phases=tuple(phases),resources=resources)
 
 

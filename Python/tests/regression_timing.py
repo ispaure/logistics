@@ -20,9 +20,10 @@ def default_report(directory):
 
 
 class TimingReport:
-    def __init__(self, path, directory, pattern, isolated):
+    def __init__(self, path, directory, pattern, isolated, junit=None):
         self.path = path.resolve()
         self.started = perf_counter()
+        self.junit = junit
         self.data = {
             'schema_version': 1, 'started_at': timestamp(), 'finished_at': None,
             'directory': str(directory.resolve()), 'pattern': pattern,
@@ -40,6 +41,23 @@ class TimingReport:
         temporary = self.path.with_suffix('.tmp')
         temporary.write_text(json.dumps(self.data, indent=2) + '\n', encoding='utf-8')
         temporary.replace(self.path)
+        if self.junit is not None:
+            from build_manager.reporting import write_junit
+            outcomes = {'passed': 'passed', 'failed': 'failed', 'error': 'error', 'skipped': 'skipped',
+                        'expected_failure': 'skipped', 'unexpected_success': 'failed', 'incomplete': 'error'}
+            cases = []
+            for row in self.data['tests']:
+                classname, _, name = row['id'].rpartition('.')
+                cases.append(dict(name=name, classname=classname, status=outcomes[row['outcome']],
+                                  seconds=row['duration_seconds'], message=row.get('message', '')))
+            for row in self.data['modules']:
+                if row['outcome'] != 'passed' or not row['test_report_complete']:
+                    cases.append(dict(name=row['path'], classname='Logistics.runner', status='error',
+                                      seconds=row['duration_seconds'], message='Isolated module: ' + row['outcome']))
+            if not self.data['complete'] or not cases or (exit_code and all(row['status'] == 'passed' for row in cases)):
+                cases.append(dict(name='suite_completion', classname='Logistics.runner', status='error',
+                                  message='The suite did not complete successfully with case evidence.'))
+            write_junit(self.junit, self.data['directory'], cases)
 
     def summarize(self):
         for key, title, name in (('tests', 'Slowest tests (setup, body and cleanup)', 'id'),
@@ -83,6 +101,7 @@ class TimedResult(unittest.TextTestResult):
 
     def addFailure(self, test, err):
         self._outcome(test, 'failed')
+        self._detail(test, self._exc_info_to_string(err, test))
         super().addFailure(test, err)
 
     def addSuccess(self, test):
@@ -91,21 +110,30 @@ class TimedResult(unittest.TextTestResult):
 
     def addError(self, test, err):
         self._outcome(test, 'error')
+        self._detail(test, self._exc_info_to_string(err, test))
         super().addError(test, err)
 
     def addSkip(self, test, reason):
         self._outcome(test, 'skipped')
+        self._detail(test, reason)
         super().addSkip(test, reason)
 
     def addExpectedFailure(self, test, err):
         self._outcome(test, 'expected_failure')
+        self._detail(test, 'Expected failure: ' + self._exc_info_to_string(err, test))
         super().addExpectedFailure(test, err)
 
     def addUnexpectedSuccess(self, test):
         self._outcome(test, 'unexpected_success')
+        self._detail(test, 'Unexpected success: update the declared expectation.')
         super().addUnexpectedSuccess(test)
 
     def addSubTest(self, test, subtest, err):
         if err is not None:
             self._outcome(test, 'failed' if issubclass(err[0], test.failureException) else 'error')
+            self._detail(test, str(subtest) + '\n' + self._exc_info_to_string(err, test))
         super().addSubTest(test, subtest, err)
+
+    def _detail(self, test, message):
+        row = self._timing if getattr(self, '_timing', None) is not None else self.report.data['tests'][-1]
+        row['message'] = row.get('message', '') + message

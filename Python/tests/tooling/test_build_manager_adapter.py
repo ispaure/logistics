@@ -92,7 +92,10 @@ class ManagerAdapterTests(unittest.TestCase):
                 patch('Scripts.build_project.materialize'), patch('build_manager.local.inspect_python', return_value={'system': 'Darwin'}):
             focused = project.make_plan('Test', 'macos', 'This Mac', pattern='test_dev_commands.py')
         command = focused.phases[1].argv
-        self.assertEqual(command[command.index('--python') + 1], command[0])
+        self.assertEqual(command[0], plan.phases[0].argv[0])
+        self.assertIn('Python/tests/run_regressions.py', command)
+        self.assertEqual(command[command.index('--pattern') + 1], 'test_dev_commands.py')
+        self.assertIn('junit', focused.phases[1].artifact_types.values())
         hosted = project.github_plan('Test', 'macos', dict(dirty=False, logistics_commit='a' * 40), root, {}, 'alpha', '')
         self.assertEqual(hosted.source['hosted_coverage'], 'macos')
 

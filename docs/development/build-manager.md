@@ -30,8 +30,9 @@ calls continue to require the complete desktop matrix.
 
 ## Reusable boundary
 
-`build_manager/` contains generic plan/result contracts, subprocess execution,
-workspace locking, cancellation, output filtering, profiles, monotonic local
+The external manager's `build_manager` package contains generic plan/result
+contracts, subprocess execution, workspace locking, cancellation, output filtering,
+profiles, monotonic local
 reservations, the GitHub transport and optional Qt presentation. It imports no
 Logistics application, feature tree, app identity or personal configuration.
 `Scripts/build_project.py`, `Scripts/build_snapshots.py`,
@@ -46,9 +47,10 @@ and `make_plan(operation, target, backend, **choices)`. Settings use
 second-project tests run a different root/name and harmless real command through
 both the executor and Qt UI without cloud credentials.
 
-Future extraction would package `build_manager` as a versioned dependency.
-Logistics would retain the adapters, functional suites and workflows and pin that
-dependency. No additional repository or submodule is introduced here.
+The manager has been extracted into a separate repository. Logistics pins its
+revision in `build-manager-dependency.json` and retains the adapters, functional
+suites and workflows. Install it explicitly in each tooling environment; see
+[external manager installation](#external-manager-installation-adapter-api-1).
 
 ## Plan, result and source contracts
 
@@ -130,12 +132,14 @@ provider retry/resume command after reviewing that immutable build.
 
 ## Validation and local outputs
 
-Generic contracts are in `build_manager/tests`; Logistics integration contracts
-are in `Python/tests/tooling` and `mobile_build/tests/tooling`. The tests exercise
+Generic contracts are in the external manager checkout's `tests/`; Logistics
+integration contracts are in `Python/tests/tooling` and `mobile_build/tests/tooling`.
+The tests exercise
 real harmless subprocesses and Qt-to-CLI execution, failure, timeout, cancellation,
 workspace conflicts, source privacy, allocation and controlled provider transport.
 They do not substitute for the local platform backends' native acceptance.
-`python dev.py lint` covers the generic package, and desktop plans run its tests.
+`python dev.py lint` covers Logistics-owned source. Desktop plans run the installed
+manager's tests through `python -m build_manager.contracts`.
 
 Profiles, counters and source workspaces stay under ignored
 `mobile_build/.tools/build-manager/`; result plans/logs/reports stay under ignored
@@ -345,9 +349,9 @@ skipped remaining work and removed only the owned emulator. The reusable focused
 driver is `mobile_build/validation/local_manager_probe.py`; its output is explicitly
 cancellation evidence, never full-suite acceptance.
 
-## Reuse boundary and extraction readiness
+## Reuse boundary after extraction
 
-`build_manager/` is the intended extractable package: serializable `Phase`/`Plan`
+The external `build_manager` package owns serializable `Phase`/`Plan`
 contracts, execution and locks, provider transports, owned simulator/container
 lifetimes, profiles, number reservations and optional Qt presentation. It imports
 no Logistics application, test catalog, release naming or account configuration.
@@ -393,18 +397,20 @@ The legacy mobile payload code fingerprint has its established narrower scope;
 the manager additionally records the whole selected source snapshot and complete
 native artifact digest. Those identities must not be presented as interchangeable.
 
-Release source ZIPs include the orchestrator, adapter and pinned tool metadata,
-while excluding Git metadata, private profiles, credentials, caches and evidence.
+Release source ZIPs include the manager installer, project adapter and pinned tool
+metadata, while excluding Git metadata, private profiles, credentials, caches and evidence.
 The install manifest records the pinned commonUtils commit. Release completion
 requires downloading the public ZIP, matching its published SHA-256, checking the
 embedded app/source/dependency identities and verifying every declared member hash.
 Checking only that GitHub advertised a digest is insufficient.
 
-A future split can move `build_manager/` with its harmless second-project tests
-into a versioned dependency, then update Logistics imports through the adapter.
-Keep project test discovery, native suites, source policy and release/distribution
-rules here. No repository or submodule split has been made. The full Windows
-plan requires normal-user file/directory symbolic-link creation. Missing capability
+The manager and its harmless second-project tests now live in the external
+repository. Project test discovery, native suites, source policy and
+release/distribution rules remain here. `Scripts.mobile_processes` delegates
+owned process-group retirement to the pinned manager's `stop_process`, including
+after parent exit, timeout or interruption. It keeps the preparation command and
+failure policy local; the manager bounds the final wait after termination.
+The full Windows plan requires normal-user file/directory symbolic-link creation. Missing capability
 remains a failed test setup, and focused Windows adapter checks cannot replace
 complete required acceptance.
 
@@ -542,3 +548,41 @@ Native Linux/Windows acceptance and all existing VM holds remain separate.
 
 App Store/Google Play publication are visible as Not implemented. Existing TestFlight
 and Firebase functionality retain their own provider identity and review gates.
+
+## Guided manager suites and tester acceptance
+
+The descriptor now declares `portable.contracts` (tooling contracts under
+`Python/tests/tooling`), `desktop.ui` (application/UI checks under
+`Python/tests/application`), `android.native`, `android.runtime`, `ios.native`
+and `release.acceptance`. These map existing owners into contracts, UI, native
+and acceptance groups without moving their fixtures or imports. Full Test retains
+its canonical suite inventory. A named host suite intersects its filename pattern;
+native and release suites reject focused patterns. Named selection on hosted/VM
+backends is explicitly unsupported rather than silently broadened.
+
+The isolated regression runner accepts `--junit PATH` alongside its JSON timing
+report. It retains measured cases, failure messages, skips, subtest/fixture errors
+and failed/crashed module gates. Native reports expose their canonical case IDs;
+when the native runner supplies no per-case duration, the manager displays an
+unknown duration rather than dividing total time or reporting an invented value.
+Whole-command parity checks remain explicitly single integration gates.
+
+Reviewed Firebase/TestFlight workflows now run full tooling contracts, desktop UI,
+mobile-host contracts, the complete native inventory and runtime acceptance before signing/preparation and the separately approved upload.
+The gate checks source/dependency IDs, case inventories, actual runtime platform,
+required iPhone/Duo/iPad release families, and owned simulator cleanup. Standalone
+iPad coverage remains optional; reviewed TestFlight delivery always requires it. Missing,
+failed or skipped native/runtime coverage blocks the prepared delivery. The
+existing local iOS backend does not run the upstream core testbed: set
+`LOGISTICS_IOS_RUNTIME_EVIDENCE` to an exact-source, verified iOS runtime JSON report
+from the owning testbed when using reviewed TestFlight delivery. A host test report
+cannot satisfy it. Existing Prepare-only operations continue to produce development
+preparation without implying native release acceptance.
+
+These changes use `build_manager.reporting` from the companion manager UI change.
+Local editable installations can validate the integration now. The committed dependency
+pin selects the reviewed manager implementation containing that module. Its manager
+and commonUtils commits must be made available remotely before hosted or fresh
+pinned setup can consume it; local pinning does not push, dispatch or upload. Changing the descriptor requires
+renewed manager trust. Portable regression checks do not establish native mobile
+or live provider acceptance.

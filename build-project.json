@@ -248,6 +248,98 @@
       "operation": "Reviewed Firebase workflow",
       "platform": "android",
       "backend": "This Mac"
+    },
+    "Portable tooling contracts": {
+      "platform": "macos",
+      "operation": "Test",
+      "backend": "This Mac",
+      "suite": "portable.contracts"
+    },
+    "Desktop application and UI": {
+      "platform": "macos",
+      "operation": "Test",
+      "backend": "This Mac",
+      "suite": "desktop.ui"
     }
-  }
+  },
+  "test_suites": [
+    {
+      "id": "portable.contracts",
+      "label": "Portable tooling contracts",
+      "tier": "contracts",
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "operations": [
+        "Test"
+      ],
+      "description": "Project tooling contracts in isolated host processes; no native device evidence."
+    },
+    {
+      "id": "desktop.ui",
+      "label": "Desktop application and UI",
+      "tier": "ui",
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "operations": [
+        "Test"
+      ],
+      "description": "Application tests in isolated Qt host processes."
+    },
+    {
+      "id": "android.native",
+      "label": "Android native UI",
+      "tier": "native",
+      "platforms": [
+        "android"
+      ],
+      "operations": [
+        "Test"
+      ],
+      "description": "Canonical native UI inventory on an owned disposable emulator."
+    },
+    {
+      "id": "android.runtime",
+      "label": "Android runtime contracts",
+      "tier": "native",
+      "platforms": [
+        "android"
+      ],
+      "operations": [
+        "Test"
+      ],
+      "description": "Canonical core inventory in the actual Android Python runtime."
+    },
+    {
+      "id": "ios.native",
+      "label": "iOS native UI sequence",
+      "tier": "native",
+      "platforms": [
+        "ios"
+      ],
+      "operations": [
+        "Test"
+      ],
+      "description": "Canonical iPhone/Duo and optional iPad inventory with owned cleanup."
+    },
+    {
+      "id": "release.acceptance",
+      "label": "Complete tester delivery gates",
+      "tier": "acceptance",
+      "platforms": [
+        "ios",
+        "android"
+      ],
+      "operations": [
+        "Reviewed TestFlight workflow",
+        "Reviewed Firebase workflow"
+      ],
+      "description": "Full native/runtime gates, preparation, and a separately reviewed upload. Cannot be narrowed."
+    }
+  ]
 }

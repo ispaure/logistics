@@ -72,9 +72,13 @@ def cleanup(lease):
 def test(root, result, kind, model, runtime, lease):
     from mobile_build.validation import ui_tools
     from uuid import uuid4
+    # A failed prior teardown must never lose its UUID to a fresh lease.
+    if lease.exists():
+        cleanup(lease)
     client = AppleSimulators()
     name = 'Build Manager ' + kind + ' ' + uuid4().hex
-    result.parent.mkdir(parents=True, exist_ok=False)
+    result.parent.mkdir(parents=True, exist_ok=True)
+    result.unlink(missing_ok=True)
     lease.parent.mkdir(parents=True, exist_ok=True)
     record = dict(kind=kind, model=model, runtime=runtime, status='running', source=json.loads((root/'.manager-source.json').read_text())['source'])
     started = time.monotonic()

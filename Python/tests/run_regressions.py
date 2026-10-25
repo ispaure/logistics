@@ -93,6 +93,7 @@ def main():
     parser.add_argument('--report', type=Path,
                         help='JSON timing report (default: timestamped file under test-results/test-timings)')
     parser.add_argument('--timing-child', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--junit', type=Path, help='Write measured testcase evidence for the build manager')
     args = parser.parse_args()
     if args.traceback_after <= 0:
         parser.error('--traceback-after must be positive')
@@ -106,7 +107,7 @@ def main():
         if not available:
             parser.error(f'Required test dependency is unavailable: {name}. Use the owning suite environment.')
     report = TimingReport(args.report or default_report(args.directory), args.directory,
-                          args.pattern, args.isolate_modules)
+                          args.pattern, args.isolate_modules, args.junit)
     report.data['include_patterns'] = args.include_pattern
     report.save()
     try:
