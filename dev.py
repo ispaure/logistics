@@ -106,7 +106,7 @@ def main(argv=None):
                        str(suite), '--pattern', pattern, '--isolate-modules', *extra]
         else:
             command = [str(interpreter), '-m', 'ruff', 'check', '--config',
-                       'Python/pyproject.toml', 'dev.py', 'Python', 'mobile_build', 'Scripts', 'build_manager', '.github/scripts']
+                       'Python/pyproject.toml', 'dev.py', 'Python', 'mobile_build', 'Scripts', '.github/scripts']
         checks.append((label, interpreter, command, environment))
     try:
         return run_checks(ROOT, checks, dry_run=args.dry_run)

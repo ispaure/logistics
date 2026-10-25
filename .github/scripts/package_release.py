@@ -15,7 +15,7 @@ EXCLUDED_DIRS = {
     'mobile-evidence',
 }
 REQUIRED = {
-    'build_manager/__main__.py', 'build_manager/executor.py', 'build_manager/ui.py',
+    'Scripts/install_build_manager.py', 'build-manager-dependency.json',
     'Scripts/build_project.py', 'Scripts/build_snapshots.py', 'Scripts/mobile_processes.py',
     'Scripts/mobile_runtime_tools.json', 'Scripts/build_manager_tools.json',
     'README.md', 'LICENSE.md', 'docs/docs.md', 'docs/user/user.md', 'docs/user/configuration.md', 'launch_config.ini',

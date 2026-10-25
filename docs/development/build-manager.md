@@ -483,3 +483,34 @@ The generic UI consumes optional `storage_inventory()` and
 in `build_manager.retention`. The settings navigation factory is optional for
 other projects; field metadata supports section, label, description, kind and
 integer minimum/maximum/suffix without importing Logistics into the generic UI.
+
+## External manager installation (adapter API 1)
+
+Generic execution, transports, profiles and retention mechanisms now belong to
+`build-deployment-manager`. Logistics retains `Scripts/build_project.py`, snapshots,
+suite declarations, distribution helpers and storage policy. No sibling checkout
+is discovered automatically. Install a reviewed Git checkout explicitly in each
+interpreter used for Logistics tooling:
+
+```sh
+.venv/bin/python -m Scripts.install_build_manager /path/to/build-deployment-manager
+mobile_build/.venv/bin/python -m Scripts.install_build_manager /path/to/build-deployment-manager
+```
+
+The manager requires adapter API 1. Missing/incompatible installations stop with a
+setup error. Generic contracts run via `python -m build_manager.contracts` from
+the installed manager checkout; project contracts remain here. Existing plans
+and result schema 1 remain readable; results are never rewritten. Counters, keys,
+profiles, snapshots and retention policy keep their existing locations.
+
+Hosted runners and newly provisioned guests also need an explicit installation
+of the reviewed manager revision. The extraction is local until that revision
+is made available to those hosts; this task does not push or dispatch it.
+Local source archives carry the installer and integration, not a stale second
+copy of the engine. Re-run the explicit install after recreating an environment.
+
+Hosted setup reads `build-manager-dependency.json` and explicitly installs that
+immutable revision using `Scripts/install_build_manager.py --from-pin DESTINATION`.
+It refuses an existing destination rather than pulling or resetting it. The owner
+must make both manager and commonUtils commits remotely available before hosted
+setup can succeed. No publication of those commits was performed here.

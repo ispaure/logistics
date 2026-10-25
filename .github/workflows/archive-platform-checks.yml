@@ -10,7 +10,6 @@ on:
       - 'LaunchLogistics_*'
       - 'launch_config.ini'
       - 'Scripts/**'
-      - 'build_manager/**'
   push:
     branches: [main, alpha]
   workflow_dispatch:
@@ -44,9 +43,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12.2'
+      - name: Install explicitly pinned external manager
+        run: python Scripts/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
       - run: python -m pip install ruff==0.14.0
       - run: python -m pip install --require-hashes -r mobile_build/requirements-host.txt
-      - run: ruff check --config Python/pyproject.toml dev.py Python mobile_build Scripts build_manager .github/scripts
+      - run: ruff check --config Python/pyproject.toml dev.py Python mobile_build Scripts .github/scripts
       - name: Check developer lint scope and shared matrix selection
         env:
           PYTHONPATH: .:Python
@@ -100,6 +101,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12.2'
+      - name: Install explicitly pinned external manager
+        run: python Scripts/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
       - name: Install headless Qt libraries
         if: runner.os == 'Linux'
         run: |

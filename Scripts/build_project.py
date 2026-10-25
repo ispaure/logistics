@@ -14,7 +14,15 @@ import time
 from threading import Event
 from uuid import uuid4
 
-from build_manager import Phase, Plan
+try:
+    from build_manager import Phase, Plan
+    from build_manager.identity import API_VERSION
+    if API_VERSION != 1:
+        raise ImportError('Unsupported manager adapter API')
+except ImportError as error:
+    raise RuntimeError('Install the external build-deployment-manager into this project environment '
+                       'with python -m pip install --no-deps -e /path/to/build-deployment-manager; '
+                       'adapter API 1 is required.') from error
 from mobile_build.deployment import manager_settings
 from Scripts.build_snapshots import git, identity, materialize
 from Scripts.validation_plans import desktop_checks
@@ -255,7 +263,8 @@ class LogisticsProject:
         env = dict(env, ANDROID_HOME=str(sdk), ANDROID_SDK_ROOT=str(sdk), JAVA_HOME=str(java),
                    PATH=str(self.mobile/'.tools/go/bin')+os.pathsep+os.environ.get('PATH',''),
                    PIP_FIND_LINKS=str(self.mobile/'.tools/release-wheels'), GRADLE_OPTS='-Dorg.gradle.daemon=false')
-        if options['tools.xcode']:env['DEVELOPER_DIR']=options['tools.xcode']
+        if options['tools.xcode']:
+            env['DEVELOPER_DIR'] = options['tools.xcode']
         run = workspace/('emulator-'+uuid4().hex)
         device = run/'device'
         python = options['tools.mobile_python']
