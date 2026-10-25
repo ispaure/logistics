@@ -566,6 +566,9 @@ and failed/crashed module gates. Native reports expose their canonical case IDs;
 when the native runner supplies no per-case duration, the manager displays an
 unknown duration rather than dividing total time or reporting an invented value.
 Whole-command parity checks remain explicitly single integration gates.
+Regression fixtures discard inherited manager profile and account-default inputs.
+Their temporary settings cannot read or overwrite the operator profile used to
+launch the plan; each fixture supplies its own settings and destinations.
 
 Reviewed Firebase/TestFlight workflows now run full tooling contracts, desktop UI,
 mobile-host contracts, the complete native inventory and runtime acceptance before signing/preparation and the separately approved upload.

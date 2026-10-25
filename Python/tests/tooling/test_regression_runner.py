@@ -64,6 +64,31 @@ class RegressionRunnerTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('Isolated test files: 2; failures: 0', result.stdout)
 
+    def test_manager_profile_and_account_inputs_do_not_escape_into_fixtures(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            protected = root / 'operator-profile.json'
+            protected.write_text('operator profile remains unchanged')
+            suite = root / 'suite'
+            suite.mkdir()
+            (suite / 'test_profile.py').write_text(
+                "import os, sys, unittest\nfrom pathlib import Path\n"
+                f"sys.path.insert(0, {str(RUNNER.parents[2])!r})\n"
+                "from mobile_build.deployment.manager_settings import profile_path\n"
+                "class Profile(unittest.TestCase):\n"
+                " def test_fixture_owns_profile(self):\n"
+                "  root=Path(__file__).parent\n"
+                "  self.assertEqual(os.environ.get('LOGISTICS_MANAGER_ACCOUNT_DEFAULTS'), '{}')\n"
+                "  self.assertEqual(profile_path(root), root/'.tools/build-manager/profile.json')\n"
+                "  profile_path(root).parent.mkdir(parents=True)\n"
+                "  profile_path(root).write_text('fixture only')\n")
+            with patch.dict(os.environ, LOGISTICS_MANAGER_PROFILE=str(protected),
+                            LOGISTICS_MANAGER_ACCOUNT_DEFAULTS='{"auth.fixture": "operator"}'):
+                result = self.run_modules(suite)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(protected.read_text(), 'operator profile remains unchanged')
+            self.assertEqual((suite / '.tools/build-manager/profile.json').read_text(), 'fixture only')
+
     def test_assertion_failure_does_not_skip_later_modules(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

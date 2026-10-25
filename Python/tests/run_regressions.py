@@ -134,6 +134,9 @@ def run_with_report(args, report):
         home.mkdir()
         environment = {
             'COMMONUTILS_STORAGE_ROOT': str(root / 'shared'),
+            # A manager run's profile is input to the suite, never to its fixtures.
+            'LOGISTICS_MANAGER_PROFILE': '',
+            'LOGISTICS_MANAGER_ACCOUNT_DEFAULTS': '{}',
             'XDG_CONFIG_HOME': str(home / '.config'),
             'XDG_CACHE_HOME': str(home / '.cache'),
             'APPDATA': str(home / 'AppData' / 'Roaming'),
