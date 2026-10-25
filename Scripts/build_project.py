@@ -163,6 +163,11 @@ class LogisticsProject:
         elif suite == 'android.runtime':
             plan = replace(plan, phases=tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name != 'android-build'))
                 for phase in plan.phases if phase.id not in {'android-native','android-build'}))
+        if suite in {'ios.native', 'ios.runtime'}:
+            core = {'ios-runtime-tools', 'ios-runtime', 'ios-runtime-cleanup'}
+            kept = tuple(phase for phase in plan.phases if (phase.id in core) == (suite == 'ios.runtime'))
+            names = {phase.id for phase in kept}
+            plan = replace(plan, phases=tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name in names)) for phase in kept))
         if suite:
             plan = replace(plan, source=dict(plan.source, test_suite=suite))
         if options.get('pattern'):
@@ -239,6 +244,8 @@ class LogisticsProject:
             phases = (prerequisites,) + tuple(Phase(name, (python, *arguments), str(snapshot), timeout=timeout,
                                  environment=env, dependencies=('environment',)) for name, arguments, timeout in commands)
             return Plan('Logistics', operation, source, phases, str(workspace), backend=backend)
+        if operation == 'Test' and target == 'ios' and suite == 'ios.runtime':
+            return self.ios_simulator_plan(source, snapshot, workspace, options, env, pattern, False, runtime_only=True)
         return self.mobile_plan(operation, target, source, snapshot, workspace, options, env,
                                 pattern, build_override, include_ipad)
 
@@ -379,7 +386,7 @@ class LogisticsProject:
         return Plan('Logistics','Complete Android native and runtime validation' if operation=='Test' else 'Build native Android test APK; no install',
                     source,tuple(phases),str(workspace),backend=self.backend_options('android','Test')[0],effect='test' if operation=='Test' else 'build')
 
-    def ios_simulator_plan(self, source, snapshot, workspace, options, env, pattern, include_ipad):
+    def ios_simulator_plan(self, source, snapshot, workspace, options, env, pattern, include_ipad, *, runtime_only=False):
         if sys.platform != 'darwin':
             raise ValueError('Local iOS simulator validation requires macOS.')
         if pattern:
@@ -394,7 +401,7 @@ class LogisticsProject:
         client = AppleSimulators(env)
         inventory = client.devices()['devices']
         selected = []
-        kinds = ('iphone', 'duo', 'ipad') if include_ipad else ('iphone', 'duo')
+        kinds = ('iphone',) if runtime_only else ('iphone', 'duo', 'ipad') if include_ipad else ('iphone', 'duo')
         for kind in kinds:
             configured = options['ios.'+kind]
             rows = [(runtime, row) for runtime, devices in inventory.items() for row in devices
@@ -424,7 +431,22 @@ class LogisticsProject:
             phases.append(Phase(kind+'-cleanup', (*base,'cleanup','--root',str(snapshot),'--lease',str(lease)), str(snapshot),
                           timeout=180, environment=env, always=True, kind='cleanup', dependencies=(kind,)))
             previous_cleanup = kind+'-cleanup'
-        return Plan('Logistics', 'Sequential native iOS validation', source, tuple(phases), str(workspace),
+        pin = json.loads((self.root / 'Scripts/mobile_runtime_tools.json').read_text())['cpython']
+        cache = self.private / ('cpython-ios-' + pin['revision'])
+        core = (python, '-m', 'Scripts.ios_runtime')
+        lease = run / 'runtime-lease.json'
+        report = run / 'runtime' / 'result.json'
+        phases.extend([
+            Phase('ios-runtime-tools', (*core, 'prepare', '--cache', str(cache), '--result', str(run / 'runtime-prepared.json')),
+                  str(snapshot), timeout=5400, environment=env, kind='setup', artifacts=(str(run / 'runtime-prepared.json'),)),
+            Phase('ios-runtime', (*core, 'test', '--root', str(snapshot), '--cache', str(cache), '--model', selected[0]['model'],
+                  '--runtime', selected[0]['runtime'], '--lease', str(lease), '--result', str(report)), str(snapshot), timeout=1500,
+                  environment=env, dependencies=('ios-runtime-tools', previous_cleanup), artifacts=(str(report), str(report.with_suffix('.log')), str(report.with_suffix('.raw.log')))),
+            Phase('ios-runtime-cleanup', (*core, 'cleanup', '--lease', str(lease)), str(snapshot), timeout=180,
+                  environment=env, always=True, kind='cleanup', dependencies=('ios-runtime',))])
+        source = dict(source, ios_core_runtime=dict(revision=pin['revision'], version=pin['version'],
+                      architecture='arm64', lifecycle='owned disposable simulator; adapted clone preserves pinned interpreter and core inventory'))
+        return Plan('Logistics', 'Complete iOS native and runtime validation', source, tuple(phases), str(workspace),
                     backend='This Mac — iOS Simulators')
 
     def mobile_plan(self, operation, target, source, snapshot, workspace, options, env, pattern, build_override, include_ipad):
@@ -495,7 +517,7 @@ def declare_resources(plan, target):
     phases=[]
     for phase in plan.phases:
         requirements=dict(phase.resources)
-        if phase.kind=='build' or phase.id=='android-runtime-tools':
+        if phase.kind=='build' or phase.id in {'android-runtime-tools','ios-runtime-tools'}:
             requirements.update({'host.mobile-build':1,'project.workspace:'+phase.cwd:1})
         if phase.id.startswith('android-'):
             if phase.id in {'android-native','android-runtime','android-ready','android-cleanup'}:

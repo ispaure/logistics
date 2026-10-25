@@ -148,6 +148,7 @@ jobs:
           # iOS Xcode project bundles iOSTestbed/app. Populate that resource root.
           cp -R "$GITHUB_WORKSPACE/payload/." "$GITHUB_WORKSPACE/ios-testbed/iOSTestbed/app/"
           test -f "$GITHUB_WORKSPACE/ios-testbed/iOSTestbed/app/mobile/smoke.py"
+          python "$GITHUB_WORKSPACE/logistics/Scripts/ios_testbed.py" "$GITHUB_WORKSPACE/ios-testbed"
       - name: Run inside the iOS Simulator testbed application
         run: |
           set -o pipefail

@@ -134,12 +134,17 @@ class ManagerAdapterTests(unittest.TestCase):
             client.return_value.devices.return_value = inventory
             client.return_value.toolchain.return_value = {'xcode':'Synthetic Xcode','sdk':'Synthetic SDK'}
             plan = project.ios_simulator_plan({}, project.root, project.private/'fixture-ios', values, {}, '', True)
-            self.assertEqual([phase.id for phase in plan.phases], ['ios-build','iphone','iphone-cleanup','duo','duo-cleanup','ipad','ipad-cleanup'])
+            self.assertEqual([phase.id for phase in plan.phases], ['ios-build','iphone','iphone-cleanup','duo','duo-cleanup','ipad','ipad-cleanup','ios-runtime-tools','ios-runtime','ios-runtime-cleanup'])
             self.assertEqual([row['kind'] for row in plan.source['simulator_sequence']], ['iphone','duo','ipad'])
             self.assertTrue(all(phase.always for phase in plan.phases if phase.kind=='cleanup'))
             self.assertEqual({phase.id:phase.dependencies for phase in plan.phases if phase.id in ('iphone','duo','ipad')},
                              {'iphone':('ios-build',),'duo':('iphone-cleanup',),'ipad':('duo-cleanup',)})
+            phases = {phase.id: phase for phase in plan.phases}
+            self.assertEqual(phases['ios-runtime'].dependencies, ('ios-runtime-tools', 'ipad-cleanup'))
+            self.assertTrue(phases['ios-runtime-cleanup'].always)
             inventory['devices']['com.apple.CoreSimulator.SimRuntime.iOS-27-1'].pop(1)
+            core_only = project.ios_simulator_plan({}, project.root, project.private/'fixture-ios', values, {}, '', False, runtime_only=True)
+            self.assertEqual([row['kind'] for row in core_only.source['simulator_sequence']], ['iphone'])
             with self.assertRaisesRegex(RuntimeError,'Duo'):
                 project.ios_simulator_plan({},project.root,project.private/'fixture-ios',values,{},'',False)
 

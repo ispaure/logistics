@@ -553,8 +553,8 @@ and Firebase functionality retain their own provider identity and review gates.
 
 The descriptor now declares `portable.contracts` (tooling contracts under
 `Python/tests/tooling`), `desktop.ui` (application/UI checks under
-`Python/tests/application`), `android.native`, `android.runtime`, `ios.native`
-and `release.acceptance`. These map existing owners into contracts, UI, native
+`Python/tests/application`), `android.native`, `android.runtime`, `ios.native`,
+`ios.runtime` and `release.acceptance`. These map existing owners into contracts, UI, native
 and acceptance groups without moving their fixtures or imports. Full Test retains
 its canonical suite inventory. A named host suite intersects its filename pattern;
 native and release suites reject focused patterns. Named selection on hosted/VM
@@ -576,10 +576,23 @@ The gate checks source/dependency IDs, case inventories, actual runtime platform
 required iPhone/Duo/iPad release families, and owned simulator cleanup. Standalone
 iPad coverage remains optional; reviewed TestFlight delivery always requires it. Missing,
 failed or skipped native/runtime coverage blocks the prepared delivery. The
-existing local iOS backend does not run the upstream core testbed: set
-`LOGISTICS_IOS_RUNTIME_EVIDENCE` to an exact-source, verified iOS runtime JSON report
-from the owning testbed when using reviewed TestFlight delivery. A host test report
-cannot satisfy it. Existing Prepare-only operations continue to produce development
+local iOS backend builds pinned CPython 3.14.7 and runs the complete core inventory
+in a separate owned disposable simulator. `ios.native` selects the native UI
+families; `ios.runtime` selects only the interpreter preparation, core tests and
+cleanup, requiring an iPhone fixture rather than the Duo/iPad inventory. Full Test
+and reviewed TestFlight delivery include both. Generated runtime receipts take
+precedence over the legacy `LOGISTICS_IOS_RUNTIME_EVIDENCE` fallback; host reports
+cannot satisfy the gate.
+
+`Scripts/ios_testbed.py` adapts only the generated upstream test app: it adds a
+real window-scene delegate and configuration, and raises the fixture's deployment
+minimum to iOS 15 for current Xcode SDKs. The pinned CPython source, interpreter
+and XCTest/core test inventory are preserved. The same adapter runs in the hosted
+iOS runtime workflow. Local execution retains raw Xcode output and normalized
+system-log output, verifying the exact staged-source digest, native platform,
+complete case count, zero skips and successful owned cleanup. The report records
+toolchain, dependency/framework checksums and the clone adapter identity.
+Existing Prepare-only operations continue to produce development
 preparation without implying native release acceptance.
 
 These changes use `build_manager.reporting` from the companion manager UI change.

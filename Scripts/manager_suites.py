@@ -73,9 +73,9 @@ def with_reports(plan, target):
             argv = [argv[0], 'Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules',
                     '--pattern', pattern, '--junit', str(report), '--report', str(report.with_suffix('.json'))]
         else:
-            native = phase.id in {'android-native', 'android-runtime', 'iphone', 'duo', 'ipad'}
+            native = phase.id in {'android-native', 'android-runtime', 'iphone', 'duo', 'ipad', 'ios-runtime'}
             mode = ['native', '--root', phase.cwd, '--target', target, '--json', phase.artifacts[0]] if native else ['command']
-            if phase.id == 'android-runtime':
+            if phase.id in {'android-runtime', 'ios-runtime'}:
                 mode += ['--runtime']
             argv = [argv[0], '-m', 'Scripts.manager_suites', *mode, '--junit', str(report),
                     '--name', phase.id, '--', *argv[1:]]
@@ -137,9 +137,9 @@ def acceptance_phase(plan, target):
     directory = Path(plan.workspace) / 'reports' / uuid4().hex
     output, junit = directory / 'release-acceptance.json', directory / 'release-acceptance.xml'
     native = [phase.artifacts[0] for phase in plan.phases if phase.id in {'android-native', 'iphone', 'duo', 'ipad'}]
-    runtime = next((phase.artifacts[0] for phase in plan.phases if phase.id == 'android-runtime'), '')
+    runtime = next((phase.artifacts[0] for phase in plan.phases if phase.id in {'android-runtime', 'ios-runtime'}), '')
     import os
-    if target == 'ios':
+    if target == 'ios' and not runtime:
         runtime = os.environ.get('LOGISTICS_IOS_RUNTIME_EVIDENCE', '')
     first = plan.phases[0]
     argv = [first.argv[0], '-m', 'Scripts.manager_suites', 'acceptance', '--root', first.cwd,

@@ -26,6 +26,30 @@ class ManagerSuiteTests(unittest.TestCase):
             with self.subTest(suite=suite, backend=backend), self.assertRaises(ValueError):
                 suites.selection(ROOT, suite, operation, target, backend, pattern)
 
+    def test_ios_runtime_suite_keeps_only_core_gates_and_generated_receipt(self):
+        project = LogisticsProject(ROOT)
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            phases = (
+                Phase('ios-build', (sys.executable, '-c', 'pass'), str(root), kind='build'),
+                Phase('iphone', (sys.executable, '-c', 'pass'), str(root), dependencies=('ios-build',), artifacts=(str(root/'iphone.json'),)),
+                Phase('iphone-cleanup', (sys.executable, '-c', 'pass'), str(root), dependencies=('iphone',), always=True, kind='cleanup'),
+                Phase('ios-runtime-tools', (sys.executable, '-c', 'pass'), str(root), kind='setup'),
+                Phase('ios-runtime', (sys.executable, '-c', 'pass'), str(root), dependencies=('ios-runtime-tools','iphone-cleanup'), artifacts=(str(root/'core.json'),)),
+                Phase('ios-runtime-cleanup', (sys.executable, '-c', 'pass'), str(root), dependencies=('ios-runtime',), always=True, kind='cleanup'))
+            full = Plan('Logistics', 'Test', {}, phases, str(root))
+            with patch.object(project, '_make_plan', return_value=full), patch('Scripts.build_retention.clean'):
+                core = project.make_plan('Test', 'ios', 'This Mac — iOS Simulators', suite='ios.runtime')
+                native = project.make_plan('Test', 'ios', 'This Mac — iOS Simulators', suite='ios.native')
+            self.assertEqual([p.id for p in core.phases], ['ios-runtime-tools','ios-runtime','ios-runtime-cleanup'])
+            self.assertEqual(core.phases[1].dependencies, ('ios-runtime-tools',))
+            self.assertIn('--runtime', core.phases[1].argv)
+            self.assertEqual([p.id for p in native.phases], ['ios-build','iphone','iphone-cleanup'])
+            with patch.dict('os.environ', LOGISTICS_IOS_RUNTIME_EVIDENCE='wrong-external-receipt.json'):
+                gate = suites.acceptance_phase(core, 'ios')
+            self.assertEqual(gate.argv[gate.argv.index('--runtime-report')+1], str(root/'core.json'))
+            self.assertIn('ios-runtime-cleanup', gate.dependencies)
+
     def test_selected_desktop_suite_reaches_only_its_declared_directory_and_pattern(self):
         project = LogisticsProject(ROOT)
         from mobile_build.deployment.manager_settings import defaults

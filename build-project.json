@@ -328,6 +328,18 @@
       "description": "Canonical iPhone/Duo and optional iPad inventory with owned cleanup."
     },
     {
+      "id": "ios.runtime",
+      "label": "iOS runtime contracts",
+      "tier": "native",
+      "platforms": [
+        "ios"
+      ],
+      "operations": [
+        "Test"
+      ],
+      "description": "Canonical core inventory in pinned CPython on an owned disposable iOS simulator."
+    },
+    {
       "id": "release.acceptance",
       "label": "Complete tester delivery gates",
       "tier": "acceptance",
