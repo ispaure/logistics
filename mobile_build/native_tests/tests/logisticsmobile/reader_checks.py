@@ -44,9 +44,18 @@ def _assert_comic_centered(view, *, fullscreen=False):
             location = jarray(jint)(2)
             native.getLocationOnScreen(location)
             decor = view._impl._native_activity.getWindow().getDecorView()
-            bars = decor.getRootWindowInsets().getInsets(jclass('android.view.WindowInsets$Type').systemBars())
-            assert abs(native.getWidth() - (decor.getWidth() - bars.left - bars.right)) <= 2, ('Comic viewport loses screen width', native.getWidth(), decor.getWidth())
-            assert abs(native.getHeight() - (decor.getHeight() - bars.top - bars.bottom)) <= 2, ('Comic viewport loses screen height', native.getHeight(), decor.getHeight())
+            insets = decor.getRootWindowInsets()
+            Types = jclass('android.view.WindowInsets$Type')
+            system_bars = insets.getInsets(Types.systemBars())
+            # Hidden system bars do not remove the camera's safe cutout. Query
+            # the union so viewport and centering use the actual safe screen.
+            bars = insets.getInsets(Types.systemBars() | Types.displayCutout())
+            cutout = insets.getInsets(Types.displayCutout())
+            inset_proof = dict(bars=[int(system_bars.left),int(system_bars.top),int(system_bars.right),int(system_bars.bottom)],
+                               cutout=[int(cutout.left),int(cutout.top),int(cutout.right),int(cutout.bottom)],
+                               location=list(location))
+            assert abs(native.getWidth() - (decor.getWidth() - bars.left - bars.right)) <= 2, ('Comic viewport loses screen width', native.getWidth(), decor.getWidth(), inset_proof)
+            assert abs(native.getHeight() - (decor.getHeight() - bars.top - bars.bottom)) <= 2, ('Comic viewport loses screen height', native.getHeight(), decor.getHeight(), inset_proof)
             dy = location[1] + rect.centerY() - (bars.top + decor.getHeight() - bars.bottom) / 2
         assert abs(dy) < 2, ('Comic misses screen centre', dy,
             float(native.bounds.size.height) if hasattr(view._impl, 'picture') else

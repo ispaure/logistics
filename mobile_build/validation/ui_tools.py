@@ -2,6 +2,8 @@
 import argparse
 import base64
 import importlib.util
+import io
+import zipfile
 import json
 import os
 from pathlib import Path
@@ -113,14 +115,17 @@ def _progress(path, stopped):
 
 def run(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False):
     if no_update:
-        if target != 'ios':
-            raise ValueError('Shared test application reuse is supported only for iOS.')
-        verify_prebuilt_ios(local=local)
+        if target == 'ios':
+            verify_prebuilt_ios(local=local)
+        elif target == 'android' and local:
+            verify_prebuilt_android()
+        else:
+            raise ValueError('Android cached test reuse requires explicit exact local source verification.')
     command = [sys.executable, '-m', 'briefcase', 'run', 'android' if target == 'android' else 'iOS',
                '--test', '--no-input', '--device', device]
     if no_update:
         command.append('--no-update')
-    if target == 'android':
+    if target == 'android' and not local:
         command.extend(['--Xemulator=-no-window', '--Xemulator=-no-audio', '--Xemulator=-no-snapshot-load', '--Xemulator=-gpu',
                         '--Xemulator=swiftshader_indirect', '--shutdown-on-exit'])
     logs = Path('logs')
@@ -150,10 +155,14 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
             except ProcessLookupError:
                 pass
             try:
-                process.wait(timeout=10)
+                process.wait(timeout=10 if isinstance(error, subprocess.TimeoutExpired) else 1)
             except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
+                pass
+            try:
+                os.killpg(process.pid,signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
             if isinstance(error, subprocess.TimeoutExpired):
                 raise RuntimeError(f'Native app UI run exceeded {timeout // 60} minutes; see retained logs.') from None
             raise
@@ -195,6 +204,16 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
     if require_duo:
         verify_duo_rotation(report)
     return report
+
+
+def verify_prebuilt_android():
+    apk = Path('build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk')
+    expected = json.loads(Path('payload/source.json').read_text())
+    with zipfile.ZipFile(apk) as archive:
+        with zipfile.ZipFile(io.BytesIO(archive.read('assets/chaquopy/app.imy'))) as application:
+            actual = json.loads(application.read('mobile/source.json'))
+            if actual != expected or not any(name.startswith('tests/logisticsmobile/') for name in application.namelist()):
+                raise ValueError('Cached Android APK is not the matching native test application.')
 
 
 def verify_prebuilt_ios(*, local=False):

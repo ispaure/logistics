@@ -280,7 +280,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     return manifest
 
 
-def verify(log, target, output):
+def verify(log, target, output, *, local_manifest=None):
     from importlib.util import spec_from_file_location, module_from_spec
     source = Path(__file__).resolve().parents[1] / 'Python/mobile/smoke.py'
     spec = spec_from_file_location('logistics_smoke_contract', source)
@@ -299,11 +299,18 @@ def verify(log, target, output):
             or any(report.get(name) != 0 for name in ('failures', 'errors', 'skipped'))
             or report.get('tests_run') != len(contract.EXPECTED_TESTS)
             or report.get('expected_tests') != list(contract.EXPECTED_TESTS)
-            or not isinstance(manifest, dict) or manifest.get('dirty') is not False
+            or not isinstance(manifest, dict) or (local_manifest is None and
+                (manifest.get('dirty') is not False or report.get('local_source_sha256') is not None))
             or any(not isinstance(manifest.get(key), str) or len(manifest[key]) != 40
                    or any(c not in '0123456789abcdef' for c in manifest[key])
                    for key in ('logistics_commit', 'commonUtils_commit'))):
         raise ValueError('Missing, failed, skipped, dirty or wrong-runtime mobile evidence.')
+    if local_manifest is not None:
+        expected = json.loads(Path(local_manifest).read_text())
+        if (manifest != expected or len(manifest.get('source_sha256', '')) != 64
+                or report.get('local_source_sha256') != manifest['source_sha256']):
+            raise ValueError('Local runtime evidence came from a different staged source.')
+        report['verification_scope'] = 'local exact snapshot; not hosted release evidence'
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     Path(output).write_text(json.dumps(report, indent=2) + '\n')
     return report

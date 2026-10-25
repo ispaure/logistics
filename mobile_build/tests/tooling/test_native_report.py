@@ -362,6 +362,31 @@ class NativeReportTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+
+    def test_android_reuse_rejects_normal_apps_and_mismatched_payloads(self):
+        import io
+        import os
+        import zipfile
+        with TemporaryDirectory() as directory:
+            previous=Path.cwd();os.chdir(directory)
+            try:
+                apk=Path('build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk')
+                apk.parent.mkdir(parents=True);Path('payload').mkdir()
+                source={'dirty':True,'source_sha256':'a'*64}
+                Path('payload/source.json').write_text(json.dumps(source))
+                def package(tests):
+                    stream=io.BytesIO()
+                    with zipfile.ZipFile(stream,'w') as application:
+                        application.writestr('mobile/source.json',json.dumps(source))
+                        if tests:application.writestr('tests/logisticsmobile/__main__.pyc',b'synthetic test bytecode')
+                    with zipfile.ZipFile(apk,'w') as archive:archive.writestr('assets/chaquopy/app.imy',stream.getvalue())
+                package(False)
+                with self.assertRaisesRegex(ValueError,'matching native test'):ui_tools.verify_prebuilt_android()
+                package(True);ui_tools.verify_prebuilt_android()
+                Path('payload/source.json').write_text(json.dumps(dict(source,source_sha256='b'*64)))
+                with self.assertRaisesRegex(ValueError,'matching native test'):ui_tools.verify_prebuilt_android()
+            finally:os.chdir(previous)
+
     def test_local_ios_cached_app_requires_exact_dirty_manifest(self):
         import os
         from unittest.mock import patch

@@ -23,3 +23,13 @@ class MobilePortabilityTests(unittest.TestCase):
         self.assertEqual(report['tests_run'], len(report['expected_tests']))
         self.assertTrue(report['success'])
         self.assertEqual(report['skipped'], 0)
+
+
+    def test_local_mobile_source_mode_never_relaxes_clean_default_or_runtime_identity(self):
+        from mobile.smoke import verify_source
+        source={'dirty':True,'source_sha256':'c'*64}
+        with self.assertRaisesRegex(RuntimeError,'clean staged'):verify_source(source,'android')
+        verify_source(source,'android','c'*64)
+        with self.assertRaisesRegex(RuntimeError,'fingerprint differs'):verify_source(source,'android','d'*64)
+        with self.assertRaises(ValueError):verify_source(source,'host','c'*64)
+        verify_source(dict(source,dirty=False),'android')

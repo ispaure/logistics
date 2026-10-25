@@ -286,3 +286,49 @@ devices stayed unstarted and its owned simulator was removed. Local validation
 found a new replacement-confirmation fixture mismatch and a real review-display
 race; the corrected native flows passed on all three families. Raw proof remains
 in ignored result directories. No hosted job or distribution is implied.
+
+## Local Android native and runtime validation
+
+For Test/Android select **This Mac — Android Emulator** on Apple Silicon. Settings
+select an explicit complete SDK, Java17 JDK, ARM64 system-image package and device
+profile. The backend requires hardware acceleration and creates a disposable,
+uniquely named AVD under its owned workspace; existing AVDs and physical devices
+are never selected as substitutes. Readiness records actual ABI/API/build and
+image revision. Commands validate the emulator serial against its ownership name
+before device actions. Cleanup removes that AVD's synthetic state, retaining logs
+and the completed lease, and preserves the user's main app and device data.
+
+The displayed plan separates native APK build, pinned runtime preparation,
+emulator readiness, native functional/UI/rotation verification, CPython runtime
+verification and always-run cleanup. Native APK reuse requires the exact source,
+SDK/JDK/configuration and verified test payload/hash. Normal application APKs and
+mismatched payloads cannot be reused. The native suite retains all33cases and
+260rotation audits. Its fullscreen geometry includes both system-bar and camera
+cutout safe insets, with the original strict centering and two-pixel bounds.
+
+The separate runtime uses CPython revision
+`823f0323ee6ec1402088b73bce1a38473cac36dc` (3.14.7), archive-verified upstream source,
+a Mac host build and `aarch64-linux-android` cross-build. Upstream supports the
+macOS build and connected-emulator test path; the manager does not copy hosted
+Linux/x86 software-rendering arguments. Runtime reports require every declared
+58test, zero failures/errors/skips, actual Android identity and the exact staged
+manifest. Explicit local fingerprints are labelled local evidence; default hosted
+verification still requires clean source and rejects local-mode reports.
+
+Prepare public SDK/image/NDK/Gradle/Python dependencies before disconnected use.
+First preparation downloads them; local execution is not a claim of an air-gapped
+cold installation. Source/build caches remain ignored. No signing credentials,
+TestFlight/Firebase upload or physical installation follows a successful test.
+
+Actual M3 Max acceptance used Google API36 ARM64 image revision7 with Pixel9
+hardware profile and Hypervisor.Framework. The complete plan passed in1,034.25s:
+native build40.4s, reused runtime-tools verification1.0s, readiness23.2s,
+native950.2s, runtime18.8s and cleanup0.6s. All33native/260rotation audits and all58
+runtime tests passed. The earlier CI profile measured32.7min native runtime on
+x86 software rendering; source, ABI, API and hardware differ, so these observations
+are not an isolated optimization or portable speedup claim. Matching warm APK
+verification reused its identical hash in0.135s without another complete suite.
+A focused real native-launch cancellation stopped after the first checkpoint,
+skipped remaining work and removed only the owned emulator. The reusable focused
+driver is `mobile_build/validation/local_manager_probe.py`; its output is explicitly
+cancellation evidence, never full-suite acceptance.

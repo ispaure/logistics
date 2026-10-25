@@ -36,6 +36,8 @@ class LogisticsProject:
     def backend_options(self, target, operation='Test'):
         if target == 'ios' and operation == 'Test':
             return ('This Mac — iOS Simulators', 'GitHub')
+        if target == 'android' and operation == 'Test':
+            return ('This Mac — Android Emulator', 'GitHub')
         return ('Local Parallels VM', 'GitHub') if target in ('linux', 'windows') else ('This Mac', 'GitHub')
 
     def settings_view(self):
@@ -207,6 +209,49 @@ class LogisticsProject:
                     (Phase('windows', command, str(snapshot), timeout=5400, artifacts=(str(results / 'result.json'),)),),
                     str(workspace), backend='Local Parallels VM')
 
+    def android_emulator_plan(self, operation, source, snapshot, workspace, options, env, pattern):
+        if sys.platform != 'darwin' or platform.machine() != 'arm64':
+            raise ValueError('This declared Android emulator backend requires Apple Silicon macOS.')
+        if pattern:
+            raise ValueError('Native/runtime Android acceptance uses the complete declared suites, not host filename filters.')
+        if options['android.avd']:
+            raise ValueError('Existing AVD state is preserved. Configure the disposable image/model instead of an existing AVD name.')
+        from build_manager.android_emulators import AndroidEmulator
+        sdk = Path(options['tools.android_sdk'])
+        java = Path(options['tools.java'])
+        if not options['tools.android_sdk'] or not options['tools.java'] or not (java/'bin/java').is_file():
+            raise ValueError('Configure an explicit complete Android SDK and Java17 JDK in Settings.')
+        env = dict(env, ANDROID_HOME=str(sdk), ANDROID_SDK_ROOT=str(sdk), JAVA_HOME=str(java),
+                   PATH=str(self.mobile/'.tools/go/bin')+os.pathsep+os.environ.get('PATH',''),
+                   PIP_FIND_LINKS=str(self.mobile/'.tools/release-wheels'), GRADLE_OPTS='-Dorg.gradle.daemon=false')
+        if options['tools.xcode']:env['DEVELOPER_DIR']=options['tools.xcode']
+        run = workspace/('emulator-'+uuid4().hex)
+        device = run/'device'
+        python = options['tools.mobile_python']
+        base = (python,'-m','Scripts.android_backend')
+        common = ('--root',str(snapshot),'--workspace',str(device))
+        phases = [Phase('android-build',(*base,'build',*common,'--result',str(run/'build.json')),str(snapshot),
+                        timeout=3600,environment=env,kind='build',artifacts=(str(run/'build.json'),))]
+        source = dict(source, sdk=str(sdk),java=str(java),abi='arm64-v8a',image=options['android.image'],
+                      device_lifecycle='owned disposable accelerated ARM AVD; preserve physical and existing emulator data')
+        if operation=='Test':
+            source['acceleration'] = AndroidEmulator(sdk,device,environment=env).inspect(options['android.image'], acceleration='Hypervisor.Framework')
+            pin = json.loads((self.root/'Scripts/mobile_runtime_tools.json').read_text())['cpython']
+            cache = self.private/('cpython-'+pin['revision'])
+            phases += [Phase('android-runtime-tools',(python,'-m','Scripts.mobile_runtime','prepare','--cache',str(cache),
+                                '--result',str(run/'runtime-prepared.json')),str(snapshot),timeout=5400,environment=env,kind='setup',
+                                artifacts=(str(run/'runtime-prepared.json'),)),
+                       Phase('android-ready',(*base,'ready',*common,'--image',options['android.image'],'--model',options['android.model'],
+                                '--result',str(run/'ready.json')),str(snapshot),timeout=360,environment=env,kind='setup',
+                                dependencies=('android-build','android-runtime-tools'),artifacts=(str(run/'ready.json'),))]
+            for action in ('native','runtime'):
+                report = run/(action+'.json')
+                phases.append(Phase('android-'+action,(*base,action,*common,'--runtime-cache',str(cache),'--result',str(report)),
+                    str(snapshot),timeout=2500 if action=='native' else 1900,environment=env,dependencies=('android-ready',),artifacts=(str(report),)))
+            phases.append(Phase('android-cleanup',(*base,'cleanup',*common),str(snapshot),timeout=180,environment=env,always=True,kind='cleanup'))
+        return Plan('Logistics','Complete Android native and runtime validation' if operation=='Test' else 'Build native Android test APK; no install',
+                    source,tuple(phases),str(workspace),backend='This Mac — Android Emulator',effect='test' if operation=='Test' else 'build')
+
     def ios_simulator_plan(self, source, snapshot, workspace, options, env, pattern, include_ipad):
         if sys.platform != 'darwin':
             raise ValueError('Local iOS simulator validation requires macOS.')
@@ -254,6 +299,8 @@ class LogisticsProject:
                     backend='This Mac — iOS Simulators')
 
     def mobile_plan(self, operation, target, source, snapshot, workspace, options, env, pattern, build_override, include_ipad):
+        if operation in ('Test','Build') and target == 'android':
+            return self.android_emulator_plan(operation, source, snapshot, workspace, options, env, pattern)
         if operation == 'Test' and target == 'ios':
             return self.ios_simulator_plan(source, snapshot, workspace, options, env, pattern, include_ipad)
         if operation in ('Prepare TestFlight', 'Prepare Firebase'):

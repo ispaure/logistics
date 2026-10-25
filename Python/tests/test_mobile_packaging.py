@@ -197,3 +197,24 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             write(report, copies=2)
             with self.assertRaises(ValueError):
                 mobile_tools.verify(log, 'android', output)
+
+
+    def test_local_runtime_verification_requires_exact_manifest_without_weakening_hosted_gate(self):
+        spec = importlib.util.spec_from_file_location('local_smoke_contract', REPO / 'Python/mobile/smoke.py')
+        contract = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(contract)
+        source = dict(dirty=True, logistics_commit='a'*40, commonUtils_commit='b'*40, source_sha256='c'*64)
+        report = dict(schema=1,suite='logistics-mobile-documents',target='android',sys_platform='android',
+                      environment='android-emulator',success=True,local_source_sha256='c'*64,tests_run=len(contract.EXPECTED_TESTS),
+                      expected_tests=list(contract.EXPECTED_TESTS),failures=0,errors=0,skipped=0,source=source)
+        with TemporaryDirectory() as directory:
+            root=Path(directory);log=root/'run.log';manifest=root/'source.json';output=root/'result.json'
+            log.write_text(contract.PREFIX+json.dumps(report)+'\n');manifest.write_text(json.dumps(source))
+            with self.assertRaises(ValueError):mobile_tools.verify(log,'android',output)
+            self.assertEqual(mobile_tools.verify(log,'android',output,local_manifest=manifest)['source'],source)
+            log.write_text(contract.PREFIX+json.dumps(dict(report,source=dict(source,dirty=False)))+'\n')
+            with self.assertRaises(ValueError):mobile_tools.verify(log,'android',output)
+            log.write_text(contract.PREFIX+json.dumps(report)+'\n')
+            manifest.write_text(json.dumps(dict(source,source_sha256='d'*64)))
+            with self.assertRaisesRegex(ValueError,'different staged source'):
+                mobile_tools.verify(log,'android',output,local_manifest=manifest)

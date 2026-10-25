@@ -25,6 +25,7 @@ def defaults(root):
         'tools.mobile_python': str(root / '.venv/bin/python'),
         'tools.xcode': '', 'tools.android_sdk': '', 'tools.java': '',
         'ios.iphone': '', 'ios.duo': '', 'ios.ipad': '', 'android.avd': '',
+        'android.image': 'system-images;android-36;google_apis;arm64-v8a', 'android.model': 'pixel_9',
         'vm.linux': '', 'vm.fedora': '', 'vm.windows': '',
         'vm.linux_scope': 'both', 'vm.fedora_mode': 'guest', 'vm.fedora_container_host': '',
         'vm.windows_prepared_reference': str(root / '.tools/build-manager/windows-prepared.json'),

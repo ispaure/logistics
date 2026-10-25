@@ -1,0 +1,10 @@
+{
+  "cpython": {
+    "revision": "823f0323ee6ec1402088b73bce1a38473cac36dc",
+    "archive": "https://github.com/python/cpython/archive/823f0323ee6ec1402088b73bce1a38473cac36dc.tar.gz",
+    "sha256": "50e9367f9b4593e8fb78aedf913172b506930b27cdf21be918214c233de1de46",
+    "version": "3.14.7",
+    "android_target": "aarch64-linux-android",
+    "android_ndk": "27.3.13750724"
+  }
+}

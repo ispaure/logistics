@@ -5,6 +5,7 @@ import importlib.abc
 import json
 from pathlib import Path
 import platform
+import re
 import sys
 import unittest
 
@@ -102,9 +103,24 @@ class RuntimeChecks(unittest.TestCase):
         self.assertFalse(any(name.split('.')[0] in FORBIDDEN for name in sys.modules))
 
 
+def verify_source(source, target, local_sha256=''):
+    if target == 'host':
+        if local_sha256:
+            raise ValueError('Local mobile snapshot verification requires an actual mobile target.')
+        return
+    if not isinstance(source, dict):
+        raise RuntimeError('Mobile evidence requires a staged source manifest.')
+    if local_sha256:
+        if not re.fullmatch('[0-9a-f]{64}',local_sha256) or source.get('source_sha256')!=local_sha256:
+            raise RuntimeError('Local mobile snapshot fingerprint differs from its staged source.')
+    elif source.get('dirty') is not False:
+        raise RuntimeError('Mobile evidence requires a clean staged source manifest.')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=('host', 'android', 'ios'), required=True)
+    parser.add_argument('--local-source-sha256', default='', help='Explicit local-only exact staged fingerprint; never hosted release evidence')
     args = parser.parse_args(argv)
     if args.target != 'host' and sys.platform != args.target:
         parser.error('Expected an actual ' + args.target + ' interpreter; got ' + sys.platform)
@@ -114,8 +130,7 @@ def main(argv=None):
         raise RuntimeError('Run this suite in a fresh interpreter.')
     source_path = Path(__file__).with_name('source.json')
     source = json.loads(source_path.read_text()) if source_path.exists() else None
-    if args.target != 'host' and (not source or source.get('dirty') is not False):
-        raise RuntimeError('Mobile evidence requires a clean staged source manifest.')
+    verify_source(source,args.target,args.local_source_sha256)
     blocker = RejectDesktop()
     sys.meta_path.insert(0, blocker)
     if args.target == 'host':
@@ -147,6 +162,8 @@ def main(argv=None):
                       failures=len(result.failures), errors=len(result.errors), skipped=len(result.skipped),
                       success=result.wasSuccessful() and not result.skipped,
                       source=source, native_picker_tested=False)
+        if args.local_source_sha256:
+            report['local_source_sha256'] = args.local_source_sha256
         print(PREFIX + json.dumps(report, sort_keys=True), flush=True)
         return 0 if report['success'] else 1
     finally:

@@ -42,10 +42,16 @@ def command(argv, cwd, timeout=1200):
         except ProcessLookupError:
             pass
         try:
-            process.wait(timeout=10)
+            process.wait(timeout=1)
         except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
+            pass
+        # The immediate child may already have exited while a descendant holds
+        # the group. Retire the owned group even in that case.
+        try:
+            os.killpg(process.pid,signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
 
 
 def build(root, result):
