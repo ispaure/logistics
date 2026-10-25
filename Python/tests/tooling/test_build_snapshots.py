@@ -61,6 +61,17 @@ class SnapshotTests(unittest.TestCase):
         self.assertFalse(self.git(committed, 'status', '--porcelain'))
         self.assertFalse((committed / 'new.py').exists())
 
+    def test_committed_ref_alias_reuses_only_exact_verified_snapshot(self):
+        destination = self.directory/'committed'
+        before = materialize(self.root, destination, 'HEAD')
+        selected = materialize(self.root, destination, before['logistics_commit'])
+        self.assertEqual(selected['fingerprint'], before['fingerprint'])
+        self.assertEqual(selected['selection'], before['logistics_commit'])
+        self.assertEqual(json.loads((destination/'.manager-source.json').read_text())['source'], before)
+        (destination/'source.py').write_text('changed')
+        with self.assertRaisesRegex(ValueError, 'different source'):
+            materialize(self.root, destination, before['logistics_commit'])
+
     def test_uncommitted_shared_changes_block_incomplete_snapshot(self):
         (self.shared / 'library.py').write_text('VERSION = 2\n')
         with self.assertRaisesRegex(ValueError, 'commonUtils'):

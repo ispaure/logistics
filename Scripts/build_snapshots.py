@@ -66,7 +66,11 @@ def _materialize(root, destination, revision):
         metadata = destination / '.manager-source.json'
         if metadata.is_file():
             saved = json.loads(metadata.read_text())
-            if saved.get('source') == before and saved.get('snapshot_fingerprint') == identity(destination)['fingerprint']:
+            # A branch, HEAD and its full SHA can name identical committed bytes.
+            # Keep the original provenance label while comparing immutable identity.
+            comparable = dict(saved.get('source', {}))
+            comparable['selection'] = before['selection']
+            if comparable == before and saved.get('snapshot_fingerprint') == identity(destination)['fingerprint']:
                 os.utime(destination, None)
                 return before
         raise ValueError('Snapshot destination already belongs to different source.')
