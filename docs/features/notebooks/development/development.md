@@ -102,7 +102,7 @@ and feature-registry checks, and the repository correctness lint. The native
 desktop probe passed pointer drawing, Undo/Redo, page creation, naming, layer
 creation, recovery and export. The independent reader accepted the generated
 eight-brush scenes and erasure tombstones. A complete Android emulator suite
-(native UI, rotations and Python runtime) and iPhone simulator suite passed.
+(native UI, rotations and Python runtime) and iPhone/Duo simulator suites passed.
 An earlier iPad suite passed, including independent windows and rotations.
 The final naming-field and recovery changes additionally passed the focused
 desktop probe and an isolated iPhone notebook QA app; the broad platform suites
