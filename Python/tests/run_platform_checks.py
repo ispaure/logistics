@@ -33,6 +33,9 @@ def main():
                             '--output-file', str(requirements)], check=True)
             subprocess.run([sys.executable, '-m', 'uv', 'pip', 'sync', '--python', sys.executable,
                             str(requirements)], check=True)
+    if args.install and os.environ.get('LOGISTICS_MANAGER_CHECKOUT'):
+        subprocess.run([sys.executable, '-m', 'Scripts.guest_manager', '--checkout', os.environ['LOGISTICS_MANAGER_CHECKOUT'],
+                        '--project', str(REPO)], cwd=REPO, check=True, timeout=180)
     results = args.results_dir.resolve()
     results.mkdir(parents=True, exist_ok=True)
     report = {'platform': platform.platform(), 'python': sys.version,

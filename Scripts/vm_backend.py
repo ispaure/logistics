@@ -121,7 +121,14 @@ subprocess.run(['uv','venv','--python','3.12.2','--seed',sys.argv[1]+'/environme
             result['failure'] = 'Guest isolated interpreter setup failed: ' + str(code)
             return 1
         guest_python = workspace + '/environment/bin/python'
-        code = execute([guest_python, 'Scripts/install_build_manager.py', '--from-pin', workspace+'/manager'], env, 600)
+        if args.manager_checkout:
+            from Scripts.guest_manager import stage_linux
+            stage_linux(client, vm, workspace, token, account['uid'], account['gid'], args.manager_checkout, args.snapshot)
+            setup = [guest_python, '-m', 'Scripts.guest_manager', '--checkout', workspace+'/manager', '--project', workspace+'/source']
+        else:
+            setup = [guest_python, 'Scripts/install_build_manager.py', '--from-pin', workspace+'/manager']
+        env['LOGISTICS_MANAGER_CHECKOUT'] = workspace+'/manager'
+        code = execute(setup, env, 600)
         if code:raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
         reports = workspace + '/reports'
         if args.pattern:
@@ -202,6 +209,7 @@ def main():
     parser.add_argument('--container-image', default='')
     parser.add_argument('--shutdown', action='store_true')
     parser.add_argument('--pattern', default='')
+    parser.add_argument('--manager-checkout', type=Path)
     args = parser.parse_args()
     code = run(args)
     report = json.loads((args.results / 'result.json').read_text())

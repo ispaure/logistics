@@ -25,6 +25,7 @@ def defaults(root):
         'tools.desktop_python': str(root.parent / '.venv/bin/python'),
         'tools.mobile_python': str(root / '.venv/bin/python'),
         'tools.xcode': '', 'tools.android_sdk': '', 'tools.java': '',
+        'tools.manager_checkout': '',
         'ios.iphone': '', 'ios.duo': '', 'ios.ipad': '', 'android.avd': '',
         'android.image': 'system-images;android-36;google_apis;arm64-v8a', 'android.model': 'pixel_9',
         'vm.linux': '', 'vm.fedora': '', 'vm.windows': '',

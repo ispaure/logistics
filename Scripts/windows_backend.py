@@ -119,6 +119,7 @@ def run(args):
                   runtime=prepared['runtime'], workspace=prepared['workspace'], operation=operation)
     started = time.monotonic()
     collected = False
+    manager = 'manager-' + operation
     try:
         payload = source_zip(args.snapshot)
         result['transfer_sha256'] = hashlib.sha256(payload).hexdigest()
@@ -140,7 +141,17 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
             dict(source=target, git=prepared['git'], python=python), timeout=60))
         result.update(runtime=info['runtime'], git=info['git'])
         environment['PATH'] = str(PureWindowsPath(prepared['git']).parent) + ';' + str(root / 'environment/Scripts') + ';' + info['path']
-        setup = guest.run(python, ['Scripts/install_build_manager.py','--from-pin',str(root/'manager')], source, reports, environment, cancelled, timeout=600)
+        manager = 'manager-' + operation
+        manager_path = str(root / manager)
+        if args.manager_checkout:
+            from Scripts.guest_manager import archive
+            guest.stage(manager, archive(args.manager_checkout, args.snapshot, 'zip'))
+            client.powershell(prepared['vm'], "foreach($folder in @($p.root,($p.root+'\\Python\\commonUtils'))){& $p.git -C $folder config core.fileMode false;if($LASTEXITCODE -ne 0){throw 'Manager Git setup failed'}}", dict(root=manager_path,git=prepared['git']))
+            setup_command = ['-m','Scripts.guest_manager','--checkout',manager_path,'--project',target]
+        else:
+            setup_command = ['Scripts/install_build_manager.py','--from-pin',manager_path]
+        environment['LOGISTICS_MANAGER_CHECKOUT'] = manager_path
+        setup = guest.run(python, setup_command, source, reports, environment, cancelled, timeout=600)
         if setup:raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
         install = (python, 'Python/tests/run_platform_checks.py', '--install', '--results-dir', report_dir)
         if args.pattern:
@@ -181,7 +192,7 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
             result.update(status='failed', retrieval_error=str(error))
         if collected:
             try:
-                guest.remove_paths([source, source + '.zip', reports, 'plan-' + operation + '.json',
+                guest.remove_paths([source, source + '.zip', manager, manager + '.zip', reports, 'plan-' + operation + '.json',
                                     'operation-' + operation, 'cancel-' + operation])
                 result['test_workspace_removed'] = True
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
@@ -206,6 +217,7 @@ def main():
     parser.add_argument('--source-identity', type=json.loads)
     parser.add_argument('--prepared', type=Path)
     parser.add_argument('--pattern', default='')
+    parser.add_argument('--manager-checkout', type=Path)
     parser.add_argument('--shutdown', action='store_true')
     args = parser.parse_args()
     if args.snapshot:

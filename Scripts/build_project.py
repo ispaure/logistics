@@ -70,7 +70,7 @@ class LogisticsProject:
         for name, value in values.items():
             kind = ('bool' if isinstance(value, bool) else
                     'int' if isinstance(value, int) else
-                    'directory' if name in {'tools.xcode', 'tools.android_sdk', 'tools.java', 'vm.shared_host'} else
+                    'directory' if name in {'tools.xcode', 'tools.android_sdk', 'tools.java', 'tools.manager_checkout', 'vm.shared_host'} else
                     'reference' if name.endswith('reference') or name.startswith('signing.') or name.endswith('_python') else 'text')
             rows[name] = dict(value=value, origin=sources[name], kind=kind, read_only=name in guarded or name in reserved)
             if name in reserved:
@@ -304,6 +304,8 @@ class LogisticsProject:
                 '--source-identity', json.dumps(source))
             if distribution == 'fedora' and options['vm.fedora_mode'] == 'container-on-ubuntu':
                 command += ('--container-image', 'localhost/logistics-fedora-tests:43')
+            if options['tools.manager_checkout']:
+                command += ('--manager-checkout', options['tools.manager_checkout'])
             if options['vm.shutdown_after_run']:
                 command += ('--shutdown',)
             if pattern:
@@ -328,6 +330,8 @@ class LogisticsProject:
         results = workspace / ('windows-' + uuid4().hex)
         command = (str(self.interpreter), '-m', 'Scripts.windows_backend', '--vm', guest['uuid'],
                    '--snapshot', str(snapshot), '--results', str(results), '--source-identity', json.dumps(source))
+        if options['tools.manager_checkout']:
+            command += ('--manager-checkout', options['tools.manager_checkout'])
         prepared = options['vm.windows_prepared_reference']
         if prepared:
             command += ('--prepared', prepared)

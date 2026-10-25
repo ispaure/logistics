@@ -602,3 +602,21 @@ and commonUtils commits must be made available remotely before hosted or fresh
 pinned setup can consume it; local pinning does not push, dispatch or upload. Changing the descriptor requires
 renewed manager trust. Portable regression checks do not establish native mobile
 or live provider acceptance.
+
+## Local guest setup with unpublished manager pins
+
+Set **tools.manager_checkout** to an explicitly reviewed local manager checkout
+when its pinned commit is not yet available remotely. Linux and Windows guest
+backends verify that checkout and its real commonUtils submodule against the
+project's declared manager pin. They transfer committed Git sources only into the
+owned guest workspace; ignored/private checkout files are excluded. No sibling
+checkout discovery, push or hosted dispatch is needed. Leaving the setting empty
+retains explicit remote pin installation.
+
+The Linux transport stages its own supervision helper outside project source.
+Guest dependency synchronization reinstalls the exact staged manager afterward,
+so the project lock cannot silently remove the external engine. Windows manager
+sources are scoped to the operation and removed with collected test work; reusable
+prepared interpreter/tools remain in their separately owned preparation workspace.
+Native Windows results record both OS architecture and Python platform: x64 Python
+on a Windows ARM guest is emulated x64 coverage, not a physical Windows x64 receipt.
