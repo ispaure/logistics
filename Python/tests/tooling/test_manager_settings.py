@@ -40,6 +40,17 @@ class ManagerSettingsTests(unittest.TestCase):
         original = json.loads((self.root / 'firebase-distribution.json').read_text())
         self.assertEqual(settings.distribution(self.root, 'firebase', original)['group'], 'Synthetic testers')
 
+    def test_vm_only_profile_preserves_callers_loaded_provider_defaults(self):
+        settings.save(self.root, {'vm.linux': 'Synthetic Ubuntu'})
+        original = dict(group='Provider file group', bundle_id='fixture.bundle')
+        self.assertEqual(settings.distribution(self.root, 'firebase', original), original)
+        path = settings.profile_path(self.root)
+        profile = json.loads(path.read_text())
+        profile['values']['firebase.bundle_id'] = 'other.bundle'
+        path.write_text(json.dumps(profile))
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            settings.distribution(self.root, 'firebase', original)
+
     def test_tracked_version_edit_is_explicit_and_preserves_bundle_identity(self):
         settings.set_app_version(self.root, '0.2.3')
         self.assertEqual(settings.app_version(self.root), '0.2.3')

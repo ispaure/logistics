@@ -26,6 +26,7 @@ def defaults(root):
         'tools.xcode': '', 'tools.android_sdk': '', 'tools.java': '',
         'ios.iphone': '', 'ios.duo': '', 'ios.ipad': '', 'android.avd': '',
         'vm.linux': '', 'vm.fedora': '', 'vm.windows': '',
+        'vm.linux_scope': 'both',
         'vm.shared_host': '', 'vm.shared_guest': '', 'vm.shutdown_after_run': False,
         'auth.testflight_reference': str(root / '.testflight-auth.json'),
         'auth.key_reference': auth.get('key_path', ''),
@@ -55,6 +56,8 @@ def settings(root, *, overrides=None):
 
 
 def validate(values, configured):
+    if values['vm.linux_scope'] not in ('both', 'ubuntu', 'fedora'):
+        raise ValueError('Linux coverage must be both, ubuntu or fedora; partial runs remain labelled partial.')
     for name in ('testflight.poll_interval_seconds', 'testflight.processing_timeout_seconds'):
         try:
             values[name] = int(values[name])
@@ -84,7 +87,17 @@ def distribution(root, provider, original):
     if not profile_path(root).exists() and not any(name in os.environ for key, name in VARIABLES.items()
                                                   if key.startswith(provider + '.')):
         return original
-    values, _ = settings(root)
+    # The caller's loaded provider file is authoritative. A profile containing
+    # only VM/tool settings must not replace it with another file's defaults.
+    configured = {provider + '.' + key: value for key, value in original.items()}
+    profile = {key: value for key, value in load_profile(profile_path(root)).items() if key in configured}
+    variables = {key: name for key, name in VARIABLES.items() if key in configured}
+    values, _ = effective(configured, profile, os.environ, variables=variables)
+    guarded = ['bundle_id'] + (['app_id'] if provider == 'testflight' else [])
+    for key in guarded:
+        name = provider + '.' + key
+        if key in original and values[name] != original[key]:
+            raise ValueError('App identity is guarded: ' + name)
     return {key: values[provider + '.' + key] for key in original}
 
 

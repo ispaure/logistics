@@ -19,7 +19,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--results-dir', type=Path, default=REPO / 'test-results')
     parser.add_argument('--install', action='store_true', help='Install the project\'s pinned dependencies into this interpreter first')
+    parser.add_argument('--prepare-only', action='store_true', help='With --install, prepare dependencies only; this is not a passing test result')
     args = parser.parse_args()
+    if args.prepare_only and not args.install:
+        parser.error('--prepare-only requires --install and never counts as platform validation')
     if args.install:
         # Export the committed lock rather than resolving transitive versions in CI.
         subprocess.run([sys.executable, '-m', 'pip', 'install', 'uv==0.12.18'], check=True)
@@ -46,12 +49,12 @@ def main():
             [sys.executable, '-c', 'import certifi; print(certifi.where())'],
             text=True).strip())
         # Clean runners must exercise real crypt operations, not skip their fixtures.
-        subprocess.run([sys.executable, '-c',
-                        'from services.software import get_software; '
-                        'from commonUtils.runtime.streams.downloads import provision; '
-                        'print(provision(*get_software("rclone")))'],
+        subprocess.run([sys.executable, '-m', 'Scripts.local_desktop'],
                        cwd=REPO, env=env, check=True, timeout=180)
         env['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] = '1'
+    if args.prepare_only:
+        print('Environment prepared; no platform tests were run.', flush=True)
+        return 0
     # A shared project-owned plan feeds CI and the local manager. Functional
     # test discovery remains with the existing isolated regression runner.
     sys.path.insert(0, str(REPO))

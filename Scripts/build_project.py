@@ -141,8 +141,41 @@ class LogisticsProject:
         return Plan('Logistics', operation, source, tuple(phases),
                     str(workspace), backend='GitHub', effect='publish')
 
-    def local_vm_plan(self, *args):
-        raise ValueError('Parallels backend is not installed yet; no hosted fallback or passing result is implied.')
+    def local_vm_plan(self, operation, target, source, workspace, options, pattern):
+        if target != 'linux':
+            raise ValueError('Windows guest backend is not installed yet; no hosted fallback or passing result is implied.')
+        if operation != 'Test':
+            raise ValueError('This Linux backend accepts Test plans; no Build operation is implied.')
+        from build_manager.parallels import Parallels
+        client = Parallels()
+        selections = []
+        for distribution, key in (('ubuntu', 'vm.linux'), ('fedora', 'vm.fedora')):
+            if options['vm.linux_scope'] not in ('both', distribution):
+                continue
+            guest = client.selected(options[key])
+            selections.append((distribution, guest))
+        if len(selections) == 2 and selections[0][1]['uuid'] == selections[1][1]['uuid']:
+            raise ValueError('Select distinct Ubuntu and Fedora guests for the full Linux coverage.')
+        snapshot = self.private / 'snapshots' / source['fingerprint']
+        materialize(self.root, snapshot, source['selection'])
+        phases = []
+        for distribution, guest in selections:
+            results = workspace / (distribution + '-' + uuid4().hex)
+            command = (str(self.interpreter), '-m', 'Scripts.vm_backend', '--vm', guest['uuid'],
+                '--snapshot', str(snapshot), '--results', str(results), '--distribution', distribution,
+                '--source-identity', json.dumps(source))
+            if options['vm.shutdown_after_run']:
+                command += ('--shutdown',)
+            if pattern:
+                command += ('--pattern', pattern)
+            phases.append(Phase(distribution, command, str(snapshot), timeout=5400,
+                                artifacts=(str(results / 'result.json'),)))
+        source['selected_guests'] = [{'distribution': distro, 'name': guest['name'],
+                                      'uuid': guest['uuid'], 'initial_state': guest['status']} for distro, guest in selections]
+        source['linux_coverage'] = options['vm.linux_scope']
+        source['focused_pattern'] = pattern
+        return Plan('Logistics', 'Local Linux tests (' + options['vm.linux_scope'] + ')', source, tuple(phases), str(workspace),
+                    backend='Local Parallels VM')
 
     def mobile_plan(self, operation, target, source, snapshot, workspace, options, env, pattern, build_override, include_ipad):
         if operation in ('Prepare TestFlight', 'Prepare Firebase'):

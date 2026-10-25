@@ -1,0 +1,46 @@
+"""Transport contracts use literal arguments and only explicitly selected guests."""
+import base64
+import io
+from pathlib import Path
+import shlex
+import tarfile
+from tempfile import TemporaryDirectory
+import unittest
+from unittest.mock import patch
+
+from build_manager.parallels import Parallels
+
+VM = '00000000-0000-0000-0000-000000000001'
+
+
+class ParallelsTransportTests(unittest.TestCase):
+    def test_guest_shell_round_trip_preserves_metacharacters_as_literal_arguments(self):
+        client = Parallels('/fixture/prlctl')
+        arguments = ['python3', '-c', 'import sys; print(sys.argv[1])', "a b; $(touch /tmp/never) 'quoted'"]
+        command = client.command(VM, arguments)
+        self.assertEqual(shlex.split(' '.join(command[3:])), arguments)
+        with self.assertRaises(ValueError):
+            client.command('--help', ['true'])
+
+    def test_selected_guest_is_explicit_and_suspended_vm_is_not_resumed(self):
+        client = Parallels('/fixture/prlctl')
+        row = dict(uuid=VM, name='Synthetic Linux', status='suspended')
+        with patch.object(client, 'inventory', return_value=[row]), patch('subprocess.run') as execute:
+            with self.assertRaises(ValueError):
+                client.start('')
+            with self.assertRaises(ValueError):
+                client.start('Synthetic Linux')
+            execute.assert_not_called()
+
+    def test_stage_allowlist_excludes_private_files(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'public.py').write_text('pass')
+            (root / 'credential').write_text('synthetic-secret')
+            client = Parallels('/fixture/prlctl')
+            with patch.object(client, 'execute') as execute:
+                client.stage(VM, root, '/var/tmp/example', 'example', 1000, 1000, members=['public.py'])
+            data = base64.b64decode(execute.call_args.kwargs['data'])
+            with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as archive:
+                self.assertEqual(archive.getnames(), ['public.py'])
+                self.assertNotIn(b'synthetic-secret', archive.extractfile('public.py').read())

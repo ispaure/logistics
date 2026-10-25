@@ -19,8 +19,8 @@ and an unused channel tag, then waits for the existing gated release workflow.
 An existing tag is never moved. These capabilities do not grant permission to
 publish a project; the operator still chooses and confirms the operation.
 
-Local macOS commands use the same project-owned desktop plan as CI. Parallels,
-sequential iOS and local Android are explicit backend extension points until
+Local macOS and Linux commands use the project-owned desktop plans. Windows
+guests, sequential iOS and local Android remain backend extension points until
 their implementation and real platform acceptance are complete. An unavailable
 backend fails planning; the manager never silently substitutes hosted validation.
 Hosted desktop selection supplies the requested platform input. Normal release
@@ -148,3 +148,47 @@ Apple Silicon run is labelled arm64 with its actual OS and toolchain, rather tha
 claiming equivalence to other hosted hardware. Use the existing locked desktop
 environment (`python dev.py setup desktop`) and repair missing prerequisites
 reported by the manager; it never falls back to a different interpreter/backend.
+
+## Parallels Linux backend
+
+The Linux selector accepts existing guest names or UUIDs in `vm.linux` (Ubuntu)
+and `vm.fedora`. `vm.linux_scope` is `both` by default; explicit `ubuntu` or
+`fedora` runs remain labelled partial Linux coverage. This permits rerunning a
+blocked distribution without repeating the other guest's unchanged complete
+suite. Full Linux acceptance still requires both distributions. Windows guest
+execution is a separate backend and is not inferred from a Linux result.
+
+The reusable `build_manager.parallels` transport discovers guests, starts only a
+selected stopped guest, transports an explicit source allowlist over guest tools,
+verifies its SHA-256, retrieves reports and removes only token-marked workspaces.
+It does not add shared folders or execute against the live host tree. The adapter
+includes local Git histories and the exact shared checkout for compression parity;
+ignored keys/configuration/builds are excluded. Guest commands preserve literal
+argument boundaries across Parallels' Linux shell parser. A harmless second-project
+fixture verifies actual transfer, normal-user execution, retrieval and cancellation,
+including an owned grandchild in a separate process group.
+
+The guest needs working Parallels Tools, Python 3 with venv support, Git and the
+native Qt/WebEngine libraries. Ubuntu additionally needed `libsnappy1v5` and
+`libminizip1` beyond the standard headless Qt packages. The preflight reports missing
+native libraries before launching the test phase. The runner prepares Python
+3.12.2 and locked dependencies in its owned guest workspace, then runs the canonical
+platform checks and release-tooling suite. First preparation downloads public
+runtime/packages; local execution is not a promise of a fully air-gapped cold setup.
+Focused filename patterns use the same locked preparation followed by the selected
+contracts. Preparation-only success is explicitly not test-suite success.
+
+Tests run under the existing normal guest account, with browser sandbox protections
+retained. Results record actual distribution, aarch64/x86 architecture, original VM
+state, transfer/setup/test times, exact source and retrieved phase reports. An ARM
+VM result does not establish x86-64 hosted parity. Failed/skipped required phases
+cannot become a pass. Cancellation stops only the recorded owned process tree;
+completed evidence is retrieved before owned workspace removal. If retrieval or
+cleanup cannot finish, the remaining workspace/error is reported for recovery.
+`vm.shutdown_after_run` defaults to false; enabling it stops only a guest started
+by that run, preserving a guest that was already running. VM creation, resets,
+resource changes, disk passphrases and account sign-in are outside this runner.
+
+A guest waiting at an encrypted-disk boot prompt remains unavailable until its
+owner unlocks it directly. Missing required guest coverage keeps Linux acceptance
+incomplete; installed guest tools or a passing Ubuntu run do not prove Fedora.
