@@ -3,6 +3,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from features.text_editor.names import document_name
+from services.documents.storage import DocumentPolicy
 from commonUtils.ui.native.editor_search import EditorSearch
 from commonUtils.ui.native.code_input import CodeInput
 from commonUtils.formats.code_language import LANGUAGE_CHOICES
@@ -13,7 +14,7 @@ FIELDS = ('selector', 'name', 'editor', 'status', 'recovery_notice', 'import_but
 
 
 def document_status(document):
-    if getattr(document, 'private', False):
+    if not DocumentPolicy.for_provider(document).persistent:
         return 'Unsaved changes · session only. Save before closing.' if document.modified else 'Session only'
     if document.conflict:
         return 'File changed outside the editor. Save a copy to keep your edits.'
@@ -200,7 +201,7 @@ class TextEditorView:
                 self.toolbar.insert(1, self.save_button)
             elif not dirty and self.save_button in self.toolbar.children:
                 self.toolbar.remove(self.save_button)
-        conflict = not getattr(self.document, 'private', False) and self.document.conflict
+        conflict = DocumentPolicy.for_provider(self.document).persistent and self.document.conflict
         if conflict and self.conflict_copy not in self.conflict_actions.children:
             self.conflict_actions.add(self.conflict_copy)
         elif not conflict and self.conflict_copy in self.conflict_actions.children:
@@ -296,12 +297,12 @@ class TextEditorView:
         rich = self.session.kind == 'markdown' and self.session.view.get('markdown_editor', 'formatted') == 'formatted'
         surface = self.editor
         if rich:
-            if self.formatted is None:
-                self.formatted = FormattedMarkdownInput(self.formatted_changed,
-                    font_size=self.app.presentation.font_size('markdown'),
-                    stylesheet=self.app.presentation.css_variables(), private=getattr(self.document, 'private', False))
-                self.app.presentation.bind_font(self.formatted.view, 'markdown', web=True, formatted=self.formatted)
             try:
+                if self.formatted is None:
+                    self.formatted = FormattedMarkdownInput(self.formatted_changed,
+                        font_size=self.app.presentation.font_size('markdown'),
+                        stylesheet=self.app.presentation.css_variables(), private=not DocumentPolicy.for_provider(self.document).persistent)
+                    self.app.presentation.bind_font(self.formatted.view, 'markdown', web=True, formatted=self.formatted)
                 self.formatted.load(self.document.text)
                 surface = self.formatted.view
             except ValueError as error:
@@ -352,7 +353,7 @@ class TextEditorView:
         if self.session.id not in self.app.workspace.sessions:
             return
         self.session.dirty = self.document.modified
-        if getattr(self.document, 'private', False):
+        if not DocumentPolicy.for_provider(self.document).persistent:
             self.refresh_status()
             return
         try:

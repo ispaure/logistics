@@ -180,3 +180,36 @@ def install_editor_dialogs():
     if app:
         app._commonutils_markdown_resource_action = markdown_action
         app._commonutils_open_text_file = open_linked_text
+
+
+def open_text_choice(choice, parent, ordinary_open):
+    """Keep ordinary desktop recovery/encoding in its existing host adapter."""
+    from services.documents.storage import DocumentPolicy
+    if not DocumentPolicy.for_provider(choice.provider).persistent:
+        return open_editor_choice(choice, parent)
+    path = choice.provider.root / choice.path
+    choice.close()
+    return ordinary_open(path)
+
+
+def text_save_choice(choice, parent, document, *, after=None):
+    """Resolve the storage/recovery handoff outside the text editor feature."""
+    from services.documents.storage import DocumentPolicy
+    if DocumentPolicy.for_provider(choice.provider).persistent:
+        path = choice.provider.root / choice.path
+        choice.close()
+        return path, False
+    try:
+        data = document.contents()
+        scrub = parent.service.session.privatize(document)
+    except Exception as error:
+        choice.close()
+        parent.show_error(str(error))
+        return None, False
+    def handed_off():
+        document.replace(document.snapshot)
+        from commonUtils.ui.document_host import close_document
+        close_document(parent)
+        if after:
+            after()
+    return None, publish_handoff(choice, data, parent, completed=handed_off, before=scrub)

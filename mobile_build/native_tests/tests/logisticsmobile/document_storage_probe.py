@@ -129,6 +129,24 @@ class DocumentStorageProbe(LogisticsMobile):
                 assert self.close_session(owner.session.id, choice='discard')
                 await asyncio.sleep(.2)
                 report['cases'].append(('localcrypt' if provider.private else 'local') + '-text-save-' + suffix)
+        from features.text_editor.notes import NotesLibrary
+        from services.documents.mobile_storage import document_source
+        from mobile.obsidian import open_vault
+        for provider in (local, crypt):
+            provider.mkdir('BoundaryNotes')
+            provider.mkdir('BoundaryNotes/.obsidian')
+            library = NotesLibrary(provider, 'BoundaryNotes')
+            key = await asyncio.to_thread(library.create, 'Shared note')
+            copies, mapped = document_source(provider, key)
+            reader = await asyncio.to_thread(copies.open, mapped)
+            await asyncio.to_thread(copies.save, reader, '# Shared storage note\n')
+            assert await asyncio.to_thread(library.read, key) == b'# Shared storage note\n'
+            browser = await open_vault(self, provider, 'BoundaryNotes', 'files')
+            assert browser is not None and await browser.open_note(key)
+            if provider.private:
+                assert browser.web.private_configured
+            browser.dispose()
+            report['cases'].append(('localcrypt' if provider.private else 'local') + '-notes-shared-create-save-private-preview')
         for name in ('plain.cbz', 'book.epub', 'encrypted.cbz', 'protected.epub'):
             item = fixture['copies'][name]
             crypt._physical(name).write_bytes(base64.b64decode(item['ciphertext']))

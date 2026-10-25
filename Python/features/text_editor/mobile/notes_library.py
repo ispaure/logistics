@@ -22,6 +22,7 @@ from commonUtils.ui.native.adaptive import AdaptiveSidebar, allocated_width
 @dataclass(frozen=True)
 class NotesHost:
     presentation: object
+    storage: Callable
     loop: object
     workspace: object
     apple: bool
@@ -54,8 +55,7 @@ class VaultBrowser:
         self.history, self.history_index = [], -1
         self.positions = {}
         self.session = None
-        self.client = host.client()
-        self.generation = getattr(self.client, "generation", None)
+        self.access = host.storage(provider)
         self.cancelled = Event()
         self.folders, self.expanded, self.loading = {}, {self.root}, set()
         self.path = None
@@ -68,7 +68,7 @@ class VaultBrowser:
         self.tree = toga.Box(
             children=[
                 toga.Label("Notes Library", style=Pack(font_size=20, font_weight='bold', margin_bottom=4)),
-                toga.Label(('Remote' if self.library.remote else 'LocalCrypt' if provider.private else 'Local')
+                toga.Label(self.access.label
                            + (' · Editable' if self.library.writable else ' · Read-only'),
                            style=Pack(font_size=12, margin_bottom=12)),
                 toga.ScrollContainer(
@@ -83,24 +83,10 @@ class VaultBrowser:
         self.edit = self.host.presentation.icon_button(
             "edit", "Edit Markdown", on_press=self.open_editor, enabled=False
         )
-        from commonUtils.ui.native.private_webview import (
-            PrivateWebView,
-            private_webview_supported,
-        )
-
-        web_type = (
-            PrivateWebView
-            if provider.private and private_webview_supported()
-            else toga.WebView
-        )
         self.pending_fragment = ""
-        private_options = {"max_html_bytes": MAX_NOTE} if web_type is PrivateWebView else {}
-        self.web = web_type(
-            on_navigation_starting=self.follow_link,
-            **private_options,
-            on_webview_load=self.page_loaded,
-            style=Pack(flex=1),
-        )
+        self.web = self.access.webview(max_bytes=MAX_NOTE,
+            on_navigation_starting=self.follow_link, on_webview_load=self.page_loaded,
+            style=Pack(flex=1))
         host.presentation.bind_font(self.web, "markdown", web=True)
         self.article = toga.Box(
             children=[self.web], style=Pack(direction=COLUMN, flex=1)
@@ -110,17 +96,9 @@ class VaultBrowser:
         self.speech = host.speech(
             self.web,
             self.article,
-            document_title=lambda: "" if self.provider.private else self.path,
-            privacy_gate=lambda: host.privacy_gate() if self.provider.private else None,
-            valid=lambda: not self.cancelled.is_set()
-            and host.active()
-            and (
-                not self.provider.private
-                or (
-                    self.client is host.client()
-                    and self.generation == getattr(self.client, "generation", None)
-                )
-            ),
+            document_title=lambda: self.access.title(self.path),
+            privacy_gate=self.access.speech_gate,
+            valid=self.valid,
         )
         self.speech.button.enabled = False
         self.sidebar = AdaptiveSidebar(
@@ -205,15 +183,7 @@ class VaultBrowser:
         self.sidebar.show_sidebar()
 
     def valid(self):
-        if self.cancelled.is_set() or not self.host.active():
-            return False
-        if self.provider.private:
-            return (
-                self.client is self.host.client()
-                and self.generation == getattr(self.client, "generation", None)
-                and not any(gate.locked for gate in self.host.privacy_gates())
-            )
-        return True
+        return not self.cancelled.is_set() and self.access.valid()
 
     def contained(self, path):
         return self.library.contained(path)
@@ -380,10 +350,7 @@ class VaultBrowser:
             def read():
                 data = self.library.read(path, cancelled=lambda: not self.valid())
                 html = self.host.preview(data.decode("utf-8-sig"), image_source=self.library.image_source(path))
-                if self.provider.private and len(html.encode("utf-8")) > MAX_NOTE:
-                    raise ValueError(
-                        "Private preview exceeds the 2 MiB memory-only limit."
-                    )
+                self.access.validate_preview(html, MAX_NOTE)
                 return html
 
             html = await asyncio.to_thread(read)
@@ -538,7 +505,7 @@ class VaultBrowser:
             return False
         await self.remember_position()
         return await self.host.open_editor(
-            self.provider, self.path, self.destination, self.library.remote, self.client
+            self.provider, self.path, self.destination
         )
 
     def new_note(self, widget=None, **kwargs):

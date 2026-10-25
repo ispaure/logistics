@@ -1,5 +1,6 @@
 """Standalone metadata workflow; never constructs a reader or reading state."""
 from commonUtils.ui import pyside as qt
+from services.documents.storage import DocumentPolicy
 from features.books.epub import EPUBBook
 from features.books.metadata import save_metadata
 from features.books.ui.metadata_editor import MetadataEditor
@@ -13,7 +14,7 @@ class MetadataWindow(qt.QDialog):
     def __init__(self, path, parent=None, *, source=None):
         super().__init__(parent, qt.Qt.WindowType.Window)
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.setWindowTitle(('🕵️ Private - ' if getattr(source, 'private', False) else '') + 'Edit EPUB metadata')
+        self.setWindowTitle(('🕵️ Private - ' if not DocumentPolicy.for_provider(source).persistent else '') + 'Edit EPUB metadata')
         self.resize(650, 720)
         self.path, self.source, self.password = path, source, None
         self.book = None
@@ -32,8 +33,8 @@ class MetadataWindow(qt.QDialog):
 
     def _load(self):
         def load(cancelled):
-            from contextlib import nullcontext
-            with self.source.operation(cancelled) if self.source is not None else nullcontext():
+            from services.documents.storage import document_operation
+            with document_operation(self.source, cancelled):
                 return EPUBBook(self.path, source=self.source, password=self.password)
         self._run(load, self._loaded)
 
@@ -87,7 +88,7 @@ class MetadataWindow(qt.QDialog):
         if not changes:
             self.close()
             return
-        self.status.setText('Saving encrypted metadata…' if self.book.source is not None else 'Saving metadata and backing up the original…')
+        self.status.setText('Saving metadata through its storage provider…' if self.book.source is not None else 'Saving metadata and backing up the original…')
         def saved(result):
             self.book, backup = result
             self.saved.emit(self.book.path)

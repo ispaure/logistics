@@ -91,7 +91,7 @@ class ComicDocument:
     def save(self, changes):
         if self.source is not None:
             return self._save_source(changes)
-        from commonUtils.persistence.publication import save_transaction
+        from services.documents.storage import document_transaction as save_transaction
         from commonUtils.filesystem.local_access import check_local_path
         def validate():
             check_local_path(self.path)
@@ -130,7 +130,7 @@ class ComicDocument:
 
 
     def _save_source(self, changes):
-        """Stream a verified replacement through the host's private storage writer."""
+        """Stream a verified replacement through the host's document storage writer."""
         if not self.unchanged():
             raise ValueError('Comic changed since loading; reopen before saving.')
         info = self.prepare_metadata(changes)
@@ -149,6 +149,7 @@ class ComicDocument:
             with self.source.open(path) as stream:
                 if archive_manifest(stream, password=self.password) != expected:
                     raise ValueError('Archive content verification failed; original kept.')
-        self.source.replace_stream(self.path, write, expected_revision=self.snapshot, verify=verify)
+        from services.documents.storage import publish_document_stream
+        publish_document_stream(self.source, self.path, write, expected_revision=self.snapshot, verify=verify)
         self.snapshot = self.source.version(self.path)
         self.info, self.exists = info, True

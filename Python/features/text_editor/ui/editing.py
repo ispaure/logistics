@@ -411,7 +411,7 @@ class EditingCommands:
             self.show_error(error)
 
     def merge_disk(self):
-        from commonUtils.persistence.text import read_text_file
+        from services.documents.storage import read_local_document as read_text_file
         from commonUtils.persistence.merge import merge_text
         from commonUtils.ui.code_editor.merge import MergeDialog
         document = self.current
@@ -455,7 +455,7 @@ class EditingCommands:
             self.compare_path(path)
 
     def compare_path(self, path):
-        from commonUtils.persistence.text import read_text_file
+        from services.documents.storage import read_local_document as read_text_file
         from commonUtils.ui.code_editor.diff import compare_text, DiffDialog, apply_change
         if not self.current or self.task.busy:
             return

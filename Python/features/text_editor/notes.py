@@ -1,8 +1,7 @@
 """Bounded provider-backed Notes Libraries; no recursive discovery or disk cache."""
 import posixpath
 from pathlib import PurePosixPath
-from contextlib import nullcontext
-from commonUtils.runtime.streams import read_up_to
+from services.documents.storage import DocumentResource
 from .access import can_write
 
 MARKDOWN = {'.md', '.markdown'}
@@ -10,7 +9,8 @@ MAX_NOTE = 2 * 1024 * 1024
 
 
 def operation(provider, cancelled):
-    return provider.operation(cancelled) if hasattr(provider, 'operation') else nullcontext()
+    from services.documents.storage import document_operation
+    return document_operation(provider, cancelled)
 
 
 def vault_root(provider, directory, rows):
@@ -66,21 +66,15 @@ class NotesLibrary:
         path = self.contained(path)
         if PurePosixPath(path).suffix.lower() not in MARKDOWN:
             raise ValueError('Choose a Markdown note.')
-        with operation(self.provider, cancelled):
-            before = self.entry(path)
-            if cancelled():
-                raise ValueError('Notes Library closed.')
-            if before['directory'] or not 0 <= before['size'] <= MAX_NOTE + 4096:
-                raise ValueError('Note exceeds the 2 MiB preview limit.')
-            with self.provider.open(path) as stream:
-                data = read_up_to(stream, MAX_NOTE + 1)
-            if len(data) > MAX_NOTE or cancelled() or self.entry(path) != before:
-                raise ValueError('Note changed or is too large. Reopen it.')
+        before = self.entry(path)
+        if before['directory'] or not 0 <= before['size'] <= MAX_NOTE + 4096:
+            raise ValueError('Note exceeds the 2 MiB preview limit.')
+        with DocumentResource(self.provider, path, max_bytes=MAX_NOTE, independent=False) as resource:
+            data = resource.read(cancelled=cancelled)
         data.decode('utf-8-sig')
         return data
 
     def create(self, name, parent=None, *, cancelled=lambda: False):
-        from io import BytesIO
         from .names import document_name
         if not self.writable:
             raise ValueError('Remote Notes Libraries are read-only.')
@@ -88,8 +82,7 @@ class NotesLibrary:
         if PurePosixPath(name).suffix.lower() not in MARKDOWN:
             name += '.md'
         path = self.contained(posixpath.join(self.root if parent is None else parent, name))
-        with operation(self.provider, cancelled):
-            self.provider.create_file(path, BytesIO(b''), cancelled=cancelled)
+        DocumentResource.publish(self.provider, path, b'', max_bytes=MAX_NOTE, cancelled=cancelled)
         return path
 
     def image_source(self, path):

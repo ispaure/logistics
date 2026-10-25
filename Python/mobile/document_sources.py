@@ -211,11 +211,9 @@ async def _reopen_file(app, source):
     """Resolve credentials again before constructing any encrypted provider."""
     if source['type'] == 'local':
         path = local_document_path(app, source['path'])
-        if path.suffix.lower() in {'.pdf', '.epub', '.cbz', '.zip'}:
-            return await app.open_download(path=path)
         from commonUtils.runtime.resources.local import LocalFiles
-        from features.text_editor.resources import LocalTextCopies
-        return await app.open_crypt(copies=LocalTextCopies(LocalFiles(path.parent)), key=path.name)
+        from services.documents.mobile_storage import open_provider_document
+        return await open_provider_document(app, LocalFiles(path.parent), path.name)
     app.show_cloud(present=False)
     origin = getattr(app, 'navigation_generation', None)
     restore = getattr(app, 'cloud_restore_task', None)

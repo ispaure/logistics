@@ -295,8 +295,7 @@ class FileDrawer:
         return await self.refresh()
 
     async def open_file(self, row):
-        from features.text_editor.resources import LocalTextCopies
-        from features.rclone.localcrypt.mobile.resources import encrypted_document
+        from services.documents.mobile_storage import open_provider_document
         provider = self.provider
         if provider is None or not self.app.checkpoint():
             return
@@ -307,18 +306,10 @@ class FileDrawer:
                 raise ValueError('Unlock the connection again before opening private files.')
             if not local_read_available(self.app, private=provider.private):
                 raise ValueError('This connection is busy. Local files remain available.')
-            if not provider.private and Path(path).suffix.lower() not in {'.txt', '.md', '.markdown'}:
-                if not await self.app.open_download(path=provider._locate(path), destination=self.destination):
-                    self.status.value = str(self.app.cloud_status.value or 'Could not open this file. Try opening it again.')[:300]
-                    return False
-            else:
-                self.app.show_cloud(present=False)
-                source = encrypted_document(provider, path)
-                copies, key = source if source is not None else (LocalTextCopies(provider), path)
-                opened = await self.app.open_crypt(copies=copies, key=key, destination=self.destination)
-                if not opened:
-                    self.status.value = str(self.app.cloud_status.value or 'Could not open this private file. Unlock its connection and try again.')[:300]
-                    return False
+            opened = await open_provider_document(self.app, provider, path, destination=self.destination)
+            if not opened:
+                self.status.value = str(self.app.cloud_status.value or 'Could not open this file. Try opening it again.')[:300]
+                return False
             if self.app.native_host.state.destination == self.destination:
                 if not self.navigation.wide:
                     self.navigation.menu_open[self.destination] = False

@@ -11,7 +11,6 @@ from pathlib import Path
 
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.resources.mutations import save_resource_and_reopen
-from commonUtils.runtime.resources.provider import capabilities
 from commonUtils.runtime.streams import read_up_to
 
 
@@ -26,12 +25,67 @@ class DocumentPolicy:
 
     @classmethod
     def for_provider(cls, provider):
-        remote = bool(getattr(provider, 'remote_storage', False))
-        return cls(not (getattr(provider, 'private', False) or remote),
-                   capabilities(provider).replace and not remote and not getattr(provider, 'read_only', False))
+        sources = tuple(document_sources(provider))
+        persistent = not any(getattr(source, 'private', False) or getattr(source, 'remote_storage', False)
+                             for source in sources)
+        declared = [source.capabilities for source in sources if getattr(source, 'capabilities', None) is not None]
+        return cls(persistent, bool(declared) and document_writable(provider))
 
     def confirm_plaintext(self, destination):
         return not self.persistent and destination.persistent
+
+
+def document_sources(*sources):
+    """Walk host wrappers without letting a local cache hide remote policy."""
+    seen = set()
+    for source in sources:
+        while source is not None and id(source) not in seen:
+            seen.add(id(source))
+            yield source
+            source = getattr(source, 'provider', None)
+
+
+def document_writable(*sources):
+    for source in document_sources(*sources):
+        if getattr(source, 'remote_storage', False) or getattr(source, 'read_only', False):
+            return False
+        declared = getattr(source, 'capabilities', None)
+        if declared is not None and not declared.replace:
+            return False
+    return True
+
+
+def check_document_access(provider):
+    for source in document_sources(provider):
+        validate = getattr(source, '_check_active', None) or getattr(source, 'check', None)
+        if validate is not None:
+            validate()
+
+
+
+def document_operation(source, cancelled=lambda: False):
+    operation = getattr(source, 'operation', None)
+    return operation(cancelled) if operation else nullcontext()
+
+def publish_document_stream(source, path, writer, *, expected_revision, verify=None,
+                            cancelled=lambda: False):
+    """Keep archive rewrites streaming through their provider's transaction owner."""
+    if not document_writable(source):
+        raise PermissionError('This document is read-only. Create a local copy before editing.')
+    with document_operation(source, cancelled):
+        check_cancelled(cancelled)
+        return source.replace_stream(path, writer, expected_revision=expected_revision, verify=verify)
+
+
+def document_transaction(**options):
+    """Ordinary archive policy retains its verified staging/backup callbacks."""
+    from commonUtils.persistence.publication import save_transaction
+    return save_transaction(**options)
+
+
+def read_local_document(path, **options):
+    from commonUtils.persistence.text import read_text_file
+    return read_text_file(path, **options)
 
 
 class DocumentResource:
@@ -77,7 +131,7 @@ class DocumentResource:
                 data = read_up_to(stream, self.max_bytes + 1, cancelled=cancelled)
         check_cancelled(cancelled)
         if len(data) > self.max_bytes:
-            raise ValueError('Document exceeds its format size limit.')
+            raise ValueError('Document is too large; exceeds its format size limit.')
         if self.check()['revision'] != before:
             raise _ReadRevisionChanged('The document changed while opening; reopen it.')
         self.revision = before
@@ -96,12 +150,12 @@ class DocumentResource:
     def publish(provider, path, data, *, max_bytes, expected_revision=None,
                 validate=lambda data: None, cancelled=lambda: False, alive=lambda: True, after_publish=None):
         policy = DocumentPolicy.for_provider(provider)
-        if getattr(provider, 'remote_storage', False) or getattr(provider, 'read_only', False):
+        if not document_writable(provider):
             raise PermissionError('Cloud files are read-only. Create a local copy before editing.')
         if expected_revision is not None and not policy.writable:
             raise PermissionError('This document is read-only.')
         if len(data) > max_bytes:
-            raise ValueError('Document exceeds its format size limit.')
+            raise ValueError('Document is too large; exceeds its format size limit.')
         check_cancelled(lambda: cancelled() or not alive())
         validate(data)
         def reopen():

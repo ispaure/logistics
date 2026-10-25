@@ -8,6 +8,8 @@
     "documents/limits.py",
     "documents/markdown.py",
     "documents/metadata.py",
+    "documents/mobile_collections.py",
+    "documents/mobile_notebooks.py",
     "documents/mobile_reading.py",
     "documents/mobile_storage.py",
     "documents/mobile_views.py",

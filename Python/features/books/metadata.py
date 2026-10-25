@@ -79,14 +79,14 @@ def save_metadata(book, changes, *, cancelled=lambda: False):
     try:
         with _save_lock:
             if book.source is not None:
-                return _save_private_metadata(book, changes, cancelled)
+                return _save_provider_metadata(book, changes, cancelled)
             return _save_metadata(book, changes, cancelled)
     except OperationCancelled:
         raise BookError('Metadata save cancelled; the original EPUB was kept.') from None
 
 
 def _save_metadata(book, changes, cancelled):
-    from commonUtils.persistence.publication import save_transaction
+    from services.documents.storage import document_transaction as save_transaction
     from commonUtils.filesystem.snapshots import verified_file_snapshot
     from commonUtils.filesystem.local_access import check_local_path
     def check():
@@ -170,7 +170,7 @@ def _save_metadata(book, changes, cancelled):
     return EPUBBook(book.path), backup
 
 
-def _save_private_metadata(book, changes, cancelled):
+def _save_provider_metadata(book, changes, cancelled):
     from commonUtils.archives.zip_access import open_archive, archive_manifest
     from commonUtils.runtime.operations import check_cancelled
     from .mutations import metadata_plan, rewrite_metadata
@@ -187,6 +187,7 @@ def _save_private_metadata(book, changes, cancelled):
                 raise BookError('EPUB resource verification failed; original preserved.')
         EPUBBook(path, source=book.source, password=book.password)
     # The provider owns cancellation during encryption and before publication.
-    with book.source.operation(cancelled):
-        book.source.replace_stream(book.path, write, expected_revision=book.signature, verify=verify)
+    from services.documents.storage import publish_document_stream
+    publish_document_stream(book.source, book.path, write, expected_revision=book.signature,
+                            verify=verify, cancelled=cancelled)
     return EPUBBook(book.path, source=book.source, password=book.password), None

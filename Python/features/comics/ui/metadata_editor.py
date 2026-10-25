@@ -1,5 +1,6 @@
 """Metadata dialog controller: loading, saving and protected navigation."""
 
+from services.documents.storage import DocumentPolicy
 from commonUtils.ui.appearance.typography import point_size
 from commonUtils.ui import pyside as qt
 from features.comics.selection import ComicSelection, normalize_targets
@@ -126,7 +127,7 @@ class MetadataEditor(qt.QDialog):
         self.last_save_error = None
         self.is_bulk = self._bulk_targets()
         title = f'{len(self.targets)} selected items' if self.is_bulk else self.path.name
-        self.setWindowTitle(('🕵️ Private - ' if getattr(self.source, 'private', False) else '') + f'Edit Metadata — {title}')
+        self.setWindowTitle(('🕵️ Private - ' if not DocumentPolicy.for_provider(self.source).persistent else '') + f'Edit Metadata — {title}')
         self.message.setVisible(self.is_bulk)
         self.message.setText('Reading selected comics…')
         self._operate(lambda: ComicSelection(self.targets, password=password, source=self.source), self._loaded)
@@ -155,7 +156,7 @@ class MetadataEditor(qt.QDialog):
             # Batch status and field actions need extra room while preserving
             # the compact single-file proportions.
             self.resize(self.width(), max(self.height(), WINDOW_SIZE[1] + 48))
-            self.setWindowTitle(('🕵️ Private - ' if getattr(self.source, 'private', False) else '') + f'Edit Metadata — {count} comics')
+            self.setWindowTitle(('🕵️ Private - ' if not DocumentPolicy.for_provider(self.source).persistent else '') + f'Edit Metadata — {count} comics')
             self.message.show()
             self.message.setText(f'{count} comics. Muted fields have multiple values. Only fields marked * will change.')
             if selection.load_failures:

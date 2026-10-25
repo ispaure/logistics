@@ -7,7 +7,8 @@ from uuid import uuid4
 from commonUtils.ui import pyside as qt
 from commonUtils.persistence.session import SessionStore
 from commonUtils.formats.code_language import LanguageSelection
-from commonUtils.persistence.text import decode_bytes, read_text_file, MAX_BYTES
+from commonUtils.persistence.text import decode_bytes, MAX_BYTES
+from services.documents.storage import read_local_document as read_text_file, DocumentPolicy
 
 
 def document_record(document):
@@ -123,7 +124,7 @@ class EditorSession(qt.QObject):
 
     def capture(self):
         documents = self.retained + [document_record(window.current) for window in self.service.windows
-                     if window.current is not None and not getattr(window.current, "private", False) and not getattr(window, "_suspending", False)]
+                     if window.current is not None and DocumentPolicy.for_provider(window.current).persistent and not getattr(window, "_suspending", False)]
         if len(documents) > 100:
             raise ValueError("Session recovery is limited to 100 documents.")
         active = self.service.windows.index(self.service.window) if self.service.window in self.service.windows else 0
@@ -194,7 +195,7 @@ class EditorSession(qt.QObject):
             self.changed()
 
     def ensure_current(self, window):
-        if any(getattr(doc, "private", False) for doc in window.documents):
+        if any(not DocumentPolicy.for_provider(doc).persistent for doc in window.documents):
             return None  # Private drafts must use Save/Discard/Cancel, never session suspension.
         if self.error and self.future is None:
             # Preserve ordinary save/discard prompts if durable recovery is unavailable.
@@ -341,7 +342,7 @@ class EditorSession(qt.QObject):
             self.lock = None
 
     def retain_window(self, window):
-        if window.current is not None and not getattr(window.current, "private", False):
+        if window.current is not None and DocumentPolicy.for_provider(window.current).persistent:
             self.retained.append(document_record(window.current))
 
     def restore_selected(self, window):

@@ -108,8 +108,7 @@ class DocumentMutation:
             raise
 
     def execute(self, cancelled):
-        from features.text_editor.resources import LocalTextCopies
-        from features.rclone.localcrypt.mobile.resources import encrypted_document
+        from services.documents.mobile_storage import document_source
         request = self.request
         destination = request.provider if request.kind == 'rename' else request.destination.resolve()
         target = (('/'.join(p for p in (request.path.rpartition('/')[0], request.target) if p))
@@ -119,8 +118,7 @@ class DocumentMutation:
         target = destination.relative(target)
         if request.provider.private and not destination.private and not request.plaintext_approved:
             raise ValueError('Use Move to confirm moving private content to unencrypted storage.')
-        destination_document = encrypted_document(destination, target) if self.bindings and destination.private else None
-        copies = (destination_document[0] if destination_document else LocalTextCopies(destination)) if self.bindings else None
+        copies, destination_key = document_source(destination, target) if self.bindings else (None, target)
         with mutation_lock:
             for binding in self.bindings:
                 key = '/'.join(p for p in (target, binding.relative) if p)
@@ -138,7 +136,7 @@ class DocumentMutation:
                 notebooks = self.notebooks.reopen(destination)
                 for binding in self.bindings:
                     key = '/'.join(p for p in (
-                        destination_document[1] if destination_document else target, binding.relative) if p)
+                        destination_key, binding.relative) if p)
                     # Publication is complete. Late cancellation must not leave a
                     # surviving editor saving to a source that no longer exists.
                     reader = copies.open(key)

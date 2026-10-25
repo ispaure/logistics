@@ -16,6 +16,11 @@ from mobile.obsidian import VaultBrowser, vault_root, open_vault
 
 class ObsidianTests(unittest.TestCase):
     def setUp(self):
+        import toga
+        factory = patch('services.documents.mobile_views.document_webview',
+                        side_effect=lambda resource=None, **options: toga.WebView(**options))
+        factory.start()
+        self.addCleanup(factory.stop)
         self.temporary = TemporaryDirectory()
         self.root = Path(self.temporary.name)
         LogisticsMobile.storage_root = self.root / 'app'

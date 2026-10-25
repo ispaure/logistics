@@ -28,13 +28,11 @@ class PageStorage:
         owner.tree.setEnabled(False)
         owner.viewer.setEnabled(False)
         def write(report, cancelled):
-            from commonUtils.runtime.resources.selection import ResourceTextSession
-            session = ResourceTextSession.open(owner.provider, relative, max_bytes=2 * 1024 * 1024,
-                                               cancelled=cancelled)
-            if session.text.data != expected:
-                raise ValueError('Note changed. Reopen it before saving.')
-            session.publish(owner.provider, relative, data, expected_revision=session.text.revision,
-                            cancelled=cancelled)
+            from services.documents.storage import DocumentResource
+            with DocumentResource(owner.provider, relative, max_bytes=2 * 1024 * 1024, independent=False) as resource:
+                if resource.read(cancelled=cancelled) != expected:
+                    raise ValueError('Note changed. Reopen it before saving.')
+                resource.save(data, cancelled=cancelled)
         owner.progress.start(write, message='Saving note…')
 
     def load_resource(self, *args):
@@ -199,12 +197,8 @@ class NotesLibraryWindow(qt.QMainWindow):
             return
         if kind == 'initial':
             self.provider, self.release, self.library, rows = result
-            if getattr(self.provider, 'private', False) and hasattr(self.provider, 'context'):
-                from features.rclone import session
-                self.unsubscribe = session.on_forget(self.provider.context, self.credentials_revoked)
-                if session.credentials(self.provider.context) is None:
-                    self.retire()
-                    return
+            from services.documents.ui.private_views import protect_private_view
+            protect_private_view(self, self.provider)
             if not self.check_provider():
                 return
             self.populate('', rows)
@@ -236,13 +230,19 @@ class NotesLibraryWindow(qt.QMainWindow):
             self.up.setEnabled(True)
         self.idle.emit()
 
+    def resource_provider(self):
+        return self.provider
+
+    def retire_private_content(self):
+        self.retire()
+
     def credentials_revoked(self):
         self.revoked.emit()
 
     def check_provider(self):
         try:
-            if hasattr(self.provider, '_check_active'):
-                self.provider._check_active()
+            from services.documents.storage import check_document_access
+            check_document_access(self.provider)
             return True
         except (OSError, ValueError):
             self.retire()

@@ -35,3 +35,14 @@ def document_webview(resource=None, **options):
         return PrivateWebView(max_html_bytes=128 * 1024 * 1024, **options)
     import toga
     return toga.WebView(**options)
+
+
+def markdown_webview(*, private=False, **options):
+    """The host chooses a protected native surface; callers retain Source mode."""
+    from types import SimpleNamespace
+    from services.documents.storage import DocumentPolicy
+    if private:
+        from commonUtils.ui.native.private_webview import private_webview_supported
+        if not private_webview_supported():
+            raise ValueError('Private formatted Markdown is unavailable here. Use Source mode.')
+    return document_webview(SimpleNamespace(policy=DocumentPolicy(not private, True)), **options)

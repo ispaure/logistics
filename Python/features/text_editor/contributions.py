@@ -87,14 +87,10 @@ def _service(parent):
 
 
 def launch(parent):
-    from services.documents.ui.editors import choose_editor_resource, open_editor_choice
+    from services.documents.ui.editors import choose_editor_resource, open_text_choice
     choice = choose_editor_resource(parent, 'open')
     if choice:
-        if getattr(choice.provider, 'private', False):
-            return open_editor_choice(choice, parent)
-        path = choice.provider.root / choice.path
-        choice.close()
-        return _service(parent).open(path)
+        return open_text_choice(choice, parent, lambda path: _service(parent).open(path))
 
 
 def new_document(parent):

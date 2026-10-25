@@ -1,6 +1,5 @@
 """Text-session adapters for ordinary provider-backed app documents."""
 from pathlib import Path
-from .access import can_write
 
 
 class TextReader:
@@ -22,32 +21,5 @@ class TextReader:
         return 'text', self.text
 
 
-class LocalTextCopies:
-    """Verified local text saves for an editor retargeted out of LocalCrypt."""
-    encrypted = False
-
-    def __init__(self, provider):
-        self.provider = provider
-
-    @property
-    def offline(self):
-        from commonUtils.runtime.resources.local import LocalFiles
-        return isinstance(self.provider, LocalFiles)
-
-    def open(self, key, *, password='', cancelled=lambda: False, read_provider=None):
-        from services.documents.storage import DocumentResource
-        with DocumentResource(read_provider if read_provider is not None else self.provider, key,
-                              max_bytes=1024 * 1024, independent=False) as resource:
-            data = resource.read(cancelled=cancelled)
-            reader = TextReader(resource.name, data, key=resource.path, revision=resource.revision)
-        reader.read_only = not can_write(provider=self.provider)
-        return reader
-
-    def save(self, reader, text, *, cancelled=lambda: False):
-        if not can_write(provider=self.provider, reader=reader):
-            raise ValueError('Remote Markdown is read-only. Create a local copy before editing.')
-        from services.documents.storage import DocumentResource
-        data = reader.session.encode(text)
-        revision = DocumentResource.publish(self.provider, reader.key, data, max_bytes=1024 * 1024,
-            expected_revision=reader.revision, cancelled=cancelled)
-        return TextReader(reader.name, data, key=reader.key, revision=revision)
+# Compatibility for existing callers; composition belongs to the document host.
+from services.documents.mobile_storage import TextDocumentCopies as LocalTextCopies

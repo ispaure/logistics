@@ -147,12 +147,7 @@ def editor_html(text, bridge, font_size=16, *, image_source=None, stylesheet='')
             f'<script nonce="{nonce}">{script}</script></body></html>')
 
 
-def markdown_webview(*, private=False, **kwargs):
-    if private:
-        from commonUtils.ui.native.private_webview import PrivateWebView, private_webview_supported
-        if private_webview_supported():
-            return PrivateWebView(**kwargs)
-    return toga.WebView(**kwargs)
+from services.documents.mobile_views import markdown_webview
 
 
 class FormattedMarkdownInput:

@@ -149,10 +149,10 @@ def show_documentation(app, directory=None, path=None):
             path = directory / 'user_mobile/user_mobile.md' 
     def open_file(path):
         from commonUtils.runtime.resources.local import LocalFiles
-        from features.text_editor.resources import LocalTextCopies
+        from services.documents.mobile_storage import document_copies
         if not hasattr(app, 'cloud_client'):
             app.show_cloud(present=False)
-        app.loop.create_task(app.open_crypt(copies=LocalTextCopies(LocalFiles(path.parent)), key=path.name))
+        app.loop.create_task(app.open_crypt(copies=document_copies(LocalFiles(path.parent)), key=path.name))
 
     owner = DocumentationReader(app, directory, path, width=app.adaptive.content_width('settings', margin=0),
                              font_size=int(app.preferences.values['markdown_font_size']), render=markdown_preview, open_file=open_file)

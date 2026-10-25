@@ -1,6 +1,5 @@
 """Native local file management; shared operations own transfer correctness."""
 from commonUtils.ui.native.password_input import PasswordInput
-from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
 
 from features.rclone.mobile.storage_location import collection_path
 import asyncio
@@ -11,7 +10,6 @@ from services.workflow_host import OwnedAttribute
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.resources.local import LocalFiles
-from features.rclone.localcrypt.mobile.resources import encrypted_document
 
 
 def local_read_available(app, *, private=True):
@@ -565,21 +563,9 @@ class FilesUI:
                 return
             if provider.entry(path)['directory']:
                 raise ValueError('Choose a file to read.')
-            if Path(path).suffix.lower() == '.rmdoc':
-                from features.notebooks.mobile.documents import open_notebook
-                from services.documents.storage import DocumentResource
-                from features.notebooks.notebook import MAX_ARCHIVE
-                return await open_notebook(self.app, resource=DocumentResource(provider, path, max_bytes=MAX_ARCHIVE))
-            source = encrypted_document(provider, path)
-            if source is not None:
-                self.crypt_password.value = self.file_password.value
-                copies, key = source
-                return await self.open_crypt(copies=copies, key=key)
-            elif Path(path).suffix.lower() in SOURCE_EXTENSIONS:
-                from features.text_editor.resources import LocalTextCopies
-                return await self.open_crypt(copies=LocalTextCopies(provider), key=path)
-            else:
-                return await self.open_download(path=provider._locate(path))
+            from services.documents.mobile_storage import open_provider_document
+            self.crypt_password.value = self.file_password.value
+            return await open_provider_document(self.app, provider, path)
         except ValueError as error:
             self.file_status.value = str(error)
             return False

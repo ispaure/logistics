@@ -167,24 +167,23 @@ def notes_host(app):
     from ..action_menu import FeatureCommands
     from .. import obsidian
 
-    async def open_editor(provider, path, destination, remote, client):
-        from features.text_editor.resources import LocalTextCopies
-        from features.rclone.localcrypt.mobile.resources import encrypted_document
-
-        if remote:
-            resource = getattr(provider, 'resource', provider)
-            return await app.open_crypt(copies=resource.readers(), key=path)
-        source = encrypted_document(provider, path)
-        copies, key = (
-            source if source is not None else (LocalTextCopies(provider), path)
-        )
+    async def open_editor(provider, path, destination):
+        from services.documents.mobile_storage import document_source
+        copies, key = document_source(provider, path)
+        if getattr(provider, 'remote_storage', False):
+            return await app.open_crypt(copies=copies, key=key)
         opened = await app.open_crypt(copies=copies, key=key, destination=destination, edit=True)
         if opened:
-            from features.text_editor.mobile.library_editing import attach_return
+            from services.documents.mobile_storage import attach_notes_return as attach_return
             attach_return(app, app.vault_browser, getattr(getattr(app, 'private_sessions', None), 'active', None))
         return opened
 
+    from services.documents.mobile_storage import NotesDocumentAccess
     return NotesHost(
+        storage=lambda provider: NotesDocumentAccess(provider,
+            client=lambda: getattr(app, 'cloud_client', None), active=lambda: app.active_host,
+            privacy_gate=lambda: getattr(app.cloud_client, 'session_privacy', None),
+            privacy_gates=lambda: app.screen_privacy.gates()),
         presentation=app.presentation,
         loop=app.loop,
         workspace=app.workspace,

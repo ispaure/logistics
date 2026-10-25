@@ -113,3 +113,30 @@ binding intact. Requested locking refuses busy or unsaved private notebooks;
 unexpected credential revocation retires their canvas and pending private picker
 material. Mobile Move/Rename retargets open notebook sessions through the existing
 verified mutation plan, retaining the draft and undo history.
+
+
+## Editor boundary
+
+All current document editors enter through the shared host storage family:
+`DocumentResource` for bounded bytes, the desktop text compatibility adapter for
+encoding/recovery, and `publish_document_stream` / `document_transaction` for
+archive metadata. Streaming archives retain their provider transaction and local
+backup callbacks; they do not inherit the text or notebook byte limit.
+
+Notebook mobile host composition lives in `services/documents/mobile_notebooks.py`;
+the former feature module is a compatibility entry.
+
+Notes Library reads, creation and saves use the same verified resource boundary.
+Its location resolution, credential lifetime and private WebView policy belong
+to the document host. Mobile file browsers, workspace drawers, Notes Library,
+move/rename and saved-source reopening use `document_source` or
+`open_provider_document`, including notebook dispatch. `LocalTextCopies` remains a
+compatibility import for the host-owned `TextDocumentCopies` adapter.
+
+Format code receives capabilities and persistence policy, rather than choosing
+LocalCrypt implementations. Host composition and provider adapters intentionally
+still resolve local, LocalCrypt and remote sources. Policy walks provider wrappers,
+so a writable local cache cannot grant writes or persistence to a remote source.
+Private formatted Markdown fails closed on unsupported native backends and leaves
+Source mode available. The boundary regression tests check imports, wrapped remote
+policy, Notes Library publication and workspace-drawer notebook dispatch.

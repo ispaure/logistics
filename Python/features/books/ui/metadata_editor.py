@@ -1,6 +1,7 @@
 """Explicit-save dialog for Dublin Core metadata stored inside the EPUB."""
 from commonUtils.ui import pyside as qt
 from features.books.metadata import EDITABLE
+from services.documents.storage import DocumentPolicy
 
 LABELS = {'title': 'Title', 'creator': 'Authors (one per line)', 'language': 'Language (e.g. en)',
           'publisher': 'Publisher', 'subject': 'Tags (one per line)', 'description': 'Description'}
@@ -10,10 +11,10 @@ class MetadataEditor(qt.QDialog):
     def __init__(self, book, parent=None, *, save_handler=None):
         super().__init__(parent)
         self.save_handler = save_handler
-        self.setWindowTitle(('🕵️ Private - ' if book.source is not None else '') + 'Edit EPUB metadata')
+        self.setWindowTitle(('🕵️ Private - ' if not DocumentPolicy.for_provider(book.source).persistent else '') + 'Edit EPUB metadata')
         self.resize(650, 680)
         layout = qt.QVBoxLayout(self)
-        note = qt.QLabel(('Save updates the encrypted local copy without plaintext backups. ' if book.source is not None else
+        note = qt.QLabel(('Save updates this resource through its storage provider. ' if book.source is not None else
                          'Save updates this EPUB directly. An original backup is kept beside the book. ') +
                         'Chapters, images and other metadata are preserved.')
         note.setWordWrap(True)

@@ -7,7 +7,8 @@ from uuid import uuid4
 import toga
 from toga.style import Pack
 from commonUtils.ui.native.markdown_search import MarkdownPageSearch
-from .markdown_editor import FormattedMarkdownInput, markdown_webview
+from .markdown_editor import FormattedMarkdownInput
+from services.documents.mobile_views import markdown_webview
 from services.documents.mobile_views import retire_webview
 
 
@@ -219,8 +220,11 @@ class ProviderMarkdown:
             return
         content = rendered if rendered is not None else '<p>Loading preview…</p>'
         if self.preview is None:
-            self.preview = markdown_webview(private=self.private, on_navigation_starting=lambda widget, url, **kw: False,
-                                        style=Pack(flex=1))
+            try:
+                self.preview = markdown_webview(private=self.private, on_navigation_starting=lambda widget, url, **kw: False, style=Pack(flex=1))
+            except ValueError as error:
+                self.host.error(str(error))
+                return
         preview = self.preview
         self.host.bind_font(preview, web=True)
         self.mode = 'preview'
@@ -323,8 +327,14 @@ class ProviderMarkdown:
             if (self.host.valid(self.host.reader()) and self.formatted is formatted
                     and formatted.view in self.content.children and not self.closed):
                 self.source.value = text
-        formatted = FormattedMarkdownInput(changed, font_size=self.host.font_size(),
-            stylesheet=self.host.stylesheet(), image_source=lambda: self.host.image_source(self.host.reader()), private=self.private)
+        try:
+            formatted = FormattedMarkdownInput(changed, font_size=self.host.font_size(),
+                stylesheet=self.host.stylesheet(), image_source=lambda: self.host.image_source(self.host.reader()), private=self.private)
+        except ValueError as error:
+            self.host.error(str(error))
+            if self.edit_mode is not None:
+                self.edit_mode.value = 'Source'
+            return
         formatted.scroll_top = self.scroll_top
         try:
             formatted.load(self.source.value)

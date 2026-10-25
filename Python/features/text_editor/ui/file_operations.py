@@ -3,13 +3,12 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.persistence.text import (
-    read_text_file,
     decode_bytes,
     FileConflictError,
     MAX_BYTES,
 )
 from features.text_editor.ui.document import Document
-from services.documents.storage import write_local_document as write_text_file
+from services.documents.storage import write_local_document as write_text_file, read_local_document as read_text_file
 
 
 class FileOperations:
@@ -63,15 +62,11 @@ class FileOperations:
         return document
 
     def open_dialog(self, force=False):
-        from services.documents.ui.editors import choose_editor_resource, open_editor_choice
+        from services.documents.ui.editors import choose_editor_resource, open_text_choice
         choice = choose_editor_resource(self, 'open')
         if choice is None:
             return
-        if getattr(choice.provider, 'private', False):
-            return open_editor_choice(choice, self)
-        path = choice.provider.root / choice.path
-        choice.close()
-        return self.open_path(path, force=force)
+        return open_text_choice(choice, self, lambda path: self.open_path(path, force=force))
 
     def open_path(self, path, *, force=False, encoding=None):
         path = Path(path).resolve()
@@ -165,27 +160,14 @@ class FileOperations:
         overwrite = False
         destination_stamp = None
         if save_as or path is None:
-            from services.documents.ui.editors import choose_editor_resource, publish_handoff
+            from services.documents.ui.editors import choose_editor_resource
             choice = choose_editor_resource(self, 'save', name=path.name if path else 'Untitled.txt')
             if choice is None:
                 return False
-            if getattr(choice.provider, 'private', False):
-                try:
-                    data = document.contents()
-                    scrub = self.service.session.privatize(document)
-                except Exception as error:
-                    choice.close()
-                    self.show_error(str(error))
-                    return False
-                def handed_off():
-                    document.replace(document.snapshot)
-                    from commonUtils.ui.document_host import close_document
-                    close_document(self)
-                    if after:
-                        after()
-                return publish_handoff(choice, data, self, completed=handed_off, before=scrub)
-            path = choice.provider.root / choice.path
-            choice.close()
+            from services.documents.ui.editors import text_save_choice
+            path, submitted = text_save_choice(choice, self, document, after=after)
+            if path is None:
+                return submitted
             if any(
                 other is not document and other.path == path for other in self.documents
             ):
