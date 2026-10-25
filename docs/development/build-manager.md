@@ -634,3 +634,26 @@ A checkout may have advanced beyond the declared pin: transfer selects the exact
 recorded commit from that explicit repository without resetting its branch or
 including later edits. Guest installation still requires the transferred HEAD
 and commonUtils revision to match the pin exactly.
+
+## Dedicated guest prerequisites
+
+Windows shared/application filesystem suites create real symbolic links. In the
+manager's Test machines dialog, select Windows and explicitly approve **Allow
+Windows filesystem tests…** for the dedicated guest. Its initialization policy
+is retained outside the VM bundle and reapplied when that bundle is recreated.
+A normal-user symlink probe establishes this capability; the complete platform
+suite must still pass. Existing personal or held guests must not be substituted.
+
+The Fedora desktop suite also needs the OS libraries declared by the project's
+`Python/tests/platform/fedora43.Containerfile`, including NSS, NSPR and GTK3 for
+Qt WebEngine. Provision those project prerequisites through the authorized
+dedicated-guest setup channel; do not grant the normal test account passwordless
+sudo or disable browser sandboxing. The manager's generic readiness check alone
+does not establish project dependency readiness. Fedora 44 ARM64 is labelled as
+such, independently of historical Fedora 43 container or Ubuntu receipts.
+
+Parallels may return error 255 before establishing a guest session. Retain the
+failed attempt and confirm its owned workspace state before retrying. Tests are
+never automatically replayed after an ambiguous transport failure. Windows owned
+cleanup alone retries the known lost-job-handle error, at most three times, with
+workspace ownership checked on every attempt.
