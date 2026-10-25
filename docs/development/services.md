@@ -70,3 +70,13 @@ physical entry keys. Discovery and catalog ownership remain unchanged.
 ## Personal path defaults
 
 `services.personal_paths.get_marc_dropbox_root()` owns the historical personal Dropbox default used for rclone credential discovery. It preserves the Windows B-drive probe and the home-directory fallback. The shared library has no personal Dropbox configuration.
+
+
+## Mobile document view retirement
+
+`services.documents.mobile_views.retire_webview` owns the document privacy policy
+used by notebook canvases and Text Editor/Notes views. It disposes font bindings,
+detaches memory-only private views before clearing them, and clears a live iOS
+web document before replacement navigation. Features import this shared policy
+directly; notebooks do not depend on the Text Editor feature. The service is in
+the mobile source allowlist and has no GUI or feature imports at module load.

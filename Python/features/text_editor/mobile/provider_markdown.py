@@ -7,7 +7,8 @@ from uuid import uuid4
 import toga
 from toga.style import Pack
 from commonUtils.ui.native.markdown_search import MarkdownPageSearch
-from .markdown_editor import FormattedMarkdownInput, retire_webview, markdown_webview
+from .markdown_editor import FormattedMarkdownInput, markdown_webview
+from services.documents.mobile_views import retire_webview
 
 
 @dataclass(frozen=True)

@@ -601,7 +601,7 @@ class VaultBrowser:
         if self.session is not None and self.session.id in self.host.workspace.sessions:
             self.host.workspace.close(self.session.id, guard=lambda session: True)
         self.session = None
-        from features.text_editor.mobile.markdown_editor import retire_webview
+        from services.documents.mobile_views import retire_webview
 
         if hasattr(self.web, "clear_private_content"):
             self.web.clear_private_content()

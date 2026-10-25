@@ -20,7 +20,7 @@ class MarkdownEditorTests(unittest.TestCase):
     def test_private_retirement_uses_the_memory_only_clearing_contract(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
-        from features.text_editor.mobile.markdown_editor import retire_webview
+        from services.documents.mobile_views import retire_webview
         events = []
         view = SimpleNamespace(parent=SimpleNamespace(remove=lambda view: events.append('detach')),
             _font_binding=SimpleNamespace(dispose=lambda: events.append('font')),
@@ -94,7 +94,7 @@ class MarkdownEditorTests(unittest.TestCase):
 
     def test_ios_retirement_clears_live_document_before_replacement_navigation(self):
         from types import SimpleNamespace
-        from features.text_editor.mobile.markdown_editor import retire_webview
+        from services.documents.mobile_views import retire_webview
         events = []
         native = SimpleNamespace(stopLoading=lambda: events.append('stop'),
             evaluateJavaScript=lambda script, **kwargs: events.append(('clear', script)),

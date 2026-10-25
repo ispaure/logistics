@@ -345,7 +345,7 @@ class TextEditorView:
         if self.formatted is not None:
             self.formatted.dispose()
         if self.preview is not None:
-            from .markdown_editor import retire_webview
+            from services.documents.mobile_views import retire_webview
             retire_webview(self.preview)
 
     def preserve(self):

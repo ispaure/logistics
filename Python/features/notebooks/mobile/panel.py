@@ -188,7 +188,7 @@ class NotebookPanel:
         web = getattr(self, 'web', None)
         if web is not None:
             web.on_navigation_starting = None
-            from features.text_editor.mobile.markdown_editor import retire_webview
+            from services.documents.mobile_views import retire_webview
             retire_webview(web)
         self.web = None
 
