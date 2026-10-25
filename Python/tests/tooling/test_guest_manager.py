@@ -61,3 +61,14 @@ class GuestManagerTests(unittest.TestCase):
         (self.project/'build-manager-dependency.json').write_text(json.dumps(dict(revision=self.pin)))
         (self.manager/'public.py').write_text('changed')
         with self.assertRaisesRegex(ValueError,'Commit manager'): verify(self.manager,self.project)
+
+    def test_linux_transport_keeps_binary_archive_out_of_guest_stdin_protocol(self):
+        import base64
+        from unittest.mock import Mock, patch
+        from Scripts.guest_manager import stage_linux
+        client = Mock()
+        payload = bytes(range(256))
+        with patch('Scripts.guest_manager.archive',return_value=payload):
+            stage_linux(client,'vm','/var/tmp/owned','owned',1000,1000,self.manager,self.project)
+        self.assertEqual(base64.b64decode(client.execute.call_args.kwargs['data']),payload)
+        self.assertTrue(client.execute.call_args.kwargs['data'].isascii())

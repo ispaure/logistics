@@ -1,5 +1,6 @@
 """Explicit exact-pin manager transfer for isolated Logistics guest environments."""
 import argparse
+import base64
 import io
 import json
 from pathlib import Path
@@ -56,15 +57,15 @@ def stage_linux(client, vm, workspace, token, uid, gid, checkout, project):
     from build_manager.parallels import OWNED
     payload = archive(checkout, project, 'tar')
     script = OWNED + """
-import io,os,tarfile
+import base64,io,os,tarfile
 manager=path/'manager'
-with tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode='r:gz') as archive:
+with tarfile.open(fileobj=io.BytesIO(base64.b64decode(sys.stdin.buffer.read(),validate=True)),mode='r:gz') as archive:
  archive.extractall(manager,filter='data')
 for folder,dirs,files in os.walk(manager):
  os.chown(folder,int(sys.argv[3]),int(sys.argv[4]))
  for name in files: os.chown(os.path.join(folder,name),int(sys.argv[3]),int(sys.argv[4]),follow_symlinks=False)
 """
-    client.execute(vm, ['python3','-c',script,workspace,token,str(uid),str(gid)], data=payload, timeout=180)
+    client.execute(vm, ['python3','-c',script,workspace,token,str(uid),str(gid)], data=base64.b64encode(payload), timeout=180)
     return workspace+'/manager'
 
 
