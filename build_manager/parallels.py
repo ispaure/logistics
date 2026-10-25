@@ -43,7 +43,9 @@ with tarfile.open(fileobj=stream,mode='w:gz') as archive:
 print(base64.b64encode(stream.getvalue()).decode())
 '''
 
-REMOVE = OWNED + '''
+REMOVE = '''import pathlib,sys
+if not pathlib.Path(sys.argv[1]).exists(): raise SystemExit(0)
+''' + OWNED + '''
 import shutil
 shutil.rmtree(path)
 '''
@@ -139,8 +141,14 @@ class Parallels:
 
     def run_owned(self, vm, workspace, token, uid, argv, environment, cancelled, *, timeout):
         payload = base64.b64encode(json.dumps(dict(argv=argv, environment=environment)).encode()).decode()
-        command = ['python3', workspace + '/source/build_manager/guest.py', workspace, token, str(uid), payload]
-        process = subprocess.Popen(self.command(vm, command))
+        command = ['python3', workspace + '/source/build_manager/guest.py', workspace, token, str(uid)]
+        # Parallels guest tools impose a command-line limit even for Linux.
+        # Carry trusted structured data over stdin, as the Windows transport does.
+        process = subprocess.Popen(self.command(vm, command), stdin=subprocess.PIPE)
+        try:
+            process.stdin.write(payload.encode())
+        finally:
+            process.stdin.close()
         started = time.monotonic()
         try:
             while process.poll() is None:
@@ -187,8 +195,19 @@ class Parallels:
     def cancel(self, selector, workspace, token):
         self.execute(selector, ['python3', '-c', CANCEL, workspace, token], timeout=30)
 
+    def cleanup(self, selector, argv, *, timeout=60):
+        # Only callers supplying idempotent, ownership-checked cleanup scripts
+        # use this path. Never retry tests, uploads or arbitrary mutations.
+        for attempt in range(3):
+            try:
+                return self.execute(selector, argv, timeout=timeout)
+            except RuntimeError as error:
+                if attempt == 2 or '(255)' not in str(error) or 'Invalid argument' not in str(error):
+                    raise
+                time.sleep(.2)
+
     def remove(self, selector, workspace, token):
-        self.execute(selector, ['python3', '-c', REMOVE, workspace, token], timeout=30)
+        self.cleanup(selector, ['python3', '-c', REMOVE, workspace, token], timeout=30)
 
     def owned_exists(self, selector, workspace, token):
         code = '''import pathlib,sys

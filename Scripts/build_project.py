@@ -21,6 +21,8 @@ from Scripts.validation_plans import desktop_checks
 
 
 class LogisticsProject:
+    secret_environment = ('GH_TOKEN', 'GITHUB_TOKEN', 'FIREBASE_TOKEN')
+    run_options = {'include_ipad': dict(label='Include iPad independent-window coverage in the sequential local run', default=False)}
     platforms = ('macos', 'linux', 'windows', 'ios', 'android')
     operations = ('Test', 'Build', 'Prepare TestFlight', 'Prepare Firebase', 'Release')
     description = 'Select source, platform and execution location; inspect the ordered plan before running.'
@@ -74,8 +76,13 @@ class LogisticsProject:
     def set_app_version(self, value):
         manager_settings.set_app_version(self.mobile, value)
 
-    def make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag=''):
-        setup_started = time.monotonic()
+    def make_plan(self, operation, target, backend, **options):
+        from dataclasses import replace
+        started = time.monotonic()
+        plan = self._make_plan(operation, target, backend, **options)
+        return replace(plan, source=dict(plan.source, plan_preparation_seconds=time.monotonic()-started))
+
+    def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag=''):
         if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target, operation):
             raise ValueError('Unsupported operation/platform/backend selection.')
         if pattern and (not pattern.endswith('.py') or '/' in pattern or '\\' in pattern):
@@ -114,7 +121,6 @@ class LogisticsProject:
                                   timeout=180, environment=env, kind='setup')
             phases = (prerequisites,) + tuple(Phase(name, (python, *arguments), str(snapshot), timeout=timeout,
                                  environment=env, dependencies=('environment',)) for name, arguments, timeout in commands)
-            source['plan_preparation_seconds'] = time.monotonic() - setup_started
             return Plan('Logistics', operation, source, phases, str(workspace), backend=backend)
         return self.mobile_plan(operation, target, source, snapshot, workspace, options, env,
                                 pattern, build_override, include_ipad)
@@ -450,7 +456,10 @@ def release_source(root, client, tag, commit, cancelled):
     if (release['draft'] or len(assets) != 1 or release['prerelease'] != (channel in ('alpha', 'beta'))
             or client.resolve_ref(tag) != commit):
         raise RuntimeError('Workflow finished without a verified published ZIP/digest.')
-    print(json.dumps(dict(release=release['html_url'], tag=tag, commit=commit, digest=assets[0]['digest'])), flush=True)
+    from Scripts.release_verification import verify_asset
+    dependency = git(root, 'ls-tree', commit, 'Python/commonUtils').split()[2]
+    verified = verify_asset(assets[0], commit, dependency, cancelled)
+    print(json.dumps(dict(release=release['html_url'], tag=tag, commit=commit, verified=verified)), flush=True)
     return 0
 
 

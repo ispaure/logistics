@@ -83,7 +83,7 @@ class PackageTests(unittest.TestCase):
             root = Path(directory)
             (root / 'source.py').write_text('pass\n')
             with patch('package_release.tracked_files', return_value=['source.py']), \
-                    patch('package_release.subprocess.check_output', return_value='a' * 40), \
+                    patch('package_release.subprocess.check_output', side_effect=['a'*40, '160000 commit '+'b'*40+'\tPython/commonUtils']), \
                     patch('package_release.build_identity', return_value=dict(schema=1,
                         tag='v0.1.1-alpha.30', revision='a' * 40, committed_at='2026-10-13T22:00:00Z')):
                 packaging.package(root, root / 'release.zip', required=set())
@@ -92,6 +92,7 @@ class PackageTests(unittest.TestCase):
                 self.assertEqual(json.loads(data)['tag'], 'v0.1.1-alpha.30')
                 manifest = json.loads(archive.read('Logistics/.app-install.json'))
                 self.assertEqual(manifest['files']['.app-version.json'], hashlib.sha256(data).hexdigest())
+                self.assertEqual(manifest['commonUtils_revision'], 'b'*40)
 
     def test_windows_scripts_have_crlf_and_manifest_hashes_shipped_bytes(self):
         with tempfile.TemporaryDirectory() as directory:

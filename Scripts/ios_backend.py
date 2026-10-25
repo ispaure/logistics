@@ -11,6 +11,7 @@ import sys
 import time
 
 from build_manager.apple_simulators import AppleSimulators
+from Scripts.mobile_processes import command, interrupt
 
 
 def bundle_digest(root):
@@ -25,33 +26,6 @@ def bundle_digest(root):
     return digest.hexdigest()
 
 
-def interrupt(*_):
-    raise KeyboardInterrupt
-
-
-def command(argv, cwd, timeout=1200):
-    process = subprocess.Popen(argv, cwd=cwd, start_new_session=True)
-    try:
-        code = process.wait(timeout=timeout)
-        if code:
-            raise RuntimeError('Simulator preparation command failed: ' + str(code))
-    finally:
-        # A cancelled build must not leave Xcode/Briefcase descendants alive.
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            process.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            pass
-        # The immediate child may already have exited while a descendant holds
-        # the group. Retire the owned group even in that case.
-        try:
-            os.killpg(process.pid,signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.wait()
 
 
 def build(root, result):

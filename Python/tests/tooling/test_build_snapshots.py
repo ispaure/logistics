@@ -66,3 +66,36 @@ class SnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'commonUtils'):
             materialize(self.root, self.directory / 'snapshot')
         self.assertFalse((self.directory / 'snapshot').exists())
+
+    @unittest.skipIf(os.name == 'nt', 'Windows executable mode is not POSIX')
+    def test_executable_change_invalidates_cache_and_is_preserved(self):
+        before = identity(self.root)
+        (self.root/'source.py').chmod(0o755)
+        self.assertNotEqual(identity(self.root)['fingerprint'], before['fingerprint'])
+        destination = self.directory/'snapshot'
+        materialize(self.root, destination)
+        self.assertTrue((destination/'source.py').stat().st_mode & 0o100)
+        (destination/'source.py').chmod(0o644)
+        with self.assertRaisesRegex(ValueError, 'different source'):
+            materialize(self.root, destination)
+
+    def test_internal_link_is_preserved_and_external_link_blocks_source(self):
+        (self.root/'link.py').symlink_to('source.py')
+        destination = self.directory/'snapshot'
+        materialize(self.root, destination)
+        self.assertTrue((destination/'link.py').is_symlink())
+        self.assertEqual(os.readlink(destination/'link.py'), 'source.py')
+        outside = self.directory/'outside'
+        outside.write_text('private fixture must not be copied')
+        (self.root/'escape').symlink_to(outside)
+        with self.assertRaisesRegex(ValueError, 'escapes the checkout'):
+            materialize(self.root, self.directory/'rejected')
+        self.assertFalse((self.directory/'rejected').exists())
+
+    def test_deleted_and_file_to_directory_paths_overlay_without_stale_bytes(self):
+        (self.root/'source.py').unlink()
+        (self.root/'source.py').mkdir()
+        (self.root/'source.py/child.py').write_text('new directory content')
+        destination = self.directory/'snapshot'
+        materialize(self.root, destination)
+        self.assertEqual((destination/'source.py/child.py').read_text(), 'new directory content')

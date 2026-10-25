@@ -10,7 +10,7 @@ import time
 from build_manager import Executor,Phase,Plan
 
 
-def run(project, snapshot, workspace, output, python, sdk, java):
+def run(project, snapshot, workspace, output, python, sdk, java, runtime_cache=None):
     source=json.loads((snapshot/'.manager-source.json').read_text())['source']
     device=workspace/'device'
     env=dict(PYTHONPATH=os.pathsep.join((str(project),str(project/'Python'))),ANDROID_HOME=str(sdk),
@@ -21,6 +21,10 @@ def run(project, snapshot, workspace, output, python, sdk, java):
             Phase('native',(*base,'native',*common,'--result',str(workspace/'native.json')),str(project),timeout=180,environment=env,dependencies=('ready',)),
             Phase('remaining-device', (str(python),'-c','raise AssertionError("must not start after cancellation")'),str(project),dependencies=('native',)),
             Phase('cleanup',(*base,'cleanup',*common),str(project),timeout=180,environment=env,always=True,kind='cleanup'))
+    if runtime_cache is not None:
+        phase = Phase('runtime', (*base,'runtime',*common,'--runtime-cache',str(runtime_cache),'--result',str(workspace/'runtime.json')),
+                      str(project),timeout=300,environment=env,dependencies=('ready',),artifacts=(str(workspace/'runtime.json'),))
+        phases = (phases[0],phase,*phases[1:])
     cancelled,finished,triggered=Event(),Event(),Event()
     def monitor():
         deadline=time.monotonic()+120
@@ -35,7 +39,7 @@ def run(project, snapshot, workspace, output, python, sdk, java):
             output)
     finally:finished.set();worker.join(timeout=2)
     verified=(triggered.is_set() and result['status']=='cancelled' and
-              [row['status']for row in result['phases']]==['passed','cancelled','skipped','passed'] and
+              [row['status']for row in result['phases']]==(['passed','passed','cancelled','skipped','passed'] if runtime_cache is not None else ['passed','cancelled','skipped','passed']) and
               not (device/'lease.json').exists() and (device/'removed-lease.json').is_file())
     report=dict(verified=verified,result=str(output/'result.json'),native_binary_source=source,
                 ready=json.loads((workspace/'ready.json').read_text()) if (workspace/'ready.json').exists() else None)
@@ -47,6 +51,7 @@ def run(project, snapshot, workspace, output, python, sdk, java):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ('project','snapshot','workspace','output','python','sdk','java'):parser.add_argument('--'+name,type=Path,required=True)
+    parser.add_argument('--runtime-cache',type=Path)
     args=parser.parse_args()
     return run(**vars(args))
 

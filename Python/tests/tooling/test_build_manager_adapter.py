@@ -133,3 +133,13 @@ class ManagerAdapterTests(unittest.TestCase):
             inventory['devices']['com.apple.CoreSimulator.SimRuntime.iOS-27-1'].pop(1)
             with self.assertRaisesRegex(RuntimeError,'Duo'):
                 project.ios_simulator_plan({},project.root,project.private/'fixture-ios',values,{},'',False)
+
+    def test_windows_transfer_rejects_source_links_instead_of_copying_target_bytes(self):
+        from Scripts.windows_backend import source_zip
+        with TemporaryDirectory() as directory:
+            root=Path(directory)
+            (root/'file.py').write_text('synthetic source')
+            (root/'link.py').symlink_to('file.py')
+            with patch('Scripts.windows_backend.source_members',return_value=['link.py']):
+                with self.assertRaisesRegex(ValueError,'cannot flatten'):
+                    source_zip(root)

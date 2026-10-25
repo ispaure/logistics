@@ -19,25 +19,38 @@ def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
 
+def signal_group(group, sig):
+    try:
+        os.killpg(group, sig)
+    except PermissionError:
+        # Darwin can briefly report EPERM while an orphan group is reaped
+        # after SIGTERM. Retry once; never hide a persistent permission error.
+        time.sleep(.05)
+        os.killpg(group, sig)
+
+
 def stop_process(process):
     if os.name == 'nt':
         process.kill_tree()
     else:
         try:
-            os.killpg(process.pid, signal.SIGTERM)
+            signal_group(process.pid, signal.SIGTERM)
         except ProcessLookupError:
             pass
     try:
-        process.wait(timeout=5)
+        process.wait(timeout=1)
     except subprocess.TimeoutExpired:
-        if os.name == 'nt':
-            process.kill()
-        else:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        process.wait(timeout=5)
+        pass
+    # A parent can exit before its descendants, leaving inherited output pipes
+    # open. Always retire the owned process group, even after parent exit.
+    if os.name == 'nt':
+        process.kill_tree()
+    else:
+        try:
+            signal_group(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    process.wait(timeout=5)
 
 
 class Executor:
@@ -95,6 +108,7 @@ class Executor:
         redact = Redactor(environment.get(name) for name in secret_environment)
         messages = Queue(maxsize=128)
         process = None
+        reader = None
         tail = []
         try:
             if os.name == 'nt':
@@ -157,8 +171,14 @@ class Executor:
             row.update(status='failed', error=redact(str(error)))
         finally:
             if process is not None:
-                stop_process(process)
-                process.stdout.close()
+                try:
+                    stop_process(process)
+                except (OSError, subprocess.SubprocessError) as error:
+                    row.update(status='failed', cleanup_error=redact(str(error)))
+                # Never block closing a pipe while its reader still holds it.
+                # A persistent OS cleanup error remains an explicit failed phase.
+                if reader is None or not reader.is_alive():
+                    process.stdout.close()
                 if os.name == 'nt':
                     process.close()
         row.update(seconds=time.monotonic() - started, finished_at=timestamp())

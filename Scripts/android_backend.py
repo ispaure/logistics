@@ -9,7 +9,7 @@ import sys
 import time
 
 from build_manager.android_emulators import AndroidEmulator
-from Scripts.ios_backend import command, interrupt
+from Scripts.mobile_processes import command, interrupt
 from Scripts.mobile_runtime import checksum
 
 

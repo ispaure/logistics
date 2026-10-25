@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+from tempfile import mkstemp
 
 
 def effective(defaults, profile=None, environment=None, overrides=None, *, variables=None):
@@ -13,6 +14,14 @@ def effective(defaults, profile=None, environment=None, overrides=None, *, varia
         for name, value in incoming.items():
             if name not in defaults:
                 raise ValueError('Unsupported setting: ' + name)
+            expected = type(defaults[name])
+            if type(value) is not expected:
+                # Environment variables and text controls can supply numeric
+                # values, but booleans must never use Python's truthy strings.
+                if expected is int and isinstance(value, str) and value.isdecimal():
+                    value = int(value)
+                else:
+                    raise ValueError(name + ' must be a ' + expected.__name__ + '.')
             values[name], sources[name] = value, origin
     return values, sources
 
@@ -25,9 +34,9 @@ def save_profile(path, values, *, allowed):
         raise ValueError('Profiles store credential references, never secret contents.')
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temporary = path.with_suffix('.tmp')
-    # Existing files must also receive restrictive permissions.
-    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    descriptor, name = mkstemp(prefix=path.name + '.', suffix='.tmp', dir=path.parent)
+    temporary = Path(name)
+    # Each writer has its own private temporary; replacement stays atomic.
     try:
         with os.fdopen(descriptor, 'w') as stream:
             stream.write(encoded)
@@ -45,6 +54,6 @@ def load_profile(path):
     if not path.exists():
         return {}
     result = json.loads(path.read_text())
-    if result.get('schema') != 1 or not isinstance(result.get('values'), dict):
+    if not isinstance(result, dict) or result.get('schema') != 1 or not isinstance(result.get('values'), dict):
         raise ValueError('Unsupported profile schema.')
     return result['values']

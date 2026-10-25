@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from build_manager import Phase, Plan
 from build_manager.parallels import Parallels
+from Scripts.build_snapshots import source_members
 
 
 INSPECT = '''import json,os,pathlib,platform,pwd
@@ -30,15 +31,6 @@ subprocess.run([str(python),'-m','uv','venv','--python','3.12.2','--seed',str(en
 '''
 
 
-def source_members(snapshot):
-    members = ['.git', '.manager-source.json']
-    for relative in ('', 'Python/commonUtils'):
-        folder = snapshot / relative
-        names = subprocess.check_output(['git', '-C', str(folder), 'ls-files', '-c', '-o', '--exclude-standard', '-z']).split(b'\0')
-        members.extend(str(Path(relative) / os.fsdecode(name)) for name in names if name and (folder / os.fsdecode(name)).is_file())
-        if relative:
-            members.append(relative + '/.git')
-    return sorted(set(members))
 
 
 def run(args):
@@ -157,7 +149,7 @@ subprocess.run(['uv','venv','--python','3.12.2','--seed',sys.argv[1]+'/environme
         if container:
             try:
                 cleanup = 'import os;os.setgid('+str(account['gid'])+');os.setuid('+str(account['uid'])+');exec('+repr(container.cleanup_script())+')'
-                client.execute(vm, ['env', *(key+'='+value for key,value in container.environment.items()), 'python3', '-c', cleanup,
+                client.cleanup(vm, ['env', *(key+'='+value for key,value in container.environment.items()), 'python3', '-c', cleanup,
                                     json.dumps(container.command), container.name], timeout=45)
                 result['container_removed'] = True
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:

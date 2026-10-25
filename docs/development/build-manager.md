@@ -332,3 +332,67 @@ A focused real native-launch cancellation stopped after the first checkpoint,
 skipped remaining work and removed only the owned emulator. The reusable focused
 driver is `mobile_build/validation/local_manager_probe.py`; its output is explicitly
 cancellation evidence, never full-suite acceptance.
+
+## Reuse boundary and extraction readiness
+
+`build_manager/` is the intended extractable package: serializable `Phase`/`Plan`
+contracts, execution and locks, provider transports, owned simulator/container
+lifetimes, profiles, number reservations and optional Qt presentation. It imports
+no Logistics application, test catalog, release naming or account configuration.
+Provider conventions remain provider-owned; a project supplies its repository,
+workflow names, credential references, device models and image selections.
+
+The Qt adapter contract supplies `description`, `platforms`, `operations`,
+`interpreter`, `runner_directory`, `results_directory`, `backend_options` and
+`make_plan`. Optional `run_options` maps boolean option names to label/default
+entries; values are passed back to `make_plan` rather than interpreted by the UI.
+Logistics owns the `include_ipad` option. Settings, connection verification and
+tracked version editing remain adapter methods. `secret_environment` identifies
+additional inherited secrets for presentation redaction; each executable plan
+also declares its redaction names. The UI can open the actual result directory,
+including immutable captured reports and phase logs.
+
+`Scripts/build_project.py` owns Logistics suites, local/hosted selection, app
+identity, release channels and distribution handoffs. `Scripts/build_snapshots.py`
+owns source selection and the transfer allowlist shared by Linux and Windows.
+Snapshots preserve internal symbolic links without dereferencing private external
+content, reject links escaping the checkout and fingerprint executable bits.
+Deleted files and file-to-directory changes are overlaid before copying children;
+a per-snapshot lock protects concurrent preparation. Cached source is verified
+again before reuse. A Git checkout with local history and the pinned shared
+repository is required; a Gitless downloaded source ZIP cannot silently stand in
+for that history-dependent workflow.
+
+`Scripts/mobile_processes.py` owns native command teardown for both mobile
+adapters; neither Android nor its runtime helper imports the iOS policy module.
+Owned POSIX groups receive final termination even when their immediate parent
+has exited. Simulator cleanup verifies the same UUID/name again if shutdown races
+with cancellation; persistent shutdown failures remain failures. Linux command
+data travels over stdin rather than consuming the Parallels guest command line.
+Private profiles validate value types and use unique atomic temporary files;
+invalid number history produces an actionable error instead of implicit coercion.
+Plan preparation timing is recorded consistently for all backends.
+
+Prepared Android runtime tests install their two pinned, SHA-256 verified public
+wheels with `--no-index`; wheel download belongs to preparation. This removes
+package-index access from that test phase. SDK/Gradle/dependency preparation can
+still need network: this is not a claim that every cold backend setup is air-gapped.
+The legacy mobile payload code fingerprint has its established narrower scope;
+the manager additionally records the whole selected source snapshot and complete
+native artifact digest. Those identities must not be presented as interchangeable.
+
+Release source ZIPs include the orchestrator, adapter and pinned tool metadata,
+while excluding Git metadata, private profiles, credentials, caches and evidence.
+The install manifest records the pinned commonUtils commit. Release completion
+requires downloading the public ZIP, matching its published SHA-256, checking the
+embedded app/source/dependency identities and verifying every declared member hash.
+Checking only that GitHub advertised a digest is insufficient.
+
+A future split can move `build_manager/` with its harmless second-project tests
+into a versioned dependency, then update Logistics imports through the adapter.
+Keep project test discovery, native suites, source policy and release/distribution
+rules here. No repository or submodule split has been made. Remaining acceptance
+limits are explicit: the selected Windows Testbed lacks normal-user symbolic-link
+permission, so its complete required suite and the final integrated release steps
+remain blocked until the owner resolves that capability. Focused Windows adapter
+checks passing does not replace that missing full acceptance.

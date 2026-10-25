@@ -58,3 +58,28 @@ class ParallelsTransportTests(unittest.TestCase):
             with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as archive:
                 self.assertEqual(archive.getnames(), ['public.py'])
                 self.assertNotIn(b'synthetic-secret', archive.extractfile('public.py').read())
+
+    def test_large_linux_command_is_stdin_data_not_guest_command_line(self):
+        import json
+        from threading import Event
+        from unittest.mock import MagicMock
+        client=Parallels('/fixture/prlctl')
+        process=MagicMock();process.poll.return_value=0;process.returncode=0
+        process.stdin=io.BytesIO()
+        saved=[]
+        process.stdin.close=lambda:saved.append(process.stdin.getvalue())
+        arguments=['python3','-c','print('+repr('large literal '*2000)+')']
+        with patch('build_manager.parallels.subprocess.Popen',return_value=process) as spawn:
+            self.assertEqual(client.run_owned(VM,'/var/tmp/owned','owned',1000,arguments,{},Event(),timeout=10),0)
+        self.assertLess(len(' '.join(spawn.call_args.args[0])),1000)
+        self.assertEqual(json.loads(base64.b64decode(saved[0]))['argv'],arguments)
+
+    def test_only_idempotent_cleanup_retries_known_tools_failure(self):
+        client=Parallels('/fixture/prlctl')
+        with patch.object(client,'execute',side_effect=[RuntimeError('Guest command failed (255): Invalid argument'),b'cleaned']) as execute, patch('build_manager.parallels.time.sleep'):
+            self.assertEqual(client.cleanup(VM,['owned-cleanup']),b'cleaned')
+            self.assertEqual(execute.call_count,2)
+        with patch.object(client,'execute',side_effect=RuntimeError('ownership mismatch')) as execute:
+            with self.assertRaisesRegex(RuntimeError,'ownership'):
+                client.cleanup(VM,['owned-cleanup'])
+            self.assertEqual(execute.call_count,1)

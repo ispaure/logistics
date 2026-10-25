@@ -128,6 +128,46 @@ class ExecutionTests(unittest.TestCase):
         self.assertLess(result['seconds'], 5)
 
 
+    @unittest.skipIf(os.name == 'nt', 'POSIX process group contract')
+    def test_orphan_ignoring_sigterm_is_killed_after_parent_exit(self):
+        import signal
+        import time
+        from unittest.mock import patch
+        import build_manager.executor as module
+        child = 'import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); print("ready",flush=True); time.sleep(30)'
+        code = 'import subprocess,sys; p=subprocess.Popen([sys.executable,"-c",'+repr(child)+'],stdout=subprocess.PIPE); print(p.stdout.readline().decode(),flush=True)'
+        original = module.subprocess.Popen
+        processes = []
+        def spawn(*args, **kwargs):
+            process = original(*args, **kwargs)
+            processes.append(process)
+            return process
+        def rescue():
+            for process in processes:
+                try: os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError: pass
+        timer = Timer(3, rescue)
+        timer.start()
+        try:
+            with patch.object(module.subprocess, 'Popen', side_effect=spawn):
+                started = time.monotonic()
+                result = self.run_plan(self.plan(self.phase('orphan', code, timeout=.2)))
+            self.assertEqual(result['phases'][0]['status'], 'timeout')
+            self.assertLess(time.monotonic()-started, 2)
+        finally:
+            timer.cancel()
+            rescue()
+
+
+    def test_cleanup_permission_error_remains_a_structured_failed_phase(self):
+        from unittest.mock import patch
+        with patch('build_manager.executor.stop_process',side_effect=PermissionError('synthetic persistent cleanup denial')):
+            result = self.run_plan(self.plan(self.phase('completed', 'print("finished")')))
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(len(result['phases']), 1)
+        self.assertIn('cleanup denial', result['phases'][0]['cleanup_error'])
+
+
 class ProfileTests(unittest.TestCase):
     def test_precedence_preserves_effective_value_provenance(self):
         values, sources = effective({'group': 'default', 'tool': 'python'}, {'group': 'profile'},
@@ -157,3 +197,18 @@ class ProfileTests(unittest.TestCase):
                 reserve_number(path, maximum=20, override='8')
             with self.assertRaises(ValueError):
                 reserve_number(path, maximum=8)
+
+    def test_invalid_boolean_profile_and_build_history_are_actionable(self):
+        from build_manager.versions import next_number
+        with self.assertRaisesRegex(ValueError, 'bool'):
+            effective({'shutdown': False}, {'shutdown': 'false'})
+        with TemporaryDirectory() as directory:
+            path = Path(directory)/'counter.json'
+            path.write_text('{"last": "4"}')
+            with self.assertRaisesRegex(ValueError, 'integer'):
+                next_number(path)
+            path.write_text('[]')
+            with self.assertRaisesRegex(ValueError, 'schema'):
+                next_number(path)
+            with self.assertRaisesRegex(ValueError, 'schema'):
+                load_profile(path)

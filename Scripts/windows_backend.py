@@ -15,7 +15,7 @@ import zipfile
 from build_manager import Phase, Plan
 from build_manager.parallels import Parallels
 from build_manager.windows_guest import WindowsGuest
-from Scripts.vm_backend import source_members
+from Scripts.build_snapshots import source_members
 
 
 PREPARE = r'''
@@ -78,8 +78,12 @@ def source_zip(snapshot):
     with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as archive:
         for name in source_members(snapshot):
             path = snapshot / name
+            if path.is_symlink():
+                raise ValueError('Windows source transfer cannot flatten a symbolic link: '+name)
             files = sorted(path.rglob('*')) if path.is_dir() else [path]
             for file in files:
+                if file.is_symlink():
+                    raise ValueError('Windows source transfer cannot flatten a symbolic link: '+str(file.relative_to(snapshot)))
                 if file.is_file():
                     archive.write(file, file.relative_to(snapshot).as_posix())
     return stream.getvalue()

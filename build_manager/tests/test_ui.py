@@ -103,3 +103,39 @@ class ManagerUITests(unittest.TestCase):
         self.assertIsNone(panel.plan)
         self.assertFalse(panel.start.isEnabled())
         self.assertIn('synthetic-read-only-preflight',panel.status.text())
+
+    def test_project_supplied_option_reaches_actual_cli_and_results_opening(self):
+        from PySide6.QtGui import QDesktopServices
+        project = OtherProject(self.root)
+        project.run_options = {'extra_probe': dict(label='Synthetic extra probe', default=True)}
+        original = project.make_plan
+        def make_plan(*args, **kwargs):
+            self.assertNotIn('include_ipad', kwargs)
+            project.code = 'print("extra enabled")' if kwargs['extra_probe'] else 'raise SystemExit(2)'
+            return original(*args, **kwargs)
+        project.make_plan = make_plan
+        panel = ManagerPanel(project)
+        panel.inspect_plan()
+        panel.run_plan()
+        self.assertEqual(self.finish(panel)['status'], 'passed')
+        self.assertIn('extra enabled', panel.preview.toPlainText())
+        with patch.object(QDesktopServices, 'openUrl', return_value=True) as opened:
+            panel.open_results.click()
+            self.assertEqual(opened.call_args.args[0].toLocalFile(), str(panel.result.parent))
+        panel.close()
+
+    def test_custom_secret_environment_redacts_review_before_execution(self):
+        project=OtherProject(self.root)
+        project.secret_environment=('SECOND_PROJECT_SECRET',)
+        original=project.make_plan
+        def make_plan(*args,**kwargs):
+            from dataclasses import replace
+            plan=original(*args,**kwargs)
+            return replace(plan, source={'synthetic':os.environ['SECOND_PROJECT_SECRET']},secret_environment=project.secret_environment)
+        project.make_plan=make_plan
+        with patch.dict(os.environ,{'SECOND_PROJECT_SECRET':'synthetic-private-example'}):
+            panel=ManagerPanel(project)
+            panel.inspect_plan()
+            self.assertNotIn('synthetic-private-example',panel.preview.toPlainText())
+            self.assertTrue(panel.start.isEnabled())
+            panel.close()

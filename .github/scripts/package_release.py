@@ -15,6 +15,9 @@ EXCLUDED_DIRS = {
     'mobile-evidence',
 }
 REQUIRED = {
+    'build_manager/__main__.py', 'build_manager/executor.py', 'build_manager/ui.py',
+    'Scripts/build_project.py', 'Scripts/build_snapshots.py', 'Scripts/mobile_processes.py',
+    'Scripts/mobile_runtime_tools.json', 'Scripts/build_manager_tools.json',
     'README.md', 'LICENSE.md', 'docs/docs.md', 'docs/user/user.md', 'docs/user/configuration.md', 'launch_config.ini',
     'LaunchLogistics_MAC.command', 'LaunchLogistics_WIN.bat',
     'LaunchLogistics_LINUX_UV.sh', 'Python/launch.py',
@@ -82,6 +85,9 @@ def package(root, output, names=None, required=REQUIRED):
     output.parent.mkdir(parents=True, exist_ok=True)
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip() if not explicit_names else 'fixture'
     manifest = {'format': 1, 'revision': revision, 'files': {}}
+    if not explicit_names:
+        manifest['commonUtils_revision'] = subprocess.check_output(
+            ['git', 'ls-tree', revision, 'Python/commonUtils'], cwd=root, text=True).split()[2]
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for name in names:
             source = root / name

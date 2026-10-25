@@ -2,6 +2,7 @@
 import json
 import os
 import subprocess
+import time
 from uuid import UUID
 
 
@@ -54,5 +55,23 @@ class AppleSimulators:
         if row is None:
             return
         if row['state'] != 'Shutdown':
-            self.invoke('shutdown', device)
-        self.invoke('delete', device)
+            try:
+                self.invoke('shutdown', device)
+            except RuntimeError:
+                # Cancellation can interrupt a previous shutdown between the
+                # state read and this request. Verify the same lease again.
+                deadline = time.monotonic()+30
+                while True:
+                    row = self.matching(device, name)
+                    if row is None:
+                        return
+                    if row['state'] == 'Shutdown':
+                        break
+                    if row['state'] != 'Shutting Down' or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(.2)
+        try:
+            self.invoke('delete', device)
+        except RuntimeError:
+            if self.matching(device, name) is not None:
+                raise

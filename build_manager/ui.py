@@ -4,7 +4,8 @@ import os
 import subprocess
 from uuid import uuid4
 
-from PySide6.QtCore import QElapsedTimer, QProcess, QTimer, Signal
+from PySide6.QtCore import QElapsedTimer, QProcess, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton,
@@ -110,7 +111,7 @@ class ManagerPanel(QWidget):
         self.process.errorOccurred.connect(self.process_error)
         self.buffer = ''
         from .redaction import Redactor
-        self.redact = Redactor(os.environ.get(name) for name in ('GH_TOKEN', 'GITHUB_TOKEN', 'FIREBASE_TOKEN'))
+        self.redact = Redactor(os.environ.get(name) for name in getattr(project, 'secret_environment', ()))
         self.elapsed = QElapsedTimer()
         self.phase_elapsed = QElapsedTimer()
         self.clock = QTimer(self)
@@ -135,14 +136,19 @@ class ManagerPanel(QWidget):
         self.build_override = QLineEdit()
         self.build_override.setPlaceholderText('Automatic allocation; explicit value is for this run only')
         self.release_tag = QLineEdit()
-        self.release_tag.setPlaceholderText('Explicit channel/tag, e.g. v0.2.0-alpha.1; unrelated to mobile build number')
+        self.release_tag.setPlaceholderText('Explicit release identifier supplied by the project policy')
         for label, control in [('Operation', self.operation), ('Platform', self.platform),
                                ('Backend', self.backend), ('Source revision', self.revision),
-                               ('Focused test pattern', self.pattern), ('Mobile build override', self.build_override),
+                               ('Focused test pattern', self.pattern), ('Build number override', self.build_override),
                                ('GitHub release tag', self.release_tag)]:
             form.addRow(label, control)
-        self.include_ipad = QCheckBox('Include iPad independent-window coverage in the sequential local run')
-        form.addRow(self.include_ipad)
+        self.run_controls = {}
+        for name, entry in getattr(project, 'run_options', {}).items():
+            control = QCheckBox(entry['label'])
+            control.setChecked(entry.get('default', False))
+            control.toggled.connect(self.invalidate)
+            self.run_controls[name] = control
+            form.addRow(control)
         layout.addLayout(form)
         controls = QHBoxLayout()
         self.prepare = QPushButton('Inspect plan')
@@ -164,6 +170,10 @@ class ManagerPanel(QWidget):
         self.preview.setReadOnly(True)
         self.preview.setMaximumBlockCount(6000)
         layout.addWidget(self.preview)
+        self.open_results = QPushButton('Open results and logs')
+        self.open_results.setEnabled(False)
+        self.open_results.clicked.connect(self.show_results)
+        layout.addWidget(self.open_results)
         self.status = QLabel('Inspect a plan before running. No deployment follows a passing test automatically.')
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
@@ -171,7 +181,6 @@ class ManagerPanel(QWidget):
             control.currentTextChanged.connect(self.invalidate)
         for control in (self.revision, self.pattern, self.build_override, self.release_tag):
             control.textChanged.connect(self.invalidate)
-        self.include_ipad.toggled.connect(self.invalidate)
         self.refresh_backends()
 
     def refresh_backends(self, *_):
@@ -194,13 +203,16 @@ class ManagerPanel(QWidget):
         try:
             self.plan = self.project.make_plan(self.operation.currentText(), self.platform.currentText(),
                 self.backend.currentText(), revision=self.revision.text(), pattern=self.pattern.text(),
-                build_override=self.build_override.text(), include_ipad=self.include_ipad.isChecked(),
+                build_override=self.build_override.text(),
+                **{name: control.isChecked() for name, control in self.run_controls.items()},
                 release_tag=self.release_tag.text())
         except (ValueError, OSError, RuntimeError, subprocess.SubprocessError) as error:
             self.status.setText(str(error))
             self.invalidate()
             return
-        self.preview.setPlainText(json.dumps(self.plan.data(), indent=2))
+        from .redaction import Redactor
+        self.redact = Redactor(os.environ.get(name) for name in self.plan.secret_environment)
+        self.preview.setPlainText(self.redact(json.dumps(self.plan.data(), indent=2)))
         self.start.setEnabled(True)
         self.status.setText('Plan ready. Source and ordered phases above identify exactly what will run.')
 
@@ -210,7 +222,9 @@ class ManagerPanel(QWidget):
         except (ValueError, OSError, RuntimeError, subprocess.SubprocessError) as error:
             self.status.setText(str(error))
             return
-        self.preview.setPlainText(json.dumps(self.plan.data(), indent=2))
+        from .redaction import Redactor
+        self.redact = Redactor(os.environ.get(name) for name in self.plan.secret_environment)
+        self.preview.setPlainText(self.redact(json.dumps(self.plan.data(), indent=2)))
         self.run_plan()
 
     def run_plan(self):
@@ -246,7 +260,7 @@ class ManagerPanel(QWidget):
             self.clock.stop()
         for control in (self.prepare, self.start, self.settings, self.verify, self.operation,
                         self.platform, self.backend, self.revision, self.pattern, self.build_override, self.release_tag,
-                        self.include_ipad):
+                        *self.run_controls.values()):
             control.setEnabled(not busy)
         self.start.setEnabled(not busy and self.plan is not None)
         self.cancel.setEnabled(busy)
@@ -263,7 +277,7 @@ class ManagerPanel(QWidget):
             try:
                 event = json.loads(line)
             except ValueError:
-                self.preview.appendPlainText(line)
+                self.preview.appendPlainText(self.redact(line))
                 continue
             if event.get('type') == 'output':
                 self.preview.appendPlainText(event['text'].rstrip())
@@ -293,6 +307,10 @@ class ManagerPanel(QWidget):
             self.set_busy(False)
             self.status.setText('Operation could not start: ' + self.process.errorString())
 
+    def show_results(self):
+        if self.result and self.result.parent.is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.result.parent)))
+
     def finished(self, code, *_):
         self.read_output()
         self.set_busy(False)
@@ -300,12 +318,13 @@ class ManagerPanel(QWidget):
         if self.result and self.result.is_file():
             report = json.loads(self.result.read_text())
             status = report['status']
-            self.preview.appendPlainText(json.dumps(report, indent=2))
+            self.preview.appendPlainText(self.redact(json.dumps(report, indent=2)))
             for phase in report['phases']:
                 for artifact in phase.get('artifacts', []):
                     from pathlib import Path
                     if Path(artifact['path']).suffix == '.json':
                         # Immutable report captured by the executor, not values
                         # reconstructed from a subsequently edited profile.
-                        self.preview.appendPlainText(Path(artifact['path']).read_text())
+                        self.preview.appendPlainText(self.redact(Path(artifact['path']).read_text()))
+        self.open_results.setEnabled(bool(self.result and self.result.parent.is_dir()))
         self.status.setText(f'{status}; exit {code}. Results: {self.result}')

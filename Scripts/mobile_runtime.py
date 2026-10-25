@@ -12,7 +12,7 @@ import tarfile
 import urllib.request
 
 from build_manager.locking import workspace_lock
-from Scripts.ios_backend import command, interrupt
+from Scripts.mobile_processes import command, interrupt
 
 
 def checksum(path):
@@ -50,11 +50,32 @@ def source(cache, pin):
                     raise ValueError('Pinned CPython source cache changed: '+str(relative))
 
 
+
+def runtime_wheels(cache, *, download=False):
+    pins = json.loads(Path(__file__).with_name('mobile_runtime_tools.json').read_text())['runtime_wheels']
+    folder = cache/'manager-wheels'
+    folder.mkdir(exist_ok=True)
+    for pin in pins:
+        path = folder/pin['filename']
+        if not path.exists() and download:
+            temporary = path.with_suffix('.download')
+            with urllib.request.urlopen(pin['url'], timeout=60) as incoming, temporary.open('wb') as output:
+                shutil.copyfileobj(incoming, output)
+            if checksum(temporary) != pin['sha256']:
+                temporary.unlink()
+                raise ValueError('Runtime wheel download digest differs: '+pin['filename'])
+            temporary.replace(path)
+        if not path.is_file() or checksum(path) != pin['sha256']:
+            raise ValueError('Prepare the pinned runtime wheel cache before testing: '+pin['filename'])
+    return folder
+
+
 def prepare(cache, result):
     pin = json.loads(Path(__file__).with_name('mobile_runtime_tools.json').read_text())['cpython']
     cache.parent.mkdir(parents=True,exist_ok=True)
     with workspace_lock(cache.parent/'mobile-runtime.lock'):
         source(cache,pin)
+        runtime_wheels(cache, download=True)
         target=pin['android_target']
         host=cache/'cross-build/build/python.exe'
         if not host.exists():host=cache/'cross-build/build/python'
@@ -95,7 +116,7 @@ def test(root, cache, serial, output):
     manifest=tools.stage(root,payload,testbed=True,allow_dirty=True)
     # These two pure-Python packages are the exact dependencies declared by the
     # canonical runtime workflow; they never contain native host binaries.
-    command([sys.executable,'-m','pip','install','--target',str(payload),'--no-deps',
+    command([sys.executable,'-m','pip','install','--no-index','--find-links',str(runtime_wheels(cache)),'--target',str(payload),'--no-deps',
              'markdown-it-py==4.2.0','mdurl==0.1.2'],root,180)
     with workspace_lock(cache.parent/'mobile-runtime.lock'):
         with output.with_suffix('.log').open('w') as log:

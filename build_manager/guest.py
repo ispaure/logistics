@@ -14,14 +14,15 @@ def main():
     parser.add_argument('workspace', type=Path)
     parser.add_argument('token')
     parser.add_argument('uid', type=int)
-    parser.add_argument('payload', help='Base64 JSON with literal argv and environment')
+    parser.add_argument('payload', nargs='?', default='-', help='Base64 JSON, or stdin when omitted')
     args = parser.parse_args()
     root = args.workspace
     if root.is_symlink() or root.resolve() != root or root.name != args.token:
         raise ValueError('Guest workspace ownership mismatch.')
     if json.loads((root / '.manager-owned.json').read_text())['token'] != args.token:
         raise ValueError('Guest workspace marker mismatch.')
-    command = json.loads(base64.b64decode(args.payload, validate=True))
+    payload = sys.stdin.buffer.read() if args.payload == '-' else args.payload
+    command = json.loads(base64.b64decode(payload, validate=True))
     account = pwd.getpwuid(args.uid)
     if account.pw_uid == 0:
         raise ValueError('Use a normal guest test account; native Qt protections remain enabled.')

@@ -45,3 +45,19 @@ class BundleIdentityTests(unittest.TestCase):
                 if child_pid:
                     try:os.kill(child_pid,signal.SIGKILL)
                     except ProcessLookupError:pass
+
+class RuntimeWheelCacheTests(unittest.TestCase):
+    def test_runtime_install_uses_only_verified_prepared_wheels(self):
+        import hashlib
+        from unittest.mock import patch
+        from Scripts.mobile_runtime import runtime_wheels
+        with TemporaryDirectory() as directory:
+            root=Path(directory)
+            folder=root/'manager-wheels';folder.mkdir()
+            wheel=folder/'fixture.whl';wheel.write_bytes(b'public synthetic wheel')
+            pins={'runtime_wheels':[dict(filename=wheel.name,sha256=hashlib.sha256(wheel.read_bytes()).hexdigest())]}
+            with patch('Scripts.mobile_runtime.json.loads',return_value=pins), patch('Scripts.mobile_runtime.urllib.request.urlopen',side_effect=AssertionError('test must not use network')):
+                self.assertEqual(runtime_wheels(root),folder)
+                wheel.write_bytes(b'changed cache')
+                with self.assertRaisesRegex(ValueError,'Prepare'):
+                    runtime_wheels(root)

@@ -7,7 +7,15 @@ from .locking import workspace_lock
 
 def next_number(path, *, existing=(), minimum=1):
     path = Path(path)
-    previous = json.loads(path.read_text()).get('last', 0) if path.exists() else 0
+    record = json.loads(path.read_text()) if path.exists() else {'schema': 1, 'last': 0}
+    if not isinstance(record, dict) or record.get('schema', 1) != 1:
+        raise ValueError('Unsupported build counter schema.')
+    previous = record.get('last')
+    if type(previous) is not int or previous < 0 or type(minimum) is not int or minimum < 1:
+        raise ValueError('Build counters require nonnegative integer history and a positive minimum.')
+    existing = tuple(existing)
+    if any(type(value) is not int or value < 0 for value in existing):
+        raise ValueError('Existing build identifiers must be nonnegative integers.')
     return max(minimum, previous + 1, max(existing, default=0) + 1)
 
 
