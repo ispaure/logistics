@@ -31,6 +31,10 @@ def open_notebook_choice(choice, parent=None, *, create=False):
             else:
                 window = open_workspace(parent, document=document)
                 opened.append(window)
+        except Exception as failure:
+            if document is not None:
+                document.close()
+            qt.QMessageBox.warning(parent, 'Notebook', str(failure))
         finally:
             choice.close()
             dialog.accept()

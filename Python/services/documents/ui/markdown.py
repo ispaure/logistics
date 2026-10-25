@@ -49,7 +49,10 @@ class MarkdownStorage:
         self.operation.start(lambda report, cancelled: self.write_bytes(path, data, expected=expected, cancelled=cancelled), message='Encrypting local Markdown save…')
 
     def _written(self, result, error):
-        self.window.viewer.setEnabled(True)
+        locked = getattr(getattr(self.window, '_private_view_guard', None), 'locked', False)
+        self.window.viewer.setEnabled(not locked)
+        if locked:
+            error = error or 'Private session locked. Reopen the document.'
         data, completed = self.pending_write
         completed(error)
         self.operation.hide()
@@ -120,6 +123,7 @@ class MarkdownStorage:
             self.resource = DocumentResource(provider, target, max_bytes=8 * 1024 * 1024, independent=False)
             self.provider, self.path, self.data = provider, provider.root / target, data
             self.resources = {}
+            self.window._session_private = self.window._session_private or not self.resource.policy.persistent
             viewer.complete_save(self.path, data)
         self.pending_write = data, completed
         def save_copy(report, cancelled):
@@ -128,6 +132,8 @@ class MarkdownStorage:
         return False
 
     def load_resource(self, kind, url):
+        if self.resource.closed:
+            return qt.QImage() if kind == qt.QTextDocument.ResourceType.ImageResource else qt.QByteArray()
         if hasattr(self.provider, '_check_active'):
             self.provider._check_active()
         if not url.isLocalFile():
@@ -161,11 +167,33 @@ class PrivateMarkdownWindow(MarkdownWindow):
         if self._session_private:
             self.setWindowTitle('🕵️ Private - ' + self.windowTitle())
 
+    def retire_private_content(self):
+        viewer, storage = self.viewer, self.viewer.storage
+        viewer.speech.stop()
+        if viewer._diagram_renderer:
+            viewer._diagram_renderer.cancel()
+        storage.resource.close()
+        storage.data, storage.resources = b'', {}
+        blockers = [qt.QSignalBlocker(widget) for widget in
+                    (viewer, viewer.editor, viewer.formatted_editor, viewer.browser)]
+        for widget in (viewer.editor, viewer.formatted_editor, viewer.browser):
+            widget.setUndoRedoEnabled(False)
+            widget.clear()
+        viewer.document_state.new()
+        viewer.history.clear()
+        viewer.history_index = -1
+        viewer.location.clear()
+        viewer.document_title.clear()
+        del blockers
+
     def closeEvent(self, event):
         storage = self.viewer.storage
         if storage.operation.busy:
             self.pending_close = True
             event.ignore()
+            return
+        if getattr(getattr(self, '_private_view_guard', None), 'locked', False):
+            event.accept()
             return
         super().closeEvent(event)
         if storage.operation.busy:

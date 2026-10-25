@@ -35,6 +35,8 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         if existing is not None:
             resource.close()
             existing.document.resource.check()
+            if existing.web is None and existing.editor is not None:
+                existing.mount_canvas()
             present(app, existing, destination=destination)
             return True
     session = next((s for s in app.workspace.sessions.values()
@@ -45,8 +47,11 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             resource.close()
         if panel.document and panel.document.resource:
             panel.document.resource.check()
-        if panel.web is None and not await panel.load(lambda: panel.repository.open(key), key):
-            return False
+        if panel.web is None:
+            if panel.document is not None and panel.editor is not None:
+                panel.mount_canvas()
+            elif not await panel.load(lambda: panel.repository.open(key), key):
+                return False
         present(app, panel, destination=destination)
         return True
     from mobile.workspace import MAX_SESSIONS
@@ -100,7 +105,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
                 book = recovery.open(key) if key else Notebook.new(name or 'Untitled notebook')
             document = NotebookDocument(book, resource=active_resource, recovery=recovery, key=key,
                                          changed=remember_notebook_resource)
-            document.dirty = bool(active_resource is not None and binding and binding.get('dirty'))
+            document.dirty = bool(binding and binding.get('dirty'))
             remember_notebook_resource(document)
             return document
         import asyncio

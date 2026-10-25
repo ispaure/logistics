@@ -244,6 +244,23 @@ class DocumentStorageProbe(LogisticsMobile):
                 assert len(await asyncio.to_thread(resource.read)) > 1024 * 1024
                 report['cases'].append('localcrypt-notebook-binary-save-above-text-limit')
                 await self.command(panel, dict(op='stroke', points=[[80,90,.5],[100,110,.7]], tool=12, width=3))
+                editor = panel.editor
+                panel.retire_canvas()
+                from features.notebooks.mobile.documents import open_notebook
+                assert await open_notebook(self, key=panel.key)
+                assert panel.editor is editor and panel.document.dirty and editor.undo
+                for _ in range(150):
+                    if await panel.web.evaluate_javascript('typeof send === "function"'):
+                        break
+                    await asyncio.sleep(.1)
+                else:
+                    raise TimeoutError('Resumed private canvas did not load.')
+                await self.command(panel, dict(op='undo'))
+                assert len(panel.editor.notebook.page(1).strokes) == 0
+                await self.command(panel, dict(op='redo'))
+                assert len(panel.editor.notebook.page(1).strokes) == 1
+                assert panel._repository is None
+                report['cases'].append('private-notebook-canvas-resume-retains-draft-and-undo')
                 assert not self.clear_private_reader(), 'Requested lock discarded an unsaved private notebook'
                 request = FileOperationRequest('rename', resource.provider, resource.path, 'Renamed.rmdoc')
                 plan = await prepare_document_mutation(self, request)
@@ -298,6 +315,28 @@ class DocumentStorageProbe(LogisticsMobile):
                 else:
                     raise AssertionError('Revoked notebook resource could still be read')
                 report['cases'].append('private-notebook-reopen-and-real-credential-revocation')
+            from commonUtils.runtime.resources.local import LocalFiles
+            from services.documents.storage import DocumentResource
+            folder = self.storage_root / 'removable-notebook-source'
+            folder.mkdir()
+            (folder / 'Recover.rmdoc').write_bytes(Notebook.new('Recoverable').to_bytes())
+            resource = DocumentResource(LocalFiles(folder), 'Recover.rmdoc', max_bytes=MAX_ARCHIVE)
+            assert await open_notebook(self, resource=resource)
+            panel = self.notebook_panel
+            for _ in range(150):
+                if await panel.web.evaluate_javascript('typeof send === "function"'):
+                    break
+                await asyncio.sleep(.1)
+            await self.command(panel, dict(op='stroke', points=[[20,30,.5],[40,50,.5]], tool=12, width=2))
+            recovery_key = panel.key
+            assert self.close_session(panel.session.id)
+            folder.rename(self.storage_root / 'disconnected-notebook-source')
+            assert await open_notebook(self, key=recovery_key)
+            panel = self.notebook_panel
+            assert panel.document.resource is None and panel.document.dirty
+            assert len(panel.editor.notebook.page(0).strokes) == 1
+            assert self.close_session(panel.session.id, choice='discard')
+            report['cases'].append('ordinary-notebook-recovery-after-source-folder-disappears')
             report['success'] = True
         except BaseException:
             report['error'] = traceback.format_exc()

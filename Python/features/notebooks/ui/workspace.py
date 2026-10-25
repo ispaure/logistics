@@ -293,9 +293,9 @@ class NotebookWorkspace(qt.QWidget):
         if self.web is not None:
             self.web.page().runJavaScript(update_script(self.state(), error or ''))
         if self.document_window is not None:
-            guard = getattr(self.document_window, '_private_view_guard', None)
-            if guard is not None:
-                guard.follow_provider()
+            if self.document is not None and self.document.resource is not None:
+                from services.documents.ui.private_views import protect_private_view
+                protect_private_view(self.document_window, self.document.resource.provider)
             if not error and getattr(self.document_window, 'pending_close', False):
                 self.document_window.close()
 
@@ -361,21 +361,32 @@ def open_workspace(parent=None, path=None, *, resource=None, document=None):
     window.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
     _windows.append(window)
     window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
-    if resource is not None:
-        from ..storage import NotebookDocument
-        book = Notebook.read(resource.read())
-        document = NotebookDocument(book, resource=resource,
-                                    recovery=panel.repository if resource.policy.persistent else None)
-    if document is not None:
-        if document.resource is not None and document.resource.policy.persistent and document.recovery is None:
-            document.recovery = panel.repository
-            document.key = panel.repository.create(document.book)
-        panel.open_resource(document)
-        if document.resource is not None:
-            from services.documents.ui.private_views import protect_private_view
-            protect_private_view(window, document.resource.provider)
-    elif path is not None:
-        panel.import_path(path)
-    from commonUtils.ui.document_host import show_document
-    show_document(window)
+    try:
+        if resource is not None:
+            from ..storage import NotebookDocument
+            book = Notebook.read(resource.read())
+            document = NotebookDocument(book, resource=resource,
+                                        recovery=panel.repository if resource.policy.persistent else None)
+        if document is not None:
+            if document.resource is not None and document.resource.policy.persistent and document.recovery is None:
+                document.recovery = panel.repository
+                document.key = panel.repository.create(document.book)
+            panel.open_resource(document)
+            if document.resource is not None:
+                from services.documents.ui.private_views import protect_private_view
+                protect_private_view(window, document.resource.provider)
+        elif path is not None:
+            panel.import_path(path)
+        from commonUtils.ui.document_host import show_document
+        show_document(window)
+    except BaseException:
+        if document is not None:
+            document.close()
+        elif resource is not None:
+            resource.close()
+        panel.dispose()
+        if window in _windows:
+            _windows.remove(window)
+        window.deleteLater()
+        raise
     return window

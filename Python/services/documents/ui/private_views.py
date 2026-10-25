@@ -47,7 +47,7 @@ class PrivateViewGuard(qt.QObject):
         window.destroyed.connect(lambda: self.unsubscribe())
         idle = getattr(window, 'idle', None)
         if idle is not None:
-            idle.connect(self.follow_provider)
+            idle.connect(self.check_revocation)
 
     def bind(self, provider):
         self.unsubscribe()
@@ -72,9 +72,15 @@ class PrivateViewGuard(qt.QObject):
 
     def check_revocation(self):
         self.follow_provider()
-        if (getattr(self.provider, 'private', False) and hasattr(self.provider, 'context')
-                and session.credentials(self.provider.context) is None):
-            self.retire()
+        if getattr(self.provider, 'private', False) and hasattr(self.provider, 'context'):
+            try:
+                if session.credentials(self.provider.context) is None:
+                    raise ValueError('The credential session is locked.')
+                validate = getattr(self.provider, '_check_active', None)
+                if validate is not None:
+                    validate()
+            except (OSError, ValueError):
+                self.retire()
 
     def invalidate(self):
         self.revoked.emit()
@@ -120,8 +126,9 @@ class PrivateViewGuard(qt.QObject):
 
 def protect_private_view(window, provider):
     window.document_provider = provider
-    if hasattr(window, '_private_view_guard'):
-        return window
-    if getattr(provider, 'private', False) and hasattr(provider, 'context'):
+    if not hasattr(window, '_private_view_guard'):
+        # Ordinary editors can become private through Save As. Follow their
+        # provider from the beginning, including commonUtils text hosts.
         window._private_view_guard = PrivateViewGuard(window, provider)
+    window._private_view_guard.check_revocation()
     return window

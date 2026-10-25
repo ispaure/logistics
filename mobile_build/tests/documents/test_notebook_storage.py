@@ -240,3 +240,43 @@ class NotebookStorageTests(unittest.TestCase):
         self.assertTrue(panel.document.dirty)
         for path in (self.root / 'notebooks').glob('**/state.json'):
             self.assertNotIn('After encryption sentinel', path.read_text())
+
+    def test_missing_source_folder_recovers_unsaved_ordinary_draft(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        folder = self.root / 'removable'
+        folder.mkdir()
+        (folder / 'Source.rmdoc').write_bytes(Notebook.new('Recoverable').to_bytes())
+        resource = DocumentResource(LocalFiles(folder), 'Source.rmdoc', max_bytes=MAX_ARCHIVE)
+        self.assertTrue(self.run_async(open_notebook(self.app, resource=resource)))
+        panel = self.app.notebook_panel
+        self.stroke(panel)
+        key = panel.key
+        self.assertTrue(self.app.close_session(panel.session.id))
+        folder.rename(self.root / 'disconnected')
+        self.assertTrue(self.run_async(open_notebook(self.app, key=key)))
+        panel = self.app.notebook_panel
+        self.assertIsNone(panel.document.resource)
+        self.assertTrue(panel.document.dirty)
+        self.assertEqual(len(panel.editor.notebook.page(0).strokes), 1)
+
+    def test_private_canvas_resume_preserves_draft_and_undo_without_repository(self):
+        panel = self.create()
+        self.stroke(panel)
+        editor = panel.editor
+        for reopen_by_key in (True, False):
+            with self.subTest(reopen_by_key=reopen_by_key):
+                panel.retire_canvas()
+                self.assertIsNone(panel.web)
+                if reopen_by_key:
+                    opened = self.run_async(open_notebook(self.app, key=panel.key))
+                else:
+                    resource = DocumentResource(self.provider, panel.document.resource.path, max_bytes=MAX_ARCHIVE)
+                    opened = self.run_async(open_notebook(self.app, resource=resource))
+                self.assertTrue(opened)
+                self.assertIs(self.app.notebook_panel, panel)
+                self.assertIs(panel.editor, editor)
+                self.assertTrue(editor.undo)
+                self.assertTrue(panel.document.dirty)
+                self.assertIsNotNone(panel.web)
+                self.assertIsNone(panel._repository)
+        self.assertEqual(list((self.root / 'notebooks').glob('**/base.rmdoc')), [])

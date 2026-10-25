@@ -42,6 +42,9 @@ def restore_notebook_resource(recovery, key):
     if path.is_symlink() or path.stat().st_size > 16384:
         raise ValueError('Invalid notebook source binding.')
     value = json.loads(path.read_text())
+    from pathlib import Path
+    if not Path(value['root']).is_dir():
+        return None, value
     provider = LocalFiles(value['root'])
     return DocumentResource(provider, value['path'], max_bytes=MAX_ARCHIVE), value
 

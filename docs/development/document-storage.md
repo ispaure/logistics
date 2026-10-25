@@ -56,6 +56,18 @@ descriptor. Legacy text editing retains its 1 MiB text contract. Existing file
 streams continue using the streamed descriptor transfer path. No plaintext
 intermediate file is required.
 
+Desktop hosts register provider guards even for ordinary editors, so Save As
+into LocalCrypt starts revocation protection immediately. Guards also validate the
+retained credential generation, including a revocation that precedes UI handoff.
+Revoked Markdown clears its source, formatted view and cached baselines; late save
+acknowledgements cannot revive its content. Failed notebook opening releases the
+resource and retires the incomplete window.
+
+Mobile notebook canvas remounting preserves the existing model, dirty flag and
+undo history without reading a recovery repository. Ordinary recovery still opens
+when its original source folder disappears, detaching the source and preserving
+unsaved edits for Save As.
+
 ## Consumer integration and checks
 
 The [notebook development guide](../features/notebooks/development/development.md)
