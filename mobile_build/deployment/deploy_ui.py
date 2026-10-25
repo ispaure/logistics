@@ -9,7 +9,7 @@ from PySide6.QtCore import QLockFile, QProcess, QProcessEnvironment, QTimer, QUr
 from PySide6.QtGui import QDesktopServices, QTextCursor
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit,
-    QPushButton, QVBoxLayout, QWidget,
+    QPushButton, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from .deployment_confirmation import MARKER
@@ -21,8 +21,8 @@ PYTHON = ROOT / '.venv/bin/python'
 class DeploymentWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Logistics · Deploy')
-        self.resize(760, 530)
+        self.setWindowTitle('Logistics · Build and Deployment Manager')
+        self.resize(1100, 800)
         self.process = QProcess(self)
         self.process.setWorkingDirectory(str(ROOT.parent))
         environment = QProcessEnvironment.systemEnvironment()
@@ -39,6 +39,15 @@ class DeploymentWindow(QWidget):
         self.pending = ''
         self.raw_output = ''
         layout = QVBoxLayout(self)
+        tabs = QTabWidget()
+        layout.addWidget(tabs)
+        from build_manager.ui import ManagerPanel
+        from Scripts.build_project import LogisticsProject
+        self.manager = ManagerPanel(LogisticsProject(ROOT.parent), self)
+        tabs.addTab(self.manager, 'Plans, tests and builds')
+        deployment = QWidget()
+        tabs.addTab(deployment, 'Devices and tester distribution')
+        layout = QVBoxLayout(deployment)
         self.devices = QLabel('Checking test devices…')
         self.devices.setWordWrap(True)
         layout.addWidget(self.devices)
@@ -50,16 +59,24 @@ class DeploymentWindow(QWidget):
         layout.addLayout(selection)
         row = QHBoxLayout()
         self.actions = []
+        self.distribution_buttons = {}
+        from .manager_settings import settings
+        try:
+            configured, _ = settings(ROOT)
+        except (OSError, ValueError):
+            configured = {'firebase.group': 'configure destination', 'testflight.external_group': 'configure destination'}
         for label, script, arguments in [
             ('Deploy test devices', 'test_devices.py', []),
-            ('Firebase → Friends', 'firebase_deploy.py', ['--gui']),
-            ('TestFlight → Friends', 'testflight_deploy.py', ['--gui']),
+            ('Firebase → ' + configured['firebase.group'], 'firebase_deploy.py', ['--gui']),
+            ('TestFlight → ' + configured['testflight.external_group'], 'testflight_deploy.py', ['--gui']),
             ('Refresh', 'test_devices.py', ['--list']),
         ]:
             button = QPushButton(label)
             button.clicked.connect(lambda checked=False, s=script, a=arguments: self.start(s, a))
             row.addWidget(button)
             self.actions.append(button)
+            if script in ('firebase_deploy.py', 'testflight_deploy.py'):
+                self.distribution_buttons[script] = button
         layout.addLayout(row)
         hint = QLabel('Test devices: saved iPhones/iPads and authorized Android connections.\n'
                       'iOS and Android deploy together; devices on each platform run one at a time.\n'
@@ -84,6 +101,8 @@ class DeploymentWindow(QWidget):
         logs.clicked.connect(self.open_logs)
         footer.addWidget(logs)
         layout.addLayout(footer)
+        self.manager.busy_changed.connect(lambda busy: self.set_busy(busy, manager=True))
+        self.manager.settings_saved.connect(self.refresh_distribution_labels)
         QTimer.singleShot(0, lambda: self.start('test_devices.py', ['--list']))
 
     def open_logs(self):
@@ -91,8 +110,18 @@ class DeploymentWindow(QWidget):
         path.mkdir(exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
-    def set_busy(self, busy):
+    def refresh_distribution_labels(self):
+        from .manager_settings import settings
+        values, _ = settings(ROOT)
+        self.distribution_buttons['firebase_deploy.py'].setText('Firebase → ' + values['firebase.group'])
+        label = 'TestFlight → ' + values['testflight.external_group']
+        if not values['testflight.enabled']:
+            label += ' (external distribution disabled)'
+        self.distribution_buttons['testflight_deploy.py'].setText(label)
+
+    def set_busy(self, busy, *, manager=False):
         self.busy = busy
+        self.manager.setEnabled(not busy or manager)
         self.target.setEnabled(not busy)
         for button in self.actions:
             button.setEnabled(not busy)
@@ -113,7 +142,19 @@ class DeploymentWindow(QWidget):
         self.status.setText('Checking devices…' if self.mode == 'list' else 'Running…')
         if self.mode != 'list':
             self.output.clear()
-        self.process.start(str(PYTHON), ['-u', '-m', 'mobile_build.deployment.' + Path(script).stem, *arguments])
+        from .manager_settings import profile_path, settings
+        python = PYTHON
+        if profile_path(ROOT).exists():
+            values, _ = settings(ROOT)
+            python = values['tools.mobile_python']
+            environment = self.process.processEnvironment()
+            environment.insert('LOGISTICS_MANAGER_PROFILE', str(profile_path(ROOT)))
+            for key, variable in [('tools.android_sdk', 'ANDROID_HOME'), ('tools.java', 'JAVA_HOME'),
+                                  ('tools.xcode', 'DEVELOPER_DIR')]:
+                if values[key]:
+                    environment.insert(variable, values[key])
+            self.process.setProcessEnvironment(environment)
+        self.process.start(str(python), ['-u', '-m', 'mobile_build.deployment.' + Path(script).stem, *arguments])
 
     def update_targets(self, devices):
         previous = self.target.currentData()

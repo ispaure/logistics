@@ -21,6 +21,8 @@ BUNDLE = 'io.github.ispaure.logisticsmobile'
 
 def settings():
     value = json.loads(SETTINGS.read_text())
+    from .manager_settings import distribution
+    value = distribution(ROOT, 'testflight', value)
     if value['bundle_id'] != BUNDLE or not str(value['app_id']).isdigit():
         raise ValueError('External distribution must use the existing Logistics app.')
     if not value['external_group'].strip() or not value['what_to_test'].strip():
@@ -31,7 +33,14 @@ def settings():
 
 
 def credentials():
-    saved = json.loads(AUTH.read_text()) if AUTH.exists() else {}
+    reference = auth_reference()
+    saved = json.loads(reference.read_text()) if reference.exists() else {}
+    if AUTH == ROOT / '.testflight-auth.json':
+        from build_manager.profiles import load_profile
+        from .manager_settings import profile_path
+        profile = load_profile(profile_path(ROOT))
+        if profile.get('auth.key_reference'):
+            saved['key_path'] = profile['auth.key_reference']
     value = {name: os.environ.get(env) or saved.get(name)
              for name, env in [('key_path', 'ASC_KEY_PATH'), ('key_id', 'ASC_KEY_ID'), ('issuer_id', 'ASC_ISSUER_ID')]}
     if not all(value.values()):
@@ -43,6 +52,14 @@ def credentials():
     if not Path(value['key_path']).is_file():
         raise ValueError('App Store Connect private key file is missing.')
     return value
+
+
+def auth_reference():
+    if AUTH != ROOT / '.testflight-auth.json':
+        return AUTH
+    from build_manager.profiles import load_profile
+    from .manager_settings import profile_path
+    return Path(load_profile(profile_path(ROOT)).get('auth.testflight_reference') or AUTH)
 
 
 def token(auth, now=None):

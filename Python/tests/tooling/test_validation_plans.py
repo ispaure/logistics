@@ -9,8 +9,8 @@ class ValidationPlanTests(unittest.TestCase):
     def test_desktop_plan_preserves_existing_commands_and_budgets(self):
         posix = desktop_checks('Darwin', Path('reports'))
         windows = desktop_checks('Windows', Path('reports'))
-        self.assertEqual([p[0] for p in posix], ['commonutils', 'logistics', 'compression-parity'])
-        self.assertEqual([p[2] for p in posix], [600, 900, 600])
+        self.assertEqual([p[0] for p in posix], ['commonutils', 'logistics', 'compression-parity', 'manager-contracts'])
+        self.assertEqual([p[2] for p in posix], [600, 900, 600, 120])
         self.assertEqual(windows[1:], posix)
         self.assertEqual(windows[0], ('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
         self.assertIn('--isolate-modules', posix[0][1])

@@ -69,8 +69,14 @@ def resolve_group(groups, requested):
     return matches[0]['name'].rsplit('/', 1)[-1]
 
 
-def preflight(cli, *, login=False, allow_login=True):
+def preflight_destination():
     config = json.loads((ROOT / 'firebase-distribution.json').read_text())
+    from .manager_settings import distribution
+    return distribution(ROOT, 'firebase', config)
+
+
+def preflight(cli, *, login=False, allow_login=True):
+    config = preflight_destination()
     match = re.fullmatch(r'1:(\d+):android:[a-f0-9]+', config['app_id'])
     if not match or config['bundle_id'] != android.BUNDLE:
         raise ValueError('Invalid Firebase app/package configuration.')
@@ -121,22 +127,41 @@ def signing(env):
     return key, password
 
 
-def reserve_build():
-    record = PRIVATE / 'build.json'
+def reserve_build(override=None):
+    from build_manager.locking import workspace_lock
+    with workspace_lock(PRIVATE / 'build-counter.lock'):
+        return _reserve_build(override)
+
+
+def next_build(root=None, private=None):
+    root = Path(root) if root is not None else ROOT
+    private = Path(private) if private is not None else PRIVATE
+    record = private / 'build.json'
     previous = json.loads(record.read_text())['last_build'] if record.exists() else 0
-    existing = [int(p.name) for p in (ROOT / 'build/firebase').glob('*') if p.name.isdigit()]
-    local = ROOT / '.tools/android-deployment-build.json'
+    existing = [int(p.name) for p in (root / 'build/firebase').glob('*') if p.name.isdigit()]
+    local = root / '.tools/android-deployment-build.json'
     if local.exists():
         existing.append(int(json.loads(local.read_text())['last_build']))
+    history = Path(os.environ.get('LOGISTICS_BUILD_HISTORY', root / 'build')) / 'firebase'
+    existing.extend(int(p.name) for p in history.glob('*') if p.name.isdigit())
     number = max(int(datetime.now(timezone.utc).strftime('%Y%m%d')) * 10 + 1,
                  previous + 1, max(existing, default=0) + 1)
-    if number > 2100000000:
-        raise ValueError('Android version code limit exceeded.')
-    private_json(record, dict(last_build=number))
     return number
 
 
-def build():
+def _reserve_build(override=None):
+    number = next_build()
+    if override is not None:
+        if not str(override).isdigit() or int(override) < number:
+            raise ValueError('Explicit Android build must be increasing and unused locally.')
+        number = int(override)
+    if number > 2100000000:
+        raise ValueError('Android version code limit exceeded.')
+    private_json(PRIVATE / 'build.json', dict(last_build=number))
+    return number
+
+
+def build(version_code=None):
     config = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['briefcase']
     if config['bundle'] + '.logisticsmobile' != android.BUNDLE:
         raise ValueError('Android bundle identity changed.')
@@ -146,7 +171,7 @@ def build():
     if not env.get('JAVA_HOME'):
         raise ValueError('Set JAVA_HOME to the JDK used by Briefcase.')
     key, password = signing(env)
-    number = reserve_build()
+    number = reserve_build(version_code)
     output = ROOT / 'build/firebase' / str(number)
     output.mkdir(parents=True)
     android.run([sys.executable, 'cloud_build.py', 'android'], env,
@@ -181,9 +206,19 @@ def build():
     if (f"name='{android.BUNDLE}'" not in package or f"versionCode='{number}'" not in package
             or f"versionName='{config['version']}'" not in package):
         raise ValueError('Built APK identity/version verification failed.')
+    if os.environ.get('LOGISTICS_MANAGER_ARTIFACT_REPORT'):
+        from .manager_settings import record_prepared_artifact
+        source = json.loads((ROOT / 'payload/source.json').read_text())
+        record_prepared_artifact(dict(provider='Firebase', bundle_id=android.BUNDLE,
+            version=config['version'], build=number, source=source, apk=str(apk),
+            destination=preflight_destination(),
+            certificate=android.apk_certificate(apk, tools, env)))
     notes = output / 'release-notes.txt'
+    from .manager_settings import distribution
+    configured_notes = distribution(ROOT, 'firebase', {'release_notes': ''})['release_notes']
     notes.write_text(f'Logistics Android beta {config["version"]}, build {number}.\n'
-                     'Built from current local sources, including uncommitted edits.\n')
+                     'Built from the selected source; consult the verified source manifest for exact identity.\n'
+                     + configured_notes + '\n')
     return apk, notes
 
 
@@ -193,6 +228,7 @@ def main():
     parser.add_argument('--check', action='store_true', help='Verify Firebase app/group without building')
     parser.add_argument('--build-only', action='store_true', help='Build/sign without uploading')
     parser.add_argument('--gui', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--version-code', help='Explicit unused increasing Android version code')
     args = parser.parse_args()
     PRIVATE.mkdir(mode=0o700, exist_ok=True)
     PRIVATE.chmod(0o700)
@@ -203,7 +239,7 @@ def main():
             config, group = preflight(cli, login=args.login, allow_login=not args.gui)
             if args.login or args.check:
                 return
-            apk, notes = build()
+            apk, notes = build(args.version_code) if args.version_code else build()
             print('\nVerified APK: ' + str(apk), flush=True)
             if args.build_only:
                 return

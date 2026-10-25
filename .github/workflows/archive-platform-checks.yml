@@ -35,7 +35,7 @@ jobs:
           python-version: '3.12.2'
       - run: python -m pip install ruff==0.14.0
       - run: python -m pip install --require-hashes -r mobile_build/requirements-host.txt
-      - run: ruff check --config Python/pyproject.toml dev.py Python mobile_build Scripts .github/scripts
+      - run: ruff check --config Python/pyproject.toml dev.py Python mobile_build Scripts build_manager .github/scripts
       - name: Check developer lint scope and shared matrix selection
         env:
           PYTHONPATH: .:Python

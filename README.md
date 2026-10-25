@@ -77,6 +77,8 @@ storage choices, format limits and validation status.
 
 For local builds, paired-device installation, Firebase and TestFlight distribution,
 start with the [mobile build and release handbook](docs/development/mobile-handbook.md).
+The existing deployment launcher also exposes reviewed test/build plans and local
+profiles in the [build manager](docs/development/build-manager.md).
 
 | Tool | Use it to… |
 | --- | --- |

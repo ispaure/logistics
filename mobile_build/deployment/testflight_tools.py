@@ -125,7 +125,9 @@ def auth_args():
     if any(values) and not all(values):
         raise ValueError('Set all of ASC_KEY_PATH, ASC_KEY_ID and ASC_ISSUER_ID, or use your signed-in Xcode account.')
     if not all(values):
-        if not EXTERNAL_AUTH.exists():
+        from . import testflight_external
+        reference = testflight_external.auth_reference() if EXTERNAL_AUTH == testflight_external.AUTH else EXTERNAL_AUTH
+        if not reference.exists():
             return []
         saved = external_credentials()
         values = [saved['key_path'], saved['key_id'], saved['issuer_id']]

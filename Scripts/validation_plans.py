@@ -12,6 +12,7 @@ def desktop_checks(system, results):
         ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'], 600),
         ('logistics', ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'], 900),
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),
+        ('manager-contracts', ['-m', 'unittest', 'discover', '-s', 'build_manager/tests', '-v'], 120),
     ])
     return checks
 
@@ -28,6 +29,8 @@ SUITES = {
                         entry='dev.py test mobile', kind='contracts', required=True),
     'release-tooling': dict(owner='.github/scripts', platforms=['macos', 'ubuntu', 'windows'],
                            entry='python -m unittest discover -s .github/scripts', kind='packaging', required=True),
+    'manager': dict(owner='build_manager/tests', platforms=['macos', 'ubuntu', 'fedora', 'windows'],
+                    entry='python -m unittest discover -s build_manager/tests', kind='contracts', required=True),
     'native-ios': dict(owner='mobile_build/native_tests', platforms=['ios'],
                        entry='mobile_build/validation/ui_tools.py', kind='native', required=True,
                        devices=['iphone', 'duo', 'ipad'], build_once=True,
