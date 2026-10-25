@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "adapter_api": 1,
+  "project_id": "io.github.ispaure.logistics",
+  "name": "Logistics",
+  "interpreter": {
+    "darwin": ".venv/bin/python",
+    "linux": ".venv/bin/python",
+    "win32": ".venv/Scripts/python.exe"
+  },
+  "bridge": "Scripts/manager_bridge.py",
+  "results": "test-results/build-manager",
+  "capabilities": {
+    "platforms": [
+      "macos",
+      "linux",
+      "windows",
+      "ios",
+      "android"
+    ],
+    "operations": [
+      "Test",
+      "Build",
+      "Prepare TestFlight",
+      "Prepare Firebase",
+      "Release"
+    ],
+    "backends": {
+      "macos": [
+        "This Mac",
+        "GitHub"
+      ],
+      "linux": [
+        "Local Parallels VM",
+        "GitHub"
+      ],
+      "windows": [
+        "Local Parallels VM",
+        "GitHub"
+      ],
+      "ios": [
+        "This Mac \u2014 iOS Simulators",
+        "This Mac",
+        "GitHub"
+      ],
+      "android": [
+        "This Mac \u2014 Android Emulator",
+        "This Mac",
+        "GitHub"
+      ]
+    }
+  },
+  "run_options": {
+    "include_ipad": {
+      "label": "Include sequential iPad coverage",
+      "default": false
+    }
+  }
+}
