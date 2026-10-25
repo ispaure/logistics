@@ -10,9 +10,9 @@ from Scripts.release_verification import verify_asset
 
 
 class ReleaseVerificationTests(unittest.TestCase):
-    def asset(self, *, dependency='shared', corrupt=False):
+    def asset(self, *, dependency='shared', corrupt=False, tag='v1.2.3-alpha.4'):
         stream=BytesIO()
-        version=json.dumps(dict(revision='commit')).encode()
+        version=json.dumps(dict(revision='commit',tag=tag)).encode()
         manifest=dict(revision='commit', commonUtils_revision=dependency,
                       files={'.app-version.json':hashlib.sha256(version).hexdigest()})
         with zipfile.ZipFile(stream,'w') as archive:
@@ -30,3 +30,9 @@ class ReleaseVerificationTests(unittest.TestCase):
             asset,data=self.asset(**options)
             with self.assertRaisesRegex(ValueError,message):
                 verify_asset(asset,'commit','shared',Event(),opener=lambda *a,**k:BytesIO(data))
+
+    def test_same_source_under_wrong_release_tag_is_rejected(self):
+        asset,data=self.asset()
+        verify_asset(asset,'commit','shared',Event(),tag='v1.2.3-alpha.4',opener=lambda *a,**k:BytesIO(data))
+        with self.assertRaisesRegex(ValueError,'release tag'):
+            verify_asset(asset,'commit','shared',Event(),tag='v1.2.3-beta.1',opener=lambda *a,**k:BytesIO(data))

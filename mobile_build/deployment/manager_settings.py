@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import tomllib
 
 from build_manager.profiles import effective, load_profile, save_profile
@@ -114,8 +115,13 @@ def save(root, changes):
     save_profile(profile_path(root), incoming, allowed=base)
 
 
-def app_version(root):
-    return tomllib.loads((Path(root) / 'pyproject.toml').read_text())['tool']['briefcase']['version']
+def app_version(root, *, revision=None):
+    if revision is None:
+        text = (Path(root) / 'pyproject.toml').read_text()
+    else:
+        text = subprocess.check_output(['git', '-C', str(Path(root).parent), 'show',
+            revision + ':mobile_build/pyproject.toml'], text=True, timeout=30)
+    return tomllib.loads(text)['tool']['briefcase']['version']
 
 
 def set_app_version(root, version):

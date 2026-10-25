@@ -168,6 +168,14 @@ class ExecutionTests(unittest.TestCase):
         self.assertIn('cleanup denial', result['phases'][0]['cleanup_error'])
 
 
+    def test_cancelled_operation_still_reports_failed_required_cleanup(self):
+        cancelled=Event();cancelled.set()
+        result=self.run_plan(self.plan(self.phase('work','pass'),
+            self.phase('cleanup','raise SystemExit(3)',always=True)),cancelled=cancelled)
+        self.assertEqual([row['status'] for row in result['phases']],['skipped','failed'])
+        self.assertEqual(result['status'],'failed')
+
+
 class ProfileTests(unittest.TestCase):
     def test_precedence_preserves_effective_value_provenance(self):
         values, sources = effective({'group': 'default', 'tool': 'python'}, {'group': 'profile'},
@@ -212,3 +220,9 @@ class ProfileTests(unittest.TestCase):
                 next_number(path)
             with self.assertRaisesRegex(ValueError, 'schema'):
                 load_profile(path)
+
+    def test_secret_values_cannot_be_written_into_serialized_phase_environment(self):
+        with self.assertRaisesRegex(ValueError,'inherited'):
+            Plan('Fixture','test',{},(Phase('example',('python','--version'),'.',
+                 environment={'CUSTOM_API_SECRET':'synthetic-secret'}),),'.',
+                 secret_environment=('CUSTOM_API_SECRET',))

@@ -45,13 +45,19 @@ class LogisticsProject:
     def settings_view(self):
         values, sources = manager_settings.settings(self.mobile)
         rows = {}
+        reserved = {'vm.shared_host', 'vm.shared_guest'}
         guarded = {'testflight.app_id', 'testflight.bundle_id', 'firebase.bundle_id',
                    'github.token_environment'}
         for name, value in values.items():
             kind = ('bool' if isinstance(value, bool) else
                     'directory' if name in {'tools.xcode', 'tools.android_sdk', 'tools.java', 'vm.shared_host'} else
                     'reference' if name.endswith('reference') or name.startswith('signing.') or name.endswith('_python') else 'text')
-            rows[name] = dict(value=value, origin=sources[name], kind=kind, read_only=name in guarded)
+            rows[name] = dict(value=value, origin=sources[name], kind=kind, read_only=name in guarded or name in reserved)
+            if name in reserved:
+                rows[name]['origin'] += '; legacy reserved field, not used by isolated local backends'
+            if name == 'android.avd':
+                rows[name]['label'] = 'Legacy AVD name — leave empty for disposable emulators'
+                rows[name]['origin'] += '; unsupported existing-AVD selection; clear this legacy value'
         rows['app.version'] = dict(value=manager_settings.app_version(self.mobile),
                                   origin='tracked pyproject.toml; intentional source edit required', read_only=True)
         config = self.mobile / '.device.json'
@@ -89,7 +95,8 @@ class LogisticsProject:
             raise ValueError('Use a focused test filename/glob, not a path or command.')
         source = identity(self.root, revision)
         source.update(host=platform.platform(), architecture=platform.machine())
-        source['app_version'] = manager_settings.app_version(self.mobile)
+        source['app_version'] = manager_settings.app_version(self.mobile,
+            revision=None if revision == 'working-tree' else source['logistics_commit'])
         options, _ = manager_settings.settings(self.mobile)
         workspace = self.private / 'workspaces' / target
         if backend == 'GitHub':
@@ -458,7 +465,7 @@ def release_source(root, client, tag, commit, cancelled):
         raise RuntimeError('Workflow finished without a verified published ZIP/digest.')
     from Scripts.release_verification import verify_asset
     dependency = git(root, 'ls-tree', commit, 'Python/commonUtils').split()[2]
-    verified = verify_asset(assets[0], commit, dependency, cancelled)
+    verified = verify_asset(assets[0], commit, dependency, cancelled, tag=tag)
     print(json.dumps(dict(release=release['html_url'], tag=tag, commit=commit, verified=verified)), flush=True)
     return 0
 

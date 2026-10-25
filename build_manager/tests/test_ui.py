@@ -45,6 +45,14 @@ class ManagerUITests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
 
+    def inspect(self, panel):
+        panel.inspect_plan()
+        deadline = time.monotonic()+5
+        while panel.preparing:
+            self.app.processEvents()
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(.005)
+
     def finish(self, panel):
         deadline = time.monotonic() + 10
         while not (panel.result and panel.result.is_file() and panel.cancel.isEnabled() is False):
@@ -58,7 +66,7 @@ class ManagerUITests(unittest.TestCase):
 
     def test_ui_runs_reviewed_second_project_plan_and_shows_actual_result(self):
         panel = ManagerPanel(OtherProject(self.root))
-        panel.inspect_plan()
+        self.inspect(panel)
         self.assertTrue(panel.start.isEnabled())
         panel.run_plan()
         report = self.finish(panel)
@@ -69,7 +77,7 @@ class ManagerUITests(unittest.TestCase):
 
     def test_declined_confirmation_launches_nothing(self):
         panel = ManagerPanel(OtherProject(self.root, effect='upload'))
-        panel.inspect_plan()
+        self.inspect(panel)
         with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.No):
             panel.run_plan()
         self.assertIsNone(panel.result)
@@ -78,7 +86,7 @@ class ManagerUITests(unittest.TestCase):
 
     def test_ui_cancellation_propagates_to_child_and_retains_cancelled_result(self):
         panel = ManagerPanel(OtherProject(self.root, code='import time; time.sleep(30)'))
-        panel.inspect_plan()
+        self.inspect(panel)
         panel.run_plan()
         deadline = time.monotonic() + 5
         while panel.process.state() == panel.process.ProcessState.Starting:
@@ -99,7 +107,7 @@ class ManagerUITests(unittest.TestCase):
         import subprocess
         panel=ManagerPanel(OtherProject(self.root))
         with patch.object(panel.project,'make_plan',side_effect=subprocess.CalledProcessError(3,['synthetic-read-only-preflight'])):
-            panel.inspect_plan()
+            self.inspect(panel)
         self.assertIsNone(panel.plan)
         self.assertFalse(panel.start.isEnabled())
         self.assertIn('synthetic-read-only-preflight',panel.status.text())
@@ -115,7 +123,7 @@ class ManagerUITests(unittest.TestCase):
             return original(*args, **kwargs)
         project.make_plan = make_plan
         panel = ManagerPanel(project)
-        panel.inspect_plan()
+        self.inspect(panel)
         panel.run_plan()
         self.assertEqual(self.finish(panel)['status'], 'passed')
         self.assertIn('extra enabled', panel.preview.toPlainText())
@@ -135,7 +143,64 @@ class ManagerUITests(unittest.TestCase):
         project.make_plan=make_plan
         with patch.dict(os.environ,{'SECOND_PROJECT_SECRET':'synthetic-private-example'}):
             panel=ManagerPanel(project)
-            panel.inspect_plan()
+            self.inspect(panel)
             self.assertNotIn('synthetic-private-example',panel.preview.toPlainText())
             self.assertTrue(panel.start.isEnabled())
             panel.close()
+
+    def test_plan_preparation_keeps_event_loop_responsive_and_rejects_stale_selection(self):
+        from PySide6.QtCore import QTimer
+        project=OtherProject(self.root)
+        original=project.make_plan
+        def slow(*args,**kwargs):
+            time.sleep(.15)
+            return original(*args,**kwargs)
+        project.make_plan=slow
+        panel=ManagerPanel(project)
+        ticks=[]
+        timer=QTimer();timer.setInterval(10);timer.timeout.connect(lambda:ticks.append(True));timer.start()
+        panel.inspect_plan()
+        self.assertTrue(panel.preparing)
+        # Programmatic changes cannot install a plan for the previous selection.
+        panel.revision.setText('different revision')
+        deadline=time.monotonic()+3
+        while panel.preparing:
+            self.app.processEvents();self.assertLess(time.monotonic(),deadline);time.sleep(.005)
+        timer.stop()
+        self.assertGreater(len(ticks),3)
+        self.assertIsNone(panel.plan)
+        self.assertFalse(panel.start.isEnabled())
+        self.assertIn('Selection changed',panel.status.text())
+        panel.close()
+
+    def test_invalid_or_missing_result_and_nonzero_exit_cannot_show_success(self):
+        cases=[None, '{broken', '[]', '{"status":"passed","phases":[]}', '{"status":"passed","phases":[null]}']
+        for index,contents in enumerate(cases):
+            with self.subTest(contents=contents):
+                panel=ManagerPanel(OtherProject(self.root))
+                panel.result=self.root/('result'+str(index)+'.json')
+                if contents is not None:panel.result.write_text(contents)
+                panel.finished(2)
+                self.assertTrue(panel.status.text().startswith('failed;'))
+                self.assertIn('could not be verified',panel.preview.toPlainText())
+                panel.close()
+
+    def test_invalid_project_result_is_a_preparation_error(self):
+        project=OtherProject(self.root)
+        project.make_plan=lambda *a,**k:None
+        panel=ManagerPanel(project)
+        self.inspect(panel)
+        self.assertIsNone(panel.plan)
+        self.assertIn('did not return an operation plan',panel.status.text())
+        self.assertFalse(panel.start.isEnabled())
+        panel.close()
+
+    def test_abnormal_exit_cannot_display_a_passing_report(self):
+        from PySide6.QtCore import QProcess
+        panel=ManagerPanel(OtherProject(self.root))
+        panel.result=self.root/'crashed.json'
+        panel.result.write_text('{"status":"passed","phases":[]}')
+        panel.finished(0,QProcess.ExitStatus.CrashExit)
+        self.assertTrue(panel.status.text().startswith('failed;'))
+        self.assertIn('crashed',panel.preview.toPlainText())
+        panel.close()

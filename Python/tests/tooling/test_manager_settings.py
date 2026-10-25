@@ -57,3 +57,29 @@ class ManagerSettingsTests(unittest.TestCase):
         self.assertIn('bundle = "io.github.ispaure"', (self.root / 'pyproject.toml').read_text())
         with self.assertRaises(ValueError):
             settings.set_app_version(self.root, 'execute something')
+
+    def test_historical_version_comes_from_selected_commit_not_live_checkout(self):
+        import os
+        import subprocess
+        with TemporaryDirectory(prefix='version-review-') as directory:
+            root=Path(directory);mobile=root/'mobile_build';mobile.mkdir()
+            config=mobile/'pyproject.toml';config.write_text('[tool.briefcase]\nversion = "1.2.3"\n')
+            environment=dict(os.environ,GIT_AUTHOR_NAME='Fixture',GIT_AUTHOR_EMAIL='fixture@example.invalid',
+                GIT_COMMITTER_NAME='Fixture',GIT_COMMITTER_EMAIL='fixture@example.invalid')
+            def git(*arguments):
+                return subprocess.check_output(['git','-C',str(root),*arguments],env=environment,text=True).strip()
+            git('init','-q');git('add','.');git('commit','-qm','version fixture');commit=git('rev-parse','HEAD')
+            config.write_text('[tool.briefcase]\nversion = "9.9.9"\n')
+            self.assertEqual(settings.app_version(mobile), '9.9.9')
+            self.assertEqual(settings.app_version(mobile,revision=commit),'1.2.3')
+
+    def test_settings_identify_unused_shared_folder_fields_and_clearable_avd(self):
+        from Scripts.build_project import LogisticsProject
+        project=LogisticsProject(self.root.parent)
+        project.mobile=self.root
+        rows=project.settings_view()
+        self.assertTrue(rows['vm.shared_host']['read_only'])
+        self.assertTrue(rows['vm.shared_guest']['read_only'])
+        self.assertIn('not used',rows['vm.shared_host']['origin'])
+        self.assertFalse(rows['android.avd']['read_only'])
+        self.assertIn('leave empty',rows['android.avd']['label'])

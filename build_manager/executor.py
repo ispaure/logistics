@@ -88,7 +88,9 @@ class Executor:
                     report['phases'].append(row)
                     self.event(dict(type='phase', **row))
                     save()
-                report['status'] = ('cancelled' if self.cancelled.is_set() else
+                cleanup_failed = any(phase.always and phase.required and states[phase.id] != 'passed'
+                                     for phase in plan.phases)
+                report['status'] = ('failed' if cleanup_failed else 'cancelled' if self.cancelled.is_set() else
                     'failed' if any(row['required'] and row['status'] != 'passed' for row in report['phases']) else 'passed')
                 report.update(finished_at=timestamp(), seconds=time.monotonic() - started)
                 save()

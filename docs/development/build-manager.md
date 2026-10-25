@@ -19,9 +19,11 @@ and an unused channel tag, then waits for the existing gated release workflow.
 An existing tag is never moved. These capabilities do not grant permission to
 publish a project; the operator still chooses and confirms the operation.
 
-Local macOS and Linux commands use the project-owned desktop plans. Windows
-guests, sequential iOS and local Android remain backend extension points until
-their implementation and real platform acceptance are complete. An unavailable
+Local macOS, Ubuntu/Fedora and Windows commands use the project-owned desktop
+plans. Sequential iOS and accelerated local Android backends are implemented and
+have complete local acceptance evidence. Windows is implemented; its complete declared plan requires a guest account
+with normal-user symbolic-link capability, and missing capability remains a
+reported failure. An unavailable
 backend fails planning; the manager never silently substitutes hosted validation.
 Hosted desktop selection supplies the requested platform input. Normal release
 calls continue to require the complete desktop matrix.
@@ -55,6 +57,8 @@ effect and ordered phases. A `Phase` carries structured argv, cwd, timeout,
 environment overrides, prior dependencies, required/cleanup flags and expected
 artifact reports. Plans are trusted executable local configuration, like scripts;
 profiles and incoming documents are never interpreted as plans automatically.
+Secret environment values are inherited through the existing provider mechanisms;
+putting a declared secret value into a serialized phase environment is rejected.
 The CLI is `python -m build_manager PLAN.json --output NEW_DIRECTORY`;
 side-effecting plans also require `--confirm`.
 
@@ -80,14 +84,16 @@ their existing locations only for that selected build, never copied into Git.
 Settings show each effective value's origin: repository defaults, ignored local
 profile, environment or one-run override. Save changes the local profile;
 changing the app version explicitly edits tracked `pyproject.toml` and requires a
-commit. Build numbers are separate from app version and release tags.
+commit. A historical source selection reads its version from that selected commit,
+not from the current checkout. Build numbers are separate from app version and release tags.
 
 | Section | Supported fields |
 | --- | --- |
 | TestFlight | Guarded app/bundle ID; selected external group; enabled state; What to Test; locale; polling interval and processing timeout |
 | Firebase | App ID (verified against the guarded package); tester group; release notes |
 | Tools | Desktop/mobile interpreter, Xcode developer directory, Android SDK and JDK directories |
-| Local targets | iPhone/Duo/iPad simulator IDs, AVD name, Linux/Fedora/Windows guest selectors, host/guest shared-folder mapping and shutdown preference; backends must validate availability before execution |
+| Local targets | iPhone/Duo/iPad template selectors, disposable Android image/model, Linux/Fedora/Windows guest selectors, Linux distro scope/Fedora mode and shutdown preference; availability is validated before execution |
+| Legacy reserved targets | `vm.shared_host` and `vm.shared_guest` are shown read-only for compatibility; `android.avd` remains editable to clear a legacy value, and must be empty. Local backends do not attach existing AVDs or mount shared folders |
 | Authentication | Existing TestFlight credential JSON and `.p8` references, with Browse/Locate; GitHub repository, credential-helper strategy and token environment name; existing Firebase CLI account storage |
 | Signing | Existing manual app and Inbox provisioning-profile file references; pinned team shown read-only |
 | Versions | Read-only app version and next iOS/Android build previews; one-run explicit build override; intentional tracked app-version edit; explicit independent release tag |
@@ -391,8 +397,20 @@ Checking only that GitHub advertised a digest is insufficient.
 A future split can move `build_manager/` with its harmless second-project tests
 into a versioned dependency, then update Logistics imports through the adapter.
 Keep project test discovery, native suites, source policy and release/distribution
-rules here. No repository or submodule split has been made. Remaining acceptance
-limits are explicit: the selected Windows Testbed lacks normal-user symbolic-link
-permission, so its complete required suite and the final integrated release steps
-remain blocked until the owner resolves that capability. Focused Windows adapter
-checks passing does not replace that missing full acceptance.
+rules here. No repository or submodule split has been made. The full Windows
+plan requires normal-user file/directory symbolic-link creation. Missing capability
+remains a failed test setup, and focused Windows adapter checks cannot replace
+complete required acceptance.
+
+
+## Plan preparation and result integrity
+
+Plan inspection prepares source and prerequisites in a worker while the Qt event
+loop remains responsive; only plain project data crosses that boundary. Project
+adapter planning methods must not access Qt widgets. A selection changed during
+preparation invalidates the returned plan. Existing tool and snapshot waits remain
+bounded. Unreadable/malformed results, missing captured evidence and disagreement
+between a passing report and a failing process exit are shown as verification
+failures. Required cleanup failures take precedence over a cancellation status.
+Published ZIP verification also checks its embedded release tag, in addition to
+source/dependency identity and hashes.

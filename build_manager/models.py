@@ -45,6 +45,8 @@ class Plan:
         for phase in self.phases:
             if phase.id in seen or any(dependency not in seen for dependency in phase.dependencies):
                 raise ValueError('Phase IDs must be unique and dependencies must precede their consumers.')
+            if any(phase.environment.get(name) for name in self.secret_environment):
+                raise ValueError('Secret environment values must be inherited, not serialized in a plan.')
             seen.add(phase.id)
 
     def data(self):

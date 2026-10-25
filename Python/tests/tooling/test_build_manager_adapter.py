@@ -143,3 +143,12 @@ class ManagerAdapterTests(unittest.TestCase):
             with patch('Scripts.windows_backend.source_members',return_value=['link.py']):
                 with self.assertRaisesRegex(ValueError,'cannot flatten'):
                     source_zip(root)
+
+    def test_historical_plan_uses_the_resolved_source_version(self):
+        root=Path(__file__).resolve().parents[3]
+        project=LogisticsProject(root)
+        source=dict(logistics_commit='a'*40,commonUtils_commit='b'*40,dirty=False,selection='HEAD',fingerprint='fixture')
+        with patch('Scripts.build_project.identity',return_value=source), patch('Scripts.build_project.manager_settings.app_version',return_value='1.2.3') as version:
+            plan=project.make_plan('Test','ios','GitHub',revision='HEAD')
+        version.assert_called_once_with(project.mobile,revision='a'*40)
+        self.assertEqual(plan.source['app_version'],'1.2.3')

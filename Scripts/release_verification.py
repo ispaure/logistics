@@ -8,7 +8,7 @@ from urllib.request import urlopen
 import zipfile
 
 
-def verify_asset(asset, commit, dependency, cancelled, *, opener=urlopen):
+def verify_asset(asset, commit, dependency, cancelled, *, tag=None, opener=urlopen):
     expected = asset.get('digest', '')
     if len(expected) != 71 or not expected.startswith('sha256:'):
         raise ValueError('Release asset needs a SHA-256 digest.')
@@ -39,6 +39,8 @@ def verify_asset(asset, commit, dependency, cancelled, *, opener=urlopen):
             if (manifest['revision'] != commit or version['revision'] != commit
                     or manifest.get('commonUtils_revision') != dependency):
                 raise ValueError('Published ZIP source/dependency differs from the reviewed release.')
+            if tag is not None and version.get('tag') != tag:
+                raise ValueError('Published ZIP release tag differs from the reviewed release.')
             for name, checksum in manifest['files'].items():
                 if Path(name).is_absolute() or '..' in Path(name).parts or '\\' in name:
                     raise ValueError('Invalid release manifest member.')

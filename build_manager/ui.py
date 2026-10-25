@@ -2,15 +2,33 @@
 import json
 import os
 import subprocess
+from queue import Empty, Queue
 from uuid import uuid4
 
-from PySide6.QtCore import QElapsedTimer, QProcess, QTimer, QUrl, Signal
+from PySide6.QtCore import QElapsedTimer, QProcess, QRunnable, QThreadPool, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton,
     QScrollArea, QVBoxLayout, QWidget,
 )
+
+
+class PreparePlan(QRunnable):
+    """Only plain project data crosses the worker boundary; Qt stays on the UI thread."""
+    def __init__(self, prepare, results):
+        super().__init__()
+        self.prepare, self.results = prepare, results
+
+    def run(self):
+        try:
+            from .models import Plan
+            plan = self.prepare()
+            if not isinstance(plan, Plan):
+                raise ValueError('The project adapter did not return an operation plan.')
+            self.results.put((plan, None))
+        except Exception as error:
+            self.results.put((None, str(error)))
 
 
 class SettingsDialog(QDialog):
@@ -103,6 +121,12 @@ class ManagerPanel(QWidget):
     def __init__(self, project, parent=None):
         super().__init__(parent)
         self.project, self.plan, self.result = project, None, None
+        self.preparing = False
+        self.selection_revision = 0
+        self.prepared = Queue()
+        self.preparation_timer = QTimer(self)
+        self.preparation_timer.setInterval(25)
+        self.preparation_timer.timeout.connect(self.plan_prepared)
         self.process = QProcess(self)
         self.process.setWorkingDirectory(str(project.runner_directory))
         self.process.readyReadStandardOutput.connect(self.read_output)
@@ -188,6 +212,7 @@ class ManagerPanel(QWidget):
         self.backend.addItems(self.project.backend_options(self.platform.currentText(), self.operation.currentText()))
 
     def invalidate(self, *_):
+        self.selection_revision += 1
         self.plan = None
         self.start.setEnabled(False)
 
@@ -200,16 +225,40 @@ class ManagerPanel(QWidget):
             self.status.setText(str(error))
 
     def inspect_plan(self):
-        try:
-            self.plan = self.project.make_plan(self.operation.currentText(), self.platform.currentText(),
-                self.backend.currentText(), revision=self.revision.text(), pattern=self.pattern.text(),
-                build_override=self.build_override.text(),
-                **{name: control.isChecked() for name, control in self.run_controls.items()},
-                release_tag=self.release_tag.text())
-        except (ValueError, OSError, RuntimeError, subprocess.SubprocessError) as error:
-            self.status.setText(str(error))
-            self.invalidate()
+        if self.preparing or self.process.state() != QProcess.ProcessState.NotRunning:
             return
+        from functools import partial
+        operation, platform, backend = (control.currentText() for control in
+                                       (self.operation, self.platform, self.backend))
+        choices = dict(revision=self.revision.text(), pattern=self.pattern.text(),
+                       build_override=self.build_override.text(), release_tag=self.release_tag.text(),
+                       **{name: control.isChecked() for name, control in self.run_controls.items()})
+        self.invalidate()
+        self.preparation_revision = self.selection_revision
+        self.preparing = True
+        self.set_busy(True)
+        self.current_phase = 'Inspecting source and prerequisites'
+        self.phase_elapsed.start()
+        self.show_elapsed()
+        QThreadPool.globalInstance().start(PreparePlan(
+            partial(self.project.make_plan, operation, platform, backend, **choices), self.prepared))
+        self.preparation_timer.start()
+
+    def plan_prepared(self):
+        try:
+            plan, error = self.prepared.get_nowait()
+        except Empty:
+            return
+        self.preparation_timer.stop()
+        self.preparing = False
+        self.set_busy(False)
+        if error is not None:
+            self.status.setText(self.redact(error))
+            return
+        if self.selection_revision != self.preparation_revision:
+            self.status.setText('Selection changed during preparation; inspect a fresh plan.')
+            return
+        self.plan = plan
         from .redaction import Redactor
         self.redact = Redactor(os.environ.get(name) for name in self.plan.secret_environment)
         self.preview.setPlainText(self.redact(json.dumps(self.plan.data(), indent=2)))
@@ -217,6 +266,8 @@ class ManagerPanel(QWidget):
         self.status.setText('Plan ready. Source and ordered phases above identify exactly what will run.')
 
     def verify_settings(self):
+        if self.preparing or self.process.state() != QProcess.ProcessState.NotRunning:
+            return
         try:
             self.plan = self.project.verification_plan()
         except (ValueError, OSError, RuntimeError, subprocess.SubprocessError) as error:
@@ -263,7 +314,7 @@ class ManagerPanel(QWidget):
                         *self.run_controls.values()):
             control.setEnabled(not busy)
         self.start.setEnabled(not busy and self.plan is not None)
-        self.cancel.setEnabled(busy)
+        self.cancel.setEnabled(busy and not self.preparing)
         self.busy_changed.emit(busy)
 
     def show_elapsed(self):
@@ -311,20 +362,34 @@ class ManagerPanel(QWidget):
         if self.result and self.result.parent.is_dir():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.result.parent)))
 
-    def finished(self, code, *_):
+    def finished(self, code, exit_status=None):
         self.read_output()
         self.set_busy(False)
         status = 'failed'
-        if self.result and self.result.is_file():
+        if self.buffer:
+            self.preview.appendPlainText(self.redact(self.buffer))
+            self.buffer = ''
+        try:
+            if not self.result or not self.result.is_file():
+                raise ValueError('The operation did not produce a result report.')
             report = json.loads(self.result.read_text())
             status = report['status']
+            if status not in {'passed', 'failed', 'cancelled'} or not isinstance(report['phases'], list):
+                raise ValueError('The result report is incomplete or invalid.')
             self.preview.appendPlainText(self.redact(json.dumps(report, indent=2)))
             for phase in report['phases']:
+                if not isinstance(phase, dict):
+                    raise ValueError('Invalid result phase.')
                 for artifact in phase.get('artifacts', []):
                     from pathlib import Path
                     if Path(artifact['path']).suffix == '.json':
-                        # Immutable report captured by the executor, not values
-                        # reconstructed from a subsequently edited profile.
                         self.preview.appendPlainText(self.redact(Path(artifact['path']).read_text()))
+            if exit_status == QProcess.ExitStatus.CrashExit:
+                raise ValueError('The operation process crashed.')
+            if code and status == 'passed':
+                raise ValueError('A passing report disagrees with the operation exit code.')
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            status = 'failed'
+            self.preview.appendPlainText('Result/evidence could not be verified: ' + self.redact(str(error)))
         self.open_results.setEnabled(bool(self.result and self.result.parent.is_dir()))
         self.status.setText(f'{status}; exit {code}. Results: {self.result}')
