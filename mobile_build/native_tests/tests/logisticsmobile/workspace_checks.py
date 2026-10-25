@@ -25,7 +25,20 @@ async def exercise_workspace(app):
     folder_frame = app.body.children[0]._workspace_frame
     await capture('folder-actions')
     assert folder_frame.header not in folder_frame.view().children
-    if app.adaptive.wide:
+    columns = getattr(app.adaptive, 'file_columns', None)
+    if columns is not None:
+        # UIKit owns the retained sidebar and navigation column separately;
+        # folder_master belongs only to the older in-content split layout.
+        assert columns.master.main._impl.container is columns.sidebar
+        assert columns.navigation.parentViewController == columns.controller
+        assert columns.sidebar.controller.parentViewController == columns.controller
+        pair = (float(columns.sidebar.native.bounds.size.width),
+                float(columns.navigation.view.bounds.size.width))
+        assert min(pair) > 0 and sum(pair) <= app.adaptive.content_width('files', margin=0) + 2, pair
+        from mobile.fold_layout import has_fold
+        if not has_fold(app, app.main_window):
+            assert abs(pair[0] - pair[1]) <= 2, ('Unequal native Workspaces panes', pair)
+    elif app.adaptive.wide:
         pair = width(folder_frame.folder_master), width(folder_frame.main)
         assert abs(pair[0] - pair[1]) <= 2, ('Unequal native Workspaces panes', pair)
         assert max(pair) <= app.adaptive.content_width('files') / 2 + 2
