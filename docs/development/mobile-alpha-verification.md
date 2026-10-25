@@ -107,3 +107,30 @@ become shared Local files while credentials remain under private support storage
 Simulator/emulator checks exercise zoom, fit, page direction, reading-mode restore,
 appearance and session ownership. Physical pinch/Back gestures, screen-reader
 interaction and large-text usability still require device evidence.
+
+## Native suite section timings
+
+The native acceptance suite records monotonic durations for navigation, documents,
+readers, scenes, chat, connections, LocalCrypt, UI review, browser Back and rotation.
+Rotation records each panel, orientation request, control-settling audit and geometry
+check. Screenshot capture and its existing presentation delay are measured separately.
+Every existing case, orientation cycle, assertion and wait remains in place.
+
+Successful-case checkpoints record time since the preceding checkpoint; they are
+not isolated function benchmarks. Section totals include children, while `self_s`
+subtracts measured child durations. Nested totals must not be added together.
+Diagnostics include measurement/logging overhead and do not affect pass/fail.
+
+The final native report embeds an aggregated `timings` summary. Full events are
+emitted as `LOGISTICS_NATIVE_TIMING` and atomically checkpointed in the app cache
+as `logistics-native-ui-timings.json`; iOS diagnostic collection preserves that file
+on failure. Summarize either a native report or the timing cache with:
+
+```sh
+python -m mobile_build.validation.native_timing_report path/to/report.json
+```
+
+Use measured request, settling, geometry and screenshot costs before shortening
+waits. Any replacement readiness check must retain bounded failure, route/content
+preservation, all tested poses and fixed-control safe-area assertions. Emulator
+measurements describe that runner and rendering configuration, not device hardware.

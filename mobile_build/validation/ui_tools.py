@@ -78,7 +78,7 @@ def simulator_report(device, started_ns, *, diagnostics=None):
         diagnostics.mkdir(exist_ok=True)
         # Fatal native crashes cannot write the final JSON. Capture their stack
         # before returning, and never leave the previous device's result here.
-        for name in ('cached.json', 'error.txt', 'fault.log'):
+        for name in ('cached.json', 'error.txt', 'fault.log', 'timings.json'):
             target = diagnostics / ('ios-native-ui-' + name)
             target.unlink(missing_ok=True)
             source = path.with_name('logistics-native-ui-' + name) if name != 'cached.json' else path

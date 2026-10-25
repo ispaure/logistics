@@ -11,12 +11,16 @@ from commonUtils.runtime.platform import get_os, OS
 from mobile.app import LogisticsMobile
 from . import CASES, start_native_check
 from .fixtures import make_books
+from .timings import SuiteTimings, measure
 
 
 async def exercise(app):
+    timings = SuiteTimings(Path(app.paths.cache) / 'logistics-native-ui-timings.json')
+    app._native_suite_timings = timings
     class Progress(list):
         def append(self, case):
             super().append(case)
+            timings.checkpoint(case)
             print('LOGISTICS_NATIVE_CASE=' + case, flush=True)
     passed = Progress()
     try:
@@ -44,31 +48,31 @@ async def exercise(app):
         assert app.file_provider is not None and not app.file_browser.closed
         app.show_home()
         from .navigation_checks import exercise_navigation
-        navigation_proof = await exercise_navigation(app)
+        navigation_proof = await measure(app, 'navigation', exercise_navigation(app))
         passed.append('native_navigation_foundation')
         from .document_checks import exercise_documents
-        await exercise_documents(app, passed)
+        await measure(app, 'documents', exercise_documents(app, passed))
         fixtures = app.private_root / 'fixtures'
         fixtures.mkdir()
         epub, comic = make_books(fixtures)
         from .reader_checks import exercise_library
-        background_comic = await exercise_library(app, fixtures, epub, comic, passed)
+        background_comic = await measure(app, 'readers', exercise_library(app, fixtures, epub, comic, passed))
         from .scene_checks import exercise_scenes
-        await exercise_scenes(app)
+        await measure(app, 'scenes', exercise_scenes(app))
         passed.append('native_independent_windows')
         from .chat_checks import exercise_chat
-        await exercise_chat(app, passed)
+        await measure(app, 'chat', exercise_chat(app, passed))
         from .connection_checks import exercise_connections
-        await exercise_connections(app, fixtures, background_comic, passed)
+        await measure(app, 'connections', exercise_connections(app, fixtures, background_comic, passed))
         from .localcrypt_checks import exercise_localcrypt
-        await exercise_localcrypt(app, passed)
+        await measure(app, 'localcrypt', exercise_localcrypt(app, passed))
         from .ui_review import exercise_ui_review
-        ui_review = await exercise_ui_review(app)
+        ui_review = await measure(app, 'ui-review', exercise_ui_review(app))
         print('LOGISTICS_UI_REVIEW=complete; checking native browser Back', flush=True)
         from .browser_back_checks import exercise_browser_back
-        ui_review.update(await exercise_browser_back(app))
+        ui_review.update(await measure(app, 'browser-back', exercise_browser_back(app)))
         from .rotation_checks import exercise_rotation
-        ui_review.update(await exercise_rotation(app))
+        ui_review.update(await measure(app, 'rotation', exercise_rotation(app)))
         passed.append('native_rotation_safe_areas')
         success = passed == list(CASES)
         error = ''
@@ -82,6 +86,7 @@ async def exercise(app):
     report = dict(schema=1, suite='logistics-native-ui', target='android' if get_os() is OS.ANDROID else 'ios',
                   backend=type(app._impl).__module__, cases=passed, expected_cases=list(CASES),
                   success=success, error=error, source=source, native_picker_tested=False)
+    report['timings'] = timings.summary()
     report['navigation'] = locals().get('navigation_proof')
     report['ui_review'] = locals().get('ui_review')
     report['independent_windows_tested'] = app.scene_manager.supported

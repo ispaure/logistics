@@ -54,25 +54,28 @@ def pose_snapshot(app):
 
 async def rotate(app, orientation):
     landscape = orientation != 'portrait'
-    if sys.platform == 'ios':
-        from rubicon.objc import ObjCClass
-        mask = {'portrait': 2, 'landscape-left': 8, 'landscape-right': 16}[orientation]
-        preferences = ObjCClass('UIWindowSceneGeometryPreferencesIOS').alloc().initWithInterfaceOrientations(mask)
-        app.main_window._impl.native.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=None)
-    else:
-        app._impl.native.setRequestedOrientation({'portrait': 1, 'landscape-left': 0, 'landscape-right': 8}[orientation])
-    for _ in range(60):
-        await asyncio.sleep(.1)
+    from .timings import section, measure
+    with section(app, 'rotation-dispatch', orientation=orientation):
         if sys.platform == 'ios':
-            # Interface orientation is only an acknowledgement of this request,
-            # never an input to production layout or an aspect-ratio assumption.
-            if int(app.main_window._impl.native.windowScene.interfaceOrientation) == {'portrait': 1, 'landscape-left': 3, 'landscape-right': 4}[orientation]:
+            from rubicon.objc import ObjCClass
+            mask = {'portrait': 2, 'landscape-left': 8, 'landscape-right': 16}[orientation]
+            preferences = ObjCClass('UIWindowSceneGeometryPreferencesIOS').alloc().initWithInterfaceOrientations(mask)
+            app.main_window._impl.native.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=None)
+        else:
+            app._impl.native.setRequestedOrientation({'portrait': 1, 'landscape-left': 0, 'landscape-right': 8}[orientation])
+    with section(app, 'rotation-acknowledgement', orientation=orientation):
+        for _ in range(60):
+            await asyncio.sleep(.1)
+            if sys.platform == 'ios':
+                # Interface orientation is only an acknowledgement of this request,
+                # never an input to production layout or an aspect-ratio assumption.
+                if int(app.main_window._impl.native.windowScene.interfaceOrientation) == {'portrait': 1, 'landscape-left': 3, 'landscape-right': 4}[orientation]:
+                    break
+            elif (app.main_window.size.width > app.main_window.size.height) == landscape:
                 break
-        elif (app.main_window.size.width > app.main_window.size.height) == landscape:
-            break
-    else:
-        raise AssertionError('Native rotation did not complete: ' + orientation)
-    await asyncio.sleep(.6)
+        else:
+            raise AssertionError('Native rotation did not complete: ' + orientation)
+    await measure(app, 'rotation-post-ack-settle', asyncio.sleep(.6), orientation=orientation)
 
 
 def safe_geometry(app):
@@ -220,7 +223,8 @@ def assert_control_bounds(rect, window, label):
 async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
     samples = []
     captured = set()
-    async def check(name):
+    from .timings import measure, section
+    async def check_panel(name):
         if panels is not None and name not in panels:
             return
         await asyncio.sleep(.4)
@@ -228,12 +232,15 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
         expected = panel_state(app)
         for cycle in range(cycles):
             for orientation in ('portrait', 'landscape-left', 'portrait', 'landscape-right', 'portrait'):
-                await rotate(app, orientation)
-                controls = await settled_visible_controls(app)
+                await measure(app, 'rotation-request', rotate(app, orientation),
+                              panel=name, orientation=orientation, cycle=cycle)
+                controls = await measure(app, 'rotation-control-settle', settled_visible_controls(app),
+                                         panel=name, orientation=orientation, cycle=cycle)
                 actual = panel_state(app)
                 assert actual == expected, (name, orientation, expected, actual)
-                sample = dict(panel=name, cycle=cycle, orientation=orientation,
-                              pose=pose_snapshot(app), **safe_geometry(app))
+                with section(app, 'rotation-geometry', panel=name, orientation=orientation, cycle=cycle):
+                    sample = dict(panel=name, cycle=cycle, orientation=orientation,
+                                  pose=pose_snapshot(app), **safe_geometry(app))
                 sample['fixed_controls'] = controls
                 if sys.platform == 'ios' and name in ('folder', 'nested-folder', 'home-file-picker'):
                     assert sample['fixed_controls'] >= 1, ('No mounted controls audited', name)
@@ -246,6 +253,11 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
                         from .fixtures import capture_window
                         captured.add(key)
                         await capture_window(app, Path(app.paths.cache) / f'rotation-{name}-{orientation}.png')
+    async def check(name):
+        if panels is not None and name not in panels:
+            return
+        return await measure(app, 'rotation-panel', check_panel(name), panel=name)
+
     app.show_locations()
     await check('workspaces')
     for source in ('rclone', 'Network shares', 'Local'):

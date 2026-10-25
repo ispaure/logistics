@@ -35,6 +35,12 @@ AES_CREDENTIALS = 'UEsDBBQAAQBjACcuTV3J2bwINgAAABgAAAALAAsAZml4dHVyZS50eHQBmQcAA
 
 
 async def capture_window(app, path):
+    from pathlib import Path
+    from .timings import measure
+    return await measure(app, 'screenshot', _capture_window(app, path), filename=Path(path).name)
+
+
+async def _capture_window(app, path):
     """Capture the actual native window, including reparented navigation content."""
     import asyncio
     import os

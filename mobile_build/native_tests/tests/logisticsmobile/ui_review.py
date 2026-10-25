@@ -47,8 +47,13 @@ async def exercise_ui_review(app):
     screenshots = []
     toolbar_checks = []
     async def capture(name):
+        from .timings import measure
+        return await measure(app, 'ui-review-capture', capture_impl(name), screenshot=name)
+
+    async def capture_impl(name):
         print('LOGISTICS_UI_REVIEW=begin:' + name, flush=True)
-        await asyncio.sleep(.4)
+        from .timings import measure
+        await measure(app, 'screenshot-settle', asyncio.sleep(.4))
         if get_os() is OS.IOS:
             controller = getattr(app, '_reader_toolbar_controller', None)
             if controller is not None:
