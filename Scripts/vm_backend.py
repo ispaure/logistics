@@ -144,9 +144,8 @@ subprocess.run(['uv','venv','--python','3.12.2','--seed',sys.argv[1]+'/environme
                         workspace + '/source', timeout=300, environment=env))
         plan = Plan('Logistics', 'Focused Linux contracts' if args.pattern else 'Full local Linux platform checks', args.source_identity, phases,
                     workspace + '/operation', backend='Parallels ' + args.distribution)
-        encoded = base64.b64encode(json.dumps(plan.data()).encode()).decode()
-        write = 'import base64,os,pathlib,sys;p=pathlib.Path(sys.argv[1]);p.write_bytes(base64.b64decode(sys.argv[2]));os.chown(p,int(sys.argv[3]),int(sys.argv[4]))'
-        client.execute_idempotent(vm, ['python3', '-c', write, workspace + '/plan.json', encoded, str(account['uid']), str(account['gid'])])
+        client.write_owned(vm, workspace, token, 'plan.json', json.dumps(plan.data()).encode(),
+                           account['uid'], account['gid'])
         code = execute([guest_python, '-m', 'build_manager', workspace + '/plan.json', '--output', reports + '/manager'], env, 3400)
         result['status'] = 'cancelled' if cancelled.is_set() else 'passed' if code == 0 else 'failed'
         return int(code != 0)

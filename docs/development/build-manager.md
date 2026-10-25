@@ -660,3 +660,9 @@ retry known session-admission/lost-job-handle failures at most three times.
 Windows owned cleanup retries only its known lost-job-handle error. Ownership is
 checked on every attempt; source creation, test execution and publication are
 never covered by this retry policy.
+
+Linux plan files also travel as ASCII stdin payloads, rather than embedding
+source/settings JSON in Parallels command arguments. The owned write checks the
+workspace token, rejects destination symlinks and assigns the normal test account.
+This avoids misleading session errors when a legitimate plan exceeds Parallels'
+command-line limit.
