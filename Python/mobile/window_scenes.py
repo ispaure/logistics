@@ -132,7 +132,7 @@ class SceneManager:
             raise ValueError('Window state was preserved; it cannot be restored.')
         value = json.loads(path.read_text())
         if (not isinstance(value, dict) or set(value) != {'schema', 'destination'} or value['schema'] != 1
-                or value['destination'] not in ('home', 'files', 'documents', 'chat', 'settings')):
+                or value['destination'] not in ('home', 'notebooks', 'files', 'documents', 'chat', 'settings')):
             raise ValueError('Window state was preserved; it cannot be restored.')
         return value['destination']
 

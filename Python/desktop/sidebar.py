@@ -119,6 +119,11 @@ class DestinationIcon(qt.QIconEngine):
                     ((5, 16), (5, 8), (9, 13), (13, 8), (13, 16))]))
                 painter.drawLine(qt.QLineF(17.5, 8, 17.5, 16))
                 painter.drawPolyline(qt.QPolygonF([qt.QPointF(15.5, 14), qt.QPointF(17.5, 16), qt.QPointF(19.5, 14)]))
+        elif self.name == 'notebooks':
+            painter.drawRoundedRect(qt.QRectF(4, 3, 16, 18), 2, 2)
+            painter.drawLine(qt.QLineF(8, 3, 8, 21))
+            painter.drawPolyline(qt.QPolygonF([qt.QPointF(x, y) for x, y in
+                ((11, 16), (12, 12), (18, 6), (20, 8), (14, 14), (11, 16))]))
         elif self.name == 'documents':
             painter.drawRoundedRect(qt.QRectF(6, 3, 15, 18), 1, 1)
             painter.drawPolyline(qt.QPolygonF([qt.QPointF(3, 6), qt.QPointF(3, 21), qt.QPointF(17, 21)]))

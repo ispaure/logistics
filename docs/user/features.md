@@ -21,6 +21,7 @@ Workspaces, navigation and general file browsing remain in the
 | [Using IDE](../features/ide/user/user.md) | Desktop only |
 | [Compress images and edit JPG comments](../features/images/user/user.md) | Desktop only |
 | [Open configured service shortcuts](../features/links/user/user.md) | Desktop only |
+| [Notebooks](../features/notebooks/user/user.md) | [Mobile guide](../features/notebooks/user_mobile/user_mobile.md) |
 | [LM Chat](../features/lm/user/user.md) | [Mobile guide](../features/lm/user_mobile/user_mobile.md) |
 | [Rename MKA chapters from a CSV](../features/media/user/user.md) | Desktop only |
 | [Manage Minecraft servers](../features/minecraft/user/user.md) | Desktop only |

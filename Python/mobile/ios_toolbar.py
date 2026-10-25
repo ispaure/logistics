@@ -8,6 +8,8 @@ import weakref
 
 def vertical_edge(controller):
     """Read the current container's bar preference, never a device model/size."""
+    if controller is None:
+        return 0
     from rubicon.objc import SEL
     traits = controller.traitCollection
     return int(traits.verticalBarEdge) if traits.respondsToSelector(SEL('verticalBarEdge')) else 0
@@ -157,8 +159,7 @@ def sync_screen(app, view, destination):
     """Apply explicit screen actions and refresh retained folder bars on resize."""
     if not app.routes.apple or app.native_host.adapter is None:
         return
-    controller = app.native_host.adapter.navigation[
-        app.native_host.destinations.index(destination)].topViewController
+    controller = app.native_host.adapter.content_controller(destination)
     screens = app.routes.screens[destination]
     if screens:
         folder = app.routes.folders.screens.get((destination, screens[-1][0]))

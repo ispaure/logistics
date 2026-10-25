@@ -21,7 +21,7 @@ def render_icons():
     palette.setColor(qt.QPalette.ColorRole.ButtonText, qt.QColor('black'))
     app.setPalette(palette)
     result = {}
-    for name, desktop in (('nav_home', 'home'), ('nav_files', 'hub'),
+    for name, desktop in (('nav_home', 'home'), ('nav_notebooks', 'notebooks'), ('nav_files', 'hub'),
                           ('nav_documents', 'documents'), ('nav_chat', 'lm'),
                           ('nav_settings', 'settings')):
         pixmap = DestinationIcon(desktop).pixmap(qt.QSize(72, 72),

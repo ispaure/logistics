@@ -73,7 +73,7 @@ def preview_edge(app, container):
         return 0
     from .ios_toolbar import vertical_edge
     index = app.native_host.destinations.index(app.native_host.state.destination)
-    return vertical_edge(app.native_host.adapter.navigation[index].topViewController)
+    return vertical_edge(app.native_host.adapter.content_controller(app.native_host.destinations[index]))
 
 
 def expand_preview(container):
@@ -112,7 +112,7 @@ def sync(app, *, settled=False):
         clear(app)
         return
     from .ios_toolbar import vertical_edge
-    controller = adapter.navigation[app.native_host.destinations.index(app.native_host.state.destination)].topViewController
+    controller = adapter.content_controller(app.native_host.state.destination)
     edge = vertical_edge(controller)
     if edge not in (1, 2) or not app.body.children:
         clear(app)

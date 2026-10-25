@@ -43,7 +43,7 @@ class HostLifecycle:
         from features.books.mobile.media_controls import stop_media
         stop_markdown_speech(host)
         stop_media(host)
-        for name in ('vault_browser', 'memory_pressure', 'screen_privacy'):
+        for name in ('vault_browser', 'notebook_panel', 'memory_pressure', 'screen_privacy'):
             resource = getattr(host, name, None)
             if resource is not None:
                 resource.dispose()
@@ -94,6 +94,8 @@ class HostLifecycle:
             return True
         if getattr(host, '_reset_scheduled', False):
             return True
+        if getattr(getattr(host, 'notebook_panel', None), 'busy', False):
+            return False
         host.retire_private_comic_batch()
         background = getattr(host, 'cloud_startup_task', None)
         restoring = background is not None and not background.done()

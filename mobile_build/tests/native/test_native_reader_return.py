@@ -34,6 +34,9 @@ class NativeReaderReturnTests(unittest.TestCase):
             return SimpleNamespace(controller=controller)
 
         self.host.adapter = SimpleNamespace(navigation=self.navigation, push=push,
+            navigation_for=lambda destination: self.navigation[self.host.destinations.index(destination)],
+            destination_for_navigation=lambda nav: self.host.destinations[self.navigation.index(nav)],
+            route_depth=lambda nav: len(nav.viewControllers) - 1,
             containers=[(None, nav.viewControllers[0]) for nav in self.navigation], release_pane=Mock())
         self.browser = toga.Label('Retained browser with its scroll and query')
         self.routes.show(self.browser, destination='files', root=True)

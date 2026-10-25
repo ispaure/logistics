@@ -80,7 +80,7 @@ def sync_comic_chrome(app, view, *, destination=None):
     if app.adaptive.split is not None and destination == 'documents':
         navigation = app.adaptive.secondary
     elif adapter is not None and hasattr(adapter, 'navigation'):
-        navigation = adapter.navigation[app.native_host.destinations.index(destination)]
+        navigation = adapter.navigation_for(destination)
     app.native_host.chrome.set_hidden(hidden, navigation=navigation)
     sync_document_tabs(app, view, fullscreen=hidden, destination=destination)
     from .ios_reader_chrome import sync

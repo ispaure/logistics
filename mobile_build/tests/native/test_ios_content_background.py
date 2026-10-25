@@ -57,7 +57,7 @@ class ContentBackgroundTests(unittest.TestCase):
         view = NS(_image_preview_surface=True, _impl=NS(container=container))
         app = NS(routes=object(), body=NS(children=[view]), native_host=NS(
             destinations=['files'], state=NS(destination='files'),
-            adapter=NS(navigation=[NS(topViewController=object())])))
+            adapter=NS(navigation=[NS(topViewController=object())], content_controller=lambda destination: object())))
         container.content = NS(interface=NS(app=app))
         with patch('mobile.ios_content_background.reduce_transparency', return_value=False), \
              patch('mobile.ios_toolbar.vertical_edge', return_value=2):

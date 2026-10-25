@@ -89,6 +89,7 @@ profiles in the [build manager](docs/development/build-manager.md).
 | [IDE](docs/features/ide/user/user.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, search project files, and autosave with Git change markers |
 | [LM Chat](docs/features/lm/user/user.md) | Chat with an existing LM server, paste screenshots, read and optionally edit IDE project files with saved change previews, and save conversations locally |
 | [Books](docs/features/books/user/user.md) and [Comics](docs/features/comics/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
+| [Notebooks](docs/features/notebooks/user/user.md) | Create and edit v6 reMarkable ink, organize pages and export .rmdoc copies (experimental) |
 | [PDF Reader](docs/features/pdf/user/user.md) | Read and search local, remote and LocalCrypt PDFs on desktop and mobile, jump to page numbers, and swipe vertically |
 | [Archives](docs/features/archives/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
 | [Images](docs/features/images/user/user.md) | Compress images, work with photo metadata, and [capture bursts on iPhone](docs/features/images/user_mobile/user_mobile.md) |

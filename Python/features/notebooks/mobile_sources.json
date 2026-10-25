@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "modules": [
+    "__init__.py",
+    "_vendor/__init__.py",
+    "_vendor/rmscene/LICENSE.py",
+    "_vendor/rmscene/__init__.py",
+    "_vendor/rmscene/crdt_sequence.py",
+    "_vendor/rmscene/scene_items.py",
+    "_vendor/rmscene/scene_stream.py",
+    "_vendor/rmscene/scene_tree.py",
+    "_vendor/rmscene/tagged_block_common.py",
+    "_vendor/rmscene/tagged_block_reader.py",
+    "_vendor/rmscene/tagged_block_writer.py",
+    "_vendor/rmscene/text.py",
+    "bridge.py",
+    "canvas.py",
+    "ink.py",
+    "mobile/__init__.py",
+    "mobile/panel.py",
+    "notebook.py",
+    "workspace.py"
+  ]
+}

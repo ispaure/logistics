@@ -45,7 +45,8 @@ def build(root, result):
         if saved['key'] == key and app.is_dir() and saved['bundle_sha256'] == bundle_digest(app):
             reused = True
     if not reused:
-        command([sys.executable, 'tools.py', 'stage', 'payload', '--repo', str(root), '--allow-dirty'], mobile)
+        from Scripts.mobile_payload import stage_payload
+        stage_payload(root, sys.executable, command)
         command([sys.executable, 'cloud_build.py', 'licenses'], mobile)
         command([sys.executable, '-m', 'briefcase', 'create', 'iOS', '--no-input'], mobile)
         command([sys.executable, 'cloud_build.py', 'ios'], mobile)

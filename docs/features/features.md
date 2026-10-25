@@ -30,3 +30,5 @@ wiki. Application source and tests retain their existing owners under `Python/`.
 - [System Tools](system_tools/system_tools.md)
 - [Text Editor](text_editor/text_editor.md)
 - [Youtube Downloader](youtube_downloader/youtube_downloader.md)
+
+- [Notebooks](notebooks/notebooks.md)

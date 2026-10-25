@@ -42,7 +42,7 @@ async def exercise_documents(app, passed):
     app.show_view(toga.Label('Route detail'), route='route-check', title='Route detail')
     assert app.native_host.state.routes['documents'] == ['editor', 'route-check']
     if get_os() is OS.IOS:
-        navigation = app.adaptive.secondary if app.adaptive.split is not None else app.native_host.adapter.navigation[2]
+        navigation = app.adaptive.secondary if app.adaptive.split is not None else app.native_host.adapter.navigation[app.native_host.destinations.index('documents')]
         # UIKit can ignore a pop requested during the preceding push.
         await asyncio.sleep(.05)
         for _ in range(60):

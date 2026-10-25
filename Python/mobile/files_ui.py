@@ -565,6 +565,12 @@ class FilesUI:
                 return
             if provider.entry(path)['directory']:
                 raise ValueError('Choose a file to read.')
+            if Path(path).suffix.lower() == '.rmdoc' and isinstance(provider, LocalFiles) and not getattr(provider, 'private', False):
+                if self.app.select_destination('notebooks') is False:
+                    return False
+                self.app.native_host.activate('notebooks')
+                await self.app.notebook_panel.open_path(provider._locate(path))
+                return True
             source = encrypted_document(provider, path)
             if source is not None:
                 self.crypt_password.value = self.file_password.value

@@ -143,7 +143,11 @@ class MobileRoutes(Routes):
             self.on_render()
 
     def native_popped(self, navigation):
-        destination = self.host.destinations[self.host.adapter.navigation.index(navigation)]
+        if self.changing or self.host.changing:
+            return
+        destination = self.host.adapter.destination_for_navigation(navigation)
+        if destination is None:
+            return
         screens = self.screens[destination]
         count = len(screens)
         previous = screens[-1][0] if screens else ''

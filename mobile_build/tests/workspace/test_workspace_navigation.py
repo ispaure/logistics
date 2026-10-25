@@ -59,6 +59,25 @@ class WorkspaceNavigationTests(unittest.TestCase):
         toolbar.assert_called_once_with(app, app.routes.body('files').children[0], 'files')
         self.assertEqual(app.native_host.state.destination, 'documents')
 
+    def test_native_frame_header_uses_its_navigation_owner(self):
+        import sys
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock
+        from mobile.workspace_navigation import WorkspaceFrame
+        frame = object.__new__(WorkspaceFrame)
+        controller = NS(navigationItem=NS())
+        app = NS(routes=NS(apple=True), main_window=object(),
+                 native_host=NS(adapter=NS(content_controller=Mock(return_value=controller))))
+        frame.navigation = NS(app=app, menu_open={'files': False})
+        frame.destination = 'files'
+        frame.header, frame.menu, frame.compact_toolbar = object(), NS(), None
+        frame.view = lambda: NS(children=[])
+        with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=Mock(), SEL=lambda name: name)}), \
+                patch('mobile.workspace_navigation.mount_native_menu', return_value=NS()):
+            frame.sync_native_header()
+        app.native_host.adapter.content_controller.assert_called_once_with('files')
+        self.assertIsNone(controller.navigationItem.leftBarButtonItem)
+
     def test_toolbar_cleanup_targets_rendered_tab_and_retained_controller(self):
         import sys
         from types import SimpleNamespace as NS
@@ -72,7 +91,8 @@ class WorkspaceNavigationTests(unittest.TestCase):
         files.navigationItem.rightBarButtonItems = ['stale reader actions']
         app = NS(refresh_reader_exit=Mock(), routes=NS(apple=True), native_host=NS(
             state=NS(destination='documents'), destinations=('documents', 'files'),
-            adapter=NS(navigation=[NS(topViewController=reader), NS(topViewController=files)])),
+            adapter=NS(navigation=[NS(topViewController=reader), NS(topViewController=files)],
+                       content_controller=lambda destination: files if destination == 'files' else reader)),
             _reader_toolbar_controllers={101, 102}, _reader_toolbar_controller=reader,
             _reader_title_controller=reader, _reader_toolbar_state='retained reader')
         with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=Mock(), CGRect=Mock(), SEL=lambda name: name)}):
@@ -304,7 +324,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 app.native_host.root.on_select()
                 self.assertEqual(app.native_host.state.destination, 'home')
                 # Its selected controller changes before the queued callback.
-                app.native_host.root._impl._set_value('current_tab_index', 2)
+                app.native_host.root._impl._set_value('current_tab_index', app.native_host.destinations.index('documents'))
                 app.native_host.adapter = original
                 app.loop.run_until_complete(__import__('asyncio').sleep(0))
                 self.assertEqual(app.native_host.state.destination, 'documents')
@@ -352,7 +372,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         app.native_host.adapter = original
         self.assertFalse(hasattr(app, 'chat_view'))
         app.native_host.root.on_select()
-        app.native_host.root._impl._set_value('current_tab_index', 3)
+        app.native_host.root._impl._set_value('current_tab_index', app.native_host.destinations.index('chat'))
         app.loop.run_until_complete(asyncio.sleep(0))
         self.assertEqual(app.native_host.state.destination, 'chat')
         self.assertIn(app.chat_view, app.body.children)
@@ -361,7 +381,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         view = app.chat_view
         app.show_home()
         app.native_host.root.on_select()
-        app.native_host.root._impl._set_value('current_tab_index', 3)
+        app.native_host.root._impl._set_value('current_tab_index', app.native_host.destinations.index('chat'))
         app.loop.run_until_complete(asyncio.sleep(0))
         self.assertEqual(app.native_host.state.destination, 'chat')
         self.assertIs(app.chat_view, view)

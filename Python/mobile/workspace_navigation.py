@@ -43,7 +43,7 @@ def mount_native_menu(app, menu, destination):
     """All workspace menus occupy the Documents navigation-bar slot."""
     from rubicon.objc import ObjCClass, SEL
     adapter = app.native_host.adapter
-    controller = adapter.navigation[app.native_host.destinations.index(destination)].topViewController
+    controller = adapter.content_controller(destination)
     detach(menu)
     menu.app, menu.window = app, app.main_window
     if not hasattr(menu, '_native_workspace_item'):
@@ -69,7 +69,7 @@ def sync_reader_toolbar(app, view, destination=None):
     from .ios_toolbar import mount_actions, mount_leading, vertical_edge, clear_actions
     adapter = app.native_host.adapter
     destination = destination or app.native_host.state.destination
-    controller = adapter.navigation[app.native_host.destinations.index(destination)].topViewController
+    controller = adapter.content_controller(destination)
     owned = getattr(app, '_reader_toolbar_controllers', None)
     if owned is None:
         owned = app._reader_toolbar_controllers = set()
@@ -479,8 +479,7 @@ class WorkspaceFrame:
             return
         from rubicon.objc import ObjCClass, SEL
         adapter = app.native_host.adapter
-        index = app.native_host.destinations.index(self.destination)
-        controller = adapter.navigation[index].topViewController
+        controller = adapter.content_controller(self.destination)
         if self.header in self.view().children:
             self.view().remove(self.header)
             self.header.remove(self.menu)

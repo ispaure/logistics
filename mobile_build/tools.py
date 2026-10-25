@@ -10,7 +10,7 @@ import subprocess
 
 SOURCE_OWNERS = (
     'mobile', 'services', 'features/books', 'features/pdf', 'features/comics',
-    'features/images', 'features/lm', 'features/rclone', 'features/text_editor',
+    'features/notebooks', 'features/images', 'features/lm', 'features/rclone', 'features/text_editor',
 )
 BASE_DOCUMENT_MODULES = ('features/__init__.py', 'configFile.ini')
 
@@ -261,7 +261,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     manifest = json.loads((destination / 'source.json').read_text())
     manifest['commonUtils_dirty'] = manifest.get('commonUtils_dirty', False) or new_shared
     manifest.update(logistics_commit=subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip(),
-                    dirty=dirty or manifest.get('commonUtils_dirty', False), features=['text', 'markdown', 'epub', 'comics', 'lm', 'rclone'])
+                    dirty=dirty or manifest.get('commonUtils_dirty', False), features=['text', 'markdown', 'epub', 'comics', 'lm', 'rclone', 'notebooks'])
     manifest['logistics_committed_at'] = subprocess.check_output(
         ['git', '-C', str(repo), 'show', '-s', '--format=%cI', 'HEAD'], text=True).strip()
     # Identify the exact local source snapshot independently of commit IDs.

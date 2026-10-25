@@ -5,6 +5,7 @@ folder navigation and built-in file/title or page-text search. A hamburger toggl
 in narrow windows; wider windows show the tree and article together.
 
 - [Getting started](getting_started/getting_started.md)
+- [reMarkable notebooks](../features/notebooks/user_mobile/user_mobile.md)
 - [Documents and readers](documents/documents.md)
 - [Remote and offline files](documents/remote.md)
 - [Using documentation](documentation/documentation.md)

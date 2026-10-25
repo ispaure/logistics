@@ -38,7 +38,7 @@ async def exercise(app):
         app.show_home()
         assert app.body.children[0].content.children[0].text == 'Your workspace'
         assert app.native_host.state.destination == 'home'
-        assert [tab.text for tab in app.navigation.content] == ['Home', 'Workspaces', 'Documents', 'Chat', 'Settings']
+        assert [tab.text for tab in app.navigation.content] == ['Home', 'Notebooks', 'Workspaces', 'Documents', 'Chat', 'Settings']
         passed.append('native_hub')
         # Exercise the direct Files entry before Workspaces/cloud setup. The
         # initial credential restore must not empty a newly built local picker.
@@ -50,6 +50,9 @@ async def exercise(app):
         from .navigation_checks import exercise_navigation
         navigation_proof = await measure(app, 'navigation', exercise_navigation(app))
         passed.append('native_navigation_foundation')
+        from .notebook_checks import exercise_notebooks
+        await measure(app, 'notebooks', exercise_notebooks(app))
+        passed.append('native_notebooks')
         from .document_checks import exercise_documents
         await measure(app, 'documents', exercise_documents(app, passed))
         fixtures = app.private_root / 'fixtures'

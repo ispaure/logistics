@@ -34,7 +34,8 @@ def build(root, output):
         saved=json.loads(record.read_text())
         reused=saved['key']==key and apk.exists() and saved['apk_sha256']==checksum(apk)
     if not reused:
-        command([sys.executable,'tools.py','stage','payload','--repo',str(root),'--allow-dirty'],mobile)
+        from Scripts.mobile_payload import stage_payload
+        stage_payload(root, sys.executable, command)
         command([sys.executable,'cloud_build.py','licenses'],mobile)
         command([sys.executable,'-m','briefcase','create','android','--no-input'],mobile)
         command([sys.executable,'cloud_build.py','android'],mobile)

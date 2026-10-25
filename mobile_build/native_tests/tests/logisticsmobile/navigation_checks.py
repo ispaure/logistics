@@ -31,7 +31,15 @@ def assert_cold_iphone_tab_labels(app):
     controller = app.native_host.adapter.controller
     tab = controller.tabBar
     tab.layoutIfNeeded()
-    expected, seen = set(app.native_host.labels), set()
+    actual_items = [str(item.title) for item in (tab.items or ())]
+    if len(app.native_host.labels) > 5 and len(actual_items) == 5:
+        # UIKit keeps its native More destination for the overflow tabs.
+        assert actual_items[:4] == list(app.native_host.labels[:4]), actual_items
+        assert actual_items[-1], 'Missing native overflow destination'
+        expected = set(actual_items)
+    else:
+        expected = set(app.native_host.labels)
+    seen = set()
     content_views = [navigation.view for navigation in app.native_host.adapter.navigation]
     def value(obj, name):
         result = getattr(obj, name)
@@ -97,15 +105,15 @@ async def exercise_navigation(app):
         assert editor.value == 'Native navigation draft'
         if get_os() is OS.ANDROID:
             assert_navigation_contrast(host.adapter.impl.native_navigationview)
-            host.adapter.impl.native_navigationview.setSelectedItemId(5)
+            host.adapter.impl.native_navigationview.setSelectedItemId(host.destinations.index('settings') + 1)
             assert host.state.destination == 'settings'
             assert host.root.current_tab.text == 'Settings'
-            host.adapter.impl.native_navigationview.setSelectedItemId(3)
+            host.adapter.impl.native_navigationview.setSelectedItemId(host.destinations.index('documents') + 1)
             assert host.state.destination == 'documents'
         else:
             native = host.adapter.controller
-            native.selectedViewController = host.adapter.navigation[4]
-            native.tabBar_didSelectItem_(native.tabBar, host.adapter.navigation[4].tabBarItem)
+            native.selectedViewController = host.adapter.navigation[host.destinations.index('settings')]
+            native.tabBar_didSelectItem_(native.tabBar, host.adapter.navigation[host.destinations.index('settings')].tabBarItem)
             assert host.state.destination == 'settings'
             host.activate('documents')
         editor.value = 'Draft survives native containers'
@@ -128,10 +136,10 @@ async def exercise_navigation(app):
             adapter.push('files', detail, 'Folder')
             host.activate('files')
             await asyncio.sleep(.3)
-            assert len(adapter.navigation[1].viewControllers) == 2
+            assert len(adapter.navigation[host.destinations.index('files')].viewControllers) == 2
             await capture('stack')
             adapter.pop('files')
-            assert len(adapter.navigation[1].viewControllers) == 1
+            assert len(adapter.navigation[host.destinations.index('files')].viewControllers) == 1
             leading = toga.Box(children=[toga.Label('Open documents')],
                                style=Pack(direction=COLUMN, flex=1))
             detail = toga.Box(children=[toga.MultilineTextInput(value=editor.value, style=Pack(flex=1))],

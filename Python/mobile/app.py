@@ -360,6 +360,11 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             self.pending_reader_restore = None
             self.show_documents_hub()
             return True
+        if destination == 'notebooks':
+            from features.notebooks.mobile.panel import NotebookPanel
+            if not hasattr(self, 'notebook_panel'):
+                self.notebook_panel = NotebookPanel(self)
+                self.show_view(self.notebook_panel.view, destination='notebooks', root=True)
         if destination == 'chat' and not self.routes.screens['chat']:
             self.show_chat(present=False)
         if destination == 'settings':
