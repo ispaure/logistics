@@ -201,6 +201,9 @@ class DestinationProbe(LogisticsMobile):
 
 def main():
     import sys
+    if '--localcrypt-only' in sys.argv:
+        from tests.logisticsmobile.destination_edge_probe import DestinationEdgeProbe
+        return DestinationEdgeProbe('Destination LocalCrypt QA', BUNDLE)
     if '--cancel-only' in sys.argv:
         from tests.logisticsmobile.destination_cancel_probe import DestinationCancelProbe
         return DestinationCancelProbe('Destination Cancel QA', BUNDLE)
