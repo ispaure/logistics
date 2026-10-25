@@ -13,8 +13,8 @@ from commonUtils.runtime.streams import read_up_to
 
 MAX_SESSIONS = 32
 MAX_MANIFEST = 64 * 1024
-KINDS = {'text', 'markdown', 'epub', 'comic', 'pdf'}
-PROVIDERS = {'managed-text', 'library'}
+KINDS = {'text', 'markdown', 'epub', 'comic', 'pdf', 'notebook'}
+PROVIDERS = {'managed-text', 'library', 'notebook'}
 VIEW_NUMBERS = {'cursor', 'selection_length', 'scroll_x', 'scroll_y', 'position'}
 
 

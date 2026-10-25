@@ -917,3 +917,14 @@ Focused regression owners are `Python/tests/resources/test_rclone_services.py`,
 `test_local_crypt.py`, and `mobile_build/tests/transfers/test_localcrypt_access.py`.
 They cover unrelated packages, independent browser/reader lifetime, replacement
 with identical keys, revocation during listing and requested-lock edit vetoes.
+
+## Notebook resource editing
+
+Notebook creation, opening, Save and Save As use the shared document resource
+boundary on desktop and mobile. Private notebook drafts do not enter ordinary
+recovery, history or saved workspace records. The binary buffer bridge accepts
+bounded RAM input and writes only exclusive ciphertext staging; legacy text
+encoding retains its text-specific limit. Mobile source/configuration text in
+managed crypt folders uses the same verified resource publication boundary.
+See [document storage and action parity](../../../development/document-storage.md)
+and the [notebook owner](../../notebooks/development/development.md).

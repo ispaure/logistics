@@ -3,13 +3,17 @@ from pathlib import Path
 
 from commonUtils.ui import pyside as qt
 from commonUtils.persistence.atomic import atomic_write_bytes
-from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
+from PySide6 import QtQuick, QtQuickWidgets
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from ..notebook import Notebook, MAX_ARCHIVE
 from ..workspace import Repository, Editor
 from ..bridge import Bridge, update_script
 from ..canvas import editor_html
 
+# Register Quick wrapper types before WebEngine creates internal objects.
+# PySide6 6.12 can otherwise crash while application event filters wrap them.
+_WEBENGINE_TYPE_BINDINGS = (QtQuick, QtQuickWidgets)
 _windows = []
 
 
@@ -17,7 +21,10 @@ class CanvasPage(QWebEnginePage):
     command = qt.Signal(object)
 
     def __init__(self, parent, bridge):
-        super().__init__(parent)
+        profile = QWebEngineProfile()
+        super().__init__(profile, parent)
+        profile.setParent(self)
+        self.private_profile = profile
         self.bridge = bridge
         self.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, False)
         self.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
@@ -41,15 +48,25 @@ class CanvasPage(QWebEnginePage):
 
 
 class NotebookWorkspace(qt.QWidget):
-    def __init__(self, parent=None, *, root=None):
+    def __init__(self, parent=None, *, root=None, library=True):
         super().__init__(parent)
         location = root or Path(qt.QStandardPaths.writableLocation(qt.QStandardPaths.StandardLocation.AppLocalDataLocation)) / 'notebooks'
-        self.repository = Repository(location)
+        self.document_window = parent if isinstance(parent, qt.QMainWindow) else None
+        self.repository_root = location
+        self._repository = None
+        self.document = None
         self.editor = None
         self.web = None
         self.busy = False
         self.layout = qt.QVBoxLayout(self)
-        self.library()
+        if library:
+            self.library()
+
+    @property
+    def repository(self):
+        if self._repository is None:
+            self._repository = Repository(self.repository_root)
+        return self._repository
 
     def clear(self):
         self.web = None
@@ -116,17 +133,42 @@ class NotebookWorkspace(qt.QWidget):
         except Exception as error:
             self.status.setText(str(error))
 
+    def open_resource(self, document):
+        self.document = document
+        self.open(document.book, document.key)
+
+    def state(self):
+        value = self.editor.state()
+        if self.document is not None:
+            if self.document.resource is None and self.document.recovery is None:
+                value['save_status'] = 'Unsaved changes' if self.document.dirty else 'Not saved yet'
+            else:
+                value['save_status'] = 'Unsaved changes' if self.document.dirty else 'Saved'
+            value['read_only'] = not self.document.writable
+        return value
+
     def open(self, book, key):
+        if self.document is not None and self.document.book is not book:
+            self.document.close()
+            self.document = None
         self.key = key
-        self.editor = Editor(book, lambda book: self.repository.save(key, book))
+        if self.document_window is not None:
+            self.document_window.setWindowTitle(book.name)
+        self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book))
         self.bridge = Bridge()
         self.clear()
         self.web = QWebEngineView(self)
         page = CanvasPage(self.web, self.bridge)
         self.web.setPage(page)
         page.command.connect(lambda action: self.deliver(page, action))
-        self.web.setHtml(editor_html(self.editor.state(), self.bridge.url, console_bridge=True))
+        self.web.setHtml(editor_html(self.state(), self.bridge.url, console_bridge=True))
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
         self.layout.addWidget(self.web)
+        from commonUtils.ui.tasks.operation_progress import OperationProgress
+        self.operation = OperationProgress(self)
+        self.operation.completed.connect(self.saved)
+        self.layout.addWidget(self.operation)
 
     def deliver(self, page, action):
         # A queued event from a retired canvas must not edit the next notebook.
@@ -136,14 +178,25 @@ class NotebookWorkspace(qt.QWidget):
     def perform(self, action):
         if self.busy:
             return
+        if action['op'] in {'save', 'save-as'}:
+            return self.save_document(save_as=action['op'] == 'save-as')
         self.busy = True
         error = ''
         try:
             op = action['op']
             if op == 'library':
-                self.library()
+                from commonUtils.ui.document_host import current_document_host
+                host = current_document_host()
+                if host is not None:
+                    self.web.page().runJavaScript(update_script(self.state(), ''))
+                    host.activate()
+                else:
+                    self.library()
                 return
             if op == 'export':
+                if not self.confirm_export():
+                    self.web.page().runJavaScript(update_script(self.state(), 'Export cancelled.'))
+                    return
                 path, _ = qt.QFileDialog.getSaveFileName(self, 'Export notebook copy',
                     self.editor.notebook.name + '.rmdoc', 'reMarkable notebook (*.rmdoc)')
                 if path:
@@ -153,6 +206,9 @@ class NotebookWorkspace(qt.QWidget):
                 else:
                     error = 'Export cancelled. Your notebook is saved on this device.'
             elif op == 'transfer':
+                if not self.confirm_export():
+                    self.web.page().runJavaScript(update_script(self.state(), 'Copy cancelled.'))
+                    return
                 choices = [(key, name) for key, name in self.repository.list() if key != self.key]
                 labels = [f'{name} ({key[:6]})' for key, name in choices]
                 if not choices:
@@ -171,19 +227,155 @@ class NotebookWorkspace(qt.QWidget):
             error = str(failure)
         finally:
             self.busy = False
-        self.web.page().runJavaScript(update_script(self.editor.state(), error))
+        if self.document_window is not None:
+            self.document_window.setWindowTitle(self.editor.notebook.name)
+        self.web.page().runJavaScript(update_script(self.state(), error))
+
+    def confirm_export(self):
+        if self.document is None or self.document.resource is None or self.document.resource.policy.persistent:
+            return True
+        return qt.QMessageBox.question(self, 'Export to unencrypted storage?',
+            'This creates a decrypted copy outside private storage. Continue?',
+            qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.Cancel,
+            qt.QMessageBox.StandardButton.Cancel) == qt.QMessageBox.StandardButton.Yes
+
+    def save_document(self, *, save_as=False):
+        if self.busy:
+            return False
+        from services.documents.storage import DocumentResource, DocumentPolicy
+        from services.documents.ui.editors import choose_editor_resource
+        from ..storage import NotebookDocument
+        document = self.document
+        if not save_as and document is not None and document.resource is not None:
+            self._pending_choice = None
+            work = lambda cancelled: document.save(cancelled=cancelled)
+        else:
+            current = document.resource.provider if document and document.resource else None
+            choice = choose_editor_resource(self, 'save', current,
+                name=self.editor.notebook.name + '.rmdoc', extensions=('.rmdoc',))
+            if choice is None:
+                self.web.page().runJavaScript(update_script(self.state(), 'Save As cancelled.'))
+                return False
+            if document and document.resource and document.resource.policy.confirm_plaintext(DocumentPolicy.for_provider(choice.provider)):
+                if not self.confirm_export():
+                    choice.close()
+                    self.web.page().runJavaScript(update_script(self.state(), 'Save As cancelled.'))
+                    return False
+            self._pending_choice = choice
+            def work(cancelled):
+                data = self.editor.notebook.to_bytes()
+                DocumentResource.publish(choice.provider, choice.path, data, max_bytes=MAX_ARCHIVE, validate=Notebook.read, cancelled=cancelled)
+                resource = DocumentResource(choice.provider, choice.path, max_bytes=MAX_ARCHIVE)
+                try:
+                    resource.read()
+                    recovery = self.repository if resource.policy.persistent else None
+                    return NotebookDocument(self.editor.notebook, resource=resource, recovery=recovery)
+                except Exception:
+                    resource.close()
+                    raise
+        self.busy = True
+        self.operation.start(lambda report, cancelled: work(cancelled), message='Saving notebook…')
+        return True
+
+    def saved(self, document, error):
+        choice, self._pending_choice = self._pending_choice, None
+        if choice is not None:
+            choice.close()
+        if document is not None and not error:
+            previous = self.document
+            self.document = document
+            self.key = document.key
+            self.editor.checkpoint = document.checkpoint
+            if previous is not None:
+                previous.close()
+        self.busy = False
+        self.operation.hide()
+        if self.web is not None:
+            self.web.page().runJavaScript(update_script(self.state(), error or ''))
+        if self.document_window is not None:
+            guard = getattr(self.document_window, '_private_view_guard', None)
+            if guard is not None:
+                guard.follow_provider()
+            if not error and getattr(self.document_window, 'pending_close', False):
+                self.document_window.close()
+
+    def dispose(self):
+        if self.document is not None:
+            self.document.close()
+            self.document = None
+        self.editor = None
+        self.clear()
 
 
-def open_workspace(parent=None, path=None):
-    window = qt.QMainWindow(parent)
-    window.setWindowTitle('Notebooks')
-    panel = NotebookWorkspace(window)
+class NotebookWindow(qt.QMainWindow):
+    pending_close = False
+
+    def resource_provider(self):
+        document = self.centralWidget().document
+        return document.resource.provider if document and document.resource else None
+
+    def prepare_credential_lock(self):
+        panel = self.centralWidget()
+        if panel.busy:
+            return False
+        if panel.document and panel.document.dirty:
+            from services.documents.ui.private_views import resolve_private_edits_before_lock
+            return resolve_private_edits_before_lock(self, panel.save_document)
+        return True
+
+    def retire_private_content(self):
+        self.centralWidget().dispose()
+
+    def closeEvent(self, event):
+        panel = self.centralWidget()
+        if panel.busy:
+            event.ignore()
+            return
+        if panel.document and panel.document.dirty:
+            answer = qt.QMessageBox.question(self, 'Unsaved notebook changes',
+                'Save changes before closing?', qt.QMessageBox.StandardButton.Save |
+                qt.QMessageBox.StandardButton.Discard | qt.QMessageBox.StandardButton.Cancel,
+                qt.QMessageBox.StandardButton.Cancel)
+            if answer == qt.QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+            if answer == qt.QMessageBox.StandardButton.Save:
+                self.pending_close = panel.save_document()
+                event.ignore()
+                return
+        panel.dispose()
+        event.accept()
+
+
+def open_workspace(parent=None, path=None, *, resource=None, document=None):
+    if path is not None and resource is None and document is None:
+        from commonUtils.runtime.resources.local import LocalFiles
+        from services.documents.storage import DocumentResource
+        path = Path(path).absolute()
+        resource = DocumentResource(LocalFiles(path.parent), path.name, max_bytes=MAX_ARCHIVE)
+    window = NotebookWindow(parent)
+    window.setWindowTitle('Notebook')
+    panel = NotebookWorkspace(window, library=resource is None and document is None)
     window.setCentralWidget(panel)
     window.resize(1000, 850)
     window.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
     _windows.append(window)
     window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
-    window.show()
-    if path is not None:
+    if resource is not None:
+        from ..storage import NotebookDocument
+        book = Notebook.read(resource.read())
+        document = NotebookDocument(book, resource=resource,
+                                    recovery=panel.repository if resource.policy.persistent else None)
+    if document is not None:
+        if document.resource is not None and document.resource.policy.persistent and document.recovery is None:
+            document.recovery = panel.repository
+            document.key = panel.repository.create(document.book)
+        panel.open_resource(document)
+        if document.resource is not None:
+            from services.documents.ui.private_views import protect_private_view
+            protect_private_view(window, document.resource.provider)
+    elif path is not None:
         panel.import_path(path)
+    from commonUtils.ui.document_host import show_document
+    show_document(window)
     return window

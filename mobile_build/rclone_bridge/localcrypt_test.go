@@ -432,3 +432,61 @@ func TestCryptPathsBatchPreservesNamesAndCredentialGuards(t *testing.T) {
 		t.Fatal("locked credential accepted")
 	}
 }
+
+func TestBinaryDocumentBufferPublication(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	if _, err := importPackage(cryptPackage(t, "Cloud:binary"), ""); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	mapped, err := cryptPath("Secret", "notebook.rmdoc", "", false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Above the legacy text ceiling, including binary NUL bytes.
+	data := bytes.Repeat([]byte{'P', 'K', 0, 255}, 300000)
+	target, err := os.CreateTemp(t.TempDir(), "ciphertext-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer target.Close()
+	encoded := base64.StdEncoding.EncodeToString(data)
+	if _, err = cryptEncode(ctx, "Secret", mapped["path"], mapped["identity"], encoded, int(target.Fd())); err == nil {
+		t.Fatal("legacy text edit admitted a binary notebook")
+	}
+	if _, err = cryptWriteBuffer(ctx, "Secret", mapped["path"], mapped["identity"], encoded, int(target.Fd())); err != nil {
+		t.Fatal(err)
+	}
+	_, reader, err := openCryptReader(ctx, "Secret", mapped["path"], mapped["identity"], int(target.Fd()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.file.Close()
+	plain, err := reader.stream(0, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plain.Close()
+	decoded, err := io.ReadAll(plain)
+	if err != nil || !bytes.Equal(decoded, data) {
+		t.Fatal("binary round trip failed", err)
+	}
+	if _, err = cryptWriteBuffer(ctx, "Secret", mapped["path"], mapped["identity"], encoded, int(target.Fd())); err == nil {
+		t.Fatal("nonempty output admitted")
+	}
+	tooLarge := strings.Repeat("A", base64.StdEncoding.EncodedLen(downloadLimit)+4)
+	if _, err = cryptWriteBuffer(ctx, "Secret", mapped["path"], mapped["identity"], tooLarge, int(target.Fd())); err == nil {
+		t.Fatal("oversize binary document admitted")
+	}
+	cancelled, stop := context.WithCancel(ctx)
+	stop()
+	empty, err := os.CreateTemp(t.TempDir(), "cancelled-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer empty.Close()
+	if _, err = cryptWriteBuffer(cancelled, "Secret", mapped["path"], mapped["identity"], encoded, int(empty.Fd())); err == nil {
+		t.Fatal("cancelled binary publication succeeded")
+	}
+}

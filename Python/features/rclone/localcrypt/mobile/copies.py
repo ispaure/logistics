@@ -125,7 +125,8 @@ class LocalCryptCopies:
     def _stream_reader(self, record, path, password='', cancelled=lambda: False):
         from features.rclone.localcrypt.mobile.archive_source import NativeSource
         source = NativeSource(self.client, record, path, password=password, cancelled=cancelled)
-        if Path(source.name).suffix.lower() in {'.txt', '.md', '.markdown', '.ini'}:
+        from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
+        if Path(source.name).suffix.lower() in SOURCE_EXTENSIONS:
             if source.size > 1024 * 1024:
                 raise ValueError('Text editing is limited to 1 MiB; the file can still be moved or exported.')
             with source.open(source.name) as stream:

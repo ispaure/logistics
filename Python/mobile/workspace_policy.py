@@ -13,6 +13,9 @@ def session_view(app, key):
         if owner.session.view.get('markdown_mode') == 'preview' and owner.preview_box is not None:
             return owner.preview_box
         return owner.document_view
+    notebook = getattr(app, '_notebook_views', {}).get(key)
+    if notebook is not None:
+        return notebook.view
     private = getattr(app, 'private_sessions', None)
     owner = private.controllers.get(key) if private else None
     if owner is not None and owner.crypt_reader is not None and owner.crypt_reader.editable:

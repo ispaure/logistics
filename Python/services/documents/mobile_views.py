@@ -24,3 +24,14 @@ def retire_webview(view):
         native.evaluateJavaScript('document.open();document.write("<p>Document closed.</p>");document.close();',
                                   completionHandler=None)
     view.set_content('https://logistics.invalid/closed/', '<p>Document closed.</p>')
+
+
+def document_webview(resource=None, **options):
+    """Choose the canvas privacy implementation at the host storage boundary."""
+    if resource is not None and not resource.policy.persistent:
+        from commonUtils.ui.native.private_webview import PrivateWebView
+        # Notebook archives allow 128 MiB expanded; an initial page can exceed
+        # the text reader's HTML bound. The private adapter never stages HTML.
+        return PrivateWebView(max_html_bytes=128 * 1024 * 1024, **options)
+    import toga
+    return toga.WebView(**options)

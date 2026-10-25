@@ -58,7 +58,7 @@ settings icon at the bottom-left; clicking it opens settings and navigation choi
 Use **File Browser** for any folder, or **Workspaces** for configured libraries
 and remote storage. Workspaces groups **Local**, **Cloud** and **Home Server**
 locations beside a docked file browser and workspace actions. **Documents** collects open readers and editors; their tabs can
-be split or detached. Text, Markdown, EPUB and comic Open dialogs share a Local/LocalCrypt
+be split or detached. Text, Markdown, notebook, EPUB and comic Open dialogs share a Local/LocalCrypt
 file picker; encrypted copies open in private readers or editors. Regular and private file browsers
 share list, tile and column views. **Settings** saves feature choices and configuration and
 provides links to each feature's help.
@@ -89,7 +89,7 @@ profiles in the [build manager](docs/development/build-manager.md).
 | [IDE](docs/features/ide/user/user.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, search project files, and autosave with Git change markers |
 | [LM Chat](docs/features/lm/user/user.md) | Chat with an existing LM server, paste screenshots, read and optionally edit IDE project files with saved change previews, and save conversations locally |
 | [Books](docs/features/books/user/user.md) and [Comics](docs/features/comics/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
-| [Notebooks](docs/features/notebooks/user/user.md) | Create and edit v6 reMarkable ink, organize pages and export .rmdoc copies (experimental) |
+| [Notebooks](docs/features/notebooks/user/user.md) | Create Notebook documents from New document, open/edit .rmdoc files and export native ink copies (experimental) |
 | [PDF Reader](docs/features/pdf/user/user.md) | Read and search local, remote and LocalCrypt PDFs on desktop and mobile, jump to page numbers, and swipe vertically |
 | [Archives](docs/features/archives/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
 | [Images](docs/features/images/user/user.md) | Compress images, work with photo metadata, and [capture bursts on iPhone](docs/features/images/user_mobile/user_mobile.md) |

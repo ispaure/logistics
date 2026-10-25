@@ -31,7 +31,7 @@ class ResourceImports:
                 if not isinstance(items, dict) or len(items) > 256:
                     raise ValueError('Invalid import index.')
                 for key, value in items.items():
-                    if not digest(key) or not isinstance(value, dict) or set(value) != {'provider', 'resource'} or value['provider'] not in {'managed-text', 'library'} or not uuid(value['resource']):
+                    if not digest(key) or not isinstance(value, dict) or set(value) != {'provider', 'resource'} or value['provider'] not in {'managed-text', 'library', 'notebook'} or not uuid(value['resource']):
                         raise ValueError('Invalid import identity.')
                 self.items = items
             except (OSError, ValueError, TypeError, KeyError):

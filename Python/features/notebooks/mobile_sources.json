@@ -17,8 +17,11 @@
     "canvas.py",
     "ink.py",
     "mobile/__init__.py",
+    "mobile/android/io/github/ispaure/logistics/notebooks/BooxRefresh.java",
     "mobile/panel.py",
+    "mobile/documents.py",
     "notebook.py",
-    "workspace.py"
+    "workspace.py",
+    "storage.py"
   ]
 }

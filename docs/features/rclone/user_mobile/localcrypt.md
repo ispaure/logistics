@@ -287,3 +287,12 @@ readable if filename or directory-name encryption was disabled; ciphertext sizes
 counts and timestamps and connection/remote labels are not secret. **Pull to Local**, Move/Save As to Local, exports and clipboard copies intentionally
 produce plaintext. Session-only imports leave an older saved credential vault
 unchanged; use **Forget saved credentials** to remove it and older retained ZIPs.
+
+## Create and edit notebooks
+
+Choose **Notebook (.rmdoc)** in New document and select an unlocked LocalCrypt
+folder, or open an existing notebook from its file browser. Save keeps the file
+encrypted. Save As uses the shared destination picker; exporting or choosing
+ordinary storage asks before creating a decrypted copy. Unsaved private notebook
+edits remain in memory, so save or discard them before closing or locking.
+See [Notebooks on mobile](../../notebooks/user_mobile/user_mobile.md).

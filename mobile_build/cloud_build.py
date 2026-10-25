@@ -45,8 +45,12 @@ def configure_android_sources(project):
     if count != 1:
         raise ValueError('Expected one Android versionCode in generated build.gradle.')
     for line in android['build_gradle_extra_content'].splitlines():
-        if line.startswith('android.sourceSets.main.java.srcDir(') and line not in text.splitlines():
+        if line.startswith(('android.sourceSets.main.java.srcDir(', 'repositories { maven {')) and line not in text.splitlines():
             text += '\n' + line + '\n'
+    # Reused Briefcase projects also need newly declared native dependencies.
+    missing = [dependency for dependency in android['build_gradle_dependencies'] if dependency not in text]
+    if missing:
+        text += '\ndependencies {\n' + ''.join('    implementation "' + dependency + '"\n' for dependency in missing) + '}\n'
     gradle.write_text(text)
     # Chaquopy isolates pip from PIP_* environment variables. Forward the
     # prepared wheel directory explicitly, including on reused projects.
@@ -100,6 +104,21 @@ def configure_android_appearance(project):
         if not any(item.get('{' + namespace + '}name') == permission for item in root.findall('uses-permission')):
             ET.SubElement(root, 'uses-permission', {'{' + namespace + '}name': permission})
     application = root.find('application')
+    # The Onyx device AAR declares its demo label; retain Logistics' own label.
+    tools_namespace = 'http://schemas.android.com/tools'
+    ET.register_namespace('tools', tools_namespace)
+    # Refresh control does not use the SDK's Wi-Fi, Bluetooth or dump helpers.
+    for permission in ('ACCESS_WIFI_STATE', 'CHANGE_WIFI_STATE', 'BLUETOOTH', 'DUMP'):
+        name = 'android.permission.' + permission
+        if not any(item.get('{' + namespace + '}name') == name for item in root.findall('uses-permission')):
+            ET.SubElement(root, 'uses-permission', {
+                '{' + namespace + '}name': name, '{' + tools_namespace + '}node': 'remove'})
+    label = '{' + namespace + '}label'
+    if application.get(label) is not None:
+        key = '{' + tools_namespace + '}replace'
+        replacements = [item.strip() for item in application.get(key, '').split(',') if item.strip()]
+        if 'android:label' not in replacements:
+            application.set(key, ','.join([*replacements, 'android:label']))
     service = 'io.github.ispaure.logistics.books.SpeechMediaService'
     if not any(item.get('{' + namespace + '}name') == service for item in application.findall('service')):
         ET.SubElement(application, 'service', {'{' + namespace + '}name': service,

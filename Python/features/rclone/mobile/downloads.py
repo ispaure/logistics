@@ -45,6 +45,9 @@ class DownloadWorkflow:
             cloud.show_cloud(present=False)
         selected = path if path is not None else cloud.download_labels.get(cloud.download_selector.value)
         selected = Path(selected) if selected is not None else None
+        if selected is not None and selected.suffix.lower() == '.rmdoc':
+            from features.notebooks.mobile.documents import open_notebook
+            return await open_notebook(cloud.app, path=selected, destination=destination)
         if selected is not None and Path(selected).suffix.lower() == '.pdf':
             from features.pdf.mobile.copies import PDFCopies
             from commonUtils.runtime.resources.local import LocalFiles

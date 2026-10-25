@@ -43,6 +43,8 @@ class HostLifecycle:
         from features.books.mobile.media_controls import stop_media
         stop_markdown_speech(host)
         stop_media(host)
+        for panel in getattr(host, '_notebook_views', {}).values():
+            panel.dispose()
         for name in ('vault_browser', 'notebook_panel', 'memory_pressure', 'screen_privacy'):
             resource = getattr(host, name, None)
             if resource is not None:
@@ -94,8 +96,13 @@ class HostLifecycle:
             return True
         if getattr(host, '_reset_scheduled', False):
             return True
-        if getattr(getattr(host, 'notebook_panel', None), 'busy', False):
+        if any(panel.busy for panel in getattr(host, '_notebook_views', {}).values()) or getattr(getattr(host, 'notebook_panel', None), 'busy', False):
             return False
+        for panel in getattr(host, '_notebook_views', {}).values():
+            if panel.document is not None and panel.document.dirty and panel.document.recovery is None:
+                from features.notebooks.mobile.documents import present
+                present(host, panel)
+                return False
         host.retire_private_comic_batch()
         background = getattr(host, 'cloud_startup_task', None)
         restoring = background is not None and not background.done()
@@ -119,6 +126,8 @@ class HostLifecycle:
             stop_markdown_speech(host)
             from features.books.mobile.media_controls import stop_media
             stop_media(host)
+            for panel in getattr(host, '_notebook_views', {}).values():
+                panel.dispose()
             vault = getattr(host, 'vault_browser', None)
             if vault is not None:
                 vault.dispose()

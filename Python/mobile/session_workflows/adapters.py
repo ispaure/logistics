@@ -88,7 +88,11 @@ def close_managed_text(host, key, choice, *, leaving_reader=False):
     return True
 
 
+from features.notebooks.mobile.documents import close_notebook
+
+
 ADAPTERS = {
+    'notebook': close_notebook,
     'notes-library': close_notes_library,
     'credential-reference': close_credential_reference,
     'provider-session': close_provider_session,

@@ -1060,7 +1060,8 @@ class LocalCryptTests(QtTestCase):
                 window.viewer.editor.setPlainText('# Save As draft')
                 window.viewer.editor.document().setModified(True)
                 self.assertTrue(window.viewer.save_as_action.isEnabled())
-                with patch('features.rclone.localcrypt.ui.views.choose_destination', return_value=(local, 'exported.md', lambda: None)):
+                with patch('services.documents.ui.markdown.choose_destination', return_value=(local, 'exported.md', lambda: None)), \
+                        patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes):
                     window.viewer.save_as_dialog()
                 self.wait(lambda: not storage.operation.busy)
                 self.assertEqual((local_root / 'exported.md').read_bytes(), b'# Save As draft')
@@ -1079,13 +1080,13 @@ class LocalCryptTests(QtTestCase):
                 window.viewer.save_document()
                 self.wait(lambda: not storage.operation.busy)
                 self.assertEqual((local_root / 'exported.md').read_bytes(), b'# Saved locally again')
-                with patch('features.rclone.localcrypt.ui.views.choose_destination', return_value=(f.provider, 'another.md', lambda: None)):
+                with patch('services.documents.ui.markdown.choose_destination', return_value=(f.provider, 'another.md', lambda: None)):
                     window.viewer.save_as_dialog()
                 self.wait(lambda: not storage.operation.busy)
                 self.assertEqual(f.provider.read_bytes('another.md'), b'# Saved locally again')
                 window.viewer.editor.setPlainText('# Collision must retain draft')
                 window.viewer.editor.document().setModified(True)
-                with patch('features.rclone.localcrypt.ui.views.choose_destination', return_value=(f.provider, 'note.md', lambda: None)):
+                with patch('services.documents.ui.markdown.choose_destination', return_value=(f.provider, 'note.md', lambda: None)):
                     window.viewer.save_as_dialog()
                 self.wait(lambda: not storage.operation.busy)
                 self.assertEqual(f.provider.read_bytes('note.md'), f.original)

@@ -244,6 +244,38 @@ func cryptEncode(ctx context.Context, name, encrypted, identity, encoded string,
 	return true, nil
 }
 
+// cryptWriteBuffer encrypts bounded binary document bytes from host RAM.
+// Only an exclusive empty ciphertext staging descriptor can be written.
+func cryptWriteBuffer(ctx context.Context, name, encrypted, identity, encoded string, fd int) (bool, error) {
+	_, cipher, err := cryptDescribe(name, encrypted, identity)
+	if err != nil {
+		return false, err
+	}
+	if len(encoded) > base64.StdEncoding.EncodedLen(downloadLimit) {
+		return false, errors.New("document exceeds 32 MiB")
+	}
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(data) > downloadLimit {
+		return false, errors.New("invalid document buffer")
+	}
+	target, err := privateOutput(fd)
+	if err != nil {
+		return false, err
+	}
+	defer target.Close()
+	input, err := cipher.EncryptData(bytes.NewReader(data))
+	if err != nil {
+		return false, err
+	}
+	if closer, ok := input.(io.Closer); ok {
+		defer closer.Close()
+	}
+	if _, err = io.Copy(target, contextReader{ctx, input}); err != nil {
+		return false, err
+	}
+	return true, target.Sync()
+}
+
 // Local file management uses raw document bytes: inner ZIP encryption is opaque.
 func cryptPath(name, value, identity string, directory, decode bool) (map[string]string, error) {
 	cipher, _, _, expected, err := cryptConnection(name)

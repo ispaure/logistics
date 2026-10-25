@@ -4,7 +4,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN
 from features.text_editor.names import document_name
 
-CHOICES = (('Plain text (.txt)', 'txt'), ('Markdown (.md)', 'md'))
+CHOICES = (('Plain text (.txt)', 'txt'), ('Markdown (.md)', 'md'), ('Notebook (.rmdoc)', 'rmdoc'))
 
 
 def choose_document_type(app):
@@ -24,13 +24,17 @@ def choose_document_type(app):
             filename = document_name(name.value)
             # Selecting a type controls the extension; accept either a base
             # name or the full filename without doubling a matching suffix.
-            suffixes = ('.md', '.markdown') if extension == 'md' else ('.txt',)
+            suffixes = ('.md', '.markdown') if extension == 'md' else ('.' + extension,)
             if not filename.lower().endswith(suffixes):
                 filename = document_name(filename + '.' + extension)
         except ValueError as exc:
             error.text = str(exc)
             return
-        await app.editor_picker().show_document_creation(filename, origin)
+        data = None
+        if extension == 'rmdoc':
+            from features.notebooks.notebook import Notebook
+            data = Notebook.new(filename[:-6]).to_bytes()
+        await app.editor_picker().show_document_creation(filename, origin, data=data)
 
     box.name_input, box.type_selector, box.error_label = name, kind, error
     box.create_button = toga.Button('Choose location…', on_press=create, style=Pack(height=48))

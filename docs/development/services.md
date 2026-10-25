@@ -80,3 +80,9 @@ detaches memory-only private views before clearing them, and clears a live iOS
 web document before replacement navigation. Features import this shared policy
 directly; notebooks do not depend on the Text Editor feature. The service is in
 the mobile source allowlist and has no GUI or feature imports at module load.
+
+## Document storage composition
+
+[Document storage sessions](document-storage.md) retain provider lifetimes, bounded
+reads, revision baselines and safe publication. Hosts own destination/privacy
+policy; format editors own document semantics and checkpoint callbacks.

@@ -101,6 +101,15 @@ class SessionTransitions:
         book = readers.controllers.get(key) if readers is not None else None
         if book is not None and host.book_edits_dirty(book):
             return host.request_book_close(book)
+        notebook = getattr(host, '_notebook_views', {}).get(key)
+        if notebook is not None and notebook.document is not None and notebook.document.dirty:
+            async def save_notebook():
+                await notebook.perform({'op': 'save'})
+                if not notebook.document.dirty:
+                    host.close_session(key)
+            return host.document_close_dialog(key, notebook.editor.notebook.name,
+                lambda: host.loop.create_task(save_notebook()),
+                lambda: host.close_session(key, choice='discard'))
         private = host.provider_sessions().controllers.get(key)
         if private is not None and private.private_dirty():
             return host.request_provider_close(private)
@@ -223,15 +232,15 @@ class SessionTransitions:
         # closes must do this too, even without a visible-reader exit intent.
         for current, screens in host.routes.screens.items():
             index = next((i for i, (name, panel, _) in enumerate(screens)
-                          if name in ('private:' + key, 'reader:' + key, 'close:' + key,
+                          if name in ('private:' + key, 'reader:' + key, 'notebook:' + key, 'close:' + key,
                                       'private-close:' + key)
                           or any(getattr(child, '_reader_session_id', None) == key for child in panel.children)), None)
             if index is not None:
                 host.routes.trim(current, index)
                 host.routes.render(current)
         details = host.adaptive.detail_routes
-        index = next((i for i, (_, panel, _) in enumerate(details)
-                      if any(getattr(child, '_reader_session_id', None) == key for child in panel.children)), None)
+        index = next((i for i, (name, panel, _) in enumerate(details)
+                      if name == 'notebook:' + key or any(getattr(child, '_reader_session_id', None) == key for child in panel.children)), None)
         if index is not None:
             host.adaptive.trim_details(index)
         if not leaving or target is None:

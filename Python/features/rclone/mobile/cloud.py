@@ -91,7 +91,8 @@ class CloudClient:
         if values.get('source_remote') and values.get('source_identity'):
             values['source_remote'] = self.resolve_remote(values['source_remote'], values['source_identity'], cipher=True)
         data = json.dumps(values, ensure_ascii=False).encode('utf-8')
-        if len(data) > PACKAGE_LIMIT * (24 if action == 'image_thumbnail' else 2):
+        if len(data) > (45 * PACKAGE_LIMIT if action == 'crypt_write_buffer' else
+                        PACKAGE_LIMIT * (24 if action == 'image_thumbnail' else 2)):
             raise ValueError('Credential package exceeds the request limit.')
         pointer = self.call(action.encode('ascii'), data)
         if not pointer:

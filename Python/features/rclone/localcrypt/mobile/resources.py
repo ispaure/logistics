@@ -249,10 +249,12 @@ class CryptFiles(LocalFiles):
                 with temporary.open('xb') as output:
                     owned = True
                     if fd is None:
-                        data = read_up_to(stream, 1024 * 1024 + 1, cancelled=cancelled)
-                        if len(data) > 1024 * 1024:
-                            raise ValueError('Text saves are limited to 1 MiB.')
-                        self.client.request('crypt_encode', remote=self.remote, identity=self.identity,
+                        legacy_text = Path(path).suffix.lower() in {'.txt', '.md', '.markdown', '.ini'}
+                        limit = 1024 * 1024 if legacy_text else 32 * 1024 * 1024
+                        data = read_up_to(stream, limit + 1, cancelled=cancelled)
+                        if len(data) > limit:
+                            raise ValueError('Document exceeds its buffer size limit.')
+                        self.client.request('crypt_encode' if legacy_text else 'crypt_write_buffer', remote=self.remote, identity=self.identity,
                                             path=self.mapping(path), fd=output.fileno(), data=base64.b64encode(data).decode())
                     else:
                         self.client.request('crypt_raw_write', remote=self.remote, identity=self.identity,
@@ -273,15 +275,32 @@ class ManagedCopies(LocalCryptCopies):
 
     def open(self, key, *, password='', cancelled=lambda: False):
         from commonUtils.archives.zip_access import ArchivePasswordError
+        from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
+        text = Path(key).suffix.lower() in SOURCE_EXTENSIONS
+        revision = self.provider.entry(key)['revision'] if text else None
         try:
-            return super().open(key, password=password, cancelled=cancelled)
+            reader = super().open(key, password=password, cancelled=cancelled)
         except ArchivePasswordError:
             if password:
                 raise
             configured = self.provider.archive_password(key, cancelled=cancelled)
             if not configured:
                 raise
-            return super().open(key, password=configured, cancelled=cancelled)
+            reader = super().open(key, password=configured, cancelled=cancelled)
+        if text:
+            if self.provider.entry(key)['revision'] != revision:
+                raise ValueError('The document changed while opening; reopen it.')
+            reader.document_revision = revision
+        return reader
+
+    def save(self, reader, text, *, cancelled=lambda: False):
+        from services.documents.storage import DocumentResource
+        data = reader.text_snapshot.encode(text)
+        if not reader.editable:
+            raise ValueError('This document does not support text editing.')
+        return DocumentResource.publish(self.provider, reader.key, data, max_bytes=1024 * 1024,
+            expected_revision=reader.document_revision, cancelled=cancelled,
+            after_publish=lambda revision: self.open(reader.key))
 
     def _data(self, key):
         return self.provider._guard(self.provider._physical(key))

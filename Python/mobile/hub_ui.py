@@ -269,6 +269,9 @@ class HubUI:
                     await reopen_file(self.app, source)
                 except (OSError, ValueError, KeyError) as error:
                     await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
+            elif session.provider == 'notebook':
+                from features.notebooks.mobile.documents import open_notebook
+                await open_notebook(self.app, key=session.resource)
             elif session.provider == 'library':
                 await self.open_book(session.resource)
             elif self.open_document(session.resource):
@@ -438,6 +441,12 @@ class HubUI:
             if matches(summary):
                 session = Session('', 'managed-text', record.id, summary[1], title=record.name)
                 rows.append(self.recent_row(session, summary))
+        from features.notebooks.mobile.documents import repository
+        for key, name in repository(self.app).list():
+            if ('notebook', key) not in represented:
+                summary = name, 'notebook', []
+                if matches(summary):
+                    rows.append(self.recent_row(Session('', 'notebook', key, 'notebook', title=name), summary))
         self.document_saved_list.add(document_list(rows,
             'No matching saved documents.' if query else 'No other saved documents.'))
 
@@ -496,6 +505,12 @@ class HubUI:
                 if document.conflict:
                     details.append('File changed outside editor')
             except (OSError, ValueError, KeyError, TypeError):
+                details.append('Unavailable; retry to reopen')
+        elif session.provider == 'notebook':
+            from features.notebooks.mobile.documents import repository
+            names = dict(repository(self.app).list())
+            title = names.get(session.resource, title)
+            if session.resource not in names:
                 details.append('Unavailable; retry to reopen')
         elif session.provider == 'library':
             try:

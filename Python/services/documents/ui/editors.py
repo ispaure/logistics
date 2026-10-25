@@ -54,7 +54,7 @@ def retain(window):
 
 def make_private_editor(choice, session, *, markdown=False, edit=True):
     if markdown:
-        from features.rclone.localcrypt.ui.views import MarkdownStorage, PrivateMarkdownWindow
+        from services.documents.ui.markdown import MarkdownStorage, PrivateMarkdownWindow
         def open_link(path, fragment=''):
             linked = ResourceChoice(choice.provider, choice.provider.relative(path),
                                     choice.provider.acquire() if hasattr(choice.provider, 'acquire') else lambda: None)
@@ -133,7 +133,7 @@ def markdown_action(viewer, mode):
 
 
 def publish_handoff(choice, data, parent, *, markdown=False, completed=lambda: None, before=lambda: None):
-    from commonUtils.runtime.resources.mutations import save_resource_and_reopen
+    from services.documents.storage import DocumentResource
     dialog = ResourceTaskDialog(parent, 'Save As')
     operation = dialog.operation
     parent.setEnabled(False)
@@ -144,7 +144,8 @@ def publish_handoff(choice, data, parent, *, markdown=False, completed=lambda: N
             if session.text.data != data:
                 raise ValueError('Saved document changed.')
             return session
-        return save_resource_and_reopen(choice.provider, choice.path, data, reopen=reopen, cancelled=cancelled)
+        return DocumentResource.publish(choice.provider, choice.path, data, max_bytes=16 * 1024 * 1024,
+            cancelled=cancelled, after_publish=lambda revision: reopen())
     def done(session, error):
         parent.setEnabled(True)
         transferred = False

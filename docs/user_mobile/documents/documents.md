@@ -14,7 +14,7 @@ documents** lists other saved text and Markdown files. **Search documents**
 filters all three sections by filename. **Open Books & Comics library** is available
 below those lists. Empty lists show plain informational text without a rounded block.
 
-To create a document, enter its name and choose Plain text or Markdown, then tap
+To create a document, enter its name and choose Plain text, Markdown or Notebook, then tap
 **Choose location…**. Select a folder in **Local**, **All files**, **Received Files**
 or an unlocked **LocalCrypt** location, then tap **Create document**. The file is
 created in that folder and appears when you browse it from All files. **Save**
@@ -22,6 +22,13 @@ writes edits back to the same file. LocalCrypt files stay encrypted on disk;
 cloud locations are read-only and receive changes through reviewed **Push**.
 New documents do not use the private saved-document store. Existing saved
 documents remain available in Documents.
+
+The location picker starts at **All files**, the same root as Workspaces’
+**Browse All Files**. Open Local or Received Files to choose a folder; Up returns
+to All files from either collection. Creation errors appear in a scrollable text
+area beneath the destination. Correct the name or location and try again.
+For a notebook, choose **Notebook (.rmdoc)** and a Local or unlocked LocalCrypt folder;
+see [Notebooks on mobile](../../features/notebooks/user_mobile/user_mobile.md).
 
 After **Create document** opens your new file, **×** closes it and returns to the
 screen where you opened New document. It does not reopen the completed creation

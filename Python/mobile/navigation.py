@@ -1,12 +1,11 @@
 """Platform-independent destination state; native widgets are presentation only."""
 from commonUtils.ui.native.navigation_state import NavigationState as DestinationState
 
-DESTINATIONS = ('home', 'notebooks', 'files', 'documents', 'chat', 'settings')
+DESTINATIONS = ('home', 'files', 'documents', 'chat', 'settings')
 
 
 DESTINATION_ITEMS = (
     ('home', 'Home', 'house', 'home'),
-    ('notebooks', 'Notebooks', 'pencil.and.outline', 'ic_menu_edit'),
     ('files', 'Workspaces', 'square.grid.2x2', 'ic_menu_mapmode'),
     ('documents', 'Documents', 'doc.on.doc', 'ic_menu_edit'),
     ('chat', 'Chat', 'bubble.left.and.bubble.right', 'ic_dialog_email'),

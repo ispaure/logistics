@@ -35,163 +35,8 @@ def ensure_session(config_path, *, package=None, parent=None):
     return True
 
 
-def choose_destination(parent, provider, name, action):
-    from services.documents.ui.editors import choose_editor_resource
-    choice = choose_editor_resource(parent, 'save' if action == 'Save As' else 'destination', provider, name,
-                                    markdown=action == 'Save As')
-    return (choice.provider, choice.path, choice.close) if choice else None
-
-
-class MarkdownStorage:
-    private = True
-    def __init__(self, provider, path, data, resources, open_link):
-        self.provider, self.path, self.data = provider, path, data
-        self.resources = resources
-        self._initial_open_link = open_link
-        self._initial_provider = provider
-
-    def open_link(self, path, fragment=''):
-        if Path(path).suffix.lower() in {'.md', '.markdown', '.txt'}:
-            from services.documents.ui.editors import open_editor_choice
-            from commonUtils.runtime.resources.selection import ResourceChoice
-            choice = ResourceChoice(self.provider, self.provider.relative(path),
-                                    self.provider.acquire() if hasattr(self.provider, 'acquire') else lambda: None)
-            return open_editor_choice(choice, self.window, markdown=Path(path).suffix.lower() != '.txt', fragment=fragment, edit=False)
-        if self.provider is self._initial_provider:
-            return self._initial_open_link(path, fragment)
-        qt.QMessageBox.information(self.window, 'Open link', 'Open this file from its current storage browser.')
-
-    def bind_window(self, window):
-        self.window = window
-        self.operation = OperationProgress(window)
-        self.operation.completed.connect(self._written)
-        content = qt.QWidget(window)
-        layout = qt.QVBoxLayout(content)
-        layout.setContentsMargins(0, 0, 0, 0)
-        window.viewer.setParent(content)
-        layout.addWidget(window.viewer, 1)
-        layout.addWidget(self.operation)
-        window.setCentralWidget(content)
-
-    def submit_write(self, path, data, expected, completed):
-        self.pending_write = data, completed
-        self.window.viewer.setEnabled(False)
-        self.operation.start(lambda report, cancelled: self.write_bytes(path, data, expected=expected, cancelled=cancelled), message='Encrypting local Markdown save…')
-
-    def _written(self, result, error):
-        self.window.viewer.setEnabled(True)
-        data, completed = self.pending_write
-        completed(error)
-        self.operation.hide()
-        self.window.idle.emit()
-        if not error and self.window.pending_close:
-            self.window.close()
-        elif error:
-            self.window.pending_close = False
-
-    def read_bytes(self, path):
-        if hasattr(self.provider, '_check_active'):
-            self.provider._check_active()
-        if path != self.path:
-            raise ValueError('Open other documents through the private browser.')
-        return self.data
-
-    def write_bytes(self, path, data, *, expected=None, cancelled=lambda: False):
-        from commonUtils.runtime.resources.selection import ResourceTextSession
-        session = ResourceTextSession.open(self.provider, path, max_bytes=8 * 1024 * 1024, cancelled=cancelled)
-        if expected is not None and session.text.data != expected:
-            raise ValueError('File changed. Reopen it before saving.')
-        session.publish(self.provider, path, data, expected_revision=session.text.revision, cancelled=cancelled)
-        self.data = data
-
-    def open_dialog(self, viewer):
-        from services.documents.ui.editors import choose_editor_resource, open_editor_choice
-        if self.operation.busy:
-            return False
-        choice = choose_editor_resource(self.window, 'open', self.provider, markdown=True)
-        if choice:
-            open_editor_choice(choice, self.window, markdown=True)
-        return False
-
-    def save_as(self, viewer):
-        from commonUtils.runtime.resources.mutations import save_resource_bytes
-        if self.operation.busy:
-            return False
-        selected = choose_destination(self.window, self.provider, self.path.name, 'Save As')
-        if selected is None:
-            return False
-        provider, target, release = selected
-        try:
-            data = viewer.capture_save()
-            if Path(target).suffix.lower() not in {'.md', '.markdown'} or len(data) > 8 * 1024 * 1024:
-                raise ValueError('Choose a Markdown filename; saves are limited to 8 MiB.')
-        except Exception as error:
-            release()
-            qt.QMessageBox.warning(self.window, 'Save As', str(error))
-            return False
-        if not viewer.begin_save():
-            release()
-            return False
-        viewer.setEnabled(False)
-        def completed(error):
-            if error:
-                release()
-                viewer.complete_save(self.path, data, error)
-                return
-            self.window.destroyed.connect(release)
-            self.provider, self.path, self.data = provider, provider.root / target, data
-            self.resources = {}
-            viewer.complete_save(self.path, data)
-        self.pending_write = data, completed
-        def save_copy(report, cancelled):
-            from commonUtils.runtime.resources.selection import ResourceTextSession
-            from commonUtils.persistence.text import TextSession
-            baseline = ResourceTextSession(provider, target, TextSession(Path(target).name, data, max_bytes=8 * 1024 * 1024))
-            return baseline.publish(provider, target, data, cancelled=cancelled)
-        self.operation.start(save_copy, message='Saving verified copy…')
-        return False
-
-    def load_resource(self, kind, url):
-        if hasattr(self.provider, '_check_active'):
-            self.provider._check_active()
-        if not url.isLocalFile():
-            url = qt.QUrl.fromLocalFile(str(self.path.parent) + '/').resolved(url)
-        data = self.resources.get(Path(url.toLocalFile()))
-        if kind == qt.QTextDocument.ResourceType.ImageResource:
-            return qt.QImage.fromData(data) if data else qt.QImage()
-        return qt.QByteArray(data or b'')
-
-
-from features.rclone.localcrypt.markdown import prepare_markdown
-
-
-from commonUtils.ui.markdown.window import MarkdownWindow
-
-
-class PrivateMarkdownWindow(MarkdownWindow):
-    idle = qt.Signal()
-    def __init__(self, path, storage, *, edit=True):
-        self.pending_close = False
-        super().__init__(path, allow_edit=True, storage=storage)
-        if not edit:
-            self.viewer.set_editing(False)
-        storage.bind_window(self)
-        from services.documents.ui.private_views import protect_private_view
-        protect_private_view(self, storage.provider)
-
-    def _update_title(self):
-        super()._update_title()
-        self.setWindowTitle('🕵️ Private - ' + self.windowTitle())
-
-    def closeEvent(self, event):
-        storage = self.viewer.storage
-        if storage.operation.busy:
-            self.pending_close = True
-            event.ignore()
-            return
-        super().closeEvent(event)
-        if storage.operation.busy:
-            self.pending_close = True
+from services.documents.ui.markdown import MarkdownStorage, PrivateMarkdownWindow, choose_destination
+from services.documents.markdown import prepare_markdown
 
 
 class CryptBrowserView(qt.QMainWindow):
@@ -430,12 +275,17 @@ class CryptBrowserView(qt.QMainWindow):
             return
         path = Path(path)
         suffix = path.suffix.lower()
+        if suffix == '.rmdoc':
+            from services.documents.ui.notebooks import open_notebook_choice
+            from commonUtils.runtime.resources.selection import ResourceChoice
+            return open_notebook_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)
         if suffix in {'.pdf', '.epub', '.cbz', '.zip'}:
             from services.documents.ui.readers import open_reader_choice
             from commonUtils.runtime.resources.selection import ResourceChoice
             return open_reader_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()),
                                       self, 'pdf' if suffix == '.pdf' else 'epub' if suffix == '.epub' else 'comic', password=password)
-        if suffix == '.txt':
+        from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
+        if suffix in SOURCE_EXTENSIONS and suffix not in {'.md', '.markdown'}:
             from services.documents.ui.editors import open_editor_choice
             from commonUtils.runtime.resources.selection import ResourceChoice
             open_editor_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)
@@ -445,7 +295,7 @@ class CryptBrowserView(qt.QMainWindow):
         if suffix in {'.md', '.markdown'}:
             callback = lambda report, cancelled: ('markdown', prepare_markdown(self.provider, path))
         else:
-            qt.QMessageBox.information(self, 'Private file', 'This private browser currently opens text, Markdown, EPUB and comic ZIP/CBZ files.')
+            qt.QMessageBox.information(self, 'Private file', 'This browser opens notebooks, PDF, text/source files, Markdown, EPUB and comic ZIP/CBZ files.')
             return
         def open_private(report, cancelled):
             with self.provider.operation(cancelled):

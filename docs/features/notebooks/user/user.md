@@ -1,13 +1,24 @@
 # reMarkable notebooks on desktop
 
-Open **Notebooks** in the desktop navigation, or activate an `.rmdoc` file in the
-file browser. **New notebook** creates a blank notebook; **Open .rmdoc** imports
-an existing notebook into a local working copy. The source file is unchanged.
-The workspace lists saved copies for reopening. Use **Export .rmdoc** to save a
-separate archive through the file dialog, then transfer it to your tablet using
-a method supported by your reMarkable model and firmware.
-The desktop document chooser also lists **reMarkable Notebook**; its **New**
-action opens a newly created notebook directly.
+Choose **Notebook (.rmdoc)** in the desktop **New / Open Document** chooser.
+**New** opens a blank notebook immediately. Choose a destination when you first
+use **Save** or **Save As**; cancelling leaves the draft open. Closing an edited,
+unsaved notebook asks whether to save, discard or cancel. **Open** chooses an
+existing `.rmdoc` file.
+You can also activate `.rmdoc` files in the file browser. Notebooks open as
+ordinary document tabs in Documents, with the same detach/close controls as
+other document types. There is no separate Notebooks navigation destination.
+New unsaved drafts stay in memory until saved. Local recovery copies support
+existing notebooks; private notebooks keep edits in memory until explicitly saved.
+Use **Export** to write an updated `.rmdoc` file copy. The standalone editor's
+saved-copy list remains available when running without the application host.
+
+
+**Open**, **Save** and **Save As** use the shared storage chooser, including
+unlocked LocalCrypt copies. Saving a private notebook publishes verified
+ciphertext; its unsaved draft stays in memory and does not use ordinary recovery.
+Saving or exporting private content to ordinary storage asks before writing a
+decrypted copy. Cloud notebook opening and editing remain unavailable.
 
 Choose Fineliner, Ballpoint, Pencil, Mechanical pencil, Marker, Paintbrush,
 Calligraphy or Highlighter, plus an ink color and width. Drag on the page to draw.

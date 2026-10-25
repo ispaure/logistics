@@ -81,6 +81,7 @@ class DocumentNavigationTests(TestCase):
                     form.name_input.value = 'Created ' + destination + ' ' + choice
                     form.type_selector.value = kind
                     app.loop.run_until_complete(form.create_button.on_press())
+                    app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
                     app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
                     owner = app.private_sessions.active
                     self.assertNotIn('new-document', [screen[0] for screen in app.routes.screens[destination]])
@@ -105,7 +106,8 @@ class DocumentNavigationTests(TestCase):
         form.name_input.value = 'Could not create'
         app.loop.run_until_complete(form.create_button.on_press())
         picker = app.editor_picker()
-        with patch('commonUtils.runtime.resources.mutations.save_resource_and_reopen', side_effect=OSError('No space')):
+        app.loop.run_until_complete(picker.browser_editor_location(('Local', '')))
+        with patch('services.documents.storage.save_resource_and_reopen', side_effect=OSError('No space')):
             app.loop.run_until_complete(picker.confirm_editor_file())
         self.assertIn('No space', picker.save_as_status.value)
         picker.cancel_text_destination()

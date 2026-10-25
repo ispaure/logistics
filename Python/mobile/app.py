@@ -328,6 +328,10 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                     self.workspace.active = restored_document.id
                     self.show_documents_hub()
                     self.startup_document_task = self.loop.create_task(self.resume_library_session(restored_document))
+                elif restored_document.provider == 'notebook':
+                    from features.notebooks.mobile.documents import open_notebook
+                    self.show_documents_hub()
+                    self.startup_document_task = self.loop.create_task(open_notebook(self, key=restored_document.resource, destination='documents'))
                 elif restored_document.provider == 'managed-text':
                     self.show_documents(resume=True, destination='documents')
         elif restored_document is not None and restored_document.provider == 'library':
@@ -348,23 +352,30 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             return False
         if destination != 'files':
             self.retire_private_comic_batch()
-        if destination != self.native_host.state.destination:
-            self.mark_navigation()
+        self.mark_navigation()
         self.save_workspace()
         adaptive = getattr(self, 'adaptive', None)
-        if (destination == 'documents' and destination == self.native_host.state.destination
-                and (self.routes.screens['documents']
-                     or (adaptive is not None and adaptive.in_detail and adaptive.detail_routes))):
-            # A second tap means "show the list"; switching back from another
-            # destination still resumes the retained document.
-            self.pending_reader_restore = None
-            self.show_documents_hub()
-            return True
-        if destination == 'notebooks':
-            from features.notebooks.mobile.panel import NotebookPanel
-            if not hasattr(self, 'notebook_panel'):
-                self.notebook_panel = NotebookPanel(self)
-                self.show_view(self.notebook_panel.view, destination='notebooks', root=True)
+        if destination == self.native_host.state.destination:
+            # Reselecting any tab returns to its root without closing retained
+            # document/chat sessions or asking for a reader-close decision.
+            if adaptive is not None and destination in adaptive.menu_open:
+                adaptive.menu_open[destination] = False
+            if destination == 'documents':
+                self.pending_reader_restore = None
+                self.show_documents_hub()
+                return True
+            cancel = getattr(self, '_cancel_transfer_review', None)
+            if destination == 'files' and cancel is not None:
+                cancel()
+            if (destination == 'chat' and getattr(self, 'chat_drawer_open', False)
+                    and adaptive is not None and adaptive.width() < 640):
+                self.toggle_chat_conversations()
+            if destination == 'settings' and hasattr(self, 'settings_navigation'):
+                self.settings_navigation.detail_requested = False
+                for child in list(self.settings_navigation.detail.children):
+                    self.settings_navigation.detail.remove(child)
+            self.routes.trim(destination, 0)
+            self.routes.render(destination)
         if destination == 'chat' and not self.routes.screens['chat']:
             self.show_chat(present=False)
         if destination == 'settings':
@@ -578,7 +589,10 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                         self.show_unavailable_session(key)
                     return
                 self.adaptive.focus_session(key)
-                if session.provider == 'library':
+                if session.provider == 'notebook':
+                    from features.notebooks.mobile.documents import open_notebook
+                    self.loop.create_task(open_notebook(self, key=session.resource))
+                elif session.provider == 'library':
                     self.loop.create_task(self.resume_library_session(session))
                 elif session.provider == 'credential-reference':
                     self.loop.create_task(self.credential_document_lists.open(session))
@@ -930,6 +944,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         return self.provider_sessions().dirty()
 
     def clear_private_reader(self, *, discard=False):
+        from features.notebooks.mobile.documents import prepare_notebook_lock
+        if not prepare_notebook_lock(self, discard=discard):
+            return False
         return self.provider_sessions().clear(discard=discard)
 
     def resume_crypt(self, widget=None, **kwargs):

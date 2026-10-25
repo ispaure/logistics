@@ -75,6 +75,8 @@ class DocumentMutation:
     def __init__(self, app, request):
         self.app, self.request = app, request
         self.bindings = []
+        from .notebook_mutations import NotebookMutations
+        self.notebooks = NotebookMutations(app, request)
         manager = app.provider_sessions()
         owners = getattr(app.workspace, 'window_owners', None)
         hosts = list(owners.hosts.values()) if owners is not None else [app]
@@ -129,9 +131,11 @@ class DocumentMutation:
                 current = binding.copies.open(binding.reader.key, cancelled=cancelled)
                 if current.data != binding.reader.data or current.revision != binding.reader.revision:
                     raise ValueError('An open document changed on disk. Reload or use Save As before moving it.')
+            self.notebooks.prepare(destination, target, cancelled)
             result = request.execute(cancelled, destination=destination)
             updated = []
             try:
+                notebooks = self.notebooks.reopen(destination)
                 for binding in self.bindings:
                     key = '/'.join(p for p in (
                         destination_document[1] if destination_document else target, binding.relative) if p)
@@ -145,7 +149,7 @@ class DocumentMutation:
                 raise MutationIncomplete('The file was moved, but the editor could not follow it. '
                     'Edits are retained; use Save As and inspect the destination before retrying.',
                     MutationResult(destination_published=True, source_state='removed')) from error
-        return result, updated
+        return result, updated, notebooks
 
     def apply(self, result):
         from .private_sessions import PrivateSessions
@@ -203,9 +207,11 @@ class DocumentMutation:
                     app.recent_documents.remember_file(session, session.history_source)
             except (OSError, ValueError):
                 app.credential_document_lists.notice()
+        self.notebooks.apply(result[2])
         app.save_workspace()
 
     def release(self):
+        self.notebooks.release()
         for binding in self.bindings:
             owner = binding.owner
             if (not self.app.active_host or self.app.private_sessions.controllers.get(owner.session.id) is not owner

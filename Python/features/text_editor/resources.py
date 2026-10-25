@@ -35,17 +35,19 @@ class LocalTextCopies:
         return isinstance(self.provider, LocalFiles)
 
     def open(self, key, *, password='', cancelled=lambda: False, read_provider=None):
-        from commonUtils.runtime.resources.selection import ResourceTextSession
-        session = ResourceTextSession.open(read_provider if read_provider is not None else self.provider,
-                                          key, cancelled=cancelled)
-        reader = TextReader(session.text.name, session.text.data, key=session.path, revision=session.text.revision)
+        from services.documents.storage import DocumentResource
+        with DocumentResource(read_provider if read_provider is not None else self.provider, key,
+                              max_bytes=1024 * 1024, independent=False) as resource:
+            data = resource.read(cancelled=cancelled)
+            reader = TextReader(resource.name, data, key=resource.path, revision=resource.revision)
         reader.read_only = not can_write(provider=self.provider)
         return reader
 
     def save(self, reader, text, *, cancelled=lambda: False):
         if not can_write(provider=self.provider, reader=reader):
             raise ValueError('Remote Markdown is read-only. Create a local copy before editing.')
-        from commonUtils.runtime.resources.selection import ResourceTextSession
-        session = ResourceTextSession(self.provider, reader.key, reader.session)
-        updated = session.save(text, cancelled=cancelled)
-        return TextReader(updated.text.name, updated.text.data, key=updated.path, revision=updated.text.revision)
+        from services.documents.storage import DocumentResource
+        data = reader.session.encode(text)
+        revision = DocumentResource.publish(self.provider, reader.key, data, max_bytes=1024 * 1024,
+            expected_revision=reader.revision, cancelled=cancelled)
+        return TextReader(reader.name, data, key=reader.key, revision=revision)

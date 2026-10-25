@@ -4,12 +4,12 @@ from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.persistence.text import (
     read_text_file,
-    write_text_file,
     decode_bytes,
     FileConflictError,
     MAX_BYTES,
 )
 from features.text_editor.ui.document import Document
+from services.documents.storage import write_local_document as write_text_file
 
 
 class FileOperations:

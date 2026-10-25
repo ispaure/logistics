@@ -13,7 +13,7 @@ from mobile_build.tests.storage.test_storage_reader_opening import ReaderClient
 
 class CreationClient(ReaderClient):
     def request(self, action, **values):
-        if action == 'crypt_encode':
+        if action in {'crypt_encode', 'crypt_write_buffer'}:
             data = base64.b64decode(values['data'])
             os.write(values['fd'], b'cipher:' + data[::-1])
             return {}
@@ -42,12 +42,75 @@ class DocumentCreationTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
-    def choose(self, name, kind='Plain text (.txt)'):
+    def choose(self, name, kind='Plain text (.txt)', *, local=True):
         self.app.choose_document_type()
         form = self.app.body.children[0].content
         form.name_input.value, form.type_selector.value = name, kind
         self.app.loop.run_until_complete(form.create_button.on_press())
-        return form, self.app.editor_picker()
+        picker = self.app.editor_picker()
+        if local:
+            row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Local')
+            self.app.loop.run_until_complete(picker.browser_editor_folder(row))
+        return form, picker
+
+    def test_creation_starts_at_browse_all_files_and_can_return_from_collections(self):
+        _, picker = self.choose('Anywhere', local=False)
+        self.assertEqual(picker.editor_picker_location, ('All files', ''))
+        self.assertEqual(picker.editor_provider('All files').root, device_files(self.root).root)
+        self.assertFalse(picker.picker_primary.enabled)
+        self.assertFalse(picker.picker_new_folder.enabled)
+        for name in ('Local', 'Received Files'):
+            row = next(row for row in picker.editor_picker_rows.values() if row['name'] == name)
+            self.app.loop.run_until_complete(picker.browser_editor_folder(row))
+            self.assertEqual(picker.editor_picker_location, (name, ''))
+            self.assertTrue(picker.picker_primary.enabled)
+            self.assertTrue(picker.picker_parent.enabled)
+            self.app.loop.run_until_complete(picker.parent_editor_folder())
+            self.assertEqual(picker.editor_picker_location, ('All files', ''))
+
+    def test_ios_shared_root_and_collection_destinations_publish_documents(self):
+        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        from mobile.incoming_files import inbox_path
+        shared_directory = TemporaryDirectory()
+        self.addCleanup(shared_directory.cleanup)
+        shared = Path(shared_directory.name)
+        use_shared_local(self.root, shared)
+        self.addCleanup(_shared_local_roots.pop, self.root)
+        (shared / 'Notes').mkdir()
+        for label, folder, target in (
+                ('All files', 'Notes', shared / 'Notes/Public.md'),
+                ('Local', '', shared / 'Local/Public.md'),
+                ('Received Files', '', inbox_path(self.root) / 'Public.md')):
+            with self.subTest(label=label):
+                _, picker = self.choose('Public', 'Markdown (.md)', local=False)
+                path = folder if label == 'All files' else picker.editor_provider(label).root.name
+                self.app.loop.run_until_complete(picker.browser_editor_location(('All files', path)))
+                self.assertEqual(picker.editor_picker_location, (label, folder))
+                self.app.loop.run_until_complete(picker.confirm_editor_file())
+                self.assertTrue(target.is_file(), picker.save_as_status.value)
+
+    def test_notebook_name_preview_listing_validation_and_retry_use_notebook_format(self):
+        from features.notebooks.notebook import Notebook
+        local = self.root / 'LocalFiles'
+        local.mkdir(exist_ok=True)
+        (local / 'Existing.rmdoc').write_bytes(Notebook.new('Existing').to_bytes())
+        (local / 'Text.txt').write_text('other format')
+        _, picker = self.choose('Sketch', 'Notebook (.rmdoc)')
+        self.assertEqual(picker.effective_name.text, 'Save as: Sketch.rmdoc')
+        self.assertIn('Existing.rmdoc', [row['name'] for row in picker.editor_picker_rows.values()])
+        self.assertNotIn('Text.txt', [row['name'] for row in picker.editor_picker_rows.values()])
+        picker.save_as_name.value = 'Invalid.txt'
+        self.app.loop.run_until_complete(picker.confirm_editor_file())
+        self.assertIn('Creation failed:', picker.save_as_status.value)
+        self.assertTrue(picker.save_as_status.readonly)
+        self.assertFalse((local / 'Invalid.txt').exists())
+        picker.save_as_name.value = 'Renamed'
+        self.assertEqual(picker.effective_name.text, 'Save as: Renamed.rmdoc')
+        picker.new_folder_name.value = 'Test'
+        self.app.loop.run_until_complete(picker.create_picker_folder())
+        self.app.loop.run_until_complete(picker.confirm_editor_file())
+        self.assertTrue((local / 'Test/Renamed.rmdoc').is_file(), picker.save_as_status.value)
+        self.assertIsNotNone(self.app.notebook_panel)
 
     def test_local_document_is_in_all_files_and_saves_to_the_chosen_folder(self):
         app = self.app
@@ -139,3 +202,38 @@ class DocumentCreationTests(unittest.TestCase):
             self.app.loop.run_until_complete(picker.confirm_editor_file())
         self.assertIn('Close an open document', picker.save_as_status.value)
         self.assertFalse((self.root / 'LocalFiles/No capacity.txt').exists())
+
+    def test_notebook_creation_opens_in_shared_documents_and_recovers_ink(self):
+        from features.notebooks.notebook import Notebook
+        from features.notebooks.mobile.documents import open_notebook
+        app = self.app
+        _, picker = self.choose('Sketches', 'Notebook (.rmdoc)')
+        app.loop.run_until_complete(picker.confirm_editor_file())
+        panel = getattr(app, 'notebook_panel', None)
+        self.assertIsNotNone(panel, picker.save_as_status.value)
+        self.assertEqual(panel.editor.notebook.name, 'Sketches')
+        self.assertEqual(app.native_host.state.destination, 'home')
+        source = self.root / 'LocalFiles/Sketches.rmdoc'
+        self.assertEqual(Notebook.read(source.read_bytes()).name, 'Sketches')
+        panel.editor.apply(dict(op='stroke', points=[[20,30,.4],[40,50,.8]], tool=12, width=2))
+        key, session_id = panel.key, panel.session.id
+        self.assertTrue(app.close_session(session_id))
+        self.assertNotIn(session_id, app.workspace.sessions)
+        self.assertTrue(app.loop.run_until_complete(open_notebook(app, path=source)))
+        self.assertEqual(app.notebook_panel.key, key)
+        self.assertEqual(len(app.notebook_panel.editor.notebook.page(0).strokes), 1)
+        self.assertNotIn('new-document', [row[0] for row in app.routes.screens['home']])
+        self.assertNotIn('text-destination', [row[0] for row in app.routes.screens['home']])
+
+    def test_multiple_notebooks_keep_independent_editors_and_reopen_from_documents(self):
+        from features.notebooks.mobile.documents import open_notebook
+        app = self.app
+        app.loop.run_until_complete(open_notebook(app, name='First'))
+        first = app.notebook_panel
+        app.loop.run_until_complete(open_notebook(app, name='Second'))
+        second = app.notebook_panel
+        self.assertIsNot(first, second)
+        self.assertEqual(len(app._notebook_views), 2)
+        self.assertTrue(app.loop.run_until_complete(open_notebook(app, key=first.key)))
+        self.assertEqual(app.workspace.active, first.session.id)
+        self.assertEqual(second.editor.notebook.name, 'Second')

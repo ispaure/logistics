@@ -134,7 +134,7 @@ class SceneManager:
         if (not isinstance(value, dict) or set(value) != {'schema', 'destination'} or value['schema'] != 1
                 or value['destination'] not in ('home', 'notebooks', 'files', 'documents', 'chat', 'settings')):
             raise ValueError('Window state was preserved; it cannot be restored.')
-        return value['destination']
+        return 'documents' if value['destination'] == 'notebooks' else value['destination']
 
     def install_ios(self):
         from rubicon.objc import ObjCClass, ObjCProtocol, objc_method, objc_property

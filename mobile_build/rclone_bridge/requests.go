@@ -147,6 +147,8 @@ func executeRequest(ctx context.Context, action string, request bridgeRequest) (
 		result, err = cryptDecode(ctx, request.Remote, request.Path, request.Identity, request.FD, request.Password)
 	case "crypt_metadata":
 		result, err = cryptStreamMetadata(ctx, request.Remote, request.Path, request.Identity, request.Password, request.Member, request.Data, request.FD, request.OutputFD)
+	case "crypt_write_buffer":
+		result, err = cryptWriteBuffer(ctx, request.Remote, request.Path, request.Identity, request.Data, request.FD)
 	case "crypt_encode":
 		result, err = cryptEncode(ctx, request.Remote, request.Path, request.Identity, request.Data, request.FD)
 	case "probe":

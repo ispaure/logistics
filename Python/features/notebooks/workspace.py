@@ -32,7 +32,15 @@ class Repository:
         directory = self.root / key
         directory.mkdir()
         atomic_write_bytes(directory / 'base.rmdoc', notebook.to_bytes())
-        self.save(key, notebook)
+        # A new recovery identity has no previous manifest, even when its model
+        # was copied from another saved notebook.
+        previous = getattr(notebook, '_recovery_revision', None)
+        notebook._recovery_revision = None
+        try:
+            self.save(key, notebook)
+        except BaseException:
+            notebook._recovery_revision = previous
+            raise
         return key
 
     @serialize_mutation

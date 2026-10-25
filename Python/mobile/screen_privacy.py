@@ -109,6 +109,8 @@ class ScreenPrivacy:
     def retire_stale(self):
         if self.disposed or not self.app.active_host:
             return
+        from features.notebooks.mobile.documents import retire_stale_notebooks
+        retire_stale_notebooks(self.app)
         self.app.credential_document_lists.refresh()
         self.app.retire_private_comic_batch(stale_only=True)
         private = getattr(self.app, 'private_sessions', None)
@@ -136,6 +138,8 @@ class ScreenPrivacy:
             candidates.append(getattr(self.app, 'save_as_privacy_gate', None))
         candidates.extend(CloudClient.credential_state.package_privacy.values())
         candidates.extend(getattr(owner, 'privacy_gate', None) for owner in owners.values())
+        candidates.extend(getattr(panel, 'privacy_gate', None)
+                          for panel in getattr(self.app, '_notebook_views', {}).values())
         return tuple(dict.fromkeys(gate for gate in candidates if gate is not None))
 
     def sensitive(self):

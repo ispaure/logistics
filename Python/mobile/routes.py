@@ -236,7 +236,7 @@ class MobileRoutes(Routes):
             action = picker.editor_browser.back_action()
             if action is not None:
                 return self.invoke_back(action)
-            if picker.picker_folder.value:
+            if picker.has_parent_folder():
                 return self.invoke_back(picker.parent_editor_folder)
 
         # Search is presentation state, not a reason to leave an editor.

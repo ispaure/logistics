@@ -7,6 +7,7 @@ from mobile.app import LogisticsMobile
 from mobile.navigation import DESTINATIONS
 from features.notebooks.notebook import Notebook
 from features.notebooks.workspace import Editor
+from features.notebooks.mobile.documents import open_notebook
 
 
 class NotebookPanelTests(unittest.TestCase):
@@ -21,21 +22,35 @@ class NotebookPanelTests(unittest.TestCase):
 
     def test_destination_order_and_retained_workspace(self):
         app=self.app
-        self.assertEqual(DESTINATIONS[:3],('home','notebooks','files'))
-        app.select_destination('notebooks')
-        app.native_host.activate('notebooks')
+        self.assertEqual(DESTINATIONS[:3],('home','files','documents'))
+        self.assertNotIn('notebooks', DESTINATIONS)
+        app.loop.run_until_complete(open_notebook(app))
         panel=app.notebook_panel
-        self.assertIn(panel.view,app.routes.roots['notebooks'].children)
+        self.assertIn(panel.session.id, app.workspace.sessions)
         app.loop.run_until_complete(panel.new())
         book=panel.editor.notebook
         panel.editor.apply(dict(op='stroke',points=[[100,100,.4],[130,140,.7]],tool=12,width=3))
         app.select_destination('home')
         app.native_host.activate('home')
-        app.select_destination('notebooks')
+        app.session_opener(panel.session.id)()
+        app.loop.run_until_complete(asyncio.sleep(.01))
         self.assertIs(app.notebook_panel.editor.notebook,book)
         restored=panel.repository.open(panel.key)
         self.assertEqual(len(restored.page(0).strokes),1)
         self.assertEqual(restored.page(0).strokes[0].tool,12)
+
+    def test_retiring_canvas_releases_native_refresh_controller(self):
+        from unittest.mock import Mock
+        self.app.loop.run_until_complete(open_notebook(self.app))
+        panel = self.app.notebook_panel
+        self.app.loop.run_until_complete(panel.new())
+        controller = Mock()
+        panel.boox_refresh = controller
+        panel.library()
+        controller.close.assert_called_once_with()
+        self.assertIsNone(panel.boox_refresh)
+        panel.dispose()
+        controller.close.assert_called_once_with()
 
     def test_workspace_opens_a_notebook_copy_without_changing_source(self):
         from unittest.mock import patch
@@ -49,7 +64,8 @@ class NotebookPanelTests(unittest.TestCase):
         with patch.object(owner, 'selected_file', return_value=(LocalFiles(path.parent), path.name)):
             result = app.loop.run_until_complete(owner.read_managed_file())
         self.assertTrue(result)
-        self.assertEqual(app.native_host.state.destination, 'notebooks')
+        self.assertEqual(app.native_host.state.destination, 'files')
+        self.assertEqual(app.notebook_panel.session.provider, 'notebook')
         self.assertEqual(app.notebook_panel.editor.notebook.name, 'From Workspaces')
         app.notebook_panel.editor.apply(dict(op='add-page'))
         self.assertEqual(path.read_bytes(), original)
@@ -65,14 +81,14 @@ class NotebookPanelTests(unittest.TestCase):
         # Build ordinary local controls before supplying an explicit selection.
         app.loop.run_until_complete(app.show_files())
         with patch.object(owner, 'selected_file', return_value=(provider, path.name)), \
-                patch.object(app, 'select_destination', return_value=False):
+                patch.object(app, 'checkpoint', return_value=False):
             result = app.loop.run_until_complete(owner.read_managed_file())
         self.assertFalse(result)
         self.assertFalse(hasattr(app, 'notebook_panel'))
 
     def test_copy_and_reopen_synthetic_import(self):
         app=self.app
-        app.select_destination('notebooks')
+        app.loop.run_until_complete(open_notebook(app))
         panel=app.notebook_panel
         path=Path(self.temp.name)/'sample.rmdoc'
         path.write_bytes(Notebook.new('Original').to_bytes())
@@ -97,7 +113,7 @@ class NotebookPanelTests(unittest.TestCase):
     def test_retired_canvas_and_busy_commands_do_not_consume_current_sequence(self):
         import json
         from urllib.parse import quote
-        self.app.select_destination('notebooks')
+        self.app.loop.run_until_complete(open_notebook(self.app))
         panel = self.app.notebook_panel
         self.app.loop.run_until_complete(panel.new())
         old = panel.web
@@ -118,7 +134,7 @@ class NotebookPanelTests(unittest.TestCase):
 
     def test_disposal_during_import_cannot_reopen_canvas(self):
         from threading import Event
-        self.app.select_destination('notebooks')
+        self.app.loop.run_until_complete(open_notebook(self.app))
         panel = self.app.notebook_panel
         started, released = Event(), Event()
         def read():
@@ -141,7 +157,7 @@ class NotebookPanelTests(unittest.TestCase):
 
     def test_failed_canvas_acknowledgement_offers_reopen_of_saved_content(self):
         from unittest.mock import AsyncMock, patch
-        self.app.select_destination('notebooks')
+        self.app.loop.run_until_complete(open_notebook(self.app))
         panel = self.app.notebook_panel
         self.app.loop.run_until_complete(panel.new())
         key = panel.key

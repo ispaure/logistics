@@ -19,6 +19,7 @@
     "crypt_remotes",
     "crypt_stat",
     "crypt_thumbnail",
+    "crypt_write_buffer",
     "document_lists_open",
     "document_lists_seal",
     "file_archive",
@@ -61,6 +62,11 @@
     },
     {
       "action": "unsupported-contract-fixture",
+      "request": {},
+      "ok": false
+    },
+    {
+      "action": "crypt_write_buffer",
       "request": {},
       "ok": false
     }

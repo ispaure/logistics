@@ -56,6 +56,9 @@ class PrivateViewGuard(qt.QObject):
                             if getattr(provider, 'private', False) and hasattr(provider, 'context') else lambda: None)
 
     def current_provider(self):
+        resolve = getattr(self.window, 'resource_provider', None)
+        if resolve is not None:
+            return resolve() or self.provider
         choice = getattr(self.window, 'pending_choice', None) or getattr(self.window, 'choice', None)
         if choice is not None:
             return choice.provider
@@ -96,6 +99,9 @@ class PrivateViewGuard(qt.QObject):
     def retire(self):
         self.locked = True
         self.window.hide()
+        retire = getattr(self.window, 'retire_private_content', None)
+        if retire is not None:
+            retire()
         self.window.setEnabled(False)
         self.window.setWindowTitle('Private session locked')
         changed = getattr(self.window, 'title_changed', None)

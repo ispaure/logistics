@@ -155,3 +155,44 @@ class MobileCryptNativeTests(unittest.TestCase):
             client.clear()
             with self.assertRaisesRegex(ValueError, 'locked'):
                 cached.page(0)
+
+    def test_notebook_binary_session_uses_real_native_provider_and_revocation(self):
+        from features.notebooks.notebook import Notebook, MAX_ARCHIVE
+        from features.notebooks.storage import NotebookDocument
+        from features.notebooks.workspace import Editor
+        from features.rclone.localcrypt.mobile.resources import CryptFiles
+        from services.documents.storage import DocumentResource
+        client = CloudClient(library=os.environ['LOGISTICS_MOBILE_BRIDGE'])
+        client.clear()
+        with TemporaryDirectory() as directory, crypt_fixture(directory, executable.get_rclone_path()) as fixture:
+            settings = dict(session.credentials(fixture.context)['Secret'], remote='Cloud:notebook-fixture')
+            package = BytesIO()
+            with ZipFile(package, 'w') as archive:
+                archive.writestr('Cloud.txt', '[Cloud]\ntype=memory\n')
+                archive.writestr('Secret.txt', '[Secret]\n' + ''.join(f'{key}={value}\n' for key, value in settings.items()))
+            client.request('import', package=base64.b64encode(package.getvalue()).decode(), password='',
+                           package_name='NotebookFixture.zip', session_only=True)
+            provider = CryptFiles(Path(directory) / 'managed', client, 'Secret')
+            book = Notebook.new('Native notebook sentinel')
+            book.members['opaque.bin'] = os.urandom(1100000)
+            data = book.to_bytes()
+            self.assertGreater(len(data), 1024 * 1024)
+            DocumentResource.publish(provider, 'Notebook.rmdoc', data, max_bytes=MAX_ARCHIVE, validate=Notebook.read)
+            with DocumentResource(provider, 'Notebook.rmdoc', max_bytes=MAX_ARCHIVE) as resource:
+                document = NotebookDocument(Notebook.read(resource.read()), resource=resource)
+                editor = Editor(document.book, document.checkpoint)
+                editor.apply(dict(op='stroke', points=[[30,40,.3],[50,60,.8]], tool=12, width=3))
+                editor.apply(dict(op='add-page'))
+                document.save()
+                reopened = Notebook.read(resource.read())
+                self.assertEqual(len(reopened.pages), 2)
+                self.assertEqual(len(reopened.page(0).strokes), 1)
+                self.assertEqual(reopened.members['opaque.bin'], book.members['opaque.bin'])
+                encrypted = provider._physical('Notebook.rmdoc')
+                self.assertNotIn(b'Native notebook sentinel', encrypted.read_bytes())
+                self.assertEqual(list(Path(directory).glob('managed/**/*.rm')), [])
+                client.clear()
+                with self.assertRaises(ValueError):
+                    resource.read()
+                with self.assertRaises(ValueError):
+                    document.save()

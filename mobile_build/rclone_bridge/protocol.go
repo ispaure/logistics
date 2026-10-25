@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 )
@@ -94,6 +95,9 @@ func dispatch(action, input string) (output string) {
 func decodeRequest(action, input string) (bridgeRequest, error) {
 	var request bridgeRequest
 	limit := 2 * packageLimit
+	if action == "crypt_write_buffer" {
+		limit = base64.StdEncoding.EncodedLen(downloadLimit) + 64*1024
+	}
 	if action == "image_thumbnail" {
 		limit = 24 * packageLimit
 	}

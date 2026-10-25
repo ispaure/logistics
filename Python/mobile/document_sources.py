@@ -33,6 +33,10 @@ def file_source(app, copies, key, *, session_only=False):
 
 
 def session_source(app, session):
+    notebook = getattr(app, '_notebook_views', {}).get(session.id)
+    if notebook is not None and notebook.document is not None:
+        resource = notebook.document.resource
+        return dict(type='crypt' if resource is not None and not resource.policy.persistent else 'local')
     if session.provider == 'file-reference':
         return getattr(session, 'source', None)
     if session.provider == 'credential-reference':
@@ -55,7 +59,10 @@ def source_icons(app, session):
         return [('storage_local', 'Local file')]
     icons = [('storage_remote', 'Cloud file')] if kind == 'remote' else [('storage_local', 'Local encrypted file')]
     unlocked = False
-    if session.provider == 'provider-session':
+    if session.provider == 'notebook':
+        panel = getattr(app, '_notebook_views', {}).get(session.id)
+        unlocked = panel is not None and panel.document is not None and not panel.document.resource.closed
+    elif session.provider == 'provider-session':
         unlocked = app.private_sessions.available(session.id)
     elif source.get('remote'):
         client = getattr(app, 'cloud_client', None)
