@@ -56,7 +56,9 @@ class EditorResourcePickerTests(QtTestCase):
             root = Path(directory).resolve()
             (root / 'note.md').write_text('# Private\n![image](image.png)')
             (root / 'image.png').write_bytes(b'image fixture')
-            choice = ResourceChoice(LocalFiles(root), 'note.md')
+            provider = LocalFiles(root)
+            provider.private = True
+            choice = ResourceChoice(provider, 'note.md')
             session = prepare_editor(choice, markdown=True)
             self.assertEqual(session.resources[root / 'image.png'], b'image fixture')
             window = make_private_editor(choice, session, markdown=True)
