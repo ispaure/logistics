@@ -23,6 +23,8 @@
       "Build",
       "Prepare TestFlight",
       "Prepare Firebase",
+      "Reviewed TestFlight workflow",
+      "Reviewed Firebase workflow",
       "Release"
     ],
     "backends": {
@@ -48,7 +50,165 @@
         "This Mac",
         "GitHub"
       ]
-    }
+    },
+    "host_backends": {
+      "linux": {
+        "macos": [
+          "GitHub"
+        ],
+        "linux": [
+          "This Linux host",
+          "GitHub"
+        ],
+        "windows": [
+          "GitHub"
+        ],
+        "android": {
+          "Test": [
+            "This Linux host \u2014 Android Emulator",
+            "GitHub"
+          ],
+          "Build": [
+            "This Linux host",
+            "GitHub"
+          ],
+          "Prepare Firebase": [
+            "This Linux host",
+            "GitHub"
+          ],
+          "Reviewed Firebase workflow": [
+            "This Linux host",
+            "GitHub"
+          ],
+          "Release": [
+            "GitHub"
+          ]
+        },
+        "ios": [
+          "GitHub"
+        ]
+      },
+      "win32": {
+        "macos": [
+          "GitHub"
+        ],
+        "linux": [
+          "GitHub"
+        ],
+        "windows": [
+          "This Windows host",
+          "GitHub"
+        ],
+        "android": {
+          "Test": [
+            "This Windows host \u2014 Android Emulator",
+            "GitHub"
+          ],
+          "Build": [
+            "This Windows host",
+            "GitHub"
+          ],
+          "Prepare Firebase": [
+            "This Windows host",
+            "GitHub"
+          ],
+          "Reviewed Firebase workflow": [
+            "This Windows host",
+            "GitHub"
+          ],
+          "Release": [
+            "GitHub"
+          ]
+        },
+        "ios": [
+          "GitHub"
+        ]
+      },
+      "darwin": {
+        "macos": [
+          "This Mac",
+          "GitHub"
+        ],
+        "linux": [
+          "Local Parallels VM",
+          "GitHub"
+        ],
+        "windows": [
+          "Local Parallels VM",
+          "GitHub"
+        ],
+        "ios": {
+          "Test": [
+            "This Mac \u2014 iOS Simulators",
+            "GitHub"
+          ],
+          "Prepare TestFlight": [
+            "This Mac",
+            "GitHub"
+          ],
+          "Reviewed TestFlight workflow": [
+            "This Mac",
+            "GitHub"
+          ],
+          "Release": [
+            "GitHub"
+          ]
+        },
+        "android": {
+          "Test": [
+            "This Mac \u2014 Android Emulator",
+            "GitHub"
+          ],
+          "Build": [
+            "This Mac",
+            "GitHub"
+          ],
+          "Prepare Firebase": [
+            "This Mac",
+            "GitHub"
+          ],
+          "Reviewed Firebase workflow": [
+            "This Mac",
+            "GitHub"
+          ],
+          "Release": [
+            "GitHub"
+          ]
+        }
+      }
+    },
+    "operations_by_target": {
+      "macos": [
+        "Test",
+        "Release"
+      ],
+      "linux": [
+        "Test",
+        "Release"
+      ],
+      "windows": [
+        "Test",
+        "Release"
+      ],
+      "ios": [
+        "Test",
+        "Prepare TestFlight",
+        "Reviewed TestFlight workflow",
+        "Release"
+      ],
+      "android": [
+        "Test",
+        "Build",
+        "Prepare Firebase",
+        "Reviewed Firebase workflow",
+        "Release"
+      ]
+    },
+    "providers": [
+      "github",
+      "firebase",
+      "testflight"
+    ]
   },
   "run_options": {
     "include_ipad": {
@@ -57,6 +217,37 @@
     }
   },
   "account_fields": {
-    "testflight": "auth.testflight_reference"
+    "testflight": "auth.testflight_reference",
+    "github": {
+      "reference": "auth.github_reference",
+      "kind": "auth.github_kind"
+    }
+  },
+  "presets": {
+    "Local macOS validation": {
+      "operation": "Test",
+      "platform": "macos",
+      "backend": "This Mac"
+    },
+    "iOS tester preparation": {
+      "operation": "Prepare TestFlight",
+      "platform": "ios",
+      "backend": "This Mac"
+    },
+    "Android tester preparation": {
+      "operation": "Prepare Firebase",
+      "platform": "android",
+      "backend": "This Mac"
+    },
+    "Reviewed TestFlight distribution": {
+      "operation": "Reviewed TestFlight workflow",
+      "platform": "ios",
+      "backend": "This Mac"
+    },
+    "Reviewed Firebase distribution": {
+      "operation": "Reviewed Firebase workflow",
+      "platform": "android",
+      "backend": "This Mac"
+    }
   }
 }

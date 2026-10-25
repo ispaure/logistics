@@ -29,6 +29,8 @@ HELP = {
     'vm.shutdown_after_run': 'Shut down the configured test VM after its operation. Enable only for a dedicated VM.',
     'auth.testflight_reference': 'Local App Store Connect authentication JSON file. Its contents are never entered here or synced to GitHub.',
     'auth.key_reference': 'Path to the existing App Store Connect private key. Store only its path here, never paste the key.',
+    'auth.github_reference': 'Selected GitHub account reference: an environment variable name or an existing credential-helper label, never a token value.',
+    'auth.github_kind': 'Choose the selected account reference mechanism. An explicit missing environment reference never falls back to another account.',
     'auth.reference_status': 'Whether the configured authentication reference file exists. This does not verify server access.',
     'signing.app_profile': 'Existing provisioning profile file for the main Apple app; must match the pinned identity.',
     'signing.inbox_profile': 'Existing provisioning profile file for the Apple inbox extension.',
@@ -59,9 +61,14 @@ HELP = {
 
 def describe_settings(rows):
     for name, entry in rows.items():
-        entry['section'] = SECTIONS[name.split('.')[0]]
+        entry.setdefault('section', SECTIONS.get(name.split('.')[0], 'Capabilities'))
         entry.setdefault('label', name.split('.', 1)[1].replace('_', ' ').capitalize())
-        entry['description'] = HELP[name]
+        if name in HELP:
+            entry['description'] = HELP[name]
+        elif entry.get('read_only') and entry.get('description'):
+            pass
+        else:
+            raise ValueError('Setting needs an explicit explanation: '+name)
         if name.endswith('app_id'):
             entry['label'] = 'Application ID'
         elif name.endswith('bundle_id'):
@@ -72,6 +79,8 @@ def describe_settings(rows):
             entry['label'] = 'Processing timeout'
         if name in ('testflight.what_to_test', 'firebase.release_notes'):
             entry['kind'] = 'multiline'
+        if name == 'auth.github_kind':
+            entry['choices'] = ('auto','credential-helper','environment-name')
         if name == 'vm.linux_scope':
             entry['choices'] = ('both', 'ubuntu', 'fedora')
         if name == 'vm.fedora_mode':

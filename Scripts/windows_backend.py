@@ -140,6 +140,8 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
             dict(source=target, git=prepared['git'], python=python), timeout=60))
         result.update(runtime=info['runtime'], git=info['git'])
         environment['PATH'] = str(PureWindowsPath(prepared['git']).parent) + ';' + str(root / 'environment/Scripts') + ';' + info['path']
+        setup = guest.run(python, ['Scripts/install_build_manager.py','--from-pin',str(root/'manager')], source, reports, environment, cancelled, timeout=600)
+        if setup:raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
         install = (python, 'Python/tests/run_platform_checks.py', '--install', '--results-dir', report_dir)
         if args.pattern:
             suite, pattern = ('shared', args.pattern[7:]) if args.pattern.startswith('shared:') else ('desktop', args.pattern)

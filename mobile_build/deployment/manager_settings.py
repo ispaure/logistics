@@ -33,6 +33,7 @@ def defaults(root):
         'vm.shared_host': '', 'vm.shared_guest': '', 'vm.shutdown_after_run': False,
         'auth.testflight_reference': str(root / '.testflight-auth.json'),
         'auth.key_reference': auth.get('key_path', ''),
+        'auth.github_reference': '', 'auth.github_kind': 'auto',
         'signing.app_profile': '', 'signing.inbox_profile': '',
         'github.repository': 'ispaure/logistics', 'github.token_environment': 'GH_TOKEN',
         'github.authentication': 'existing git credential helper',
@@ -65,6 +66,10 @@ def settings(root, *, overrides=None):
 
 
 def validate(values, configured):
+    if values['auth.github_kind'] not in {'auto','environment-name','credential-helper'}:
+        raise ValueError('Unsupported GitHub account reference kind.')
+    if values['auth.github_kind']=='environment-name' and not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',values['auth.github_reference']):
+        raise ValueError('GitHub account references contain environment names, never tokens.')
     if values['vm.linux_scope'] not in ('both', 'ubuntu', 'fedora'):
         raise ValueError('Linux coverage must be both, ubuntu or fedora; partial runs remain labelled partial.')
     for name in ('testflight.poll_interval_seconds', 'testflight.processing_timeout_seconds'):
@@ -154,6 +159,6 @@ def record_prepared_artifact(record):
 
 def authentication_references(root):
     account = json.loads(os.environ.get('LOGISTICS_MANAGER_ACCOUNT_DEFAULTS', '{}'))
-    if set(account) - {'auth.testflight_reference', 'auth.key_reference'}:
+    if set(account) - {'auth.testflight_reference', 'auth.key_reference', 'auth.github_reference', 'auth.github_kind'}:
         raise ValueError('Shared accounts may supply protected auth references only.')
     return dict(account, **{key: value for key, value in load_profile(profile_path(root)).items() if key.startswith('auth.')})

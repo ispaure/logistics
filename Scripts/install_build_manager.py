@@ -1,5 +1,7 @@
 """Explicitly install a reviewed external manager Git checkout in this interpreter."""
 import argparse
+import importlib.util
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -14,7 +16,7 @@ def main():
     if args.from_pin:
         import json
         pin = json.loads((Path(__file__).resolve().parents[1] / 'build-manager-dependency.json').read_text())
-        if pin.get('schema') != 1 or pin.get('adapter_api') != 1:
+        if pin.get('schema') != 1 or pin.get('adapter_api') != 1 or not re.fullmatch(r'[0-9a-f]{40}',pin.get('revision','')):
             parser.error('Unsupported manager dependency schema.')
         destination = args.from_pin.expanduser().absolute()
         if destination.exists():
@@ -29,9 +31,20 @@ def main():
     config = root / 'pyproject.toml'
     if not config.is_file() or tomllib.loads(config.read_text()).get('project', {}).get('name') != 'build-deployment-manager':
         parser.error('Select a reviewed build-deployment-manager checkout.')
-    subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-deps', '-e', str(root)], check=True)
+    if importlib.util.find_spec('pip'):
+        command=[sys.executable,'-m','pip','install','--no-deps','-e',str(root)]
+    else:
+        from Scripts.development import find_uv
+        uv=find_uv()
+        if not uv:parser.error('This environment has no pip. Install uv, then run this explicit setup again.')
+        command=[uv,'pip','install','--python',sys.executable,'--no-deps','-e',str(root)]
+    subprocess.run(command,check=True)
     return 0
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError,subprocess.SubprocessError) as error:
+        print('External manager setup failed. Check the reviewed checkout, initialized submodule and remote availability of the exact dependency pins: '+str(error),file=sys.stderr)
+        raise SystemExit(1)

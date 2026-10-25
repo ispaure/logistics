@@ -32,7 +32,7 @@ class LogisticsProject:
     secret_environment = ('GH_TOKEN', 'GITHUB_TOKEN', 'FIREBASE_TOKEN')
     run_options = {'include_ipad': dict(label='Include iPad independent-window coverage in the sequential local run', default=False)}
     platforms = ('macos', 'linux', 'windows', 'ios', 'android')
-    operations = ('Test', 'Build', 'Prepare TestFlight', 'Prepare Firebase', 'Release')
+    operations = ('Test', 'Build', 'Prepare TestFlight', 'Prepare Firebase', 'Reviewed TestFlight workflow', 'Reviewed Firebase workflow', 'Release')
     description = 'Select source, platform and execution location; inspect the ordered plan before running.'
 
     def __init__(self, root):
@@ -44,11 +44,20 @@ class LogisticsProject:
         self.results_directory = self.root / 'test-results/build-manager'
 
     def backend_options(self, target, operation='Test'):
-        if target == 'ios' and operation == 'Test':
-            return ('This Mac — iOS Simulators', 'GitHub')
-        if target == 'android' and operation == 'Test':
-            return ('This Mac — Android Emulator', 'GitHub')
-        return ('Local Parallels VM', 'GitHub') if target in ('linux', 'windows') else ('This Mac', 'GitHub')
+        host={'darwin':'macos','linux':'linux','win32':'windows'}.get(sys.platform)
+        label={'macos':'This Mac','linux':'This Linux host','windows':'This Windows host'}.get(host,'Unsupported host')
+        if target=='ios' and operation=='Test':
+            return (('This Mac — iOS Simulators', 'GitHub') if host=='macos' else ('GitHub',))
+        if target=='android' and operation=='Test':
+            return (label+' — Android Emulator','GitHub')
+        if target==host:return (label,'GitHub')
+        if target in ('linux','windows') and host=='macos':return ('Local Parallels VM','GitHub')
+        return ((label,'GitHub') if target=='android' else ('This Mac','GitHub') if target=='ios' and host=='macos' else ('GitHub',))
+
+    def operations_for(self, target):
+        if target in ('macos','linux','windows'):return ('Test','Release')
+        if target=='ios':return ('Test','Prepare TestFlight','Reviewed TestFlight workflow','Release')
+        return ('Test','Build','Prepare Firebase','Reviewed Firebase workflow','Release')
 
     def settings_view(self):
         values, sources = manager_settings.settings(self.mobile)
@@ -83,6 +92,14 @@ class LogisticsProject:
         rows['build.next_android'] = dict(value=next_android(self.mobile, self.mobile / '.android-beta'), origin='preview only; reserved at build start', read_only=True)
         rows['github.credentials'] = dict(value='Hosted workflows use repository secrets/variables; local file references are not synced.',
                                            origin='provider boundary', read_only=True)
+        from build_manager.providers import settings_rows
+        from build_manager.hosts import capabilities
+        rows.update(settings_rows(self.platforms))
+        for capability in capabilities(self.platforms,hosted=self.platforms):
+            rows['host.'+capability['location']+'.'+capability['target']] = dict(
+                value=capability['status']+' — '+capability['reason'],origin='explicit host/target capability policy',
+                read_only=True,section='Host capabilities',description=capability['reason'],
+                label=capability['target']+' — '+capability['location'])
         from mobile_build.deployment.settings_help import describe_settings
         return describe_settings(rows)
 
@@ -103,14 +120,28 @@ class LogisticsProject:
     def make_plan(self, operation, target, backend, **options):
         from dataclasses import replace
         started = time.monotonic()
+        workflow = operation in ('Reviewed TestFlight workflow','Reviewed Firebase workflow')
+        requested_operation = operation
+        if workflow:
+            operation = 'Prepare TestFlight' if operation == 'Reviewed TestFlight workflow' else 'Prepare Firebase'
         from Scripts.build_retention import clean
         try:
             clean(self.root, apply=True)
         except (OSError, RuntimeError) as error:
             print('Build retention incomplete: ' + str(error), flush=True)
         plan = self._make_plan(operation, target, backend, **options)
+        if workflow:
+            preparation = plan.phases[-1]
+            report = Path(preparation.artifacts[0])
+            receipt = report.with_name(report.stem+'-distribution.json')
+            upload = Phase('reviewed-distribution',(preparation.argv[0],'-m','Scripts.distribute_prepared',
+                '--report',str(report),'--receipt',str(receipt)),preparation.cwd,timeout=14400,
+                dependencies=(preparation.id,),environment=dict(preparation.environment),kind='distribution',
+                effect='upload',provider='testflight' if target=='ios' else 'firebase',artifacts=(str(receipt),))
+            plan = replace(plan,operation=requested_operation,phases=(*plan.phases,upload))
         snapshot = self.private / 'snapshots' / plan.source.get('fingerprint', '')
         resources = (str(snapshot.with_suffix('.lock')),) if (snapshot / '.manager-source.json').is_file() else ()
+        plan = declare_resources(plan,target)
         settings_snapshot = plan.source.get('effective_settings')
         phases = plan.phases
         if settings_snapshot:
@@ -119,8 +150,17 @@ class LogisticsProject:
             save_profile(reference, settings_snapshot['values'], allowed=manager_settings.defaults(self.mobile))
             phases = tuple(replace(phase, environment=dict(phase.environment,
                 LOGISTICS_MANAGER_PROFILE=str(reference), LOGISTICS_MANAGER_ACCOUNT_DEFAULTS='{}')) for phase in phases)
-        return replace(plan, phases=phases, resource_locks=resources,
-                       source=dict(plan.source, plan_preparation_seconds=time.monotonic()-started))
+        secrets=plan.secret_environment
+        if settings_snapshot:
+            reference=settings_snapshot['values'].get('auth.github_reference','')
+            if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',reference):secrets=tuple(dict.fromkeys((*secrets,reference)))
+        values=settings_snapshot['values'] if settings_snapshot else {}
+        destination=(values.get('github.repository','declared GitHub repository') if plan.backend=='GitHub' else
+            {'app':values.get('testflight.app_id'),'group':values.get('testflight.external_group')} if operation=='Prepare TestFlight' else
+            {'app':values.get('firebase.app_id'),'group':values.get('firebase.group')} if operation=='Prepare Firebase' else
+            'local '+target+' workspace')
+        return replace(plan, phases=phases, secret_environment=secrets, resource_locks=(*plan.resource_locks,*resources),
+                       source=dict(plan.source,destination=destination,plan_preparation_seconds=time.monotonic()-started))
 
     def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag=''):
         if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target, operation):
@@ -138,25 +178,26 @@ class LogisticsProject:
             return self.github_plan(operation, target, source, workspace, options, revision, release_tag)
         if operation == 'Release':
             raise ValueError('Choose GitHub for a release; tests do not publish automatically.')
-        if target in ('linux', 'windows'):
+        if target in ('linux', 'windows') and backend == 'Local Parallels VM':
             return self.local_vm_plan(operation, target, source, workspace, options, pattern)
-        if target == 'macos':
+        if target in ('macos','linux','windows'):
+            expected_system={'macos':'Darwin','linux':'Linux','windows':'Windows'}[target]
             from build_manager.local import inspect_python
             source['toolchain'] = inspect_python(options['tools.desktop_python'], ('Pillow', 'PySide6', 'pyzipper', 'yt-dlp'))
-            if source['toolchain']['system'] != 'Darwin':
-                raise ValueError('The selected interpreter does not run on macOS; no fallback was selected.')
+            if source['toolchain']['system'] != expected_system:
+                raise ValueError('The selected interpreter does not run on the requested native host; no fallback was selected.')
         snapshot = self.private / 'snapshots' / source['fingerprint']
         materialize(self.root, snapshot, revision)
         env = dict(PYTHONPATH=os.pathsep.join((str(snapshot), str(snapshot / 'Python'))),
                    QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1',
                    LOGISTICS_MANAGER_ACCOUNT_DEFAULTS=os.environ.get('LOGISTICS_MANAGER_ACCOUNT_DEFAULTS', '{}'))
         python = options['tools.desktop_python']
-        if target == 'macos':
-            if sys.platform != 'darwin':
-                raise ValueError('This Mac backend requires macOS; no fallback was selected.')
+        if target in ('macos','linux','windows'):
+            if platform.system() != expected_system:
+                raise ValueError('Requested native target is unsupported on this host; no fallback was selected.')
             if operation != 'Test':
                 raise ValueError('Desktop Build is not implemented by the existing source-package workflow; select Test or GitHub release.')
-            commands = [('focused', ['dev.py', 'test', 'desktop', pattern, '--python', python], 600)] if pattern else desktop_checks('Darwin', workspace / 'reports')
+            commands = [('focused', ['dev.py', 'test', 'desktop', pattern, '--python', python], 600)] if pattern else desktop_checks(expected_system, workspace / 'reports')
             if not pattern:
                 commands += [('release-tooling', ['-m', 'unittest', 'discover', '-s', '.github/scripts', '-p', 'test_*.py'], 300)]
             env['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] = '1'
@@ -188,9 +229,10 @@ class LogisticsProject:
         source['hosted_coverage'] = target
         phases = []
         for name, workflow in selected:
-            command = (str(self.interpreter), '-m', 'Scripts.build_project', 'github', '--platform', target,
+            receipt = workspace / 'remote' / (uuid4().hex + '.json')
+            command = (str(self.interpreter), '-m', 'Scripts.build_project', 'github', '--operation-receipt', str(receipt), '--platform', target,
                        '--workflow', workflow, '--ref', ref, '--commit', source['logistics_commit'], '--root', str(self.root))
-            phases.append(Phase('github-' + name, command, str(self.root), timeout=14400))
+            phases.append(Phase('github-' + name, command, str(self.root), timeout=14400, artifacts=(str(receipt),)))
         return Plan('Logistics', operation, source, tuple(phases),
                     str(workspace), backend='GitHub', effect='publish')
 
@@ -259,8 +301,10 @@ class LogisticsProject:
                     str(workspace), backend='Local Parallels VM')
 
     def android_emulator_plan(self, operation, source, snapshot, workspace, options, env, pattern):
-        if sys.platform != 'darwin' or platform.machine() != 'arm64':
-            raise ValueError('This declared Android emulator backend requires Apple Silicon macOS.')
+        from build_manager.hosts import android_abi, android_acceleration
+        abi=android_abi()
+        if operation=='Test' and (platform.system()!='Darwin' or abi!='arm64-v8a'):
+            raise ValueError('Logistics CPython Android runtime suite currently requires macOS ARM; the generic transport is portable but this project compiler is unavailable on this host.')
         if pattern:
             raise ValueError('Native/runtime Android acceptance uses the complete declared suites, not host filename filters.')
         if options['android.avd']:
@@ -282,10 +326,10 @@ class LogisticsProject:
         common = ('--root',str(snapshot),'--workspace',str(device))
         phases = [Phase('android-build',(*base,'build',*common,'--result',str(run/'build.json')),str(snapshot),
                         timeout=3600,environment=env,kind='build',artifacts=(str(run/'build.json'),))]
-        source = dict(source, sdk=str(sdk),java=str(java),abi='arm64-v8a',image=options['android.image'],
+        source = dict(source, sdk=str(sdk),java=str(java),abi=abi,image=options['android.image'],
                       device_lifecycle='owned disposable accelerated ARM AVD; preserve physical and existing emulator data')
         if operation=='Test':
-            source['acceleration'] = AndroidEmulator(sdk,device,environment=env).inspect(options['android.image'], acceleration='Hypervisor.Framework')
+            source['acceleration'] = AndroidEmulator(sdk,device,environment=env).inspect(options['android.image'], acceleration=android_acceleration())
             pin = json.loads((self.root/'Scripts/mobile_runtime_tools.json').read_text())['cpython']
             cache = self.private/('cpython-'+pin['revision'])
             phases += [Phase('android-runtime-tools',(python,'-m','Scripts.mobile_runtime','prepare','--cache',str(cache),
@@ -300,7 +344,7 @@ class LogisticsProject:
                     str(snapshot),timeout=2500 if action=='native' else 1900,environment=env,dependencies=('android-ready',),artifacts=(str(report),)))
             phases.append(Phase('android-cleanup',(*base,'cleanup',*common),str(snapshot),timeout=180,environment=env,always=True,kind='cleanup'))
         return Plan('Logistics','Complete Android native and runtime validation' if operation=='Test' else 'Build native Android test APK; no install',
-                    source,tuple(phases),str(workspace),backend='This Mac — Android Emulator',effect='test' if operation=='Test' else 'build')
+                    source,tuple(phases),str(workspace),backend=self.backend_options('android','Test')[0],effect='test' if operation=='Test' else 'build')
 
     def ios_simulator_plan(self, source, snapshot, workspace, options, env, pattern, include_ipad):
         if sys.platform != 'darwin':
@@ -336,15 +380,17 @@ class LogisticsProject:
         build_report = run/'build.json'
         phases = [Phase('ios-build', (*base,'build','--root',str(snapshot),'--result',str(build_report)), str(snapshot),
                         timeout=3600, environment=env, kind='build', artifacts=(str(build_report),))]
+        previous_cleanup = None
         for row in selected:
             kind = row['kind']
             report = run/kind/'result.json'
             lease = run/(kind+'-lease.json')
             phases.append(Phase(kind, (*base,'test','--root',str(snapshot),'--kind',kind,'--model',row['model'],
                           '--runtime',row['runtime'],'--lease',str(lease),'--result',str(report)), str(snapshot),
-                          timeout=2100, environment=env, dependencies=('ios-build',), artifacts=(str(report),)))
+                          timeout=2100, environment=env, dependencies=(previous_cleanup or 'ios-build',), artifacts=(str(report),)))
             phases.append(Phase(kind+'-cleanup', (*base,'cleanup','--root',str(snapshot),'--lease',str(lease)), str(snapshot),
-                          timeout=180, environment=env, always=True, kind='cleanup'))
+                          timeout=180, environment=env, always=True, kind='cleanup', dependencies=(kind,)))
+            previous_cleanup = kind+'-cleanup'
         return Plan('Logistics', 'Sequential native iOS validation', source, tuple(phases), str(workspace),
                     backend='This Mac — iOS Simulators')
 
@@ -396,10 +442,40 @@ class LogisticsProject:
 
     def verification_plan(self):
         source = identity(self.root)
+        from build_manager.profiles import save_profile
+        values, origins = manager_settings.settings(self.mobile)
+        reference = self.private / 'verification' / 'settings' / (uuid4().hex + '.json')
+        save_profile(reference, values, allowed=manager_settings.defaults(self.mobile))
+        source['effective_settings'] = dict(values=values, origins=origins)
+        environment = dict(LOGISTICS_MANAGER_PROFILE=str(reference), LOGISTICS_MANAGER_ACCOUNT_DEFAULTS='{}')
         command = (str(self.interpreter), '-m', 'Scripts.build_project', 'verify', '--root', str(self.root))
         return Plan('Logistics', 'Read-only connection verification', source,
-                    (Phase('verify-settings', command, str(self.root), timeout=120, kind='inspect'),),
+                    (Phase('verify-settings', command, str(self.root), timeout=120, kind='inspect', environment=environment),),
                     str(self.private / 'verification'), effect='inspect')
+
+
+def declare_resources(plan, target):
+    """Project policy: conservative mobile capacity and explicit device sequencing."""
+    from dataclasses import replace
+    if plan.backend == 'GitHub':
+        return plan
+    phases=[]
+    for phase in plan.phases:
+        requirements=dict(phase.resources)
+        if phase.kind=='build' or phase.id=='android-runtime-tools':
+            requirements.update({'host.mobile-build':1,'project.workspace:'+phase.cwd:1})
+        if phase.id.startswith('android-'):
+            if phase.id in {'android-native','android-runtime','android-ready','android-cleanup'}:
+                requirements['android.device-workspace:'+plan.workspace]=1
+            else:
+                requirements['android.sdk-cache']=1
+        if phase.id=='prepare-verified-artifact':requirements['host.signing-keychain']=1
+        if phase.effect in {'upload','publish'}:
+            requirements['provider.destination:'+phase.provider+':'+plan.project]=1
+        phases.append(replace(phase,resources=requirements,stop_grace=5 if target in {'ios','android'} else phase.stop_grace))
+    resources=dict(plan.resources)
+    if target in {'ios','android'} and plan.effect=='test':resources['host.mobile-device-session']=1
+    return replace(plan,phases=tuple(phases),resources=resources)
 
 
 def main():
@@ -409,6 +485,7 @@ def main():
     parser.add_argument('--platform', choices=LogisticsProject.platforms)
     parser.add_argument('--ref')
     parser.add_argument('--commit')
+    parser.add_argument('--operation-receipt', type=Path)
     parser.add_argument('--workflow')
     parser.add_argument('--tag')
     args = parser.parse_args()
@@ -438,7 +515,13 @@ def main():
     if args.command == 'github':
         inputs = {'target': args.platform}
         run = client.dispatch(args.workflow, args.ref, args.commit, inputs, confirmed=True)
-        print(json.dumps(dict(run_id=run, repository=values['github.repository'], status='queued')), flush=True)
+        receipt = dict(schema=1, provider='github', run_id=run, repository=values['github.repository'],
+                       expected_commit=args.commit, workflow=args.workflow, status='queued',
+                       operation_id=os.environ.get('BUILD_MANAGER_OPERATION_ID',''))
+        if args.operation_receipt:
+            from build_manager.profiles import save_json
+            save_json(args.operation_receipt, receipt)
+        print(json.dumps(receipt), flush=True)
         result = client.wait(run, args.commit, timeout=13800, cancelled=cancelled,
                              progress=lambda value: print(json.dumps(value), flush=True))
         return int(result.get('status') != 'completed')
@@ -446,16 +529,12 @@ def main():
 
 
 def github_client(values, root):
-    from build_manager.github import GitHub
-    token = os.environ.get(values['github.token_environment'])
-    if not token and values['github.authentication'] == 'existing git credential helper':
-        result = subprocess.run(['git', 'credential', 'fill'], cwd=root,
-            input='protocol=https\nhost=github.com\n\n', text=True, capture_output=True,
-            timeout=30, env=dict(os.environ, GIT_TERMINAL_PROMPT='0', GCM_INTERACTIVE='Never'))
-        if result.returncode == 0:
-            saved = dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line)
-            token = saved.get('password')
-    return GitHub(values['github.repository'], token)
+    from build_manager.github import GitHub, credential_token
+    kind=values.get('auth.github_kind','auto')
+    reference=values.get('auth.github_reference') or values['github.token_environment']
+    if kind=='auto' and values['github.authentication']!='existing git credential helper':kind='environment-name'
+    token=credential_token(reference=reference,kind=kind,root=root)
+    return GitHub(values['github.repository'],token)
 
 
 def release_source(root, client, tag, commit, cancelled):

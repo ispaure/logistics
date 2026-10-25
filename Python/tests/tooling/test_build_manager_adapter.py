@@ -134,7 +134,8 @@ class ManagerAdapterTests(unittest.TestCase):
             self.assertEqual([phase.id for phase in plan.phases], ['ios-build','iphone','iphone-cleanup','duo','duo-cleanup','ipad','ipad-cleanup'])
             self.assertEqual([row['kind'] for row in plan.source['simulator_sequence']], ['iphone','duo','ipad'])
             self.assertTrue(all(phase.always for phase in plan.phases if phase.kind=='cleanup'))
-            self.assertTrue(all(phase.dependencies==('ios-build',) for phase in plan.phases if phase.id in ('iphone','duo','ipad')))
+            self.assertEqual({phase.id:phase.dependencies for phase in plan.phases if phase.id in ('iphone','duo','ipad')},
+                             {'iphone':('ios-build',),'duo':('iphone-cleanup',),'ipad':('duo-cleanup',)})
             inventory['devices']['com.apple.CoreSimulator.SimRuntime.iOS-27-1'].pop(1)
             with self.assertRaisesRegex(RuntimeError,'Duo'):
                 project.ios_simulator_plan({},project.root,project.private/'fixture-ios',values,{},'',False)

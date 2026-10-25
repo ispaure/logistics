@@ -213,6 +213,7 @@ def build(version_code=None):
             source = json.loads((ROOT / 'payload/source.json').read_text())
             record_prepared_artifact(dict(provider='Firebase', bundle_id=android.BUNDLE,
                 version=config['version'], build=number, source=source, apk=str(apk),
+                apk_sha256=__import__('hashlib').sha256(apk.read_bytes()).hexdigest(),
                 destination=preflight_destination(),
                 certificate=android.apk_certificate(apk, tools, env)))
         notes = output / 'release-notes.txt'

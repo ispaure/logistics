@@ -514,3 +514,31 @@ immutable revision using `Scripts/install_build_manager.py --from-pin DESTINATIO
 It refuses an existing destination rather than pulling or resetting it. The owner
 must make both manager and commonUtils commits remotely available before hosted
 setup can succeed. No publication of those commits was performed here.
+
+## Registered workflows and fixed settings
+
+The standalone manager registers the tracked `build-project.json` and invokes
+`Scripts/manager_bridge.py` in Logistics' own interpreter after explicit trust.
+Named TestFlight/Firebase workflows prepare a signed artifact and pause for exact
+artifact/destination review before reusing the existing distribution helpers.
+`Scripts/distribute_prepared.py` never rebuilds for upload. It records intent before
+the provider request and refuses to repeat an interrupted attempt without
+reconciliation. Passing tests never approves distribution automatically.
+
+Shared GitHub account references can select an environment-name or the existing
+Git credential helper; TestFlight can select an existing protected auth JSON.
+Destinations, app identities and signing remain explicit project values. An explicit
+missing environment reference does not fall back to another account. Firebase
+continues to use its existing CLI authentication. No local credentials are copied
+to hosted secrets. Each run retains effective values/origins and a private fixed
+profile; later account/profile edits cannot redirect that plan's destination.
+
+Native resource declarations bound mobile builds, SDK/cache mutation, signing and
+device sessions. iOS devices depend on the prior device's cleanup even if a plan's
+worker count increases. POSIX mobile helpers receive a bounded five-second cleanup
+grace. The generic Android transport is portable, while Logistics' CPython Android
+runtime compiler remains explicitly macOS ARM until its own toolchain is ported.
+Native Linux/Windows acceptance and all existing VM holds remain separate.
+
+App Store/Google Play publication are visible as Not implemented. Existing TestFlight
+and Firebase functionality retain their own provider identity and review gates.

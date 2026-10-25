@@ -2,7 +2,6 @@
 import argparse
 import base64
 import json
-import os
 from pathlib import Path
 import signal
 import subprocess
@@ -122,6 +121,8 @@ subprocess.run(['uv','venv','--python','3.12.2','--seed',sys.argv[1]+'/environme
             result['failure'] = 'Guest isolated interpreter setup failed: ' + str(code)
             return 1
         guest_python = workspace + '/environment/bin/python'
+        code = execute([guest_python, 'Scripts/install_build_manager.py', '--from-pin', workspace+'/manager'], env, 600)
+        if code:raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
         reports = workspace + '/reports'
         if args.pattern:
             suite, pattern = ('shared', args.pattern[7:]) if args.pattern.startswith('shared:') else ('desktop', args.pattern)
