@@ -68,6 +68,7 @@ validate a new change.
 - [UI refinement validation](ui-refinement.md)
 - [Documentation viewer verification](documentation-viewer-verification.md)
 - [Local validation artifacts](validation-artifacts.md)
+- [Testing and packaging plans](testing-packaging.md)
 - [Mobile performance implementation and verification](mobile-performance.md)
 - [Mobile alpha verification](mobile-alpha-verification.md)
 - [Mobile UI refresh evidence](mobile-ui-refresh.md)

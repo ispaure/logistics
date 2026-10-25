@@ -21,6 +21,7 @@ def main(argv=None):
     commands.add_parser('compatibility', help='List compatibility imports, canonical owners and current consumers')
     commands.add_parser('hygiene', help='Inspect indexed paths and recognizable private-key/token patterns')
     commands.add_parser('owners', help='List source owners and their developer guides')
+    commands.add_parser('test-map', help='Print the project-owned suite inventory as JSON')
     owned_tests = commands.add_parser('test-owner', help='Run the test groups declared for a source owner')
     owned_tests.add_argument('owner')
     owned_tests.add_argument('--dry-run', action='store_true')
@@ -38,6 +39,11 @@ def main(argv=None):
         command.add_argument('--python', type=Path, help='Use a specific environment Python executable')
         command.add_argument('--dry-run', action='store_true', help='Show the command without running it')
     args = parser.parse_args(argv)
+    if args.command == 'test-map':
+        import json
+        from Scripts.validation_plans import inventory
+        print(json.dumps(inventory(ROOT), indent=2))
+        return 0
     if args.command == 'hygiene':
         from Scripts.hygiene import check
         return check(ROOT)

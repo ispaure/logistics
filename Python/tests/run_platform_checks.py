@@ -52,17 +52,11 @@ def main():
                         'print(provision(*get_software("rclone")))'],
                        cwd=REPO, env=env, check=True, timeout=180)
         env['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] = '1'
-    checks = []
-    if platform.system() == 'Windows':
-        checks.append(('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
-    checks += [
-        # The full shared suite approaches five minutes on Windows CI.
-        ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'], 600),
-        # Windows' Git/process tests keep making progress past five minutes.
-        # Leave room for the growing suite within the platform job's budget.
-        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'], 900),
-        ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(results / 'parity')], 600),
-    ]
+    # A shared project-owned plan feeds CI and the local manager. Functional
+    # test discovery remains with the existing isolated regression runner.
+    sys.path.insert(0, str(REPO))
+    from Scripts.validation_plans import desktop_checks
+    checks = desktop_checks(platform.system(), results)
     for name, command, timeout in checks:
         print(f'Running {name} on {platform.system()}…', flush=True)
         started = time.monotonic()
