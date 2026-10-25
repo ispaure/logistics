@@ -7,11 +7,10 @@ from contextlib import contextmanager
 import json
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import tempfile
 
-from build_manager.retention import lease, prune
+from build_manager.retention import lease, prune, remove_tree
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,7 +52,7 @@ def scratch(root=ROOT):
         finally:
             # Retain reports outside this directory before leaving the context.
             if not (path / '.keep').exists():
-                shutil.rmtree(path)
+                remove_tree(path)
 
 
 def main():

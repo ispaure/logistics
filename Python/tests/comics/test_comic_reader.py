@@ -229,8 +229,11 @@ class ReaderTests(ReaderFixture, unittest.TestCase):
         self.assertTrue(updated.pages.right_to_left)
         first.close()
         updated.close()
-        self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
-        self.app.processEvents()
+        deadline = time.monotonic() + 5
+        while reader._windows and time.monotonic() < deadline:
+            self.app.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            self.app.processEvents()
+            time.sleep(.01)
         self.assertFalse(reader._windows)
 
     def test_reader_rapid_navigation_and_close_during_page_load(self):
