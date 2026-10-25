@@ -73,7 +73,7 @@ class DeveloperCommandTests(unittest.TestCase):
             self.assertEqual(dev.main(['lint']), 0)
             command = run.call_args.args[0]
             self.assertEqual(command[1:5], ['-m', 'ruff', 'check', '--config'])
-            self.assertEqual(command[-5:], ['dev.py', 'Python', 'mobile_build', 'Scripts', '.github/scripts'])
+            self.assertEqual(command[-6:], ['dev.py', 'Python', 'mobile_build', 'Scripts', 'build_manager', '.github/scripts'])
 
 
 class SetupCommandTests(unittest.TestCase):

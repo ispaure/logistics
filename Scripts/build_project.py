@@ -10,6 +10,7 @@ import signal
 import shutil
 import subprocess
 import sys
+import time
 from threading import Event
 from uuid import uuid4
 
@@ -70,6 +71,7 @@ class LogisticsProject:
         manager_settings.set_app_version(self.mobile, value)
 
     def make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag=''):
+        setup_started = time.monotonic()
         if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target):
             raise ValueError('Unsupported operation/platform/backend selection.')
         if pattern and (not pattern.endswith('.py') or '/' in pattern or '\\' in pattern):
@@ -85,6 +87,11 @@ class LogisticsProject:
             raise ValueError('Choose GitHub for a release; tests do not publish automatically.')
         if target in ('linux', 'windows'):
             return self.local_vm_plan(operation, target, source, workspace, options, pattern)
+        if target == 'macos':
+            from build_manager.local import inspect_python
+            source['toolchain'] = inspect_python(options['tools.desktop_python'], ('Pillow', 'PySide6', 'pyzipper', 'yt-dlp'))
+            if source['toolchain']['system'] != 'Darwin':
+                raise ValueError('The selected interpreter does not run on macOS; no fallback was selected.')
         snapshot = self.private / 'snapshots' / source['fingerprint']
         materialize(self.root, snapshot, revision)
         env = dict(PYTHONPATH=os.pathsep.join((str(snapshot), str(snapshot / 'Python'))),
@@ -95,11 +102,15 @@ class LogisticsProject:
                 raise ValueError('This Mac backend requires macOS; no fallback was selected.')
             if operation != 'Test':
                 raise ValueError('Desktop Build is not implemented by the existing source-package workflow; select Test or GitHub release.')
-            commands = [('focused', ['dev.py', 'test', 'desktop', pattern], 600)] if pattern else desktop_checks('Darwin', workspace / 'reports')
+            commands = [('focused', ['dev.py', 'test', 'desktop', pattern, '--python', python], 600)] if pattern else desktop_checks('Darwin', workspace / 'reports')
             if not pattern:
                 commands += [('release-tooling', ['-m', 'unittest', 'discover', '-s', '.github/scripts', '-p', 'test_*.py'], 300)]
-            phases = tuple(Phase(name, (python, *arguments), str(snapshot), timeout=timeout,
-                                 environment=env) for name, arguments, timeout in commands)
+            env['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] = '1'
+            prerequisites = Phase('environment', (python, '-m', 'Scripts.local_desktop'), str(snapshot),
+                                  timeout=180, environment=env, kind='setup')
+            phases = (prerequisites,) + tuple(Phase(name, (python, *arguments), str(snapshot), timeout=timeout,
+                                 environment=env, dependencies=('environment',)) for name, arguments, timeout in commands)
+            source['plan_preparation_seconds'] = time.monotonic() - setup_started
             return Plan('Logistics', operation, source, phases, str(workspace), backend=backend)
         return self.mobile_plan(operation, target, source, snapshot, workspace, options, env,
                                 pattern, build_override, include_ipad)
@@ -121,7 +132,7 @@ class LogisticsProject:
         if not ref:
             raise ValueError('Choose a published branch or tag for hosted validation.')
         selected = [('native', 'mobile-build.yml'), ('runtime', 'mobile-runtime.yml')] if target in ('ios', 'android') else [('desktop-matrix', 'archive-platform-checks.yml')]
-        source['hosted_coverage'] = target if target in ('ios', 'android') else 'complete desktop matrix (platform selector added by desktop backend card)'
+        source['hosted_coverage'] = target
         phases = []
         for name, workflow in selected:
             command = (str(self.interpreter), '-m', 'Scripts.build_project', 'github', '--platform', target,
@@ -217,7 +228,7 @@ def main():
     for name in (signal.SIGINT, signal.SIGTERM):
         signal.signal(name, lambda *_: cancelled.set())
     if args.command == 'github':
-        inputs = {'target': args.platform} if args.workflow in ('mobile-build.yml', 'mobile-runtime.yml') else {}
+        inputs = {'target': args.platform}
         run = client.dispatch(args.workflow, args.ref, args.commit, inputs, confirmed=True)
         print(json.dumps(dict(run_id=run, repository=values['github.repository'], status='queued')), flush=True)
         result = client.wait(run, args.commit, timeout=13800, cancelled=cancelled,

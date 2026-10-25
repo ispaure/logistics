@@ -3,6 +3,10 @@
   "host_adapter_policy": "Existing desktop presentation adapters; new dependencies require review. Mobile features must not import the mobile application.",
   "host_adapters": [
     [
+      "Python/features/lm/ui/page.py",
+      "desktop.notifications"
+    ],
+    [
       "Python/features/archives/ui/page.py",
       "desktop.notifications"
     ],
@@ -104,6 +108,10 @@
     ]
   ],
   "feature_dependencies": [
+    [
+      "lm",
+      "git"
+    ],
     [
       "books",
       "comics"

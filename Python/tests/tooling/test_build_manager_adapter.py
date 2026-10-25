@@ -69,3 +69,24 @@ class ManagerAdapterTests(unittest.TestCase):
         self.assertEqual(plan.effect, 'publish')
         with self.assertRaises(ValueError):
             project.github_plan('Test', 'ios', dict(source, dirty=True), root, {}, 'working-tree', '')
+
+    def test_macos_local_plan_has_environment_gate_and_exact_desktop_commands(self):
+        from Scripts.validation_plans import desktop_checks
+        root = Path(__file__).resolve().parents[3]
+        project = LogisticsProject(root)
+        with patch('Scripts.build_project.identity', return_value=dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture')), \
+                patch('Scripts.build_project.materialize'), patch('build_manager.local.inspect_python', return_value={'system': 'Darwin'}):
+            plan = project.make_plan('Test', 'macos', 'This Mac')
+        names = [phase.id for phase in plan.phases]
+        expected = [name for name, _, _ in desktop_checks('Darwin', 'reports')]
+        self.assertEqual(names, ['environment', *expected, 'release-tooling'])
+        self.assertTrue(all(phase.dependencies == ('environment',) for phase in plan.phases[1:]))
+        self.assertTrue(all(phase.environment['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] == '1' for phase in plan.phases))
+        self.assertEqual(plan.source['toolchain']['system'], 'Darwin')
+        with patch('Scripts.build_project.identity', return_value=dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture')), \
+                patch('Scripts.build_project.materialize'), patch('build_manager.local.inspect_python', return_value={'system': 'Darwin'}):
+            focused = project.make_plan('Test', 'macos', 'This Mac', pattern='test_dev_commands.py')
+        command = focused.phases[1].argv
+        self.assertEqual(command[command.index('--python') + 1], command[0])
+        hosted = project.github_plan('Test', 'macos', dict(dirty=False, logistics_commit='a' * 40), root, {}, 'alpha', '')
+        self.assertEqual(hosted.source['hosted_coverage'], 'macos')

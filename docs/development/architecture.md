@@ -390,3 +390,9 @@ reviewed dependency boundaries, not that invoking every optional operation avoid
 presentation or external dependencies. Existing `CredentialBackend`, `RemoteSession`,
 resource-provider and mobile-presentation protocols remain the narrow contracts;
 there is no parallel interface framework or blanket typing migration.
+
+The desktop LM changes review uses Git's existing desktop diff preview, and its
+completed-response UI uses the desktop notification service. These are reviewed
+presentation-only edges (`lm -> git` and `lm/ui/page.py -> desktop.notifications`)
+in the explicit architecture policy. They do not authorize host dependencies in
+portable LM domain/session code or arbitrary new feature-to-feature imports.

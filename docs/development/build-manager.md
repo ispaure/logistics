@@ -23,8 +23,8 @@ Local macOS commands use the same project-owned desktop plan as CI. Parallels,
 sequential iOS and local Android are explicit backend extension points until
 their implementation and real platform acceptance are complete. An unavailable
 backend fails planning; the manager never silently substitutes hosted validation.
-Hosted desktop selection currently identifies the complete desktop matrix in
-the preview, rather than claiming it runs only the selected OS.
+Hosted desktop selection supplies the requested platform input. Normal release
+calls continue to require the complete desktop matrix.
 
 ## Reusable boundary
 
@@ -130,3 +130,21 @@ Profiles, counters and source workspaces stay under ignored
 `test-results/build-manager/`. Keep keys and personal configuration out of source
 and captured artifacts. Existing in-place deployment guards and final upload
 confirmation remain in the owning deployment helpers.
+
+## Local macOS acceptance
+
+Select macOS and This Mac. Planning verifies the configured interpreter and records
+its Python, OS, architecture and package versions before copying source. The
+setup phase loads native Qt and provisions/verifies the pinned rclone executable;
+full local runs require the genuine LocalCrypt fixtures rather than silently
+skipping them. The remaining phases are the canonical shared/app regressions,
+full historical compression parity, manager contracts and release-tooling tests.
+Source-plan preparation and environment setup are timed separately from tests.
+
+The GitHub option dispatches the macOS selector in the platform-check workflow.
+Normal pushes, pull requests and release calls still default to the complete
+matrix; selecting one platform does not change release prerequisites. A local
+Apple Silicon run is labelled arm64 with its actual OS and toolchain, rather than
+claiming equivalence to other hosted hardware. Use the existing locked desktop
+environment (`python dev.py setup desktop`) and repair missing prerequisites
+reported by the manager; it never falls back to a different interpreter/backend.
