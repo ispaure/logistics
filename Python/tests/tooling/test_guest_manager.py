@@ -51,6 +51,7 @@ class GuestManagerTests(unittest.TestCase):
                 self.assertIn('public.py',names)
                 self.assertIn('Python/commonUtils/library.py',names)
                 self.assertIn('.git/HEAD',names)
+                self.assertIn('.git/refs/' if kind=='zip' else '.git/refs',names)
                 self.assertNotIn('private-credential',names)
         self.assertEqual(list((self.project/'test-results/build-scratch').glob('run-*')),[])
 

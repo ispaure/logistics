@@ -43,7 +43,7 @@ def archive(checkout, project, kind):
         if kind == 'zip':
             with zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as output:
                 for path in sorted(source.rglob('*')):
-                    if path.is_file(): output.write(path, path.relative_to(source).as_posix())
+                    output.write(path, path.relative_to(source).as_posix())
         elif kind == 'tar':
             with tarfile.open(fileobj=stream, mode='w:gz') as output:
                 for path in sorted(source.iterdir()): output.add(path, arcname=path.name)
