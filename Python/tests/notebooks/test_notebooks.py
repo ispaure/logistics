@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 from urllib.parse import quote
-from zipfile import ZipFile
+from zipfile import ZipFile, ZipInfo
 from uuid import uuid4
 
 from features.notebooks._vendor.rmscene import scene_stream as ss
@@ -23,7 +23,11 @@ def archive(members):
     out = BytesIO()
     with ZipFile(out, 'w') as z:
         for key, value in members.items():
-            z.writestr(key, value)
+            # ZipInfo normalizes backslashes on Windows; preserve adversarial
+            # entry bytes so unsafe-name assertions exercise the actual reader.
+            info = ZipInfo(key)
+            info.filename = info.orig_filename = key
+            z.writestr(info, value)
     return out.getvalue()
 
 
