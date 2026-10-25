@@ -58,7 +58,9 @@ def read_archive(data):
             if len(infos) > MAX_MEMBERS or sum(i.file_size for i in infos) > MAX_EXPANDED:
                 raise ValueError('RMDOC archive exceeds the expanded size/member limit.')
             for info in infos:
-                name = info.filename
+                # ZipInfo.filename normalizes Windows separators and truncates
+                # NULs; validate the original entry before that transformation.
+                name = info.orig_filename
                 path = PurePosixPath(name)
                 mode = info.external_attr >> 16
                 if (name in seen or '\\' in name or ':' in name or '\x00' in name
