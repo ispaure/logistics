@@ -152,9 +152,12 @@ class LogisticsProject:
         for distribution, key in (('ubuntu', 'vm.linux'), ('fedora', 'vm.fedora')):
             if options['vm.linux_scope'] not in ('both', distribution):
                 continue
-            guest = client.selected(options[key])
+            selector = options['vm.fedora_container_host'] if distribution == 'fedora' and options['vm.fedora_mode'] == 'container-on-ubuntu' else options[key]
+            if options['vm.fedora_mode'] not in ('guest', 'container-on-ubuntu'):
+                raise ValueError('Choose an explicit supported Fedora backend mode.')
+            guest = client.selected(selector)
             selections.append((distribution, guest))
-        if len(selections) == 2 and selections[0][1]['uuid'] == selections[1][1]['uuid']:
+        if len(selections) == 2 and selections[0][1]['uuid'] == selections[1][1]['uuid'] and options['vm.fedora_mode'] != 'container-on-ubuntu':
             raise ValueError('Select distinct Ubuntu and Fedora guests for the full Linux coverage.')
         snapshot = self.private / 'snapshots' / source['fingerprint']
         materialize(self.root, snapshot, source['selection'])
@@ -164,6 +167,8 @@ class LogisticsProject:
             command = (str(self.interpreter), '-m', 'Scripts.vm_backend', '--vm', guest['uuid'],
                 '--snapshot', str(snapshot), '--results', str(results), '--distribution', distribution,
                 '--source-identity', json.dumps(source))
+            if distribution == 'fedora' and options['vm.fedora_mode'] == 'container-on-ubuntu':
+                command += ('--container-image', 'localhost/logistics-fedora-tests:43')
             if options['vm.shutdown_after_run']:
                 command += ('--shutdown',)
             if pattern:
@@ -173,6 +178,7 @@ class LogisticsProject:
         source['selected_guests'] = [{'distribution': distro, 'name': guest['name'],
                                       'uuid': guest['uuid'], 'initial_state': guest['status']} for distro, guest in selections]
         source['linux_coverage'] = options['vm.linux_scope']
+        source['fedora_mode'] = options['vm.fedora_mode']
         source['focused_pattern'] = pattern
         return Plan('Logistics', 'Local Linux tests (' + options['vm.linux_scope'] + ')', source, tuple(phases), str(workspace),
                     backend='Local Parallels VM')

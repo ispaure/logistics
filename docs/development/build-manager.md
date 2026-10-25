@@ -227,3 +227,29 @@ remains blocked until all required fixtures can run under an approved environmen
 Reports are retrieved before only the token-marked source/test workspaces are
 removed; public portable tools may remain cached. Failed retrieval preserves the
 owned path with a recovery error rather than deleting its evidence.
+
+### Explicit Fedora container mode
+
+`vm.fedora_mode=container-on-ubuntu` with an explicit
+`vm.fedora_container_host` selects rootless Podman in that existing Ubuntu guest;
+it is an alternative to the default separate Fedora guest, never an automatic
+fallback. The normal guest account needs rootless Podman/user namespace support.
+The Fedora 43 definition is `Python/tests/platform/fedora43.Containerfile`.
+The adapter hashes the definition, prepares/reuses the matching labelled image,
+records the actual image ID/architecture, then executes by that immutable ID.
+It records Fedora's own OS release separately from the Ubuntu host kernel.
+Cold image preparation uses public package downloads; normal cached tests run
+locally, but cold setup is not claimed to be air-gapped.
+
+The full real Fedora43 aarch64/Python3.12.2 container run passed the same shared,
+application, compression and manager plan plus release-tooling tests. Together
+with the existing complete Ubuntu run and its focused corrections this establishes
+both required Linux distributions on this Mac's current ARM VM environment.
+Container tests run as the normal UID with default Podman security and the browser
+sandbox enabled; no privileged/unconfined flags, kernel protection changes or
+root Qt fallback are used. Actual second-project container success and cancellation
+also passed. Cleanup verifies the unique ownership label before removing that
+run's container, retrieves evidence, and removes only the owned guest workspace.
+Public image/package caches remain reusable. One transient Parallels transport
+failure was retained before the isolated successful lifetime proof; failed
+transports remain failures and are never converted to successful test evidence.

@@ -26,7 +26,7 @@ def defaults(root):
         'tools.xcode': '', 'tools.android_sdk': '', 'tools.java': '',
         'ios.iphone': '', 'ios.duo': '', 'ios.ipad': '', 'android.avd': '',
         'vm.linux': '', 'vm.fedora': '', 'vm.windows': '',
-        'vm.linux_scope': 'both',
+        'vm.linux_scope': 'both', 'vm.fedora_mode': 'guest', 'vm.fedora_container_host': '',
         'vm.windows_prepared_reference': str(root / '.tools/build-manager/windows-prepared.json'),
         'vm.shared_host': '', 'vm.shared_guest': '', 'vm.shutdown_after_run': False,
         'auth.testflight_reference': str(root / '.testflight-auth.json'),

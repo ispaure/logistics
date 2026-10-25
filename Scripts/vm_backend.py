@@ -57,11 +57,13 @@ def run(args):
             if cancelled.is_set() or time.monotonic() >= deadline:
                 raise RuntimeError('Guest tools/Python are not ready; no test result is implied.') from None
             cancelled.wait(2)
-    if info['system'] != 'Linux' or ('ID=' + args.distribution) not in info['os_release'].replace('"', ''):
+    expected_host = 'ubuntu' if args.container_image else args.distribution
+    if info['system'] != 'Linux' or ('ID=' + expected_host) not in info['os_release'].replace('"', ''):
         raise ValueError('Selected VM does not provide the requested Linux distribution.')
     if len(info['users']) != 1:
         raise ValueError('Select a guest with one identifiable normal test account; no root Qt fallback is allowed.')
     account = info['users'][0]
+    container = None
     token = uuid4().hex
     workspace = '/var/tmp/' + token
     result = dict(schema=1, vm=vm, original_state=original['status'], environment=info,
@@ -81,9 +83,47 @@ def run(args):
         env = dict(QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1', PYTHONUTF8='1',
                    UV_PYTHON_INSTALL_DIR=workspace + '/python', UV_CACHE_DIR=workspace + '/cache',
                    PYTHONPATH=workspace + '/source:' + workspace + '/source/Python')
+        def execute(argv, environment, timeout):
+            return client.run_owned(vm, workspace, token, account['uid'],
+                container.run(workspace, ['env', *(key+'='+value for key,value in environment.items()), *argv]) if container else argv,
+                container.environment if container else environment, cancelled, timeout=timeout)
+        if args.container_image:
+            from build_manager.containers import RootlessContainer
+            container = RootlessContainer('/var/tmp/build-manager-fedora-cache-'+str(account['uid']), account['uid'],
+                                           'build-manager-'+token, args.container_image)
+            result['container'] = dict(image=args.container_image, name=container.name, rootless=True,
+                                       protections='default Podman; normal UID; browser sandbox retained')
+            prepare_image = """import hashlib,json,pathlib,subprocess,sys
+root=pathlib.Path(sys.argv[1]); command=json.loads(sys.argv[2]); image=sys.argv[3]
+definition=root/'source/Python/tests/platform/fedora43.Containerfile'
+sha=hashlib.sha256(definition.read_bytes()).hexdigest()
+probe=subprocess.run(command+['image','inspect',image],capture_output=True,text=True)
+rows=json.loads(probe.stdout) if probe.returncode==0 else []
+if not rows or rows[0].get('Config',{}).get('Labels',{}).get('build-manager.definition')!=sha:
+ subprocess.run(command+['build','--label','build-manager.definition='+sha,'--tag',image,'--file',str(definition),str(definition.parent)],check=True,timeout=900)
+ rows=json.loads(subprocess.check_output(command+['image','inspect',image],text=True))
+reports=root/'reports';reports.mkdir(exist_ok=True)
+(reports/'container-image.json').write_text(json.dumps(dict(image_id=rows[0]['Id'],definition_sha256=sha,architecture=rows[0]['Architecture'])))
+"""
+            image_code = client.run_owned(vm, workspace, token, account['uid'],
+                ['python3','-c',prepare_image,workspace,json.dumps(container.command),args.container_image],
+                container.environment,cancelled,timeout=1020)
+            if image_code:
+                raise RuntimeError('Rootless Fedora image preparation failed: '+str(image_code))
+            image = json.loads(client.execute(vm,['python3','-c',
+                'import pathlib,sys;print(pathlib.Path(sys.argv[1]).read_text())',workspace+'/reports/container-image.json']))
+            container.image = image['image_id']
+            result['container'].update(image)
+
         setup_started = time.monotonic()
-        code = client.run_owned(vm, workspace, token, account['uid'], ['python3', '-c', BOOTSTRAP, workspace],
-                         env, cancelled, timeout=1020)
+        bootstrap = BOOTSTRAP if not container else '''import json,pathlib,platform,subprocess,sys
+r=pathlib.Path('/etc/os-release').read_text()
+if 'ID=fedora' not in r or 'VERSION_ID=43' not in r: raise ValueError('Expected Fedora43 container')
+p=pathlib.Path(sys.argv[1])/'reports';p.mkdir(exist_ok=True)
+(p/'container-environment.json').write_text(json.dumps(dict(os_release=r,architecture=platform.machine())))
+subprocess.run(['uv','venv','--python','3.12.2','--seed',sys.argv[1]+'/environment'],check=True,timeout=600)
+'''
+        code = execute(['python3', '-c', bootstrap, workspace], env, 1020)
         result['setup_seconds'] = time.monotonic() - setup_started
         if code:
             result['status'] = 'cancelled' if cancelled.is_set() else 'failed'
@@ -92,9 +132,10 @@ def run(args):
         guest_python = workspace + '/environment/bin/python'
         reports = workspace + '/reports'
         if args.pattern:
+            suite, pattern = ('shared', args.pattern[7:]) if args.pattern.startswith('shared:') else ('desktop', args.pattern)
             phases = (Phase('environment', (guest_python, 'Python/tests/run_platform_checks.py', '--install', '--prepare-only', '--results-dir', reports),
                             workspace + '/source', timeout=600, environment=env, kind='setup'),
-                      Phase('focused', (guest_python, 'dev.py', 'test', 'desktop', args.pattern, '--python', guest_python),
+                      Phase('focused', (guest_python, 'dev.py', 'test', suite, pattern, '--python', guest_python),
                             workspace + '/source', timeout=900, environment=dict(env, LOGISTICS_REQUIRE_LOCALCRYPT_TESTS='1'), dependencies=('environment',)))
         else:
             phases = (Phase('platform', (guest_python, 'Python/tests/run_platform_checks.py', '--install', '--results-dir', reports),
@@ -106,15 +147,21 @@ def run(args):
         encoded = base64.b64encode(json.dumps(plan.data()).encode()).decode()
         write = 'import base64,os,pathlib,sys;p=pathlib.Path(sys.argv[1]);p.write_bytes(base64.b64decode(sys.argv[2]));os.chown(p,int(sys.argv[3]),int(sys.argv[4]))'
         client.execute(vm, ['python3', '-c', write, workspace + '/plan.json', encoded, str(account['uid']), str(account['gid'])])
-        code = client.run_owned(vm, workspace, token, account['uid'],
-                         [guest_python, '-m', 'build_manager', workspace + '/plan.json', '--output', reports + '/manager'],
-                         env, cancelled, timeout=3400)
+        code = execute([guest_python, '-m', 'build_manager', workspace + '/plan.json', '--output', reports + '/manager'], env, 3400)
         result['status'] = 'cancelled' if cancelled.is_set() else 'passed' if code == 0 else 'failed'
         return int(code != 0)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         result.update(status='failed', error=str(error))
         return 1
     finally:
+        if container:
+            try:
+                cleanup = 'import os;os.setgid('+str(account['gid'])+');os.setuid('+str(account['uid'])+');exec('+repr(container.cleanup_script())+')'
+                client.execute(vm, ['env', *(key+'='+value for key,value in container.environment.items()), 'python3', '-c', cleanup,
+                                    json.dumps(container.command), container.name], timeout=45)
+                result['container_removed'] = True
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                result.update(status='failed', container_cleanup_error=str(error))
         if transfer_attempted and not staged:
             try:
                 staged = client.owned_exists(vm, workspace, token)
@@ -159,6 +206,7 @@ def main():
     parser.add_argument('--results', type=Path, required=True)
     parser.add_argument('--source-identity', type=json.loads, required=True)
     parser.add_argument('--distribution', choices=('ubuntu', 'fedora'), required=True)
+    parser.add_argument('--container-image', default='')
     parser.add_argument('--shutdown', action='store_true')
     parser.add_argument('--pattern', default='')
     args = parser.parse_args()
