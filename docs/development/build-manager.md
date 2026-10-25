@@ -654,6 +654,9 @@ such, independently of historical Fedora 43 container or Ubuntu receipts.
 
 Parallels may return error 255 before establishing a guest session. Retain the
 failed attempt and confirm its owned workspace state before retrying. Tests are
-never automatically replayed after an ambiguous transport failure. Windows owned
-cleanup alone retries the known lost-job-handle error, at most three times, with
-workspace ownership checked on every attempt.
+never automatically replayed after an ambiguous transport failure. Explicitly
+idempotent Linux manager staging, plan writes, evidence reads and owned cleanup
+retry known session-admission/lost-job-handle failures at most three times.
+Windows owned cleanup retries only its known lost-job-handle error. Ownership is
+checked on every attempt; source creation, test execution and publication are
+never covered by this retry policy.

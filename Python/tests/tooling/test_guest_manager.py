@@ -70,8 +70,8 @@ class GuestManagerTests(unittest.TestCase):
         payload = bytes(range(256))
         with patch('Scripts.guest_manager.archive',return_value=payload):
             stage_linux(client,'vm','/var/tmp/owned','owned',1000,1000,self.manager,self.project)
-        self.assertEqual(base64.b64decode(client.execute.call_args.kwargs['data']),payload)
-        self.assertTrue(client.execute.call_args.kwargs['data'].isascii())
+        self.assertEqual(base64.b64decode(client.execute_idempotent.call_args.kwargs['data']),payload)
+        self.assertTrue(client.execute_idempotent.call_args.kwargs['data'].isascii())
 
     def test_newer_host_checkout_transfers_declared_pin_without_resetting_it(self):
         (self.manager/'public.py').write_text('LATER = True')

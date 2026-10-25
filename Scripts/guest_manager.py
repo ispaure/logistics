@@ -71,7 +71,7 @@ for folder,dirs,files in os.walk(manager):
  os.chown(folder,int(sys.argv[3]),int(sys.argv[4]))
  for name in files: os.chown(os.path.join(folder,name),int(sys.argv[3]),int(sys.argv[4]),follow_symlinks=False)
 """
-    client.execute(vm, ['python3','-c',script,workspace,token,str(uid),str(gid)], data=base64.b64encode(payload), timeout=180)
+    client.execute_idempotent(vm, ['python3','-c',script,workspace,token,str(uid),str(gid)], data=base64.b64encode(payload), timeout=180)
     return workspace+'/manager'
 
 
