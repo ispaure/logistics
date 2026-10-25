@@ -224,8 +224,9 @@ class ManagerPanel(QWidget):
         path = run.with_suffix('.plan.json')
         self.plan.save(path)
         self.result = run / 'result.json'
+        self.cancel_file = run.with_suffix('.cancel')
         self.buffer = ''
-        arguments = ['-m', 'build_manager', str(path), '--output', str(run)]
+        arguments = ['-m', 'build_manager', str(path), '--output', str(run), '--cancel-file', str(self.cancel_file)]
         if confirmed:
             arguments.append('--confirm')
         self.set_busy(True)
@@ -275,7 +276,10 @@ class ManagerPanel(QWidget):
         if self.process.state() != QProcess.ProcessState.NotRunning:
             self.current_phase = 'Cancelling active work and running owned cleanup…'
             self.show_elapsed()
-            self.process.terminate()
+            # Windows console processes do not reliably receive QProcess's
+            # WM_CLOSE. The CLI observes this owned marker and retains its
+            # structured cancelled result while it stops the phase's job/tree.
+            self.cancel_file.touch()
 
     def process_error(self, *_):
         if self.process.state() == QProcess.ProcessState.NotRunning:

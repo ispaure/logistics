@@ -27,6 +27,7 @@ def defaults(root):
         'ios.iphone': '', 'ios.duo': '', 'ios.ipad': '', 'android.avd': '',
         'vm.linux': '', 'vm.fedora': '', 'vm.windows': '',
         'vm.linux_scope': 'both',
+        'vm.windows_prepared_reference': str(root / '.tools/build-manager/windows-prepared.json'),
         'vm.shared_host': '', 'vm.shared_guest': '', 'vm.shutdown_after_run': False,
         'auth.testflight_reference': str(root / '.testflight-auth.json'),
         'auth.key_reference': auth.get('key_path', ''),

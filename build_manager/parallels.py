@@ -106,6 +106,30 @@ class Parallels:
         UUID(selector)
         return [self.executable, 'exec', selector, *(shlex.quote(value) for value in argv)]
 
+    def powershell_command(self, selector):
+        UUID(selector)
+        # A large -EncodedCommand crosses cmd.exe's command-line limit inside
+        # guest tools. Only this fixed loader is in argv. The authenticated
+        # stdin envelope carries trusted adapter code and separately bound data.
+        loader = "$ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';"
+        loader += "$request=[Console]::In.ReadToEnd()|ConvertFrom-Json;$p=$request.values;"
+        loader += "$transportInput=[Convert]::FromBase64String($request.data);& ([ScriptBlock]::Create($request.script))"
+        encoded = base64.b64encode(loader.encode('utf-16le')).decode()
+        return [self.executable, 'exec', selector, '--current-user', 'powershell.exe',
+                '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded]
+
+    @staticmethod
+    def powershell_payload(script, values=None, data=None):
+        return json.dumps(dict(script=script, values=values or {}, data=base64.b64encode(data or b'').decode())).encode()
+
+    def powershell(self, selector, script, values=None, *, data=None, timeout=60):
+        result = subprocess.run(self.powershell_command(selector),
+                                input=self.powershell_payload(script, values, data), capture_output=True, timeout=timeout)
+        if result.returncode:
+            detail = Redactor()(result.stderr.decode('utf-8', errors='replace')[-3000:])
+            raise RuntimeError(f'Windows guest command failed ({result.returncode}): ' + detail)
+        return result.stdout
+
     def execute(self, selector, argv, *, data=None, timeout=60):
         result = subprocess.run(self.command(selector, argv), input=data, capture_output=True, timeout=timeout)
         if result.returncode:

@@ -14,6 +14,20 @@ VM = '00000000-0000-0000-0000-000000000001'
 
 
 class ParallelsTransportTests(unittest.TestCase):
+    def test_windows_parameters_are_encoded_data_and_use_existing_interactive_user(self):
+        client = Parallels('/fixture/prlctl')
+        value = "a'; Stop-Process -Id 123; 'Unicode—value"
+        command = client.powershell_command(VM)
+        script = base64.b64decode(command[-1]).decode('utf-16le')
+        self.assertNotIn(value, script)
+        self.assertIn('--current-user', command)
+        self.assertNotIn('-ExecutionPolicy', command)
+        import json
+        envelope = json.loads(client.powershell_payload('$p.value | ConvertTo-Json', {'value': value}, b'fixture'))
+        self.assertEqual(envelope['values'], {'value': value})
+        self.assertEqual(base64.b64decode(envelope['data']), b'fixture')
+        self.assertLess(len(' '.join(command)), 2000)
+
     def test_guest_shell_round_trip_preserves_metacharacters_as_literal_arguments(self):
         client = Parallels('/fixture/prlctl')
         arguments = ['python3', '-c', 'import sys; print(sys.argv[1])', "a b; $(touch /tmp/never) 'quoted'"]

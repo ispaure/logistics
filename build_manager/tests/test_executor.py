@@ -38,6 +38,16 @@ class ExecutionTests(unittest.TestCase):
         self.assertNotIn('mobile.app', sys.modules)
         self.assertNotIn('features.application', sys.modules)
 
+    def test_literal_arguments_and_unicode_working_directory_survive_transport(self):
+        folder = self.root / 'space café & literal'
+        folder.mkdir()
+        arguments = ['space value', 'quote"value', 'literal&echo', 'trailing\\', 'café']
+        phase = Phase('quoted', (sys.executable, '-c',
+            'import json,sys;print(json.dumps(sys.argv[1:]))', *arguments), str(folder))
+        result = self.run_plan(self.plan(phase))
+        self.assertEqual(result['status'], 'passed')
+        self.assertEqual(json.loads((self.root / 'result/quoted.log').read_text()), arguments)
+
     def test_failure_blocks_dependents_but_runs_independent_and_cleanup_phases(self):
         result = self.run_plan(self.plan(self.phase('failed', 'raise SystemExit(4)'),
             self.phase('dependent', 'raise AssertionError("must not run")', dependencies=('failed',)),
@@ -111,7 +121,6 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(result['status'], 'failed')
         self.assertIn('Another operation', result['error'])
 
-    @unittest.skipIf(os.name == 'nt', 'POSIX process-group orphan contract')
     def test_timeout_closes_pipe_held_by_descendant_after_parent_exits(self):
         code = 'import subprocess,sys; subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"])'
         result = self.run_plan(self.plan(self.phase('orphan', code, timeout=.15)))

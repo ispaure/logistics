@@ -192,3 +192,38 @@ resource changes, disk passphrases and account sign-in are outside this runner.
 A guest waiting at an encrypted-disk boot prompt remains unavailable until its
 owner unlocks it directly. Missing required guest coverage keeps Linux acceptance
 incomplete; installed guest tools or a passing Ubuntu run do not prove Fedora.
+
+## Parallels Windows backend
+
+Select an existing normal-user Windows test guest explicitly. The adapter uses
+owned source copies and portable, hash-verified Git/uv archives from
+`Scripts/build_manager_tools.json`; it never changes global PATH, login policy,
+Developer Mode or signing settings. `vm.windows_prepared_reference` may point to
+an ignored preparation report to reuse that guest's public tools/interpreter.
+Preparation alone is not validation. The current catalog targets Windows ARM64
+with Python 3.12.2 AMD64 under x64 emulation; results identify both architectures
+and do not claim native ARM Python or equivalence to hosted x64 hardware.
+
+The complete plan runs native Windows startup, shared/application regressions,
+compression parity, generic manager contracts and release-tooling checks.
+An explicit `shared:test_filename.py` focused pattern selects shared contracts;
+ordinary filename patterns select application contracts. Source transfer retains
+Git history and verifies its digest; reports retain actual process exit codes.
+PowerShell receives structured data over stdin rather than interpolated shell
+commands or an oversized command-line payload. Logs preserve UTF-8/CRLF content.
+Windows phases use owned Job Objects assigned before their suspended child runs,
+so timeout/cancellation also closes descendants after the parent exits. The UI
+uses an owned cancellation marker instead of relying on console window messages.
+
+The first real Windows ARM/emulated-Python full run passed native startup,
+compression and manager contracts, but required symlink fixtures failed with
+WinError 1314 under the selected normal user's current capability. The adapter
+keeps these failures visible; it does not elevate tests or disable OS protection.
+A separate timestamp fixture now uses a controlled clock, permission preservation
+compares the actual supported initial mode, and Firebase's local advisory lock is
+portable. Focused actual Windows corrections and literal Unicode/space argument,
+orphan-child, lock, timeout and cancellation checks passed. Full Windows acceptance
+remains blocked until all required fixtures can run under an approved environment.
+Reports are retrieved before only the token-marked source/test workspaces are
+removed; public portable tools may remain cached. Failed retrieval preserves the
+owned path with a recovery error rather than deleting its evidence.

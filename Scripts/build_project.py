@@ -142,8 +142,8 @@ class LogisticsProject:
                     str(workspace), backend='GitHub', effect='publish')
 
     def local_vm_plan(self, operation, target, source, workspace, options, pattern):
-        if target != 'linux':
-            raise ValueError('Windows guest backend is not installed yet; no hosted fallback or passing result is implied.')
+        if target == 'windows':
+            return self.windows_vm_plan(operation, source, workspace, options, pattern)
         if operation != 'Test':
             raise ValueError('This Linux backend accepts Test plans; no Build operation is implied.')
         from build_manager.parallels import Parallels
@@ -176,6 +176,28 @@ class LogisticsProject:
         source['focused_pattern'] = pattern
         return Plan('Logistics', 'Local Linux tests (' + options['vm.linux_scope'] + ')', source, tuple(phases), str(workspace),
                     backend='Local Parallels VM')
+
+    def windows_vm_plan(self, operation, source, workspace, options, pattern):
+        if operation != 'Test':
+            raise ValueError('Windows guest supports Test plans; no Build operation is implied.')
+        from build_manager.parallels import Parallels
+        guest = Parallels().selected(options['vm.windows'])
+        snapshot = self.private / 'snapshots' / source['fingerprint']
+        materialize(self.root, snapshot, source['selection'])
+        results = workspace / ('windows-' + uuid4().hex)
+        command = (str(self.interpreter), '-m', 'Scripts.windows_backend', '--vm', guest['uuid'],
+                   '--snapshot', str(snapshot), '--results', str(results), '--source-identity', json.dumps(source))
+        prepared = options['vm.windows_prepared_reference']
+        if prepared:
+            command += ('--prepared', prepared)
+        if pattern:
+            command += ('--pattern', pattern)
+        if options['vm.shutdown_after_run']:
+            command += ('--shutdown',)
+        source.update(selected_guest=guest, focused_pattern=pattern)
+        return Plan('Logistics', 'Focused Windows contracts' if pattern else 'Complete local Windows tests', source,
+                    (Phase('windows', command, str(snapshot), timeout=5400, artifacts=(str(results / 'result.json'),)),),
+                    str(workspace), backend='Local Parallels VM')
 
     def mobile_plan(self, operation, target, source, snapshot, workspace, options, env, pattern, build_override, include_ipad):
         if operation in ('Prepare TestFlight', 'Prepare Firebase'):

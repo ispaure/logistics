@@ -163,9 +163,10 @@ class UndoUITests(QtTestCase):
         path = self.paths[0]
         path.write_bytes(b'\xef\xbb\xbf' + self.after.replace('\n', '\r\n').encode())
         path.chmod(0o640)
+        expected_mode = path.stat().st_mode & 0o777
         self.click_undo()
         self.assertEqual(path.read_bytes(), b'\xef\xbb\xbf' + self.before.replace('\n', '\r\n').encode())
-        self.assertEqual(path.stat().st_mode & 0o777, 0o640)
+        self.assertEqual(path.stat().st_mode & 0o777, expected_mode)
 
     def test_symlink_is_refused_before_any_other_file_changes(self):
         self.paths[1].unlink()

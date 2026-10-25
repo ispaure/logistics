@@ -21,11 +21,7 @@ def timestamp():
 
 def stop_process(process):
     if os.name == 'nt':
-        if process.poll() is not None:
-            return
-        # /T includes grandchildren; the VM transport has its own guest cleanup.
-        subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+        process.kill_tree()
     else:
         try:
             os.killpg(process.pid, signal.SIGTERM)
@@ -101,9 +97,12 @@ class Executor:
         process = None
         tail = []
         try:
-            process = subprocess.Popen(list(phase.argv), cwd=phase.cwd, env=environment,
-                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                start_new_session=os.name != 'nt')
+            if os.name == 'nt':
+                from .windows_process import WindowsProcess
+                process = WindowsProcess(list(phase.argv), cwd=phase.cwd, env=environment)
+            else:
+                process = subprocess.Popen(list(phase.argv), cwd=phase.cwd, env=environment,
+                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
             def read():
                 try:
                     while chunk := process.stdout.readline(16384):
@@ -113,7 +112,9 @@ class Executor:
             reader = Thread(target=read, daemon=True)
             reader.start()
             finished = False
-            with (output / row['log']).open('w') as stream:
+            # Preserve the child's CRLF rather than translating it a second
+            # time on Windows (which would produce CRCRLF/blank log lines).
+            with (output / row['log']).open('w', encoding='utf-8', newline='') as stream:
                 while not finished or process.poll() is None:
                     if self.cancelled.is_set() and not phase.always:
                         row['status'] = 'cancelled'
@@ -158,6 +159,8 @@ class Executor:
             if process is not None:
                 stop_process(process)
                 process.stdout.close()
+                if os.name == 'nt':
+                    process.close()
         row.update(seconds=time.monotonic() - started, finished_at=timestamp())
         if row['status'] != 'passed':
             row['summary'] = '\n'.join(tail)

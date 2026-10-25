@@ -1,7 +1,6 @@
 """Build a signed Android beta and distribute it to a verified Firebase group."""
 import argparse
 from datetime import datetime, timezone
-import fcntl
 import json
 import os
 from pathlib import Path
@@ -233,8 +232,8 @@ def main():
     PRIVATE.mkdir(mode=0o700, exist_ok=True)
     PRIVATE.chmod(0o700)
     try:
-        with (PRIVATE / 'deploy.lock').open('w') as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        from build_manager.locking import workspace_lock
+        with workspace_lock(PRIVATE / 'deploy.lock'):
             cli = firebase_cli()
             config, group = preflight(cli, login=args.login, allow_login=not args.gui)
             if args.login or args.check:

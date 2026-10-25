@@ -23,12 +23,13 @@ class RegressionRunnerTests(unittest.TestCase):
             root = Path(temporary)
             (root / 'test_stuck.py').write_text('')
             report = runner.TimingReport(root / 'report.json', root, 'test*.py', True)
-            with patch.object(runner.subprocess, 'run', side_effect=subprocess.TimeoutExpired('probe', 300)):
+            with patch.object(runner.subprocess, 'run', side_effect=subprocess.TimeoutExpired('probe', 300)), \
+                    patch.object(runner, 'monotonic', side_effect=[10.0, 10.25]):
                 self.assertEqual(runner.run_isolated(root, 'test*.py', 60, report=report), 1)
             data = json.loads(report.path.read_text())
             self.assertEqual(data['modules'][0]['outcome'], 'timeout')
             self.assertEqual(data['modules'][0]['exit_code'], 124)
-            self.assertGreater(data['modules'][0]['duration_seconds'], 0)
+            self.assertEqual(data['modules'][0]['duration_seconds'], 0.25)
             self.assertFalse(data['modules'][0]['test_report_available'])
             self.assertFalse(data['complete'])
 

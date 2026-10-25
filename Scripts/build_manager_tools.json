@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "windows_arm64": {
+    "uv": {
+      "version": "0.12.18",
+      "url": "https://github.com/astral-sh/uv/releases/download/0.12.18/uv-aarch64-pc-windows-msvc.zip",
+      "sha256": "17f27b1c64eacc757ae603579f116a014881e486c5e79ae81877980d4699e943"
+    },
+    "git": {
+      "version": "v2.56.0.windows.3",
+      "url": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.3/MinGit-2.56.0.3-arm64.zip",
+      "sha256": "042e7fda964e2072c11435fd0efeb822083c8f5a07c8b00456247bbb5334589d"
+    }
+  }
+}
