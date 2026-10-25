@@ -41,6 +41,7 @@ class TestDeviceDeployment(unittest.TestCase):
 
     def test_testflight_gui_waits_for_verified_build_and_decline_never_uploads(self):
         with patch.object(testflight.sys, 'argv', ['testflight', '--gui', '--build-number', '202610201']), \
+                patch.object(testflight, 'reserve_build', return_value='202610201'), \
                 patch.object(testflight, 'gui_input', return_value='n') as ask, \
                 patch.object(testflight.subprocess, 'run') as run:
             testflight.main()

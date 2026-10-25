@@ -11,6 +11,11 @@ from mobile_build.deployment import firebase_deploy, manager_settings, testfligh
 
 
 class ManagerAdapterTests(unittest.TestCase):
+    def setUp(self):
+        retention = patch("Scripts.build_retention.clean", return_value=[])
+        retention.start()
+        self.addCleanup(retention.stop)
+
     def test_prepared_report_keeps_embedded_identity_after_profile_changes(self):
         with TemporaryDirectory() as directory:
             report = Path(directory) / 'prepared.json'

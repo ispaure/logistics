@@ -50,6 +50,7 @@ class LogisticsProject:
                    'github.token_environment'}
         for name, value in values.items():
             kind = ('bool' if isinstance(value, bool) else
+                    'int' if isinstance(value, int) else
                     'directory' if name in {'tools.xcode', 'tools.android_sdk', 'tools.java', 'vm.shared_host'} else
                     'reference' if name.endswith('reference') or name.startswith('signing.') or name.endswith('_python') else 'text')
             rows[name] = dict(value=value, origin=sources[name], kind=kind, read_only=name in guarded or name in reserved)
@@ -74,7 +75,16 @@ class LogisticsProject:
         rows['build.next_android'] = dict(value=next_android(self.mobile, self.mobile / '.android-beta'), origin='preview only; reserved at build start', read_only=True)
         rows['github.credentials'] = dict(value='Hosted workflows use repository secrets/variables; local file references are not synced.',
                                            origin='provider boundary', read_only=True)
-        return rows
+        from mobile_build.deployment.settings_help import describe_settings
+        return describe_settings(rows)
+
+    def storage_inventory(self):
+        from Scripts.build_retention import storage_inventory
+        return storage_inventory(self.root)
+
+    def delete_storage(self, selections):
+        from Scripts.build_retention import delete_storage
+        return delete_storage(self.root, selections)
 
     def save_settings(self, values):
         manager_settings.save(self.mobile, values)
@@ -85,8 +95,16 @@ class LogisticsProject:
     def make_plan(self, operation, target, backend, **options):
         from dataclasses import replace
         started = time.monotonic()
+        from Scripts.build_retention import clean
+        try:
+            clean(self.root, apply=True)
+        except (OSError, RuntimeError) as error:
+            print('Build retention incomplete: ' + str(error), flush=True)
         plan = self._make_plan(operation, target, backend, **options)
-        return replace(plan, source=dict(plan.source, plan_preparation_seconds=time.monotonic()-started))
+        snapshot = self.private / 'snapshots' / plan.source.get('fingerprint', '')
+        resources = (str(snapshot.with_suffix('.lock')),) if (snapshot / '.manager-source.json').is_file() else ()
+        return replace(plan, resource_locks=resources,
+                       source=dict(plan.source, plan_preparation_seconds=time.monotonic()-started))
 
     def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag=''):
         if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target, operation):

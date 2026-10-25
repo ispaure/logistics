@@ -340,19 +340,16 @@ class SettingsPage(qt.QWidget):
         self.reset_status.hide()
         layout.addWidget(self.reset_status)
         self.scope_selector.currentIndexChanged.connect(self._scope_changed)
-        splitter = qt.QSplitter()
+        from commonUtils.ui.settings.navigation import SettingsNavigation
+        splitter = SettingsNavigation(self)
         layout.addWidget(splitter, 1)
-        self.sidebar = qt.QTreeWidget()
+        self.sidebar = splitter.sidebar
         from commonUtils.ui.appearance.styling import bind_font
         bind_font(self.sidebar, 'ui')
         self.sidebar.setHeaderHidden(True)
         self.sidebar.setAccessibleName('Settings categories')
         self.sidebar.installEventFilter(self)
-        self.stack = qt.QStackedWidget()
-        splitter.addWidget(self.sidebar)
-        splitter.addWidget(self.stack)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
+        self.stack = splitter.stack
         self.sidebar.currentItemChanged.connect(self._selected)
         self._unsubscribe = registry.subscribe(self._changed)
         self.destroyed.connect(self._unsubscribe)

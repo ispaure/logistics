@@ -10,7 +10,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton,
-    QScrollArea, QVBoxLayout, QWidget,
+    QScrollArea, QVBoxLayout, QWidget, QSizePolicy, QSpinBox, QSplitter, QStackedWidget, QTreeWidget, QTreeWidgetItem,
 )
 
 
@@ -34,40 +34,89 @@ class PreparePlan(QRunnable):
 class SettingsDialog(QDialog):
     def __init__(self, project, parent=None):
         super().__init__(parent)
-        self.project, self.controls = project, {}
+        self.project, self.controls, self.read_only = project, {}, set()
         self.setWindowTitle('Settings and effective value sources')
         self.resize(800, 650)
         layout = QVBoxLayout(self)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        content = QWidget()
-        form = QFormLayout(content)
-        section = None
+        factory = getattr(project, 'settings_navigation', None)
+        self.navigation = factory(self) if factory else QSplitter(self)
+        if factory:
+            self.sidebar, self.stack = self.navigation.sidebar, self.navigation.stack
+        else:
+            self.sidebar, self.stack = QTreeWidget(), QStackedWidget()
+            self.sidebar.setHeaderHidden(True)
+            self.navigation.addWidget(self.sidebar)
+            self.navigation.addWidget(self.stack)
+            self.navigation.setStretchFactor(1, 1)
+        self.sidebar.setAccessibleName('Settings categories')
+        self.sidebar.currentItemChanged.connect(self.select_section)
+        layout.addWidget(self.navigation, 1)
+        forms = {}
         for name, entry in project.settings_view().items():
-            group = name.split('.')[0]
-            if group != section:
-                heading = QLabel(group.replace('_', ' ').title())
-                heading.setStyleSheet('font-weight: bold; margin-top: 8px')
-                form.addRow(heading)
-                section = group
-            if entry.get('kind') == 'bool':
+            group = entry.get('section', name.split('.')[0].replace('_', ' ').title())
+            if group not in forms:
+                scroll = QScrollArea()
+                scroll.setWidgetResizable(True)
+                content = QWidget()
+                form = QFormLayout(content)
+                form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+                scroll.setWidget(content)
+                forms[group] = form
+                index = self.stack.addWidget(scroll)
+                item = QTreeWidgetItem([group])
+                from PySide6.QtCore import Qt
+                item.setData(0, Qt.ItemDataRole.UserRole, index)
+                self.sidebar.addTopLevelItem(item)
+            if entry.get('choices'):
+                control = QComboBox()
+                control.addItems(entry['choices'])
+                if control.findText(str(entry['value'])) < 0:
+                    control.addItem(str(entry['value']))
+                control.setCurrentText(str(entry['value']))
+            elif entry.get('kind') == 'multiline':
+                control = QPlainTextEdit(str(entry['value']))
+                control.setFixedHeight(110)
+                control.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            elif entry.get('kind') == 'bool':
                 control = QCheckBox()
                 control.setChecked(bool(entry['value']))
+            elif entry.get('kind') == 'int':
+                control = QSpinBox()
+                control.setRange(entry.get('minimum', -2147483648), entry.get('maximum', 2147483647))
+                control.setValue(int(entry['value']))
+                control.setSuffix(entry.get('suffix', ''))
             else:
                 control = QLineEdit(str(entry['value']))
-            control.setEnabled(not entry.get('read_only', False))
+            label = entry.get('label', name)
+            control.setAccessibleName(label)
+            description = entry.get('description', label)
+            control.setToolTip(description)
+            if entry.get('read_only', False):
+                self.read_only.add(name)
+                if isinstance(control, (QLineEdit, QPlainTextEdit)):
+                    control.setReadOnly(True)
+                else:
+                    control.setEnabled(False)
             self.controls[name] = control
-            row = QHBoxLayout()
-            row.addWidget(control)
+            row = QVBoxLayout()
+            input_row = QHBoxLayout()
+            input_row.addWidget(control)
             if entry.get('kind') in ('reference', 'directory'):
                 browse = QPushButton('Locate…')
+                browse.setToolTip(description)
                 browse.setEnabled(not entry.get('read_only', False))
                 browse.clicked.connect(lambda checked=False, field=control, kind=entry['kind']: self.locate(field, kind))
-                row.addWidget(browse)
-            row.addWidget(QLabel(entry.get('origin', 'repository default')))
-            form.addRow(entry.get('label', name), row)
-        scroll.setWidget(content)
-        layout.addWidget(scroll)
+                input_row.addWidget(browse)
+            row.addLayout(input_row)
+            origin = QLabel('Source: ' + entry.get('origin', 'repository default'))
+            origin.setWordWrap(True)
+            origin.setToolTip(description)
+            row.addWidget(origin)
+            heading = QLabel(label)
+            heading.setToolTip(description)
+            forms[group].addRow(heading, row)
+        if self.sidebar.topLevelItemCount():
+            self.sidebar.setCurrentItem(self.sidebar.topLevelItem(0))
         help_text = QLabel('Save changes to the local profile. One-run build overrides belong in the plan. '
                            'Credential fields contain file references, never private-key contents.')
         help_text.setWordWrap(True)
@@ -80,6 +129,11 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self.save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def select_section(self, item, previous):
+        if item is not None:
+            from PySide6.QtCore import Qt
+            self.stack.setCurrentIndex(item.data(0, Qt.ItemDataRole.UserRole))
 
     def locate(self, control, kind):
         if kind == 'directory':
@@ -104,8 +158,21 @@ class SettingsDialog(QDialog):
             QMessageBox.warning(self, 'Version not changed', str(error))
 
     def save(self):
-        values = {name: field.isChecked() if isinstance(field, QCheckBox) else field.text()
-                  for name, field in self.controls.items() if field.isEnabled()}
+        values = {}
+        for name, field in self.controls.items():
+            if name in self.read_only:
+                continue
+            if isinstance(field, QCheckBox):
+                value = field.isChecked()
+            elif isinstance(field, QSpinBox):
+                value = field.value()
+            elif isinstance(field, QComboBox):
+                value = field.currentText()
+            elif isinstance(field, QPlainTextEdit):
+                value = field.toPlainText()
+            else:
+                value = field.text()
+            values[name] = value
         try:
             self.project.save_settings(values)
         except (OSError, ValueError) as error:
@@ -157,14 +224,26 @@ class ManagerPanel(QWidget):
         self.revision = QLineEdit('working-tree')
         self.pattern = QLineEdit()
         self.pattern.setPlaceholderText('Blank: full declared suite; filename glob: focused contracts')
-        self.build_override = QLineEdit()
-        self.build_override.setPlaceholderText('Automatic allocation; explicit value is for this run only')
+        self.build_override = QSpinBox()
+        self.build_override.setRange(0, 2147483647)
+        self.build_override.setSpecialValueText('Automatic')
+        self.build_override.setToolTip('Zero selects automatic allocation. A positive number overrides this run only; existing build numbers cannot be reused.')
         self.release_tag = QLineEdit()
         self.release_tag.setPlaceholderText('Explicit release identifier supplied by the project policy')
         for label, control in [('Operation', self.operation), ('Platform', self.platform),
                                ('Backend', self.backend), ('Source revision', self.revision),
                                ('Focused test pattern', self.pattern), ('Build number override', self.build_override),
                                ('GitHub release tag', self.release_tag)]:
+            control.setAccessibleName(label)
+            if control is not self.build_override:
+                control.setToolTip({
+                    'Operation': 'Choose tests, an artifact build, tester preparation or a GitHub release. Inspect the plan before running.',
+                    'Platform': 'Operating system to build or test.',
+                    'Backend': 'Where the operation runs. VM backends require an explicitly configured authorized test VM.',
+                    'Source revision': 'working-tree includes current edits; a Git revision selects that committed source.',
+                    'Focused test pattern': 'Optional test filename glob for desktop contracts. Blank runs the full declared suite.',
+                    'GitHub release tag': 'Explicit unused release tag for a Release operation, such as v0.1.15-alpha.39.',
+                }[label])
             form.addRow(label, control)
         self.run_controls = {}
         for name, entry in getattr(project, 'run_options', {}).items():
@@ -185,9 +264,13 @@ class ManagerPanel(QWidget):
         self.cancel.clicked.connect(self.cancel_operation)
         self.settings = QPushButton('Settings…')
         self.settings.clicked.connect(self.edit_settings)
+        self.cleanup = QPushButton('Clean up builds…')
+        self.cleanup.setEnabled(hasattr(project, 'storage_inventory'))
+        self.cleanup.setToolTip('Review owned build outputs and delete selected or all unprotected entries.')
+        self.cleanup.clicked.connect(self.clean_builds)
         self.verify = QPushButton('Verify connections/settings')
         self.verify.clicked.connect(self.verify_settings)
-        for button in (self.prepare, self.start, self.cancel, self.settings, self.verify):
+        for button in (self.prepare, self.start, self.cancel, self.settings, self.verify, self.cleanup):
             controls.addWidget(button)
         layout.addLayout(controls)
         self.preview = QPlainTextEdit()
@@ -203,7 +286,8 @@ class ManagerPanel(QWidget):
         layout.addWidget(self.status)
         for control in (self.operation, self.platform, self.backend):
             control.currentTextChanged.connect(self.invalidate)
-        for control in (self.revision, self.pattern, self.build_override, self.release_tag):
+        self.build_override.valueChanged.connect(self.invalidate)
+        for control in (self.revision, self.pattern, self.release_tag):
             control.textChanged.connect(self.invalidate)
         self.refresh_backends()
 
@@ -224,6 +308,10 @@ class ManagerPanel(QWidget):
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
 
+    def clean_builds(self):
+        from .storage_ui import StorageDialog
+        StorageDialog(self.project, self).exec()
+
     def inspect_plan(self):
         if self.preparing or self.process.state() != QProcess.ProcessState.NotRunning:
             return
@@ -231,7 +319,7 @@ class ManagerPanel(QWidget):
         operation, platform, backend = (control.currentText() for control in
                                        (self.operation, self.platform, self.backend))
         choices = dict(revision=self.revision.text(), pattern=self.pattern.text(),
-                       build_override=self.build_override.text(), release_tag=self.release_tag.text(),
+                       build_override=str(self.build_override.value()) if self.build_override.value() else '', release_tag=self.release_tag.text(),
                        **{name: control.isChecked() for name, control in self.run_controls.items()})
         self.invalidate()
         self.preparation_revision = self.selection_revision
@@ -309,10 +397,11 @@ class ManagerPanel(QWidget):
             self.clock.start()
         else:
             self.clock.stop()
-        for control in (self.prepare, self.start, self.settings, self.verify, self.operation,
+        for control in (self.prepare, self.start, self.settings, self.verify, self.cleanup, self.operation,
                         self.platform, self.backend, self.revision, self.pattern, self.build_override, self.release_tag,
                         *self.run_controls.values()):
             control.setEnabled(not busy)
+        self.cleanup.setEnabled(not busy and hasattr(self.project, 'storage_inventory'))
         self.start.setEnabled(not busy and self.plan is not None)
         self.cancel.setEnabled(busy and not self.preparing)
         self.busy_changed.emit(busy)

@@ -53,9 +53,12 @@ class LocationContextTests(QtTestCase):
     def test_remote_and_localcrypt_titles_use_provider_not_virtual_paths(self):
         window = qt.QMainWindow()
         self.addCleanup(window.deleteLater)
-        provider = SimpleNamespace(root=self.root, remote='Library', remote_storage=True, private=True)
+        provider = SimpleNamespace(root=self.root, remote='Library', remote_storage=True, private=True,
+                                   session_only=True)
         window.choice = SimpleNamespace(path='guide.pdf', provider=provider)
         self.assertEqual(document_title(window), 'guide.pdf [Remote: Library (🕵️ Session-Only)]')
+        provider.session_only = False
+        self.assertEqual(document_title(window), 'guide.pdf [Remote: Library]')
         provider.connection = SimpleNamespace(remote='Private-Library')
         self.assertEqual(document_title(window), 'guide.pdf [Local: Private-Library (🕵️ Session-Only)]')
         window._private_view_guard = SimpleNamespace(locked=True)
@@ -99,12 +102,17 @@ class LocationContextTests(QtTestCase):
         browser.directory_changed.emit(browser.navigation.directory)
         self.assertEqual(row.label.text(), 'Local')
         provider = SimpleNamespace(remote_storage=True, private=True, remote='Books',
-                                   encrypted=True, context=Path('keys.session'), closed=False)
+                                   encrypted=True, context=Path('keys.session'), closed=False,
+                                   session_only=True)
         row.provider = provider
         with patch('features.rclone.session.credentials', return_value={'Books': {}}):
             row.refresh()
             self.assertEqual(row.label.text(), 'Cloud · Unlocked · Books · 🕵️ Session-Only')
             self.assertFalse(row.icon.pixmap().isNull())
+            provider.session_only = False
+            row.refresh()
+            self.assertEqual(row.label.text(), 'Cloud · Unlocked · Books')
+            provider.session_only = True
             provider.storage_label = 'Home Server'
             row.refresh()
             self.assertTrue(row.label.text().startswith('Home Server · Unlocked'))

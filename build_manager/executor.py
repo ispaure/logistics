@@ -1,4 +1,5 @@
 """Sequential phase execution, dependency gates, bounded waits and process cleanup."""
+from contextlib import ExitStack
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -73,7 +74,10 @@ class Executor:
         save()
         started = time.monotonic()
         try:
-            with workspace_lock(Path(plan.workspace) / 'operation.lock'):
+            with ExitStack() as locks:
+                locks.enter_context(workspace_lock(Path(plan.workspace) / 'operation.lock'))
+                for resource in sorted(set(plan.resource_locks)):
+                    locks.enter_context(workspace_lock(resource))
                 report['status'] = 'running'
                 save()
                 states = {}

@@ -77,6 +77,7 @@ class RemoteResources:
 
     def __init__(self, config_path, remote, *, binary):
         self.config_path, self.remote, self.binary = Path(config_path), remote, Path(binary)
+        self.session_only = self.config_path.suffix == '.session'
         from .desktop_service import service
         self._credential_grant = service.credentials.capture(self.config_path)
         values = session.credentials(self.config_path)

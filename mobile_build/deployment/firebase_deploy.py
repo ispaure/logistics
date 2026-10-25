@@ -172,53 +172,56 @@ def build(version_code=None):
     key, password = signing(env)
     number = reserve_build(version_code)
     output = ROOT / 'build/firebase' / str(number)
-    output.mkdir(parents=True)
-    android.run([sys.executable, 'cloud_build.py', 'android'], env,
-                log=output / 'bridge.log')
-    # Use a Gradle init script so device/debug configuration is never rewritten.
-    init = output / 'version.gradle'
-    init.write_text('gradle.beforeProject { p ->\n'
-                    '  p.pluginManager.withPlugin("com.android.application") {\n'
-                    '    p.androidComponents.finalizeDsl { dsl ->\n'
-                    f'      dsl.defaultConfig.versionCode = {number}\n'
-                    f'      dsl.defaultConfig.versionName = {json.dumps(config["version"])}\n'
-                    '    }\n  }\n}\n')
-    with (output / 'build.log').open('w') as log:
-        subprocess.run([str(android.PROJECT / 'gradlew'), '--no-daemon', '-I', str(init),
-                        'clean', ':app:assembleRelease'], cwd=android.PROJECT,
-                       env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
-    sdk = Path(env['ANDROID_HOME'])
-    candidates = [p for p in (sdk / 'build-tools').iterdir()
-                  if re.fullmatch(r'\d+(\.\d+)+', p.name) and (p / 'apksigner').is_file()]
-    tools = max(candidates, key=lambda p: tuple(map(int, p.name.split('.'))))
-    unsigned = android.PROJECT / 'app/build/outputs/apk/release/app-release-unsigned.apk'
-    aligned = output / 'aligned.apk'
-    apk = output / 'Logistics-android-beta.apk'
-    subprocess.run([str(tools / 'zipalign'), '-f', '-p', '4', str(unsigned), str(aligned)], check=True, env=env)
-    key_env = dict(env, LOGISTICS_BETA_STORE_PASSWORD=password)
-    subprocess.run([str(tools / 'apksigner'), 'sign', '--ks', str(key),
-                    '--ks-key-alias', 'logistics-beta', '--ks-pass', 'env:LOGISTICS_BETA_STORE_PASSWORD',
-                    '--out', str(apk), str(aligned)], env=key_env, check=True)
-    subprocess.run([str(tools / 'apksigner'), 'verify', '--verbose', str(apk)], env=env, check=True)
-    metadata = subprocess.check_output([str(tools / 'aapt'), 'dump', 'badging', str(apk)], env=env, text=True)
-    package = metadata.splitlines()[0]
-    if (f"name='{android.BUNDLE}'" not in package or f"versionCode='{number}'" not in package
-            or f"versionName='{config['version']}'" not in package):
-        raise ValueError('Built APK identity/version verification failed.')
-    if os.environ.get('LOGISTICS_MANAGER_ARTIFACT_REPORT'):
-        from .manager_settings import record_prepared_artifact
-        source = json.loads((ROOT / 'payload/source.json').read_text())
-        record_prepared_artifact(dict(provider='Firebase', bundle_id=android.BUNDLE,
-            version=config['version'], build=number, source=source, apk=str(apk),
-            destination=preflight_destination(),
-            certificate=android.apk_certificate(apk, tools, env)))
-    notes = output / 'release-notes.txt'
-    from .manager_settings import distribution
-    configured_notes = distribution(ROOT, 'firebase', {'release_notes': ''})['release_notes']
-    notes.write_text(f'Logistics Android beta {config["version"]}, build {number}.\n'
-                     'Built from the selected source; consult the verified source manifest for exact identity.\n'
-                     + configured_notes + '\n')
-    return apk, notes
+    from build_manager.retention import lease
+    from Scripts.build_retention import clean_builds
+    clean_builds(ROOT)
+    with lease(output):
+        android.run([sys.executable, 'cloud_build.py', 'android'], env,
+                    log=output / 'bridge.log')
+        # Use a Gradle init script so device/debug configuration is never rewritten.
+        init = output / 'version.gradle'
+        init.write_text('gradle.beforeProject { p ->\n'
+                        '  p.pluginManager.withPlugin("com.android.application") {\n'
+                        '    p.androidComponents.finalizeDsl { dsl ->\n'
+                        f'      dsl.defaultConfig.versionCode = {number}\n'
+                        f'      dsl.defaultConfig.versionName = {json.dumps(config["version"])}\n'
+                        '    }\n  }\n}\n')
+        with (output / 'build.log').open('w') as log:
+            subprocess.run([str(android.PROJECT / 'gradlew'), '--no-daemon', '-I', str(init),
+                            'clean', ':app:assembleRelease'], cwd=android.PROJECT,
+                           env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
+        sdk = Path(env['ANDROID_HOME'])
+        candidates = [p for p in (sdk / 'build-tools').iterdir()
+                      if re.fullmatch(r'\d+(\.\d+)+', p.name) and (p / 'apksigner').is_file()]
+        tools = max(candidates, key=lambda p: tuple(map(int, p.name.split('.'))))
+        unsigned = android.PROJECT / 'app/build/outputs/apk/release/app-release-unsigned.apk'
+        aligned = output / 'aligned.apk'
+        apk = output / 'Logistics-android-beta.apk'
+        subprocess.run([str(tools / 'zipalign'), '-f', '-p', '4', str(unsigned), str(aligned)], check=True, env=env)
+        key_env = dict(env, LOGISTICS_BETA_STORE_PASSWORD=password)
+        subprocess.run([str(tools / 'apksigner'), 'sign', '--ks', str(key),
+                        '--ks-key-alias', 'logistics-beta', '--ks-pass', 'env:LOGISTICS_BETA_STORE_PASSWORD',
+                        '--out', str(apk), str(aligned)], env=key_env, check=True)
+        subprocess.run([str(tools / 'apksigner'), 'verify', '--verbose', str(apk)], env=env, check=True)
+        metadata = subprocess.check_output([str(tools / 'aapt'), 'dump', 'badging', str(apk)], env=env, text=True)
+        package = metadata.splitlines()[0]
+        if (f"name='{android.BUNDLE}'" not in package or f"versionCode='{number}'" not in package
+                or f"versionName='{config['version']}'" not in package):
+            raise ValueError('Built APK identity/version verification failed.')
+        if os.environ.get('LOGISTICS_MANAGER_ARTIFACT_REPORT'):
+            from .manager_settings import record_prepared_artifact
+            source = json.loads((ROOT / 'payload/source.json').read_text())
+            record_prepared_artifact(dict(provider='Firebase', bundle_id=android.BUNDLE,
+                version=config['version'], build=number, source=source, apk=str(apk),
+                destination=preflight_destination(),
+                certificate=android.apk_certificate(apk, tools, env)))
+        notes = output / 'release-notes.txt'
+        from .manager_settings import distribution
+        configured_notes = distribution(ROOT, 'firebase', {'release_notes': ''})['release_notes']
+        notes.write_text(f'Logistics Android beta {config["version"]}, build {number}.\n'
+                         'Built from the selected source; consult the verified source manifest for exact identity.\n'
+                         + configured_notes + '\n')
+        return apk, notes
 
 
 def main():

@@ -277,23 +277,29 @@ def main():
     if config['bundle'] + '.logisticsmobile' != BUNDLE:
         raise ValueError('Briefcase bundle identity has changed.')
     workspace = ROOT / 'build/testflight' / args.build_number
-    if args.command == 'distribute':
-        distribute_external(workspace)
-        return
-    if args.command == 'plan':
-        print(json.dumps(dict(identity=identity, version=config['version'], build_number=args.build_number,
-                              workspace=str(workspace), upload_enabled=False,
-                              export_options=export_options(identity['team_id']),
-                              prerequisites=['Approved enrollment', 'App Store Connect app record using the existing bundle ID',
-                                             'Distribution signing assets', 'Clean committed source', 'Encryption compliance answers']), indent=2))
-        return
-    developer, _ = choose(installed())
-    os.environ['DEVELOPER_DIR'] = developer
-    env = dict(os.environ)
-    if args.command == 'archive':
-        archive_release(args, workspace, identity, env)
-    else:
-        export_release(workspace, env, upload=args.command == 'upload')
+    from contextlib import nullcontext
+    from build_manager.retention import lease
+    from Scripts.build_retention import clean_builds
+    with nullcontext() if args.command == 'plan' else lease(workspace):
+        if args.command != 'plan':
+            clean_builds(ROOT)
+        if args.command == 'distribute':
+            distribute_external(workspace)
+            return
+        if args.command == 'plan':
+            print(json.dumps(dict(identity=identity, version=config['version'], build_number=args.build_number,
+                                  workspace=str(workspace), upload_enabled=False,
+                                  export_options=export_options(identity['team_id']),
+                                  prerequisites=['Approved enrollment', 'App Store Connect app record using the existing bundle ID',
+                                                 'Distribution signing assets', 'Clean committed source', 'Encryption compliance answers']), indent=2))
+            return
+        developer, _ = choose(installed())
+        os.environ['DEVELOPER_DIR'] = developer
+        env = dict(os.environ)
+        if args.command == 'archive':
+            archive_release(args, workspace, identity, env)
+        else:
+            export_release(workspace, env, upload=args.command == 'upload')
 
 
 if __name__ == '__main__':

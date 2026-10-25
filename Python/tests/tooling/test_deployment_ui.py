@@ -11,6 +11,25 @@ from mobile_build.deployment import deploy_ui as ui
 
 
 class DeploymentUITests(QtTestCase):
+    def test_settings_use_shared_navigation_and_explain_every_field(self):
+        from commonUtils.ui.settings.navigation import SettingsNavigation
+        from build_manager.ui import SettingsDialog
+        from PySide6.QtWidgets import QSpinBox, QPlainTextEdit
+        with patch.object(ui.QTimer, 'singleShot'):
+            window = ui.DeploymentWindow()
+        self.addCleanup(window.deleteLater)
+        dialog = SettingsDialog(window.manager.project, window)
+        self.addCleanup(dialog.deleteLater)
+        self.assertIsInstance(dialog.navigation, SettingsNavigation)
+        self.assertGreater(dialog.sidebar.topLevelItemCount(), 5)
+        self.assertTrue(all(field.toolTip() for field in dialog.controls.values()))
+        self.assertIsInstance(dialog.controls['testflight.poll_interval_seconds'], QSpinBox)
+        self.assertEqual(dialog.controls['testflight.poll_interval_seconds'].maximum(), 60)
+        self.assertIsInstance(dialog.controls['testflight.what_to_test'], QPlainTextEdit)
+        self.assertTrue(window.manager.cleanup.isEnabled())
+        self.assertEqual(window.manager.build_override.value(), 0)
+        self.assertEqual(window.manager.build_override.text(), 'Automatic')
+
     def test_selection_survives_refresh_and_only_routes_local_deployment(self):
         with patch.object(ui.QTimer, 'singleShot'):
             window = ui.DeploymentWindow()

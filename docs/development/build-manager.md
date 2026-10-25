@@ -1,6 +1,6 @@
 # Build and deployment manager
 
-Open `mobile_build/deploy_ui.py` with the desktop environment, or use the existing
+Open `mobile_build/deployment/deploy_ui.py` with the desktop environment, or use the existing
 `mobile_build/deploy_test_devices.command` launcher. The window has a plan tab
 and the existing device/tester tab. Passing a test never starts deployment.
 Select an operation, platform, backend and source; inspect the ordered plan,
@@ -80,6 +80,12 @@ tester preparation requires committed source; protected inputs are linked from
 their existing locations only for that selected build, never copied into Git.
 
 ## Settings and identity
+
+Settings use a category menu on the left and retained forms on the right, sharing
+`commonUtils.ui.settings.navigation.SettingsNavigation` with Logistics settings.
+Hover a field or its label for its purpose; timing integers have bounded stepper
+controls in seconds. The main plan's optional build number also has a stepper,
+with **Automatic** representing no override.
 
 Settings show each effective value's origin: repository defaults, ignored local
 profile, environment or one-run override. Save changes the local profile;
@@ -414,3 +420,66 @@ between a passing report and a failing process exit are shown as verification
 failures. Required cleanup failures take precedence over a cancellation status.
 Published ZIP verification also checks its embedded release tag, in addition to
 source/dependency identity and hashes.
+
+## Automatic storage retention
+
+The Logistics adapter runs retention before preparing a manager plan. Direct
+TestFlight archive/export/upload/distribution commands and Firebase builds also
+apply the same provider-build policy, including when called without the UI or
+inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
+
+- Provider histories keep the three highest-numbered build directories
+  and every directory used within the last 24 hours.
+- Manager source snapshots keep the three most recently used snapshots and every
+  snapshot used within seven days. Snapshot reuse refreshes its age. Execution
+  holds a snapshot resource lock; pruning skips a leased snapshot.
+- A `.keep` file anywhere inside a tree pins that enclosing build or snapshot.
+  Pin a prepared artifact before keeping its path for long-term upload/retry use.
+- Shared SDKs, signing keys, profiles, monotonic counters, existing simulators,
+  deployment workspaces and unclassified evidence are outside this sweep.
+
+Run `python -m Scripts.build_retention` from the repository root for a JSON preview;
+add `--apply` to remove expired owned outputs. Pruning respects active build locks,
+skips symbolic links and reports filesystem errors. Old saved plans can refer to
+expired snapshots: prepare a fresh plan before running them. Retention preserves
+recent failures for diagnosis; it does not guarantee a fixed disk-size ceiling.
+The numeric families deliberately exclude unclassified historical backup names.
+
+For a one-off probe, use `Scripts.build_retention.scratch(root)` as a context
+manager, or run a command in a disposable working directory:
+
+```sh
+python -m Scripts.build_retention --scratch /absolute/path/to/python /absolute/path/to/probe.py --output '{workspace}'
+```
+
+Scratch work stays under ignored `test-results/build-scratch/` and is removed on
+normal exit or failure. Save required evidence outside that directory first.
+A root `.keep` file retains a scratch directory deliberately; otherwise abandoned
+marked scratch directories become eligible after one day (the newest is retained).
+A force-killed command cannot run its finalizer, so the next retention pass handles
+its expired workspace. This is a shared lifecycle for agent-created probes as well
+as human-driven builds, not a system-wide cache cleaner.
+
+## Reviewing and deleting local builds
+
+Choose **Clean up builds…** in the manager. Filter by iOS/TestFlight,
+Android/Firebase, source snapshots or disposable scratch; select individual rows
+or choose **Delete all unprotected…** for the displayed category. The confirmation
+includes the exact paths. This manual action can remove even the newest local
+artifacts; automatic retention still keeps its normal recent-build allowance.
+
+The list covers only the existing retention owners. Native test build caches
+inside owned source snapshots are removed with those snapshots. SDKs, toolchains,
+physical-device deployment workspaces, personal VM/simulator state, credentials,
+signing inputs, build counters and unclassified evidence are not cleanup targets.
+Published releases are unaffected. A `.keep` anywhere in a tree or an active build
+lease protects it. Deletion checks ownership, links, pins and locks again after
+confirmation, reports skipped entries and refreshes the list. Listing and deleting
+run off the UI thread; cleanup is unavailable while this manager runs an operation.
+
+The generic UI consumes optional `storage_inventory()` and
+`delete_storage(selections)` adapter methods. Logistics defines owned roots in
+`Scripts.build_retention`; reusable manual deletion and lease protection remain
+in `build_manager.retention`. The settings navigation factory is optional for
+other projects; field metadata supports section, label, description, kind and
+integer minimum/maximum/suffix without importing Logistics into the generic UI.

@@ -43,7 +43,12 @@ class DeploymentWindow(QWidget):
         layout.addWidget(tabs)
         from build_manager.ui import ManagerPanel
         from Scripts.build_project import LogisticsProject
-        self.manager = ManagerPanel(LogisticsProject(ROOT.parent), self)
+        # Shared presentation only; application settings and persistence stay separate.
+        sys.path.insert(0, str(ROOT.parent / 'Python'))
+        from commonUtils.ui.settings.navigation import SettingsNavigation
+        project = LogisticsProject(ROOT.parent)
+        project.settings_navigation = SettingsNavigation
+        self.manager = ManagerPanel(project, self)
         tabs.addTab(self.manager, 'Plans, tests and builds')
         deployment = QWidget()
         tabs.addTab(deployment, 'Devices and tester distribution')

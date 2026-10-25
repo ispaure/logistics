@@ -37,6 +37,7 @@ class Plan:
     backend: str = 'local'
     effect: str = 'test'
     secret_environment: tuple[str, ...] = ('GH_TOKEN', 'GITHUB_TOKEN', 'FIREBASE_TOKEN')
+    resource_locks: tuple[str, ...] = ()
 
     def __post_init__(self):
         if not self.project or not self.phases or self.effect not in {'inspect', 'test', 'build', 'deploy', 'upload', 'publish'}:

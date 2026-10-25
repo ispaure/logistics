@@ -76,10 +76,10 @@ def location_context(path, provider=None):
         if connection is not None:
             return LocationContext('Local', connection.remote, unlocked=True, session_only=True)
         if getattr(provider, 'remote_storage', False):
-            # All direct remote document buffers are private, even with disk credentials.
+            # Buffer privacy is independent of credential persistence.
             return LocationContext('Remote', provider.remote,
                 unlocked=bool(getattr(provider, 'encrypted', False)),
-                session_only=bool(getattr(provider, 'private', False)),
+                session_only=bool(getattr(provider, 'session_only', False)),
                 source_label=getattr(provider, 'storage_label', 'Cloud'))
     return location_catalog().local(path)
 

@@ -67,6 +67,7 @@ def _materialize(root, destination, revision):
         if metadata.is_file():
             saved = json.loads(metadata.read_text())
             if saved.get('source') == before and saved.get('snapshot_fingerprint') == identity(destination)['fingerprint']:
+                os.utime(destination, None)
                 return before
         raise ValueError('Snapshot destination already belongs to different source.')
     destination.parent.mkdir(parents=True, exist_ok=True)
