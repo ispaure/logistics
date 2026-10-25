@@ -9,8 +9,8 @@ def desktop_checks(system, results):
     if system == 'Windows':
         checks.append(('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
     checks.extend([
-        ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'], 600),
-        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'], 900),
+        ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'], 1800 if system=='Windows' else 600),
+        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'], 1800 if system=='Windows' else 900),
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),
         ('manager-contracts', ['-m', 'build_manager.contracts'], 120),
     ])

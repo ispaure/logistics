@@ -310,7 +310,7 @@ class LogisticsProject:
                 command += ('--shutdown',)
             if pattern:
                 command += ('--pattern', pattern)
-            phases.append(Phase(distribution, command, str(snapshot), timeout=5400,
+            phases.append(Phase(distribution, command, str(snapshot), timeout=5400, stop_grace=240,
                                 artifacts=(str(results / 'result.json'),)))
         source['selected_guests'] = [{'distribution': distro, 'name': guest['name'],
                                       'uuid': guest['uuid'], 'initial_state': guest['status']} for distro, guest in selections]
@@ -341,7 +341,7 @@ class LogisticsProject:
             command += ('--shutdown',)
         source.update(selected_guest=guest, focused_pattern=pattern)
         return Plan('Logistics', 'Focused Windows contracts' if pattern else 'Complete local Windows tests', source,
-                    (Phase('windows', command, str(snapshot), timeout=5400, artifacts=(str(results / 'result.json'),)),),
+                    (Phase('windows', command, str(snapshot), timeout=7200, stop_grace=240, artifacts=(str(results / 'result.json'),)),),
                     str(workspace), backend='Local Parallels VM')
 
     def android_emulator_plan(self, operation, source, snapshot, workspace, options, env, pattern):

@@ -14,13 +14,19 @@ def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args], text=True, timeout=60).strip()
 
 
-def verify(checkout, project):
+def verify(checkout, project, *, pinned_source=False):
     checkout, project = Path(checkout).resolve(), Path(project)
     pin = json.loads((project/'build-manager-dependency.json').read_text())['revision']
-    if git(checkout, 'rev-parse', 'HEAD') != pin:
+    if not pinned_source and git(checkout, 'rev-parse', 'HEAD') != pin:
         raise ValueError('Explicit manager checkout does not match the project dependency pin.')
-    shared = git(checkout, 'ls-tree', pin, 'Python/commonUtils').split()[2]
-    if git(checkout/'Python/commonUtils', 'rev-parse', 'HEAD') != shared:
+    try:
+        if git(checkout, 'cat-file', '-t', pin) != 'commit':
+            raise ValueError('Declared manager pin is not a commit.')
+        shared = git(checkout, 'ls-tree', pin, 'Python/commonUtils').split()[2]
+        git(checkout/'Python/commonUtils', 'cat-file', '-e', shared+'^{commit}')
+    except (subprocess.CalledProcessError, IndexError) as error:
+        raise ValueError('Explicit manager sources lack the declared project/dependency commits.') from error
+    if not pinned_source and git(checkout/'Python/commonUtils', 'rev-parse', 'HEAD') != shared:
         raise ValueError('Manager commonUtils does not match its real pinned submodule.')
     for folder in (checkout, checkout/'Python/commonUtils'):
         if git(folder, 'status', '--porcelain', '--untracked-files=no'):
@@ -31,7 +37,7 @@ def verify(checkout, project):
 def archive(checkout, project, kind):
     from Scripts.build_retention import scratch
     checkout = Path(checkout).resolve()
-    pin, shared = verify(checkout, project)
+    pin, shared = verify(checkout, project, pinned_source=True)
     stream = io.BytesIO()
     with scratch(Path(project)) as workspace:
         source = workspace/'manager'

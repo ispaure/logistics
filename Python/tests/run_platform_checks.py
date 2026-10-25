@@ -65,17 +65,13 @@ def main():
     checks = desktop_checks(platform.system(), results)
     for name, command, timeout in checks:
         print(f'Running {name} on {platform.system()}…', flush=True)
-        started = time.monotonic()
-        try:
-            check_env = dict(env, QT_QPA_PLATFORM='windows') if name == 'windows-native-ui' else env
-            completed = subprocess.run([sys.executable, *command], cwd=REPO, env=check_env, capture_output=True, timeout=timeout)
-            output = (completed.stdout + completed.stderr).decode('utf-8', errors='replace')
-            code = completed.returncode
-        except subprocess.TimeoutExpired as error:
-            output = ((error.stdout or b'') + (error.stderr or b'')).decode('utf-8', errors='replace') + '\nTimed out.'
-            code = 124
-        (results / (name + '.log')).write_text(output, encoding='utf-8')
-        report['checks'].append({'name': name, 'exit_code': code, 'seconds': round(time.monotonic() - started, 2)})
+        from Scripts.platform_checks import run_check
+        check_env = dict(env, QT_QPA_PLATFORM='windows') if name == 'windows-native-ui' else env
+        row = run_check(name, [sys.executable, *command], root=REPO, results=results,
+                        environment=check_env, timeout=timeout)
+        code = row['exit_code']
+        output = (results/(name+'.log')).read_text(encoding='utf-8', errors='replace')
+        report['checks'].append(row)
         (results / 'summary.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
         print(f'{name}: {"PASS" if code == 0 else "FAIL"} ({code})', flush=True)
         if code:

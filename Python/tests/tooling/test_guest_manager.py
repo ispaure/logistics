@@ -72,3 +72,14 @@ class GuestManagerTests(unittest.TestCase):
             stage_linux(client,'vm','/var/tmp/owned','owned',1000,1000,self.manager,self.project)
         self.assertEqual(base64.b64decode(client.execute.call_args.kwargs['data']),payload)
         self.assertTrue(client.execute.call_args.kwargs['data'].isascii())
+
+    def test_newer_host_checkout_transfers_declared_pin_without_resetting_it(self):
+        (self.manager/'public.py').write_text('LATER = True')
+        self.command(self.manager,'add','public.py')
+        self.commit(self.manager)
+        later = self.command(self.manager,'rev-parse','HEAD')
+        payload = archive(self.manager,self.project,'zip')
+        with zipfile.ZipFile(io.BytesIO(payload)) as data:
+            self.assertEqual(data.read('public.py'),b'PUBLIC = True')
+        self.assertEqual(self.command(self.manager,'rev-parse','HEAD'),later)
+        self.assertEqual((self.manager/'public.py').read_text(),'LATER = True')

@@ -607,7 +607,8 @@ or live provider acceptance.
 
 Set **tools.manager_checkout** to an explicitly reviewed local manager checkout
 when its pinned commit is not yet available remotely. Linux and Windows guest
-backends verify that checkout and its real commonUtils submodule against the
+backends verify the selected commit is present in that checkout and its real commonUtils
+submodule against the
 project's declared manager pin. They transfer committed Git sources only into the
 owned guest workspace; ignored/private checkout files are excluded. No sibling
 checkout discovery, push or hosted dispatch is needed. Leaving the setting empty
@@ -620,3 +621,16 @@ sources are scoped to the operation and removed with collected test work; reusab
 prepared interpreter/tools remain in their separately owned preparation workspace.
 Native Windows results record both OS architecture and Python platform: x64 Python
 on a Windows ARM guest is emulated x64 coverage, not a physical Windows x64 receipt.
+
+Each platform check now runs through the manager's own process-tree supervisor,
+retaining a streamed per-check log and result under the run's results directory.
+Timeouts retire the owned descendants, including Windows interpreter redirectors,
+instead of killing only the immediate process and waiting on inherited pipes.
+Windows shared/app budgets allow 30 minutes each for the declared cold x64-on-ARM
+run; the required check inventory is unchanged. Guest phases give cooperative
+remote cancellation time to collect evidence and retire owned work.
+
+A checkout may have advanced beyond the declared pin: transfer selects the exact
+recorded commit from that explicit repository without resetting its branch or
+including later edits. Guest installation still requires the transferred HEAD
+and commonUtils revision to match the pin exactly.

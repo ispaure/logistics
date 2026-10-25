@@ -160,7 +160,7 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
                       Phase('focused', (python, 'dev.py', 'test', suite, pattern, '--python', python), target,
                             timeout=1200, environment=dict(environment, LOGISTICS_REQUIRE_LOCALCRYPT_TESTS='1'), dependencies=('environment',)))
         else:
-            phases = (Phase('platform', install, target, timeout=3000, environment=environment),
+            phases = (Phase('platform', install, target, timeout=5400, environment=environment),
                       Phase('release-tooling', (python, '-m', 'unittest', 'discover', '-s', '.github/scripts', '-v'),
                             target, timeout=300, environment=environment))
         plan = Plan('Logistics', 'Focused Windows contracts' if args.pattern else 'Full local Windows platform checks',
@@ -169,7 +169,7 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
         guest.write(plan_name, json.dumps(plan.data(), indent=2).encode())
         argv = ['-m', 'build_manager', str(root / plan_name), '--output', str(root / reports / 'manager'),
                 '--cancel-file', str(root / ('cancel-' + operation))]
-        code = guest.run(python, argv, source, reports, environment, cancelled, timeout=3400)
+        code = guest.run(python, argv, source, reports, environment, cancelled, timeout=6000)
         result['status'] = 'cancelled' if cancelled.is_set() else 'passed' if code == 0 else 'failed'
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         result.update(status='failed', error=str(error))
