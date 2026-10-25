@@ -66,7 +66,7 @@ def sync_reader_toolbar(app, view, destination=None):
             from .android_reader_chrome import sync
             sync(app, view, destination or app.native_host.state.destination)
         return
-    from .ios_toolbar import mount_actions, mount_leading, vertical_edge, clear_actions
+    from .ios_toolbar import mount_actions, mount_leading, vertical_edge, clear_actions, action_state
     adapter = app.native_host.adapter
     destination = destination or app.native_host.state.destination
     controller = adapter.content_controller(destination)
@@ -74,6 +74,9 @@ def sync_reader_toolbar(app, view, destination=None):
     if owned is None:
         owned = app._reader_toolbar_controllers = set()
     key = controller.ptr.value
+    projections = getattr(app, '_reader_toolbar_projections', None)
+    if projections is None:
+        projections = app._reader_toolbar_projections = {}
     controls = getattr(view, '_native_reader_buttons', None)
     if controls is None:
         # Tabs retain their controllers. Clear reader-owned chrome even when a
@@ -83,6 +86,8 @@ def sync_reader_toolbar(app, view, destination=None):
             controller.navigationItem.prompt = None
             controller.navigationItem.titleView = None
             owned.discard(key)
+            projections.pop(key, None)
+            projections.pop((key, 'leading'), None)
             if getattr(app, '_reader_toolbar_controller', None) == controller:
                 app._reader_toolbar_controller = None
                 app._reader_toolbar_state = None
@@ -97,11 +102,15 @@ def sync_reader_toolbar(app, view, destination=None):
         detach(control)
     from .reader_chrome import reader_buttons
     buttons = [] if getattr(view, '_reader_fullscreen', False) else reader_buttons(app, view)
-    state = (controller.ptr.value, tuple(id(button) for button in buttons), vertical_edge(controller))
+    state = (action_state(buttons), vertical_edge(controller))
     for button in buttons:
         detach(button)
         button.app, button.window = app, app.main_window
-    mount_actions(controller, view, buttons)
+    # Replacing identical native groups during keyboard/layout notifications
+    # cancels UIKit's in-progress menu presentation. Refresh only changed data.
+    if projections.get(key) != state:
+        mount_actions(controller, view, buttons)
+        projections[key] = state
     app._reader_toolbar_state = state
     status = getattr(view, '_native_reader_status', None)
     text = status.text if status is not None else ''
@@ -130,7 +139,10 @@ def sync_reader_toolbar(app, view, destination=None):
             detach(menu)
             menu.app, menu.window = app, app.main_window
             leading.append(menu)
-        mount_leading(controller, leading, replaces_back=True)
+        leading_state = action_state(leading)
+        if projections.get((key, 'leading')) != leading_state:
+            mount_leading(controller, leading, replaces_back=True)
+            projections[key, 'leading'] = leading_state
         close._native_reader_close_item = close._ios_action_item
 
 

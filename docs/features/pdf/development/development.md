@@ -32,6 +32,10 @@ panel opens or closes. The feature does not import host toolbar policy. The host
 places this panel above the page canvas and vertical page navigation beside it; invalid
 numeric jumps retain feedback inside the panel even when filename labels are
 detached for the native title bar.
+Submitting a page number while the current page is refreshing waits for that
+reader's idle signal. The captured request is discarded after navigation, session
+retirement or a reader switch. A same-page layout refresh preserves a number the
+user is typing; moving to a different page synchronizes the number with that page.
 
 Desktop `ui.reader.PDFWindow` uses QPdfView SinglePage/FitInView and a numeric page
 control. Remote and LocalCrypt ResourceChoice sessions load through their provider

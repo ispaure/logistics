@@ -69,6 +69,50 @@ def search_panel():
 
 
 class PDFMobileTests(unittest.TestCase):
+    def test_numeric_jump_waits_for_refresh_and_rejects_a_retired_navigation(self):
+        with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf):
+            previous_root = LogisticsMobile.storage_root
+            LogisticsMobile.storage_root = Path(directory)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            path = Path(directory) / 'jump.pdf'
+            path.write_bytes(PDF)
+            async def check():
+                self.assertTrue(await app.open_download(path=path))
+                owner = app.private_sessions.active
+                owner.pdf_number.value = '3'
+                await owner.read_crypt_page()
+                self.assertEqual(owner.pdf_number.value, '3')
+                for leave in (False, True):
+                    owner.resume_crypt()
+                    owner.set_cloud_busy(True)
+                    owner.pdf_number.value = '3'
+                    pending = owner.pdf_number.on_confirm()
+                    try:
+                        await asyncio.sleep(0)
+                        self.assertFalse(pending.done())
+                        # A refresh may synchronize the input with its old page.
+                        # The submitted target must already have been captured.
+                        owner.pdf_number.value = '1'
+                        if leave:
+                            app.show_settings()
+                        owner.set_cloud_busy(False)
+                        await pending
+                        self.assertEqual(owner.crypt_page.value, 'Page 1' if leave else 'Page 3')
+                        if leave:
+                            self.assertEqual(app.native_host.state.destination, 'settings')
+                            self.assertEqual(owner.pdf_jump_status.text, 'Page jump cancelled.')
+                        else:
+                            await owner.move_private_page(0)
+                    finally:
+                        owner.set_cloud_busy(False)
+                        await pending
+            try:
+                app.loop.run_until_complete(check())
+            finally:
+                app.main_window.close()
+                app.loop.close()
+                LogisticsMobile.storage_root = previous_root
+
     def test_spreads_follow_page_dimensions_and_last_page_without_skipping(self):
         from features.pdf.mobile.canvas import PDFNavigation
         from io import BytesIO

@@ -307,7 +307,6 @@ class EditorPicker:
         self.picker_destination.style.flex = 0
         self.picker_primary = toga.Button(primary, on_press=self.confirm_editor_file, style=Pack(height=48, flex=1))
         self.picker_new_folder = toga.Button('New folder', on_press=self.toggle_editor_new_folder, style=Pack(height=48))
-        self.picker_header.add(self.picker_new_folder)
         self.new_folder_name = toga.TextInput(placeholder='New folder name', style=Pack(height=48, flex=1))
         from .keyboard import prepare_picker_input
         for control in (self.save_as_name, self.new_folder_name):
@@ -323,7 +322,10 @@ class EditorPicker:
                 style=Pack(direction=ROW, margin_left=12, margin_right=12, margin_bottom=12))
         self.picker_form = toga.ScrollContainer(content=self.save_as_view, horizontal=False,
                                                 style=Pack(height=180))
-        self._browse_controls = (self.save_as_storage, self.picker_header, self.editor_browser.scroll_container())
+        # Keep the named action outside the compact location header: that
+        # header reserves icon-sized slots and truncates "New folder" on phones.
+        self._browse_controls = (self.save_as_storage, self.picker_header,
+                                 self.picker_new_folder, self.editor_browser.scroll_container())
         panel = toga.Box(children=[*self._browse_controls, self.picker_form, self.picker_actions],
             style=Pack(direction=COLUMN, flex=1))
         from .ios_toolbar import prepare_form
@@ -359,8 +361,9 @@ class EditorPicker:
             flex = 1 if compact else 0
             if self.picker_form.style.flex != flex:
                 self.picker_form.style.flex = flex
-            scale = getattr(self.save_as_view._impl, 'scale_out', lambda value: value)
-            natural = scale(self.save_as_view.layout.min_height) or 180
+            # Travertino layout sizes already use logical units. Scaling them
+            # out again clips the status area on high-density Android screens.
+            natural = self.save_as_view.layout.min_height or 180
             height = NONE if compact else min(max(120, natural), max(120, self.app.main_window.size.height / 2))
             if self.picker_form.style.height != height:
                 self.picker_form.style.height = height

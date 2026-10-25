@@ -87,6 +87,19 @@ def action_groups(buttons):
     return [group for _, group in groups]
 
 
+def action_state(buttons):
+    """Capture bar projection values without retaining widgets or private owners."""
+    def identity(value):
+        pointer = getattr(value, 'ptr', None)
+        return pointer.value if pointer is not None else id(value) if value is not None else None
+    return tuple((id(button), button.enabled, button.text,
+                  getattr(button, 'accessible_name', None), getattr(button, 'control_icon', None),
+                  getattr(button, '_toolbar_symbol', None), getattr(button, '_toolbar_group', None),
+                  getattr(button, '_toolbar_prominent', False), getattr(button, '_toolbar_priority', False),
+                  identity(button._impl.native.menu), identity(button._impl.native.imageForState(0)))
+                 for button in buttons)
+
+
 def mount_actions(controller, owner, buttons, *, overflow=True):
     """Mount semantic groups in natural order; UIKit handles vertical ordering."""
     from rubicon.objc import ObjCClass, Block, ObjCBlock, objc_id, ns_from_py, SEL

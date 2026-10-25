@@ -135,8 +135,10 @@ their existing control row instead of adding a second header. UIKit still mounts
 the drawer in its native navigation bar. Reading views also expose native
 button/toolbar handles so UIKit hosts the existing buttons as title-bar custom
 views, preserving callbacks, menus, accessibility labels and enabled states.
-Updates cache the controller/button set and only rebuild the action groups when
-its buttons change. Error prompts remain visible. Text editors use top pencil/page mode
+Updates cache each controller’s action projection, including button identity,
+menu, icon, enabled state and bar placement. Identical keyboard/layout reflows
+retain the native groups so an opening document menu stays attached; changed
+actions and leading controls still refresh. Error prompts remain visible. Text editors use top pencil/page mode
 icons, and rebuild their native action menu only when clean/dirty state changes;
 clean documents omit Save. Provider Markdown likewise inserts its Save icon only
 for a changed editable buffer and collapses its unused mode-selector footer.
@@ -403,6 +405,10 @@ if that operation still belongs to the visible picker. Provider capabilities
 control New folder and confirmation; Open retains its separate completion policy.
 Focused tests live in `test_destination_workflows.py`; `destination_probe.py`
 provides disposable native tap checkpoints and native hidden-color assertions.
+New folder occupies a separate full-width row below the location header, so its
+name remains visible on compact screens and with larger text. Keyboard compaction
+hides that browsing row with the other browser controls, retaining the filename,
+scrollable error area and native completion actions.
 
 `app.editor_picker()` lazily creates one `EditorPicker` per host. It owns picker
 widgets, rows, provider associations, source document, pending bytes, privacy gate
@@ -426,12 +432,22 @@ host replacement and successful exit invalidate/clear picker state. Concealing
 private content also cancels picker work. Cancellation can arrive after a file
 was published; it does not imply that completed publication was rolled back.
 
-Save As still publishes without overwriting, verifies the reopened bytes, and
-retains its draft if reopening fails. `app.finish_save_as_source()` owns the
+Save As verifies the reopened bytes and retains its draft if reopening fails.
+Replacing an existing file requires confirmation and rechecks its captured
+revision before publication. `app.finish_save_as_source()` owns the
 managed-document handoff after successful reopening; the picker cannot mutate
 an editor widget through an implicit host attribute. Privacy gates follow the
 exported provider session. Storage/cancellation correctness remains owned by the
 existing resource operations, not a second implementation here.
+
+`save_as_acceptance_probe.py` exercises cold entry, exact destination bytes and
+subsequent saves, name errors, provider capability states, injected permission and
+reopen failures, replacement conflicts, delayed-list invalidation, source closure,
+LocalCrypt folder creation and keyboard geometry on native backends. It also
+spot-checks document actions, all Settings categories and EPUB/comic/PDF readers.
+Its explicit tap checkpoints are separate from callback-driven checks; the iOS
+driver is `SaveAsAcceptanceUITests.swift`. Use owned disposable native fixtures
+and record the source fingerprint, backend, actual interaction method and cleanup.
 
 ## Saved imports and host composition
 

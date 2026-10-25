@@ -354,8 +354,10 @@ class ProviderUI(FilesUI):
             if hasattr(child, 'magnifier_enabled'):
                 child.magnifier_enabled = (comic or view.crypt_reader.kind == '.pdf') and getattr(view, 'crypt_immersive', False)
         view._provider_displayed_half = view.crypt_reader.comic_navigation.half if kind == 'spread' else 0
+        previous_index = getattr(view, '_provider_displayed_index', None)
         view._provider_displayed_index = view.crypt_reader.labels.index(view.crypt_page.value)
-        if view.crypt_reader.kind == '.pdf' and hasattr(view, 'pdf_number'):
+        if (view.crypt_reader.kind == '.pdf' and hasattr(view, 'pdf_number')
+                and previous_index != view._provider_displayed_index):
             view.pdf_number.value = str(view._provider_displayed_index + 1)
         publication.chrome()
 

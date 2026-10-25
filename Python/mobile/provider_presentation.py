@@ -115,11 +115,27 @@ def _pdf_tools(self, view):
     from .provider_ui import private_label
     async def jump(widget=None, **kwargs):
         from features.pdf.document import page_index
+        reader = view.crypt_reader
+        if reader is None:
+            return
         try:
-            index = page_index(view.pdf_number.value, len(view.crypt_reader.labels))
+            index = page_index(view.pdf_number.value, len(reader.labels))
         except ValueError as error:
             view.crypt_title.text = private_label(error)
             view.pdf_jump_status.text = str(error)
+            return
+        token = self.workspace.token(self.session.id)
+        navigation = self.app.navigation_generation
+        # A native viewport refresh can already be rendering the current page.
+        # Retain the submitted number before that refresh synchronizes the input.
+        while self.cloud_busy:
+            view.pdf_jump_status.text = 'Loading the current page…'
+            await self.operation_idle.wait()
+        if (not self.active_host or view.crypt_reader is not reader
+                or not self.workspace.accepts(token) or self.manager.active is not self
+                or self.app.navigation_generation != navigation):
+            if self.active_host and view.crypt_reader is reader and self.workspace.accepts(token):
+                view.pdf_jump_status.text = 'Page jump cancelled.'
             return
         view.pdf_jump_status.text = ''
         await self.move_private_page(index)
