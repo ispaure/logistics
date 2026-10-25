@@ -79,6 +79,17 @@ class CredentialDocumentListTests(unittest.TestCase):
         self.assertEqual(self.cache.states[key]['open'], opened)
         self.assertEqual(self.app.recent_documents.private_items, [])
 
+    def test_relocated_session_removes_old_open_and_recent_credential_references(self):
+        self.client.unlock()
+        session = self.remember()
+        other = self.remember(1)
+        self.cache.relocated(session)
+        key = session.cache_id
+        expected = self.cache.references.reference_id(other.cache_source)
+        for field in ('open', 'recent'):
+            self.assertEqual([item['resource'] for item in self.cache.states[key][field]], [expected])
+        self.assertEqual([item['resource'] for item in self.app.recent_documents.private_items], [expected])
+
     def test_clear_recent_retires_a_pending_encrypted_history_write(self):
         self.client.unlock()
         async def exercise():

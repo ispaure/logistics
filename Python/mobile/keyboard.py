@@ -2,6 +2,28 @@
 from commonUtils.ui.native.keyboard import install as install_dismissal
 
 
+def prepare_picker_input(control):
+    """Keep filename/folder completion in the app during landscape typing."""
+    if type(control._impl).__module__.startswith('toga_android.'):
+        from android.view.inputmethod import EditorInfo
+        native = control._impl.native
+        native.setImeOptions(native.getImeOptions() | EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                             | EditorInfo.IME_FLAG_NO_FULLSCREEN)
+
+
+def picker_keyboard_visible(app, adapter):
+    visible = bool(getattr(adapter, 'keyboard_visible', False)
+                   or getattr(adapter, 'keyboard_chrome', None) is not None)
+    native = getattr(getattr(adapter, 'impl', None), 'native', None)
+    if (type(getattr(app, '_impl', None)).__module__.startswith('toga_android.')
+            and native is not None and hasattr(native, 'getRootWindowInsets')):
+        from java import jclass
+        insets = jclass('androidx.core.view.ViewCompat').getRootWindowInsets(native)
+        if insets is not None:
+            return bool(insets.isVisible(jclass('androidx.core.view.WindowInsetsCompat$Type').ime()))
+    return visible
+
+
 def _tuck_control(control, compact):
     mounted = getattr(control, '_keyboard_mount', None)
     if compact and mounted is None and control.parent is not None:
@@ -56,7 +78,12 @@ def _fit_source(editor, compact):
 def fit_editors(app):
     """Reserve the short Android IME viewport for text and its main toolbar."""
     adapter = getattr(getattr(app, 'native_host', None), 'adapter', None)
-    if adapter is None or not hasattr(adapter, 'keyboard_chrome'):
+    if adapter is None:
+        return
+    picker = getattr(app, '_editor_picker', None)
+    if picker is not None:
+        picker.fit_keyboard(picker_keyboard_visible(app, adapter))
+    if not hasattr(adapter, 'keyboard_chrome'):
         return
     compact = adapter.keyboard_chrome is not None
     for owner in tuple(getattr(app, 'text_views', {}).values()):

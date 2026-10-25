@@ -23,10 +23,13 @@ def native_resize_changed(app, widget):
     if adapter is None:
         return True
     native, bar = adapter.impl.native, adapter.impl.native_navigationview
+    from .keyboard import picker_keyboard_visible
+    picker_ime = bool(getattr(app, '_editor_picker', None)) and picker_keyboard_visible(app, adapter)
     geometry = (native.getWidth(), native.getHeight(), native.getPaddingLeft(), native.getPaddingTop(),
                 native.getPaddingRight(), native.getPaddingBottom(), bar.getWidth(), bar.getVisibility(),
                 adapter.mode, app.native_host.state.destination, id(app.body),
                 getattr(adapter, 'keyboard_chrome', None) is not None,
+                picker_ime,
                 getattr(getattr(app, 'workspace', None), 'active', None))
     if geometry == getattr(app, '_android_resize_geometry', None):
         return False

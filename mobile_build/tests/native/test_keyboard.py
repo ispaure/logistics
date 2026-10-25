@@ -68,6 +68,34 @@ class AndroidEditorLayoutTests(unittest.TestCase):
         for app in (NS(), NS(native_host=NS(adapter=None)), NS(native_host=NS(adapter=NS()))):
             keyboard.fit_editors(app)
 
+    def test_apple_keyboard_notifies_picker_without_android_chrome(self):
+        from unittest.mock import Mock
+        picker = NS(fit_keyboard=Mock())
+        adapter = NS(keyboard_visible=True)
+        app = NS(native_host=NS(adapter=adapter), _editor_picker=picker)
+        keyboard.fit_editors(app)
+        picker.fit_keyboard.assert_called_once_with(True)
+        adapter.keyboard_visible = False
+        keyboard.fit_editors(app)
+        picker.fit_keyboard.assert_called_with(False)
+
+    def test_picker_ime_change_invalidates_unchanged_android_geometry(self):
+        from unittest.mock import patch
+        from mobile.layout_events import native_resize_changed
+        native = NS(**{name: lambda: 0 for name in ('getWidth', 'getHeight', 'getPaddingLeft',
+            'getPaddingTop', 'getPaddingRight', 'getPaddingBottom', 'getVisibility')})
+        backend = type('AndroidApp', (), {'__module__': 'toga_android.app'})()
+        window = object()
+        adapter = NS(impl=NS(native=native, native_navigationview=native), mode='bottom', keyboard_chrome=None)
+        app = NS(main_window=window, _impl=backend, _editor_picker=object(),
+            native_host=NS(adapter=adapter, state=NS(destination='files')), body=object())
+        with patch('mobile.keyboard.picker_keyboard_visible', return_value=False) as visible:
+            self.assertTrue(native_resize_changed(app, window))
+            self.assertFalse(native_resize_changed(app, window))
+            visible.return_value = True
+            self.assertTrue(native_resize_changed(app, window))
+            self.assertFalse(native_resize_changed(app, window))
+
     def test_source_padding_restores_without_overwriting_a_changed_line_gutter(self):
         from toga.style import Pack
         padding = [40, 12, 4, 8]

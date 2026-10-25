@@ -41,8 +41,9 @@ class FileOperationRequest:
     path: str | None
     target: str = ''
     destination: FileDestination | None = None
+    plaintext_approved: bool = False
 
-    def execute(self, cancelled):
+    def execute(self, cancelled, *, destination=None):
         check_cancelled(cancelled)
         if self.kind == 'new':
             part = resource_path(self.target)
@@ -61,7 +62,7 @@ class FileOperationRequest:
         if self.kind == 'delete':
             return delete_resource(self.provider, self.path, cancelled=cancelled)
         if self.kind == 'move':
-            return move_resource(self.provider, self.path, self.destination.resolve(), self.target,
+            return move_resource(self.provider, self.path, destination or self.destination.resolve(), self.target,
                                  cancelled=cancelled)
         raise ValueError('Unknown file operation: ' + self.kind)
 
@@ -73,6 +74,32 @@ class FileOperationsHost:
     current: Callable
     report: Callable
     finish: Callable
+    prepare: Callable = lambda request, mutation: None
+
+
+async def retiring_work(work, cancel, *, completed=lambda result: None, failed=lambda error: None):
+    """Retire a mutation's thread and reconcile a committed result even on Cancel."""
+    worker = asyncio.create_task(asyncio.to_thread(work, cancel.is_set))
+    try:
+        result = await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        cancel.set()
+        while not worker.done():
+            try:
+                await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                continue
+            except Exception:
+                break
+        if not worker.cancelled():
+            error = worker.exception()
+            if error is not None:
+                failed(error)
+            else:
+                completed(worker.result())
+        raise
+    completed(result)
+    return result
 
 
 class FileOperations:
@@ -91,35 +118,23 @@ class FileOperations:
                              + '\nRefresh to inspect any completed items.')
 
     async def run(self, capture, *, mutation=True):
-        if self.cancel_event is not None or not self.host.allowed(mutation):
+        if self.cancel_event is not None or not self.host.allowed(False):
             return False
         cancel = self.cancel_event = Event()
         self.task = asyncio.current_task()
         view = None
+        plan = None
         try:
             view = self.host.begin(cancel)
             # Capture inputs on the UI thread; execution never reads widgets.
             self.request = capture()
-            work = self.request.execute if isinstance(self.request, FileOperationRequest) else self.request
-            worker = asyncio.create_task(asyncio.to_thread(work, cancel.is_set))
-            try:
-                await asyncio.shield(worker)
-            except asyncio.CancelledError:
-                cancel.set()
-                # A cancelled coroutine does not stop its thread. Keep the busy
-                # guard until the worker retires, including repeated task cancels.
-                while not worker.done():
-                    try:
-                        await asyncio.shield(worker)
-                    except asyncio.CancelledError:
-                        continue
-                    except Exception:
-                        break
-                if not worker.cancelled():
-                    error = worker.exception()
-                    if error is not None:
-                        self.report_failure(view, error)
-                raise
+            import inspect
+            prepared = self.host.prepare(self.request, mutation)
+            plan = await prepared if inspect.isawaitable(prepared) else prepared
+            command = plan or self.request
+            work = command.execute if plan or isinstance(command, FileOperationRequest) else command
+            await retiring_work(work, cancel, completed=plan.apply if plan else lambda result: None,
+                                failed=lambda error: self.report_failure(view, error))
             if not self.host.current(view):
                 return False
             self.host.report(view, 'Finished. Destination verified before removing the source.')
@@ -132,6 +147,10 @@ class FileOperations:
         finally:
             try:
                 if view is not None:
-                    self.host.finish(view, cancel)
+                    try:
+                        if plan is not None:
+                            plan.release()
+                    finally:
+                        self.host.finish(view, cancel)
             finally:
                 self.cancel_event = self.task = self.request = None

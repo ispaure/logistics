@@ -47,6 +47,40 @@ class EditorPickerTests(unittest.TestCase):
         self.assertIsNone(picker.save_as_data)
         self.assertIsNone(picker.save_as_source_document)
 
+    def test_keyboard_naming_layout_retains_focus_tree_draft_and_browsing_state(self):
+        picker = self.app.editor_picker()
+        panel, form, name = picker.panel, picker.picker_form, picker.save_as_name
+        original = list(panel.children)
+        parent = name.parent
+        provider = picker._listed_provider
+        picker.save_as_data = b'Keep this draft'
+        name.value = 'Retained.txt'
+        picker.fit_keyboard(True)
+        self.assertEqual(list(panel.children), [form, picker.picker_actions])
+        self.assertIs(name.parent, parent)
+        self.assertIs(form.content, picker.save_as_view)
+        self.assertEqual(form.style.height, 'none')
+        self.assertEqual(form.style.flex, 1)
+        picker.fit_keyboard(True)
+        original_size = self.app.main_window.size
+        self.app.main_window.size = type(original_size)(900, 180)
+        picker.fit_keyboard(True)
+        self.assertEqual(panel.style.direction, 'row')
+        self.assertEqual(picker.picker_actions.style.direction, 'column')
+        self.assertEqual(picker.picker_actions.style.width, 112)
+        self.assertIs(name.parent, parent)
+        self.app.main_window.size = original_size
+        picker.fit_keyboard(False)
+        self.assertEqual(panel.style.direction, 'column')
+        self.assertEqual(picker.picker_actions.style.direction, 'row')
+        self.assertEqual(picker.picker_actions.style.width, 'none')
+        self.assertEqual(list(panel.children), original)
+        self.assertIs(name.parent, parent)
+        self.assertEqual(name.value, 'Retained.txt')
+        self.assertEqual(picker.save_as_data, b'Keep this draft')
+        self.assertIs(picker._listed_provider, provider)
+        self.assertGreater(form.style.height, 0)
+
     def test_late_listing_and_error_do_not_publish_after_invalidation(self):
         app, picker = self.app, self.app.editor_picker()
         for failure in (False, True):

@@ -377,6 +377,16 @@ def file_operations(owner):
             and (not mutation or owner.clear_private_reader())
         )
 
+    async def prepare(request, mutation):
+        from ..file_operations import FileOperationRequest
+        if isinstance(request, FileOperationRequest) and request.kind in {'rename', 'move'}:
+            from ..document_mutations import prepare_document_mutation
+            return await prepare_document_mutation(owner, request)
+        if isinstance(request, FileOperationRequest) and request.kind == 'new':
+            return None
+        if mutation and not owner.clear_private_reader():
+            raise ValueError('Save or close open file edits before changing files.')
+
     def begin(cancel):
         row = owner.file_rows.get(owner.file_selection.value)
         owner._file_selected = owner.file_provider, row["path"] if row else None
@@ -430,7 +440,7 @@ def file_operations(owner):
 
     operations = FileOperations(
         FileOperationsHost(
-            allowed=allowed, begin=begin, current=current, report=report, finish=finish
+            allowed=allowed, begin=begin, current=current, report=report, finish=finish, prepare=prepare
         )
     )
     return operations

@@ -67,7 +67,7 @@ system accessibility extremes still require native layout validation.
 | Retained destination browser, provider and listing lifetime | `file_drawer.py`; pane placement remains in `workspace_navigation.py` |
 | Workspaces discovery task, cache and invalidation | `folder_discovery.py`, composed by `folder_controller.py`; snapshot/result building in `folder_hub.py` |
 | Workspaces sources and presentation | `folder_hub.py`, `local_sources.py`, `folder_hub_ui.py`; retained tree controls in `folder_tree_view.py`, styling in `folder_hub_style.py` |
-| File create/rename/move/delete coordination | `file_operations.py`, composed by `composition.presentation.file_operations`; `files_ui.py` retains forms, confirmation and forwarding methods |
+| File create/rename/move/delete coordination | `file_operations.py`, composed by `composition.presentation.file_operations`; `document_mutations.py` owns live text identity handoff; `files_ui.py` retains forms, confirmation and forwarding methods |
 | Main and workspace browser listing requests | `folder_listing.py`; presentation in `files_ui.py` and `file_drawer.py` |
 | Local file management and comic batch entry points | `files_ui.py` |
 | Text Open/Save As, picker widgets and pending bytes | `editor_picker.py` |
@@ -229,7 +229,7 @@ encrypted destination resolution stays in the worker and rejects a changed
 credential generation before construction.
 
 The host adapter in `composition.presentation.file_operations` retains transfer/busy and
-unsaved-reader policy, snapshots controls/status and connects the coordinator's
+destructive-operation policy, snapshots controls/status and connects the coordinator's
 cancellation event to the existing `_crypt_cancel`/Cancel path. The coordinator
 owns its request and task until the worker retires. Cancelling an awaiting task
 signals cancellation and waits for its thread before releasing the busy guard;
@@ -246,6 +246,43 @@ Actual writes, no-clobber publication, verification and deletion remain in
 commonUtils resource operations. Cancellation is cooperative and does not promise
 rollback: incomplete mutations retain their existing refresh-before-retry warning.
 No preference, storage schema or confirmation wording changes are introduced.
+
+Move and Rename use `document_mutations.py` from both the file-command coordinator
+and the shared destination picker. It flushes affected formatted Markdown input,
+reserves affected text controllers, checks their saved bytes/revisions before
+mutation and reopens the destination before adopting its new baseline. Draft
+widgets, session IDs and unrelated open documents survive. Folder mutations match
+open descendants, including ordinary files opened through a narrower local root.
+Downloaded encrypted copies retain their record identity when renamed. Subsequent
+saves use the new provider/key and revision; saved bytes are moved without
+implicitly saving the draft. Plaintext moves still require explicit confirmation.
+
+Completion updates live session identity, filename/language, folder navigation
+and reopen history. Credential-bound references stay with the encrypted document
+list owner. A protection upgrade replaces ordinary Markdown WebViews with private
+ones; other moves preserve the formatted editing surface. Cross-editor-type
+renames, affected read-only/non-text readers, busy readers and documents owned by
+another window require closing or finishing that reader first. Stale credentials
+cannot revive a retired session. Cancellation waits for the worker and reconciles
+an already committed move even after navigation changes. A move that publishes
+but cannot reopen reports that state and retains the draft for Save As.
+
+`test_document_mutations.py` covers real local mutations, descendants, offline
+encrypted-record rename, conflicts, external changes, formatted edits after
+save and cancellation after publication. The native suite's
+`file_mutation_checks.py` exercises local/encrypted editor handoff plus Save As
+error recovery, storage switching and portrait/landscape geometry. Native
+callbacks do not establish actual system Open/Export-sheet or physical receiving
+acceptance; record those interactions separately.
+
+The picker keeps its naming form inside a bounded scroll container and its
+completion row outside that scroller. Keyboard notifications temporarily unmount
+browsing controls while retaining their provider/listing state. The focused input
+is never reparented. Dismissal restores controls in their original order. Native
+acceptance checks compare the filename's actual screen rectangle with the
+software keyboard, including landscape; screen bounds alone missed this overlap.
+When a very short viewport cannot stack the form and actions, completion buttons
+sit beside the scrollable form so their touch targets retain their full height.
 
 Run `python3 dev.py test mobile test_file_operations.py` and `test_files_ui.py`
 (`py` on Windows). Checks cover captured requests, worker destination resolution,

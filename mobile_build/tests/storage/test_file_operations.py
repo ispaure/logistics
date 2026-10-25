@@ -105,6 +105,32 @@ class FileOperationTests(unittest.TestCase):
         self.assertIn('Operation failed:', self.app.file_status.value)
         self.assertTrue(self.app.file_actions_button.enabled)
 
+    def test_direct_private_move_requires_confirmation_and_keeps_captured_source(self):
+        self.app.file_provider.private = True
+        self.app.file_target.value = 'confirmed.txt'
+        with patch.object(self.app.main_window, 'dialog', AsyncMock(return_value=False)):
+            self.run_async(self.app.move_file())
+        self.assertTrue((self.source.root / 'first.txt').exists())
+        self.assertFalse((self.destination.root / 'confirmed.txt').exists())
+        async def confirm(dialog):
+            self.select('second.txt')
+            return True
+        with patch.object(self.app.main_window, 'dialog', side_effect=confirm):
+            self.run_async(self.app.move_file())
+        self.assertEqual((self.destination.root / 'confirmed.txt').read_text(), 'First')
+        self.assertEqual((self.source.root / 'second.txt').read_text(), 'Second')
+
+    def test_new_folder_keeps_unrelated_open_edits(self):
+        from features.text_editor.resources import LocalTextCopies
+        self.run_async(self.app.open_crypt(copies=LocalTextCopies(self.app.file_provider), key='first.txt'))
+        owner = self.app.private_sessions.active
+        owner.crypt_text.value = 'Keep open draft'
+        self.app.file_name.value = 'Another folder'
+        self.run_async(self.app.new_file_folder())
+        self.assertTrue((self.source.root / 'Another folder').is_dir())
+        self.assertIs(self.app.private_sessions.controllers[owner.session.id], owner)
+        self.assertEqual(owner.crypt_text.value, 'Keep open draft')
+
     def test_worker_uses_captured_source_and_name_and_leaves_new_screen_status_alone(self):
         started, release = Event(), Event()
         original = file_operations.rename_resource

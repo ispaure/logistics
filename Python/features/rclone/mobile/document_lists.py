@@ -326,6 +326,21 @@ class CredentialDocumentLists:
         except (OSError, ValueError):
             self.notice()
 
+    def relocated(self, session):
+        """Forget the old reopen identity before the host remembers a moved file."""
+        key = getattr(session, 'cache_id', None)
+        if key not in self.states:
+            return
+        resource = self.references.reference_id(session.cache_source)
+        for field in ('open', 'recent'):
+            self.states[key][field] = [item for item in self.states[key][field]
+                                      if item['resource'] != resource]
+        try:
+            self.queue_write(key)
+        except (OSError, ValueError):
+            self.notice()
+        self.publish_recent()
+
     def forget_memory(self, key=None):
         with _cache_io_lock:
             self._forget_memory(key)

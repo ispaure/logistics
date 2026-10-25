@@ -288,6 +288,25 @@ class ProviderMarkdown:
         if self.formatted is not None and self.formatted.view in self.content.children:
             await self.formatted.flush()
 
+    def relocated(self, *, private):
+        """Refresh relative resources, preserving the active editing surface."""
+        if private and not self.private:
+            # Moving into protected storage must replace ordinary WebViews with
+            # memory-only ones. Flush has already retained their latest draft.
+            self.private = True
+            mode = self.mode
+            self.clear()
+            if self.preview is not None:
+                retire_webview(self.preview)
+                self.preview = None
+            if mode == 'edit':
+                self.show_editor()
+            elif mode == 'preview':
+                self.toggle_preview(initial=True)
+        elif self.preview is not None and self.preview in self.content.children:
+            self.schedule_preview()
+        self.refresh_controls()
+
     def show_editor(self):
         reader = self.host.reader()
         if (reader is None or getattr(reader, 'read_only', False) or self.closed
@@ -300,10 +319,11 @@ class ProviderMarkdown:
             self.refresh_controls()
             return
         def changed(text):
-            if self.host.valid(reader) and formatted.view in self.content.children and not self.closed:
+            if (self.host.valid(self.host.reader()) and self.formatted is formatted
+                    and formatted.view in self.content.children and not self.closed):
                 self.source.value = text
         formatted = FormattedMarkdownInput(changed, font_size=self.host.font_size(),
-            stylesheet=self.host.stylesheet(), image_source=lambda: self.host.image_source(reader), private=self.private)
+            stylesheet=self.host.stylesheet(), image_source=lambda: self.host.image_source(self.host.reader()), private=self.private)
         formatted.scroll_top = self.scroll_top
         try:
             formatted.load(self.source.value)

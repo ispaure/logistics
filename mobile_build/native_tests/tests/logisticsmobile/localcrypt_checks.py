@@ -479,7 +479,9 @@ async def exercise_localcrypt(app, passed):
     select('destination')
     app.file_destination.value = 'Local files'
     app.file_target.value = 'exported'
-    await app.move_file()
+    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)) as confirm:
+        await app.move_file()
+        confirm.assert_awaited_once()
     assert (local / 'exported/moved/note.md').read_bytes() == b'# Edited after native move'
     assert (local / 'exported/moved/empty').is_dir()
     from commonUtils.runtime.resources.local import LocalFiles
@@ -616,6 +618,11 @@ async def exercise_localcrypt(app, passed):
     from .review_checks import exercise_reviews
     await exercise_reviews(app)
     passed.append('native_shared_transfer_reviews')
+    from .file_mutation_checks import exercise_file_mutations, exercise_cross_storage
+    from features.rclone.localcrypt.mobile.resources import CryptFiles
+    provider = CryptFiles(app.private_root / 'NativeMutationCrypt', app.cloud_client, 'Secret')
+    await exercise_file_mutations(app, provider)
+    await exercise_cross_storage(app, provider)
     await app.clear_cloud()
     assert not browser.icons and not browser.info.children and not browser.entries
     passed.append('native_localcrypt_file_management')

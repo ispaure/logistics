@@ -35,6 +35,15 @@ to ordinary storage requires confirmation. It does not choose an encrypted desti
 the share sheet. Developer iOS builds require the app and extension's matching
 App Group provisioning; see [mobile preparation](../../development/mobile-preparation.md#incoming-files-and-inbox).
 
+Move and Rename keep open text documents and their unsaved edits. Moving a
+folder also updates its open text documents. The operation moves the saved
+file; your next **Save** writes the draft at the new location. A conflict or an
+external change preserves your draft and reports the problem. Close an affected
+non-text/read-only reader, or a document open in another window, before moving
+it. Changing between plain text and Markdown by renaming also requires closing
+the document first. If a move finishes but its editor cannot reopen the result,
+keep the draft and use **Save As** after inspecting the destination.
+
 ## Document workflow
 
 The app opens on **Home**, a landing page with Open/New actions and five recent
@@ -162,6 +171,10 @@ for a Markdown source); a draft without a supported extension uses `.txt`.
 The resolved filename appears above the destination. An explicit supported
 extension is kept; invalid names or unsupported extensions keep the draft open
 for correction. Local files are plaintext; LocalCrypt destinations remain encrypted.
+
+When the keyboard leaves little room, the picker focuses on the filename and
+completion controls. The chosen destination remains in the form, and errors can
+be scrolled into view. Dismissing the keyboard restores the same folder listing.
 
 **Preview** renders common Markdown offline: tables, headings, nested bulleted
 and numbered lists, quotes, bold/italic/strikethrough text, rules, line breaks and

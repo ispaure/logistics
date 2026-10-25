@@ -154,6 +154,9 @@ async def exercise_documents(app, passed):
     assert app.preview is original_preview
     await wait_for_text(app.preview, 'Native preview')
     passed.append('native_markdown_preview')
+    from .file_mutation_checks import exercise_file_mutations, exercise_destination_edges
+    await exercise_file_mutations(app)
+    await exercise_destination_edges(app)
 
 
 async def exercise_loading_progress(app):

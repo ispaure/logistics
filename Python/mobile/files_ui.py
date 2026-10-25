@@ -283,7 +283,7 @@ class FilesUI:
             except ValueError as error:
                 self.file_status.value = str(error)
                 return
-            if not self.file_operations().host.allowed(True):
+            if not self.file_operations().host.allowed(False):
                 return
             from .file_operations import FileOperationRequest
             request = FileOperationRequest('move', provider, path)
@@ -533,7 +533,24 @@ class FilesUI:
             await self.browse_files()
 
     async def move_file(self, widget=None, **kwargs):
-        if await self.file_operations().run(lambda: self.capture_file_operation('move')):
+        if not self.file_operations().host.allowed(False):
+            return
+        # Capture before confirmation so changing selection cannot move a
+        # different item when the native dialog returns.
+        try:
+            request = self.capture_file_operation('move')
+            location = request.destination.location if request.destination else None
+            plaintext = location is None or (isinstance(location, LocalFiles) and not location.private)
+            if request.provider is not None and request.provider.private and plaintext:
+                if not await self.main_window.dialog(toga.ConfirmDialog('Move to unencrypted storage?',
+                        'The destination will contain a decrypted copy. Continue?')):
+                    return
+                from dataclasses import replace
+                request = replace(request, plaintext_approved=True)
+        except (OSError, ValueError, KeyError) as error:
+            self.file_status.value = str(error)
+            return
+        if await self.file_operations().run(lambda: request):
             await self.browse_files()
             await self.refresh_crypt()
 

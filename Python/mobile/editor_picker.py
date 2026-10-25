@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import COLUMN, ROW, NONE
 from commonUtils.runtime.operations import MutationIncomplete
 from commonUtils.runtime.resources.selection import ResourceSelection
 from commonUtils.runtime.resources.paths import resource_name
@@ -82,6 +82,7 @@ class EditorPicker:
 
     def clear(self):
         """Invalidate late results and forget picker-owned private material."""
+        self.fit_keyboard(False)
         self._epoch += 1
         self.cancel()
         self.origin = self.panel = self._restore_when_idle = None
@@ -287,24 +288,63 @@ class EditorPicker:
         self.picker_new_folder = toga.Button('New folder', on_press=self.toggle_editor_new_folder, style=Pack(height=48))
         self.picker_header.add(self.picker_new_folder)
         self.new_folder_name = toga.TextInput(placeholder='New folder name', style=Pack(height=48, flex=1))
+        from .keyboard import prepare_picker_input
+        for control in (self.save_as_name, self.new_folder_name):
+            prepare_picker_input(control)
         self.new_folder_form = toga.Box(children=[self.new_folder_name,
             toga.Button('Create', on_press=self.create_picker_folder, style=Pack(height=48)),
             toga.Button('Cancel', on_press=self.hide_new_folder, style=Pack(height=48))], style=Pack(direction=ROW))
         self.save_as_view = toga.Box(children=[toga.Label('Name' if destination_action is not None else 'File name'), self.save_as_name, self.effective_name,
-            self.picker_destination, self.save_as_status,
-            toga.Box(children=[
+            self.picker_destination, self.save_as_status], style=Pack(direction=COLUMN, margin=12))
+        self.picker_actions = toga.Box(children=[
                 toga.Button('Cancel', on_press=self.cancel_text_destination, style=Pack(height=48)),
                 self.picker_primary],
-                style=Pack(direction=ROW))], style=Pack(direction=COLUMN, margin=12))
-        panel = toga.Box(children=[self.save_as_storage, self.picker_header,
-            self.editor_browser.scroll_container(), self.save_as_view],
+                style=Pack(direction=ROW, margin_left=12, margin_right=12, margin_bottom=12))
+        self.picker_form = toga.ScrollContainer(content=self.save_as_view, horizontal=False,
+                                                style=Pack(height=180))
+        self._browse_controls = (self.save_as_storage, self.picker_header, self.editor_browser.scroll_container())
+        panel = toga.Box(children=[*self._browse_controls, self.picker_form, self.picker_actions],
             style=Pack(direction=COLUMN, flex=1))
         from .ios_toolbar import prepare_form
         prepare_form(panel, primary=primary, cancel='Cancel')
         self.panel = panel
+        self._compact_keyboard = False
         self.show_view(panel, route='text-destination', title=title)
         self.save_as_storage.on_change = self.change_editor_storage
         await self.refresh_editor_browser()
+
+    def fit_keyboard(self, compact):
+        """Keep naming and completion usable without reparenting the focused input."""
+        if self.panel is None or not hasattr(self, 'picker_form') or getattr(self, '_fitting_keyboard', False):
+            return
+        from .keyboard import _tuck_control
+        self._fitting_keyboard = True
+        try:
+            self._compact_keyboard = compact
+            controls = self._browse_controls if compact else reversed(self._browse_controls)
+            for control in controls:
+                _tuck_control(control, compact)
+            # A landscape Android IME can leave only ~100 logical pixels.
+            # Put full-size completion buttons beside the scrollable form;
+            # stacking both areas would squash the native buttons to a sliver.
+            tight = compact and self.app.main_window.size.height < 220
+            changes = ((self.panel, 'direction', ROW if tight else COLUMN),
+                       (self.picker_actions, 'direction', COLUMN if tight else ROW),
+                       (self.picker_actions, 'width', 112 if tight else NONE),
+                       (self.picker_actions, 'margin_bottom', 0 if tight else 12))
+            for control, field, value in changes:
+                if getattr(control.style, field) != value:
+                    setattr(control.style, field, value)
+            flex = 1 if compact else 0
+            if self.picker_form.style.flex != flex:
+                self.picker_form.style.flex = flex
+            scale = getattr(self.save_as_view._impl, 'scale_out', lambda value: value)
+            natural = scale(self.save_as_view.layout.min_height) or 180
+            height = NONE if compact else min(max(120, natural), max(120, self.app.main_window.size.height / 2))
+            if self.picker_form.style.height != height:
+                self.picker_form.style.height = height
+        finally:
+            self._fitting_keyboard = False
 
     def update_effective_name(self, widget=None, **kwargs):
         if self.editor_picker_mode != 'save':
@@ -331,6 +371,7 @@ class EditorPicker:
         if self.editor_picker_mode != 'open':
             self.picker_primary.enabled = writable and all(
                 getattr(capabilities(provider), key) for key in ('create', 'rename', 'delete'))
+        self.fit_keyboard(getattr(self, '_compact_keyboard', False))
 
     def show_new_folder(self, widget=None, **kwargs):
         if not self.picker_new_folder.enabled:
@@ -369,10 +410,8 @@ class EditorPicker:
     async def complete_destination(self):
         if self.cloud_busy or self.editor_picker_location != (self.save_as_storage.value, self.picker_folder.value):
             return
-        if not self.app.clear_private_reader():
-            self.save_as_status.value = 'Save or close open file edits before moving files.'
-            return
         work = self._begin_work()
+        plan = None
         try:
             name = resource_name(self.save_as_name.value)
             provider = self.editor_provider(self.save_as_storage.value)
@@ -387,9 +426,13 @@ class EditorPicker:
                     return
             from .file_operations import FileOperationRequest, FileDestination
             destination = FileDestination(self.app.private_root, work.client, provider, work.credential_generation)
-            request = FileOperationRequest('move', source, action.path, target, destination)
+            request = FileOperationRequest('move', source, action.path, target, destination,
+                                           plaintext_approved=source.private and not provider.private)
             # Use the same guarded, verified mutation as other file commands.
-            await asyncio.to_thread(request.execute, work.cancel.is_set)
+            from .document_mutations import prepare_document_mutation
+            from .file_operations import retiring_work
+            plan = await prepare_document_mutation(self.app, request)
+            await retiring_work(plan.execute, work.cancel, completed=plan.apply)
             if not self._accepts(work):
                 return
             self._finish_work(work)
@@ -401,6 +444,8 @@ class EditorPicker:
             if self._accepts(work):
                 self.save_as_status.value = 'Move failed: ' + str(error)[:250] + '\nRefresh before retrying; inspect both locations.'
         finally:
+            if plan is not None:
+                plan.release()
             self._finish_work(work)
 
     def browser_editor_selected(self, row):
