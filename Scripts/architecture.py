@@ -28,7 +28,7 @@ def references(path, source_root):
             module, separator, attribute = node.value.partition(':')
             if separator and not re.fullmatch(r'[A-Za-z_]\w*(\.[A-Za-z_]\w*)*', attribute):
                 continue
-            application = re.fullmatch(r'(features|desktop|mobile|commonUtils)(\.[A-Za-z_]\w*)+', module)
+            application = re.fullmatch(r'(features|desktop|mobile|commonUtils|services)(\.[A-Za-z_]\w*)+', module)
             toolkit = re.fullmatch(r'(PySide6|toga)(\.[A-Za-z_]\w*)*', module)
             if application or toolkit:
                 result.add(module)
@@ -110,9 +110,19 @@ def check(root=ROOT):
         for module in sorted(references(path, root / 'Python')):
             if presentation_dependency(module):
                 errors.append(f'Portable module {name} imports presentation: {module}')
+    if __package__:
+        from .document_architecture import document_errors
+    else:
+        from document_architecture import document_errors
+    try:
+        storage_errors, documents = document_errors(root, policy, portable_sources, references)
+        errors.extend(storage_errors)
+    except (ValueError, SyntaxError) as error:
+        documents = 0
+        errors.append(f'Document storage scope: {error}')
     for error in errors:
         print(error)
-    print(f'Architecture: {len(host)} host adapters, {len(feature)} feature edges, {len(portable)} portable modules; {len(errors)} violations.')
+    print(f'Architecture: {len(host)} host adapters, {len(feature)} feature edges, {len(portable)} portable modules, {documents} document modules; {len(errors)} violations.')
     return int(bool(errors))
 
 

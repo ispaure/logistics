@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from commonUtils.ui import pyside as qt
-from services.documents.storage import export_local_document
+from services.documents.storage import export_local_document, read_local_bytes, local_document_resource
 from PySide6 import QtQuick, QtQuickWidgets
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -119,8 +119,7 @@ class NotebookWorkspace(qt.QWidget):
 
     def import_path(self, path):
         try:
-            with Path(path).open('rb') as stream:
-                book = Notebook.read(stream.read(MAX_ARCHIVE + 1))
+            book = Notebook.read(read_local_bytes(path, max_bytes=MAX_ARCHIVE))
             key = self.repository.create(book)
             self.open(book, key)
         except Exception as error:
@@ -358,10 +357,7 @@ class NotebookWindow(qt.QMainWindow):
 
 def open_workspace(parent=None, path=None, *, resource=None, document=None):
     if path is not None and resource is None and document is None:
-        from commonUtils.runtime.resources.local import LocalFiles
-        from services.documents.storage import DocumentResource
-        path = Path(path).absolute()
-        resource = DocumentResource(LocalFiles(path.parent), path.name, max_bytes=MAX_ARCHIVE)
+        resource = local_document_resource(path, max_bytes=MAX_ARCHIVE)
     window = NotebookWindow(parent)
     window.setWindowTitle('Notebook')
     panel = NotebookWorkspace(window, library=resource is None and document is None)

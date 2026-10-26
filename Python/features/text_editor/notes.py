@@ -25,7 +25,6 @@ def vault_root(provider, directory, rows):
 class NotesLibrary:
     def __init__(self, provider, root=''):
         self.provider, self.root = provider, provider.relative(root)
-        self.remote = bool(getattr(provider, 'remote_storage', False))
 
     @property
     def writable(self):
@@ -77,7 +76,7 @@ class NotesLibrary:
     def create(self, name, parent=None, *, cancelled=lambda: False):
         from .names import document_name
         if not self.writable:
-            raise ValueError('Remote Notes Libraries are read-only.')
+            raise ValueError('This Notes Library is read-only.')
         name = document_name(name)
         if PurePosixPath(name).suffix.lower() not in MARKDOWN:
             name += '.md'

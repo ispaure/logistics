@@ -19,3 +19,7 @@ def document_locations(entry):
             return service.remotes.open(DesktopRemoteLocation(Path(entry.remote_context), entry.remote_name))
         result.append(('Remote', remote, True))
     return result
+
+
+def document_location_available(entry):
+    return bool(entry.local is not None or entry.remote_source == 'rclone')

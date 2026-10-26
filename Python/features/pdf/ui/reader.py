@@ -4,7 +4,8 @@ from commonUtils.ui import pyside as qt
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QEvent, QPoint
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtPdfWidgets import QPdfView
-from features.pdf.document import read_pdf
+from features.pdf.document import MAX_PDF
+from services.documents.storage import read_local_bytes
 
 
 class PDFWindow(qt.QMainWindow):
@@ -143,8 +144,7 @@ class PDFWindow(qt.QMainWindow):
 
 
 def open_pdf(path, parent=None):
-    with Path(path).open('rb') as stream:
-        data = read_pdf(stream)
+    data = read_local_bytes(path, max_bytes=MAX_PDF)
     window = PDFWindow(str(path), data)
     from services.documents.ui.editors import retain
     retain(window)

@@ -2,6 +2,7 @@
 import asyncio
 from io import BytesIO
 from pathlib import Path
+from services.documents.storage import read_local_bytes
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
@@ -110,8 +111,7 @@ class NotebookPanel:
 
     async def open_path(self, path):
         def read():
-            with Path(path).open('rb') as stream:
-                return Notebook.read(stream.read(MAX_ARCHIVE + 1))
+            return Notebook.read(read_local_bytes(path, max_bytes=MAX_ARCHIVE))
         return await self.load(read)
 
     def open_resource(self, document):

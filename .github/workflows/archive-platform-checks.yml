@@ -54,6 +54,7 @@ jobs:
         run: |
           python Python/tests/run_regressions.py Python/tests/tooling --pattern test_dev_commands.py --isolate-modules
           python Python/tests/run_regressions.py Python/tests/tooling --pattern test_architecture_contracts.py --isolate-modules
+          python Python/tests/run_regressions.py Python/tests/tooling --pattern test_document_architecture.py --isolate-modules
           python Python/tests/run_regressions.py Python/tests/tooling --pattern test_portable_imports.py --isolate-modules
           python -m unittest discover -s .github/scripts -p test_regression_runner.py -v
       - run: python dev.py architecture

@@ -457,7 +457,11 @@ The architecture check includes module-qualified imports and literal
 `module:attribute` references used by deferred factories. Portable-owner checks
 also reject deferred commonUtils UI, PySide6 and Toga references. It inspects
 syntax without importing features or optional toolkits; dynamically constructed
-strings still require source review. The reviewed edge policy is unchanged.
+strings still require source review. Document editor packages additionally enforce the [shared storage boundary](document-storage.md#enforced-architecture-contract), including scoped persistence exceptions.
+
+Run `python dev.py test desktop test_document_architecture.py` when changing document
+storage ownership or architecture enforcement. These syntax-only mutation tests also
+run in CI without desktop/native toolkits.
 
 ## Portable import matrix
 

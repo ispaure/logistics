@@ -1,5 +1,4 @@
 """Format editing stays independent of concrete storage implementations."""
-import ast
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -12,17 +11,6 @@ from services.documents.storage import DocumentPolicy, DocumentResource, publish
 
 
 class DocumentBoundaryTests(unittest.TestCase):
-    def test_editor_features_do_not_import_encryption_implementations(self):
-        root = Path(__file__).resolve().parents[2] / 'features'
-        paths = list((root / 'text_editor').rglob('*.py'))
-        paths += [root / 'books/ui/reader.py', root / 'notebooks/ui/workspace.py', root / 'books/metadata.py', root / 'comics/library.py', root / 'notebooks/storage.py', root / 'notebooks/mobile/documents.py', root / 'comics/mobile/collection/workflows.py']
-        for path in paths:
-            tree = ast.parse(path.read_text())
-            for node in ast.walk(tree):
-                names = [node.module or ''] if isinstance(node, ast.ImportFrom) else (
-                    [alias.name for alias in node.names] if isinstance(node, ast.Import) else [])
-                self.assertFalse(any('localcrypt' in name or name.startswith('features.rclone') for name in names), str(path))
-
     def test_wrapped_remote_policy_cannot_become_writable_or_persistent(self):
         with TemporaryDirectory() as directory:
             outer = LocalFiles(directory)
@@ -52,12 +40,3 @@ class DocumentBoundaryTests(unittest.TestCase):
             publish_document_stream(source, 'book.epub', writer, expected_revision='old')
         writer.assert_not_called()
         source.replace_stream.assert_not_called()
-
-    def test_notebook_export_has_no_raw_filesystem_writer(self):
-        path = Path(__file__).resolve().parents[2] / 'features/notebooks/ui/workspace.py'
-        tree = ast.parse(path.read_text())
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                self.assertNotIn(node.module, ('commonUtils.persistence.atomic', 'commonUtils.persistence'))
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                self.assertNotIn(node.func.attr, ('write_bytes', 'write_text'))

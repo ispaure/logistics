@@ -8,7 +8,7 @@ from commonUtils.persistence.text import (
     MAX_BYTES,
 )
 from features.text_editor.ui.document import Document
-from services.documents.storage import write_local_document as write_text_file, read_local_document as read_text_file
+from services.documents.storage import read_local_bytes, write_local_document as write_text_file, read_local_document as read_text_file
 
 
 class FileOperations:
@@ -234,8 +234,7 @@ class FileOperations:
                     raise FileConflictError(
                         "The destination changed after confirmation."
                     )
-                with path.open("rb") as stream:
-                    target_expected = stream.read(MAX_BYTES + 1)
+                target_expected = read_local_bytes(path, max_bytes=MAX_BYTES + 1)
                 if len(target_expected) > MAX_BYTES:
                     raise FileConflictError(
                         "The destination changed after confirmation."

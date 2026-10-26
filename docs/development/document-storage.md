@@ -147,3 +147,39 @@ publication and exact-byte reopening as other resources. It cannot write through
 an ordinary path into a host-protected provider root. Export keeps the source
 binding intact. EPUB/comic reader privacy follows shared persistence policy,
 including provider wrappers; a provider-backed ordinary file remains ordinary.
+
+
+## Enforced architecture contract
+
+`python dev.py architecture` checks every Python descendant of the text editor,
+notebook, EPUB, comic and PDF feature packages. `Scripts/architecture.json`
+declares those owners; `Scripts/document_architecture.py` implements the syntax
+checks. New nested modules inherit the contract automatically. A new document
+launcher or `document_editor_id` outside the declared packages fails until its
+storage ownership is classified. Archive workspace tools have separate explicit
+filesystem ownership; the vendored notebook scene codec is excluded as upstream
+in-memory format code.
+
+The check rejects concrete storage backend imports, literal/deferred backend
+factories, backend policy flags, ordinary file opening/byte/text helpers, direct
+provider publication/deletion and filesystem publication APIs. It follows ordinary
+import and assignment aliases, checks reflective access to guarded methods, and
+rejects opaque storage star imports. ZIP writes are reviewed too; serialization
+into a known `BytesIO` remains format-owned. Reader editing controls use shared
+`document_writable` policy, so wrappers cannot hide read-only storage. Ordinary
+notebook/PDF imports and text/XML compatibility reads use bounded host helpers.
+
+Intentional persistence exceptions identify an exact module, qualified function,
+operation and reason. They cover recovery/preferences, the ordinary collection
+index, anonymous Android PDF memory and existing verified archive callbacks/tools.
+Exceptions cannot waive backend selection, do not exempt a whole editor, and fail
+when unused. Archive callbacks must retain their declared shared transaction or
+streamed-publication entry. Adding a new operation requires a reviewed policy change.
+
+CI runs the architecture command and `test_document_architecture.py`, which injects
+forbidden imports, backend flags, aliases, raw exports, provider mutations, new
+editor registrations and detached transaction callbacks into temporary source trees.
+The check imports no feature or GUI toolkit. It is a static architectural guard,
+not a Python sandbox: constructed module names, arbitrary reflection, third-party
+writers and dataflow beyond the supported alias forms still require source review.
+Runtime storage/privacy regressions remain necessary.

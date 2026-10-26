@@ -208,3 +208,15 @@ def export_local_document(path, data, *, max_bytes, validate=lambda data: None,
         revision = None
     return DocumentResource.publish(provider, target.name, data, max_bytes=max_bytes,
                                     expected_revision=revision, validate=validate, cancelled=cancelled)
+
+
+def local_document_resource(path, *, max_bytes):
+    """Resolve an ordinary path inside the host, including protected-root checks."""
+    from commonUtils.runtime.resources.local import LocalFiles
+    target = Path(path).absolute()
+    return DocumentResource(LocalFiles(target.parent), target.name, max_bytes=max_bytes)
+
+
+def read_local_bytes(path, *, max_bytes, cancelled=lambda: False):
+    with local_document_resource(path, max_bytes=max_bytes) as resource:
+        return resource.read(cancelled=cancelled)

@@ -9,7 +9,8 @@ def sources(entry):
 
 
 def available(entry):
-    return bool(entry.local is not None or entry.remote_source == 'rclone')
+    from services.documents.ui.locations import document_location_available
+    return document_location_available(entry)
 
 
 def actions(entry):

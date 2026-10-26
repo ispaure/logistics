@@ -239,5 +239,260 @@
     "commonUtils.filesystem.index",
     "features.comics.collection",
     "features.books.library"
+  ],
+  "document_packages": [
+    "features.text_editor",
+    "features.notebooks",
+    "features.books",
+    "features.comics",
+    "features.pdf"
+  ],
+  "document_external_packages": {
+    "features.notebooks._vendor": "Upstream in-memory rmscene binary codec; not application document I/O."
+  },
+  "document_workflow_packages": {
+    "features.archives": "Archive filesystem workspace/create/extract tools; not a document content editor."
+  },
+  "document_storage_exceptions": [
+    {
+      "module": "features.books.library.index",
+      "scope": "CollectionIndex.__init__",
+      "operation": "raw-method:unlink",
+      "reason": "Disposable ordinary-import SQLite metadata index and corrupt-cache cleanup; not source document storage."
+    },
+    {
+      "module": "features.books.library.index",
+      "scope": "CollectionIndex.connect",
+      "operation": "raw-call:sqlite3.connect",
+      "reason": "Disposable ordinary-import SQLite metadata index and corrupt-cache cleanup; not source document storage."
+    },
+    {
+      "module": "features.books.metadata",
+      "scope": "_save_metadata.cleanup",
+      "operation": "raw-method:unlink",
+      "reason": "Ordinary EPUB verified transaction callback: staging, fsync, exclusive verified backup, publication or cleanup.",
+      "via": "services.documents.storage.document_transaction"
+    },
+    {
+      "module": "features.books.metadata",
+      "scope": "_save_metadata.publish",
+      "operation": "raw-call:os.replace",
+      "reason": "Ordinary EPUB verified transaction callback: staging, fsync, exclusive verified backup, publication or cleanup.",
+      "via": "services.documents.storage.document_transaction"
+    },
+    {
+      "module": "features.books.metadata",
+      "scope": "_save_metadata.publish",
+      "operation": "raw-method:open",
+      "reason": "Ordinary EPUB verified transaction callback: staging, fsync, exclusive verified backup, publication or cleanup.",
+      "via": "services.documents.storage.document_transaction"
+    },
+    {
+      "module": "features.books.metadata",
+      "scope": "_save_metadata.publish",
+      "operation": "raw-method:unlink",
+      "reason": "Ordinary EPUB verified transaction callback: staging, fsync, exclusive verified backup, publication or cleanup.",
+      "via": "services.documents.storage.document_transaction"
+    },
+    {
+      "module": "features.books.metadata",
+      "scope": "_save_metadata.stage",
+      "operation": "archive-write:zipfile.ZipFile",
+      "reason": "Format archive rewrite callback retains shared verified publication.",
+      "via": "services.documents.storage.document_transaction"
+    },
+    {
+      "module": "features.books.metadata",
+      "scope": "_save_metadata.verify",
+      "operation": "raw-method:open",
+      "reason": "Ordinary EPUB verified transaction callback: staging, fsync, exclusive verified backup, publication or cleanup.",
+      "via": "services.documents.storage.document_transaction"
+    },
+    {
+      "module": "features.books.metadata",
+      "scope": "_save_provider_metadata.write",
+      "operation": "archive-write:commonUtils.archives.zip_access.open_archive",
+      "reason": "Format archive rewrite callback retains shared verified publication.",
+      "via": "services.documents.storage.publish_document_stream"
+    },
+    {
+      "module": "features.books.preferences",
+      "scope": "ReadingState.load",
+      "operation": "raw-method:open",
+      "reason": "Ordinary reader resume/bookmark state; shared persistence policy excludes private and remote documents."
+    },
+    {
+      "module": "features.books.preferences",
+      "scope": "ReadingState.save",
+      "operation": "raw-call:commonUtils.persistence.atomic_write_json",
+      "reason": "Ordinary reader resume/bookmark state; shared persistence policy excludes private and remote documents."
+    },
+    {
+      "module": "features.comics.archive_io",
+      "scope": "replace_archive",
+      "operation": "raw-call:os.replace",
+      "reason": "Existing comic filesystem rebuild tool owns verified staging and atomic publication; separate from provider metadata editing."
+    },
+    {
+      "module": "features.comics.archive_io",
+      "scope": "replace_archive",
+      "operation": "raw-method:open",
+      "reason": "Existing comic filesystem rebuild tool owns verified staging and atomic publication; separate from provider metadata editing."
+    },
+    {
+      "module": "features.comics.encryption",
+      "scope": "encrypt_comic",
+      "operation": "archive-write:commonUtils.archives.zip_access.open_archive",
+      "reason": "Existing inner ZIP encryption filesystem tool owns staging and full member verification."
+    },
+    {
+      "module": "features.comics.encryption",
+      "scope": "encrypt_comic",
+      "operation": "raw-call:os.replace",
+      "reason": "Existing inner ZIP encryption filesystem tool verifies every member before replacement; unrelated to storage-provider encryption."
+    },
+    {
+      "module": "features.comics.encryption",
+      "scope": "encrypt_comic",
+      "operation": "raw-method:open",
+      "reason": "Existing inner ZIP encryption filesystem tool verifies every member before replacement; unrelated to storage-provider encryption."
+    },
+    {
+      "module": "features.comics.library",
+      "scope": "ComicDocument._save_source.write",
+      "operation": "archive-write:commonUtils.archives.zip_access.open_archive",
+      "reason": "Format archive rewrite callback retains shared verified publication.",
+      "via": "services.documents.storage.publish_document_stream"
+    },
+    {
+      "module": "features.comics.library",
+      "scope": "ComicDocument.save",
+      "operation": "raw-call:os.replace",
+      "reason": "Ordinary comic verified transaction callback: fsync, publication or staged-file cleanup.",
+      "via": "services.documents.storage.document_transaction"
+    },
+    {
+      "module": "features.comics.library",
+      "scope": "ComicDocument.save",
+      "operation": "raw-method:unlink",
+      "reason": "Ordinary comic verified transaction callback: fsync, publication or staged-file cleanup.",
+      "via": "services.documents.storage.document_transaction"
+    },
+    {
+      "module": "features.comics.library",
+      "scope": "ComicDocument.save.stage",
+      "operation": "archive-write:commonUtils.archives.zip_access.open_archive",
+      "reason": "Format archive rewrite callback retains shared verified publication.",
+      "via": "services.documents.storage.document_transaction"
+    },
+    {
+      "module": "features.comics.library",
+      "scope": "ComicDocument.save.verify",
+      "operation": "raw-method:open",
+      "reason": "Ordinary comic verified transaction callback: fsync, publication or staged-file cleanup.",
+      "via": "services.documents.storage.document_transaction"
+    },
+    {
+      "module": "features.comics.reading_state",
+      "scope": "ReadingState._load",
+      "operation": "raw-method:open",
+      "reason": "Ordinary reader resume/bookmark state; shared persistence policy excludes private and remote documents."
+    },
+    {
+      "module": "features.comics.reading_state",
+      "scope": "ReadingState.save",
+      "operation": "raw-call:commonUtils.persistence.atomic_write_json",
+      "reason": "Ordinary reader resume/bookmark state; shared persistence policy excludes private and remote documents."
+    },
+    {
+      "module": "features.notebooks.workspace",
+      "scope": "Repository.create",
+      "operation": "raw-call:commonUtils.persistence.atomic.atomic_write_bytes",
+      "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.notebooks.workspace",
+      "scope": "Repository.list",
+      "operation": "raw-method:read_text",
+      "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.notebooks.workspace",
+      "scope": "Repository.open",
+      "operation": "raw-method:read_bytes",
+      "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.notebooks.workspace",
+      "scope": "Repository.open",
+      "operation": "raw-method:read_text",
+      "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.notebooks.workspace",
+      "scope": "Repository.save",
+      "operation": "raw-call:commonUtils.persistence.atomic.atomic_write_bytes",
+      "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.notebooks.workspace",
+      "scope": "Repository.save",
+      "operation": "raw-call:commonUtils.persistence.atomic_write_json",
+      "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.notebooks.workspace",
+      "scope": "Repository.save",
+      "operation": "raw-method:read_bytes",
+      "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.notebooks.workspace",
+      "scope": "Repository.save",
+      "operation": "raw-method:read_text",
+      "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.notebooks.workspace",
+      "scope": "Repository.save",
+      "operation": "raw-method:unlink",
+      "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.pdf.backends.android",
+      "scope": "AndroidPDF.__init__",
+      "operation": "raw-call:os.fdopen",
+      "reason": "Anonymous memfd bytes consumed by Android PdfRenderer; no filesystem destination or plaintext cache."
+    },
+    {
+      "module": "features.text_editor.ui.commands",
+      "scope": "CommandControls._build_command_controls",
+      "operation": "raw-method:read_text",
+      "reason": "User keyboard shortcut preference JSON, not document content."
+    },
+    {
+      "module": "features.text_editor.ui.commands",
+      "scope": "CommandControls._save_shortcuts",
+      "operation": "raw-call:commonUtils.persistence.atomic_write_json",
+      "reason": "User keyboard shortcut preference JSON, not document content."
+    },
+    {
+      "module": "features.text_editor.ui.session",
+      "scope": "EditorSession.finished",
+      "operation": "raw-method:unlink",
+      "reason": "Remove owned ordinary editor recovery checkpoints during privacy transition or successful recovery handoff."
+    },
+    {
+      "module": "features.text_editor.ui.session",
+      "scope": "EditorSession.privatize.scrub",
+      "operation": "raw-method:unlink",
+      "reason": "Remove owned ordinary editor recovery checkpoints during privacy transition or successful recovery handoff."
+    },
+    {
+      "module": "features.text_editor.ui.syntax_settings",
+      "scope": "SyntaxSettings.reset_preferences",
+      "operation": "raw-method:unlink",
+      "reason": "Reset user syntax preferences, not document content."
+    }
   ]
 }

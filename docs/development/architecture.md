@@ -396,3 +396,11 @@ completed-response UI uses the desktop notification service. These are reviewed
 presentation-only edges (`lm -> git` and `lm/ui/page.py -> desktop.notifications`)
 in the explicit architecture policy. They do not authorize host dependencies in
 portable LM domain/session code or arbitrary new feature-to-feature imports.
+
+
+## Document storage boundary
+
+The architecture command enforces the document feature package contract as well
+as dependency direction and portable imports. See [document storage](document-storage.md#enforced-architecture-contract)
+for automatic editor coverage, backend/raw-I/O restrictions, scoped persistence
+exceptions, transaction anchors and the mutation regressions run by CI.

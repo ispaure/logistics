@@ -367,7 +367,8 @@
         "desktop": [
           "test_feature_registry.py",
           "test_feature_runtime.py",
-          "test_architecture_contracts.py"
+          "test_architecture_contracts.py",
+          "test_document_architecture.py"
         ]
       }
     },
@@ -440,6 +441,7 @@
         "desktop": [
           "test_dev_commands.py",
           "test_architecture_contracts.py",
+          "test_document_architecture.py",
           "test_documentation_layout.py",
           "test_source_hygiene.py"
         ]

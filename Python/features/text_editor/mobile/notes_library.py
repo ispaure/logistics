@@ -123,7 +123,7 @@ class VaultBrowser:
             "up", "Browse parent folder", on_press=self.browse_parent, enabled=False
         )
         self.search = None
-        if not self.library.remote:
+        if self.library.writable:
             self.search = toga.TextInput(
                 placeholder="Filter loaded file names",
                 on_change=lambda w: self.render_tree(),
@@ -172,7 +172,7 @@ class VaultBrowser:
             self.back_button,
             self.forward_button,
             *(
-                [self.edit if not self.library.remote else self.speech.button]
+                [self.edit if self.library.writable else self.speech.button]
                 if self.path
                 else []
             ),

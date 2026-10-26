@@ -19,8 +19,8 @@ class ComicInfoXML(xmlType.XMLFile):
 
     def read_lines(self) -> List[str]:
         # Unicode line separators are valid XML text, not file line endings.
-        with self.path.open('r', encoding='utf-8-sig') as source:
-            self.line_lst = source.read().split('\n')
+        from services.documents.storage import read_local_bytes
+        self.line_lst = read_local_bytes(self.path, max_bytes=4 * 1024 * 1024).decode('utf-8-sig').split('\n')
         return self.line_lst
 
     def update_pages_in_line_lst(self, cbz_image_file_lst: List[CBZImageFile]) -> bool:
