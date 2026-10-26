@@ -134,18 +134,20 @@ async def exercise_destination_edges(app):
             native = picker.save_as_name._impl.native
             native.requestFocus()
             manager = app._impl.native.getSystemService(jclass('android.content.Context').INPUT_METHOD_SERVICE)
-            # WindowInsetsController defers the request until window focus is
-            # ready after rotation; a direct showSoftInput can be discarded.
-            jclass('androidx.core.view.WindowCompat').getInsetsController(
-                app._impl.native.getWindow(), native).show(
-                    jclass('androidx.core.view.WindowInsetsCompat$Type').ime())
-            # A fresh emulator may start its IME service asynchronously. Wait
-            # for actual visibility instead of sampling during its animation.
-            for _ in range(100):
+            # Rotation can finish its input-connection restart after the
+            # first focus request. Re-request visibility until the actual IME
+            # insets acknowledge it; a focused field alone is not proof.
+            controller = jclass('androidx.core.view.WindowCompat').getInsetsController(
+                app._impl.native.getWindow(), native)
+            ime = jclass('androidx.core.view.WindowInsetsCompat$Type').ime()
+            for _ in range(20):
+                native.requestFocus()
+                controller.show(ime)
+                manager.showSoftInput(native, 0)
+                await asyncio.sleep(.25)
                 insets = jclass('androidx.core.view.ViewCompat').getRootWindowInsets(native)
-                if insets is not None and insets.isVisible(jclass('androidx.core.view.WindowInsetsCompat$Type').ime()):
+                if insets is not None and insets.isVisible(ime):
                     break
-                await asyncio.sleep(.05)
         await asyncio.sleep(.6)
         assert_visible_controls(app)
         sample = dict(orientation=orientation, width=app.main_window.size.width,
