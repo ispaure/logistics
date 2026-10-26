@@ -186,6 +186,13 @@ and the Text Editor-specific provider choice.
 Native text-size gestures and in-place WebView reflow live in commonUtils.
 Logistics retains format keys, settings fanout, private-surface validity and errors.
 
+Mobile notebook, Markdown and EPUB panes load their fully inlined HTML through
+`commonUtils.ui.native.inline_html.set_inline_html`. Logistics keeps the original
+document identifiers in link and bridge metadata and owns navigation decisions,
+private-surface policy and document retirement. On iOS, the native content base
+uses a local document scheme instead of a synthetic website origin. This changes
+the load origin without changing the document's routing identifiers or assets.
+
 Page transition and slider painting mechanics live in commonUtils. Logistics
 retains E Ink animation policy, reader value reversal, palette and theme refresh.
 

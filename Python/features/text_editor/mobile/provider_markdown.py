@@ -5,6 +5,7 @@ from typing import Callable
 from uuid import uuid4
 
 import toga
+from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from commonUtils.ui.native.markdown_search import MarkdownPageSearch
 from .markdown_editor import FormattedMarkdownInput
@@ -129,7 +130,7 @@ class ProviderMarkdown:
             native = getattr(self.preview._impl, 'native', None)
             if native is not None:
                 native.stopLoading()
-            self.preview.set_content('https://logistics.invalid/closed/', '<p>Preview closed.</p>')
+            set_inline_html(self.preview, 'https://logistics.invalid/closed/', '<p>Preview closed.</p>')
             if self.preview in self.content.children:
                 self.content.remove(self.preview)
                 if self.source not in self.content.children:
@@ -195,7 +196,7 @@ class ProviderMarkdown:
                 if self.search is not None:
                     self.search.loading()
                 self.preview_text = text
-                preview.set_content('https://logistics.invalid/live/', content)
+                set_inline_html(preview, 'https://logistics.invalid/live/', content)
             except (ValueError, OSError) as error:
                 if current():
                     self.host.error(str(error))
@@ -238,7 +239,7 @@ class ProviderMarkdown:
         self.host.bind_font(preview, web=True)
         self.search.loading()
         self.preview_text = self.source.value if rendered is not None else None
-        preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
+        set_inline_html(preview, 'https://logistics.invalid/' + uuid4().hex + '/', content)
         if self.speech is None:
             self.speech = self.host.speech(preview, self.content,
                 lambda: not self.closed and self.host.valid(self.host.reader()))

@@ -7,6 +7,7 @@ from urllib.parse import urlsplit, parse_qs
 from uuid import uuid4
 
 import toga
+from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from markdown_it import MarkdownIt
 from commonUtils.ui.appearance.formatting_glyphs import formatting_svg
@@ -192,7 +193,7 @@ class FormattedMarkdownInput:
         self._blocks = tuple(block['source'] for block in editor_blocks(text))
         self._revision = 0
         self.text = text
-        self.view.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
+        set_inline_html(self.view, 'https://logistics.invalid/' + uuid4().hex + '/', content)
 
     def navigate(self, widget, url, **kwargs):
         if not self.closed and url.split('?', 1)[0] == self.bridge:

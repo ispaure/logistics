@@ -3,6 +3,7 @@
 
 def retire_webview(view):
     from commonUtils.ui.native.text_size import native_backend
+    from commonUtils.ui.native.inline_html import set_inline_html
     binding = getattr(view, '_font_binding', None)
     if binding is not None:
         binding.dispose()
@@ -19,12 +20,11 @@ def retire_webview(view):
         native.navigationDelegate = None
         native.UIDelegate = None
         # WKWebView can defer replacement navigation while its pane is hidden.
-        # Clear the live DOM without document.open/write: resetting a retired
-        # document can stall later WebKit process startup on iOS simulators.
+        # Clear the live DOM immediately, even while this pane is hidden.
         # Keep the final navigation to replace the old document's script state.
         native.evaluateJavaScript('(()=>{const body=document.createElement("body");body.textContent="Document closed.";document.documentElement.replaceChildren(body);})()',
                                   completionHandler=None)
-    view.set_content('https://logistics.invalid/closed/', '<p>Document closed.</p>')
+    set_inline_html(view, 'https://logistics.invalid/closed/', '<p>Document closed.</p>')
 
 
 def document_webview(resource=None, **options):

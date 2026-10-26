@@ -3,6 +3,7 @@ import json
 from urllib.parse import unquote, urlsplit, parse_qs
 from uuid import uuid4
 import toga
+from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 
 # Executed through the native evaluation API, never supplied by the book.
@@ -313,7 +314,7 @@ def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None, m
     view.on_navigation_starting = bridge.navigation
     view.on_webview_load = bridge.loaded
     content = content.replace('</head>', '<meta name="logistics-reader-root" content="' + root + '"></head>', 1)
-    view.set_content(root, content)
+    set_inline_html(view, root, content)
     return view
 
 

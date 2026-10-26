@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 from services.documents.storage import read_local_bytes
 import toga
+from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 
@@ -161,7 +162,7 @@ class NotebookPanel:
         location = getattr(self.view, '_document_location_row', None)
         if location is not None:
             self.view.insert(0, location)
-        self.web.set_content('https://logistics.invalid/notebooks/', mobile_editor_html(self.state(), self.bridge.url))
+        set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(self.state(), self.bridge.url))
 
     def navigate(self, widget, url, **kwargs):
         if self.busy or self.closed or not self.app.active_host or widget is not self.web:

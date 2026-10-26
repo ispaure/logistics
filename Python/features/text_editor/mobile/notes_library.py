@@ -12,6 +12,7 @@ from uuid import uuid4
 from dataclasses import dataclass
 from typing import Callable
 import toga
+from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from features.text_editor.notes import NotesLibrary, MAX_NOTE, MARKDOWN
@@ -385,7 +386,7 @@ class VaultBrowser:
             )
             self.pending_fragment = fragment
             self.page_search.loading()
-            self.web.set_content(self.base, html)
+            set_inline_html(self.web, self.base, html)
             self.edit.enabled = self.library.writable
             self.speech.button.enabled = True
             self.notice.text = ""
