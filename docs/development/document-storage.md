@@ -277,7 +277,7 @@ restoration, without waiting for cloud setup or accepting stale directory data.
 ## Enforced architecture contract
 
 `python dev.py architecture` checks every Python descendant of the text editor,
-notebook, EPUB, comic and PDF feature packages. `Scripts/architecture.json`
+notebook, EPUB, comic, image and PDF feature packages. `Scripts/architecture.json`
 declares those owners; `Scripts/document_architecture.py` implements the syntax
 checks. New nested modules inherit the contract automatically. A new document
 launcher or `document_editor_id` outside the declared packages fails until its
@@ -297,6 +297,8 @@ notebook/PDF imports and text/XML compatibility reads use bounded host helpers.
 Intentional persistence exceptions identify an exact module, qualified function,
 operation and reason. They cover recovery/preferences, the ordinary collection
 index, anonymous Android PDF memory and existing verified archive callbacks/tools.
+The existing image compression tool retains narrowly scoped staging, verified
+publication and cleanup exceptions; provider-backed image viewing has none.
 Exceptions cannot waive backend selection, do not exempt a whole editor, and fail
 when unused. Archive callbacks must retain their declared shared transaction or
 streamed-publication entry. Adding a new operation requires a reviewed policy change.
@@ -308,6 +310,13 @@ The check imports no feature or GUI toolkit. It is a static architectural guard,
 not a Python sandbox: constructed module names, arbitrary reflection, third-party
 writers and dataflow beyond the supported alias forms still require source review.
 Runtime storage/privacy regressions remain necessary.
+
+Notes Library folder creation and moves enter through the document storage host,
+which checks write policy and access before the shared provider mutation. Local
+provider selection and remote classification also stay in that host. Mobile
+Images receives its icon factory from its caller, and rclone receives the Notes
+Library offer as a presentation callback. The reviewed rclone-to-Images and
+rclone-to-Text Editor dependencies cover its existing desktop document handoffs.
 
 
 ## Notebook host actions and deletion

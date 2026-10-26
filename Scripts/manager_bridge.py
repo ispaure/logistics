@@ -16,6 +16,11 @@ def main():
     from Scripts.build_project import LogisticsProject
     import os
     os.environ['LOGISTICS_MANAGER_ACCOUNT_DEFAULTS'] = json.dumps(request.get('account_defaults', {}))
+    if request.get('settings_profile'):
+        os.environ.setdefault('LOGISTICS_MANAGER_PROFILE', request['settings_profile'])
+        os.environ['LOGISTICS_MANAGER_LEGACY_PROFILE'] = str(ROOT / 'mobile_build/.tools/build-manager/profile.json')
+    if request.get('manager_checkout'):
+        os.environ['LOGISTICS_MANAGER_CHECKOUT'] = request['manager_checkout']
     project = LogisticsProject(ROOT)
     values = request.get('values', {})
     action = request['action']

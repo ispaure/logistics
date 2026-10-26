@@ -199,6 +199,15 @@ jobs:
             *) exit 1 ;;
           esac
           device=$(python validation/ui_tools.py "$selector" --owned)
+          # Capture launch decisions live: retrospective simulator logs can
+          # contain only UUID compose failures after a WebKit startup stall.
+          # Limit this synthetic-test stream to 25 MiB on the macOS runner.
+          (ulimit -f 25600; exec xcrun simctl spawn "$device" log stream \
+            --style compact --level debug --predicate \
+            'subsystem BEGINSWITH "com.apple.WebKit" OR subsystem BEGINSWITH "com.apple.browserEngineKit" OR process == "runningboardd"') \
+            > logs/ios-webkit-live.log 2>&1 &
+          webkit_log_pid=$!
+          trap 'kill "$webkit_log_pid" 2>/dev/null || true; kill -KILL "$webkit_log_pid" 2>/dev/null || true; wait "$webkit_log_pid" 2>/dev/null || true' EXIT
           python validation/ui_tools.py run ios --device "$device" --no-update "${flags[@]}"
       - name: Capture iOS startup and crash diagnostics
         if: failure()

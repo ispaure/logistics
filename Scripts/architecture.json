@@ -187,6 +187,14 @@
     [
       "youtube_downloader",
       "rclone"
+    ],
+    [
+      "rclone",
+      "images"
+    ],
+    [
+      "rclone",
+      "text_editor"
     ]
   ],
   "portable_modules": [
@@ -253,7 +261,8 @@
     "features.notebooks",
     "features.books",
     "features.comics",
-    "features.pdf"
+    "features.pdf",
+    "features.images"
   ],
   "document_external_packages": {
     "features.notebooks._vendor": "Upstream in-memory rmscene binary codec; not application document I/O."
@@ -513,6 +522,36 @@
       "scope": "Repository.delete",
       "operation": "raw-call:shutil.rmtree",
       "reason": "Validated ordinary recovery identity cleanup after document deletion; private resources have no recovery repository."
+    },
+    {
+      "module": "features.images.processing",
+      "scope": "ImageFile.compress",
+      "operation": "raw-call:os.replace",
+      "reason": "Existing standalone image compression tool owns exclusive sibling staging, encoded-image verification and publication/cleanup. It is separate from provider-backed image viewing; no source document path is opened by the viewer."
+    },
+    {
+      "module": "features.images.processing",
+      "scope": "ImageFile.compress",
+      "operation": "raw-method:unlink",
+      "reason": "Existing standalone image compression tool owns exclusive sibling staging, encoded-image verification and publication/cleanup. It is separate from provider-backed image viewing; no source document path is opened by the viewer."
+    },
+    {
+      "module": "features.images.processing",
+      "scope": "ImageFile.compress.allocate_output",
+      "operation": "raw-method:open",
+      "reason": "Existing standalone image compression tool owns exclusive sibling staging, encoded-image verification and publication/cleanup. It is separate from provider-backed image viewing; no source document path is opened by the viewer."
+    },
+    {
+      "module": "features.images.processing",
+      "scope": "compress_image",
+      "operation": "raw-call:os.replace",
+      "reason": "Existing standalone image compression tool owns exclusive sibling staging, encoded-image verification and publication/cleanup. It is separate from provider-backed image viewing; no source document path is opened by the viewer."
+    },
+    {
+      "module": "features.images.processing",
+      "scope": "compress_image",
+      "operation": "raw-method:unlink",
+      "reason": "Existing standalone image compression tool owns exclusive sibling staging, encoded-image verification and publication/cleanup. It is separate from provider-backed image viewing; no source document path is opened by the viewer."
     }
   ]
 }

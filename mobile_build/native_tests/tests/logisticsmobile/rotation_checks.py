@@ -54,13 +54,19 @@ def pose_snapshot(app):
 
 async def rotate(app, orientation):
     landscape = orientation != 'portrait'
+    native_errors = []
     from .timings import section, measure
     with section(app, 'rotation-dispatch', orientation=orientation):
         if sys.platform == 'ios':
-            from rubicon.objc import ObjCClass
+            from rubicon.objc import Block, ObjCClass, ObjCInstance, objc_id
             mask = {'portrait': 2, 'landscape-left': 8, 'landscape-right': 16}[orientation]
             preferences = ObjCClass('UIWindowSceneGeometryPreferencesIOS').alloc().initWithInterfaceOrientations(mask)
-            app.main_window._impl.native.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=None)
+            def rejected(error):
+                native_errors.append(str(ObjCInstance(error)))
+                print('LOGISTICS_ROTATION_REJECTED=' + json.dumps(dict(
+                    orientation=orientation, error=native_errors[-1])), flush=True)
+            rejection = Block(rejected, None, objc_id)
+            app.main_window._impl.native.windowScene.requestGeometryUpdateWithPreferences(preferences, errorHandler=rejection)
         else:
             app._impl.native.setRequestedOrientation({'portrait': 1, 'landscape-left': 0, 'landscape-right': 8}[orientation])
     with section(app, 'rotation-acknowledgement', orientation=orientation):
@@ -74,7 +80,8 @@ async def rotate(app, orientation):
             elif (app.main_window.size.width > app.main_window.size.height) == landscape:
                 break
         else:
-            raise AssertionError('Native rotation did not complete: ' + orientation)
+            raise AssertionError('Native rotation did not complete: ' + orientation
+                                 + ('; UIKit: ' + '; '.join(native_errors) if native_errors else ''))
     await measure(app, 'rotation-post-ack-settle', asyncio.sleep(.6), orientation=orientation)
 
 

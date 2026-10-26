@@ -93,9 +93,8 @@ class NotesLibrary:
         if not self.supports('create'):
             raise ValueError('This Notes Library cannot create folders.')
         path = self.contained(posixpath.join(self.root if parent is None else parent, document_name(name)))
-        from commonUtils.runtime.resources.mutations import create_resource_folder
-        with operation(self.provider, cancelled):
-            create_resource_folder(self.provider, path, cancelled=cancelled)
+        from services.documents.storage import create_document_folder
+        create_document_folder(self.provider, path, cancelled=cancelled)
         return path
 
     def move(self, source, destination, *, cancelled=lambda: False):
@@ -111,8 +110,8 @@ class NotesLibrary:
             if not entry['directory'] and (PurePosixPath(source).suffix.lower() not in MARKDOWN
                                            or PurePosixPath(destination).suffix.lower() not in MARKDOWN):
                 raise ValueError('Keep a Markdown filename extension.')
-            from commonUtils.runtime.resources.mutations import rename_resource
-            rename_resource(self.provider, source, destination, cancelled=cancelled)
+            from services.documents.storage import move_document_resource
+            move_document_resource(self.provider, source, destination, cancelled=cancelled)
         return destination
 
     def image_source(self, path):

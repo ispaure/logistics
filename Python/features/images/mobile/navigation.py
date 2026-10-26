@@ -3,8 +3,7 @@ import asyncio
 from features.images.document import adjacent_image
 
 
-def install(owner, view):
-    from mobile.control_icons import icon_button
+def install(owner, view, *, icon_button):
     store = view._crypt_reader_store
     provider = getattr(store, 'provider', None) or getattr(store, 'resource', None)
     reader = view.crypt_reader

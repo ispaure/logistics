@@ -40,3 +40,34 @@ class DocumentBoundaryTests(unittest.TestCase):
             publish_document_stream(source, 'book.epub', writer, expected_revision='old')
         writer.assert_not_called()
         source.replace_stream.assert_not_called()
+
+    def test_notes_folder_mutations_preserve_exclusivity_cancellation_and_remote_policy(self):
+        from services.documents.storage import create_document_folder, move_document_resource
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'Vault').mkdir()
+            provider = LocalFiles(root)
+            notes = NotesLibrary(provider, 'Vault')
+            self.assertEqual(notes.create_folder('Nested'), 'Vault/Nested')
+            source = notes.create('Original')
+            destination = 'Vault/Nested/Renamed.md'
+            self.assertEqual(notes.move(source, destination), destination)
+            self.assertFalse((root / source).exists())
+            self.assertEqual((root / destination).read_bytes(), b'')
+            other = notes.create('Other')
+            with self.assertRaises((ValueError, FileExistsError)):
+                notes.move(other, destination)
+            self.assertTrue((root / other).exists())
+            with self.assertRaises(Exception):
+                notes.create_folder('Cancelled', cancelled=lambda: True)
+            self.assertFalse((root / 'Vault/Cancelled').exists())
+            with self.assertRaises(Exception):
+                notes.move(other, 'Vault/Cancelled.md', cancelled=lambda: True)
+            self.assertTrue((root / other).exists())
+            provider.provider = SimpleNamespace(remote_storage=True)
+            with self.assertRaises(PermissionError):
+                create_document_folder(provider, 'Denied')
+            with self.assertRaises(PermissionError):
+                move_document_resource(provider, other, 'Denied.md')
+            self.assertFalse((root / 'Denied').exists())
+            self.assertTrue((root / other).exists())

@@ -87,6 +87,10 @@ class LogisticsProject:
             if name == 'android.avd':
                 rows[name]['label'] = 'Legacy AVD name — leave empty for disposable emulators'
                 rows[name]['origin'] += '; unsupported existing-AVD selection; clear this legacy value'
+        rows['config.profile'] = dict(value=str(manager_settings.profile_path(self.mobile)),
+            origin='local configuration file', read_only=True, section='Local settings',
+            label='Private project settings file',
+            description='Save writes project settings here. The manager uses its private application configuration directory; this file is not tracked in the project repository.')
         rows['app.version'] = dict(value=manager_settings.app_version(self.mobile),
                                   origin='tracked pyproject.toml; intentional source edit required', read_only=True)
         config = self.mobile / '.device.json'
@@ -340,6 +344,8 @@ class LogisticsProject:
         if options['vm.fedora_mode'] not in ('guest', 'container-on-ubuntu'):
             raise ValueError('Choose an explicit supported Fedora backend mode.')
         selector = options['vm.fedora_container_host'] if options['vm.fedora_mode'] == 'container-on-ubuntu' else options['vm.fedora']
+        if not selector:
+            raise ValueError('No Fedora test machine is configured. Open Setup → Test machines to create or recover the dedicated Linux machine, then reopen Project settings and Save. Container mode requires its own explicit host.')
         guest = client.selected(selector)
         snapshot = self.private / 'snapshots' / source['fingerprint']
         materialize(self.root, snapshot, source['selection'], expected=source)
@@ -369,6 +375,8 @@ class LogisticsProject:
         if operation != 'Test':
             raise ValueError('Windows guest supports Test plans; no Build operation is implied.')
         from build_manager.parallels import Parallels
+        if not options['vm.windows']:
+            raise ValueError('No Windows test machine is configured. Open Setup → Test machines to create or recover the dedicated Windows machine, then reopen Project settings and Save.')
         guest = Parallels().selected(options['vm.windows'])
         snapshot = self.private / 'snapshots' / source['fingerprint']
         materialize(self.root, snapshot, source['selection'], expected=source)

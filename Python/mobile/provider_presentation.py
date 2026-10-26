@@ -242,7 +242,7 @@ def _mount_reader(self, view, controls, comic, neighbors):
         view.fit_button = icon_button('fit', 'Fit image', on_press=self.fit_private_page)
         if image:
             from features.images.mobile.navigation import install
-            view.image_file_buttons = install(self, view)
+            view.image_file_buttons = install(self, view, icon_button=icon_button)
             for button in view.image_file_buttons:
                 header.insert(len(header.children) - 1, button)
         view.crypt_view._native_reader_buttons = lambda: [*getattr(view, 'image_file_buttons', ()), view.fit_button, view.crypt_actions]

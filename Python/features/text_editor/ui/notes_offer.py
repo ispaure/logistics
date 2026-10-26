@@ -52,8 +52,8 @@ class NotesFolderOffer(qt.QWidget):
         provider = getattr(self.browser, 'provider', None)
         # Browser providers expose decoded paths for LocalCrypt and cloud roots.
         if provider is None:
-            from commonUtils.runtime.resources.local import LocalFiles
-            factory = lambda: LocalFiles(location)
+            from services.documents.storage import local_document_provider
+            factory = lambda: local_document_provider(location)
             root = ''
         else:
             factory = lambda: provider
@@ -88,8 +88,9 @@ class NotesFolderOffer(qt.QWidget):
         factory, root = self.candidate
         provider = factory()
         from .notes_library import open_notes
+        from services.documents.storage import document_remote
         open_notes(factory, self.location.name, root=root,
-                   remote=bool(getattr(provider, 'remote_storage', False)))
+                   remote=document_remote(provider))
         self.hide()
 
     def prepare_close(self):

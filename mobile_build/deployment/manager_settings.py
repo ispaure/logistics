@@ -13,6 +13,14 @@ def profile_path(root):
     return Path(os.environ.get('LOGISTICS_MANAGER_PROFILE') or Path(root) / '.tools/build-manager/profile.json')
 
 
+def loaded_profile(root):
+    path = profile_path(root)
+    legacy = os.environ.get('LOGISTICS_MANAGER_LEGACY_PROFILE')
+    if not path.exists() and legacy:
+        return load_profile(legacy)
+    return load_profile(path)
+
+
 def defaults(root):
     root = Path(root)
     testflight = json.loads((root / 'testflight-distribution.json').read_text())
@@ -65,9 +73,24 @@ def settings(root, *, overrides=None):
                         machine=key.startswith(('tools.', 'vm.', 'ios.', 'android.')),
                         guarded=key in {'testflight.app_id', 'testflight.bundle_id', 'firebase.bundle_id'},
                         variable=VARIABLES.get(key)) for key, value in configured.items()}
-    values, sources = resolve(schema, account=account, profile=current_settings(load_profile(profile_path(root))),
+    values, sources = resolve(schema, account=account, profile=current_settings(loaded_profile(root)),
                               environment=os.environ, overrides=current_settings(overrides or {}))
     validate(values, configured)
+    # Discover only checkout-owned dedicated guests, never adopt a named personal VM.
+    # Frozen run profiles already contain resolved UUIDs and must remain authoritative.
+    if os.environ.get('LOGISTICS_MANAGER_CHECKOUT'):
+        from build_manager.vm import dedicated_guest
+        for key, kind in (('vm.fedora', 'linux'), ('vm.windows', 'windows')):
+            if values[key] or (kind == 'linux' and values['vm.fedora_mode'] != 'guest'):
+                continue
+            try:
+                selector = dedicated_guest(kind, os.environ['LOGISTICS_MANAGER_CHECKOUT'])
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                from build_manager.redaction import Redactor
+                sources[key] = 'Automatic selection unavailable: ' + Redactor()(str(error))
+                continue
+            if selector:
+                values[key], sources[key] = selector, 'Detected dedicated test machine; Save keeps its UUID in your private project settings'
     return values, sources
 
 
@@ -102,13 +125,13 @@ def distribution(root, provider, original):
     # Existing tests/consumers may supply only the provider's settings file.
     # No profile means the established defaults remain the sole source.
     root = Path(root)
-    if not profile_path(root).exists() and not any(name in os.environ for key, name in VARIABLES.items()
+    if not loaded_profile(root) and not any(name in os.environ for key, name in VARIABLES.items()
                                                   if key.startswith(provider + '.')):
         return original
     # The caller's loaded provider file is authoritative. A profile containing
     # only VM/tool settings must not replace it with another file's defaults.
     configured = {provider + '.' + key: value for key, value in original.items()}
-    profile = {key: value for key, value in load_profile(profile_path(root)).items() if key in configured}
+    profile = {key: value for key, value in loaded_profile(root).items() if key in configured}
     variables = {key: name for key, name in VARIABLES.items() if key in configured}
     values, _ = effective(configured, profile, os.environ, variables=variables)
     guarded = ['bundle_id'] + (['app_id'] if provider == 'testflight' else [])
@@ -121,7 +144,7 @@ def distribution(root, provider, original):
 
 def save(root, changes):
     base = defaults(root)
-    current = load_profile(profile_path(root))
+    current = loaded_profile(root)
     incoming = current_settings(dict(current, **changes))
     values, _ = effective(base, incoming)
     validate(values, base)
@@ -165,4 +188,4 @@ def authentication_references(root):
     account = json.loads(os.environ.get('LOGISTICS_MANAGER_ACCOUNT_DEFAULTS', '{}'))
     if set(account) - {'auth.testflight_reference', 'auth.key_reference', 'auth.github_reference', 'auth.github_kind'}:
         raise ValueError('Shared accounts may supply protected auth references only.')
-    return dict(account, **{key: value for key, value in load_profile(profile_path(root)).items() if key.startswith('auth.')})
+    return dict(account, **{key: value for key, value in loaded_profile(root).items() if key.startswith('auth.')})

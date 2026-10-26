@@ -3,6 +3,25 @@
 For setup, settings and running builds, see the [user guide](../user/build-manager.md).
 This guide owns Logistics adapter policy, implementation and validation.
 
+## Dedicated test-machine settings
+
+The manager supplies a checkout-specific private profile in its Application Support
+configuration directory. Logistics reads the old checkout-local profile until the
+first Save, which preserves those values in the new profile without rewriting the
+legacy file. Later manager saves use the private profile as the authority.
+Explicit `LOGISTICS_MANAGER_PROFILE` overrides remain supported by command-line tools.
+
+When Fedora or Windows is empty, the manager bridge resolves its dedicated machine
+from the manager checkout's ownership receipt and current Parallels registration.
+It verifies the bundle location without starting a VM or running guest commands.
+Explicit saved selectors take precedence; Save records detected UUIDs in the private
+profile. Missing or conflicting ownership leaves the field editable; setup and OS
+readiness remain separate steps in Setup → Test machines.
+
+Fedora defaults to direct guest testing. The advanced `container-on-ubuntu` mode
+still requires a separately authorized Ubuntu test host and rootless Podman. Its
+host field appears only in that mode; switching modes preserves stored values.
+
 ## Implemented operations and extension points
 
 The manager integrates the existing physical-device, TestFlight and Firebase

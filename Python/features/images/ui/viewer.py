@@ -130,10 +130,8 @@ def open_image_choice(choice, parent=None):
 
 
 def open_image(path, parent=None):
-    from commonUtils.runtime.resources.local import LocalFiles
-    from commonUtils.runtime.resources.selection import ResourceChoice
-    path = Path(path)
-    return open_image_choice(ResourceChoice(LocalFiles(path.parent), path.name, lambda: None), parent)
+    from services.documents.ui.editors import local_document_choice
+    return open_image_choice(local_document_choice(path), parent)
 
 
 def launch(parent):

@@ -17,6 +17,9 @@ def rclone_host_ui(app):
     from mobile.folder_navigation import record
     from mobile.document_sources import opening_status
     from mobile.reader_chrome import refresh_transfer_chrome
+    async def offer_notes(browser, provider, root, rows):
+        from mobile.obsidian import offer_vault
+        return await offer_vault(app, browser, provider, root, rows)
     from mobile.settings.forms import (
         ConnectionSettingsPage,
         connection_group,
@@ -29,6 +32,7 @@ def rclone_host_ui(app):
     )
 
     return MobileHostUI(
+        offer_notes=offer_notes,
         refresh_transfer_chrome=lambda: refresh_transfer_chrome(app),
         icon_button=icon_button,
         NativeBrowser=NativeBrowser,

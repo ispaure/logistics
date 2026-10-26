@@ -62,6 +62,7 @@ class MobileHostUI:
     record_folder: RecordFolder = lambda *args, **kwargs: None
     opening_status: OpeningStatus = lambda *args, **kwargs: nullcontext()
     refresh_transfer_chrome: Callable[[], None] = lambda: None
+    offer_notes: Callable[[Any, Any, str, list], Awaitable[Any]] | None = None
 
 
 @dataclass(frozen=True)

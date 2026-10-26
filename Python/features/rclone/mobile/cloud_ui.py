@@ -435,10 +435,9 @@ class CloudUI(LocalCryptUI):
             return False
         opened = await self.browser_workflow.browse(self.cloud_client, self.selected_cloud_remote(),
             self.cloud_location.value.strip('/'), preserve_path=preserve_path)
-        if opened:
-            from mobile.obsidian import offer_vault
-            await offer_vault(self.app, self.remote_browser, self.browser_workflow.state.resource,
-                              self.cloud_path, list(self.cloud_rows.values()))
+        if opened and self.rclone_ui.offer_notes is not None:
+            await self.rclone_ui.offer_notes(self.remote_browser, self.browser_workflow.state.resource,
+                                            self.cloud_path, list(self.cloud_rows.values()))
         return opened
 
     async def parent_cloud(self, widget=None, **kwargs):

@@ -18,6 +18,50 @@ class ManagerSettingsTests(unittest.TestCase):
         for name in ('testflight-distribution.json', 'firebase-distribution.json', 'pyproject.toml'):
             shutil.copyfile(source / name, self.root / name)
 
+    def test_manager_profile_migrates_legacy_values_only_on_save(self):
+        import os
+        legacy = self.root / 'legacy.json'
+        destination = self.root / 'Application Support/project/profile.json'
+        settings.save_profile(legacy, {'vm.windows': 'saved Windows', 'firebase.group': 'Saved group'},
+                              allowed={'vm.windows', 'firebase.group'})
+        with patch.dict(os.environ, {'LOGISTICS_MANAGER_PROFILE': str(destination),
+                                    'LOGISTICS_MANAGER_LEGACY_PROFILE': str(legacy)}):
+            values, _ = settings.settings(self.root)
+            self.assertEqual(values['vm.windows'], 'saved Windows')
+            self.assertFalse(destination.exists())
+            before = legacy.read_bytes()
+            settings.save(self.root, {'vm.fedora': 'detected UUID'})
+            saved = settings.load_profile(destination)
+            self.assertEqual(saved['firebase.group'], 'Saved group')
+            self.assertEqual(saved['vm.fedora'], 'detected UUID')
+            self.assertEqual(legacy.read_bytes(), before)
+            settings.save_profile(legacy, {'firebase.group': 'Changed legacy'}, allowed={'firebase.group'})
+            self.assertEqual(settings.settings(self.root)[0]['firebase.group'], 'Saved group')
+
+    def test_empty_guests_detect_owned_machines_and_preserve_explicit_selectors(self):
+        import os
+        with patch.dict(os.environ, {'LOGISTICS_MANAGER_CHECKOUT': '/reviewed/manager'}), \
+                patch('build_manager.vm.dedicated_guest', side_effect=lambda kind, checkout: kind + '-uuid') as discover:
+            values, sources = settings.settings(self.root)
+            self.assertEqual(values['vm.fedora'], 'linux-uuid')
+            self.assertEqual(values['vm.windows'], 'windows-uuid')
+            self.assertIn('Detected dedicated', sources['vm.fedora'])
+            self.assertFalse(settings.profile_path(self.root).exists())
+            settings.save(self.root, {'vm.windows': 'explicit Windows', 'vm.fedora_mode': 'container-on-ubuntu'})
+            discover.reset_mock()
+            values, _ = settings.settings(self.root)
+            self.assertEqual(values['vm.windows'], 'explicit Windows')
+            self.assertEqual(values['vm.fedora'], '')
+            discover.assert_not_called()
+
+    def test_unavailable_detection_leaves_settings_editable_with_reason(self):
+        import os
+        with patch.dict(os.environ, {'LOGISTICS_MANAGER_CHECKOUT': '/reviewed/manager'}), \
+                patch('build_manager.vm.dedicated_guest', side_effect=ValueError('Ownership conflict')):
+            values, sources = settings.settings(self.root)
+            self.assertEqual(values['vm.fedora'], '')
+            self.assertIn('Ownership conflict', sources['vm.fedora'])
+
     def test_retired_ubuntu_settings_do_not_block_fedora_and_are_removed_on_save(self):
         path = settings.profile_path(self.root)
         legacy = {'vm.linux': 'Retired Ubuntu', 'vm.linux_scope': 'both',

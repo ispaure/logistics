@@ -9,6 +9,11 @@ from commonUtils.ui.resources.picker import choose_resource, ResourceTaskDialog
 _windows = []
 
 
+def local_document_choice(path):
+    path = Path(path)
+    return ResourceChoice(LocalFiles(path.parent), path.name, lambda: None)
+
+
 def choose_editor_resource(parent, mode, provider=None, name='', *, markdown=False, extensions=None, directory=None):
     from features.rclone.localcrypt.mapping import connections
     from features.rclone.desktop_service import service

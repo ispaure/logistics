@@ -18,10 +18,10 @@ HELP = {
     'android.avd': 'Legacy existing AVD selector is unsupported. Leave empty; the manager creates and removes its own emulator.',
     'android.image': 'Installed Android SDK system-image package used to create the disposable test emulator.',
     'android.model': 'Android hardware profile used for the disposable emulator, such as pixel_9.',
-    'vm.fedora': 'Parallels VM name or UUID for authorized Fedora guest testing. Leave blank when no dedicated guest is authorized.',
-    'vm.windows': 'Parallels VM name or UUID for authorized Windows testing. Leave blank until a dedicated test VM is available.',
-    'vm.fedora_mode': 'Run Fedora as a guest, or as a rootless container on the configured Linux host (container-on-ubuntu).',
-    'vm.fedora_container_host': 'Authorized Parallels Linux host used for the rootless Fedora container.',
+    'vm.fedora': 'Dedicated Fedora test machine. The manager fills an empty value from its owned Linux machine; Save remembers the UUID in private project settings. Create or recover it in Setup → Test machines if unavailable.',
+    'vm.windows': 'Dedicated Windows test machine. The manager fills an empty value from its owned Windows machine; Save remembers the UUID in private project settings. Create or recover it in Setup → Test machines if unavailable.',
+    'vm.fedora_mode': 'Use guest for the dedicated Fedora machine (recommended). container-on-ubuntu is an advanced alternative requiring a separately configured Ubuntu test host with rootless Podman.',
+    'vm.fedora_container_host': 'Only for container-on-ubuntu mode: the explicitly authorized Ubuntu test VM name or UUID. Direct Fedora guest testing does not use this field.',
     'vm.windows_prepared_reference': 'Local JSON reference to prepared Windows tools. This is a path, not a tool download or credential.',
     'vm.shared_host': 'Reserved legacy shared-folder field. Isolated backends do not use it.',
     'vm.shared_guest': 'Reserved legacy shared-folder field. Isolated backends do not use it.',
@@ -83,8 +83,18 @@ def describe_settings(rows):
             entry['kind'] = 'multiline'
         if name == 'auth.github_kind':
             entry['choices'] = ('auto','credential-helper','environment-name')
+        if name in ('vm.fedora', 'vm.windows'):
+            entry['label'] = 'Fedora test machine' if name == 'vm.fedora' else 'Windows test machine'
+            if entry.get('origin', '').startswith('Automatic selection unavailable:'):
+                entry['description'] += ' ' + entry['origin']
         if name == 'vm.fedora_mode':
+            entry['label'] = 'Fedora execution mode'
             entry['choices'] = ('guest', 'container-on-ubuntu')
+        if name == 'vm.fedora_container_host':
+            entry['label'] = 'Ubuntu host for Fedora container (advanced)'
+            entry['visible_when'] = {'vm.fedora_mode': 'container-on-ubuntu'}
+        if name == 'vm.fedora':
+            entry['visible_when'] = {'vm.fedora_mode': 'guest'}
         if entry.get('kind') == 'int':
             entry.update(minimum=1, maximum=60 if name.endswith('poll_interval_seconds') else 3600, suffix=' s')
     return rows

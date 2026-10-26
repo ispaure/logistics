@@ -67,6 +67,34 @@ def document_operation(source, cancelled=lambda: False):
     operation = getattr(source, 'operation', None)
     return operation(cancelled) if operation else nullcontext()
 
+
+def local_document_provider(directory):
+    """Select ordinary filesystem storage at the host document boundary."""
+    from commonUtils.runtime.resources.local import LocalFiles
+    return LocalFiles(directory)
+
+
+def document_remote(provider):
+    return any(getattr(source, 'remote_storage', False) for source in document_sources(provider))
+
+
+def create_document_folder(provider, path, *, cancelled=lambda: False):
+    from commonUtils.runtime.resources.mutations import create_resource_folder
+    if not document_writable(provider):
+        raise PermissionError('This Notes Library is read-only.')
+    with document_operation(provider, cancelled):
+        check_document_access(provider)
+        return create_resource_folder(provider, path, cancelled=cancelled)
+
+
+def move_document_resource(provider, source, destination, *, cancelled=lambda: False):
+    from commonUtils.runtime.resources.mutations import rename_resource
+    if not document_writable(provider):
+        raise PermissionError('This Notes Library is read-only.')
+    with document_operation(provider, cancelled):
+        check_document_access(provider)
+        return rename_resource(provider, source, destination, cancelled=cancelled)
+
 def publish_document_stream(source, path, writer, *, expected_revision, verify=None,
                             cancelled=lambda: False):
     """Keep archive rewrites streaming through their provider's transaction owner."""
