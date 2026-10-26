@@ -311,7 +311,17 @@ def owned_ios_device(lease, *, ipad=False, duo=False, client=None, sdk=None):
     lease.parent.mkdir(parents=True, exist_ok=True)
     lease.write_text(json.dumps(dict(device=device, name=name, runtime=runtime,
         device_type=profile['deviceTypeIdentifier'], sdk=sdk)))
-    client.boot(device)
+    try:
+        client.boot(device)
+    except subprocess.TimeoutExpired as error:
+        # bootstatus reports its current boot phase on stdout. Keep that
+        # evidence even when the simulator never becomes responsive.
+        def decoded(value):
+            return value.decode(errors='replace') if isinstance(value, bytes) else value or ''
+        lease.with_name('ios-native-ui-boot-timeout.json').write_text(json.dumps(dict(
+            device=device, timeout=error.timeout,
+            stdout=decoded(error.stdout), stderr=decoded(error.stderr))))
+        raise
     return device
 
 
@@ -346,7 +356,10 @@ def ios_diagnostics():
                '--style', 'compact', '--predicate',
                'process == "Logistics Mobile" OR eventMessage CONTAINS "io.github.ispaure.logisticsmobile"']
     with (logs / 'ios-system.log').open('w') as output:
-        subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=60, check=False)
+        try:
+            subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=60, check=False)
+        except subprocess.TimeoutExpired:
+            output.write('\nSimulator log collection timed out.\n')
     # This diagnostic replay never counts as a passing test. Native constructor
     # failures can write directly to fd 2 before Python's OS logging exists.
     try:

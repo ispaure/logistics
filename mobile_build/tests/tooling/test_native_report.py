@@ -79,6 +79,27 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                 ui_tools.cleanup_owned_ios_device(lease, client=client)
             client.remove.assert_not_called()
 
+    def test_owned_boot_timeout_preserves_phase_output_and_cleanup_identity(self):
+        client = Mock()
+        client.devices.return_value = {'devices': {'com.apple.CoreSimulator.SimRuntime.iOS-27-1': [
+            dict(udid='profile', name='iPhone Duo', state='Shutdown', isAvailable=True,
+                 deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.iPhone-Duo')]}}
+        client.create.return_value = 'owned-timeout'
+        client.boot.side_effect = subprocess.TimeoutExpired(
+            ['xcrun', 'simctl', 'bootstatus'], 180, output=b'Waiting on Data Migration', stderr=None)
+        with TemporaryDirectory() as directory:
+            lease = Path(directory) / 'lease.json'
+            with self.assertRaises(subprocess.TimeoutExpired):
+                ui_tools.owned_ios_device(lease, client=client, sdk='27.1', duo=True)
+            self.assertEqual(json.loads(lease.read_text())['device'], 'owned-timeout')
+            evidence = json.loads(lease.with_name('ios-native-ui-boot-timeout.json').read_text())
+            self.assertEqual(evidence['stdout'], 'Waiting on Data Migration')
+            self.assertEqual(evidence['stderr'], '')
+            self.assertEqual(evidence['timeout'], 180)
+            client.matching.return_value = None
+            ui_tools.cleanup_owned_ios_device(lease, client=client)
+            self.assertTrue(json.loads(lease.read_text())['removed'])
+
     def test_shared_test_app_is_reused_and_wrong_or_missing_builds_fail_before_launch(self):
         import os
         from unittest.mock import patch
@@ -352,6 +373,35 @@ runpy.run_path(sys.argv[0], run_name='__main__')
                 self.assertEqual(events[0], ('capture', 'failed-ipad', 123))
                 self.assertEqual(events[1][1][3], 'failed-ipad')
                 self.assertIn('failed-ipad', events[2][1])
+            finally:
+                os.chdir(previous)
+
+    def test_unresponsive_simulator_does_not_suppress_host_diagnostics(self):
+        import os
+        from unittest.mock import patch
+        with TemporaryDirectory() as directory:
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                Path('logs').mkdir()
+                Path('logs/ios-native-ui-owned.json').write_text(json.dumps(dict(device='boot-stalled')))
+                commands = []
+                def run(command, **kwargs):
+                    commands.append(command)
+                    if 'spawn' in command or 'launch' in command:
+                        raise subprocess.TimeoutExpired(command, 60)
+                    if command[0] == 'ps':
+                        return SimpleNamespace(stdout='123 1 S 0 2048 Simulator\n', stderr='')
+                    kwargs['stdout'].write('host evidence\n')
+                    return SimpleNamespace(returncode=0)
+                with patch.object(ui_tools.subprocess, 'run', side_effect=run), \
+                        patch.object(ui_tools.Path, 'home', return_value=Path(directory)):
+                    ui_tools.ios_diagnostics()
+                self.assertIn('timed out', Path('logs/ios-system.log').read_text())
+                self.assertIn('timed out', Path('logs/ios-launch.result').read_text())
+                for name in ('host-memory.txt', 'host-vm.txt', 'host-webkit-processes.txt'):
+                    self.assertTrue((Path('logs') / name).read_text())
+                self.assertEqual(commands[0][3], 'boot-stalled')
             finally:
                 os.chdir(previous)
 
