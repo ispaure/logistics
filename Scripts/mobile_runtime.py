@@ -70,6 +70,14 @@ def runtime_wheels(cache, *, download=False):
     return folder
 
 
+
+def host_interpreter(cache):
+    """Resolve the executable after a build, including macOS's python.exe name."""
+    build = Path(cache) / 'cross-build/build'
+    return next((path for path in (build / 'python.exe', build / 'python')
+                 if path.is_file() and os.access(path, os.X_OK)), None)
+
+
 def prepare(cache, result):
     pin = json.loads(Path(__file__).with_name('mobile_runtime_tools.json').read_text())['cpython']
     cache.parent.mkdir(parents=True,exist_ok=True)
@@ -77,18 +85,17 @@ def prepare(cache, result):
         source(cache,pin)
         runtime_wheels(cache, download=True)
         target=pin['android_target']
-        host=cache/'cross-build/build/python.exe'
-        if not host.exists():host=cache/'cross-build/build/python'
+        host=host_interpreter(cache)
         library=cache/'cross-build'/target/'prefix/lib/libpython3.14.so'
         record=cache/'prepared-manager.json'
         if record.exists():
             saved=json.loads(record.read_text())
-            if saved['revision']==pin['revision'] and host.exists() and library.exists() and saved['host_sha256']==checksum(host) and saved['library_sha256']==checksum(library):
+            if saved['revision']==pin['revision'] and host is not None and library.is_file() and saved['host_sha256']==checksum(host) and saved['library_sha256']==checksum(library):
                 result.parent.mkdir(parents=True,exist_ok=True)
                 result.write_text(json.dumps(dict(saved,reused=True),indent=2)+'\n')
                 return
             raise ValueError('Prepared runtime artifacts changed; inspect the cache before rebuilding.')
-        if not host.exists() or not library.exists():
+        if host is None or not library.is_file():
             previous=dict(os.environ)
             try:
                 sdk=subprocess.check_output(['xcrun','--sdk','macosx','--show-sdk-path'],text=True).strip()
@@ -102,7 +109,10 @@ def prepare(cache, result):
             finally:
                 os.environ.clear();os.environ.update(previous)
             command([sys.executable,'Android/android.py','build',pin['android_target']],cache,1800)
-        version=subprocess.check_output([str(host),'-c','import platform;print(platform.python_version())'],text=True).strip()
+        host=host_interpreter(cache)
+        if host is None:
+            raise RuntimeError('Pinned CPython build produced no executable host interpreter.')
+        version=subprocess.check_output([str(host),'-c','import platform;print(platform.python_version())'],text=True,timeout=30).strip()
         if version!=pin['version']:raise ValueError('Pinned CPython host version mismatch.')
         record.write_text(json.dumps(dict(revision=pin['revision'],version=version,target=target,
             host_sha256=checksum(host),library_sha256=checksum(library),archive_sha256=pin['sha256'],status='prepared'),indent=2)+'\n')
