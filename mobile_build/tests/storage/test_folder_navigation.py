@@ -31,6 +31,9 @@ class FolderStackTests(TestCase):
             self.navigation[self.host.destinations.index(destination)].viewControllers.append(controller)
             return SimpleNamespace(controller=controller)
         self.host.adapter = SimpleNamespace(navigation=self.navigation, push=push,
+            navigation_for=lambda destination: self.navigation[self.host.destinations.index(destination)],
+            destination_for_navigation=lambda nav: self.host.destinations[self.navigation.index(nav)],
+            route_depth=lambda nav: len(nav.viewControllers) - 1,
             containers=[(None, nav.viewControllers[0]) for nav in self.navigation], release_pane=Mock())
         self.view = toga.Box()
         self.header = toga.Box(children=[toga.Button('Up')])
@@ -280,6 +283,9 @@ class ShowInFolderTests(TestCase):
             navigation[host.destinations.index(destination)].viewControllers.append(controller)
             return SimpleNamespace(controller=controller)
         host.adapter = SimpleNamespace(navigation=navigation, push=push,
+            navigation_for=lambda destination: navigation[host.destinations.index(destination)],
+            destination_for_navigation=lambda nav: host.destinations[navigation.index(nav)],
+            route_depth=lambda nav: len(nav.viewControllers) - 1,
             containers=[(None, nav.viewControllers[0]) for nav in navigation], release_pane=Mock())
         provider = CollectionFiles(app.private_root)
         browser = FileBrowser()

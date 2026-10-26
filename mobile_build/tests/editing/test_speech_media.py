@@ -189,7 +189,10 @@ class SpeechPrivacyIntegrationTests(unittest.TestCase):
                 self.assertTrue(media.closed)
                 self.assertFalse(panel.session.text or panel.session.words)
                 owner.markdown_speech.close()
-        self.app.loop.run_until_complete(exercise())
+        import toga
+        with patch('features.text_editor.mobile.provider_markdown.markdown_webview',
+                   side_effect=lambda *, private, **options: toga.WebView(**options)):
+            self.app.loop.run_until_complete(exercise())
 
     def test_late_dom_read_cannot_start_session_speech_after_lock(self):
         import json

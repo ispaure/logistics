@@ -200,6 +200,7 @@ class HubDocumentTests(unittest.TestCase):
         form = app.body.children[0].content
         form.name_input.value = 'My notes'
         app.loop.run_until_complete(form.create_button.on_press())
+        app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         owner = app.private_sessions.active
         self.assertEqual(owner.crypt_reader.name, 'My notes.txt')
@@ -787,6 +788,7 @@ class HubDocumentTests(unittest.TestCase):
         form.type_selector.value = 'Markdown (.md)'
         form.type_selector.value = 'Plain text (.txt)'
         app.loop.run_until_complete(form.create_button.on_press())
+        app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Notes.txt')
         self.assertEqual(app.private_sessions.active.crypt_text.value, '')
@@ -801,6 +803,7 @@ class HubDocumentTests(unittest.TestCase):
         form.name_input.value = 'Trip.markdown'
         form.type_selector.value = 'Markdown (.md)'
         app.loop.run_until_complete(form.create_button.on_press())
+        app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Trip.markdown')
         self.assertEqual(app.private_sessions.active.crypt_text.value, '')

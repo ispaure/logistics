@@ -86,7 +86,7 @@ class ReopenSourceTests(IsolatedAsyncioTestCase):
             path.write_text('Welcome')
             use_shared_local(private, documents)
             self.addCleanup(_shared_local_roots.pop, private, None)
-            app = SimpleNamespace(private_root=private, open_crypt=AsyncMock(return_value=True))
+            app = SimpleNamespace(private_root=private, show_cloud=Mock(), open_crypt=AsyncMock(return_value=True))
             old = '/var/mobile/Containers/Data/Application/OLD-CONTAINER/Documents/Welcome to Local.txt'
             self.assertTrue(await reopen_file(app, dict(type='local', path=old)))
             copies = app.open_crypt.await_args.kwargs['copies']
@@ -141,7 +141,7 @@ class ReopenSourceTests(IsolatedAsyncioTestCase):
 
     async def test_local_text_reopens_with_original_provider_for_source_saves(self):
         with TemporaryDirectory() as directory:
-            app = SimpleNamespace(open_crypt=AsyncMock(return_value=True))
+            app = SimpleNamespace(show_cloud=Mock(), open_crypt=AsyncMock(return_value=True))
             path = Path(directory) / 'notes.md'
             path.write_text('# Original')
             self.assertTrue(await reopen_file(app, dict(type='local', path=str(path))))
@@ -150,6 +150,9 @@ class ReopenSourceTests(IsolatedAsyncioTestCase):
             self.assertEqual(values['key'], path.name)
 
     async def test_local_pdf_reopens_from_original_path(self):
-        app = SimpleNamespace(open_download=AsyncMock(return_value=True))
-        self.assertTrue(await reopen_file(app, dict(type='local', path='/files/report.pdf')))
-        app.open_download.assert_awaited_once_with(path=Path('/files/report.pdf'))
+        with TemporaryDirectory() as directory:
+            app = SimpleNamespace(open_download=AsyncMock(return_value=True))
+            path = Path(directory) / 'report.pdf'
+            path.write_bytes(b'%PDF-1.4')
+            self.assertTrue(await reopen_file(app, dict(type='local', path=str(path))))
+            app.open_download.assert_awaited_once_with(path=path, destination=None)
