@@ -14,14 +14,16 @@ def native_state(view):
             return state
         native = impl.native
         if state['backend'].startswith('toga_iOS.'):
+            from commonUtils.ui.native.keyboard import native_value
             state['loading'] = bool(native.isLoading())
-            state['window'] = native.window is not None
+            state['window'] = native_value(native.window) is not None
             chain = []
             node = native
             while node is not None and len(chain) < 12:
-                chain.append(dict(hidden=bool(node.isHidden()), alpha=float(node.alpha),
-                    width=float(node.bounds.size.width), height=float(node.bounds.size.height)))
-                node = node.superview
+                bounds = native_value(node.bounds)
+                chain.append(dict(hidden=bool(node.isHidden()), alpha=float(native_value(node.alpha)),
+                    width=float(bounds.size.width), height=float(bounds.size.height)))
+                node = native_value(node.superview)
             state['ancestors'] = chain
         elif state['backend'].startswith('toga_android.'):
             state.update(attached=bool(native.isAttachedToWindow()), visibility=int(native.getVisibility()),

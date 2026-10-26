@@ -21,6 +21,9 @@ class DocumentWorkspaceProbe(NotebookProbe):
         await exercise_notebooks(app)
         report['cases'].append('native_notebooks')
         await exercise_documents(app, report['cases'])
+        from .web_checks import native_state
+        report['managed_webview'] = native_state(app.preview)
+        assert 'diagnostic_error' not in report['managed_webview'], report['managed_webview']
 
     async def check(self, app):
         report = dict(success=False, cases=[])
