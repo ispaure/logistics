@@ -149,7 +149,17 @@ async def exercise_documents(app, passed):
     with patch.object(app.preview, 'set_content', wraps=app.preview.set_content) as reload:
         app.show_preview()
         reload.assert_not_called()
-    await wait_for_text(app.preview, 'Native preview')
+    try:
+        await wait_for_text(app.preview, 'Native preview')
+    except RuntimeError:
+        # Preserve the original failure. Fresh synthetic sibling views tell us
+        # whether this instance or the host's WebKit process startup is stuck.
+        from .preview_diagnostics import diagnose_preview
+        try:
+            await diagnose_preview(app, app.preview)
+        except Exception as diagnostic_error:
+            print('LOGISTICS_PREVIEW_DIAGNOSTIC_ERROR=' + str(diagnostic_error), flush=True)
+        raise
     original_preview = app.preview
     a_session = app.editor_view.session.id
     app.new_document()

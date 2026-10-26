@@ -90,6 +90,11 @@ def simulator_report(device, started_ns, *, diagnostics=None):
             source = path.with_name('logistics-native-ui-' + name) if name != 'cached.json' else path
             if source.is_file() and source.stat().st_mtime_ns >= started_ns:
                 shutil.copyfile(source, target)
+        target = diagnostics / 'ios-preview-diagnostics.json'
+        target.unlink(missing_ok=True)
+        source = path.with_name('logistics-preview-diagnostics.json')
+        if source.is_file() and source.stat().st_mtime_ns >= started_ns:
+            shutil.copyfile(source, target)
     if not path.is_file() or path.stat().st_mtime_ns < started_ns:
         return None
     raw = path.read_text()
