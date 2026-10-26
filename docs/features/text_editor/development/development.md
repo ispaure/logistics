@@ -13,7 +13,8 @@ Reopening a file focuses its existing pane. Disabling the feature removes
 contributions while retaining open documents for re-enablement.
 
 Mobile Markdown preview HTML is published after its view is attached to the owning
-window, including the initial presentation.
+window, including the initial presentation. Its self-contained HTML uses a blank
+base URL instead of a synthetic HTTPS site; navigation remains blocked.
 
 ## Architecture
 
