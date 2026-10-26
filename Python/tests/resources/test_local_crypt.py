@@ -843,7 +843,19 @@ class LocalCryptTests(QtTestCase):
                     self.wait_until(lambda: not view.open_operation.busy)
                     show.assert_not_called()
                 context = view.provider.context
-                view.close()
+                # Closing may be deferred while an owned preview/listing worker
+                # retires. Exercise that state deliberately instead of racing
+                # the machine's completion speed and assuming close succeeded.
+                pending, cancelled = Event(), Event()
+                pending.set()
+                view.file_browser.operations.own(pending, busy=pending.is_set, cancel=cancelled.set)
+                try:
+                    self.assertFalse(view.close())
+                    self.assertTrue(cancelled.is_set())
+                    self.assertIsNotNone(session.credentials(context))
+                finally:
+                    pending.clear()
+                self.wait_until(view.close, message='Private browser did not finish cooperative close')
                 self.assertIsNone(session.credentials(context))
 
     def test_specific_push_preview_matches_execution_and_reports_lost_mapping(self):
