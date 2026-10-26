@@ -78,7 +78,7 @@ class EpubController:
         if task is None or task.done():
             self._epub_flush = asyncio.Event()
             self._epub_location_task = self.loop.create_task(self.save_epub_location())
-        if action in {"next", "previous"} and not self.book_busy:
+        if action in {"next", "previous"}:
             self.loop.create_task(
                 self.epub_boundary(index, 1 if action == "next" else -1)
             )

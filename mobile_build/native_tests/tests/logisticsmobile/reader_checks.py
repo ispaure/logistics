@@ -223,9 +223,23 @@ async def exercise_library(app, fixtures, epub, comic, passed):
     await wait_for_text(app.reader_manager().active.book_content.children[0], 'Native EPUB first')
     original_reader = app.reader_manager().active.book_content.children[0]
     deadline = asyncio.get_running_loop().time() + 15
-    while not await original_reader.evaluate_javascript('Boolean(window.reader)'):
-        assert asyncio.get_running_loop().time() < deadline, 'EPUB navigation bridge did not initialize'
+    pagination = None
+    while True:
+        raw = await original_reader.evaluate_javascript(
+            'JSON.stringify(window.reader ? window.reader.pagination() : null)')
+        pagination = json.loads(raw) if raw else None
+        bridge = original_reader._chapter_bridge
+        # The initial position acknowledgement proves the native navigation
+        # channel is live and the tiny first chapter fits its settled viewport.
+        # A JavaScript object can exist before its first animation-frame event.
+        if (pagination and bridge.at_end
+                and pagination['count'] <= pagination['columns']):
+            break
+        assert asyncio.get_running_loop().time() < deadline, (
+            'EPUB navigation did not acknowledge initial pagination', pagination,
+            bridge.ready, bridge.at_end)
         await asyncio.sleep(.05)
+    print('LOGISTICS_EPUB_READY=' + json.dumps(pagination), flush=True)
     await wait_for_reader(app.reader_manager().active)
     await app.next_book_page()
     assert app.reader_manager().active.book_content.children[0] is original_reader
