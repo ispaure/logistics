@@ -210,6 +210,22 @@ def exercise_sampled_apple_decode(app):
 
 
 async def exercise_library(app, fixtures, epub, comic, passed):
+    """Retain native load-policy evidence without changing navigation decisions."""
+    from features.books.mobile.presentation import ChapterBridge
+    from unittest.mock import patch
+    original = ChapterBridge.navigation
+    def navigation(bridge, widget, url, **kwargs):
+        decision = original(bridge, widget, url, **kwargs)
+        print('LOGISTICS_EPUB_NAVIGATION=' + json.dumps(dict(
+            url=url, root=bridge.root, closed=bridge.closed,
+            ready=bridge.ready, decision=decision,
+            allowed_url=getattr(bridge.view._impl, '_allowed_url', None))), flush=True)
+        return decision
+    with patch.object(ChapterBridge, 'navigation', navigation):
+        return await _exercise_library(app, fixtures, epub, comic, passed)
+
+
+async def _exercise_library(app, fixtures, epub, comic, passed):
     from .navigation_checks import wait_for_transitions
     await wait_for_transitions(app)
     exercise_sampled_apple_decode(app)
@@ -250,7 +266,13 @@ async def exercise_library(app, fixtures, epub, comic, passed):
             active_host=bool(owner.active_host), session_open=owner.session.id in owner.workspace.sessions,
             busy=owner.book_busy, position=owner.book_record['position'],
             pending_done=None if pending is None else pending.done(),
-            status=owner.book_status.text)
+            status=owner.book_status.text,
+            displayed_is_original=owner.book_content.children[0] is original_reader,
+            retained_is_original=owner.epub_view is original_reader,
+            bridge_root=owner.epub_view._chapter_bridge.root,
+            bridge_ready=owner.epub_view._chapter_bridge.ready,
+            allowed_url=getattr(owner.epub_view._impl, '_allowed_url', None),
+            native_url=owner.epub_view.url)
     def trace(reader, epoch, index, action, offset):
         state = event_state(reader, epoch, index, action)
         events.append(state)
