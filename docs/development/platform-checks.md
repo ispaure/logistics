@@ -72,6 +72,13 @@ bits run only on POSIX hosts; archive and password checks run on every platform.
 
 ## Stalled tests
 
+The native UI fixture keeps bounded navigation and WebKit load-event traces.
+On iOS, passive start/commit/failure/process-termination callbacks supplement
+the application policy trace; toolkit-preapproved initial URLs can bypass the
+application handler. Timeout snapshots include the pending preapproved URL,
+estimated progress, attachment and ancestor visibility. The fixture inherits
+Toga's policy and finish handlers and retains the normal render deadline.
+
 The suite runner reports the active test and completed count every 60 seconds.
 Native crashes also produce Python tracebacks. The outer platform runner allows
 ten minutes for the shared suite and fifteen for Logistics and uploads its logs; macOS jobs also collect native Python

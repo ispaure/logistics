@@ -15,6 +15,9 @@ def native_state(view):
         native = impl.native
         if state['backend'].startswith('toga_iOS.'):
             from commonUtils.ui.native.keyboard import native_value
+            state['load_events'] = getattr(view, '_native_load_trace', [])
+            state['allowed_url'] = getattr(impl, '_allowed_url', None)
+            state['progress'] = float(native_value(native.estimatedProgress))
             state['loading'] = bool(native.isLoading())
             state['window'] = native_value(native.window) is not None
             chain = []

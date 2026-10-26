@@ -1,11 +1,28 @@
 """Native WebView probes require real text after provisional navigation settles."""
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from mobile_build.native_tests.tests.logisticsmobile.web_checks import wait_for_text
+from mobile_build.native_tests.tests.logisticsmobile.navigation_trace import native_event
 
 
 class NativeWebCheckTests(unittest.IsolatedAsyncioTestCase):
+    def test_native_load_events_are_bounded_and_capture_preapproved_navigation(self):
+        view = SimpleNamespace(_impl=SimpleNamespace(_allowed_url='https://logistics.invalid/test/'))
+        native = SimpleNamespace(interface=view, URL='https://logistics.invalid/test/',
+            isLoading=lambda: True, estimatedProgress=.1)
+        with patch('builtins.print'):
+            for _ in range(40):
+                native_event(native, 'start')
+            native_event(native, 'provisional-error', 'synthetic load failure')
+        self.assertEqual(len(view._native_load_trace), 32)
+        event = view._native_load_trace[-1]
+        self.assertEqual(event['allowed_url'], view._impl._allowed_url)
+        self.assertEqual(event['error'], 'synthetic load failure')
+        self.assertEqual(event['phase'], 'provisional-error')
+        self.assertTrue(event['loading'])
+        self.assertEqual(event['progress'], .1)
+
     async def test_transient_webkit_error_and_stale_content_do_not_count_as_cleared(self):
         view = SimpleNamespace(url='https://logistics.invalid/closed/', evaluate_javascript=AsyncMock(side_effect=[
             RuntimeError('WKErrorDomain Code=5 unsupported type'), 'Nested Markdown note', 'Document closed.']))
