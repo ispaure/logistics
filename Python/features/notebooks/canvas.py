@@ -25,9 +25,12 @@ def editor_html(state, bridge, *, console_bridge=False, desktop=False, mobile=Fa
 let state=__STATE__,bridge=__BRIDGE__,seq=0,queue=[],busy=false,mode='ink',
     active=null,points=[],selected=new Set(),start=null,last=null,pan=null,pageSwipe=false,
     pendingInk=null,continuousInk=false,deferredUpdate=null;
-const $=id=>document.getElementById(id),canvas=$('paper'),ctx=canvas.getContext('2d',{desynchronized:true});
+const $=id=>document.getElementById(id),canvas=$('paper'),ctx=canvas.getContext('2d',{desynchronized:!state.native_pen});
 const canvasPixelLimit=__CANVAS_PIXEL_LIMIT__;
 """
+    # Android's native pen already provides the direct display preview. Its
+    # canonical WebView canvas must use normal compositor synchronization rather
+    # than a second low-latency front buffer competing with the vendor renderer.
     # The page, live preview and mask each own a backing bitmap. CSS zoom must
     # not multiply all three without bound. Desktop gets a larger screen budget;
     # neither budget changes native ink geometry or exported document quality.

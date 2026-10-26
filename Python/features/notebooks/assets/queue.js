@@ -56,3 +56,24 @@ window.notebookStrokeUpdate = function(stroke, status) {
   $('status').textContent = queue.length ? 'Saving…' : status;
   pump();
 };
+window.notebookInkUpdate = function(patch) {
+  if (active !== null) {
+    deferredUpdate = () => window.notebookInkUpdate(patch);
+    return
+  }
+  const strokes = new Map(state.strokes.map(s => [s.id, s]));
+  for (const stroke of patch.strokes) strokes.set(stroke.id, stroke);
+  state.strokes = patch.order.map(id => strokes.get(id));
+  state.undo = patch.undo;
+  state.redo = patch.redo;
+  state.save_status = patch.save_status;
+  pendingErase = null;
+  pendingInk = null;
+  busy = false;
+  queue.shift();
+  $('undo').disabled = !state.undo;
+  $('redo').disabled = !state.redo;
+  $('status').textContent = queue.length ? 'Saving…' : patch.save_status;
+  draw();
+  pump()
+};

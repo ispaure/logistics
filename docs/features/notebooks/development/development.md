@@ -76,7 +76,11 @@ simulator and QA app were removed after collecting evidence.
 `ink.py` preserves original v6 frames, using the vendored **rmscene 0.8.0** codec
 for known native blocks. It retains imported point dynamics and native tool/color
 IDs, emits native scene lines for new ink, and tombstones erased strokes while
-retaining sequence links. New authors avoid existing author IDs. Scene order uses
+retaining sequence links. Saves reuse a registered byte-sized author ID and
+allocate counters beyond all serialized identities, timestamps and references,
+including tombstones. Earlier builds allocated an author on every save and
+failed once the author number reached 256; existing saturated pages remain
+editable without rewriting their original frames or author table. Scene order uses
 CRDT order rather than physical frame order. Edited known stroke frames retain
 extra fields; untouched frames are byte-preserved. Unknown objects, visible typed
 text, highlights and text anchoring disable ink editing for the page. Empty root
@@ -543,10 +547,60 @@ ordinary rendering and the existing DU refresh policy.
 The bridge disables SDK-generated Android input. Native begin locks the current
 canvas gesture; the completed point list then enters `logisticsNativePen` once
 and follows the existing brush and ordered save queue. Pressure is normalized
-using the device-reported maximum. Raw input pauses during reconciliation;
-the raw preview retires after WebView's visual-state callback, then the current
-configuration resumes. Notebook tools, pressure-derived widths and binary saving
-remain under Logistics' control.
+using the device-reported maximum. At pen-up, both raw input and raw rendering
+pause before the canonical JavaScript stroke is submitted. The SDK's raw drawing
+mode suppresses normal screen refreshes, so it must be released before requesting
+normal WebView presentation. WebView's visual-state
+callback means content is ready for its next draw; on hardware-accelerated
+Android 10+, the bridge invalidates the view and waits for the frame-commit
+callback before resuming the current native configuration. Older/software views
+use the following animation/posted UI turn. A generation token retires stale
+callbacks after scene changes, focus loss and close. Notebook tools,
+pressure-derived widths and binary saving remain under Logistics' control.
+
+The October 26 physical drawing trace recorded 321–1,501 ms handoffs followed by
+foreground low-memory kills after four native contacts. Available system memory
+fell from 2.81 GiB to 0.76 GiB, while the logged app native heap stayed around
+35 MB. Those figures do not identify a particular driver allocation; they
+motivate releasing the vendor display path before WebView painting. The native
+regression checks the immediate pen-up state (reader and renderer both off)
+alongside pressure, rapid-contact fallback and archive readback. Synthetic raw
+callbacks alone do not validate the hardware compositor memory behavior.
+
+Releasing the native renderer earlier alone did not resolve the foreground
+memory kill (build 202610333). Runtime inspection confirmed that the canonical
+canvas also requested and received Chromium's `desynchronized: true` context.
+Android native-pen views now request `desynchronized: false`, leaving the direct
+preview to the Boox SDK and normal frame synchronization to WebView. Desktop
+and iOS retain their existing context request. All-brush pixel checks exercise
+the Android synchronized context as well as the other presentation modes.
+
+Build 202610334's physical drawing/toolbar-erasing trial retained its process
+through at least 26 completed native contacts, with no low-memory kills and a
+sampled available-memory minimum of 1.76 GiB. This distinguishes the competing
+canvas path from the earlier native lifecycle issue; it does not identify a
+specific internal driver allocation. Slow handoffs (up to 6.15 seconds in that
+trial) remain a separate responsiveness limitation.
+
+That trial also reached an independent save failure at `CrdtId(256, 256)`:
+the native preview appeared, but rollback removed the unsaved stroke. Regression
+coverage now saves 300 successive strokes, reopens and exports them, exercises
+Undo/Redo and adds a layer, as well as drawing into a legacy page with all 255
+author IDs occupied and a deleted item's higher counter reference.
+
+Android input ownership is selected at pen-down and retained through pen-up.
+If a contact starts while the previous native stroke is reconciling, it uses
+ordinary input throughout; the raw reader stays paused until that contact ends.
+Resuming the reader midway through such a contact previously backed up only its
+tail, triggered the missing-callback guard and permanently closed native preview
+for that editor. The October 26 NoteAir5C device log captured that failure.
+The device regression forces 24 contacts across this boundary, checks one saved
+stroke per contact, then checks a native callback stroke after an idle gap and
+reopens all 30 fixture strokes. Native input remained enabled with no rejected
+samples. The broader probe subsequently failed its independent window-inset
+assertion (49-pixel top offset with the status bar hidden); its later navigation
+and remount checks were not reached. This is synthetic lifecycle/save evidence,
+not a measurement of physical pen-to-display latency.
 
 The local notebook WebView exposes only a bounded numeric preview configuration
 interface, with no filesystem access. Mobile chrome publishes canvas/viewport
@@ -770,6 +824,22 @@ errors still replace the full state. An acknowledgement arriving during a pen
 stroke waits until pen-up/cancellation, preserving live mask geometry. Queued
 strokes are included when zoom or another operation redraws the page.
 
+Successful mobile eraser acknowledgements carry stroke ordering and only new or
+changed stroke payloads. Unchanged ink stays in JavaScript; error/history and
+structural responses still replace the full state. Partial erasing starts its
+incremental bitmap preview without first replaying the page. The eraser's exact
+swept geometry removes repeated/collinear path samples, caches bounded spatial
+candidate lists and stops testing a segment once a sweep completely removes it.
+A tangent quadratic root splits its test intervals rather than classifying an
+entire segment as erased. Endpoint reuse avoids allocating fresh coordinate
+lists for untouched portions; stored ink remains immutable for Undo.
+
+The renderer reuses exact ribbon `Path2D` geometry keyed by immutable point arrays
+in a `WeakMap`. It retains the brush's original arcs, widths and winding; it
+does not simplify saved samples. Replacing a scene or stroke releases the cache
+with its old point arrays. Brush/eraser pixel checks cover all nine brushes in
+desktop and both mobile scheduling modes.
+
 Close acknowledges the canvas command before requesting the shared save/discard
 guard, so cancelling cannot leave JavaScript permanently busy. iOS uses the host
 reader's native X in place of Back and hides the duplicate canvas close button.
@@ -795,7 +865,7 @@ Source reloads explicitly adopt the revision observed by the recovery repository
 notebook objects carry no persistence revision attributes.
 
 `protocol.py` defines model versus host command names, action shape validation,
-document status and full-state/stroke acknowledgement serialization. Ordered bridge
+document status and full-state/stroke/eraser acknowledgement serialization. Ordered bridge
 envelopes are consumed before action validation so invalid actions receive an error
 acknowledgement through the host. A full response handles structural edits, errors
 and cancellation; a stroke delta avoids replaying the whole page. Close releases
@@ -1034,6 +1104,32 @@ were inspected. In the run using PixelCopy, app PSS ranged from 290 to 724 MB
 (including graphics allocations), with at least 1.3 GiB system memory available.
 This is a repeatable stress regression, not a certification of unlimited session
 length or every device memory condition.
+
+The `notebook-load` Android probe targets a single dense page with 32 native
+callback strokes of 4,096 samples each, scrolling, toolbar partial erasing at
+fit and 200% zoom, Undo and archive readback. Eight additional timed contacts
+fluctuate pressure to exercise repeated vendor width changes. It records eraser,
+checkpoint and JavaScript redraw costs separately and stops at a sampled
+1.2-GiB available-memory floor. Use the same driver with `--probe notebook-load
+--device SERIAL`; evidence and temporary-app cleanup follow the soak lifecycle.
+These callbacks do not exercise physical digitizer/display rendering.
+
+The October 26 follow-up user trial produced foreground `LOW_MEMORY` exits for
+both main app and WebView. A larger synthetic dense-page baseline did not
+reproduce that exit; it did expose eraser contacts taking 26.5 and 18.1 seconds.
+Native handoff diagnostics now log long visual reconciliations and periodic
+available-memory/heap counters without document content, to help investigate
+the remaining physical-session slowdown and memory failure. Passing synthetic
+checks do not establish that those reported failures are resolved.
+
+With eraser deltas, bounded candidate reuse and exact ribbon-path reuse, the
+same dense-page contacts took 6.42 and 2.06 seconds. The latter contact did not
+intersect stored ink; it remains a distinct no-op workload. The run retained
+all 139,264 points after Undo and eight additional fluctuating-pressure contacts,
+with 8,320 native width submissions and at least 1.72 GiB available system
+memory. These figures include synthetic contact delivery and checkpoint work;
+they do not describe ordinary-page optical eraser latency. All 59 notebook model
+tests and the all-brush desktop/mobile pixel checks passed.
 
 The October 26 recovery follow-up passed native macOS and Windows Qt WebEngine,
 Fedora 43 X11/software graphics, and iPhone/iPad WKWebView simulators. Each run

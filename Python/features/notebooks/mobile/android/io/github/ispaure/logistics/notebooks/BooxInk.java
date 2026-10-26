@@ -33,11 +33,15 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
     private Rect bounds = new Rect();
     private final ArrayList<Rect> exclusions = new ArrayList<>();
     private String configuration = "";
-    private boolean reconciling, failed;
+    private boolean reconciling, failed, ordinaryContact;
     private int previewTool = -1, previewColor, previewStyle = -1;
     private final BooxBallpoint ballpoint = new BooxBallpoint();
     private float pageScale, baseWidth;
     private boolean widthUnavailable;
+    private long reconciliationStarted, lastReconciliationMs, longestReconciliationMs;
+    private int handoffGeneration;
+    private Runnable frameCommit;
+    private ViewTreeObserver commitObserver;
 
     private static int styleFor(int tool) {
         // Ballpoint uses the plain native path with our pressure-derived widths;
@@ -169,10 +173,18 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
         catch (RuntimeException | LinkageError failure) { fail(failure); }
     }
 
+    /** Do not restart the raw reader halfway through an ordinary contact. */
+    public void ordinaryContact(boolean drawing) {
+        if (ordinaryContact == drawing) return;
+        ordinaryContact = drawing;
+        try { apply(); }
+        catch (RuntimeException | LinkageError failure) { fail(failure); }
+    }
+
     private void apply() {
         if (!closed && helper != null) {
             helper.setRawDrawingEnabled(enabled && !(previewTool == 15 && widthUnavailable)
-                && !reconciling && view.hasWindowFocus() && view.isAttachedToWindow());
+                && !reconciling && !ordinaryContact && view.hasWindowFocus() && view.isAttachedToWindow());
             if (enabled && previewTool == 15 && !active) {
                 ballpoint.reset();
                 helper.setStrokeWidth(BooxBallpoint.width(0, baseWidth) * pageScale);
@@ -181,6 +193,11 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
     }
 
     private void cancel() {
+        handoffGeneration++;
+        if (android.os.Build.VERSION.SDK_INT >= 29 && frameCommit != null
+                && commitObserver != null && commitObserver.isAlive())
+            commitObserver.unregisterFrameCommitCallback(frameCommit);
+        frameCommit = null; commitObserver = null; reconciling = false;
         if (active) view.evaluateJavascript("window.logisticsNativePen&&window.logisticsNativePen('cancel',999,[[0,0,0]]," + view.getWidth() + "," + view.getHeight() + ")", null);
         active = false; live.clear(); completed = null; ballpoint.reset();
     }
@@ -194,7 +211,7 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
 
     private final RawInputCallback callback = new RawInputCallback() {
         @Override public void onBeginRawDrawing(boolean shortcut, TouchPoint point) {
-            if (!enabled || closed || reconciling || !contains(point.getX(), point.getY())) return;
+            if (!enabled || closed || reconciling || ordinaryContact || !contains(point.getX(), point.getY())) return;
             begins++; active = true; live.clear(); completed = null;
             live.add(point);
             preview(point);
@@ -242,18 +259,29 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
                 + "window.logisticsNativePen('up',999,[p[p.length-1]],w,h)})()";
             active = false;
             reconciling = true;
-            // Stop raw input while Chromium catches up. Leave its preview visible
-            // until the canonical canvas has a frame, then retire the overlay.
-            helper.setRawInputReaderEnable(false);
+            final int generation = ++handoffGeneration;
+            reconciliationStarted = android.os.SystemClock.uptimeMillis();
+            // Raw rendering suppresses normal screen refreshes on Boox. Release
+            // BOTH renderer and reader before Chromium paints the canonical
+            // stroke; otherwise its visual callback is requested while normal
+            // screen refreshes are still suppressed by scribble mode.
+            helper.setRawDrawingEnabled(false);
             view.evaluateJavascript(js, ignored -> view.postVisualStateCallback(ends,
                 new WebView.VisualStateCallback() {
                     @Override public void onComplete(long id) {
-                        if (closed) return;
+                        if (closed || generation != handoffGeneration) return;
                         try {
-                            helper.setRawDrawingRenderEnabled(false);
+                            // VisualStateCallback only makes content ready for
+                            // the NEXT draw. Keep scribble mode off until that
+                            // frame is actually submitted to the swap chain.
+                            if (android.os.Build.VERSION.SDK_INT >= 29 && view.isHardwareAccelerated()) {
+                                commitObserver = view.getViewTreeObserver();
+                                frameCommit = () -> view.post(() -> finishHandoff(generation));
+                                commitObserver.registerFrameCommitCallback(frameCommit);
+                            } else {
+                                view.postOnAnimation(() -> view.post(() -> finishHandoff(generation)));
+                            }
                             view.invalidate();
-                            reconciling = false;
-                            apply();
                         } catch (RuntimeException | LinkageError failure) { fail(failure); }
                     }
                 }));
@@ -264,6 +292,29 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
         @Override public void onRawErasingTouchPointMoveReceived(TouchPoint point) {}
         @Override public void onRawErasingTouchPointListReceived(TouchPointList points) {}
     };
+
+    private void finishHandoff(int generation) {
+        if (closed || generation != handoffGeneration) return;
+        frameCommit = null; commitObserver = null;
+        try {
+            reconciling = false;
+            apply();
+            lastReconciliationMs = android.os.SystemClock.uptimeMillis() - reconciliationStarted;
+            longestReconciliationMs = Math.max(longestReconciliationMs, lastReconciliationMs);
+            if (lastReconciliationMs >= 250 || ends % 8 == 0) {
+                try {
+                    android.app.ActivityManager.MemoryInfo memory = new android.app.ActivityManager.MemoryInfo();
+                    android.app.ActivityManager manager = (android.app.ActivityManager) view.getContext()
+                        .getSystemService(android.content.Context.ACTIVITY_SERVICE);
+                    if (manager != null) manager.getMemoryInfo(memory);
+                    Log.i("LogisticsBooxInk", "Handoff " + status() + " available_bytes=" + memory.availMem
+                        + " native_heap_bytes=" + android.os.Debug.getNativeHeapAllocatedSize());
+                } catch (RuntimeException diagnosticFailure) {
+                    Log.d("LogisticsBooxInk", "Handoff memory diagnostic unavailable", diagnosticFailure);
+                }
+            }
+        } catch (RuntimeException | LinkageError failure) { fail(failure); }
+    }
 
     private void preview(TouchPoint point) {
         if (previewTool != 15 || !active || widthUnavailable) return;
@@ -294,6 +345,9 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
             out.put("preview_tool", previewTool); out.put("preview_style", previewStyle);
             out.put("preview_argb", Integer.toUnsignedLong(previewColor));
             out.put("width_updates", ballpoint.submissions());
+            out.put("enabled", enabled); out.put("reconciling", reconciling);
+            out.put("ordinary_contact", ordinaryContact);
+            out.put("handoff_ms", lastReconciliationMs); out.put("longest_handoff_ms", longestReconciliationMs);
         } catch (Exception failure) { throw new IllegalStateException(failure); }
         return out.toString();
     }

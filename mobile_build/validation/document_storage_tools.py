@@ -193,7 +193,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 result_name='document-storage-result.json', device=None):
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
-    memory_probe = entry_point.endswith(('.notebook_memory_probe', '.notebook_soak_probe'))
+    memory_probe = entry_point.endswith(('.notebook_memory_probe', '.notebook_soak_probe', '.notebook_load_probe'))
     project = workspace / 'build/logisticsmobile/android/gradle'
     shutil.copytree(REPO / 'mobile_build/build/logisticsmobile/android/gradle', project,
                     ignore=shutil.ignore_patterns('build', '.gradle', '__pycache__'))
@@ -350,7 +350,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('storage', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPad'), default='iPhone')
     parser.add_argument('--increase-contrast', action='store_true')
@@ -359,8 +359,8 @@ def main():
         parser.error('--device requires Android.')
     if args.probe == 'notebook-input' and args.platform != 'android':
         parser.error('The notebook-input native probe requires Android.')
-    if args.probe == 'notebook-soak' and (args.platform != 'android' or not args.device):
-        parser.error('The notebook-soak probe requires an explicit physical Android --device.')
+    if args.probe in ('notebook-soak', 'notebook-load') and (args.platform != 'android' or not args.device):
+        parser.error('The notebook soak/load probe requires an explicit physical Android --device.')
     if args.probe == 'recent-deletion' and args.platform != 'android':
         parser.error('The recent-deletion native probe requires Android.')
     if args.probe in ('boox-raw-ink', 'boox-preview') and (args.platform != 'android' or not args.device):
@@ -421,6 +421,9 @@ def main():
             if args.probe == 'notebook-soak':
                 profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                     entry_point='tests.logisticsmobile.notebook_soak_probe', result_name='notebook-memory-result.json')
+            if args.probe == 'notebook-load':
+                profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                    entry_point='tests.logisticsmobile.notebook_load_probe', result_name='notebook-memory-result.json')
             if args.probe == 'boox-raw-ink':
                 profile = dict(bundle='io.github.ispaure.logisticsrawinkqa',
                     entry_point='tests.logisticsmobile.boox_raw_ink_probe', result_name='boox-raw-ink-result.json')

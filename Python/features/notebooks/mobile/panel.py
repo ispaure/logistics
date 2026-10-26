@@ -13,7 +13,7 @@ from ..notebook import Notebook, MAX_ARCHIVE
 from ..recovery import Repository
 from ..editor import Editor
 from ..bridge import Bridge, RetiredCanvas
-from ..protocol import document_state, stroke_script, update_script, validate_action
+from ..protocol import document_state, stroke_script, ink_patch_script, update_script, validate_action
 from .surface import mobile_editor_html
 
 
@@ -180,6 +180,7 @@ class NotebookPanel:
         self.busy = True
         error = ''
         web, editor = self.web, self.editor
+        previous_ink = list(editor.notebook.page(editor.index).strokes) if action.get('op') == 'erase' else None
         try:
             op = validate_action(action)
             if op == 'page-previews':
@@ -272,6 +273,8 @@ class NotebookPanel:
             try:
                 if action['op'] == 'stroke' and not error:
                     script = stroke_script(editor, self.document)
+                elif action['op'] == 'erase' and not error:
+                    script = ink_patch_script(editor, self.document, previous_ink)
                 else:
                     script = update_script(self.state(), error)
                 await web.evaluate_javascript(script)

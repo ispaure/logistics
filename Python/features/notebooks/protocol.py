@@ -81,3 +81,13 @@ def stroke_script(editor, document):
     stroke = editor.notebook.page(editor.index).strokes[-1].payload()
     return ('window.notebookStrokeUpdate(' + json.dumps(stroke, allow_nan=False)
             + ',' + json.dumps(save_status(document)) + ')')
+
+
+def ink_patch_script(editor, document, previous):
+    """Send changed ink and ordering after erasing, without resending the page."""
+    strokes = editor.notebook.page(editor.index).strokes
+    old = {s.id: s for s in previous}
+    patch = dict(order=[s.id for s in strokes],
+                 strokes=[s.payload() for s in strokes if old.get(s.id) is not s],
+                 undo=bool(editor.undo), redo=bool(editor.redo), save_status=save_status(document))
+    return 'window.notebookInkUpdate(' + json.dumps(patch, allow_nan=False) + ')'

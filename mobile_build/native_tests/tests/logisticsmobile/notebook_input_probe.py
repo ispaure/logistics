@@ -173,6 +173,8 @@ class NotebookInputProbe(NotebookProbe):
                             break
                         await asyncio.sleep(.05)
                     await idle()
+                    assert jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks').handoffReleased(), (
+                        'Native render/input remained active during canonical handoff')
                     ink = panel.editor.notebook.page(0).strokes
                     assert len(ink) == count + 1, (len(ink), count)
                     stroke = ink[-1]
@@ -189,6 +191,33 @@ class NotebookInputProbe(NotebookProbe):
                     ballpoints.append(dict(tool=tool, color=color, widths=[p[3] for p in stroke.points],
                         saved_widths=[p[3] for p in after.points], pressure=[p[2] for p in stroke.points], native=status))
                 result['native_ballpoint_handoff'] = ballpoints
+                # Repeatedly force the rapid-contact race: down during visual
+                # reconciliation, then the previous frame completes before up.
+                # This previously backed up only the tail and closed native ink.
+                count = len(panel.editor.notebook.page(0).strokes)
+                for contact in range(24):
+                    jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks').reconciliationContact(
+                        panel.pen_input, native, x, y + contact * 2)
+                    await asyncio.sleep(.12)
+                    status = json.loads(panel.pen_input.nativeStatus())
+                    assert not status['closed'] and status['input'] and not status['error'], status
+                await idle()
+                ink = panel.editor.notebook.page(0).strokes
+                assert len(ink) == count + 24, (len(ink), count)
+                assert all(len(s.points) == 3 for s in ink[-24:]), [len(s.points) for s in ink[-24:]]
+                # Prove raw callbacks still save after the burst and an idle gap.
+                await asyncio.sleep(1)
+                jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks').rawBallpoint(
+                    panel.pen_input, native, x, y)
+                await asyncio.sleep(.5)
+                await idle()
+                assert len(panel.editor.notebook.page(0).strokes) == count + 25
+                status = json.loads(panel.pen_input.nativeStatus())
+                assert status['input'] and not status['closed'] and not status['error'], status
+                reopened = Notebook.read(panel.editor.notebook.to_bytes())
+                assert len(reopened.page(0).strokes) == count + 25
+                result['rapid_contact_handoff'] = dict(ordinary_contacts=24, duplicates=False,
+                    raw_after_idle=True, reopened_strokes=len(reopened.page(0).strokes), native=status)
             location = jarray(jint)(2)
             native.getLocationOnScreen(location)
             decor = app._impl.native.getWindow().getDecorView()

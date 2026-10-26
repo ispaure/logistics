@@ -64,7 +64,10 @@ canvas.onpointerdown = e => {
   erasePreviewCount = 0;
   if (mode === 'erase') {
     selected = new Set(eraserKind === 'whole' ? hits(start) : []);
-    draw()
+    // Partial erasing edits the existing bitmap incrementally. Replaying every
+    // stored stroke here delays the first eraser sample on dense pages.
+    if (eraserKind === 'whole') draw();
+    else previewErase(points)
   } else if (mode === 'select') {
     let ids = hits(start);
     selected = new Set(ids.slice(-1));

@@ -9,7 +9,7 @@ from urllib.parse import quote
 from features.notebooks.bridge import Bridge, RetiredCanvas
 from features.notebooks.editor import Editor
 from features.notebooks.notebook import Notebook
-from features.notebooks.protocol import document_state, stroke_script, update_script
+from features.notebooks.protocol import document_state, stroke_script, ink_patch_script, update_script
 from features.notebooks.recovery import Repository
 from features.notebooks.storage import NotebookDocument
 
@@ -85,6 +85,23 @@ class NotebookProtocolTests(unittest.TestCase):
         self.assertEqual(document_state(editor, document)['save_status'], 'Unsaved changes')
         self.assertIn('Unsaved changes', stroke_script(editor, document))
         self.assertNotIn('strokes', stroke_script(editor, document))
+
+    def test_erase_patch_retains_order_and_omits_unchanged_points(self):
+        editor = Editor(Notebook.new())
+        for y in (30, 90):
+            editor.apply({'op': 'stroke', 'points': [[20, y, .5], [200, y, .5]]})
+        previous = list(editor.notebook.page(0).strokes)
+        editor.apply({'op': 'erase', 'points': [[100, 20, .5], [100, 40, .5]], 'radius': 8})
+        script = ink_patch_script(editor, None, previous)
+        patch = json.loads(script[len('window.notebookInkUpdate('):-1])
+        self.assertNotIn(previous[1].id, [s['id'] for s in patch['strokes']])
+        restored = {s.id: s.payload() for s in previous}
+        restored.update({s['id']: s for s in patch['strokes']})
+        self.assertEqual([restored[key] for key in patch['order']], editor.state()['strokes'])
+        previous = list(editor.notebook.page(0).strokes)
+        editor.apply({'op': 'erase', 'points': [[500, 500, .5]], 'radius': 8})
+        script = ink_patch_script(editor, None, previous)
+        self.assertEqual(json.loads(script[len('window.notebookInkUpdate('):-1])['strokes'], [])
 
     def test_retired_canvas_stops_an_awaited_continuation(self):
         async def run():

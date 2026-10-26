@@ -17,6 +17,7 @@ public final class NotebookInput implements View.OnTouchListener,
     private final java.util.ArrayList<MotionEvent> backup = new java.util.ArrayList<>();
     private int rawBegins;
     private boolean rawObserved;
+    private boolean rawContact;
     public String nativeStatus() { return ink == null ? "{\"available\":false}" : ink.status(); }
     public void disableNativePreview() { if (ink != null) ink.close(); }
     private final Runnable verifyRaw = this::verifyRaw;
@@ -51,17 +52,29 @@ public final class NotebookInput implements View.OnTouchListener,
             view.removeCallbacks(verifyRaw);
             verifyRaw.run();
         }
-        if (ink != null && ink.owns(event)) {
+        if (action == MotionEvent.ACTION_DOWN) {
+            // Choose once for the whole contact. Reconciliation can finish
+            // between down and up; switching then would back up only the tail
+            // and falsely diagnose a reader which never received this down.
+            rawContact = ink != null && ink.owns(event);
+            if (ink != null) ink.ordinaryContact(!rawContact
+                && event.getToolType(event.getActionIndex()) == MotionEvent.TOOL_TYPE_STYLUS);
+        }
+        if (rawContact) {
             if (backup.isEmpty()) { rawBegins = ink.begins(); rawObserved = ink.drawing(); }
             rawObserved |= ink.drawing();
             if (backup.size() < 10000) backup.add(MotionEvent.obtain(event));
-            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 view.postDelayed(verifyRaw, 100);
+                rawContact = false;
+            }
             return false;
         }
         if (!backup.isEmpty() && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL))
             view.postDelayed(verifyRaw, 100);
         ordinary(event);
+        if (ink != null && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL))
+            ink.ordinaryContact(false);
         return false;
     }
 
@@ -129,14 +142,20 @@ public final class NotebookInput implements View.OnTouchListener,
     }
 
     @Override public void onWindowFocusChanged(boolean focused) {
-        if (!focused) { cancel(); view.removeCallbacks(verifyRaw); clearBackup(); }
+        if (!focused) {
+            cancel(); rawContact = false;
+            if (ink != null) ink.ordinaryContact(false);
+            view.removeCallbacks(verifyRaw); clearBackup();
+        }
     }
     @Override public void onViewAttachedToWindow(View ignored) {
         view.getViewTreeObserver().removeOnWindowFocusChangeListener(this);
         view.getViewTreeObserver().addOnWindowFocusChangeListener(this);
     }
     @Override public void onViewDetachedFromWindow(View ignored) {
-        cancel(); view.removeCallbacks(verifyRaw); clearBackup();
+        cancel(); rawContact = false;
+        if (ink != null) ink.ordinaryContact(false);
+        view.removeCallbacks(verifyRaw); clearBackup();
     }
 
     public void close() {

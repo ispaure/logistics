@@ -46,6 +46,52 @@ class NotebookTests(unittest.TestCase):
     def draw(self, tool=17, color=0):
         self.editor.apply(dict(op='stroke', points=[[10,20,.25],[50,60,.8]],tool=tool,color=color))
 
+    def test_more_than_255_checkpoints_keep_saving_and_undoing(self):
+        for _ in range(300):
+            self.draw()
+        self.assertEqual(len(self.repo.open(self.key).page(0).strokes), 300)
+        self.editor.apply(dict(op='undo'))
+        self.editor.apply(dict(op='redo'))
+        self.editor.apply(dict(op='add-layer', name='After 300 saves'))
+        self.draw()
+        reopened = Notebook.read(self.book.to_bytes()).page(0)
+        self.assertFalse(reopened.warning)
+        self.assertEqual(len(reopened.strokes), 301)
+        self.assertEqual(len({s.id for s in reopened.strokes}), 301)
+        authors = [b for b in reopened._blocks if isinstance(b, ss.AuthorIdsBlock)]
+        self.assertEqual(len(authors), 1)
+
+    def test_saturated_legacy_author_table_can_draw_erase_and_add_layer(self):
+        from features.notebooks.ink import encode
+        from features.notebooks._vendor.rmscene.tagged_block_common import CrdtId
+        from features.notebooks._vendor.rmscene.crdt_sequence import CrdtSequenceItem
+        ink = InkPage.blank()
+        # Old releases consumed one author per save. Even an erased item's
+        # right reference must reserve its counter when allocating new IDs.
+        raw = ink.raw + encode([
+            ss.AuthorIdsBlock({n: uuid4() for n in range(2, 256)}),
+            ss.SceneLineItemBlock(CrdtId(0, 11), CrdtSequenceItem(
+                CrdtId(255, 1000), CrdtId(0, 0), CrdtId(255, 9000), 1, None)),
+        ])[len(HEADER_V6):]
+        ink = InkPage.read(raw)
+        self.assertFalse(ink.warning)
+        before = list(ink._frames)
+        ink.add([[10, 20, .5]])
+        ink = InkPage.read(ink.to_bytes())
+        self.assertFalse(ink.warning)
+        identity = ink.strokes[0].id
+        self.assertGreater(int(identity.split(':')[1]), 9000)
+        self.assertEqual(ink._frames[:len(before)], before)
+        ink.strokes.clear()
+        ink = InkPage.read(ink.to_bytes())
+        ink.add_layer('After exhaustion')
+        ink.add([[30, 40, .5]])
+        reopened = InkPage.read(ink.to_bytes())
+        self.assertFalse(reopened.warning)
+        self.assertEqual(len(reopened.strokes), 1)
+        self.assertNotEqual(reopened.strokes[0].id, identity)
+        self.assertEqual(len(reopened.layers), 2)
+
     def test_partial_eraser_splits_sparse_stroke_and_roundtrips_order_and_style(self):
         from features.notebooks.ink import Stroke
         ink = self.book.page(0)

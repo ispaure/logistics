@@ -121,13 +121,22 @@ function grain(target, rgb, mechanical) {
   return pattern;
 }
 
+// Stored point arrays are immutable; full updates replace them. Weak ownership
+// lets retired page/undo geometry go with its model instead of retaining a
+// second document. Reuse the exact path rather than rebuilding every arc on
+// each eraser acknowledgement, scroll/layout redraw or selection update.
+const ribbonCache = new WeakMap();
 function ribbon(target, p) {
-  target.beginPath();
+  if (ribbonCache.has(p)) {
+    target.fill(ribbonCache.get(p));
+    return
+  }
+  const path = new Path2D();
   for (let i = 0; i < p.length; i++) {
     let b = p[i],
       r = b[3] / 2;
-    target.moveTo(b[0] + r, b[1]);
-    target.arc(b[0], b[1], r, 0, Math.PI * 2);
+    path.moveTo(b[0] + r, b[1]);
+    path.arc(b[0], b[1], r, 0, Math.PI * 2);
     if (!i) continue;
     let a = p[i - 1],
       dx = b[0] - a[0],
@@ -138,13 +147,14 @@ function ribbon(target, p) {
       ny = dx / length,
       ar = a[3] / 2;
     // Consistent winding makes the overlapping segment outlines one filled mask.
-    target.moveTo(a[0] + nx * ar, a[1] + ny * ar);
-    target.lineTo(a[0] - nx * ar, a[1] - ny * ar);
-    target.lineTo(b[0] - nx * r, b[1] - ny * r);
-    target.lineTo(b[0] + nx * r, b[1] + ny * r);
-    target.closePath();
+    path.moveTo(a[0] + nx * ar, a[1] + ny * ar);
+    path.lineTo(a[0] - nx * ar, a[1] - ny * ar);
+    path.lineTo(b[0] - nx * r, b[1] - ny * r);
+    path.lineTo(b[0] + nx * r, b[1] + ny * r);
+    path.closePath();
   }
-  target.fill();
+  ribbonCache.set(p, path);
+  target.fill(path);
 }
 
 function geometry(target, p, family, beforePoint = null) {

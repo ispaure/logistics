@@ -1,6 +1,6 @@
 """Native v6 ink adapter. Original frames survive unless their stroke is edited."""
 from copy import deepcopy
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from io import BytesIO
 import math
 import struct
@@ -37,6 +37,38 @@ def frames(data):
         result.append(data[offset:offset + size])
         offset += size
     return result
+
+
+def allocation(blocks):
+    """Reuse a registered byte-sized author and advance beyond all native IDs.
+
+    References and tombstones reserve IDs too. Point arrays and group children
+    contain no additional serialized IDs (children have their own scene blocks).
+    """
+    authors = {key for b in blocks if isinstance(b, ss.AuthorIdsBlock)
+               for key in b.author_uuids if 0 < key < 256}
+    author = max(authors, default=1)
+    maximum = 0
+
+    def visit(value):
+        nonlocal maximum
+        if isinstance(value, CrdtId):
+            maximum = max(maximum, value.part2)
+        elif is_dataclass(value):
+            for member in fields(value):
+                if member.name not in ('points', 'children'):
+                    visit(getattr(value, member.name))
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                visit(key)
+                visit(item)
+        elif isinstance(value, (tuple, list)):
+            for item in value:
+                visit(item)
+
+    visit(blocks)
+    additions = [] if authors else [ss.AuthorIdsBlock({author: uuid4()})]
+    return author, maximum + 1, additions
 
 
 @dataclass
@@ -193,14 +225,13 @@ class InkPage:
             raise ValueError('Choose a layer name of 1–80 characters; at most 32 layers are supported.')
         raw = self.to_bytes()
         page = InkPage.read(raw)
-        authors = {key for b in page._blocks if isinstance(b, ss.AuthorIdsBlock) for key in b.author_uuids}
-        author = next(n for n in range(1, 65536) if n not in authors)
-        node, item, end, root = CrdtId(author, 1), CrdtId(author, 2), CrdtId(0, 0), CrdtId(0, 1)
+        author, first, extra = allocation(page._blocks)
+        node, item, end, root = CrdtId(author, first), CrdtId(author, first + 1), CrdtId(0, 0), CrdtId(0, 1)
         tree = SceneTree()
         ss.build_tree(tree, page._blocks)
         order = tree.root.children.keys()
-        extra = [ss.AuthorIdsBlock({author: uuid4()}), ss.SceneTreeBlock(node, end, True, root),
-                 ss.TreeNodeBlock(si.Group(node, label=LwwValue(CrdtId(author, 3), name.strip()))),
+        extra += [ss.SceneTreeBlock(node, end, True, root),
+                 ss.TreeNodeBlock(si.Group(node, label=LwwValue(CrdtId(author, first + 2), name.strip()))),
                  ss.SceneGroupItemBlock(root, CrdtSequenceItem(item, order[-1] if order else end, end, 0, node))]
         updated = InkPage.read(raw + encode(extra)[len(HEADER_V6):])
         self.__dict__.update(updated.__dict__)
@@ -211,6 +242,7 @@ class InkPage:
         current = {s.id: s for s in self.strokes}
         if {s.id: s.payload() for s in self.strokes} == self._baseline and self.layers == self._original_layers:
             return self.raw
+        author, first, additions = allocation(self._blocks)
         chunks = []
         for raw, block in zip(self._frames, self._blocks):
             if isinstance(block, ss.SceneLineItemBlock):
@@ -240,19 +272,14 @@ class InkPage:
                 layer = next((row for row in self.layers if row[0] == key), None)
                 if layer and (layer[1] != block.group.label.value or layer[2] != block.group.visible.value):
                     block = deepcopy(block)
-                    stamp = CrdtId(block.group.visible.timestamp.part1, max(block.group.visible.timestamp.part2, block.group.label.timestamp.part2) + 1)
+                    stamp = CrdtId(author, first)
+                    first += 1
                     block.group.label = LwwValue(stamp, layer[1])
                     block.group.visible = LwwValue(stamp, layer[2])
                     raw = encode([block])[len(HEADER_V6):]
             chunks.append(raw)
-        # Allocate a fresh author, avoiding every existing author number.
-        authors = {key for b in self._blocks if isinstance(b, ss.AuthorIdsBlock) for key in b.author_uuids}
-        author = next((n for n in range(1, 65536) if n not in authors), None)
-        if author is None:
-            raise ValueError('Ink author space exhausted.')
-        additions = [ss.AuthorIdsBlock({author: uuid4()})]
         identities = {s.id: (CrdtId(*map(int, s.id.split(':'))) if s.id in self._baseline
-                              else CrdtId(author, index + 1))
+                              else CrdtId(author, first + index))
                       for index, s in enumerate(self.strokes)}
         right_neighbors, next_by_layer = {}, {}
         for stroke in reversed(self.strokes):
