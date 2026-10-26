@@ -66,6 +66,13 @@ workspace manifest. Desktop chooser/save/recovery and mobile dropdown/rename tes
 cover these adapters; shared model/choice/CodeInput tests live in commonUtils.
 Host checks use offscreen Qt and Toga's dummy backend, not physical devices.
 
+The native document acceptance checks retain pre-existing persistent workspace
+identities, including open notebooks, while verifying restoration of both text
+drafts. The disposable `document_storage_tools` runner's `--probe documents`
+executes notebook acceptance followed by these document checks on iOS or Android;
+it also covers native Back, preferences, close decisions and Markdown ownership.
+The runner removes its QA app and owned device after collecting results.
+
 ## Notes document ownership
 
 The desktop Notes library clears `viewer.document_state` when retiring a private

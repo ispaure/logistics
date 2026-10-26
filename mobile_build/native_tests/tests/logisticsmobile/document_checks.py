@@ -36,6 +36,10 @@ async def exercise_loading_layout(app):
 async def exercise_documents(app, passed):
     await exercise_loading_layout(app)
     await exercise_loading_progress(app)
+    # Earlier native notebook checks intentionally leave a restorable session.
+    # Preserve every existing persistent identity as well as both text drafts.
+    expected_sessions = {key: session.identity for key, session in app.workspace.sessions.items()
+                         if not session.transient}
     app.show_documents(destination='documents')
     app.editor.value = 'Draft survives actual Back'
     import toga
@@ -72,10 +76,12 @@ async def exercise_documents(app, passed):
     app.save_document()
     assert app.store.open(app.current.id).text == '# Native preview\n'
     passed.append('native_documents')
-    a, a_editor = app.current.id, app.editor
+    a, a_editor, a_session = app.current.id, app.editor, app.editor_view.session
     app.editor.value = '# Native preview\nA draft\n'
     app.new_document()
     b, b_session = app.current.id, app.editor_view.session.id
+    expected_sessions.update({session.id: session.identity for session in
+                              (a_session, app.editor_view.session)})
     app.name.value = 'Other.md'
     # This case edits the native source control, not the formatted DOM. Keep
     # that surface active so an inactive close cannot replace its draft with
@@ -91,7 +97,9 @@ async def exercise_documents(app, passed):
     assert app.editor.value == '# Native preview\nA draft\n'
     from mobile.workspace import Workspace
     restored = Workspace(app.private_root)
-    assert len(restored.sessions) == 2
+    assert not restored.error, restored.error
+    identities = {key: session.identity for key, session in restored.sessions.items()}
+    assert identities == expected_sessions, (identities, expected_sessions)
     assert app.store.open(b).text == 'B draft\n'
     from unittest.mock import AsyncMock, patch
     # Exercise the session decision and await it before continuing native UI

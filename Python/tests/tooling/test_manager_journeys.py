@@ -106,9 +106,18 @@ class JourneyAdapterTests(unittest.TestCase):
         def command(phase):
             if phase.effect == 'upload':
                 target = self.root / (phase.id + '.json')
-                return (sys.executable, '-c', 'import json,time;from pathlib import Path;'
-                    + 'start=time.time();time.sleep(.3);'
-                    + f'Path({str(target)!r}).write_text(json.dumps([start,time.time()]))')
+                # Both uploads must enter before either can finish. A fixed
+                # sleep can miss overlap when a busy host delays child startup.
+                ready = [self.root / (name + '.ready') for name in ('firebase', 'testflight')]
+                own = ready[0 if phase.id == 'firebase.upload' else 1]
+                script = ('import json,time\nfrom pathlib import Path\n'
+                    'start=time.time()\ndeadline=time.monotonic()+30\n'
+                    f'Path({str(own)!r}).touch()\n'
+                    f'while not all(Path(p).exists() for p in {[str(p) for p in ready]!r}):\n'
+                    '    assert time.monotonic()<deadline, "Uploads did not execute concurrently"\n'
+                    '    time.sleep(.01)\n'
+                    f'Path({str(target)!r}).write_text(json.dumps([start,time.time()]))')
+                return (sys.executable, '-c', script)
             return (sys.executable, '-c', 'pass')
         phases = tuple(replace(p, argv=command(p), artifacts=(), artifact_types={}, environment={}) for p in plan.phases)
         plan = replace(plan, phases=phases)
