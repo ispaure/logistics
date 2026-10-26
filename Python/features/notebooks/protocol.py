@@ -45,6 +45,8 @@ def validate_action(action):
 def save_status(document):
     if document is None:
         return 'Saved on this device. Export a copy to share.'
+    if document.deletion_started:
+        return 'Deleted; retry Delete to close or use Save As'
     if document.dirty:
         return 'Unsaved changes'
     if document.resource is None and document.recovery is None:
@@ -55,9 +57,9 @@ def save_status(document):
 def document_state(editor, document):
     state = editor.state()
     state.update(save_status=save_status(document),
-                 read_only=bool(document and not document.writable),
+                 read_only=bool(document and (not document.writable or document.deletion_started)),
                  has_source=bool(document and document.resource))
-    state['can_delete'] = document is not None and not state['read_only']
+    state['can_delete'] = document is not None and (document.writable or document.deletion_started)
     return state
 
 

@@ -231,6 +231,16 @@ class NotebookPanel:
                 if hasattr(self, 'session') and op == 'rename':
                     self.session.title = editor.notebook.name
                     self.app.refresh_document_list()
+        except asyncio.CancelledError:
+            if (canvas is self.bridge and canvas.active and not self.closed
+                    and self.app.active_host and self.web is web):
+                try:
+                    message = ('Deletion interrupted. Retry Delete or use Save As.'
+                               if action.get('op') == 'delete-file' else 'Action interrupted. Your notebook remains open.')
+                    await asyncio.shield(web.evaluate_javascript(update_script(self.state(), message)))
+                except (Exception, asyncio.CancelledError):
+                    pass
+            raise
         except RetiredCanvas:
             return
         except Exception as failure:

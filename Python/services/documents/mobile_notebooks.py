@@ -272,36 +272,84 @@ async def delete_notebook(panel):
     from features.text_editor.mobile.document_dialogs import DocumentDialog
     from mobile.resource_imports import ResourceImports
     app, document, session = panel.app, panel.document, panel.session
-    if panel.closed or not app.active_host:
+    if panel.closed or not app.active_host or getattr(panel, '_delete_pending', False):
         return False
-    if document is None or not document.writable:
+    if document is None or (not document.writable and not document.deletion_started):
         raise ValueError('This notebook cannot be deleted.')
+    resource = document.resource
+    binding = (resource.path, resource.revision) if resource is not None else None
+    session_resource = session.resource
+    def current():
+        return (not panel.closed and app.active_host and panel.document is document
+                and panel.session is session and session.resource == session_resource
+                and document.resource is resource
+                and (resource is None or (resource.path, resource.revision) == binding))
     def single_window():
         if len(app.scene_manager.owners.hosts) > 1:
             raise ValueError('Close other app windows before deleting a document.')
     single_window()
     warning = ('Permanently delete this notebook and its recovery draft? '
                'Unsaved changes will also be removed.')
-    if document.resource is not None:
-        warning += (' The file was already deleted; retry recovery cleanup.' if document.source_deleted
-                    else ' The file will be deleted from its folder.')
+    if document.deletion_started:
+        warning = 'Notebook data was already deleted in part or in full. Retry the remaining cleanup?'
+    elif resource is not None:
+        warning += ' The file will be deleted from its folder.'
+    canvas = getattr(panel, 'bridge', None)
     was_busy, panel.busy = panel.busy, True
+    panel._delete_pending = True
     try:
         choice = await app.main_window.dialog(DocumentDialog(
             'Delete ' + document.book.name + '?', warning, delete=True))
-        if (choice != 'delete' or panel.closed or panel.document is not document
-                or panel.session is not session or not app.active_host):
+        if choice != 'delete' or not current():
             return False
         single_window()
-        await asyncio.to_thread(document.delete)
-        if panel.closed or panel.document is not document or panel.session is not session:
+        worker = asyncio.create_task(asyncio.to_thread(document.delete))
+        try:
+            await asyncio.shield(worker)
+        except asyncio.CancelledError:
+            # A thread cannot be cancelled. Keep ownership until it settles so
+            # a new canvas command or lock cannot overlap destructive work.
+            while not worker.done():
+                try:
+                    await asyncio.shield(worker)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            if not worker.cancelled():
+                worker.exception()  # observe a failure without hiding cancellation
+            raise
+        if not current():
             return False
-        app.recent_documents.forget('notebook', session.resource)
+        app.recent_documents.forget('notebook', session_resource)
         imports = getattr(app, 'resource_imports', None) or ResourceImports(app.private_root)
-        imports.forget('notebook', session.resource)
+        imports.forget('notebook', session_resource)
         panel.busy = False
-        app.__dict__.setdefault('_reader_returns', {})[session.id] = ('home', None, False)
-        app.__dict__.setdefault('_reader_closing', set()).add(session.id)
-        return app.close_session(session.id, choice='discard')
+        returns = app.__dict__.setdefault('_reader_returns', {})
+        closing = app.__dict__.setdefault('_reader_closing', set())
+        had_return, previous_return = session.id in returns, returns.get(session.id)
+        was_closing = session.id in closing
+        returns[session.id] = ('home', None, False)
+        closing.add(session.id)
+        try:
+            try:
+                closed = app.close_session(session.id, choice='discard')
+            except Exception as error:
+                raise OSError('Notebook data was deleted, but session cleanup failed. Retry Delete or use Save As.') from error
+            if not closed:
+                raise OSError('Notebook data was deleted, but the editor could not close. Retry Delete or use Save As.')
+            return True
+        finally:
+            if session.id in app.workspace.sessions:
+                if had_return:
+                    returns[session.id] = previous_return
+                else:
+                    returns.pop(session.id, None)
+                if not was_closing:
+                    closing.discard(session.id)
     finally:
-        panel.busy = False if panel.closed else was_busy
+        panel._delete_pending = False
+        if panel.closed:
+            panel.busy = False
+        elif getattr(panel, 'bridge', None) is canvas:
+            panel.busy = was_busy

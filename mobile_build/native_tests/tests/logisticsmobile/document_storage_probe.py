@@ -234,10 +234,44 @@ class DocumentStorageProbe(LogisticsMobile):
             assert physical.exists() and not document.source_deleted and document.dirty
             report['cases'].append(label + '-notebook-delete-stale-revision')
             resource.read()
-            assert await panel.delete_document()
-            assert not physical.exists() and panel.closed and session.id not in self.workspace.sessions
+            replacement = physical.read_bytes()
+            forget = self.recent_documents.forget
+            def unavailable(*args):
+                raise OSError('Controlled history cleanup failure')
+            self.recent_documents.forget = unavailable
+            try:
+                try:
+                    await panel.delete_document()
+                except OSError as error:
+                    assert 'Controlled history' in str(error)
+                else:
+                    raise AssertionError('History cleanup failure was not reported')
+            finally:
+                self.recent_documents.forget = forget
+            assert document.source_deleted and not physical.exists() and not panel.closed
+            state = panel.state()
+            assert state['read_only'] and state['can_delete'] and 'Deleted' in state['save_status']
+            try:
+                document.save()
+            except ValueError as error:
+                assert 'deleted' in str(error)
+            else:
+                raise AssertionError('Deleted document could still save')
+            marker = None
             if document.recovery is not None:
-                assert not (document.recovery.root / document.key).exists()
+                recovery = document.recovery.root / document.key
+                assert document.recovery_deleted and not recovery.exists()
+                recovery.mkdir()
+                marker = recovery / 'replacement-owner'
+                marker.write_bytes(b'new recovery owner')
+            report['cases'].append(label + '-notebook-delete-partial-failure-readonly')
+            physical.write_bytes(replacement)
+            assert await panel.delete_document()
+            assert panel.closed and session.id not in self.workspace.sessions
+            assert physical.read_bytes() == replacement
+            if marker is not None:
+                assert marker.read_bytes() == b'new recovery owner'
+            report['cases'].append(label + '-notebook-delete-retry-keeps-replacements')
             report['cases'].append(label + '-notebook-delete-source-recovery-session')
         finally:
             self.main_window.dialog = original_dialog

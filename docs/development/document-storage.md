@@ -209,3 +209,21 @@ error. Retrying finishes recovery cleanup without deleting a new file at the old
 path. History/session cleanup follows successful document cleanup, and closing
 uses the host's existing discard path. Focused deletion tests cover cancellation,
 replacement, credential revocation, wrappers/capabilities and cleanup retries.
+
+
+## Deletion retry and cancellation review
+
+A live notebook remembers successful source and recovery deletion separately.
+Cleanup retries skip both completed phases, preserving replacement files and
+recovery records at the old identities. After either phase completes, the draft
+becomes read-only: ordinary Save/checkpoints are refused, while Save As and Delete
+cleanup retry remain available. The canvas reports the deleted state explicitly.
+
+Delete confirmation also retains the source path/revision and session resource
+identity. An in-place move, retarget or baseline change requires another decision.
+Only one deletion may own the panel at a time. Cancelling its task keeps the busy
+reservation until the filesystem worker settles, because thread cancellation
+cannot undo deletion. A still-current canvas receives an interruption response;
+a replacement canvas keeps its own busy state. Failed/refused session closing
+reports that notebook data was already deleted and restores the prior navigation
+intent so closing can be retried safely.
