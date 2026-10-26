@@ -176,6 +176,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 result_name='document-storage-result.json', device=None):
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
+    memory_probe = entry_point.endswith(('.notebook_memory_probe', '.notebook_soak_probe'))
     project = workspace / 'build/logisticsmobile/android/gradle'
     shutil.copytree(REPO / 'mobile_build/build/logisticsmobile/android/gradle', project,
                     ignore=shutil.ignore_patterns('build', '.gradle', '__pycache__'))
@@ -185,7 +186,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     gradle.write_text(re.sub(r'applicationId "[^"]+"', 'applicationId "' + bundle + '"', gradle.read_text()))
     manifest = project / 'app/src/main/AndroidManifest.xml'
     manifest.write_text(manifest.read_text().replace('io.github.ispaure.logisticsmobile', bundle))
-    if entry_point.endswith(('.notebook_input_probe', '.notebook_memory_probe')):
+    if entry_point.endswith('.notebook_input_probe') or memory_probe:
         with gradle.open('a') as stream:
             stream.write('\nandroid.sourceSets.main.java.srcDir(' + json.dumps(str(REPO / 'mobile_build/native_tests/android/notebooks')) + ')\n')
     raw_ink = entry_point.endswith('.boox_raw_ink_probe')
@@ -215,10 +216,10 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
             time.sleep(2)
             emulator.invoke('-s', serial, 'shell', 'pm', 'enable', bundle)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
-        deadline = time.monotonic() + (2400 if hands_on else 900 if raw_ink else 240)
+        deadline = time.monotonic() + (2400 if hands_on else 900 if raw_ink or memory_probe else 240)
         last_stage = None
         while time.monotonic() < deadline:
-            if entry_point.endswith('.notebook_memory_probe'):
+            if memory_probe:
                 progress = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/notebook-memory-progress.json'], env=env, capture_output=True, timeout=15)
                 if progress.returncode == 0 and progress.stdout != last_stage:
@@ -226,6 +227,9 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                     (output / 'memory-progress.json').write_bytes(progress.stdout)
                     try:
                         print('Memory QA: ' + json.dumps(json.loads(progress.stdout)['samples'][-1]), flush=True)
+                        ordinal = len(json.loads(progress.stdout)['samples'])
+                        (output / f'android-memory-{ordinal:02d}.txt').write_text(
+                            emulator.invoke('-s', serial, 'shell', 'dumpsys', 'meminfo', '--package', bundle))
                     except (ValueError, KeyError, IndexError):
                         pass
             if raw_ink or hands_on:
@@ -284,8 +288,9 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                         'run-as', bundle, 'cat', 'cache/notebook-input/' + name], env=env, capture_output=True, timeout=15)
                     if artifact.returncode == 0:
                         (output / name).write_bytes(artifact.stdout)
-            if entry_point.endswith('.notebook_memory_probe'):
-                for name in ('notebook-memory-progress.json', 'notebook-memory.rmdoc', 'notebook-memory.png'):
+            if memory_probe:
+                for name in ('notebook-memory-progress.json', 'notebook-memory.rmdoc', 'notebook-memory.png',
+                             *[f'notebook-soak-{index:02d}.png' for index in range(8)]):
                     artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
                         'run-as', bundle, 'cat', 'cache/' + name], env=env, capture_output=True, timeout=15)
                     if artifact.returncode == 0:
@@ -302,6 +307,11 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
             if report_data.returncode == 0 and report_data.stdout:
                 (output / 'android-result.json').write_bytes(report_data.stdout)
             (output / 'android-logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', '-t', '2000'))
+            try:
+                (output / 'android-exit-info.txt').write_text(emulator.invoke(
+                    '-s', record['serial'], 'shell', 'dumpsys', 'activity', 'exit-info', bundle))
+            except RuntimeError:
+                pass
             emulator.invoke('-s', record['serial'], 'uninstall', bundle)
             if device is not None:
                 remaining = emulator.invoke('-s', device, 'shell', 'pm', 'list', 'packages', 'logistics')
@@ -318,7 +328,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'recent-deletion', 'notebook', 'creation', 'features', 'notebook-input', 'notebook-memory', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('storage', 'recent-deletion', 'notebook', 'creation', 'features', 'notebook-input', 'notebook-memory', 'notebook-soak', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPad'), default='iPhone')
     parser.add_argument('--increase-contrast', action='store_true')
@@ -327,6 +337,8 @@ def main():
         parser.error('--device requires Android.')
     if args.probe == 'notebook-input' and args.platform != 'android':
         parser.error('The notebook-input native probe requires Android.')
+    if args.probe == 'notebook-soak' and (args.platform != 'android' or not args.device):
+        parser.error('The notebook-soak probe requires an explicit physical Android --device.')
     if args.probe == 'recent-deletion' and args.platform != 'android':
         parser.error('The recent-deletion native probe requires Android.')
     if args.probe in ('boox-raw-ink', 'boox-preview') and (args.platform != 'android' or not args.device):
@@ -372,6 +384,9 @@ def main():
             if args.probe == 'notebook-memory':
                 profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                     entry_point='tests.logisticsmobile.notebook_memory_probe', result_name='notebook-memory-result.json')
+            if args.probe == 'notebook-soak':
+                profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                    entry_point='tests.logisticsmobile.notebook_soak_probe', result_name='notebook-memory-result.json')
             if args.probe == 'boox-raw-ink':
                 profile = dict(bundle='io.github.ispaure.logisticsrawinkqa',
                     entry_point='tests.logisticsmobile.boox_raw_ink_probe', result_name='boox-raw-ink-result.json')
