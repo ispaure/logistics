@@ -160,7 +160,14 @@ class ManagerSuiteTests(unittest.TestCase):
             self.assertIn('release-acceptance', rows['prepare-verified-artifact'].dependencies)
             self.assertEqual(rows['reviewed-distribution'].dependencies, ('prepare-verified-artifact',))
             self.assertEqual(rows['reviewed-distribution'].effect, 'upload')
-            self.assertIn('host.mobile-device-session', plan.resources)
+            self.assertNotIn('host.mobile-device-session', plan.resources)
+            device_resource = 'android.device-workspace:' + plan.workspace
+            for name in ('android-native', 'android-runtime'):
+                self.assertEqual(rows[name].resources[device_resource], 1)
+            self.assertFalse(rows['portable-contracts'].resources)
+            self.assertEqual(rows['prepare-verified-artifact'].resources['host.mobile-build'], 1)
+            self.assertEqual(rows['prepare-verified-artifact'].resources['host.signing-keychain'], 1)
+            self.assertEqual(rows['reviewed-distribution'].resources['provider.destination:firebase:Logistics'], 1)
 
     def test_reviewed_ios_forces_required_ipad_coverage(self):
         with TemporaryDirectory() as directory:
