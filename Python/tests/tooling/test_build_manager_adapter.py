@@ -71,7 +71,8 @@ class ManagerAdapterTests(unittest.TestCase):
         for phase in plan.phases:
             self.assertEqual(phase.argv[phase.argv.index('--ref') + 1], 'alpha')
             self.assertEqual(phase.argv[phase.argv.index('--commit') + 1], 'a' * 40)
-        self.assertEqual(plan.effect, 'publish')
+        self.assertEqual(plan.effect, 'dispatch')
+        self.assertTrue(all(phase.effect=='dispatch' for phase in plan.phases))
         with self.assertRaises(ValueError):
             project.github_plan('Test', 'ios', dict(source, dirty=True), root, {}, 'working-tree', '')
 

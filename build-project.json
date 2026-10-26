@@ -417,6 +417,61 @@
         ],
         "description": "Requires complete iPhone, Duo, iPad and runtime gates; pauses before uploading the prepared archive."
       }
+    },
+    "selectable_backends": true
+  },
+  "run_fields": [
+    {
+      "id": "testflight.what_to_test",
+      "label": "What should TestFlight testers try?",
+      "kind": "multiline",
+      "destinations": [
+        "testflight"
+      ],
+      "operations": [
+        "Prepare TestFlight",
+        "Reviewed TestFlight workflow"
+      ],
+      "description": "Notes for this build only. Describe what changed and what to try."
+    },
+    {
+      "id": "testflight.external_group",
+      "label": "TestFlight recipient group",
+      "kind": "text",
+      "destinations": [
+        "testflight"
+      ],
+      "operations": [
+        "Prepare TestFlight",
+        "Reviewed TestFlight workflow"
+      ],
+      "description": "Uses the saved group unless you choose another group for this build."
+    },
+    {
+      "id": "firebase.release_notes",
+      "label": "What should Android testers try?",
+      "kind": "multiline",
+      "destinations": [
+        "firebase"
+      ],
+      "operations": [
+        "Prepare Firebase",
+        "Reviewed Firebase workflow"
+      ],
+      "description": "Release notes for this build only."
+    },
+    {
+      "id": "firebase.group",
+      "label": "Firebase recipient group",
+      "kind": "text",
+      "destinations": [
+        "firebase"
+      ],
+      "operations": [
+        "Prepare Firebase",
+        "Reviewed Firebase workflow"
+      ],
+      "description": "Uses the saved group unless you choose another group for this build."
     }
-  }
+  ]
 }

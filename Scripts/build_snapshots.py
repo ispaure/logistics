@@ -11,6 +11,25 @@ from tempfile import TemporaryDirectory
 from build_manager.locking import workspace_lock
 
 
+# These are private runtime references bound by mobile_plan, never source inputs.
+PRIVATE_RUNTIME_NAMES = ('.venv', '.tools', '.device.json', '.testflight-auth.json', '.android-beta')
+
+
+def exclude_private_runtime_references(snapshot):
+    snapshot = Path(snapshot)
+    excluded = snapshot / '.git/info/exclude'
+    if snapshot.is_symlink() or any(path.is_symlink() for path in (snapshot/'.git',snapshot/'.git/info',excluded)):
+        raise ValueError('Snapshot Git metadata must not be linked.')
+    if not (snapshot/'.git').is_dir():
+        raise ValueError('Snapshot requires owned Git metadata.')
+    rules = ['/' + (Path('mobile_build') / name).as_posix() for name in PRIVATE_RUNTIME_NAMES]
+    current = excluded.read_text() if excluded.is_file() else ''
+    missing = [rule for rule in rules if rule not in current.splitlines()]
+    if missing:
+        with excluded.open('a') as stream:
+            stream.write('\n' + '\n'.join(missing) + '\n')
+
+
 def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args], text=True, timeout=60).strip()
 
@@ -65,6 +84,7 @@ def _materialize(root, destination, revision, *, expected=None):
     if expected is not None and any(before[key] != expected.get(key) for key in ('logistics_commit', 'commonUtils_commit', 'dirty', 'fingerprint')):
         raise ValueError('Source changed after the shared planning capture; prepare a fresh plan.')
     if destination.exists():
+        exclude_private_runtime_references(destination)
         metadata = destination / '.manager-source.json'
         if metadata.is_file():
             saved = json.loads(metadata.read_text())
@@ -114,6 +134,7 @@ def _materialize(root, destination, revision, *, expected=None):
                         shutil.copy2(source, target)
         if identity(root, revision) != before:
             raise RuntimeError('Source changed during snapshot preparation; inspect a fresh plan.')
+        exclude_private_runtime_references(snapshot)
         with (snapshot / '.git/info/exclude').open('a') as stream:
             stream.write('\n.manager-source.json\n')
         (snapshot / '.manager-source.json').write_text(json.dumps(dict(source=before,

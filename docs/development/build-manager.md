@@ -738,3 +738,29 @@ and supplies the same reference. After the locked dependency sync, the platform
 runner verifies and reinstalls this manager into the selected interpreter before
 starting checks. Dependency sync removes packages outside the project lock; an
 installation performed only before sync does not satisfy this requirement.
+
+## Execution locations and inputs for one run
+
+Guided validation offers an execution location beside each platform. Hosted checks
+use a reviewed dispatch effect, independently of release publication; no release
+tag is needed for checks. Committed source is required for GitHub. Native tester
+delivery still requires the owning local validation receipts; a hosted check is
+not substituted for those gates.
+
+Project settings retains tool paths, signing/account references and reusable
+recipient/note defaults. TestFlight “what to test” and group, and Firebase notes
+and group are editable on the run configuration page. The adapter captures these
+values in immutable per-run effective settings and review evidence, without writing
+them back to the saved profile. Unknown overrides and credential material fail.
+
+A blank release identifier uses the captured app version and next available local
+alpha suffix. It creates no tag; publication checks remote availability again.
+Custom identifiers remain available under Advanced options.
+
+Cached source snapshots exclude only the known private mobile runtime references
+through owned Git exclude metadata. These references are not source and cannot
+enter transferred source archives. Snapshot reuse still checks source fingerprints
+and rejects unrelated escaping links; linked Git metadata cannot be rewritten.
+Native Cocoa verification covered short-window navigation, actual hosted plan
+review, captured TestFlight notes, automatic naming and seven passing local checks.
+No live dispatch, upload or publication formed part of that verification.

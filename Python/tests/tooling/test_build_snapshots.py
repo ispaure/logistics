@@ -111,6 +111,32 @@ class SnapshotTests(unittest.TestCase):
         materialize(self.root, destination)
         self.assertEqual((destination/'source.py/child.py').read_text(), 'new directory content')
 
+    def test_private_mobile_references_do_not_break_snapshot_reuse_or_enter_transfer(self):
+        from Scripts.build_snapshots import source_members
+        destination=self.directory/'mobile-snapshot'
+        original=materialize(self.root,destination,'HEAD')
+        (destination/'mobile_build').mkdir()
+        outside=self.directory/'private-signing';outside.mkdir()
+        (outside/'credential').write_text('synthetic protected data')
+        (destination/'mobile_build/.android-beta').symlink_to(outside,target_is_directory=True)
+        # Simulate an older cached snapshot with only directory-style ignores.
+        (destination/'.git/info/exclude').write_text('.manager-source.json\n')
+        with self.assertRaisesRegex(ValueError,'escapes the checkout'):identity(destination)
+        self.assertEqual(materialize(self.root,destination,'HEAD'),original)
+        self.assertNotIn('mobile_build/.android-beta',source_members(destination))
+        self.assertEqual((outside/'credential').read_text(),'synthetic protected data')
+        (destination/'source.py').write_text('unexpected edit')
+        with self.assertRaisesRegex(ValueError,'different source'):materialize(self.root,destination,'HEAD')
+
+    def test_runtime_reference_excludes_refuse_linked_git_metadata(self):
+        from Scripts.build_snapshots import exclude_private_runtime_references
+        destination=self.directory/'snapshot';materialize(self.root,destination,'HEAD')
+        outside=self.directory/'outside-config';outside.write_text('preserve')
+        exclude=destination/'.git/info/exclude';exclude.unlink();exclude.symlink_to(outside)
+        with self.assertRaisesRegex(ValueError,'metadata must not be linked'):
+            exclude_private_runtime_references(destination)
+        self.assertEqual(outside.read_text(),'preserve')
+
     def test_shared_capture_rejects_source_change_before_snapshot_creation(self):
         captured = identity(self.root)
         (self.root / 'source.py').write_text('VERSION = 3\n')

@@ -24,14 +24,27 @@ class PlanningContext:
         return json.loads(self.captured)
 
 
-def capture(project, revision):
+RUN_FIELDS={'testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
+
+
+def run_values(values):
+    reject_secrets(values)
+    if not isinstance(values,dict) or set(values)-RUN_FIELDS or any(not isinstance(v,str) or len(v)>20000 for v in values.values()):
+        raise ValueError('Only tester notes and recipient groups can be changed for one run.')
+    return dict(values)
+
+
+def capture(project, revision, run_overrides=None):
     # Use the canonical project owners, including its real pinned commonUtils.
     from Scripts import build_project as owner
     source = owner.identity(project.root, revision)
     source.update(host=owner.platform.platform(), architecture=owner.platform.machine())
     source['app_version'] = owner.manager_settings.app_version(project.mobile,
         revision=None if revision == 'working-tree' else source['logistics_commit'])
-    values, origins = owner.manager_settings.settings(project.mobile)
+    values, origins = (owner.manager_settings.settings(project.mobile, overrides=run_values(run_overrides))
+                       if run_overrides else owner.manager_settings.settings(project.mobile))
+    if run_overrides:
+        source['run_overrides'] = run_values(run_overrides)
     source['effective_settings'] = dict(values=values, origins=origins)
     reject_secrets(source)
     return PlanningContext(str(project.root), revision, json.dumps(source))
@@ -57,10 +70,10 @@ def _namespace(plan, prefix, barrier=()):
     return phases
 
 
-def make_journey(project, intent, *, revision='working-tree', pattern='', build_override='', release_tag=''):
+def make_journey(project, intent, *, revision='working-tree', pattern='', build_override='', release_tag='', backends=None, run_overrides=None):
     if not isinstance(intent, dict):
         raise ValueError('A Logistics journey needs a structured intent.')
-    selected = request(project.journey_capability, intent.get('goal'), intent.get('platforms', []), intent.get('destinations', []))
+    selected = request(project.journey_capability, intent.get('goal'), intent.get('platforms', []), intent.get('destinations', []), backends=backends or intent.get('backends'))
     if intent.get('schema') != 1:
         raise ValueError('Unsupported Logistics journey intent schema.')
     targets, destinations = selected['platforms'], selected['destinations']
@@ -69,22 +82,27 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         raise ValueError('This Logistics destination has no reviewed integrated delivery implementation.')
     if pattern:
         raise ValueError('Combined validation uses complete project suites. Use an advanced operation for focused checks.')
+    locations = selected.get('backends', {})
     for target in targets:
         row = project.journey_capability['platforms'][target]
-        if row['backend'] not in project.backend_options(target, 'Test'):
+        if locations.get(target,row['backend']) not in project.backend_options(target, 'Test'):
             raise ValueError(target + ': the declared validation host is unavailable; no hosted fallback was selected.')
-    if 'github' in destinations and not re.fullmatch(r'v\d+\.\d+\.\d+-(?:alpha\.\d+|beta\.\d+|main\.\d+)', release_tag):
-        raise ValueError('Choose an unused GitHub release tag such as v1.2.3-alpha.1.')
     from Scripts.build_retention import clean
     try:
         clean(project.root, apply=True)
     except (OSError, RuntimeError) as error:
         print('Build retention incomplete: ' + str(error), flush=True)
-    context = capture(project, revision)
+    context = capture(project, revision, run_overrides)
     source = context.source(project, revision)
     if delivery and source['dirty']:
         raise ValueError('Delivery requires committed source. Select a committed revision or commit your intended edits.')
     values = source['effective_settings']['values']
+    if 'github' in destinations and not release_tag:
+        from Scripts.release_naming import suggest_tag
+        release_tag = suggest_tag(project.root, source['app_version'])
+    for name,target in (('testflight','ios'),('firebase','android')):
+        if name in destinations and locations.get(target,project.journey_capability['platforms'][target]['backend']) == 'GitHub':
+            raise ValueError(name+' preparation needs local native validation and matching receipts. Choose the local host for '+target+' or remove this delivery destination; GitHub validation is available for checks-only runs.')
     if delivery and 'linux' in targets and values.get('vm.linux_scope') != 'both' and sys.platform == 'darwin':
         raise ValueError('Coordinated Linux delivery requires both declared Linux distributions, not partial coverage.')
     if 'github' in destinations:
@@ -95,7 +113,7 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         raise ValueError('Local tester preparation currently requires the configured macOS signing/build host.')
 
     phases, gates, locks, resources, capacities = [], {}, set(), {}, {}
-    branch_sources, evidence = {}, {}
+    branch_sources, evidence, executions = {}, {}, {}
     previous_mobile = None
     plans = []
     def retain(plan):
@@ -112,7 +130,8 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
     for target in targets:
         row = project.journey_capability['platforms'][target]
         mobile = target in {'ios', 'android'}
-        plan = project.make_plan('Test', target, row['backend'], revision=revision,
+        backend = locations.get(target,row['backend'])
+        plan = project.make_plan('Test', target, backend, revision=revision,
             include_ipad=delivery and target == 'ios', _context=context,
             _release_validation=delivery and mobile)
         retain(plan)
@@ -124,8 +143,9 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
             phases.append(admission)
             barrier = (admission.id,)
         branch = _namespace(plan, target + '.validation', barrier)
-        if any(phase.effect in EXTERNAL for phase in branch):
-            raise ValueError('Validation cannot dispatch or deliver anything; choose an explicitly available native host.')
+        if any(phase.effect in EXTERNAL - {'dispatch'} for phase in branch):
+            raise ValueError('Validation cannot publish or deliver builds.')
+        executions[target] = dict(backend=backend,steps=[phase.id for phase in branch if phase.effect=='dispatch'])
         phases.extend(branch)
         gate = Phase(target + '.validated', (str(project.interpreter), '-c', 'pass'), str(project.root),
             dependencies=tuple(phase.id for phase in branch), effect='test')
@@ -169,7 +189,7 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         evidence[name] = dict(identity=provider + ' · app ' + identity + ' · version ' + source['app_version'], steps=[upload.id])
 
     # Refuse changes during preparation, including changing selected settings.
-    final = capture(project, revision).source(project, revision)
+    final = capture(project, revision, run_overrides).source(project, revision)
     if final != source:
         raise ValueError('Source or effective settings changed during combined planning. Prepare a fresh plan.')
     # Preparation-only work is intentionally not an external effect. All deliveries
@@ -178,8 +198,8 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
     secrets = tuple(dict.fromkeys(secret for plan in plans for secret in plan.secret_environment))
     result = Plan('Logistics', 'Validate and deliver' if delivery else 'Validate selected platforms',
         dict(source, platform_plans=branch_sources), tuple(phases), str(workspace),
-        backend='Declared native hosts', max_workers=4, capacities=capacities, resources=resources,
+        backend='Per-platform execution choices', max_workers=4, capacities=capacities, resources=resources,
         resource_locks=tuple(sorted(locks)), secret_environment=secrets,
-        journey=dict(schema=1, goal=selected['goal'], platforms=gates, destinations=evidence))
+        journey=dict(schema=1, goal=selected['goal'], platforms=gates, destinations=evidence, executions=executions))
     validate_plan(result, selected)
     return result

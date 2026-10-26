@@ -40,6 +40,7 @@ class LogisticsProject:
         descriptor = self.root / 'build-project.json'
         metadata = json.loads(descriptor.read_text()) if descriptor.is_file() else {}
         self.test_suites = metadata.get('test_suites', [])
+        self.run_fields = metadata.get('run_fields', [])
         try:
             from build_manager.journeys import for_host
         except ImportError:
@@ -121,6 +122,10 @@ class LogisticsProject:
         from Scripts.build_retention import delete_storage
         return delete_storage(self.root, selections)
 
+    def run_defaults(self, *, cancelled=lambda:False):
+        rows=self.settings_view()
+        return {field['id']:rows[field['id']]['value'] for field in self.run_fields}
+
     def save_settings(self, values):
         manager_settings.save(self.mobile, values)
 
@@ -137,6 +142,12 @@ class LogisticsProject:
         from dataclasses import replace
         started = time.monotonic()
         from Scripts.manager_suites import selection, with_reports, with_host_gates, acceptance_phase
+        run_overrides = options.pop('run_overrides', None)
+        if run_overrides:
+            from Scripts.manager_journeys import capture
+            if options.get('_context') is not None:
+                raise ValueError('Cannot replace captured settings inside a workflow.')
+            options['_context'] = capture(self, options.get('revision','working-tree'), run_overrides)
         suite = options.pop('suite', '')
         release_validation = options.pop('_release_validation', False)
         selection(self.root, suite, operation, target, backend, options.get('pattern', ''))
@@ -284,6 +295,9 @@ class LogisticsProject:
         if revision == 'working-tree' and source['dirty']:
             raise ValueError('GitHub cannot run uncommitted source. Select an explicitly published revision.')
         if operation == 'Release':
+            if not release_tag:
+                from Scripts.release_naming import suggest_tag
+                release_tag = suggest_tag(self.root,source['app_version'])
             if not re.fullmatch(r'v\d+\.\d+\.\d+-(?:alpha\.\d+|beta\.\d+|main\.\d+)', release_tag):
                 raise ValueError('Choose an explicit release channel/tag, separate from app version and mobile build numbers.')
             command = (str(self.interpreter), '-m', 'Scripts.build_project', 'release', '--tag', release_tag,
@@ -303,9 +317,9 @@ class LogisticsProject:
             receipt = workspace / 'remote' / (uuid4().hex + '.json')
             command = (str(self.interpreter), '-m', 'Scripts.build_project', 'github', '--operation-receipt', str(receipt), '--platform', target,
                        '--workflow', workflow, '--ref', ref, '--commit', source['logistics_commit'], '--root', str(self.root))
-            phases.append(Phase('github-' + name, command, str(self.root), timeout=14400, artifacts=(str(receipt),)))
+            phases.append(Phase('github-' + name, command, str(self.root), timeout=14400, artifacts=(str(receipt),),effect='dispatch',kind='validation-dispatch'))
         return Plan('Logistics', operation, source, tuple(phases),
-                    str(workspace), backend='GitHub', effect='publish')
+                    str(workspace), backend='GitHub', effect='dispatch')
 
     def local_vm_plan(self, operation, target, source, workspace, options, pattern):
         if target == 'windows':
@@ -499,7 +513,8 @@ class LogisticsProject:
                 raise ValueError('Mobile build override must be numeric.')
             # Link existing protected inputs, never copy keys into source or a
             # profile. Generated builds remain in this source snapshot.
-            for name in ('.venv', '.tools', '.device.json', '.testflight-auth.json', '.android-beta'):
+            from Scripts.build_snapshots import PRIVATE_RUNTIME_NAMES
+            for name in PRIVATE_RUNTIME_NAMES:
                 canonical = self.mobile / name
                 destination = snapshot / 'mobile_build' / name
                 if canonical.exists() and not destination.exists():

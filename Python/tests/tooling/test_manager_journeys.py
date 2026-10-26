@@ -151,8 +151,9 @@ class JourneyAdapterTests(unittest.TestCase):
         with patch('Scripts.build_project.identity', return_value=dict(self.source, dirty=True)):
             with self.assertRaisesRegex(ValueError, 'committed source'):
                 self.make()
-        with self.assertRaisesRegex(ValueError, 'unused GitHub release tag'):
-            self.make(platforms=['macos', 'linux', 'windows'], destinations=['github'])
+        with patch('Scripts.release_naming.suggest_tag', return_value='v1.2.3-alpha.7'), patch('Scripts.build_snapshots.git', side_effect=['','a'*40]):
+            automatic = self.make(platforms=['macos', 'linux', 'windows'], destinations=['github'])
+            self.assertIn('v1.2.3-alpha.7',automatic.journey['destinations']['github']['identity'])
         with patch('Scripts.manager_journeys.capture') as captured:
             baseline = dict(self.source, app_version='1.2.3', effective_settings=dict(values=self.values, origins={}))
             changed = dict(baseline, app_version='2.0.0')

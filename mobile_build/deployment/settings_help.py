@@ -78,6 +78,9 @@ def describe_settings(rows):
             entry['label'] = 'Processing check interval'
         elif name == 'testflight.processing_timeout_seconds':
             entry['label'] = 'Processing timeout'
+        if name in {'testflight.what_to_test','testflight.external_group','firebase.release_notes','firebase.group'}:
+            entry['section']='Defaults for new runs'
+            entry['description'] += ' This is a saved default; the run screen can override it without changing this profile.'
         if name in ('testflight.what_to_test', 'firebase.release_notes'):
             entry['kind'] = 'multiline'
         if name == 'auth.github_kind':
