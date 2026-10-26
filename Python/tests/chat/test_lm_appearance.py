@@ -19,7 +19,9 @@ class LMAppearanceTests(QtTestCase):
         page = LMPage(store=Store(self.root / 'chat'))
         self.addCleanup(page.deleteLater)
         self.addCleanup(page.prepare_close)
-        page.resize(1000, 800)
+        # Leave room for ten lines with Linux's larger native font before
+        # exercising the half-height cap with the 100-line draft below.
+        page.resize(1000, 1000)
         page.show()
         page.composer.setPlainText('Short draft')
         for _ in range(5):
@@ -51,12 +53,12 @@ class LMAppearanceTests(QtTestCase):
         # Wrapping a single paragraph must grow the draft too. Keep this
         # fixture below the half-height cap with the current reading font;
         # overflow at the cap is exercised by the 100-line draft above.
-        page.resize(1000, 800)
+        page.resize(1000, 1000)
         page.composer.setPlainText('wrapped words ' * 20)
         for _ in range(5):
             self.app.processEvents()
         wide_height = page.composer.height()
-        page.resize(650, 800)
+        page.resize(650, 1000)
         self.wait_until(lambda: page.composer.height() > wide_height and
                         page.composer.verticalScrollBar().maximum() == 0)
 
