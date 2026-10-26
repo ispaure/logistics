@@ -98,7 +98,7 @@ class SavedFilesTests(unittest.TestCase):
             store = app.reader_manager().catalog.library_store
             records = [store.import_book(LocalDocuments(), source) for source in (epub, comic)]
             app.loop.run_until_complete(app.open_book(records[0]['id']))
-            from features.rclone.mobile.storage_location import collection_path
+            from services.documents.locations import collection_path
             local = collection_path(app.private_root) / 'retained'
             local.mkdir(parents=True)
             (local / 'note.txt').write_text('keep')

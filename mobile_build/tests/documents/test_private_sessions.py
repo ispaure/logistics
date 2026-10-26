@@ -292,12 +292,18 @@ class PrivateSessionTests(unittest.TestCase):
         from types import SimpleNamespace
         self.app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None)
         # Model the encrypted boundary before opening, when history eligibility is decided.
-        self.copies.encrypted = True
+        self.copies.provider.private = True
+        client = self.app.cloud_client
+        generation = client.generation
+        def check_access():
+            if client.generation != generation:
+                raise ValueError('Credentials locked')
+        self.copies.provider.check = check_access
         owner = self.open('Sensitive-title.md', b'Sensitive body')
         owner.credential_client = self.app.cloud_client
         owner.credential_generation = self.app.cloud_client.generation
         # Model the encrypted provider boundary with a memory-only test reader.
-        owner._crypt_reader_store.encrypted = True
+        owner._crypt_reader_store.provider.private = True
         self.assertTrue(self.app.session_visible(owner.session))
         self.app.save_workspace()
         self.app.recent_documents.remember(owner.session)

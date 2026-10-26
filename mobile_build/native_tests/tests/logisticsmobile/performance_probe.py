@@ -25,7 +25,7 @@ class Probe(LogisticsMobile):
     async def measure(self):
         from mobile.folder_hub_ui import FolderHubUI
         from mobile.hub_ui import HubUI
-        from features.rclone.mobile.storage_location import collection_path
+        from services.documents.locations import collection_path
         output = Path(self.paths.cache) / 'performance-evidence'
         output.mkdir(exist_ok=True)
         report = dict(success=False, samples=[], fixture='4 locked LocalCrypt folders and matching retained remotes; no loaded credentials')

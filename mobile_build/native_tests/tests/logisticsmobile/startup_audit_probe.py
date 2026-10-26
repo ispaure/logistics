@@ -79,7 +79,7 @@ class Probe(LogisticsMobile):
                 await check(name, action)
             from mobile.documentation_ui import show_documentation
             await check('documentation', lambda: show_documentation(self))
-            from features.rclone.mobile.storage_location import collection_path
+            from services.documents.locations import collection_path
             local = collection_path(self.private_root)
             local.mkdir(exist_ok=True)
             epub, comic = make_books(local)

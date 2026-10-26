@@ -92,7 +92,7 @@ class DocumentStorageProbe(LogisticsMobile):
         import base64
         from commonUtils.runtime.resources.local import LocalFiles
         from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
-        from features.rclone.mobile.storage_location import collection_path
+        from services.documents.locations import collection_path
         from services.documents.mobile_storage import document_copies
         from services.documents.storage import DocumentResource
         local_root = collection_path(self.private_root)

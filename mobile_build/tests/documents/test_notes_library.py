@@ -128,7 +128,7 @@ class NotesLibraryTests(unittest.TestCase):
         self.run_async(exercise())
 
     def test_actions_open_local_in_workspaces_and_close_session(self):
-        from features.rclone.mobile.storage_location import collection_path
+        from services.documents.locations import collection_path
         folder = collection_path(self.app.private_root) / 'Notes'
         shutil.copytree(self.vault, folder)
         self.app.show_cloud(present=False)

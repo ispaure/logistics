@@ -1,5 +1,5 @@
 """Local mobile folder providers; crypt naming/bytes stay in the native bridge."""
-from features.rclone.mobile.storage_location import collection_path, _modified_time
+from services.documents.locations import collection_path, _modified_time
 from contextlib import contextmanager
 import base64
 import os
@@ -14,7 +14,7 @@ from commonUtils.runtime.resources.provider import ResourceCapabilities
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import read_up_to
-from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
+from .content import CryptContentProvider
 from features.rclone.access import ResourceAccess
 from features.rclone.localcrypt.mobile.locations import LocalCryptLocation, OfflineCryptLocation
 from features.rclone.mobile.service import native_service
@@ -64,8 +64,14 @@ def native_transfer(client, record, path, encrypted):
         yield stream
 
 
-class CryptFiles(LocalFiles):
+class CryptFiles(CryptContentProvider, LocalFiles):
     private = True
+    supports_metadata_collections = True
+
+    def _ciphertext_temporary(self, path):
+        path = self.relative(path)
+        staged = '/'.join(p for p in (path.rpartition('/')[0], '.save-' + uuid4().hex + Path(path).suffix) if p)
+        return self._guard(self._physical(staged))
 
     def __init__(self, root, client, remote, *, namespace=None, storage_root=None, create=True):
         self.collection_storage_root = storage_root
@@ -267,61 +273,33 @@ class CryptFiles(LocalFiles):
                     temporary.unlink(missing_ok=True)
 
 
-class ManagedCopies(LocalCryptCopies):
-    """Reuse private reader/editor transactions for files in a managed tree."""
-    def __init__(self, provider):
-        self.provider = provider
-        super().__init__(provider.root, provider.client)
-
-    def open(self, key, *, password='', cancelled=lambda: False):
-        from commonUtils.archives.zip_access import ArchivePasswordError
-        from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
-        text = Path(key).suffix.lower() in SOURCE_EXTENSIONS
-        revision = self.provider.entry(key)['revision'] if text else None
-        try:
-            reader = super().open(key, password=password, cancelled=cancelled)
-        except ArchivePasswordError:
-            if password:
-                raise
-            configured = self.provider.archive_password(key, cancelled=cancelled)
-            if not configured:
-                raise
-            reader = super().open(key, password=configured, cancelled=cancelled)
-        if text:
-            if self.provider.entry(key)['revision'] != revision:
-                raise ValueError('The document changed while opening; reopen it.')
-            reader.document_revision = revision
-        return reader
-
-    def save(self, reader, text, *, cancelled=lambda: False):
-        from services.documents.storage import DocumentResource
-        data = reader.text_snapshot.encode(text)
-        if not reader.editable:
-            raise ValueError('This document does not support text editing.')
-        return DocumentResource.publish(self.provider, reader.key, data, max_bytes=1024 * 1024,
-            expected_revision=reader.document_revision, cancelled=cancelled,
-            after_publish=lambda revision: self.open(reader.key))
-
-    def _data(self, key):
-        return self.provider._guard(self.provider._physical(key))
-
-    def _temporary(self, key):
-        staged = '/'.join(p for p in (key.rpartition('/')[0], '.save-' + uuid4().hex + Path(key).suffix) if p)
-        return self.provider._guard(self.provider._physical(staged))
-
-    def record(self, key):
-        self.provider.entry(key)
-        return self.provider.record(key)
+from services.documents.provider_documents import ProviderDocuments
 
 
-class DownloadedCryptFile(LocalFiles):
+class ManagedCopies(ProviderDocuments):
+    """Compatibility adapter; all reads and writes use the resource provider."""
+
+
+class DownloadedCryptFile(CryptContentProvider, LocalFiles):
     """One existing offline copy exposed as a movable resource, without migration."""
     private = True
-    capabilities = ResourceCapabilities(rename=True, delete=True)
+    capabilities = ResourceCapabilities(rename=True, delete=True, replace=True)
+
+    def document_readers(self):
+        return self.copies
+
+    def document_key(self, path):
+        self.relative(path)
+        return self.key
+
+    def _ciphertext_temporary(self, path):
+        self._physical(path)
+        return self.copies._temporary(self.key)
 
     def __init__(self, copies, key):
         self.copies, self.key = copies, key
         record = copies.record(key)
+        self.client, self.remote, self.identity = copies.client, record['remote'], record['identity']
         self._access = ResourceAccess(native_service(copies.client).credentials.capture(record['remote']))
         name = copies.client.request('crypt_describe', remote=record['remote'], identity=record['identity'], path=record['encrypted_path'])
         self._access.check()
@@ -363,18 +341,15 @@ class DownloadedCryptFile(LocalFiles):
 
     @contextmanager
     def open(self, path):
-        self._physical(path)
-        record = self.copies.record(self.key)
-        with self.copies._data(self.key).open('rb') as encrypted:
-            if getattr(self.copies.client, 'supports_streaming', False):
-                with native_transfer(self.copies.client, record, self.copies._data(self.key), encrypted) as stream:
-                    self._access.check()
+        with self.operation(lambda: False):
+            self._physical(path)
+            if getattr(self.client, 'supports_streaming', False):
+                physical = self.copies._data(self.key)
+                with physical.open('rb') as encrypted, native_transfer(self.client, self.record(path), physical, encrypted) as stream:
                     yield stream
                 return
-            result = self.copies.client.request('crypt_raw_read', remote=record['remote'], identity=record['identity'],
-                                                path=record['encrypted_path'], fd=encrypted.fileno())
-            with CryptTransferStream(base64.b64decode(result['data'], validate=True), record, encrypted,
-                                     validate=self._access.check) as stream:
+            from contextlib import closing
+            with closing(self.content_source(path)) as content, content.open(path) as stream:
                 yield stream
 
     def rename(self, source, destination):
@@ -412,15 +387,13 @@ def encrypted_storage(root, client, remote, *, create=True):
 def encrypted_copies(provider):
     # Reader/editor access outlives the browser independently. Both remain bound
     # to the original generation and are revoked together by package locking.
-    return ManagedCopies(provider.reopen())
+    return ManagedCopies(provider)
 
 
 def encrypted_document(provider, path):
-    """Return the feature-owned reader store/key, or defer to ordinary hosting."""
-    if isinstance(provider, DownloadedCryptFile):
-        return provider.copies, provider.key
-    if isinstance(provider, CryptFiles):
-        return encrypted_copies(provider), path
+    """Compatibility entry; host selection uses the provider's declared hook."""
+    if isinstance(provider, (DownloadedCryptFile, CryptFiles)):
+        return provider.document_readers(), path
     return None
 
 

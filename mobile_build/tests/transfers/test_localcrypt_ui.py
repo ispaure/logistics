@@ -34,6 +34,8 @@ class LocalCryptUITests(unittest.TestCase):
             generation = 0
             data = b'[Settings]\r\nvalue=private-ini-sentinel\r\n'
             def request(self, action, **values):
+                if action == 'crypt_describe':
+                    return 'settings.ini'
                 if action == 'crypt_decode':
                     return dict(name='settings.ini', data=base64.b64encode(self.data).decode())
                 if action == 'crypt_encode':
@@ -125,7 +127,7 @@ class LocalCryptUITests(unittest.TestCase):
                 self.assertIsNotNone(owner.crypt_reader)
                 self.assertEqual(owner.crypt_text.value, '# edited private reader sentinel')
                 app.loop.run_until_complete(app.save_crypt())
-                self.assertIn('Saved encrypted', owner.crypt_title.text)
+                self.assertIn('Saved locally', owner.crypt_title.text)
                 self.assertFalse(app.private_dirty())
                 app.close_crypt()
                 self.assertIsNone(app.provider_sessions().active)
@@ -170,7 +172,7 @@ class LocalCryptUITests(unittest.TestCase):
                 app.show_cloud()
                 app.crypt_labels = {'comic': 'a' * 32}
                 app.crypt_selector.items = ['comic']
-                with patch.object(app.crypt_copies, 'open', return_value=reader('Before')):
+                with patch.object(app.crypt_copies, 'capture_access', return_value=lambda: None), patch.object(app.crypt_copies, 'open', return_value=reader('Before')):
                     app.loop.run_until_complete(app.open_crypt())
                 owner = app.provider_sessions().active
                 app.loop.run_until_complete(owner.operation_idle.wait())

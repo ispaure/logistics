@@ -140,6 +140,7 @@ class FolderHubTests(unittest.TestCase):
             local = dict(name='Secret', source='LocalCrypt', kind='crypt', value='Secret', remote='Secret')
             remote = dict(name='Secret', source='Remote', kind='remote', value=('Secret', ''), remote='Secret')
             choices = {'Secret': dict(local, copies=[local, remote])}
+            app.folder_local_group = 'Rclone'
             app.build_folder_picker(choices=choices)
             def icons():
                 return [c.control_icon for c in app.folder_buttons['Secret'].parent.children
@@ -620,24 +621,27 @@ class FolderHubTests(unittest.TestCase):
                 view = app.body.children[0]._workspace_frame.main
                 self.assertEqual([button.text for button in view.children[0].children], ['Local', 'Cloud', 'Home Server'])
                 self.assertEqual(app.folder_source, 'Local')
-                self.assertFalse(view.children[1].children)
+                self.assertEqual(list(app.folder_local_header.children), [app.folder_local_tabs])
+                self.assertFalse(app.folder_picker_header.children)
                 self.assertIn('Comics', app.folder_buttons)
                 app.change_folder_source('rclone')
-                self.assertEqual(view.children[1].children[0].children[0].text, 'Credential')
+                self.assertFalse(app.folder_local_header.children)
+                self.assertEqual(list(app.folder_picker_header.children), [app.folder_credential_row])
+                self.assertEqual(app.folder_credential_row.children[0].text, 'Credential')
                 self.assertEqual(app.folder_credential.value, 'All')
                 self.assertEqual(app.native_host.labels[app.native_host.destinations.index('files')], 'Workspaces')
-                self.assertEqual(view.children[2].children, [])
+                self.assertEqual(app.folder_source_actions.children, [])
                 app.transfer_busy = True
                 app.refresh_transfer_status()
-                self.assertEqual(view.children[2].children, [app.folder_transfers_button])
+                self.assertEqual(app.folder_source_actions.children, [app.folder_transfers_button])
                 app.transfer_busy = False
                 app.transfer_notification = True
                 app.transfer_complete = False
                 app.refresh_transfer_status()
-                self.assertEqual(view.children[2].children, [app.folder_transfers_button])
+                self.assertEqual(app.folder_source_actions.children, [app.folder_transfers_button])
                 app.transfer_complete = True
                 app.refresh_transfer_status()
-                self.assertEqual(view.children[2].children, [])
+                self.assertEqual(app.folder_source_actions.children, [])
                 app.transfer_notification = False
                 scroll = next(child for child in view.children if isinstance(child, toga.ScrollContainer))
                 self.assertIs(scroll.content, app.folder_list)

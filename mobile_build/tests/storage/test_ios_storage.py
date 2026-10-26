@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from features.rclone.mobile.storage_location import collection_path, CollectionFiles, _shared_local_roots
+from services.documents.locations import collection_path, CollectionFiles, _shared_local_roots
 from features.rclone.transfers.mobile.jobs import MirrorJobs
 from mobile.ios_storage import MIGRATION, prepare_storage, prepare_for_app
 from mobile.documents import DocumentStore

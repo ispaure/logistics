@@ -10,6 +10,7 @@ from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.resources.range_reader import RangeReader
 from services.documents.archive_access import NativeArchiveAccess
 from services.documents.readers import PrivateReader
+from services.documents.mobile_reading import DocumentReadCapabilities
 from features.rclone.remote_policy import direct_kind, TEXT_LIMIT, LocalCopyRequired
 
 
@@ -143,9 +144,16 @@ class RemoteSource(NativeArchiveAccess):
 
 
 class RemoteReaders:
-    # Credential-bound sessions use the existing private session revocation path.
-    encrypted = True
     remote_storage = True
+    document_capabilities = DocumentReadCapabilities(
+        private=True, writable=False, credential_bound=True, offline=False, remote=True, required_feature='rclone')
+
+    def capture_access(self, key):
+        return self.resource._access.grant.check
+
+    @property
+    def privacy_gate(self):
+        return getattr(self.client, 'session_privacy', None)
 
     def __init__(self, client, remote, *, progress=lambda message: None, resource=None, identity=None):
         from features.rclone.remote_access import NativeRemoteLocation

@@ -93,7 +93,7 @@ class NotebookStorageTests(unittest.TestCase):
         self.stroke(panel)
         resource = panel.document.resource
         original = resource.provider._physical(resource.path).read_bytes()
-        with patch.object(resource.provider, 'replace_created', side_effect=OSError('full disk')):
+        with patch.object(resource.provider, 'replace_bytes', side_effect=OSError('full disk')):
             self.run_async(panel.perform({'op': 'save'}))
         self.assertTrue(panel.document.dirty)
         self.assertEqual(len(panel.editor.notebook.page(0).strokes), 1)

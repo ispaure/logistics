@@ -78,6 +78,7 @@ SHARED_REQUIRED_MODULES = (
     'runtime/protected_keys.py',
     'runtime/resources/archives.py',
     'runtime/resources/documents.py',
+    'runtime/resources/content.py',
     'runtime/resources/local.py',
     'runtime/resources/mutations.py',
     'runtime/resources/provider.py',

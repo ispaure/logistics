@@ -340,9 +340,10 @@ live under this feature; portable policy lives in its owning workflow.
 | --- | --- |
 | Feature bridge and credentials | `mobile/cloud.py`, `credential_vault.py`, `credential_packages.py` |
 | Feature transfer operations | `transfers/mobile/jobs.py` |
-| Feature ciphertext storage | `localcrypt/mobile/copies.py`, `file_resources.py`, `crypt_stream.py`, `previews.py` |
+| Feature ciphertext storage | `localcrypt/mobile/copies.py` catalog, `resources.py` providers, `content.py` content/write boundary, `archive_source.py` native ranges |
 | Feature native presentation | `mobile/cloud_ui.py`, `mirror_ui.py`, `transfer_review_ui.py`, `localcrypt_ui.py`, `messages.py` |
-| Generic app document hosting | `mobile/provider_ui.py`, `provider_readers.py`, `text_resources.py`, `native_archives.py`, `private_sessions.py` |
+| Generic app document hosting | `mobile/provider_ui.py`, `provider_opening.py`, `private_sessions.py`; `services/documents/provider_documents.py`, `mobile_storage.py`, `archive_access.py` |
+| Ordinary mobile storage | `services/documents/locations.py`, `mobile/document_imports.py` |
 | Generic app integration | Workspaces, Files, navigation/scenes, document persistence, screen privacy and OS picker access stay in `mobile` |
 
 Feature UI adapters consume host navigation, pickers and document services through

@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
 
 from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
 from features.rclone.mobile.service import native_service
@@ -15,6 +16,8 @@ class Client:
     generation = 0
 
     def request(self, action, **values):
+        if action == 'crypt_describe':
+            return 'note.txt'
         if action == 'crypt_path':
             return dict(identity='a' * 64, path=values['path'])
         if action == 'crypt_paths':
@@ -30,6 +33,32 @@ class Client:
 
 
 class LocalCryptAccessTests(unittest.TestCase):
+    def test_failed_archive_construction_releases_its_native_source(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from services.documents.provider_documents import ProviderDocuments
+        with TemporaryDirectory() as root:
+            provider = LocalFiles(root)
+            Path(root, 'broken.cbz').write_bytes(b'ciphertext')
+            source = SimpleNamespace(close=Mock())
+            provider.content_source = Mock(return_value=source)
+            with patch('services.documents.readers.PrivateReader', side_effect=ValueError('Invalid archive')):
+                with self.assertRaisesRegex(ValueError, 'Invalid archive'):
+                    ProviderDocuments(provider).open('broken.cbz')
+            source.close.assert_called_once_with()
+
+    def test_revocation_after_loading_releases_the_unpublished_reader(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from services.documents.provider_documents import ProviderDocuments
+        with TemporaryDirectory() as root:
+            provider = LocalFiles(root)
+            Path(root, 'note.txt').write_bytes(b'original')
+            source = SimpleNamespace(close=Mock())
+            provider.content_source = Mock(return_value=source)
+            provider.check = Mock(side_effect=[None, ValueError('Credentials locked')])
+            with self.assertRaisesRegex(ValueError, 'Credentials locked'):
+                ProviderDocuments(provider).open('note.txt')
+            source.close.assert_called_once_with()
+
     def provider(self, root, client):
         return native_service(client).localcrypt.open(LocalCryptLocation(Path(root), 'Secret'))
 
@@ -43,12 +72,15 @@ class LocalCryptAccessTests(unittest.TestCase):
             provider = self.provider(Path(root) / 'encrypted', Client())
             (provider.root / 'note.txt').write_bytes(b'ciphertext fixture')
             reader = encrypted_copies(provider)
+            document = reader.open('note.txt')
+            self.addCleanup(document.source.close)
             browser = FileBrowser()
             try:
                 browser.set_entries(provider, '', provider.list())
                 app.loop.run_until_complete(browser.close())
                 self.assertTrue(provider.closed)
-                self.assertEqual(reader.record('note.txt')['remote'], 'Secret')
+                self.assertEqual(document.text, 'fixture content')
+                document.source.check_access()
             finally:
                 app.loop.run_until_complete(browser.close())
                 app.main_window.close()
@@ -61,14 +93,17 @@ class LocalCryptAccessTests(unittest.TestCase):
             other = self.provider(root, client)
             (browser.root / 'note.txt').write_bytes(b'ciphertext fixture')
             reader = encrypted_copies(browser)
+            document = reader.open('note.txt')
+            self.addCleanup(document.source.close)
             release = browser.acquire()
             release()
             release()  # GUI close and destruction can both release their lease.
             with self.assertRaisesRegex(ValueError, 'closed'):
                 browser.list()
             self.assertEqual(other.list()[0]['name'], 'note.txt')
-            self.assertEqual(reader.record('note.txt')['remote'], 'Secret')
-            self.assertFalse(reader.provider.closed)
+            self.assertEqual(document.text, 'fixture content')
+            document.source.check_access()
+            self.assertFalse(document.source.provider.closed)
 
     def test_lock_and_identical_reunlock_never_revive_old_provider_or_buffer(self):
         with TemporaryDirectory() as root:

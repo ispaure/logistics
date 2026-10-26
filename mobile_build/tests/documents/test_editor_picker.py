@@ -171,7 +171,7 @@ class EditorPickerTests(unittest.TestCase):
                 raise RuntimeError('Save fixture not released')
             return save_resource_and_reopen(*args, **kwargs)
         async def exercise():
-            with patch('commonUtils.runtime.resources.mutations.save_resource_and_reopen', side_effect=delayed), patch.object(
+            with patch('services.documents.storage.save_resource_and_reopen', side_effect=delayed), patch.object(
                     app, 'open_crypt', new_callable=AsyncMock) as opened:
                 task = asyncio.create_task(app.save_text_destination())
                 try:

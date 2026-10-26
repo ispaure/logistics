@@ -12,7 +12,7 @@ from commonUtils.ui.native_browser import NativeBrowser
 
 class NativeBrowserTests(unittest.TestCase):
     def test_native_search_callback_recurses_without_running_loop_context(self):
-        from features.rclone.mobile.storage_location import CollectionFiles
+        from services.documents.locations import CollectionFiles
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)

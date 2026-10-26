@@ -15,6 +15,23 @@ MANAGED_RESERVE = (NATIVE_ARCHIVE_POOL + PRIVATE_BUFFERS + BITMAP_RESERVE
                    + DECODE_RESERVE + BRIDGE_RESERVE)
 
 
+def content_sources(source):
+    """Include decoded storage behind a generic retained-content wrapper."""
+    seen = set()
+    while source is not None and id(source) not in seen:
+        seen.add(id(source))
+        yield source
+        source = getattr(source, 'backend', None)
+
+
+def trim_content_cache(source):
+    for item in content_sources(source):
+        cache = getattr(item, 'cache', None)
+        if cache is not None:
+            cache.clear()
+            item.cache_bytes = 0
+
+
 def private_buffer_bytes(owners):
     """Count distinct reader/source buffers, member caches and current edit strings."""
     seen, total = set(), 0
@@ -27,9 +44,10 @@ def private_buffer_bytes(owners):
         reader = getattr(owner, 'crypt_reader', None)
         source = getattr(reader, 'source', None)
         count(getattr(reader, 'data', None))
-        count(getattr(source, 'data', None))
+        for item in content_sources(source):
+            count(getattr(item, 'data', None))
+            for value in getattr(item, 'cache', {}).values():
+                count(value)
         count(getattr(reader, 'text', None))
         count(getattr(getattr(owner, 'crypt_text', None), 'value', None))
-        for value in getattr(source, 'cache', {}).values():
-            count(value)
     return total

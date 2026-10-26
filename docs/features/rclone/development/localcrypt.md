@@ -159,14 +159,25 @@ but settings are not written to plaintext config files or command arguments.
 
 Mobile rclone ownership is under `Python/features/rclone/mobile`: bridge/credentials,
 transfer jobs, ciphertext copies/providers and their native operation screens.
-The app retains generic provider-document controllers in
-`mobile/provider_ui.py`, memory-only format coordination in
-`provider_readers.py`, ordinary text adapters in `text_resources.py`, and the shared
-native archive facade in `native_archives.py`. Private sessions, format-feature
+The app retains generic provider-document controllers in `mobile/provider_ui.py`
+and `provider_opening.py`. Storage-neutral reader/editor adapters live in
+`services/documents/provider_documents.py`; ordinary locations live in
+`services/documents/locations.py`, and native archive facades in
+`services/documents/archive_access.py`. Private sessions, format-feature
 views, navigation, persistence and screen privacy remain with their existing owners.
 The rclone catalog UI subclasses the generic provider UI; generic private-session
 controllers inherit `ProviderUI` directly, without inheriting remote download UI.
 See the [module ownership map](development.md#mobile-ownership).
+
+Managed `CryptFiles` and existing `DownloadedCryptFile` copies share the
+`localcrypt/mobile/content.py:CryptContentProvider` content/write boundary.
+`LocalCryptCopies` retains catalog identity and delegates opening and saving to
+the provider adapter; it no longer has a separate document transaction engine.
+commonUtils' generic content factory knows no rclone commands, credentials or
+format editors. The LocalCrypt implementation owns those commands, verified
+ciphertext staging and revision-safe publication, including native ZIP metadata
+rewrites that preserve untouched members. Byte saves and archive metadata saves
+retain their distinct streaming/buffer limits within that one provider contract.
 
 
 The embedded bridge implements crypt using rclone's cipher over an allowlisted

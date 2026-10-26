@@ -2,6 +2,7 @@
 import asyncio
 from contextlib import contextmanager
 from pathlib import Path
+from services.documents.mobile_reading import reading_capabilities
 
 
 def saved_connection(app, remote, identity):
@@ -17,10 +18,10 @@ def saved_connection(app, remote, identity):
 
 def file_source(app, copies, key, *, session_only=False):
     provider = getattr(copies, 'provider', None)
-    if not getattr(copies, 'encrypted', True):
+    if not reading_capabilities(copies).private and not reading_capabilities(copies).credential_bound:
         root = getattr(provider, 'root', getattr(copies, 'root', None))
         return dict(type='local', path=str(Path(root) / key)) if root is not None else None
-    if getattr(copies, 'remote_storage', False):
+    if reading_capabilities(copies).remote:
         remote = copies.remote
         identity = copies.client.connection_identity(remote)
         source = dict(type='remote', remote=remote, identity=identity, key=key)
@@ -45,9 +46,9 @@ def session_source(app, session):
     owner = manager.controllers.get(session.id) if manager else None
     if owner is not None:
         store = getattr(owner, '_crypt_reader_store', None)
-        if getattr(store, 'remote_storage', False):
+        if reading_capabilities(store).remote:
             return dict(type='remote')
-        if getattr(store, 'encrypted', True):
+        if reading_capabilities(store).private:
             return dict(type='crypt')
     return dict(type='local')
 
@@ -190,7 +191,7 @@ def local_document_path(app, path):
     path = Path(path)
     if path.exists():
         return path
-    from features.rclone.mobile.storage_location import shared_documents_path
+    from services.documents.locations import shared_documents_path
     root = shared_documents_path(getattr(app, 'private_root', Path('/')))
     if root is None:
         return path
@@ -258,7 +259,7 @@ async def _reopen_file(app, source):
         from features.rclone.localcrypt.mobile.resources import ManagedCopies
         from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
         from features.rclone.mobile.service import native_service
-        from features.rclone.mobile.storage_location import collection_path
+        from services.documents.locations import collection_path
         provider = native_service(client).localcrypt.open(LocalCryptLocation(
             collection_path(app.private_root, True), remote,
             namespace=source['namespace'], storage_root=app.private_root, create=False))
@@ -298,7 +299,7 @@ def folder_location(app, session, owner=None):
                     and not manager.available(session.id)):
                 return None
             return dict(provider=provider, key=reader.key)
-        if (getattr(copies, 'remote_storage', False)
+        if (reading_capabilities(copies).remote
                 and (manager.controllers.get(session.id) is not owner or manager.available(session.id))):
             return dict(remote=copies.remote, key=reader.key)
     source = (getattr(session, 'history_source', None) or getattr(session, 'source', None)

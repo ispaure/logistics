@@ -61,6 +61,15 @@ class ResponsivenessTests(unittest.TestCase):
         self.assertEqual(app.folder_buttons, buttons)
         style.assert_not_called()
         prepare.assert_not_called()
+        # A real subgroup change still updates both selectors, exactly once.
+        with patch('mobile.folder_hub_ui.source_tab') as style:
+            app.folder_local_buttons['Rclone'].on_press()
+            self.assertEqual(style.call_args_list, [
+                unittest.mock.call(app.folder_local_buttons['Rclone'], True),
+                unittest.mock.call(app.folder_local_buttons['Others'], False)])
+            style.reset_mock()
+            app.update_folder_list(app.folder_all_choices)
+            style.assert_not_called()
 
     def test_retained_workspace_refreshes_folder_creation_and_removal(self):
         app = self.app
@@ -86,6 +95,7 @@ class ResponsivenessTests(unittest.TestCase):
         root.mkdir(parents=True)
         (root / 'file').write_bytes(b'fixture')
         app.hub_crypt_roots = {'Secret': ('Secret', 'fixture')}
+        app.folder_local_group = 'Rclone'
         with patch.object(app, 'retained_credential_associations', return_value=retained):
             app.select_destination('files')
             app.change_folder_source('rclone')

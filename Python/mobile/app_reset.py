@@ -4,7 +4,7 @@ from pathlib import Path
 import shutil
 
 from commonUtils.persistence import atomic_write_json
-from features.rclone.mobile.storage_location import _unlinked
+from services.documents.locations import _unlinked
 
 RESET_MARKER = 'erase-app-data-on-launch.json'
 

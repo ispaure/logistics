@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from commonUtils.persistence import atomic_write_json
-from features.rclone.mobile.storage_location import _unlinked, use_shared_local
+from services.documents.locations import _unlinked, use_shared_local
 
 MIGRATION = 'ios-file-sharing-migration.json'
 # These identify the old Toga Documents-as-private-data layout. New installations

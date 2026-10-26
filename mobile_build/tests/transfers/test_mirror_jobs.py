@@ -608,7 +608,8 @@ class MirrorProgressDisplayTests(unittest.TestCase):
         banner.dismiss = toga.Button('Dismiss')
         banner.progress = toga.ProgressBar(max=100, value=0)
         refresh_folder = Mock()
-        app = SimpleNamespace(rclone_ui=SimpleNamespace(refresh_folder_source_actions=refresh_folder),
+        app = SimpleNamespace(app=SimpleNamespace(require_feature=lambda name: name == 'rclone'),
+                              rclone_ui=SimpleNamespace(refresh_folder_source_actions=refresh_folder),
                               transfer_busy=True, transfer_percentage=42,
                               transfer_message='Transferring · 42% of known work',
                               mirror_store=lambda: SimpleNamespace(error=''),

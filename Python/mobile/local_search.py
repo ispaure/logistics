@@ -11,7 +11,7 @@ class LocalSearch(IndexedLocalSearch):
         # Explicit adapters only: encrypted LocalFiles subclasses map names and
         # must never be enumerated through a physical filesystem index.
         from commonUtils.runtime.resources.local import LocalFiles
-        from features.rclone.mobile.storage_location import CollectionFiles
+        from services.documents.locations import CollectionFiles
         from .local_sources import SharedFiles
         return (type(provider) in (LocalFiles, CollectionFiles, SharedFiles)
                 and not provider.private and not getattr(provider, 'session_only', False)

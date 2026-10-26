@@ -1,5 +1,5 @@
 """Discover logical mobile folders without creating crypt storage or copying files."""
-from features.rclone.mobile.storage_location import collection_path
+from services.documents.locations import collection_path
 from pathlib import Path
 from dataclasses import dataclass
 from features.rclone.transfers.mobile.jobs import copy_target
@@ -53,11 +53,11 @@ def hub_entries(root, jobs, remotes=(), crypt_locations=()):
     return [(name, folder_parts(name), entries[name]) for name in sorted(entries, key=str.casefold)]
 
 
-def folder_tree(choices):
+def folder_tree(choices, *, grouped=True):
     """Build every dash-separated level, preserving selectable folder identities."""
     tree = {}
     for name in choices:
-        parts = tuple(part for part in name.replace('/', '-').split('-') if part) or (name,)
+        parts = (tuple(part for part in name.replace('/', '-').split('-') if part) or (name,)) if grouped else (name,)
         branch = tree
         for part in parts:
             node = branch.setdefault(part, dict(children={}, names=[]))
@@ -93,7 +93,7 @@ def credential_choices(choices, remotes):
     return result
 
 
-def source_choices(choices, source, network_remotes=()):
+def source_choices(choices, source, network_remotes=(), *, local_group=None):
     """Expose downloaded copies locally while retaining their remote actions."""
     network_remotes = set(network_remotes)
     def owner(entry):
@@ -108,11 +108,25 @@ def source_choices(choices, source, network_remotes=()):
         return 'rclone' if remotes else 'Local'
     def visible(entry):
         if source == 'Local':
-            return any(copy['source'] in ('Local', 'LocalCrypt')
-                       for copy in [entry, *entry.get('copies', ())])
+            copies = [copy for copy in (entry.get('copies') or [entry])
+                      if copy['source'] in ('Local', 'LocalCrypt')]
+            if local_group is not None:
+                copies = [copy for copy in copies
+                          if bool(copy.get('remote')) == (local_group == 'Rclone')]
+            return bool(copies)
         return (owner(entry) == source and (source != 'rclone' or any(copy['source'] == 'Remote'
                 for copy in [entry, *entry.get('copies', ())])))
-    return {name: entry for name, entry in choices.items() if visible(entry)}
+    result = {name: entry for name, entry in choices.items() if visible(entry)}
+    if source == 'Local' and local_group is not None:
+        # Mixed catalog entries may contain both ordinary and managed copies.
+        # Keep browse/menu actions within the selected local group too.
+        for name, entry in list(result.items()):
+            copies = [copy for copy in (entry.get('copies') or [entry])
+                      if bool(copy.get('remote')) == (local_group == 'Rclone')
+                      and (local_group == 'Rclone' or copy['source'] == 'Local')]
+            primary = next(copy for copy in copies if copy['source'] in ('Local', 'LocalCrypt'))
+            result[name] = {**entry, **primary, 'copies': copies}
+    return result
 
 
 def folder_browse_copy(entry, source):

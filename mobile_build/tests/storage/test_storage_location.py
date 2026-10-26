@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from features.rclone.mobile.storage_location import (
+from services.documents.locations import (
     CONFIG, MARKER, CollectionFiles, collection_path, switch_location,
     recover_location, wipe_destination, start_empty_location, describe_location,
 )
@@ -15,6 +15,52 @@ from mobile.folder_hub import hub_entries
 
 
 class CollectionStorageTests(unittest.TestCase):
+    def test_android_sd_card_publication_copies_exclusively_when_rename_flags_are_unsupported(self):
+        from commonUtils.runtime.platform import OS
+        from commonUtils.runtime.resources.mutations import save_resource_bytes
+        provider = CollectionFiles(self.private)
+        provider.mkdir('New folder')
+        with patch('commonUtils.runtime.resources.local.rename_exclusive',
+                   side_effect=OSError(errno.EINVAL, 'SD card rejects rename flags')), \
+                patch('commonUtils.runtime.platform.get_os', return_value=OS.ANDROID):
+            save_resource_bytes(provider, 'New folder/Sketch.rmdoc', b'notebook bytes')
+            self.assertEqual((provider.root / 'New folder/Sketch.rmdoc').read_bytes(), b'notebook bytes')
+            self.assertEqual([row['name'] for row in provider.list('New folder')], ['Sketch.rmdoc'])
+            with self.assertRaises(FileExistsError):
+                save_resource_bytes(provider, 'New folder/Sketch.rmdoc', b'replacement')
+        self.assertEqual((provider.root / 'New folder/Sketch.rmdoc').read_bytes(), b'notebook bytes')
+
+    def test_android_sd_card_publication_preserves_a_racing_destination(self):
+        from commonUtils.runtime.platform import OS
+        provider = CollectionFiles(self.private)
+        source, target = provider.root / 'staged', provider.root / 'target'
+        source.write_bytes(b'new')
+        def race(*args):
+            target.write_bytes(b'existing')
+            raise OSError(errno.EINVAL, 'SD card rejects rename flags')
+        with patch('commonUtils.runtime.resources.local.rename_exclusive', side_effect=race), \
+                patch('commonUtils.runtime.platform.get_os', return_value=OS.ANDROID):
+            with self.assertRaises(FileExistsError):
+                provider.rename('staged', 'target')
+        self.assertEqual(source.read_bytes(), b'new')
+        self.assertEqual(target.read_bytes(), b'existing')
+
+    def test_android_sd_card_publication_failure_preserves_source_and_cleans_partial_copy(self):
+        from commonUtils.runtime.platform import OS
+        provider = CollectionFiles(self.private)
+        source = provider.root / 'staged'
+        source.write_bytes(b'new')
+        def fail(before, after, **kwargs):
+            after.write(b'partial')
+            raise OSError('Card write failed')
+        with patch('commonUtils.runtime.resources.local.rename_exclusive', side_effect=OSError(errno.EINVAL, 'fixture')), \
+                patch('commonUtils.runtime.platform.get_os', return_value=OS.ANDROID), \
+                patch('commonUtils.runtime.resources.local.copy_stream', side_effect=fail):
+            with self.assertRaisesRegex(OSError, 'Card write failed'):
+                provider.rename('staged', 'target')
+        self.assertEqual(source.read_bytes(), b'new')
+        self.assertFalse((provider.root / 'target').exists())
+
     def test_start_empty_keeps_old_files_and_private_metadata_and_never_overwrites(self):
         self.seed()
         self.assertTrue(start_empty_location(self.private, self.volume))
@@ -54,7 +100,7 @@ class CollectionStorageTests(unittest.TestCase):
             if event['phase'] == 'Complete':
                 self.assertEqual(collection_path(self.private), self.volume / 'Logistics/Local')
         import itertools
-        with patch('features.rclone.mobile.storage_location.time.monotonic', side_effect=itertools.count()):
+        with patch('services.documents.locations.time.monotonic', side_effect=itertools.count()):
             switch_location(self.private, self.volume, progress=record)
         copy = [event for event in events if event['phase'] == 'Copying Local']
         self.assertTrue(any(0 < event['bytes'] < event['total'] for event in copy))
@@ -70,7 +116,7 @@ class CollectionStorageTests(unittest.TestCase):
         for index in range(200):
             (source / str(index)).write_bytes(b'x')
         events = []
-        with patch('features.rclone.mobile.storage_location.time.monotonic', return_value=0):
+        with patch('services.documents.locations.time.monotonic', return_value=0):
             switch_location(self.private, self.volume, progress=events.append)
         copy = [event for event in events if event['phase'] == 'Copying Local']
         self.assertEqual(len(copy), 2)  # initial and final; no per-file queue flood
@@ -81,7 +127,7 @@ class CollectionStorageTests(unittest.TestCase):
     def test_progress_failure_never_reports_complete_or_changes_location(self):
         self.seed()
         events = []
-        with patch('features.rclone.mobile.storage_location._sync', side_effect=OSError('Card removed')):
+        with patch('services.documents.locations._sync', side_effect=OSError('Card removed')):
             with self.assertRaisesRegex(OSError, 'Card removed'):
                 switch_location(self.private, self.volume, progress=events.append)
         self.assertNotIn('Complete', [event['phase'] for event in events])
@@ -148,7 +194,7 @@ class CollectionStorageTests(unittest.TestCase):
 
     def test_copy_failure_and_changed_source_do_not_commit(self):
         self.seed()
-        with patch('features.rclone.mobile.storage_location.shutil.copytree', side_effect=OSError('disk removed')):
+        with patch('services.documents.locations.shutil.copytree', side_effect=OSError('disk removed')):
             with self.assertRaises(OSError):
                 switch_location(self.private, self.volume)
         self.assertFalse((self.private / CONFIG).exists())
@@ -269,8 +315,8 @@ class CollectionStorageTests(unittest.TestCase):
             return original_open(path, *args, **kwargs)
         events = []
         with patch.object(Path, 'open', unreadable), \
-                patch('features.rclone.mobile.storage_location.os.walk', side_effect=AssertionError('Must not scan')), \
-                patch('features.rclone.mobile.storage_location._inventory', side_effect=AssertionError('Must not hash')):
+                patch('services.documents.locations.os.walk', side_effect=AssertionError('Must not scan')), \
+                patch('services.documents.locations._inventory', side_effect=AssertionError('Must not hash')):
             self.assertTrue(recover_location(self.private, self.volume, progress=events.append))
         self.assertEqual(collection_path(self.private, True), target.parent)
         self.assertTrue(collection_path(self.private).is_dir())
@@ -287,19 +333,19 @@ class CollectionStorageTests(unittest.TestCase):
 
     def test_android_filesystem_without_fsync_still_verifies_bytes(self):
         store, client, local, crypt = self.seed()
-        from features.rclone.mobile.storage_location import _sync
+        from services.documents.locations import _sync
 
         def unsupported_sync(stream):
-            with patch('features.rclone.mobile.storage_location.os.fsync', side_effect=OSError(errno.EINVAL, 'unsupported')):
+            with patch('services.documents.locations.os.fsync', side_effect=OSError(errno.EINVAL, 'unsupported')):
                 _sync(stream)
 
-        with patch('features.rclone.mobile.storage_location._sync', side_effect=unsupported_sync):
+        with patch('services.documents.locations._sync', side_effect=unsupported_sync):
             switch_location(self.private, self.volume)
         self.assertEqual((store.target(local) / 'note.txt').read_bytes(), b'first')
 
     def test_real_sync_failure_never_commits(self):
         self.seed()
-        with patch('features.rclone.mobile.storage_location.os.fsync', side_effect=OSError(errno.EIO, 'I/O error')):
+        with patch('services.documents.locations.os.fsync', side_effect=OSError(errno.EIO, 'I/O error')):
             with self.assertRaises(OSError):
                 switch_location(self.private, self.volume)
         self.assertFalse((self.private / CONFIG).exists())
@@ -316,10 +362,10 @@ class CollectionStorageTests(unittest.TestCase):
                 raise OSError('Card disconnected')
             return original_copy(source, target, *args, **kwargs)
 
-        with patch('features.rclone.mobile.storage_location.shutil.copytree', side_effect=fail_crypt):
+        with patch('services.documents.locations.shutil.copytree', side_effect=fail_crypt):
             with self.assertRaisesRegex(OSError, 'disconnected'):
                 switch_location(self.private, self.volume)
         self.assertFalse((self.private / CONFIG).exists())
-        with patch('features.rclone.mobile.storage_location.shutil.disk_usage', return_value=SimpleNamespace(free=2 * 1024 * 1024)):
+        with patch('services.documents.locations.shutil.disk_usage', return_value=SimpleNamespace(free=2 * 1024 * 1024)):
             self.assertTrue(switch_location(self.private, self.volume))
         self.assertEqual((collection_path(self.private) / 'large.bin').stat().st_size, 2 * 1024 * 1024)

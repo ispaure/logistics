@@ -135,7 +135,6 @@ class CloudController(CloudUI):
         "remote_item_password",
         "remote_item_view",
         "remote_read_busy",
-        "resource_imports",
         "session_credential_packages",
         "smb_guest",
         "smb_account",
@@ -176,7 +175,9 @@ class CloudController(CloudUI):
     download_selector = StateAttribute("download_state", "download_selector")
     download_export = StateAttribute("download_state", "download_export")
     download_open = StateAttribute("download_state", "download_open")
-    resource_imports = StateAttribute("download_state", "resource_imports")
+    resource_imports = HostAttribute("resource_imports")
+    cloud_status = HostAttribute("document_status")
+    crypt_password = HostAttribute("document_password")
 
     credential_packages = StateAttribute("credential_state", "credential_packages")
     session_credential_packages = StateAttribute(
@@ -229,6 +230,7 @@ class CloudController(CloudUI):
     open_book = HostAttribute("open_book")
     open_crypt = HostService("open_crypt")
     open_document = HostAttribute("open_document")
+    open_local_document = HostService("open_local_document")
     pin_remote_folder = HostService("pin_remote_folder")
     populate_file_browser = HostAttribute("populate_file_browser")
     preferences = HostAttribute("preferences")

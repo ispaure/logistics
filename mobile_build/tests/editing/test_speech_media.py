@@ -159,8 +159,10 @@ class SpeechPrivacyIntegrationTests(unittest.TestCase):
         from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         from mobile_build.tests.editing.test_markdown_speech import Engine as SpeechEngine
+        from services.documents.mobile_reading import DocumentReadCapabilities
         class Copies(LocalTextCopies):
-            encrypted = True
+            document_capabilities = DocumentReadCapabilities(
+                private=True, writable=True, credential_bound=True, offline=True)
         async def exercise():
             (self.root / 'Private.md').write_text('# Private')
             await self.app.open_crypt(copies=Copies(LocalFiles(self.root)), key='Private.md')
@@ -184,12 +186,17 @@ class SpeechPrivacyIntegrationTests(unittest.TestCase):
                 self.app.release_disposable_resources()
                 self.assertEqual(panel.session.state, 'speaking')
                 self.assertIn(owner.crypt_preview, owner.crypt_content.children)
-                owner.credential_generation = -999
+                def revoked():
+                    raise ValueError('Source access revoked')
+                owner.document_access = revoked
                 self.assertFalse(media.command('forward'))
                 self.assertTrue(media.closed)
                 self.assertFalse(panel.session.text or panel.session.words)
                 owner.markdown_speech.close()
-        self.app.loop.run_until_complete(exercise())
+        import toga
+        with patch('features.text_editor.mobile.provider_markdown.markdown_webview',
+                   side_effect=lambda *, private, **options: toga.WebView(**options)):
+            self.app.loop.run_until_complete(exercise())
 
     def test_late_dom_read_cannot_start_session_speech_after_lock(self):
         import json

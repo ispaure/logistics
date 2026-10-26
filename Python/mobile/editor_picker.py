@@ -194,10 +194,6 @@ class EditorPicker:
         source_document = self.current
         origin = self._capture_origin(self.app.editor_view, managed=True)
         name, data = source_document.name, source_document.snapshot.encode(source_document.text)
-        if not hasattr(self, 'cloud_view'):
-            self.show_cloud()
-            if getattr(self, 'cloud_restore_task', None):
-                await self.cloud_restore_task
         if self.cloud_busy:
             return
         if not self.active_host:
@@ -209,10 +205,6 @@ class EditorPicker:
         await self.show_text_destination(name, data)
 
     async def show_editor_open(self, widget=None, **kwargs):
-        if not hasattr(self, 'cloud_view'):
-            self.show_cloud()
-            if getattr(self, 'cloud_restore_task', None):
-                await self.cloud_restore_task
         if self.cloud_busy:
             return
         await self.show_editor_browser('open')
@@ -334,7 +326,17 @@ class EditorPicker:
         self._compact_keyboard = False
         self.show_view(panel, route='text-destination', title=title)
         self.save_as_storage.on_change = self.change_editor_storage
-        await self.refresh_editor_browser()
+        # Cold-start credential restoration can replace the client and then
+        # advance its generation during the first local directory read. Retry
+        # discarded results using fresh tokens without waiting for cloud setup.
+        for _ in range(3):
+            if await self.refresh_editor_browser():
+                break
+            if (not self.active_host or self.panel is not panel or not self.visible()
+                    or self.save_as_status.value != 'Loading folder…'):
+                break
+        else:
+            self.save_as_status.value = 'Locations changed while loading. Select a location to refresh.'
 
     def fit_keyboard(self, compact):
         """Keep naming and completion usable without reparenting the focused input."""
@@ -534,7 +536,7 @@ class EditorPicker:
         if self.creation is not None and label == 'All files':
             # Collection roots have their own providers, just as in Workspaces.
             # In particular, iOS protects the shared Local directory itself.
-            from features.rclone.mobile.storage_location import collection_path
+            from services.documents.locations import collection_path
             from .incoming_files import inbox_path
             for name, root in (('Local', collection_path(self.app.private_root)),
                                ('Received Files', inbox_path(self.app.private_root))):

@@ -157,16 +157,16 @@ class ComicBatchController:
             )
             return
         self.retire_private_comic_batch()
-        client, generation = self.cloud_client, self.cloud_client.generation
+        capture = getattr(provider, 'capture_access', None)
+        check_access = capture('') if capture is not None else lambda: None
         navigation = self.navigation_generation
 
         def valid():
-            return (
-                self.active_host
-                and self.cloud_client is client
-                and client.generation == generation
-                and getattr(self, "private_comic_batch", None) is plan
-            )
+            try:
+                check_access()
+            except ValueError:
+                return False
+            return self.active_host and getattr(self, "private_comic_batch", None) is plan
 
         def release(reader):
             source = reader.source
@@ -202,7 +202,7 @@ class ComicBatchController:
             release_reader=release,
         )
         self.private_comic_batch = plan
-        plan.privacy_gate = getattr(client, "session_privacy", None)
+        plan.privacy_gate = getattr(provider, "privacy_gate", None)
         self.screen_privacy.refresh()
         selected = self.file_rows.get(self.file_selection.value)
         folder = (

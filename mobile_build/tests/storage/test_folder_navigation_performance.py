@@ -7,7 +7,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from features.rclone.mobile.storage_location import CollectionFiles
+from services.documents.locations import CollectionFiles
 from features.rclone.localcrypt.mobile.resources import CryptFiles
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.runtime.resources.local import LocalFiles
@@ -58,7 +58,6 @@ class FolderNavigationTests(unittest.TestCase):
         app.change_folder_source('rclone')
         unlocked = app.folder_buttons['Secret']
         self.assertIn('unlocked', unlocked.accessible_name)
-        indicator = unlocked.parent.children[0]
         app.change_folder_source('Local')
         (app.private_root / 'LocalFiles' / 'New folder').mkdir(parents=True)
         app.change_folder_source('rclone')
@@ -120,26 +119,26 @@ class FolderNavigationTests(unittest.TestCase):
         for name, button in rows.items():
             self.assertIs(app.folder_buttons[name], button)
 
-    def test_folder_add_remove_preserves_sibling_controls_and_hierarchy(self):
+    def test_folder_add_remove_preserves_sibling_controls_and_literal_names(self):
         app = self.folder_app()
         base = app.private_root / 'LocalFiles'
         for name in ('Team-Books', 'Team-Notes'):
             (base / name).mkdir(parents=True, exist_ok=True)
         app.show_locations()
         books, notes = app.folder_buttons['Team-Books'], app.folder_buttons['Team-Notes']
-        group = app.folder_tree_buttons[('Team',)]
+        self.assertFalse(app.folder_tree_buttons)
         (base / 'Team-Comics').mkdir()
         app.update_folder_list(app.folder_choices())
         self.assertIs(app.folder_buttons['Team-Books'], books)
         self.assertIs(app.folder_buttons['Team-Notes'], notes)
-        self.assertIs(app.folder_tree_buttons[('Team',)], group)
+        self.assertFalse(app.folder_tree_buttons)
         (base / 'Team-Comics').rmdir()
         app.update_folder_list(app.folder_choices())
         self.assertNotIn('Team-Comics', app.folder_buttons)
         self.assertIs(app.folder_buttons['Team-Books'], books)
         self.assertIs(app.folder_buttons['Team-Notes'], notes)
-        self.assertEqual([child.children[1].text for child in books.parent.parent.children
-                          if len(child.children) == 3], ['Books', 'Notes'])
+        self.assertEqual(books.text, 'Team-Books')
+        self.assertEqual(notes.text, 'Team-Notes')
 
     def test_collection_snapshot_matches_rows_with_constant_location_checks(self):
         with TemporaryDirectory() as root:
@@ -149,10 +148,34 @@ class FolderNavigationTests(unittest.TestCase):
             for index in range(120):
                 (provider.root / f'{index}.txt').write_text(str(index))
             expected = LocalFiles.list(provider)
-            from features.rclone.mobile import storage_location
+            from services.documents import locations as storage_location
             with patch.object(storage_location, 'collection_path', wraps=storage_location.collection_path) as locate:
                 self.assertEqual(provider.list(), expected)
                 self.assertLessEqual(locate.call_count, 3)
+
+    def test_device_folder_snapshot_bounds_collection_reads_and_preserves_guards(self):
+        from mobile.local_sources import DeviceFiles
+        from services.documents import locations as storage_location
+        with TemporaryDirectory() as root:
+            provider = DeviceFiles(root)
+            folder = provider.folders[0]
+            for index in range(120):
+                (provider.root / folder / f'{index}.txt').write_text(str(index))
+            expected = LocalFiles.list(provider, folder)
+            with patch.object(storage_location, 'collection_base', wraps=storage_location.collection_base) as locate:
+                self.assertEqual(provider.list(folder), expected)
+                self.assertLessEqual(locate.call_count, 3)
+            private = provider.root / 'private'
+            private.mkdir()
+            with self.assertRaisesRegex(ValueError, 'private app storage'):
+                provider.list('private')
+            linked = provider.root / folder / 'linked.txt'
+            linked.symlink_to(provider.root / folder / '0.txt')
+            with self.assertRaisesRegex(ValueError, 'Linked storage'):
+                provider.list(folder)
+            linked.unlink()
+            with self.assertRaises(OperationCancelled):
+                provider.list(folder, cancelled=lambda: True)
 
     def test_collection_listing_rejects_linked_files_and_checks_cancellation(self):
         with TemporaryDirectory() as root:

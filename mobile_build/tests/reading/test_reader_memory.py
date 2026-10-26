@@ -3,10 +3,19 @@ from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from mobile.reader_memory import (private_buffer_bytes, NATIVE_ARCHIVE_POOL,
-                                          PRIVATE_BUFFERS, MANAGED_RESERVE, MIB)
+                                          PRIVATE_BUFFERS, MANAGED_RESERVE, MIB, trim_content_cache)
 
 
 class ReaderMemoryTests(unittest.TestCase):
+    def test_content_factory_buffers_are_counted_and_trimmed_through_wrapper(self):
+        backend = SimpleNamespace(data=b'decoded fixture', cache={'member': b'cached member'}, cache_bytes=13)
+        source = SimpleNamespace(backend=backend)
+        owner = SimpleNamespace(crypt_reader=SimpleNamespace(source=source))
+        self.assertEqual(private_buffer_bytes([owner]), len(backend.data) + len(backend.cache['member']))
+        trim_content_cache(source)
+        self.assertEqual(backend.cache_bytes, 0)
+        self.assertEqual(private_buffer_bytes([owner]), len(backend.data))
+
     def test_native_pool_matches_python_reserve_without_lowering_per_archive_limit(self):
         source = (Path(__file__).resolve().parents[2] / 'rclone_bridge/remote_cache.go').read_text()
         self.assertIn('const remoteComicPoolLimit int64 = 128 * 1024 * 1024', source)

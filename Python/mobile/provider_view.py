@@ -91,7 +91,7 @@ class ProviderDocumentView:
         bind(owner, view.crypt_image)
         view.crypt_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
         owner._show_crypt_content(kind, content, view=view)
-        view.crypt_save = toga.Button('Save encrypted copy' if getattr(copies, 'encrypted', True) else 'Save local file', on_press=owner.save_crypt, enabled=reader.editable and not getattr(reader, 'read_only', False), style=Pack(height=44))
+        view.crypt_save = toga.Button('Save', on_press=owner.save_crypt, enabled=reader.editable and not getattr(reader, 'read_only', False), style=Pack(height=44))
         view.crypt_read_page.enabled = not reader.editable
         read_only = getattr(reader, 'read_only', False)
         mutation_controls = [] if read_only else ([view.crypt_save,

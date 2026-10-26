@@ -131,6 +131,13 @@ class ObsidianTests(unittest.TestCase):
             private = True
         provider = PrivateFiles(self.root)
         client = self.app.cloud_client = SimpleNamespace(generation=1, cancel=lambda: None)
+        def capture(path):
+            generation = client.generation
+            def check():
+                if client.generation != generation:
+                    raise ValueError('Source access revoked')
+            return check
+        provider.capture_access = capture
         owner = VaultBrowser(self.app, provider, 'Vault', 'files')
         self.app.vault_browser = owner
         entered, released = Event(), Event()

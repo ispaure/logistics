@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from mobile.app import LogisticsMobile
-from features.rclone.mobile.storage_location import collection_path, switch_location
+from services.documents.locations import collection_path, switch_location
 
 
 class StorageUITests(unittest.TestCase):

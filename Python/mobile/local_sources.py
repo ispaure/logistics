@@ -1,6 +1,6 @@
 """Ordinary mobile browse roots, excluding private control and encrypted storage."""
 from commonUtils.runtime.resources.local import LocalFiles
-from features.rclone.mobile.storage_location import shared_documents_path
+from services.documents.locations import shared_documents_path
 
 
 class SharedFiles(LocalFiles):
@@ -44,7 +44,7 @@ class DeviceFiles(LocalFiles):
     visible through this provider, including direct paths and recursive search.
     """
     def __init__(self, private_root):
-        from features.rclone.mobile.storage_location import collection_base, collection_path
+        from services.documents.locations import collection_base, collection_path
         from .incoming_files import inbox_path
         self.private_root = private_root
         received = inbox_path(private_root)
@@ -54,7 +54,7 @@ class DeviceFiles(LocalFiles):
         super().__init__(collection_base(private_root))
 
     def _guard(self, path):
-        from features.rclone.mobile.storage_location import collection_base
+        from services.documents.locations import collection_base
         if collection_base(self.private_root) != self.root:
             raise ValueError('Collection location changed. Restart Logistics.')
         parts = path.relative_to(self.root).parts
@@ -65,7 +65,8 @@ class DeviceFiles(LocalFiles):
     def list(self, path='', *, cancelled=lambda: False):
         from commonUtils.runtime.operations import check_cancelled
         if self.relative(path):
-            return super().list(path, cancelled=cancelled)
+            from services.documents.locations import local_folder_snapshot
+            return local_folder_snapshot(self, path, cancelled=cancelled)
         rows = []
         for folder in self.folders:
             check_cancelled(cancelled)

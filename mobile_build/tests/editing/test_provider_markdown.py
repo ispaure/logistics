@@ -40,7 +40,12 @@ class ProviderMarkdownTests(unittest.TestCase):
             owner.crypt_text.value = '# Programmatic mutation'
             await owner.save_crypt()
             self.assertEqual((self.files / 'First.md').read_bytes(), before)
-        self.app.loop.run_until_complete(exercise())
+        # This test covers supported-preview actions; unsupported private
+        # backends are checked separately by the host privacy tests.
+        import toga
+        with patch('features.text_editor.mobile.provider_markdown.markdown_webview',
+                   side_effect=lambda *, private, **options: toga.WebView(**options)):
+            self.app.loop.run_until_complete(exercise())
 
     def test_preview_load_accepts_android_positional_url(self):
         workflow = self.owner._provider_markdown
@@ -189,21 +194,32 @@ class ProviderMarkdownTests(unittest.TestCase):
                 finally:
                     self.owner.crypt_reader = reader
 
-    def test_credential_change_cannot_receive_late_render_or_error(self):
-        # Local readers also snapshot the current connection during a render;
-        # a connection change must never publish that old render or its error.
-        client = SimpleNamespace(generation=1, cancel=lambda: None)
-        self.owner.credential_client = self.app.cloud_client = client
+    def test_source_access_change_cannot_receive_late_render_or_error(self):
+        client = SimpleNamespace(generation=1)
+        def check():
+            if client.generation != 1:
+                raise ValueError('Source access revoked')
+        self.owner.document_access = check
         for failure in (False, True):
+            client.generation = 1
             with self.subTest(failure=failure):
-                self.check_late_render(lambda owner: setattr(client, 'generation', client.generation + 1),
-                                       failure=failure)
+                self.check_late_render(lambda owner: setattr(client, 'generation', 2), failure=failure)
+
+    def test_unrelated_connection_change_keeps_local_document_available(self):
+        self.app.cloud_client = SimpleNamespace(generation=10)
+        self.assertTrue(self.app.private_sessions.available(self.owner.session.id))
+        self.app.cloud_client.generation += 1
+        self.assertTrue(self.app.private_sessions.available(self.owner.session.id))
 
     def test_lock_revokes_pending_work_and_search(self):
         client = SimpleNamespace(generation=1, cancel=lambda: None)
         self.owner.credential_client = self.app.cloud_client = client
         self.owner.credential_generation = 1
-        self.copies.encrypted = True
+        self.copies.provider.private = True
+        def check():
+            if client.generation != 1:
+                raise ValueError('Source access revoked')
+        self.owner.document_access = check
         search = self.owner.crypt_preview_search
         def lock(owner):
             client.generation += 1

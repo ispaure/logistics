@@ -69,7 +69,7 @@ class DocumentCreationTests(unittest.TestCase):
             self.assertEqual(picker.editor_picker_location, ('All files', ''))
 
     def test_ios_shared_root_and_collection_destinations_publish_documents(self):
-        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        from services.documents.locations import use_shared_local, _shared_local_roots
         from mobile.incoming_files import inbox_path
         shared_directory = TemporaryDirectory()
         self.addCleanup(shared_directory.cleanup)

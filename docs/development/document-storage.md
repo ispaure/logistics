@@ -46,6 +46,56 @@ storage. Format canvases receive a checkpoint callback. Provider operations stil
 validate credentials and revisions during I/O; hiding a view does not authorize a
 save after revocation. Memory-only drafts do not imply secure memory erasure.
 
+Mobile reader adapters declare `DocumentReadCapabilities` in
+`services/documents/mobile_reading.py`: privacy, write access, credential-bound
+lifetime, offline availability and remote access are separate properties.
+An optional `required_feature` declares feature admission separately from privacy
+or credential lifetime; a different encrypted provider does not require rclone.
+`reading_capabilities` preserves wrapped-provider privacy and read-only rules.
+LocalCrypt declares private, writable offline access; Cloud declares private,
+read-only credential-bound access without claiming that every remote is encrypted.
+Ordinary text adapters derive policy from their provider. Unknown compatibility
+adapters default to private, credential-bound sessions.
+
+`commonUtils.runtime.resources.content.ProviderContent` retains independent
+content access. Its provider-supplied `content_source` class/function factory can
+add decoding and authenticated native archive access. The generic
+`services/documents/provider_documents.py:ProviderDocuments` adapter uses that
+boundary for text, PDF, EPUB and comics; notebooks retain bounded
+`DocumentResource` sessions over the same provider byte contract. See the shared
+[content factory and replacement contracts](../../Python/commonUtils/docs/reference/ui/resource-providers.md#injected-content-mechanisms).
+
+Mobile `document_source` selects a provider's optional `document_readers` and
+`document_key` hooks, with the generic adapter as its default. It imports no
+concrete backend. LocalCrypt's managed and existing offline-copy providers use
+one `CryptContentProvider` for native content, ciphertext staging and verified
+byte/member replacement. The older copy catalog delegates document I/O to those
+providers. Captured access callbacks, rather than the app's current Cloud client,
+control reader and Notes Library revocation. A successful editor replacement
+retires the old source after adopting its replacement.
+
+Ordinary collection locations and drive migration belong to
+`services/documents/locations.py`; ordinary import/reopen routing belongs to
+`mobile/document_imports.py`. Local browsing, text opening and picker setup do not
+construct Cloud controls. Disabling rclone preserves ordinary document access;
+LocalCrypt and remote adapters explicitly retain their rclone feature requirement.
+
+The session manager resolves the selected source, key and password before calling
+the generic document opener. `ProviderDocumentSession` owns cancellation and busy
+state; existing `_crypt_cancel` and reader-control names remain compatibility
+accessors. Newly acquired readers are closed if opening fails before adoption,
+regardless of storage type. Supplied prepared readers remain caller-owned until
+adoption; an adopted reader is closed by session disposal. Cleanup includes native
+PDF handles and archive sources. The opening workflow does not select credentials
+or change the global connection's busy state.
+
+`test_storage_independence.py` forbids rclone imports while exercising ordinary
+local storage and verifies another private provider's read/save path with rclone
+disabled. Shared factory tests cover class injection, revision/cancellation checks
+and capability-checked replacement. Real host-bridge regressions cover encrypted
+text/archive writes, streamed moves, notebooks and revocation; they do not replace
+physical-device UI validation.
+
 Private notebook canvases use off-the-record Qt WebEngine profiles or native
 nonpersistent mobile WebViews. Android loads even large private HTML directly
 in memory, bypassing the toolkit’s disk-backed large-content cache.

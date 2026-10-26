@@ -244,7 +244,7 @@ async def exercise_ui_review(app):
         # All files shows the ordinary shared/device root, containing Local
         # and Received Files. Enter the collection before checking its files.
         if app.file_storage.value != 'Local files':
-            from features.rclone.mobile.storage_location import collection_path
+            from services.documents.locations import collection_path
             collection = collection_path(app.private_root).name
             entry = next(entry for entry in app.file_browser.entries if entry.payload['path'] == collection)
             await app.file_browser.activate_entry(entry)

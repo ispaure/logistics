@@ -205,7 +205,7 @@ class FolderDiscoveryTests(TestCase):
     def test_shared_remote_names_are_plain_and_visible_under_each_credential(self):
         from mobile.folder_hub import credential_choices, source_choices, folder_browse_copy
         from services.folders.catalog import CredentialScope
-        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        from services.documents.locations import use_shared_local, _shared_local_roots
         shared_directory = TemporaryDirectory()
         self.addCleanup(shared_directory.cleanup)
         shared = Path(shared_directory.name)
@@ -276,7 +276,7 @@ class FolderDiscoveryTests(TestCase):
 
     def test_builder_does_not_mutate_snapshot_or_create_missing_crypt_directories(self):
         from copy import deepcopy
-        from features.rclone.mobile.storage_location import collection_path
+        from services.documents.locations import collection_path
         snapshot = FolderDiscoverySnapshot(private_root=self.app.private_root, jobs={},
             remote_names=('Drive',), retained_packages=(), crypt_locations=(('Secret', 'Drive'),),
             crypt_roots={'Secret': ('Drive', 'missing-identity')})

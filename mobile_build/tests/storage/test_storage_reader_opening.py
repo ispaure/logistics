@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from commonUtils.runtime.resources.local import LocalFiles
 from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
-from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+from services.documents.locations import use_shared_local, _shared_local_roots
 from mobile.app import LogisticsMobile
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 from mobile_build.tests.reading.test_library_catalog import CryptClient

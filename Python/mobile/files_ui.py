@@ -1,7 +1,7 @@
 """Native local file management; shared operations own transfer correctness."""
 from commonUtils.ui.native.password_input import PasswordInput
 
-from features.rclone.mobile.storage_location import collection_path
+from services.documents.locations import collection_path
 import asyncio
 from pathlib import Path
 import toga
@@ -19,9 +19,9 @@ def local_read_available(app, *, private=True):
 
 
 def ordinary_local_copies(copies):
-    provider = getattr(copies, 'provider', None)
-    return (isinstance(provider, LocalFiles) and not provider.private
-        and not getattr(copies, 'encrypted', True) and not getattr(copies, 'remote_storage', False))
+    from services.documents.mobile_reading import reading_capabilities
+    capabilities = reading_capabilities(copies)
+    return capabilities.offline and not capabilities.private and not capabilities.remote
 
 
 class FilesUI:
@@ -105,8 +105,6 @@ class FilesUI:
     async def show_files(self, widget=None, *, local_root=False, location=None, **kwargs):
         # Files can be opened directly from Home/Documents on a cold launch.
         # Ordinary local browsing does not depend on saved credentials.
-        if not hasattr(self, 'cloud_view'):
-            self.show_cloud(present=False)
         if not self.active_host or getattr(self, '_storage_changing', False):
             return
         try:
@@ -335,8 +333,7 @@ class FilesUI:
                          ('Rename…', lambda: self.show_file_actions(operation='rename')),
                          ('Move…', lambda: self.show_file_actions(operation='move')),
                          ('Details', self.show_file_details), ('Delete…', self.delete_file)]
-        from features.rclone.localcrypt.mobile.resources import CryptFiles
-        if isinstance(self.file_provider, LocalFiles) and (not self.file_provider.private or isinstance(self.file_provider, CryptFiles)):
+        if isinstance(self.file_provider, LocalFiles) and (not self.file_provider.private or getattr(self.file_provider, 'supports_metadata_collections', False)):
             commands += [('Edit comics in this folder…', self.edit_local_comic_folder)]
         return commands + [('Archive password…', lambda: self.show_file_actions(operation='password'))]
 
@@ -422,8 +419,9 @@ class FilesUI:
     def ordinary_file_roots(self):
         from .local_sources import device_files
         from .incoming_files import inbox_path
+        from services.documents.locations import MobileLocalFiles
         roots = {'Local files': None, 'Shared files': device_files(self.private_root),
-                 'Received Files': LocalFiles(inbox_path(self.private_root))}
+                 'Received Files': MobileLocalFiles(inbox_path(self.private_root))}
         return roots
 
     def file_provider_for(self, label):

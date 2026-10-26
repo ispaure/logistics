@@ -2,21 +2,29 @@
 import base64
 from pathlib import Path
 from commonUtils.runtime.operations import check_cancelled
-from features.rclone.mobile.previews import preview_source, encrypted_thumbnail
+from contextlib import closing
+from commonUtils.runtime.resources.content import ProviderContent
 
 
 def callbacks(provider, client, password=''):
     def source(row, cancelled):
-        return preview_source(provider, client, row, password=password, cancelled=cancelled)
+        return ProviderContent(provider, row['path'], password=password, cancelled=cancelled)
 
     def thumbnail(row, size, cancelled):
         check_cancelled(cancelled)
+        suffix = Path(row['path']).suffix.lower()
+        native_thumbnail = getattr(provider, 'thumbnail', None)
+        if native_thumbnail is not None:
+            member = ''
+            if suffix in {'.zip', '.cbz', '.epub'}:
+                from services.documents.readers import PrivateReader
+                with closing(source(row, cancelled)) as content:
+                    reader = PrivateReader(Path(row['path']).name, source=content)
+                    member = reader.book.cover_path() if reader.book else reader.pages[0]
+            return native_thumbnail(row['path'], size, member=member, password=password, cancelled=cancelled)
         if not getattr(client, 'supports_streaming', False):
             return b''
-        suffix = Path(row['path']).suffix.lower()
-        if getattr(provider, 'private', False):
-            return encrypted_thumbnail(provider, client, row, size, password=password, cancelled=cancelled)
-        elif suffix in {'.png', '.jpg', '.jpeg', '.webp'}:
+        if suffix in {'.png', '.jpg', '.jpeg', '.webp'}:
             with provider.open(row['path']) as stream:
                 data = client.request('file_thumbnail', fd=stream.fileno(), width=size[0], height=size[1])
         else:
@@ -51,12 +59,13 @@ def callbacks(provider, client, password=''):
         if suffix in {'.zip', '.cbz', '.epub'}:
             if getattr(provider, 'private', False):
                 from services.documents.readers import PrivateReader
-                reader = PrivateReader(Path(row['path']).name, source=source(row, cancelled))
-                if reader.book:
-                    fields = [('Title', reader.book.title), ('Author', ', '.join(reader.book.values('creator')))]
-                else:
-                    fields = [('Pages', len(reader.pages))]
-                    fields += [(field, reader.comic.info.get_field(field)) for field in ('Title', 'Series', 'Writer', 'Publisher', 'Summary') if reader.comic.info.get_field(field)]
+                with closing(source(row, cancelled)) as content:
+                    reader = PrivateReader(Path(row['path']).name, source=content)
+                    if reader.book:
+                        fields = [('Title', reader.book.title), ('Author', ', '.join(reader.book.values('creator')))]
+                    else:
+                        fields = [('Pages', len(reader.pages))]
+                        fields += [(field, reader.comic.info.get_field(field)) for field in ('Title', 'Series', 'Writer', 'Publisher', 'Summary') if reader.comic.info.get_field(field)]
             elif suffix == '.epub':
                 from features.books.epub import EPUBBook
                 book = EPUBBook(provider.root / row['path'], source=provider)

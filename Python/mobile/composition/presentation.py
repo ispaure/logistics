@@ -263,6 +263,8 @@ def provider_markdown(owner, view, footer):
     from ..provider_ui import private_label, speech_session_valid
     from ..workspace_navigation import sync_reader_toolbar
 
+    from services.documents.mobile_reading import reading_capabilities
+
     app = owner.app
 
     def valid(reader):
@@ -274,22 +276,10 @@ def provider_markdown(owner, view, footer):
             or not speech_session_valid(owner)
         ):
             return False
-        store = owner._crypt_reader_store
-        return (
-            not (
-                getattr(store, "encrypted", True)
-                or getattr(store, "remote_storage", False)
-            )
-            or owner.credential_client is app.cloud_client
-        )
+        return True
 
     def access_stamp():
-        client = getattr(owner, "credential_client", None)
-        return (
-            id(client),
-            getattr(client, "generation", None),
-            id(getattr(app, "cloud_client", None)),
-        )
+        return id(getattr(owner, 'document_access', None))
 
     def sync_toolbar():
         if (
@@ -339,8 +329,7 @@ def provider_markdown(owner, view, footer):
         action_items=view.crypt_action_items,
         actions_menu=view.crypt_actions_menu,
         read_only=getattr(view.crypt_reader, "read_only", False),
-        private=getattr(view._crypt_reader_store, "encrypted", False)
-                or getattr(getattr(view._crypt_reader_store, "provider", None), "private", False),
+        private=reading_capabilities(view._crypt_reader_store).private,
     )
     return workflow
 

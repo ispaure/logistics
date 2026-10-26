@@ -200,6 +200,7 @@ class HubDocumentTests(unittest.TestCase):
         form = app.body.children[0].content
         form.name_input.value = 'My notes'
         app.loop.run_until_complete(form.create_button.on_press())
+        app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         owner = app.private_sessions.active
         self.assertEqual(owner.crypt_reader.name, 'My notes.txt')
@@ -380,7 +381,9 @@ class HubDocumentTests(unittest.TestCase):
         self.assertFalse(view.transfer_banner.dismiss.enabled)
         credential_row = app.folder_credential.parent
         self.assertIs(frame.main.children[0], app.folder_source_tabs)
-        self.assertIs(frame.main.children[1].children[0], credential_row)
+        self.assertFalse(app.folder_local_header.children)
+        self.assertIn(app.folder_picker_header, frame.main.children)
+        self.assertEqual(list(app.folder_picker_header.children), [credential_row])
         actions = app.folder_transfers_button.parent
         self.assertEqual(list(actions.children), [app.folder_transfers_button])
         app.transfer_busy = False
@@ -413,7 +416,7 @@ class HubDocumentTests(unittest.TestCase):
     def test_home_browse_refreshes_local_root_after_other_views_and_search(self):
         import toga
         app = self.app
-        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        from services.documents.locations import use_shared_local, _shared_local_roots
         shared_directory = TemporaryDirectory()
         self.addCleanup(shared_directory.cleanup)
         shared = Path(shared_directory.name)
@@ -787,6 +790,7 @@ class HubDocumentTests(unittest.TestCase):
         form.type_selector.value = 'Markdown (.md)'
         form.type_selector.value = 'Plain text (.txt)'
         app.loop.run_until_complete(form.create_button.on_press())
+        app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Notes.txt')
         self.assertEqual(app.private_sessions.active.crypt_text.value, '')
@@ -801,6 +805,7 @@ class HubDocumentTests(unittest.TestCase):
         form.name_input.value = 'Trip.markdown'
         form.type_selector.value = 'Markdown (.md)'
         app.loop.run_until_complete(form.create_button.on_press())
+        app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Trip.markdown')
         self.assertEqual(app.private_sessions.active.crypt_text.value, '')

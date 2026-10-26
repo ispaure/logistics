@@ -72,7 +72,8 @@ class CredentialMetadataPreparationTests(TestCase):
             folder.mkdir()
             (folder / 'encrypted.bin').write_bytes(b'ciphertext')
             client = SimpleNamespace(package_records=(dict(crypt_identities={'Secret': identity}),), request=Mock())
-            app = SimpleNamespace(cloud_client=client, cloud_crypt_remotes={'Secret'}, private_root=base,
+            app = SimpleNamespace(app=SimpleNamespace(feature_enabled=lambda name: name == 'rclone'),
+                cloud_client=client, cloud_crypt_remotes={'Secret'}, private_root=base,
                 rclone_ui=SimpleNamespace(visible_remotes=lambda names: names))
             roots = {}
             with patch('features.rclone.transfers.mobile.ui.collection_path', return_value=base):

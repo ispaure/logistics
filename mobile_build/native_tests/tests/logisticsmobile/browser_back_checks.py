@@ -67,7 +67,7 @@ async def exercise_folder_pop_preview(app, *, scroll_position=120):
     """The parent must already contain rows while its refresh is blocked."""
     if get_os() is not OS.IOS:
         return {}
-    from features.rclone.mobile.storage_location import collection_path
+    from services.documents.locations import collection_path
     root = collection_path(app.private_root) / 'Back transition fixture'
     (root / 'Child').mkdir(parents=True, exist_ok=True)
     for index in range(60):

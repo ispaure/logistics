@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from commonUtils.archives.zip_access import ArchivePasswordError
 from commonUtils.runtime.resources.local import LocalFiles
 from features.rclone.localcrypt.mobile.resources import CryptFiles, ManagedCopies
@@ -192,15 +192,20 @@ class LocalCryptConfigurationTests(unittest.TestCase):
 
     def test_managed_open_retries_with_config_only_after_native_unlock_requires_it(self):
         with TemporaryDirectory() as directory:
-            provider = self.provider(Path(directory), {'remoteConfig.ini': b'[LogisticsZIP]\narchive_password=fixture-only\n'})
+            provider = LocalFiles(Path(directory))
+            (provider.root / 'book.cbz').write_bytes(b'archive fixture')
+            provider.archive_password = Mock(return_value='fixture-only')
             copies = ManagedCopies(provider)
-            reader = object()
-            with patch.object(LocalCryptCopies, 'open', side_effect=[ArchivePasswordError('Locked archive'), reader]) as opened:
-                self.assertIs(copies.open('Comics/book.cbz'), reader)
-                self.assertEqual(opened.call_args.kwargs['password'], 'fixture-only')
-            with patch.object(LocalCryptCopies, 'open', return_value=reader), patch.object(provider, 'archive_password', side_effect=AssertionError('Unneeded lookup')):
-                self.assertIs(copies.open('plain.cbz'), reader)
-            with patch.object(LocalCryptCopies, 'open', side_effect=ArchivePasswordError('Locked archive')) as opened:
+            def reader():
+                return SimpleNamespace(editable=False, read_only=False, kind='.cbz', name='book.cbz')
+            with patch('services.documents.readers.PrivateReader', side_effect=[ArchivePasswordError('Locked archive'), reader()]) as opened:
+                result = copies.open('book.cbz')
+                self.addCleanup(result.source.close)
+                self.assertEqual(opened.call_args.kwargs['source'].password, 'fixture-only')
+            with patch('services.documents.readers.PrivateReader', return_value=reader()), patch.object(provider, 'archive_password', side_effect=AssertionError('Unneeded lookup')):
+                result = copies.open('book.cbz')
+                self.addCleanup(result.source.close)
+            with patch('services.documents.readers.PrivateReader', side_effect=ArchivePasswordError('Locked archive')) as opened:
                 with self.assertRaises(ArchivePasswordError):
                     copies.open('book.cbz', password='explicit-fixture')
                 self.assertEqual(opened.call_count, 1)

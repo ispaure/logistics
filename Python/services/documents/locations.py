@@ -87,7 +87,45 @@ def collection_path(private_root, crypt=False):
                              else ('LocalCryptFolders' if crypt else 'LocalFiles')))
 
 
-class CollectionFiles(LocalFiles):
+class MobileLocalFiles(LocalFiles):
+    """Ordinary mobile files, including Android mounts without rename flags."""
+
+    def rename(self, source, destination):
+        from commonUtils.persistence.publication import mutation_lock
+        from commonUtils.runtime.platform import get_os, OS
+        from commonUtils.runtime.operations import MutationIncomplete, MutationResult
+        from hashlib import file_digest
+        with mutation_lock:
+            try:
+                return super().rename(source, destination)
+            except OSError as error:
+                if get_os() is not OS.ANDROID or error.errno not in {
+                        errno.EINVAL, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP}:
+                    raise
+                original = self._locate(source)
+                if not original.is_file():
+                    raise
+                target = self._guard(self._physical(destination))
+                # Android's SD-card/FUSE mounts can reject RENAME_NOREPLACE.
+                # The rooted provider exclusively creates the destination;
+                # it never substitutes an overwriting rename. Partial copies are
+                # visible while writing, so this provider fallback is not atomic.
+                # The same mounts can deny hard links with EACCES, so copy
+                # through the provider's existing exclusive-create operation.
+                with self.open(source) as stream:
+                    self.create_file(destination, stream)
+                try:
+                    with original.open('rb') as before, target.open('rb') as after:
+                        if file_digest(before, 'sha256').digest() != file_digest(after, 'sha256').digest():
+                            raise ValueError('Destination verification failed; source preserved.')
+                    original.unlink()
+                except Exception as failure:
+                    raise MutationIncomplete(
+                        'The destination was created, but verification or source cleanup failed. Inspect both files.',
+                        MutationResult(destination_published=True, source_state='unknown')) from failure
+
+
+class CollectionFiles(MobileLocalFiles):
     def __init__(self, private_root):
         self.private_root = Path(private_root)
         root = collection_path(private_root)
@@ -100,37 +138,42 @@ class CollectionFiles(LocalFiles):
         return super()._guard(path)
 
     def list(self, path='', *, cancelled=lambda: False):
-        path = self.relative(path)
-        folder = self._locate(path)
-        from commonUtils.filesystem.local_access import check_local_path
-        rows = []
-        # Resolve collection configuration once at each snapshot boundary, not
-        # repeatedly for every entry. Each child still gets the rooted link and
-        # regular-file checks, including externally supplied SD-card contents.
-        with os.scandir(folder) as children:
-            for child in children:
-                check_cancelled(cancelled)
-                if child.is_symlink() or (hasattr(Path, 'is_junction') and Path(child.path).is_junction()):
-                    raise ValueError('Linked storage is not supported.')
-                check_local_path(child.path)
-                try:
-                    info = child.stat(follow_symlinks=False)
-                    directory = child.is_dir(follow_symlinks=False)
-                except FileNotFoundError:
-                    continue
-                if not directory and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
-                    raise ValueError('Choose an independent regular file or folder.')
-                revision = ((info.st_dev, info.st_ino) if directory else
-                    (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
-                rows.append(dict(name=child.name, path='/'.join(p for p in (path, child.name) if p),
-                    directory=directory, size=info.st_size, revision=revision,
-                    hidden=(child.name.startswith('.')
-                        or bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_HIDDEN', 0))
-                        or bool(getattr(info, 'st_flags', 0) & getattr(stat, 'UF_HIDDEN', 0))),
-                    modified=_modified_time(info.st_mtime)))
-        check_cancelled(cancelled)
-        self._guard(folder)
-        return sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
+        return local_folder_snapshot(self, path, cancelled=cancelled)
+
+
+def local_folder_snapshot(provider, path='', *, cancelled=lambda: False):
+    """List an ordinary mobile folder with provider guards at both boundaries."""
+    path = provider.relative(path)
+    folder = provider._locate(path)
+    from commonUtils.filesystem.local_access import check_local_path
+    rows = []
+    # Resolve collection configuration once at each snapshot boundary, not
+    # repeatedly for every entry. Each child still gets the rooted link and
+    # regular-file checks, including externally supplied SD-card contents.
+    with os.scandir(folder) as children:
+        for child in children:
+            check_cancelled(cancelled)
+            if child.is_symlink() or (hasattr(Path, 'is_junction') and Path(child.path).is_junction()):
+                raise ValueError('Linked storage is not supported.')
+            check_local_path(child.path)
+            try:
+                info = child.stat(follow_symlinks=False)
+                directory = child.is_dir(follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if not directory and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
+                raise ValueError('Choose an independent regular file or folder.')
+            revision = ((info.st_dev, info.st_ino) if directory else
+                (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
+            rows.append(dict(name=child.name, path='/'.join(p for p in (path, child.name) if p),
+                directory=directory, size=info.st_size, revision=revision,
+                hidden=(child.name.startswith('.')
+                    or bool(getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_HIDDEN', 0))
+                    or bool(getattr(info, 'st_flags', 0) & getattr(stat, 'UF_HIDDEN', 0))),
+                modified=_modified_time(info.st_mtime)))
+    check_cancelled(cancelled)
+    provider._guard(folder)
+    return sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
 
 
 def _modified_time(timestamp):

@@ -77,7 +77,10 @@ class ReaderBuildTests(unittest.TestCase):
             )
 
             permissions = ET.parse(manifest).getroot().findall("uses-permission")
-            self.assertEqual([item.get("{http://schemas.android.com/apk/res/android}name") for item in permissions],
+            removed = [item for item in permissions if item.get('{http://schemas.android.com/tools}node') == 'remove']
+            self.assertEqual({item.get('{http://schemas.android.com/apk/res/android}name') for item in removed},
+                             {'android.permission.' + name for name in ('ACCESS_WIFI_STATE', 'CHANGE_WIFI_STATE', 'BLUETOOTH', 'DUMP')})
+            self.assertEqual([item.get("{http://schemas.android.com/apk/res/android}name") for item in permissions if item not in removed],
                              ["android.permission.MANAGE_EXTERNAL_STORAGE", "android.permission.FOREGROUND_SERVICE",
                               "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK", "android.permission.WAKE_LOCK"])
             services = ET.parse(manifest).getroot().findall("application/service")

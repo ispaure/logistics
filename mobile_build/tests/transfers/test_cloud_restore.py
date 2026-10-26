@@ -89,7 +89,7 @@ class CloudRestoreTests(IsolatedAsyncioTestCase):
                 source = dict(type=kind, remote='Drive', identity='identity', key='Notes.md', namespace='copy')
                 with patch('features.rclone.mobile.service.native_service') as service, \
                         patch('features.rclone.localcrypt.mobile.resources.ManagedCopies', return_value=copies), \
-                        patch('features.rclone.mobile.storage_location.collection_path'):
+                        patch('services.documents.locations.collection_path'):
                     service.return_value.remotes.open.return_value.readers.return_value = copies
                     service.return_value.localcrypt.open.return_value = copies.provider
                     opening = asyncio.create_task(_reopen_file(app, source))
@@ -118,7 +118,7 @@ class CloudRestoreTests(IsolatedAsyncioTestCase):
             require_remote_credentials_async=AsyncMock(), open_crypt=AsyncMock())
         source = dict(type='crypt', remote='Drive', identity='identity', key='Notes.md', namespace='copy')
         with patch('features.rclone.mobile.service.native_service') as service, \
-                patch('features.rclone.mobile.storage_location.collection_path'), \
+                patch('services.documents.locations.collection_path'), \
                 patch('features.rclone.localcrypt.mobile.resources.ManagedCopies') as readers:
             service.return_value.localcrypt.open.return_value = provider
             with self.assertRaisesRegex(ValueError, 'connection changed'):

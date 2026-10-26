@@ -155,7 +155,8 @@ class DocumentMutation:
         from .document_sources import file_source
         app = self.app
         for binding, copies, reader in result[1]:
-            encrypted = getattr(copies, 'encrypted', True)
+            from services.documents.mobile_reading import reading_capabilities
+            private = reading_capabilities(copies).private
             owner, session = binding.owner, binding.owner.session
             if (not app.active_host or not app.workspace.accepts(binding.token)
                     or owner.crypt_reader is not binding.reader
@@ -184,13 +185,13 @@ class DocumentMutation:
             owner.crypt_title.text = private_label(session.title)
             owner.crypt_page.items = reader.labels
             owner.crypt_page.value = reader.labels[0]
-            owner.crypt_save.text = 'Save encrypted copy' if encrypted else 'Save local file'
+            owner.crypt_save.text = 'Save'
             workflow = getattr(owner, '_provider_markdown', None)
             if workflow is not None:
-                workflow.relocated(private=encrypted)
+                workflow.relocated(private=private)
             # Keep an existing session-only privacy gate across plaintext moves.
             # New encrypted locations adopt their current credential gate too.
-            if encrypted:
+            if private:
                 owner.privacy_gate = owner.privacy_gate or getattr(app.cloud_client, 'session_privacy', None)
             session.history_source = None
             for name in ('cache_id', 'cache_source'):
@@ -199,7 +200,7 @@ class DocumentMutation:
             try:
                 if owner.privacy_gate is None:
                     session.history_source = file_source(app, copies, reader.key)
-                if owner.privacy_gate is None or encrypted:
+                if owner.privacy_gate is None or private:
                     app.credential_document_lists.remember(session, file_source(app, copies, reader.key, session_only=True))
                 if session.history_source is not None:
                     app.recent_documents.remember_file(session, session.history_source)

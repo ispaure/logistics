@@ -141,7 +141,7 @@ async def exercise_document_actions(app):
     from features.text_editor.mobile.document_dialogs import DocumentDialog
     from .web_checks import wait_for_text
 
-    from features.rclone.mobile.storage_location import collection_path
+    from services.documents.locations import collection_path
     from uuid import uuid4
     source = collection_path(app.private_root) / ('menu-actions-' + uuid4().hex + '.rmdoc')
     source.parent.mkdir(parents=True, exist_ok=True)

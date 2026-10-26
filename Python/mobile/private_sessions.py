@@ -7,6 +7,7 @@ from hashlib import sha256
 from pathlib import Path
 from mobile.provider_ui import ProviderUI
 from .reader_host import ReaderHost
+from services.documents.mobile_reading import reading_capabilities
 
 MAX_PRIVATE_SESSIONS = 4
 from .reader_memory import PRIVATE_BUFFERS, private_buffer_bytes
@@ -17,6 +18,10 @@ MAX_PRIVATE_BYTES = PRIVATE_BUFFERS
 @composed_workflow('provider_book_controller', ProviderBookController)
 @composed_workflow('provider_comic_controller', ProviderComicController)
 class PrivateController(ReaderHost, ProviderUI):
+    from services.workflow_host import OwnedAttribute
+
+    operation_busy = OwnedAttribute('provider_document', 'busy')
+
     def __init__(self, manager, session):
         self.manager, self.app, self.session = manager, manager.app, session
         from .composition.presentation import reading_presentation
@@ -41,6 +46,10 @@ class PrivateController(ReaderHost, ProviderUI):
         return self.operation_busy
 
     def set_cloud_busy(self, busy):
+        """Compatibility entry for existing reader tools."""
+        self.set_document_busy(busy)
+
+    def set_document_busy(self, busy):
         self.operation_busy = busy
         if busy:
             self.operation_idle.clear()
@@ -128,7 +137,7 @@ class PrivateSessions:
     async def opening_rejected(self, message):
         """Admission failures must be visible from every folder entry point."""
         import toga
-        self.app.cloud_status.value = message
+        self.app.document_status.value = message
         await self.app.main_window.dialog(toga.InfoDialog('Could not open document', message))
         return False
 
@@ -136,10 +145,11 @@ class PrivateSessions:
         """A credential replacement in any scene also retires displayed bytes."""
         import toga
         for key, owner in list(self.controllers.items()):
-            if (getattr(owner, 'credential_client', None) is self.app.cloud_client
-                    and getattr(owner, 'credential_generation', None) == getattr(self.app.cloud_client, 'generation', None)):
-                continue
-            if not getattr(getattr(owner, '_crypt_reader_store', None), 'encrypted', True):
+            try:
+                owner.document_access()
+            except ValueError:
+                pass
+            else:
                 continue
             self.app.workspace.invalidate(key)
             pending = owner._crypt_cancel
@@ -150,15 +160,11 @@ class PrivateSessions:
             else:
                 # Cancellation may still be retiring a worker. Clear the UI now;
                 # its completion cannot present content with the invalid token.
-                reader = owner.crypt_reader
                 owner._crypt_cancel = None
                 try:
                     ProviderUI.clear_private_reader(owner, discard=True)
                 finally:
                     owner._crypt_cancel = pending
-                source = getattr(reader, 'source', None)
-                if hasattr(source, 'close'):
-                    source.close()
             owner.session.title = ''
             view = getattr(owner, 'crypt_view', None)
             if view is not None:
@@ -173,8 +179,7 @@ class PrivateSessions:
         if root is None:
             raise ValueError('Provider sessions require a stable storage namespace.')
         namespace = str(Path(root).resolve())
-        from features.text_editor.access import can_write
-        if not can_write(provider=copies):
+        if not reading_capabilities(copies).writable:
             namespace = 'read-only:' + namespace
         return sha256((namespace + '\0' + str(key)).encode()).hexdigest()
 
@@ -182,12 +187,11 @@ class PrivateSessions:
         owner = self.controllers.get(key)
         if owner is None or owner.crypt_reader is None:
             return False
-        store = getattr(owner, '_crypt_reader_store', None)
-        if not getattr(store, 'encrypted', True):
-            return True
-        return (getattr(owner, 'credential_client', None) is self.app.cloud_client
-                and self.app.cloud_client is not None
-                and getattr(owner, 'credential_generation', None) == getattr(self.app.cloud_client, 'generation', None))
+        try:
+            owner.document_access()
+        except ValueError:
+            return False
+        return True
 
     def bind(self, owner):
         self.suspend(except_owner=owner)
@@ -277,24 +281,25 @@ class PrivateSessions:
                 image.image = None
                 owner.page_suspended = True
             source = getattr(owner.crypt_reader, 'source', None)
-            if hasattr(source, 'cache'):
-                source.cache.clear()
-                source.cache_bytes = 0
+            from .reader_memory import trim_content_cache
+            trim_content_cache(source)
         from .external_display import sync as sync_external
         sync_external(self.app)
 
     async def open(self, copies, key, *, prepared=None, destination=None, privacy_gate=None, edit=False):
+        if not self.app.require_document_feature(key, copies=copies):
+            return False
         destination = destination or self.app.native_host.state.destination
         from .files_ui import local_read_available, ordinary_local_copies
-        if not hasattr(self.app, 'cloud_view'):
+        if reading_capabilities(copies).credential_bound and not hasattr(self.app, 'cloud_view'):
             self.app.show_cloud(present=False)
             restore = getattr(self.app, 'cloud_restore_task', None)
             if restore is not None and not ordinary_local_copies(copies):
                 await restore
-        independent = (self.app.cloud_busy and getattr(copies, 'offline', False)
+        independent = (self.app.cloud_busy and reading_capabilities(copies).offline
             and local_read_available(self.app, private=not ordinary_local_copies(copies)))
         if self.app.cloud_busy and not independent:
-            if getattr(copies, 'remote_storage', False):
+            if reading_capabilities(copies).remote:
                 from features.rclone.mobile.cloud_ui import explain_remote_busy
                 await explain_remote_busy(self.app)
             return False
@@ -302,11 +307,11 @@ class PrivateSessions:
         existing = next((owner for owner in self.controllers.values()
                          if owner.session.resource == identity), None)
         if existing is not None and prepared is None and not self.available(existing.session.id):
-            self.app.cloud_status.value = 'Unlock the connection again before reopening this private document.'
+            self.app.document_status.value = 'Unlock the connection again before reopening this private document.'
             return False
         if existing is not None and prepared is None:
             existing.presentation_destination = destination
-            self.app.crypt_password.value = ''
+            self.app.document_password.value = ''
             self.bind(existing)
             existing.resume_crypt()
             if edit and existing.crypt_reader.kind in {'.md', '.markdown'} and not getattr(existing.crypt_reader, 'read_only', False):
@@ -338,8 +343,12 @@ class PrivateSessions:
         except ValueError as error:
             return await self.opening_rejected(str(error) + '\n\nGo to Documents → Open documents to manage open items.')
         self.app.workspace.active = selection
-        owner = self._register_opening_owner(session, copies, destination=destination,
-                                             privacy_gate=privacy_gate, independent=independent)
+        try:
+            owner = self._register_opening_owner(session, copies, key=key, destination=destination,
+                                                 privacy_gate=privacy_gate, independent=independent)
+        except (OSError, ValueError) as error:
+            self.app.workspace.close(session.id, guard=lambda session: True)
+            return await self.opening_rejected(str(error))
         token = self.app.workspace.token(session.id)
         owner._opening_origin, owner._opening_token, owner._open_presented = origin, token, False
         def retire_open():
@@ -347,12 +356,18 @@ class PrivateSessions:
             self.close(session.id, discard=True, force=True)
             if bound and self.app.active_host and previous is not None and previous.session.id in self.controllers:
                 previous.resume_crypt()
-        remote_open = getattr(copies, 'remote_storage', False)
+        remote_open = reading_capabilities(copies).remote
         if remote_open:
             self.app.remote_read_busy = True
             self.app.set_cloud_busy(True)
         try:
-            opened = await owner.provider_document().opening.open( copies=copies, key=key, prepared=prepared, independent=independent, edit=edit)
+            password = self.app.document_password.value
+            self.app.document_password.value = ''
+            if password:
+                from features.rclone.mobile.session_privacy import ResumePassword
+                owner.privacy_gate = ResumePassword(password)
+            opened = await owner.provider_document().opening.open(
+                copies=copies, key=key, password=password, prepared=prepared, edit=edit)
             if not opened or not self.app.active_host or not self.app.workspace.accepts(token):
                 retire_open()
                 return False
@@ -370,16 +385,18 @@ class PrivateSessions:
             retire_open()
             raise
         finally:
+            password = None
             owner._opening_origin = owner._opening_token = None
             owner._independent_operation = False
             if remote_open:
                 self.app.set_cloud_busy(False)
                 self.app.remote_read_busy = False
 
-    def _register_opening_owner(self, session, copies, *, destination, privacy_gate, independent):
+    def _register_opening_owner(self, session, copies, *, key, destination, privacy_gate, independent):
         owner = PrivateController(self, session)
-        if getattr(copies, 'encrypted', True) or getattr(copies, 'remote_storage', False):
-            owner.privacy_gate = getattr(self.app.cloud_client, 'session_privacy', None)
+        capture = getattr(copies, 'capture_access', None)
+        owner.document_access = capture(key) if capture is not None else lambda: None
+        owner.privacy_gate = getattr(copies, 'privacy_gate', None)
         if privacy_gate is not None:
             owner.privacy_gate = privacy_gate
         owner.credential_client = self.app.cloud_client
@@ -423,7 +440,7 @@ class PrivateSessions:
     @staticmethod
     def offline_owner(owner):
         source = getattr(getattr(owner, 'crypt_reader', None), 'source', None)
-        return (getattr(getattr(owner, '_crypt_reader_store', None), 'offline', False)
+        return (reading_capabilities(getattr(owner, '_crypt_reader_store', None)).offline
                 or (getattr(source, 'cache_token', None) is not None and not source.closed))
 
     def activate(self, key, *, destination=None):
@@ -432,7 +449,7 @@ class PrivateSessions:
         from .files_ui import ordinary_local_copies
         local = ordinary_local_copies(getattr(owner, '_crypt_reader_store', None))
         if not self.available(key) or (self.app.cloud_busy and not (local or ((getattr(self.app, 'transfer_busy', False) or getattr(self.app, 'remote_read_busy', False)) and self.offline_owner(owner)))):
-            if self.available(key) and getattr(getattr(owner, '_crypt_reader_store', None), 'remote_storage', False):
+            if self.available(key) and reading_capabilities(getattr(owner, '_crypt_reader_store', None)).remote:
                 from features.rclone.mobile.cloud_ui import explain_remote_busy
                 self.app.loop.create_task(explain_remote_busy(self.app))
             return False
@@ -464,11 +481,6 @@ class PrivateSessions:
             self.remember_position(owner)
         if not ProviderUI.clear_private_reader(owner, discard=True):
             return False
-        source = getattr(reader, 'source', None)
-        if hasattr(source, 'close'):
-            source.close()
-        if hasattr(reader, 'password'):
-            reader.password = ''
         if not force:
             self.app.credential_document_lists.closed(owner.session)
         owner.session.title = ''

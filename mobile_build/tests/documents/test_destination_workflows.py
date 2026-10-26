@@ -129,6 +129,7 @@ class DestinationWorkflowTests(unittest.TestCase):
                   len(self.app.routes.screens[self.app.native_host.state.destination]),
                   len(self.app.adaptive.detail_routes))
         self.run_async(self.picker.show_document_creation('Draft.md', origin))
+        self.run_async(self.picker.browser_editor_location(('Local', '')))
         started, release = Event(), Event()
         def delayed(*args, **kwargs):
             started.set()

@@ -4,13 +4,20 @@
 class ProviderDocumentSession:
     def __init__(self, owner):
         self.owner = owner
+        self.cancel = None
+        self.busy = False
         from .provider_opening import ProviderDocumentOpening
-        self.opening = ProviderDocumentOpening(owner)
+        self.opening = ProviderDocumentOpening(owner, self)
         self._reader = None
         self.metadata_fields = {}
         self.metadata_initial = {}
         self.metadata_values = {}
         self.closed = False
+
+    def set_busy(self, busy):
+        """Notify document controls without changing the connection's busy state."""
+        self.busy = busy
+        self.owner.set_document_busy(busy)
 
     @property
     def reader(self):
@@ -18,6 +25,9 @@ class ProviderDocumentSession:
 
     @reader.setter
     def reader(self, value):
+        if self._reader is not None and self._reader is not value:
+            from services.documents.mobile_reading import close_document_reader
+            close_document_reader(self._reader)
         self._reader = value
         if value is not None:
             self.closed = False
@@ -44,8 +54,9 @@ class ProviderDocumentSession:
         if contents is not None:
             contents.dispose()
         reader = self.reader
+        from services.documents.mobile_reading import close_document_reader
+        close_document_reader(reader)
         if reader is not None and reader.kind == '.pdf':
-            reader.pdf.close()
             reader.data = b''
             from services.documents.readers import MemorySource
             if isinstance(reader.source, MemorySource):

@@ -1,5 +1,5 @@
 """Managed copies and transfers which keep ordinary Documents usable."""
-from features.rclone.mobile.storage_location import collection_path
+from services.documents.locations import collection_path
 import asyncio
 import toga
 from toga.style import Pack

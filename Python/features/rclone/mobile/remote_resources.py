@@ -39,6 +39,13 @@ class NativeRemoteResources:
     def acquire(self):
         return self._access.acquire()
 
+    def capture_access(self, path):
+        return self._access.grant.check
+
+    @property
+    def privacy_gate(self):
+        return getattr(self.client, 'session_privacy', None)
+
     def close(self):
         self._access.close()
 
@@ -104,3 +111,6 @@ class NativeRemoteResources:
         from .remote_readers import RemoteReaders
         self._access.grant.check()
         return RemoteReaders(self.client, self.remote, resource=self, progress=progress)
+
+    def document_readers(self):
+        return self.readers()

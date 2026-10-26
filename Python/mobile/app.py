@@ -218,11 +218,18 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         workspace_root = getattr(self, 'workspace_root', root)
         models = self.__dict__.pop('_startup_models', None)
         self.preferences = models['preferences'] if models is not None else Preferences(workspace_root)
+        manager = getattr(self, 'scene_manager', None)
+        if manager is not None and manager.app is not self:
+            self.preferences.feature_preferences = manager.app.preferences
         from .appearance import configure_android_eink
         configure_android_eink(self)
         return models, workspace_root
 
     def _prepare_startup_documents(self, root, models, workspace_root):
+        from .browser_ui import BrowserStatusLabel
+        from commonUtils.ui.native.password_input import PasswordInput
+        self.document_status = BrowserStatusLabel(value='')
+        self.document_password = PasswordInput()
         self.store = models['store'] if models is not None else DocumentStore(root / 'Documents')
         from .recent_documents import RecentDocuments, MAX_RECENT
         self.recent_documents = models['recent'] if models is not None else RecentDocuments(workspace_root)
@@ -346,6 +353,30 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         if os.environ.get('LOGISTICS_COMIC_LAYOUT_CHECK') == '1' and type(self.main_window._impl).__module__.startswith('toga_iOS.'):
             from .comic_layout_check import run
             self.loop.create_task(run(self))
+
+    def feature_enabled(self, name):
+        from services.mobile_features import enabled
+        return enabled(self.preferences, name)
+
+    def require_feature(self, name, *, destination=None, present=True):
+        from .feature_settings import require
+        return require(self, name, destination=destination, present=present)
+
+    def set_feature_enabled(self, name, value, *, refresh=True):
+        from .feature_settings import set_enabled
+        return set_enabled(self, name, value, refresh=refresh)
+
+    def require_document_feature(self, name, *, kind=None, copies=None):
+        from services.mobile_features import document_feature
+        feature = document_feature(name, kind)
+        if feature is not None and not self.require_feature(feature):
+            return False
+        if copies is not None:
+            from services.documents.mobile_reading import reading_capabilities
+            required = reading_capabilities(copies).required_feature
+            if required is not None and not self.require_feature(required):
+                return False
+        return True
 
     def select_destination(self, destination):
         if not self.checkpoint(save_workspace=False):
@@ -922,6 +953,21 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                 self.loading = False
         source_document.private = False
         self.store.checkpoint(source_document)
+
+    async def open_local_document(self, path, *, destination=None):
+        from .document_imports import open_local_document
+        return await open_local_document(self, path, destination=destination)
+
+    async def open_download(self, widget=None, *, path=None, destination=None, **kwargs):
+        if path is None:
+            return await self.cloud_controller().open_download(widget, destination=destination, **kwargs)
+        if not self.require_document_feature(str(path)):
+            return False
+        from .document_sources import opening_status
+        from .document_imports import open_local_document
+        with opening_status(self, dict(path=str(path)), destination=destination):
+            await asyncio.sleep(0)
+            return await open_local_document(self, path, destination=destination)
 
     def provider_sessions(self):
         from .private_sessions import PrivateSessions

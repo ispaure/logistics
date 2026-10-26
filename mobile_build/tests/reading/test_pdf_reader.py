@@ -257,6 +257,8 @@ class PDFMobileTests(unittest.TestCase):
     def test_local_remote_and_localcrypt_sessions(self):
         class Client(RemoteClient):
             def request(self, action, **values):
+                if action == 'crypt_describe':
+                    return 'secret.pdf'
                 if action == 'crypt_decode':
                     return dict(name='secret.pdf', data=base64.b64encode(PDF).decode())
                 return super().request(action, **values)
@@ -383,7 +385,8 @@ class PDFMobileTests(unittest.TestCase):
                 self.assertTrue(owner.pdf_search.controller.disposed)
                 self.assertEqual(owner.pdf_search.input.value, '')
                 self.assertEqual(reader.pdf.data, b'')
-                self.assertEqual(reader.source.data, b'')
+                self.assertTrue(reader.source.closed)
+                self.assertEqual(reader.source.backend.data, b'')
                 self.assertIsNone(owner.crypt_image.image)
                 self.assertFalse(app.private_sessions.controllers)
                 for path in root.rglob('*'):

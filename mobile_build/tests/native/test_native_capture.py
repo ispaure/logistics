@@ -1,5 +1,4 @@
 """Screenshots use the native decor view and release encoding resources."""
-import importlib.util
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -7,10 +6,7 @@ import unittest
 from unittest.mock import patch
 from commonUtils.runtime.platform import OS
 
-source = Path(__file__).resolve().parents[2] / 'native_tests/tests/logisticsmobile/fixtures.py'
-spec = importlib.util.spec_from_file_location('native_capture_fixture', source)
-fixtures = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(fixtures)
+from mobile_build.native_tests.tests.logisticsmobile import fixtures
 
 
 class NativeCaptureTests(unittest.IsolatedAsyncioTestCase):

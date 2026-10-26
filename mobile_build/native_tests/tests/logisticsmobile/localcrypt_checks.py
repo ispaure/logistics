@@ -366,7 +366,7 @@ async def exercise_localcrypt(app, passed):
     provider = CryptFiles(app.private_root / 'LocalCryptFolders', app.cloud_client, remote)
     provider.mkdir('fixture-seed')
     await app.show_files()
-    from features.rclone.mobile.storage_location import collection_path
+    from services.documents.locations import collection_path
     local = collection_path(app.private_root)
     (local / 'source').mkdir()
     (local / 'source/empty').mkdir()

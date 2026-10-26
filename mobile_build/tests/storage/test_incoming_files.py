@@ -9,7 +9,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from mobile.incoming_files import consume, inbox_path, valid_name
-from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+from services.documents.locations import use_shared_local, _shared_local_roots
 
 
 class IncomingTests(unittest.TestCase):

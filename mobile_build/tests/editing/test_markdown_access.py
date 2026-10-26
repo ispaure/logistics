@@ -32,7 +32,7 @@ class MarkdownAccessTests(unittest.TestCase):
             provider.remote_storage = True
             self.assertFalse(NotesLibrary(provider).writable)
             self.assertTrue(copies.open('Note.md').read_only)
-            with self.assertRaisesRegex(ValueError, 'read-only'):
+            with self.assertRaisesRegex(PermissionError, 'read-only'):
                 copies.save(reader, '# Must not write')
             self.assertEqual(path.read_bytes(), b'# Original\r\n')
 

@@ -5,7 +5,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from commonUtils.persistence import atomic_write_json
-from features.rclone.mobile.storage_location import (
+from services.documents.locations import (
     _shared_local_roots, use_shared_local, switch_location, collection_path,
 )
 from mobile.incoming_files import inbox_path
@@ -73,7 +73,7 @@ class ReceivedFilesTests(TestCase):
 
     def test_partial_copy_failure_keeps_original_and_retry_succeeds(self):
         source = self.legacy()
-        with patch('features.rclone.mobile.storage_location._copy_durable', side_effect=OSError('disk full')):
+        with patch('services.documents.locations._copy_durable', side_effect=OSError('disk full')):
             with self.assertRaisesRegex(OSError, 'disk full'):
                 inbox_path(self.private)
         self.assertEqual((source / 'nested/été.txt').read_bytes(), b'original bytes')

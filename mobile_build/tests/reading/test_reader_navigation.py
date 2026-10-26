@@ -106,7 +106,7 @@ class ReaderNavigationTests(unittest.TestCase):
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
             try:
                 app.show_cloud(present=False)
-                from features.rclone.mobile.storage_location import collection_path
+                from services.documents.locations import collection_path
                 fixtures = collection_path(app.private_root) / 'fixtures'
                 fixtures.mkdir(parents=True)
                 epub, comic = make_books(fixtures)

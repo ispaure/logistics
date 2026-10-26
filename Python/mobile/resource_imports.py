@@ -15,7 +15,7 @@ class ResourceImports:
         if collection_root is not None and Path(collection_root).is_symlink():
             raise ValueError('Import storage cannot be linked.')
         self.collection_root = Path(collection_root).resolve() if collection_root is not None else None
-        from features.rclone.mobile.storage_location import shared_documents_path
+        from services.documents.locations import shared_documents_path
         shared_root = shared_documents_path(Path(root))
         self.shared_root = shared_root.resolve() if shared_root is not None else None
         self.path = self.root / 'resource-imports.json'

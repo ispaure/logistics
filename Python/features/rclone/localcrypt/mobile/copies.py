@@ -1,24 +1,22 @@
-"""Ciphertext-only offline copies and bounded session-only reader content."""
-import base64
-from contextlib import contextmanager
-from io import BytesIO
+"""Existing ciphertext-copy catalog; document I/O delegates to resource providers."""
 import json
-import threading
-import os
 from pathlib import Path
 from uuid import uuid4
-from zipfile import ZipFile
-
 from commonUtils.filesystem.snapshots import verified_file_snapshot
-from features.rclone.mobile.cloud import download_name
-from services.documents.readers import PrivateReader
-from commonUtils.runtime.operations import check_cancelled
 from commonUtils.persistence.publication import mutation_lock
+from features.rclone.mobile.cloud import download_name
+from services.documents.mobile_reading import DocumentReadCapabilities
 
 
 class LocalCryptCopies:
     # Reads use app-private ciphertext, not the network transfer connection.
     offline = True
+    document_capabilities = DocumentReadCapabilities(
+        private=True, writable=True, credential_bound=True, offline=True, required_feature='rclone')
+
+    @property
+    def privacy_gate(self):
+        return getattr(self.client, 'session_privacy', None)
 
     def __init__(self, root, client):
         self.root, self.client = Path(root), client
@@ -87,150 +85,31 @@ class LocalCryptCopies:
             raise ValueError('Encrypted copy changed while checking its revision.') from error
         return record, revision, digest
 
-    def _request(self, action, record, path, *, mode='rb', **values):
-        with path.open(mode) as stream:
-            return self.client.request(action, remote=record['remote'], path=record['encrypted_path'],
-                                       identity=record['identity'], fd=stream.fileno(), **values)
+    def _documents(self, key):
+        from .resources import DownloadedCryptFile
+        from services.documents.provider_documents import ProviderDocuments
+        provider = DownloadedCryptFile(self, key)
+        return ProviderDocuments(provider), provider.name
 
-    @staticmethod
-    def _decoded(result):
-        data = base64.b64decode(result['data'], validate=True)
-        if len(data) > 32 * 1024 * 1024:
-            raise ValueError('Decrypted copy exceeds 32 MiB.')
-        return download_name(result['name']), data
+    def capture_access(self, key):
+        from features.rclone.service import CredentialGrant
+        client, generation = self.client, getattr(self.client, 'generation', None)
+        return CredentialGrant(key, lambda: self.client is not client or getattr(client, 'generation', None) != generation).check
 
     def open(self, key, *, password='', cancelled=lambda: False):
-        check_cancelled(cancelled)
-        revision = self._snapshot(key)
-        from features.rclone.mobile.service import native_service
-        grant = native_service(self.client).credentials.capture(revision[0]['remote'])
-        if getattr(self.client, 'supports_streaming', False):
-            reader = self._stream_reader(revision[0], self._data(key), password, cancelled)
-            if self._snapshot(key) != revision:
-                raise ValueError('The encrypted copy changed while opening; reopen it.')
-            reader.key, reader.revision, reader.password = key, revision, password
-            grant.check()
-            reader.credential_grant = grant
-            return reader
-        result = self._request('crypt_decode', revision[0], self._data(key), password=password)
-        check_cancelled(cancelled)
-        if self._snapshot(key) != revision:
-            raise ValueError('The encrypted copy changed while opening; reopen it.')
-        reader = PrivateReader(*self._decoded(result))
-        reader.key, reader.revision, reader.password = key, revision, password
-        grant.check()
-        reader.credential_grant = grant
+        documents, name = self._documents(key)
+        reader = documents.open(name, password=password, cancelled=cancelled)
+        reader.key = key
         return reader
 
-    def _stream_reader(self, record, path, password='', cancelled=lambda: False):
-        from features.rclone.localcrypt.mobile.archive_source import NativeSource
-        source = NativeSource(self.client, record, path, password=password, cancelled=cancelled)
-        from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
-        if Path(source.name).suffix.lower() in SOURCE_EXTENSIONS:
-            if source.size > 1024 * 1024:
-                raise ValueError('Text editing is limited to 1 MiB; the file can still be moved or exported.')
-            with source.open(source.name) as stream:
-                return PrivateReader(source.name, stream.read())
-        return PrivateReader(source.name, source=source)
-
     def save(self, reader, text, *, cancelled=lambda: False):
-        """Verify staged ciphertext before replacing an unchanged local original."""
-        if not reader.editable:
-            raise ValueError('Only text, Markdown and INI copies can be edited.')
-        data = reader.text_snapshot.encode(text)
-        if len(data) > 1024 * 1024:
-            raise ValueError('Private text editing is limited to 1 MiB.')
-        # Validate the resulting document before any ciphertext can be published.
-        updated = PrivateReader(reader.name, data)
-        def stage(record, temporary):
-            self._request('crypt_encode', record, temporary, mode='r+b', data=base64.b64encode(data).decode('ascii'))
-        def verify(name, content):
-            if name != reader.name or content != data:
-                raise ValueError('Encrypted save verification failed; original preserved.')
-            return updated
-        return self._save_staged(reader, stage, verify, cancelled)
+        from services.documents.provider_documents import ProviderDocuments
+        updated = ProviderDocuments(reader.source.provider).save(reader, text, cancelled=cancelled)
+        updated.key = reader.key
+        return updated
 
     def save_metadata(self, reader, changes, *, cancelled=lambda: False):
-        from features.comics.mutations import metadata_plan as comic_metadata
-        from features.books.mutations import metadata_plan as epub_metadata
-        from commonUtils.archives.rebuilding import patched_manifest, content_manifest
-        if reader.kind == '.epub':
-            member, data = epub_metadata(reader.book, changes)
-        elif reader.kind in {'.cbz', '.zip'}:
-            member, data = comic_metadata(reader.comic, changes)
-        else:
-            raise ValueError('Metadata requires a comic or EPUB.')
-        if len(data) > 1024 * 1024:
-            raise ValueError('Metadata exceeds 1 MiB.')
-        with reader.source.open_archive(reader.name) if reader.streaming else ZipFile(BytesIO(reader.data)) as archive:
-            expected = patched_manifest(archive, {member: data}, cancelled=cancelled)
-        def stage(record, temporary):
-            with temporary.open('r+b') as output:
-                self._request('crypt_metadata', record, self._data(reader.key),
-                    output_fd=output.fileno(), member=member, password=reader.password,
-                    data=base64.b64encode(data).decode('ascii'))
-        def verify(name, content):
-            if isinstance(content, PrivateReader):
-                with content.source.open_archive(content.name) as archive:
-                    if name != reader.name or content_manifest(archive, cancelled=cancelled) != expected:
-                        raise ValueError('Archive verification failed; original preserved.')
-                return content
-            with ZipFile(BytesIO(content)) as archive:
-                if name != reader.name or content_manifest(archive, cancelled=cancelled) != expected:
-                    raise ValueError('Archive resource verification failed; original preserved.')
-            return PrivateReader(name, content)
-        return self._save_staged(reader, stage, verify, cancelled)
-
-    def _save_staged(self, reader, stage, verify, cancelled):
-        """One transaction for text and archive edits; disk staging is ciphertext."""
-        from commonUtils.persistence.publication import save_transaction
-        record = reader.revision[0]
-        target = self._data(reader.key)
-        temporary = self._temporary(reader.key)
-        password = getattr(reader, 'password', '')
-        grant = getattr(reader, 'credential_grant', None)
-        def validate():
-            if grant is not None:
-                grant.check()
-            if self._snapshot(reader.key) != reader.revision:
-                raise ValueError('The encrypted copy changed; original preserved. Reopen it before saving.')
-        staged_revision = None
-        def verified():
-            nonlocal staged_revision
-            before = self._snapshot_path(record, temporary)
-            if getattr(reader, 'streaming', False):
-                content = self._stream_reader(record, temporary, password, cancelled)
-                name = content.name
-            else:
-                name, content = self._decoded(self._request('crypt_decode', record, temporary, password=password))
-            result = verify(name, content)
-            staged_revision = self._snapshot_path(record, temporary)
-            if staged_revision != before:
-                raise ValueError('Staged ciphertext changed during verification.')
-            return result
-        owned = False
-        def create():
-            nonlocal owned
-            with temporary.open('xb'):
-                owned = True
-            stage(record, temporary)
-        def cleanup():
-            if owned:
-                temporary.unlink(missing_ok=True)
-        with self._write_lock:
-            updated = save_transaction(stage=create, verify=verified,
-                validate=validate, publish=lambda: os.replace(temporary, target),
-                cleanup=cleanup, cancelled=cancelled)
-            from commonUtils.runtime.operations import MutationIncomplete, MutationResult
-            try:
-                revision = self._snapshot(reader.key)
-                if revision[0] != record or revision[2] != staged_revision[2]:
-                    raise ValueError('Encrypted file changed after publication.')
-                if getattr(updated, 'streaming', False):
-                    updated = self._stream_reader(record, target, password, cancelled)
-            except Exception as error:
-                raise MutationIncomplete('The encrypted file was saved, but its new revision could not be read. Reopen it before editing.',
-                                         MutationResult(destination_published=True)) from error
-            updated.key, updated.revision, updated.password = reader.key, revision, password
-            updated.credential_grant = grant
-            return updated
+        from services.documents.provider_documents import ProviderDocuments
+        updated = ProviderDocuments(reader.source.provider).save_metadata(reader, changes, cancelled=cancelled)
+        updated.key = reader.key
+        return updated

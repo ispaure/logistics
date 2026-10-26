@@ -47,7 +47,7 @@ class RemoteNotes:
 
 
 def resolve_source(app, entry):
-    from features.rclone.mobile.storage_location import collection_path
+    from services.documents.locations import collection_path
     from commonUtils.runtime.resources.local import LocalFiles
     from features.rclone.localcrypt.mobile.resources import encrypted_storage
     from features.rclone.localcrypt.mobile.locations import LocalCryptLocation

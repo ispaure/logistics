@@ -59,7 +59,7 @@ class FolderHubProbe(LogisticsMobile):
             self.refresh_native_theme()
             await asyncio.sleep(.3)
             await capture_window(self, output / 'slate.png')
-            from features.rclone.mobile.storage_location import collection_path
+            from services.documents.locations import collection_path
             (collection_path(self.private_root) / 'Books').mkdir(parents=True, exist_ok=True)
             self.preferences.values['android_eink'] = 'true'
             configure_android_eink(self)

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 def exercise_ios_storage(app):
     from mobile.ios_storage import prepare_for_app
-    from features.rclone.mobile.storage_location import collection_path, _shared_local_roots
+    from services.documents.locations import collection_path, _shared_local_roots
     root = app.private_root / 'ios-storage-probe'
     documents = root / 'Documents'
     (documents / 'LocalFiles').mkdir(parents=True)

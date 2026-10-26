@@ -16,7 +16,7 @@ import time
 
 from commonUtils.persistence import atomic_write_json
 from commonUtils.persistence.publication import rename_exclusive
-from features.rclone.mobile.storage_location import _unlinked, shared_documents_path, collection_base
+from services.documents.locations import _unlinked, shared_documents_path, collection_base
 
 MAX_FILE = 1024 * 1024 * 1024
 MAX_FILES = 100
@@ -43,7 +43,7 @@ def inbox_path(private_root):
 def _migrate_inbox(private_root, source, destination, *, ios):
     """Copy a legacy tree once; journal publication and retain the source backup."""
     from commonUtils.persistence.publication import mutation_lock
-    from features.rclone.mobile.storage_location import _inventory, _stage_collection_tree, _Progress
+    from services.documents.locations import _inventory, _stage_collection_tree, _Progress
     with mutation_lock:
         source, destination = _unlinked(source), _unlinked(destination)
         # iOS container prefixes change after restore. Its two sources are

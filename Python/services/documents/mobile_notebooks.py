@@ -68,7 +68,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             resource, binding = restore_notebook_resource(recovery, key)
         if resource is not None and resource.policy.persistent:
             from mobile.resource_imports import ResourceImports
-            from features.rclone.mobile.storage_location import collection_path
+            from services.documents.locations import collection_path
             imports = ResourceImports(app.private_root, collection_root=collection_path(app.private_root))
             source_path = resource.provider.root / resource.path
             imported = imports.find(source_path)
@@ -116,7 +116,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             return False
         panel.open_resource(document)
         if resource is not None and not resource.policy.persistent:
-            panel.privacy_gate = getattr(getattr(app, 'cloud_client', None), 'session_privacy', None)
+            panel.privacy_gate = getattr(resource.provider, 'privacy_gate', None)
         if imports is not None:
             imports.remember(source_path, 'notebook', document.key)
     except Exception as error:
@@ -203,7 +203,7 @@ def adopt_notebook_document(app, panel, document):
     session.resource, session.transient = document.key, not resource.policy.persistent
     session.history_source = None
     if not resource.policy.persistent:
-        panel.privacy_gate = panel.privacy_gate or getattr(getattr(app, 'cloud_client', None), 'session_privacy', None)
+        panel.privacy_gate = panel.privacy_gate or getattr(resource.provider, 'privacy_gate', None)
     app.workspace.invalidate(session.id)
     if not resource.policy.persistent and (old is None or old.resource is None or old.resource.policy.persistent):
         panel.mount_canvas()

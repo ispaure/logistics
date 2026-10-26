@@ -2,41 +2,38 @@
 import asyncio
 import threading
 from pathlib import Path
-import toga
 from commonUtils.runtime.operations import check_cancelled
+from services.documents.mobile_reading import reading_capabilities, close_document_reader
 from .provider_ui import private_label
 from .provider_view import ProviderDocumentView
 
 
 class ProviderDocumentOpening:
-    def __init__(self, owner):
-        self.owner = owner
+    def __init__(self, owner, session):
+        self.owner, self.session = owner, session
         self.view = ProviderDocumentView(owner)
 
-    async def open(self, widget=None, *, copies=None, key=None, prepared=None, independent=False, edit=False, **kwargs):
+    async def open(self, *, copies, key, password='', prepared=None, edit=False):
         owner = self.owner
-        copies = copies or owner.crypt_copies
-        key = key if key is not None else owner.crypt_labels.get(owner.crypt_selector.value)
-        if (owner.cloud_busy and not (independent and owner.transfer_busy and getattr(copies, 'offline', False))) or key is None:
+        session = self.session
+        capabilities = reading_capabilities(copies)
+        if session.busy or key is None:
             return
-        password = owner.crypt_password.value
-        owner.crypt_password.value = ''
-        if owner._crypt_cancel is not None:
+        if session.cancel is not None:
             return
         if prepared is None and owner.private_dirty():
             owner.crypt_title.text = private_label('Unsaved changes: save, or discard and close.')
             owner.resume_crypt()
             return
-        if not independent:
-            owner.set_cloud_busy(True)
-        owner._crypt_cancel = threading.Event()
+        cancelled = session.cancel = threading.Event()
+        session.set_busy(True)
         reader = None
         view = None
         try:
             if prepared is None:
                 from .loading_progress import opening_options
                 reader = await asyncio.to_thread(copies.open, key,
-                    password=password, cancelled=owner._crypt_cancel.is_set, **opening_options(copies))
+                    password=password, cancelled=cancelled.is_set, **opening_options(copies))
                 owner._provider_comic_mode = owner.private_comic_mode()
                 owner._provider_comic_sharing = owner.format_services.comic_sharing()
                 owner._provider_comic_seam = owner.private_comic_seam()
@@ -44,52 +41,39 @@ class ProviderDocumentOpening:
                 kind, content = await asyncio.to_thread(owner.provider_page_content, reader, 0)
             else:
                 reader, kind, content = prepared
-            from features.text_editor.access import can_write
-            reader.read_only = not can_write(provider=copies, reader=reader)
+            if not owner.app.require_document_feature(reader.name):
+                return False
+            from services.documents.storage import document_writable
+            reader.read_only = not capabilities.writable or not document_writable(copies, reader)
             initial_preview, initial_preview_error = await self._prepare_initial_preview(
                 owner, reader, copies, content, edit=edit)
-            check_cancelled(owner._crypt_cancel.is_set)
+            check_cancelled(cancelled.is_set)
             view = self.view.build(reader, copies, kind, content)
-            if password:
-                from features.rclone.mobile.session_privacy import ResumePassword
-                view.privacy_gate = ResumePassword(password)
-            elif getattr(owner, 'privacy_gate', None) is not None:
+            if getattr(owner, 'privacy_gate', None) is not None:
                 view.privacy_gate = owner.privacy_gate
             handoff = (prepared is not None and getattr(owner, 'save_as_source_document', None) is owner.current
                        and getattr(owner.current, 'private', False))
             if not owner.show_view(view.crypt_view, checkpoint=not handoff, title=Path(reader.name).name):
                 return False
-            owner._crypt_cancel = None
+            session.cancel = None
             return await self._publish_view(owner, view, reader, edit=edit,
                                             initial_preview=initial_preview,
                                             initial_preview_error=initial_preview_error)
         except Exception as error:
-            if owner._crypt_cancel is not None and owner._crypt_cancel.is_set():
-                owner.cloud_status.value = 'Remote opening cancelled.' if getattr(copies, 'remote_storage', False) else 'Private reading cancelled.'
+            if cancelled.is_set():
+                owner.document_open_cancelled(remote=capabilities.remote)
                 return False
-            owner.cloud_status.value = 'Private reading failed: ' + str(error)[:300]
-            if getattr(copies, 'remote_storage', False):
-                from commonUtils.archives.zip_access import ArchivePasswordError
-                if isinstance(error, ArchivePasswordError):
-                    row = next((row for row in owner.app.cloud_rows.values() if row['path'] == key),
-                               dict(path=key, directory=False, size=0))
-                    owner.app.show_remote_item_actions(row, password_required=True)
-                    return False
-                from features.rclone.remote_policy import LOCAL_COPY_MESSAGE
-                await owner.main_window.dialog(toga.InfoDialog('Remote preview unavailable',
-                    str(error)[:200] + '\n\n' + LOCAL_COPY_MESSAGE))
-            else:
-                await owner.main_window.dialog(toga.InfoDialog('Could not open document', str(error)[:300]))
+            await owner.document_open_failed(error, remote=capabilities.remote, key=key)
         finally:
-            if view is not None:
-                view.discard()
-            if (prepared is None and getattr(copies, 'remote_storage', False) and reader is not None
-                    and getattr(owner, 'crypt_reader', None) is not reader):
-                reader.source.close()
-            password = None
-            owner._crypt_cancel = None
-            if not independent:
-                owner.set_cloud_busy(False)
+            try:
+                if view is not None:
+                    view.discard()
+                if prepared is None and session.reader is not reader:
+                    close_document_reader(reader)
+            finally:
+                password = None
+                session.cancel = None
+                session.set_busy(False)
 
     async def _prepare_initial_preview(self, owner, reader, copies, content, *, edit):
         initial_preview = None
@@ -108,6 +92,7 @@ class ProviderDocumentOpening:
     async def _publish_view(self, owner, view, reader, *, edit, initial_preview, initial_preview_error):
         owner.clear_private_reader(discard=True)
         view.adopt(owner)
+        self.session.reader = reader
         if reader.editable and reader.kind in {'.md', '.markdown'}:
             if edit and not getattr(reader, 'read_only', False):
                 owner.show_private_markdown_editor()

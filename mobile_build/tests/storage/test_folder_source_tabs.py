@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from mobile.app import LogisticsMobile
-from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+from services.documents.locations import use_shared_local, _shared_local_roots
 
 
 class FolderSourceTabTests(unittest.TestCase):
@@ -85,6 +85,38 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_remote_button])
         self.assertIsNone(app.folder_add_share_button.parent)
         self.assertIn(app.folder_credential_row, app.folder_picker_header.children)
+
+    def test_local_subtabs_isolate_managed_copies_and_preserve_ordinary_names(self):
+        app = self.app
+        app.show_locations()
+        ordinary = dict(source='Local', kind='local', name='Notes-2026-10', value='Notes-2026-10')
+        managed = dict(source='Local', kind='job', name='Server-Books', remote='Server-Books', value='job')
+        encrypted = dict(source='LocalCrypt', kind='crypt', name='Private', remote='Private', value='LocalCrypt: Private')
+        browser = dict(source='Local', kind='shared-local', name='Browse All Files', value='', browser_root=True)
+        choices = {'Notes-2026-10': ordinary, 'Server-Books': managed, 'Private': encrypted, 'All files': browser}
+        app.update_folder_list(choices)
+        self.assertEqual(set(app.folder_buttons), {'Notes-2026-10', 'All files'})
+        self.assertEqual(app.folder_tree_buttons, {})
+        self.assertEqual(app.folder_buttons['Notes-2026-10'].text, 'Notes-2026-10')
+        app.folder_local_buttons['Rclone'].on_press()
+        self.assertEqual(set(app.folder_buttons), {'Server-Books', 'Private'})
+        self.assertIn(('Server',), app.folder_tree_buttons)
+        app.folder_local_buttons['Others'].on_press()
+        self.assertEqual(set(app.folder_buttons), {'Notes-2026-10', 'All files'})
+        # One name can identify both a managed and an ordinary copy. Switching
+        # groups must not lose the other copy or borrow its actions.
+        shared_name = 'Server-Books'
+        choices[shared_name] = dict(managed, copies=[managed, dict(ordinary, name=shared_name)])
+        app.update_folder_list(choices)
+        self.assertEqual(app.folder_picker_choices[shared_name]['kind'], 'local')
+        app.folder_local_buttons['Rclone'].on_press()
+        self.assertEqual(app.folder_picker_choices[shared_name]['kind'], 'job')
+        app.folder_local_buttons['Others'].on_press()
+        self.assertEqual(app.folder_picker_choices[shared_name]['kind'], 'local')
+        app.change_folder_source('rclone')
+        self.assertFalse(app.folder_local_header.children)
+        app.change_folder_source('Local')
+        self.assertTrue(app.folder_local_header.children)
 
     def test_loaded_network_share_packages_never_enter_cloud_credential_filter(self):
         from types import SimpleNamespace
@@ -335,20 +367,22 @@ class FolderSourceTabTests(unittest.TestCase):
         job, _ = app.mirror_store().create(MirrorClient(), 'Drive', 'folder', storage='Local')
         app.show_locations()
         self.assertIn('Imported', app.folder_buttons)
+        self.assertNotIn(job['target'], app.folder_buttons)
+        app.folder_local_buttons['Rclone'].on_press()
         self.assertIn(job['target'], app.folder_buttons)
         self.assertNotIn('Collection', app.folder_buttons)
-        self.assertEqual(list(app.folder_buttons)[-1], 'All files')
-        self.assertEqual(app.folder_buttons['All files'].text, 'Browse All Files')
+        self.assertNotIn('All files', app.folder_buttons)
         app.loop.run_until_complete(app.folder_buttons[job['target']].on_press())
         self.assertEqual(app.file_provider.root, documents / 'Local')
         self.assertEqual(app.file_path, job['target'])
         app.show_locations()
+        app.folder_local_buttons['Others'].on_press()
         app.loop.run_until_complete(app.folder_buttons['Imported'].on_press())
         self.assertEqual(app.file_path, 'Imported')
 
     def test_local_shortcut_lists_only_requested_folder_on_cold_and_reused_browser(self):
         from unittest.mock import patch
-        from features.rclone.mobile.storage_location import CollectionFiles
+        from services.documents.locations import CollectionFiles
         app = self.app
         documents = Path(self.directory.name) / 'Documents'
         folder = documents / 'Local' / 'Server-Lib-Calibre'
@@ -438,10 +472,12 @@ class FolderSourceTabTests(unittest.TestCase):
             return [child.control_icon for child in app.folder_buttons[name].parent.children
                     if getattr(child, 'control_icon', '').startswith('folder')]
 
-        self.assertEqual(icons(local['target']), ['folder'])
-        self.assertEqual(icons(crypt['target']), ['folder_unlocked'])
         self.assertEqual(icons('Notes'), ['folder'])
         self.assertEqual(app.folder_buttons['All files'].text, 'Browse All Files')
+        app.folder_local_buttons['Rclone'].on_press()
+        self.assertEqual(icons(local['target']), ['folder'])
+        self.assertEqual(icons(crypt['target']), ['folder_unlocked'])
+        self.assertNotIn('Notes', app.folder_buttons)
         app.change_folder_source('rclone')
         self.assertEqual(icons('Online'), ['folder'])
         self.assertEqual(icons(local['target']), ['folder'])
@@ -488,6 +524,8 @@ class FolderSourceTabTests(unittest.TestCase):
             menus = []
             for tab, expected in [('Local', 'job'), ('rclone', 'job-remote')]:
                 app.change_folder_source(tab)
+                if tab == 'Local':
+                    app.folder_local_buttons['Rclone'].on_press()
                 name = job['target']
                 with patch.object(app, 'open_picker_folder', new=AsyncMock(return_value=True)) as opened:
                     app.loop.run_until_complete(app.folder_buttons[name].on_press())

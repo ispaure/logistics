@@ -10,10 +10,14 @@ from toga.style.pack import COLUMN
 def speech_session_valid(owner):
     if not owner.active_host or owner.crypt_reader is None:
         return False
-    store = owner._crypt_reader_store
-    if getattr(store, 'encrypted', True) or getattr(store, 'remote_storage', False):
-        return owner.credential_generation == getattr(owner.credential_client, 'generation', None)
+    try:
+        check = getattr(owner, 'document_access', None)
+        if check is not None:
+            check()
+    except ValueError:
+        return False
     return True
+
 
 
 def private_label(value):
@@ -71,6 +75,7 @@ class ProviderUI(FilesUI):
     from services.workflow_host import OwnedAttribute
 
     crypt_reader = OwnedAttribute('provider_document', 'reader')
+    _crypt_cancel = OwnedAttribute('provider_document', 'cancel')
     crypt_metadata_fields = OwnedAttribute('provider_document', 'metadata_fields')
     crypt_metadata_initial = OwnedAttribute('provider_document', 'metadata_initial')
     crypt_metadata_values = OwnedAttribute('provider_document', 'metadata_values')
@@ -172,7 +177,8 @@ class ProviderUI(FilesUI):
                 self.file_name.value = self.file_target.value = self.file_location.value = ''
                 self.file_status.value = ''
         self.crypt_labels = {}
-        self.crypt_selector.items = []
+        if hasattr(self, 'crypt_selector'):
+            self.crypt_selector.items = []
 
 
 
@@ -278,7 +284,7 @@ class ProviderUI(FilesUI):
             if workflow is not None:
                 await workflow.flush()
             self.crypt_reader = await asyncio.to_thread(self._crypt_reader_store.save, self.crypt_reader, self.crypt_text.value, cancelled=self._crypt_cancel.is_set)
-            self.crypt_title.text = private_label(Path(self.crypt_reader.name).name + (' · Saved encrypted locally' if getattr(self._crypt_reader_store, 'encrypted', True) else ' · Saved locally'))
+            self.crypt_title.text = private_label(Path(self.crypt_reader.name).name + ' · Saved locally')
         except Exception as error:
             self.crypt_title.text = private_label('Save failed; edits retained: ' + str(error)[:200])
         finally:

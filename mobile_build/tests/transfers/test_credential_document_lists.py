@@ -277,7 +277,7 @@ class CredentialDocumentListTests(unittest.TestCase):
         provider = LocalFiles(folder)
         provider.remote, provider.identity, provider.storage_namespace = 'Drive', 'b' * 64, 'b' * 64
         copies = LocalTextCopies(provider)
-        copies.encrypted = True  # Exercise the credential boundary with a local fixture reader.
+        copies.provider.private = True  # Exercise the credential boundary with a local fixture reader.
         source = dict(type='crypt', remote='Drive', identity='b' * 64, namespace='b' * 64, key='note.md')
         previous = Session('old', 'provider-session', 'old-reader', 'markdown', title='note.md', transient=True)
         self.cache.remember(previous, source)

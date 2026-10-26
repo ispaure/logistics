@@ -415,7 +415,10 @@
     "mobile-storage": {
       "sources": [
         "Python/mobile/private_sessions.py",
-        "Python/mobile/library.py"
+        "Python/mobile/library.py",
+        "Python/services/documents/locations.py",
+        "Python/services/documents/provider_documents.py",
+        "Python/mobile/document_imports.py"
       ],
       "guide": "docs/development/mobile-runtime.md",
       "tests": {
@@ -427,7 +430,9 @@
           "test_android_storage.py",
           "test_storage_reader_opening.py",
           "test_credential_document_lists.py",
-          "test_file_operations.py"
+          "test_file_operations.py",
+          "test_storage_independence.py",
+          "test_document_reading.py"
         ]
       }
     },

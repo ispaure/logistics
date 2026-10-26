@@ -145,7 +145,7 @@ class Audit(LogisticsMobile):
             return await action
 
     async def storage_audit(self, output):
-        from features.rclone.mobile.storage_location import collection_path, selection
+        from services.documents.locations import collection_path, selection
         from mobile import storage_ui
         card = Path('/storage/emulated/0/LogisticsResetQA')
         card.mkdir(exist_ok=True)

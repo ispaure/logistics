@@ -264,7 +264,7 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
         app.change_folder_source(source)
         assert app.folder_source == source
         await check('workspace-' + source)
-    from features.rclone.mobile.storage_location import collection_path
+    from services.documents.locations import collection_path
     root = collection_path(app.private_root) / 'Rotation fixture'
     (root / 'Child').mkdir(parents=True, exist_ok=True)
     (root / 'Child' / 'Note.md').write_text('# Rotation fixture\n\nRetain this panel.')

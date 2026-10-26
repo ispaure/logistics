@@ -6,6 +6,7 @@
     "documents/__init__.py",
     "documents/archive_access.py",
     "documents/limits.py",
+    "documents/locations.py",
     "documents/markdown.py",
     "documents/metadata.py",
     "documents/mobile_collections.py",
@@ -13,6 +14,7 @@
     "documents/mobile_reading.py",
     "documents/mobile_storage.py",
     "documents/mobile_views.py",
+    "documents/provider_documents.py",
     "documents/readers.py",
     "documents/storage.py",
     "documents/zip_passwords.py",
@@ -21,6 +23,7 @@
     "folders/catalog.py",
     "folders/policy.py",
     "identifiers.py",
+    "mobile_features.py",
     "mobile_presentation.py",
     "seasonal.py",
     "workflow_host.py"

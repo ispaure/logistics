@@ -206,6 +206,8 @@ class ReaderLifecycleTests(TestCase):
         class Client(RemoteClient):
             supports_streaming = False
             def request(self, action, **values):
+                if action == 'crypt_describe':
+                    return 'private.epub'
                 if action == 'crypt_decode':
                     return dict(name='private.epub', data=base64.b64encode(data).decode())
                 return super().request(action, **values)
@@ -310,6 +312,8 @@ class ReaderLifecycleTests(TestCase):
         class Client(RemoteClient):
             supports_streaming = False
             def request(self, action, **values):
+                if action == 'crypt_describe':
+                    return 'secret.pdf'
                 if action == 'crypt_decode':
                     return dict(name='secret.pdf', data=base64.b64encode(PDF).decode())
                 return super().request(action, **values)

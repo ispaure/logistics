@@ -3,13 +3,9 @@
 
 def document_source(provider, path):
     """The sole mobile choice of provider-backed reader adapter and mapped key."""
-    if getattr(provider, 'remote_storage', False):
-        resource = getattr(provider, 'resource', provider)
-        if hasattr(resource, 'readers'):
-            return resource.readers(), path
-    from features.rclone.localcrypt.mobile.resources import encrypted_document
-    source = encrypted_document(provider, path)
-    return source if source is not None else (TextDocumentCopies(provider), path)
+    factory = getattr(provider, 'document_readers', None)
+    key = getattr(provider, 'document_key', lambda path: path)(path)
+    return (factory(), key) if factory is not None else (TextDocumentCopies(provider), key)
 
 
 def document_copies(provider):
@@ -21,6 +17,13 @@ async def open_provider_document(app, provider, path, *, destination=None, **opt
     from pathlib import Path
     from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
     from services.documents.storage import DocumentResource, DocumentPolicy
+    if not app.require_document_feature(path):
+        return False
+    from services.documents.mobile_reading import reading_capabilities
+    copies, key = document_source(provider, path)
+    required = reading_capabilities(copies).required_feature
+    if required is not None and not app.require_feature(required):
+        return False
     suffix = Path(path).suffix.lower()
     if suffix == '.rmdoc':
         from services.documents.mobile_notebooks import open_notebook
@@ -28,46 +31,16 @@ async def open_provider_document(app, provider, path, *, destination=None, **opt
         if getattr(provider, 'remote_storage', False):
             raise ValueError('Cloud notebooks are read-only. Create a local copy before opening.')
         return await open_notebook(app, resource=DocumentResource(provider, path, max_bytes=MAX_ARCHIVE), destination=destination)
-    copies, key = document_source(provider, path)
     if suffix in SOURCE_EXTENSIONS or not DocumentPolicy.for_provider(provider).persistent:
-        app.show_cloud(present=False)
         return await app.open_crypt(copies=copies, key=key, destination=destination, **options)
     return await app.open_download(path=provider._locate(path), destination=destination)
 
 
-class TextDocumentCopies:
-    """Text presentation over a generic document provider."""
-    encrypted = False
+from services.documents.provider_documents import ProviderDocuments
 
-    def __init__(self, provider):
-        self.provider = provider
 
-    @property
-    def offline(self):
-        from commonUtils.runtime.resources.local import LocalFiles
-        return isinstance(self.provider, LocalFiles)
-
-    def open(self, key, *, password='', cancelled=lambda: False, read_provider=None):
-        from services.documents.storage import DocumentResource
-        with DocumentResource(read_provider if read_provider is not None else self.provider, key,
-                              max_bytes=1024 * 1024, independent=False) as resource:
-            data = resource.read(cancelled=cancelled)
-            from features.text_editor.resources import TextReader
-            reader = TextReader(resource.name, data, key=resource.path, revision=resource.revision)
-        from services.documents.storage import document_writable
-        reader.read_only = not document_writable(self.provider)
-        return reader
-
-    def save(self, reader, text, *, cancelled=lambda: False):
-        from services.documents.storage import document_writable
-        if not document_writable(self.provider, reader):
-            raise ValueError('Remote Markdown is read-only. Create a local copy before editing.')
-        from services.documents.storage import DocumentResource
-        data = reader.session.encode(text)
-        revision = DocumentResource.publish(self.provider, reader.key, data, max_bytes=1024 * 1024,
-            expected_revision=reader.revision, cancelled=cancelled)
-        from features.text_editor.resources import TextReader
-        return TextReader(reader.name, data, key=reader.key, revision=revision)
+class TextDocumentCopies(ProviderDocuments):
+    """Compatibility name for storage-neutral provider document sessions."""
 
 
 async def confirm_export(app, resource):
@@ -123,16 +96,18 @@ class NotesDocumentAccess:
         self.provider, self.client, self.active = provider, client, active
         self.privacy_gate, self.privacy_gates = privacy_gate, privacy_gates
         self.policy = DocumentPolicy.for_provider(provider)
-        self.original_client = client()
-        self.generation = getattr(self.original_client, 'generation', None)
+        capture = getattr(provider, 'capture_access', None)
+        self._check_access = capture('') if capture is not None else lambda: None
         self.label = 'Remote' if getattr(provider, 'remote_storage', False) else ('Private storage' if not self.policy.persistent else 'Local')
 
     def valid(self):
         if not self.active():
             return False
-        if not self.policy.persistent and (self.original_client is not self.client()
-                or self.generation != getattr(self.client(), 'generation', None)
-                or any(gate.locked for gate in self.privacy_gates())):
+        if not self.policy.persistent and any(gate.locked for gate in self.privacy_gates()):
+            return False
+        try:
+            self._check_access()
+        except ValueError:
             return False
         # Provider I/O validates its grant. Do not call check() from a cancellation
         # predicate: scoped provider checks themselves consult this predicate.

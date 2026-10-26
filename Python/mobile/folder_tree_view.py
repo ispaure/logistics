@@ -77,7 +77,7 @@ class FolderTreeView:
         self.nodes, self.panels, self.extras = {}, {}, {}
         self.browse, self.buttons, self.tree_buttons = {}, {}, {}
 
-    def render(self, visible, source, loaded_remotes, crypt_remotes):
+    def render(self, visible, source, loaded_remotes, crypt_remotes, *, grouped=True):
         """Reconcile this source snapshot; unchanged rows keep native identity."""
         nodes, panels, buttons, tree_buttons = {}, {}, {}, {}
 
@@ -118,7 +118,7 @@ class FolderTreeView:
 
         content = []
         folders = {name: entry for name, entry in visible.items() if not entry.get('browser_root')}
-        for title, node in sorted(folder_tree(folders).items(), key=lambda item: item[0].casefold()):
+        for title, node in sorted(folder_tree(folders, grouped=grouped).items(), key=lambda item: item[0].casefold()):
             panel = self.panels.get(title)
             if panel is None:
                 branch_content = toga.Box(style=Pack(direction=COLUMN))

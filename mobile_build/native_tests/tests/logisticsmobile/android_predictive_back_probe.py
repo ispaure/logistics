@@ -6,7 +6,7 @@ from pathlib import Path
 import traceback
 
 from types import SimpleNamespace
-from features.rclone.mobile.storage_location import collection_path
+from services.documents.locations import collection_path
 from features.rclone.localcrypt.mobile.resources import CryptFiles
 from .android_document_navigation_probe import AndroidDocumentNavigationProbe, BUNDLE
 

@@ -1,5 +1,5 @@
 """Managed Local/LocalCrypt copies with verified, explicit pull and push."""
-from features.rclone.mobile.storage_location import collection_path
+from services.documents.locations import collection_path
 import json
 import os
 import shutil

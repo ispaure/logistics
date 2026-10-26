@@ -31,7 +31,7 @@ class FileUITests(unittest.TestCase):
                 app.loop.close()
 
     def test_credential_cleanup_during_cold_local_read_preserves_picker_and_listing(self):
-        from features.rclone.mobile.storage_location import CollectionFiles
+        from services.documents.locations import CollectionFiles
         with TemporaryDirectory() as directory:
             LogisticsMobile.storage_root = Path(directory).resolve()
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
@@ -76,7 +76,8 @@ class FileUITests(unittest.TestCase):
                 app.cloud_restore_task = asyncio.create_task(restore())
             async def exercise():
                 try:
-                    with patch.object(app, 'show_cloud', side_effect=initialize):
+                    initialize(present=False)
+                    with patch.object(app, 'show_cloud', side_effect=AssertionError('Local files must not initialize Cloud')):
                         await asyncio.wait_for(app.show_files(), 1)
                     self.assertFalse(app.cloud_restore_task.done())
                     self.assertIn('Local files', [row.value for row in app.file_storage.items])

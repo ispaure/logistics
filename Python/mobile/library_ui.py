@@ -1,5 +1,5 @@
 """Mobile Books and Comics catalogue; readers own their own presentation."""
-from features.rclone.mobile.storage_location import collection_path, CollectionFiles
+from services.documents.locations import collection_path, CollectionFiles
 from configparser import ConfigParser, Error as ConfigError
 from pathlib import Path
 from features.comics.library_config import library_names

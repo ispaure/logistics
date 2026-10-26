@@ -106,6 +106,8 @@ class MobileLocalCryptTests(unittest.TestCase):
             cancel_after_encode = False
             fail = False
             def request(self, action, **values):
+                if action == 'crypt_describe':
+                    return 'note.md'
                 if action == 'crypt_encode':
                     self.saved = base64.b64decode(values['data'])
                     os.write(values['fd'], b'opaque-updated')
@@ -161,6 +163,8 @@ class MobileLocalCryptTests(unittest.TestCase):
             corrupt = False
             data = original.getvalue()
             def request(self, action, **values):
+                if action == 'crypt_describe':
+                    return 'comic.cbz'
                 if action == 'crypt_decode':
                     return dict(name='comic.cbz', data=base64.b64encode(self.data).decode())
                 if action == 'crypt_metadata':

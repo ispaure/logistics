@@ -1,5 +1,5 @@
 """A folder list and focused, source-owned folder actions."""
-from features.rclone.mobile.storage_location import collection_path
+from services.documents.locations import collection_path
 import asyncio
 import inspect
 from contextlib import nullcontext
@@ -65,7 +65,7 @@ class FolderHubUI:
         if vault is not None:
             vault.render_tree()
         if hasattr(self, 'folder_list'):
-            self.update_folder_list(self.folder_picker_choices)
+            self.update_folder_list(self.folder_all_choices)
         for name in ('file_browser', 'remote_browser', 'editor_browser'):
             browser = getattr(self, name, None)
             if browser is not None:
@@ -189,6 +189,19 @@ class FolderHubUI:
         choices = self.folder_choices() if choices is None else choices
         self.folder_source = getattr(self, 'folder_source', 'Local')
         self._build_folder_source_tabs()
+        self.folder_local_group = getattr(self, 'folder_local_group', 'Others')
+        self.folder_local_styled = None
+        self.folder_local_tabs = toga.Box(style=Pack(direction=ROW, margin_bottom=8))
+        self.folder_local_buttons = {}
+        for group in ('Rclone', 'Others'):
+            def select_local(widget=None, selected=group, **kwargs):
+                self.folder_local_group = selected
+                self.update_folder_list(self.folder_all_choices)
+            button = toga.Button(group, on_press=select_local,
+                                 style=Pack(flex=1, height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT)))
+            self.folder_local_buttons[group] = button
+            self.folder_local_tabs.add(button)
+        self.folder_local_header = toga.Box(style=Pack(direction=COLUMN))
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
         self.folder_tab_views = {}
         self.folder_tab_snapshot = None
@@ -223,7 +236,7 @@ class FolderHubUI:
         self.folder_loading_box = toga.Box(style=Pack(direction=COLUMN))
         self.app.incoming_notice = FittedLabel(getattr(self.app, 'incoming_status',
             'Files shared from other apps appear in Received Files.'), style=Pack(font_size=12, margin_top=4))
-        box = toga.Box(children=[self.folder_source_tabs, self.folder_picker_header, self.folder_source_actions,
+        box = toga.Box(children=[self.folder_source_tabs, self.folder_local_header, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box,
             folder_scroll(self.folder_list), self.app.incoming_notice],
             style=Pack(direction=COLUMN, margin=(8, 16, 12, 16), flex=1))
@@ -264,9 +277,21 @@ class FolderHubUI:
             self.folder_credential.value = selected if selected in credentials else 'All'
             self.folder_credential_name = selected if selected in credentials else 'All'
             self.folder_credential.on_change = self.change_folder_credential
+        self.folder_all_choices = choices
         self.folder_picker_choices = choices
         selected = self.folder_credentials.get(self.selected_folder_credential())
-        visible = source_choices(choices, self.folder_source, network_remotes)
+        local_group = self.folder_local_group if self.folder_source == 'Local' else None
+        visible = source_choices(choices, self.folder_source, network_remotes, local_group=local_group)
+        if self.folder_source == 'Local':
+            if not self.folder_local_header.children:
+                self.folder_local_header.add(self.folder_local_tabs)
+            if self.folder_local_styled != local_group:
+                for group, button in self.folder_local_buttons.items():
+                    source_tab(button, group == local_group)
+                    accessible_name(button, group + (' selected' if group == local_group else ''))
+                self.folder_local_styled = local_group
+        elif self.folder_local_header.children:
+            self.folder_local_header.remove(self.folder_local_tabs)
         if self.folder_source == 'rclone' and selected is not None:
             visible = credential_choices(visible, selected)
         if self.folder_source_styled != self.folder_source:
@@ -300,7 +325,7 @@ class FolderHubUI:
         self.folder_source_tabs = surface(toga.Box(
             style=Pack(direction=ROW, margin_bottom=12)),
             radius=11, background='alternate', outlined=False)
-        for source in ('Local', 'rclone', 'Network shares'):
+        for source in (('Local', 'rclone', 'Network shares') if self.app.feature_enabled('rclone') else ('Local',)):
             def select_source(widget=None, selected=source, **kwargs):
                 if self.folder_source != selected:
                     self.change_folder_source(selected)
@@ -312,7 +337,8 @@ class FolderHubUI:
 
     def _render_folder_tab(self, visible, loaded_remotes, crypt_remotes):
         """Project a filtered source into its retained native tree and mount it once."""
-        tab = self.folder_tab_views.get(self.folder_source)
+        key = (self.folder_source, self.folder_local_group if self.folder_source == 'Local' else None)
+        tab = self.folder_tab_views.get(key)
         if tab is None:
             tab = FolderTreeView(
                 browse=lambda name: self.browse_hub_folder(name),
@@ -321,8 +347,9 @@ class FolderHubUI:
                 invoke=self.invoke_workspace_action,
                 native_context=lambda: self.app._impl.native,
             )
-            self.folder_tab_views[self.folder_source] = tab
-        tab.render(visible, self.folder_source, loaded_remotes, crypt_remotes)
+            self.folder_tab_views[key] = tab
+        tab.render(visible, self.folder_source, loaded_remotes, crypt_remotes,
+                   grouped=not (self.folder_source == 'Local' and self.folder_local_group == 'Others'))
         self.folder_buttons, self.folder_tree_buttons = tab.buttons, tab.tree_buttons
         self.mount_folder_tab(tab.content)
 
@@ -344,6 +371,8 @@ class FolderHubUI:
                 for remote in item['remotes']}
 
     def change_folder_source(self, source):
+        if source != 'Local' and not self.app.require_feature('rclone'):
+            return
         # Source names and lock states need credentials, not a remote browser.
         if source in ('rclone', 'Network shares'):
             self.start_cloud_restore()

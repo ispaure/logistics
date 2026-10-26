@@ -5,7 +5,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 
-from features.rclone.mobile.storage_location import collection_base, selection, switch_location, recover_location, wipe_destination, start_empty_location, describe_location
+from services.documents.locations import collection_base, selection, switch_location, recover_location, wipe_destination, start_empty_location, describe_location
 
 
 def android_sdk():

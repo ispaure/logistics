@@ -9,7 +9,7 @@ from uuid import uuid4
 from zipfile import ZipFile
 
 from commonUtils.runtime.resources.documents import LocalDocuments
-from features.rclone.mobile.storage_location import CollectionFiles, collection_path, switch_location
+from services.documents.locations import CollectionFiles, collection_path, switch_location
 from mobile.app import LogisticsMobile
 from mobile.storage_ui import android_drives
 

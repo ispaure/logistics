@@ -10,7 +10,7 @@ from commonUtils.runtime.resources.paths import resource_path
 from commonUtils.runtime.resources.mutations import (
     create_resource_folder, delete_resource, move_resource, rename_resource,
 )
-from features.rclone.mobile.storage_location import CollectionFiles
+from services.documents.locations import CollectionFiles
 from features.rclone.localcrypt.mobile.resources import encrypted_storage
 
 

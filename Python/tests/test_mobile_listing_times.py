@@ -4,7 +4,7 @@ import os
 import time
 import unittest
 
-from features.rclone.mobile.storage_location import _modified_time
+from services.documents.locations import _modified_time
 
 
 class ListingTimeTests(unittest.TestCase):

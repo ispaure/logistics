@@ -431,7 +431,7 @@ class RemoteReaderTests(unittest.TestCase):
                 app.show_cloud(present=False)
                 app.cloud_remote.items = ['Cloud', 'Secret']
                 app.cloud_open_remote = 'Cloud'
-                entry = dict(kind='remote', value=('Secret', 'folder'), source='Remote', remote='Secret')
+                entry = dict(kind='remote', value=('Secret', 'folder'), source='Remote', remote='Secret', name='Secret')
                 self.assertTrue(await app.open_picker_folder(entry))
                 self.assertEqual(app.cloud_path, 'folder')
                 browser = app.remote_browser
@@ -537,7 +537,13 @@ class RemoteReaderTests(unittest.TestCase):
                 app.loop.close()
 
     def test_remote_markdown_returns_to_readonly_text_without_edit_label(self):
-        with TemporaryDirectory() as folder:
+        # Exercise supported-preview controls with a dummy surface. Production
+        # never falls back to an ordinary WebView for private content.
+        def webview(*, private, **options):
+            self.assertTrue(private)
+            return toga.WebView(**options)
+        with TemporaryDirectory() as folder, patch(
+                'features.text_editor.mobile.provider_markdown.markdown_webview', side_effect=webview):
             LogisticsMobile.storage_root = Path(folder)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
@@ -559,6 +565,34 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertIsNone(getattr(owner, 'crypt_formatted', None))
                 app.loop.run_until_complete(owner.save_crypt_metadata())
                 app.loop.run_until_complete(owner.show_crypt_save_as())
+                self.assertFalse(any('write' in action for action, _ in app.cloud_client.calls))
+            finally:
+                app.main_window.close()
+                app.loop.close()
+
+    def test_remote_markdown_unsupported_private_webview_keeps_readonly_source(self):
+        with TemporaryDirectory() as folder, patch(
+                'commonUtils.ui.native.private_webview.private_webview_supported', return_value=False):
+            LogisticsMobile.storage_root = Path(folder)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            app.cloud_client = RemoteClient()
+            app.cloud_client.files['note.md'] = b'# Remote note'
+            try:
+                app.show_cloud()
+                app.cloud_remote.items = ['Files']
+                app.cloud_open_remote = 'Files'
+                self.assertTrue(app.loop.run_until_complete(app.open_remote_document(
+                    dict(path='note.md', size=13, directory=False))))
+                owner = app.private_sessions.active
+                self.assertIsNone(owner._provider_markdown.preview)
+                self.assertIn(owner.crypt_text, owner.crypt_content.children)
+                self.assertTrue(owner.crypt_text.readonly)
+                self.assertEqual(owner.crypt_text.value, '# Remote note')
+                self.assertIn('unavailable', owner.crypt_title.text)
+                owner.show_private_markdown_editor()
+                self.assertIsNone(owner._provider_markdown.formatted)
+                assert_preview_only_ui(self, owner)
                 self.assertFalse(any('write' in action for action, _ in app.cloud_client.calls))
             finally:
                 app.main_window.close()

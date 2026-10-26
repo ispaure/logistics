@@ -20,7 +20,7 @@ def seed_download(store, name, data):
 class ResourceImportTests(unittest.TestCase):
     def test_ios_inbox_import_identity_is_retained_without_plaintext_names(self):
         from mobile.resource_imports import ResourceImports
-        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        from services.documents.locations import use_shared_local, _shared_local_roots
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             private, documents = root / 'private', root / 'Documents'
@@ -38,7 +38,7 @@ class ResourceImportTests(unittest.TestCase):
 
     def test_ios_shared_local_epub_opens_and_reopens_without_duplicate_import(self):
         from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
-        from features.rclone.mobile.storage_location import use_shared_local, _shared_local_roots
+        from services.documents.locations import use_shared_local, _shared_local_roots
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             private, documents = root / 'Application Support/Logistics', root / 'Documents'

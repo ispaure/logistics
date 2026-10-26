@@ -1,7 +1,7 @@
 """Actual Local/LocalCrypt vault controls, nested notes and adaptive presentation."""
 import asyncio
 from io import BytesIO
-from features.rclone.mobile.storage_location import collection_path, CollectionFiles
+from services.documents.locations import collection_path, CollectionFiles
 from .fixtures import capture_window
 
 
