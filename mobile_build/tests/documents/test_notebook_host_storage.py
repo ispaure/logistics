@@ -14,6 +14,23 @@ class NotebookHostStorageTests(unittest.TestCase):
     create = fixture.NotebookStorageTests.create
     stroke = fixture.NotebookStorageTests.stroke
 
+    def test_canvas_html_loads_after_host_attachment_on_open_and_reopen(self):
+        import toga
+        from services.documents.mobile_notebooks import open_notebook
+        attached = []
+        original = toga.WebView.set_content
+        def load(web, *args, **kwargs):
+            if args[0] == 'https://logistics.invalid/notebooks/':
+                attached.append(web.window is self.app.main_window)
+            return original(web, *args, **kwargs)
+        with patch.object(toga.WebView, 'set_content', new=load):
+            panel = self.create(private=False)
+            key = panel.key
+            self.assertEqual(attached, [True])
+            self.assertTrue(self.app.close_session(panel.session.id))
+            self.assertTrue(self.run_async(open_notebook(self.app, key=key)))
+            self.assertEqual(attached, [True, True])
+
     def test_cancel_keeps_dirty_source_recovery_and_open_session(self):
         panel = self.create(private=False)
         self.stroke(panel)

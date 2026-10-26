@@ -49,17 +49,6 @@ class ManagedDocumentWorkflows:
         prepare_managed_preview(owner, on_edit=back_to_editor,
             valid=lambda: self.active_host and owner.session.id in self.workspace.sessions)
         bind(self, owner.preview, lambda: owner.session.kind, web=True)
-        digest = sha256(content.encode('utf-8')).digest()
-        if digest != getattr(owner, 'preview_digest', None):
-            owner.preview_search.loading()
-            saved = self.__dict__.get('_closed_text_positions', {}).get(owner.session.resource)
-            if saved is not None:
-                from .reader_lifecycle import restore_loaded_scroll
-                restore_loaded_scroll(owner.preview, saved[1], lambda: self.workspace.accepts(token))
-            self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
-            # Re-presenting an unchanged preview must preserve its in-flight
-            # navigation, DOM and scroll rather than cancel it with another UUID.
-            owner.preview_digest = digest
         from .action_menu import ActionMenu
         from .document_sources import folder_action
         if hasattr(owner, 'preview_actions'):
@@ -80,6 +69,17 @@ class ManagedDocumentWorkflows:
         self.preview_box = owner.preview_box
         shown = self.show_view(self.preview_box, destination=kwargs.get('destination'),
                                route='preview', title=owner.document.name)
+        digest = sha256(content.encode('utf-8')).digest()
+        if digest != getattr(owner, 'preview_digest', None):
+            owner.preview_search.loading()
+            saved = self.__dict__.get('_closed_text_positions', {}).get(owner.session.resource)
+            if saved is not None:
+                from .reader_lifecycle import restore_loaded_scroll
+                restore_loaded_scroll(owner.preview, saved[1], lambda: self.workspace.accepts(token))
+            self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
+            # Re-presenting an unchanged preview must preserve its in-flight
+            # navigation, DOM and scroll rather than cancel it with another UUID.
+            owner.preview_digest = digest
         self.save_workspace()
         return shown
 

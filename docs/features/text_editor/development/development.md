@@ -12,6 +12,9 @@ pane in the application's document workspace, and can detach into its own window
 Reopening a file focuses its existing pane. Disabling the feature removes
 contributions while retaining open documents for re-enablement.
 
+Mobile Markdown preview HTML is published after its view is attached to the owning
+window, including the initial presentation.
+
 ## Architecture
 
 | Module | Responsibility |

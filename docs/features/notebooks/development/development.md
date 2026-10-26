@@ -30,6 +30,11 @@ is removed. Numeric tab assumptions in affected tests use destination identities
 
 ## Format and preservation boundary
 
+The mobile document host prepares a notebook before presentation, then attaches
+its canvas to the presented view before publishing HTML. Reopening a retired
+canvas follows the same order, so initial WebView navigation starts in its owning
+window. Standalone notebook panels retain their immediate mounting default.
+
 `notebook.py` reads bounded ZIP members without extracting them. Traversal,
 links, special entries, duplicate members, encrypted entries and oversized
 archives are rejected. Exactly one document root is required. Notebook page lists

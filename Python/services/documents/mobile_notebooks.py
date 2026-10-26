@@ -39,8 +39,6 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         if existing is not None:
             resource.close()
             existing.document.resource.check()
-            if existing.web is None and existing.editor is not None:
-                existing.mount_canvas()
             present(app, existing, destination=destination)
             return True
     session = next((s for s in app.workspace.sessions.values()
@@ -51,10 +49,8 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             resource.close()
         if panel.document and panel.document.resource:
             panel.document.resource.check()
-        if panel.web is None:
-            if panel.document is not None and panel.editor is not None:
-                panel.mount_canvas()
-            elif not await panel.load(lambda: panel.repository.open(key), key):
+        if panel.web is None and panel.editor is None:
+            if not await panel.load(lambda: panel.repository.open(key), key, mount=False):
                 return False
         present(app, panel, destination=destination)
         return True
@@ -118,7 +114,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             document.close()
             panel.dispose()
             return False
-        panel.open_resource(document)
+        panel.open_resource(document, mount=False)
         if resource is not None and not resource.policy.persistent:
             panel.privacy_gate = getattr(resource.provider, 'privacy_gate', None)
         if imports is not None:
@@ -146,6 +142,8 @@ def present(app, panel, *, destination=None):
         app.recent_documents.remember(session)
     app.show_view(panel.view, destination=destination, route='notebook:' + session.id,
                   title=panel.editor.notebook.name)
+    if panel.web is None:
+        panel.mount_canvas()
     app.save_workspace()
     app.refresh_document_list()
 

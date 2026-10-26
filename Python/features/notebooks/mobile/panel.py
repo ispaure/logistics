@@ -66,7 +66,7 @@ class NotebookPanel:
     async def new(self, widget=None, **kwargs):
         return await self.load(Notebook.new)
 
-    async def load(self, read, key=None):
+    async def load(self, read, key=None, *, mount=True):
         if self.busy or self.closed or not self.app.active_host:
             return False
         self.busy = True
@@ -84,7 +84,7 @@ class NotebookPanel:
                 else:
                     self.document.close()
                     self.document = None
-            self.open(book, key)
+            self.open(book, key, mount=mount)
             return True
         except Exception as error:
             if not self.closed and self.app.active_host:
@@ -122,9 +122,9 @@ class NotebookPanel:
             return Notebook.read(read_local_bytes(path, max_bytes=MAX_ARCHIVE))
         return await self.load(read)
 
-    def open_resource(self, document):
+    def open_resource(self, document, *, mount=True):
         self.document = document
-        self.open(document.book, document.key)
+        self.open(document.book, document.key, mount=mount)
 
     def state(self):
         state = document_state(self.editor, self.document)
@@ -133,7 +133,7 @@ class NotebookPanel:
         state['frame_batched_ink'] = sys.platform == 'ios'
         return state
 
-    def open(self, book, key):
+    def open(self, book, key, *, mount=True):
         if self.document is not None and self.document.book is not book:
             if self.document.recovery is not None:
                 self._repository = self.document.recovery
@@ -141,7 +141,8 @@ class NotebookPanel:
             self.document = None
         self.key = key
         self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book))
-        self.mount_canvas()
+        if mount:
+            self.mount_canvas()
 
     def mount_canvas(self):
         self.retire_canvas()
@@ -154,10 +155,10 @@ class NotebookPanel:
             self.boox_refresh = jclass('io.github.ispaure.logistics.notebooks.BooxRefresh').attach(self.web._impl.native)
             self.pen_input = jclass('io.github.ispaure.logistics.notebooks.NotebookInput').attach(
                 self.web._impl.native, self.boox_refresh)
-        self.web.set_content('https://logistics.invalid/notebooks/', mobile_editor_html(self.state(), self.bridge.url))
         for child in list(self.view.children):
             self.view.remove(child)
         self.view.add(self.web)
+        self.web.set_content('https://logistics.invalid/notebooks/', mobile_editor_html(self.state(), self.bridge.url))
 
     def navigate(self, widget, url, **kwargs):
         if self.busy or self.closed or not self.app.active_host or widget is not self.web:
