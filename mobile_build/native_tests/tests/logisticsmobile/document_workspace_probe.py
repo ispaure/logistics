@@ -10,6 +10,13 @@ from .document_checks import exercise_documents
 
 
 class DocumentWorkspaceProbe(NotebookProbe):
+    result_name = 'document-workspace-result.json'
+
+    async def run_checks(self, app, report):
+        await exercise_notebooks(app)
+        report['cases'].append('native_notebooks')
+        await exercise_documents(app, report['cases'])
+
     async def check(self, app):
         report = dict(success=False, cases=[])
         try:
@@ -25,13 +32,11 @@ class DocumentWorkspaceProbe(NotebookProbe):
             restoring = getattr(self, 'cloud_restore_task', None)
             if restoring is not None:
                 await restoring
-            await exercise_notebooks(app)
-            report['cases'].append('native_notebooks')
-            await exercise_documents(app, report['cases'])
+            await self.run_checks(app, report)
             report['success'] = True
         except Exception:
             report['error'] = traceback.format_exc()
-        (Path(self.paths.cache) / 'document-workspace-result.json').write_text(json.dumps(report, indent=2))
+        (Path(self.paths.cache) / self.result_name).write_text(json.dumps(report, indent=2))
 
 
 def main():

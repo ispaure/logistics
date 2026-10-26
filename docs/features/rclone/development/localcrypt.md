@@ -259,6 +259,13 @@ AES passwords, stale-save rejection, draft retention and credential locking.
 Oversize rejection remains a core test; feeding an oversized single line into the
 Android text widget stalled its layout during native testing.
 
+The disposable `document_storage_tools` runner supports `--probe localcrypt` on
+iOS and Android to exercise this complete native LocalCrypt sequence separately.
+Text-save acceptance checks the shared “Saved locally” status, clean draft state,
+absence of plaintext sentinel bytes in the stored ciphertext, and decrypted
+readback with the original encoding. The runner removes its owned QA app and
+simulator/emulator after collecting results.
+
 The desktop browser and mobile managed folder browser support decrypted names,
 rename, permanent delete, mkdir and moves within and across encryption boundaries.
 The commonUtils provider operations remain backend-agnostic; their API and failure

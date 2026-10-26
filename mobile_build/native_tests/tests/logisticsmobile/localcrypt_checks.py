@@ -259,7 +259,10 @@ async def exercise_localcrypt(app, passed):
         await close_copy()
         assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None) is reader and app.private_dirty()
         await app.save_crypt()
-        assert 'Saved encrypted' in app.provider_sessions().active.crypt_title.text, app.provider_sessions().active.crypt_title.text
+        assert 'Saved locally' in app.provider_sessions().active.crypt_title.text, app.provider_sessions().active.crypt_title.text
+        assert not app.private_dirty()
+        ciphertext = (app.crypt_copies.root / fixture['copies'][name]['key'] / 'data').read_bytes()
+        assert b'Native LocalCrypt edited sentinel' not in ciphertext
         await close_copy()
         updated = await open_copy(name)
         assert updated.text == '# Native LocalCrypt edited sentinel\n'
