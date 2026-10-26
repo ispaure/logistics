@@ -4,6 +4,13 @@ Open a local `.pdf` from the file browser, or choose **PDF Reader** from the
 launch chooser. Its Open picker also supports unlocked LocalCrypt locations.
 Remote and LocalCrypt browsers open PDFs through the same reader.
 
+Choose **⋯ → Duplicate as .rmdoc to annotate** to create an editable notebook
+beside the PDF, with the same base name and embedded PDF pages as backgrounds.
+The PDF remains unchanged. If that `.rmdoc` already exists, an error appears
+and the existing file is preserved. The file browser's selected-PDF actions
+also offer this command. Creation requires a writable folder and supports
+up to 1,000 pages within the notebook's archive limits.
+
 Use **Page** to enter the current page number (starting at 1), or use Previous
 page and Next page. Swipe or drag upward to advance and downward to go back.
 The mouse wheel and Up/Down or Page Up/Page Down keys also turn pages. The reader

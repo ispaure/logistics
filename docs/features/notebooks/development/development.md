@@ -36,8 +36,37 @@ archives are rejected. Exactly one document root is required. Notebook page list
 and `cPages` records are supported; deleted modern pages are omitted from the
 editor. Unrecognized JSON fields and archive members remain opaque. Page changes
 update ordering and page-count metadata; removed modern pages retain tombstones.
-Copies get new page IDs and matching page sidecar names. PDF/EPUB-backed documents
-are rejected pending background and redirection support.
+Copies get new page IDs and matching page sidecar names. PDF-backed documents
+retain their embedded PDF and per-page source mapping; EPUB-backed documents
+remain unsupported. PDF backgrounds are rendered lazily with the existing
+platform PDF backend and a single-page editor cache. The image sits below the
+transparent ink canvases so erasing ink preserves the PDF. Legacy redirection
+maps and modern page-record redirects follow reorder/duplicate/delete and
+recovery. Blank inserted pages have redirect -1. Cross-notebook PDF-page copies
+are refused to avoid losing their source background. Overview thumbnails remain
+ink-only.
+
+The PDF reader's **Duplicate as .rmdoc to annotate** action publishes through
+`DocumentResource` with no expected destination revision, retaining provider
+encryption and refusing collisions, including a competing creation during
+conversion. The archive embeds the unmodified PDF rather than rasterized page
+copies. Native macOS, iPhone WKWebView and Android emulator checks passed menu
+creation, distinct backgrounds, ink Save/readback and collision preservation.
+These synthetic fixtures do not certify reMarkable firmware import or physical
+stylus latency.
+
+iOS coalesces delivered pen-preview batches to animation frames; pen-up flushes
+the last batch before committing every captured sample. Android keeps immediate
+painting for its native pen path. In an iPhone simulator comparison with 241
+samples, preview calls fell from 241 to 31 and the largest frame gap from 207 ms
+to 17 ms. Both modes saved all 241 samples. This measures the synthetic WKWebView
+workload, rather than physical Pencil-to-display latency. The native annotation
+probe records both modes, and the WebEngine brush probe covers both mobile
+scheduling settings alongside desktop.
+The iPhone follow-up also passed the existing 216-stroke, all-brush regression:
+four pages through 400% zoom, 36 Undo/Redo steps, recovery reopening, explicit
+Save/readback and identical settled pixels after zoom round trips. Its owned
+simulator and QA app were removed after collecting evidence.
 
 `ink.py` preserves original v6 frames, using the vendored **rmscene 0.8.0** codec
 for known native blocks. It retains imported point dynamics and native tool/color
@@ -920,7 +949,11 @@ and regression check, not a guarantee against all device-wide memory pressure.
 
 The iOS `notebook_apple_memory_probe.py` and desktop
 `Python/tests/notebooks/notebook_memory_probe.py` exercise all nine brushes and
-three widths on pages one and two through fit, 100%, 150%, 200% and 400% zoom.
+three widths on four pages through fit, 100%, 150%, 200% and 400% zoom, with
+ordinary recovery checkpoints enabled. They count retained stroke/native-block
+identities across the live document and both history stacks, then exercise 36
+Undo and Redo steps and compare restored ink and pixels. Recovery reopening is
+checked independently of explicit source Save.
 The shared checks compare native-decoded stroke dynamics, colors, widths, layers
 and page order, require source files to stay unchanged until explicit Save, and
 verify saved/exported readback. Native author UUIDs generated during encoding
@@ -963,6 +996,58 @@ checks, including saving a 1,007-stroke page after continued drawing, and remove
 its guest workspace without a thread failure. Its normal-renderer frame gap
 still reached 300.1 ms against the 80 ms guard, so Windows responsiveness remains
 unresolved despite the passing memory, ink-quality and file-preservation checks.
+
+## Recovery history sharing
+
+Checkpoint normalization calls `InkPage.read(raw, previous=ink)` for changed pages
+and reuses unchanged pages. Unchanged native frames, parsed line blocks, stroke
+objects and baseline payloads are shared across immutable history snapshots.
+This avoids decoding every old point into a new object on every stroke. Mutating
+operations still replace their stroke values; the recovery-sharing regression
+checks that moving a stroke leaves its Undo version intact. Archive encoding,
+recovery manifests and source publication retain their existing formats.
+
+The host reproduction of 60 strokes with 256 samples across four pages reduced
+peak traced Python allocation from 282,476,544 to 38,633,472 bytes. Fifty Undo
+snapshots retained 60 stroke objects instead of 1,785. These are allocation
+measurements for this reproduction, rather than whole-process memory limits.
+
+The physical Android `notebook_soak_probe.py` uses six synthetic pages, 60 native
+Ballpoint callback contacts and 120 ordinary historical-event contacts with all
+nine brushes, each containing 512 samples. It checks zoom, 50-state history,
+Undo/Redo, partial erasing, page thumbnails, six complete editor remounts and a
+final additional stroke. Saved ink must match after reopening. Run through
+`document_storage_tools android --probe notebook-soak --device SERIAL`; evidence
+stays outside the wiki and the runner removes its temporary QA package. Android
+window captures use PixelCopy so accelerated canvas ink is included. Synthetic
+contacts exercise buffer, rendering and persistence paths; they do not measure
+optical pen latency or establish physical brush appearance parity.
+
+Two physical NoteAir5C runs completed all 181 strokes and six remounts without
+a process exit. Saved native ink matched; captured canvas and overview images
+were inspected. In the run using PixelCopy, app PSS ranged from 290 to 724 MB
+(including graphics allocations), with at least 1.3 GiB system memory available.
+This is a repeatable stress regression, not a certification of unlimited session
+length or every device memory condition.
+
+The October 26 recovery follow-up passed native macOS and Windows Qt WebEngine,
+Fedora 43 X11/software graphics, and iPhone/iPad WKWebView simulators. Each run
+edited four pages through 400% zoom with all nine brushes and three widths. The
+desktop runs retained 217 stroke objects/native line blocks for 217 visible
+strokes; iOS retained 216 for 216, with 50 Undo snapshots. After 36 Undo/Redo steps,
+native ink and rendered pixels matched. Recovery reopening, explicit Save and
+export/readback preserved page order, layers, colors, pressure and widths, and
+source bytes stayed unchanged before Save. Windows/Fedora brush-pixel and
+menus/zoom probes also passed; Fedora's broader drawing/history/save stress passed.
+The model regression checks 60 strokes over four pages, 50 Undo/Redo steps,
+reopening and transform isolation. Storage regressions passed too.
+
+These are focused sharing and rendering checks, not a guarantee against all
+long-session memory growth. iOS input was simulated rather than physical Apple
+Pencil; Windows used x64 Qt under ARM64 emulation, and Fedora used an owned Xvfb
+display. This follow-up does not certify native x64 hardware, Linux GPU drivers
+or resolve the separate Windows drawing-latency issue. All follow-up simulator
+apps/devices and guest test workspaces were removed after collecting evidence.
 
 ## Dropdown presentation
 

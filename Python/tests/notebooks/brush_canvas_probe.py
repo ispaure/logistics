@@ -147,8 +147,8 @@ def main(output):
     results, failed = {}, []
     views = []
 
-    def run(desktop):
-        name = 'desktop' if desktop else 'mobile'
+    def run(desktop, batched=False):
+        name = 'desktop' if desktop else 'mobile-ios' if batched else 'mobile'
         view = QWebEngineView()
         view.resize(1200, 900)
         views.append(view)
@@ -166,6 +166,8 @@ def main(output):
                 view.close()
                 if desktop:
                     run(False)
+                elif not batched:
+                    run(False, True)
                 else:
                     app.quit()
             except Exception as error:
@@ -177,10 +179,11 @@ def main(output):
                 failed.append('WebEngine load failed')
                 app.quit()
                 return
-            view.page().runJavaScript('const expectedFrameBatching=' + json.dumps(desktop) + ';const expected=' + json.dumps(expected) + ';' + CHECKS, checked)
+            view.page().runJavaScript('const expectedFrameBatching=' + json.dumps(desktop or batched) + ';const expected=' + json.dumps(expected) + ';' + CHECKS, checked)
 
         view.loadFinished.connect(loaded)
         state = Editor(Notebook.new('Brush compatibility')).state()
+        state['frame_batched_ink'] = batched
         if desktop:
             html = editor_html(state, 'logistics-notebook://brush-probe/', console_bridge=True, desktop=True)
         else:
@@ -195,7 +198,7 @@ def main(output):
     if failed:
         raise RuntimeError('; '.join(failed))
     (output / 'brush-checks.json').write_text(json.dumps(results, indent=2) + '\n')
-    print('Both WebViews passed palettes, three widths, model/preview parity, distinct pixels, grayscale and native RGBA checks.')
+    print('Desktop and both mobile scheduling modes passed palettes, widths, model/preview parity, distinct pixels, grayscale and native RGBA checks.')
 
 
 if __name__ == '__main__':

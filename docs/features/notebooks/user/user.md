@@ -104,7 +104,13 @@ unknown scene types and older
 ink versions show a preservation warning
 and disable ink editing on that page. Cross-notebook copying of unsupported pages
 is disabled because their resource dependencies cannot yet be guaranteed.
-PDF/EPUB-backed archives are rejected without changing the source.
+PDF-backed archives display the embedded PDF beneath editable ink. In the PDF
+reader's **⋯** menu, choose **Duplicate as .rmdoc to annotate** to create and open
+a notebook beside the PDF with the same base name. An existing `.rmdoc` produces
+an error and is preserved. The PDF itself stays unchanged. PDF-backed pages can
+be duplicated and reordered within the notebook; copying their backgrounds to
+another notebook is unavailable. Page overview thumbnails show ink only.
+EPUB-backed archives remain unsupported.
 
 The page surface uses 1404 × 1872 notebook units. Existing templates are preserved
 but are not rendered behind the ink. Stroke selection currently moves one stroke;

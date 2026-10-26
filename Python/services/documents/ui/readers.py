@@ -81,7 +81,7 @@ def open_reader_choice(choice, parent, kind, *, password=None):
             if kind == 'pdf':
                 from features.pdf.ui.reader import PDFWindow
                 from services.documents.ui.private_views import protect_private_view
-                window = PDFWindow(str(path), document)
+                window = PDFWindow(str(path), document, annotation_provider=choice.provider, annotation_path=choice.path)
                 protect_private_view(window, choice.provider)
                 window.destroyed.connect(lambda: choice.close())
                 retain(window)

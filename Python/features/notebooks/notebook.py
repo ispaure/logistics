@@ -120,8 +120,10 @@ class Notebook:
             title = metadata.get('visibleName', 'Notebook')
             if not isinstance(title, str) or len(title) > 512:
                 raise ValueError('Invalid or oversized notebook title.')
-            if content.get('fileType', '') not in ('', 'notebook'):
-                raise ValueError('PDF/EPUB-backed RMDOC editing is not supported yet; the original was not changed.')
+            if content.get('fileType', '') not in ('', 'notebook', 'pdf'):
+                raise ValueError('EPUB-backed RMDOC editing is not supported yet; the original was not changed.')
+            if content.get('fileType') == 'pdf' and identity + '.pdf' not in members:
+                raise ValueError('The PDF-backed notebook is missing its embedded PDF.')
             templates = members.get(identity + '.pagedata', b'').decode('utf-8').splitlines()
             if 'cPages' in content:
                 records = content['cPages']['pages']
@@ -129,6 +131,19 @@ class Notebook:
                 records = sorted(records, key=lambda r: r.get('idx', {}).get('value', ''))
             else:
                 records = [dict(id=p) for p in content.get('pages', [])]
+                if content.get('fileType') == 'pdf':
+                    redirects = content.get('redirectionPageMap')
+                    if redirects is None:
+                        redirects = list(range(len(records)))
+                    if not isinstance(redirects, list) or len(redirects) != len(records):
+                        raise ValueError('Invalid PDF page mapping.')
+                    for record, redirect in zip(records, redirects):
+                        record['redir'] = dict(value=redirect)
+            if content.get('fileType') == 'pdf':
+                for record in records:
+                    redirect = record.get('redir', {}).get('value', -1)
+                    if type(redirect) is not int or not -1 <= redirect < 10000:
+                        raise ValueError('Invalid PDF page mapping.')
             if not 1 <= len(records) <= MAX_PAGES:
                 raise ValueError('Notebooks must contain 1–1000 pages with explicit page IDs.')
             pages = [Page(identifier(r['id']), deepcopy(r),
@@ -156,6 +171,8 @@ class Notebook:
             raise ValueError('A notebook is limited to 1000 pages.')
         at = len(self.pages) if at is None else page_index(at, len(self.pages), insertion=True)
         page = Page(str(uuid4()), ink=InkPage.blank())
+        if self.content.get('fileType') == 'pdf':
+            page.record['redir'] = dict(value=-1)
         self.pages.insert(at, page)
         self.structure_dirty = True
         return page
@@ -180,6 +197,8 @@ class Notebook:
         page_index(index, len(source.pages))
         at = len(self.pages) if at is None else page_index(at, len(self.pages), insertion=True)
         original = source.pages[index]
+        if source is not self and source.content.get('fileType') == 'pdf' and original.record.get('redir', {}).get('value', -1) >= 0:
+            raise ValueError('PDF-backed pages can only be duplicated within their notebook.')
         if source is not self and source.page(index).warning:
             raise ValueError('This page contains unsupported objects; cross-notebook copy is disabled to preserve referenced assets.')
         identity = str(uuid4())
@@ -192,7 +211,10 @@ class Notebook:
         record = deepcopy(original.record)
         record['id'] = identity
         # A copied page is inserted in the target, not a redirect into another document.
-        record.pop('redir', None)
+        if source is not self:
+            record.pop('redir', None)
+            if self.content.get('fileType') == 'pdf':
+                record['redir'] = dict(value=-1)
         record.pop('deleted', None)
         for name, data in source.members.items():
             parts = PurePosixPath(name).parts
@@ -237,6 +259,8 @@ class Notebook:
                 content['cPages']['lastOpened'] = dict(timestamp=stamp, value=self.pages[0].id)
             else:
                 content['pages'] = [page.id for page in self.pages]
+                if content.get('fileType') == 'pdf':
+                    content['redirectionPageMap'] = [p.record.get('redir', {}).get('value', -1) for p in self.pages]
             members[self.id + '.pagedata'] = ('\n'.join(p.template for p in self.pages) + '\n').encode()
             members[self.id + '.content'] = json_bytes(content)
         if changed:

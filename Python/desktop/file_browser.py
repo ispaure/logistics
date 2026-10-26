@@ -120,7 +120,8 @@ class _BrowserHost:
         self.closing = False
         self.filesystem_scope = filesystem_scope
         from desktop.bulk_rename import bulk_rename_actions
-        self.file_browser = FileBrowser(parent=self, action_providers=(bulk_rename_actions,),
+        from features.pdf.ui.annotation import annotation_actions
+        self.file_browser = FileBrowser(parent=self, action_providers=(bulk_rename_actions, annotation_actions),
                                        directory_handler=self._route_directory,
                                        directory_boundary=self._directory_boundary,
                                        calculate_folder_sizes=calculate_folder_sizes,

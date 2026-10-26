@@ -5,6 +5,23 @@ Its mobile canvas reuses Comics’ viewport invalidation loop and Images’ boun
 page-dimension validation. These presentation dependencies are declared in
 `Scripts/architecture.json`.
 
+`annotation.duplicate_pdf` reads a bounded, revision-checked source through
+`DocumentResource` and publishes a sibling `.rmdoc` with no replacement. It embeds
+the original PDF bytes and creates native notebook page IDs with PDF redirects.
+PDF owns conversion and menu adapters; Notebooks owns editable ink and displays
+one lazily rendered PDF background under its transparent canvases. These two
+feature dependencies are declared in the architecture map. Same-name collisions
+are reported before conversion and enforced again by provider publication.
+Private providers retain their encryption; read-only providers reject creation.
+
+`Python/tests/notebooks/test_pdf_annotation.py` covers archive/recovery/ink
+round trips, mappings, collision races and desktop menu dispatch. The native
+desktop `pdf_annotation_probe.py` covers the real menu, mouse drawing, background
+pages, Save/reopen and collision errors. The mobile runner offers
+`--probe pdf-annotation` on iOS and Android, using a disposable QA identity and
+synthetic PDF. It also compares immediate and frame-batched pen preview work;
+simulated pen samples do not establish physical Pencil latency.
+
 It declares a PDF file type and a document launcher, with lazy desktop imports.
 `mobile_sources.json` is included in the mobile source owners in `mobile_build/tools.py`.
 

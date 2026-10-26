@@ -1,5 +1,6 @@
 """Installed Android/iOS notebook library and offline canvas workflow."""
 import asyncio
+import sys
 from io import BytesIO
 from pathlib import Path
 from services.documents.storage import read_local_bytes
@@ -129,6 +130,7 @@ class NotebookPanel:
         state = document_state(self.editor, self.document)
         state['native_close'] = hasattr(self.view, '_native_reader_buttons')
         state['native_pen'] = self.pen_input is not None
+        state['frame_batched_ink'] = sys.platform == 'ios'
         return state
 
     def open(self, book, key):

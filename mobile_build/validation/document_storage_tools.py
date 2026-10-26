@@ -328,7 +328,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'recent-deletion', 'notebook', 'creation', 'features', 'notebook-input', 'notebook-memory', 'notebook-soak', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('storage', 'recent-deletion', 'notebook', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPad'), default='iPhone')
     parser.add_argument('--increase-contrast', action='store_true')
@@ -366,6 +366,9 @@ def main():
         if args.probe == 'recent-deletion':
             creation_profile = dict(entry_point='tests.logisticsmobile.recent_deletion_probe',
                                     result_name='recent-deletion-result.json')
+        if args.probe == 'pdf-annotation':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.pdf_annotation_probe', result_name='pdf-annotation-result.json')
         if args.platform == 'ios':
             profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                            entry_point='tests.logisticsmobile.notebook_probe',

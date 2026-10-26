@@ -55,8 +55,9 @@ async def _capture_window(app, path):
             native.drawViewHierarchyInRect(native.bounds, afterScreenUpdates=True)
         data = nsdata_to_bytes(renderer.PNGDataWithActions(Block(render, None, objc_id)))
     else:
-        from java import jclass
-        decor = app._impl.native.getWindow().getDecorView()
+        from java import dynamic_proxy, jclass
+        window = app._impl.native.getWindow()
+        decor = window.getDecorView()
         for attempt in range(100):
             width, height = int(decor.getWidth()), int(decor.getHeight())
             if width > 0 and height > 0:
@@ -68,7 +69,20 @@ async def _capture_window(app, path):
         bitmap = Bitmap.createBitmap(width, height, jclass('android.graphics.Bitmap$Config').ARGB_8888)
         output = jclass('java.io.ByteArrayOutputStream')()
         try:
-            decor.draw(jclass('android.graphics.Canvas')(bitmap))
+            # View.draw uses a software canvas and omits accelerated WebView ink.
+            # Copy the composited window instead, without blocking its UI thread.
+            copied = asyncio.get_running_loop().create_future()
+            class CopyResult(dynamic_proxy(jclass('android.view.PixelCopy$OnPixelCopyFinishedListener'))):
+                def onPixelCopyFinished(self, result):
+                    if not copied.done():
+                        copied.set_result(int(result))
+            listener = CopyResult()
+            PixelCopy = jclass('android.view.PixelCopy')
+            PixelCopy.request(window, bitmap, listener,
+                              jclass('android.os.Handler')(jclass('android.os.Looper').getMainLooper()))
+            result = await asyncio.wait_for(asyncio.shield(copied), 15)
+            if result != int(PixelCopy.SUCCESS):
+                raise OSError(f'The Android window screenshot failed: PixelCopy {result}.')
             if not bitmap.compress(jclass('android.graphics.Bitmap$CompressFormat').PNG, 100, output):
                 raise OSError('The Android window screenshot could not be encoded.')
             data = bytes(int(value) & 255 for value in output.toByteArray())

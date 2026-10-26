@@ -1,6 +1,5 @@
 """Logistics Linux VM policy over the reusable existing-guest transport."""
 import argparse
-import base64
 import json
 from pathlib import Path
 import signal
@@ -129,7 +128,8 @@ subprocess.run(['uv','venv','--python','3.12.2','--seed',sys.argv[1]+'/environme
             setup = [guest_python, 'Scripts/install_build_manager.py', '--from-pin', workspace+'/manager']
         env['LOGISTICS_MANAGER_CHECKOUT'] = workspace+'/manager'
         code = execute(setup, env, 600)
-        if code:raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
+        if code:
+            raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
         reports = workspace + '/reports'
         if args.pattern:
             suite, pattern = ('shared', args.pattern[7:]) if args.pattern.startswith('shared:') else ('desktop', args.pattern)

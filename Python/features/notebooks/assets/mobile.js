@@ -1,6 +1,7 @@
 (function() {
 
   continuousInk = true;
+  frameBatchedInk = !!state.frame_batched_ink;
   pageSwipe = true;
   const svg = icon,
     brushNib = value => nibs[Object.keys(state.tools).find(name => String(state.tools[name]) === String(value))] || glyphs.pen;

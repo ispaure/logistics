@@ -93,7 +93,7 @@ The guided flow supports [combined platform validation and reviewed GitHub/Fireb
 | [LM Chat](docs/features/lm/user/user.md) | Chat with an existing LM server, paste screenshots, read and optionally edit IDE project files with saved change previews, and save conversations locally |
 | [Books](docs/features/books/user/user.md) and [Comics](docs/features/comics/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
 | [Notebooks](docs/features/notebooks/user/user.md) | Create Notebook documents from New document, open/edit .rmdoc files and export native ink copies (experimental) |
-| [PDF Reader](docs/features/pdf/user/user.md) | Read and search local, remote and LocalCrypt PDFs on desktop and mobile, jump to page numbers, and swipe vertically |
+| [PDF Reader](docs/features/pdf/user/user.md) | Read and search PDFs on desktop and mobile, jump to pages, swipe vertically, and duplicate a PDF as an annotatable .rmdoc beside it |
 | [Archives](docs/features/archives/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
 | [Images](docs/features/images/user/user.md) | Compress images, work with photo metadata, and [capture bursts on iPhone](docs/features/images/user_mobile/user_mobile.md) |
 | [rclone](docs/features/rclone/user/user.md) | Browse remotes in read-only tabs, open supported files in memory, and use managed Pull/Push for local or encrypted folders |

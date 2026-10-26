@@ -1,5 +1,12 @@
 # Mobile PDF Reader
 
+Open the PDF's **⋯** menu and choose **Duplicate as .rmdoc to annotate** to
+create and open an editable notebook beside it. The notebook has the same base
+name and embeds the original PDF as page backgrounds; the PDF stays unchanged.
+An existing `.rmdoc` shows an error and is preserved. The folder must allow new
+files; remote read-only locations cannot create a sibling notebook. Conversion
+supports up to 1,000 pages within the notebook archive limits.
+
 Open a `.pdf` from local files, a remote file browser, or an unlocked LocalCrypt
 copy. The PDF opens directly in a document session without importing into Books.
 

@@ -1,5 +1,12 @@
 # reMarkable notebooks on Android and iOS
 
+To annotate a PDF, open its **⋯** menu and choose **Duplicate as .rmdoc to
+annotate**. This creates and opens a notebook in the PDF's folder, with the same
+base name and the PDF pages behind editable ink. An existing `.rmdoc` shows an
+error; neither that file nor the PDF is replaced. The folder must support
+creating files. PDF-backed pages can be duplicated inside their notebook,
+but cannot be copied to another notebook; overview thumbnails show ink only.
+
 A notebook is a document type in **New document**: choose **Notebook (.rmdoc)**,
 enter its name and choose a folder in ordinary Local storage or an unlocked
 **LocalCrypt** location. Open existing `.rmdoc` files from the file browser,

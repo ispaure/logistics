@@ -149,6 +149,14 @@
       "ide"
     ],
     [
+      "notebooks",
+      "pdf"
+    ],
+    [
+      "pdf",
+      "notebooks"
+    ],
+    [
       "pdf",
       "comics"
     ],

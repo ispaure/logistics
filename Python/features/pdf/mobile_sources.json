@@ -2,6 +2,7 @@
   "schema": 1,
   "modules": [
     "__init__.py",
+    "annotation.py",
     "backends/__init__.py",
     "backends/android.py",
     "backends/apple.py",
@@ -10,6 +11,7 @@
     "document.py",
     "limits.py",
     "mobile/__init__.py",
+    "mobile/annotation.py",
     "mobile/canvas.py",
     "mobile/contents.py",
     "mobile/copies.py",

@@ -12,6 +12,11 @@ function options(id, values) {
 }
 
 function render() {
+  const background = $('pdfBackground');
+  background.hidden = !state.background;
+  if (state.background) {
+    if (background.getAttribute('src') !== state.background) background.src = state.background;
+  } else background.removeAttribute('src');
   $('title').textContent = state.name;
   if (document.activeElement !== $('notebookName')) $('notebookName').value = state.name;
   $('pageinfo').textContent = (state.index + 1) + ' / ' + state.count;

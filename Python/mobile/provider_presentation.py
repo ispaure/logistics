@@ -100,6 +100,10 @@ def _private_actions(self, view, comic):
         actions.append(('Close private document', self.close_crypt))
     if view.crypt_reader.book is not None or view.crypt_reader.kind == '.pdf':
         actions.append(('Fullscreen', self.toggle_private_reading_mode))
+    if view.crypt_reader.kind == '.pdf':
+        from features.pdf.annotation import LABEL
+        from features.pdf.mobile.annotation import annotate_pdf
+        actions.append((LABEL, lambda: annotate_pdf(self, view.crypt_reader)))
     if view.crypt_reader.book is not None or view.crypt_reader.kind in {'.md', '.markdown'}:
         app = getattr(self, 'app', self)
         actions.append(('Open beside another document', app.adaptive.show_pair_picker))

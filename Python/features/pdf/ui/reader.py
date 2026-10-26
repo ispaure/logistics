@@ -12,7 +12,7 @@ class PDFWindow(qt.QMainWindow):
     document_editor_id = 'pdf'
     document_editor_name = 'PDF Reader'
 
-    def __init__(self, name, data):
+    def __init__(self, name, data, *, annotation_provider=None, annotation_path=None):
         super().__init__()
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(Path(name).name)
@@ -57,6 +57,18 @@ class PDFWindow(qt.QMainWindow):
         self.find_button = reader_button(self, 'Find in PDF', text='Find in PDF')
         self.find_button.setCheckable(True)
         controls.addWidget(self.find_button)
+        if annotation_provider is not None:
+            from features.pdf.annotation import LABEL
+            from .annotation import annotate_pdf
+            self.actions_button = qt.QToolButton()
+            self.actions_button.setText('⋯')
+            self.actions_button.setAccessibleName('PDF actions')
+            self.actions_button.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
+            self.actions_menu = qt.QMenu(self.actions_button)
+            self.actions_menu.addAction(LABEL).triggered.connect(
+                lambda: annotate_pdf(annotation_provider, annotation_path, self))
+            self.actions_button.setMenu(self.actions_menu)
+            controls.addWidget(self.actions_button)
         self.fullscreen_action = qt.QAction('Full screen', self)
         self.fullscreen_action.setCheckable(True)
         self.fullscreen_action.setShortcut('F11')
@@ -145,7 +157,9 @@ class PDFWindow(qt.QMainWindow):
 
 def open_pdf(path, parent=None):
     data = read_local_bytes(path, max_bytes=MAX_PDF)
-    window = PDFWindow(str(path), data)
+    from services.documents.storage import local_document_resource
+    with local_document_resource(path, max_bytes=MAX_PDF) as resource:
+        window = PDFWindow(str(path), data, annotation_provider=resource.provider, annotation_path=resource.path)
     from services.documents.ui.editors import retain
     retain(window)
     return window

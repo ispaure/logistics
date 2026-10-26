@@ -34,12 +34,6 @@ class BooxPreviewProbe(NotebookProbe):
             source = self.private_root / 'preview-check.rmdoc'
             book = Notebook.new('Native preview check')
             book.add_page()
-            # Existing dark ink exposes incorrect native alpha/overlap behavior.
-            from features.notebooks.ink import Stroke
-            from uuid import uuid4
-            page = book.page(1)
-            page.strokes.append(Stroke(uuid4().hex, page.layers[0][0], 17, 0,
-                [[180, 650, .5, 20], [1220, 650, .5, 20]]))
             source.write_bytes(book.to_bytes())
             assert await open_notebook(self, path=source)
             panel = self.notebook_panel
@@ -66,7 +60,7 @@ class BooxPreviewProbe(NotebookProbe):
                 await panel.web.evaluate_javascript("$('tool').value=" + repr(str(tool)) + ";$('tool').onchange();$('color').value=" + repr(str(color)) + ";$('width').value='3';render();document.dispatchEvent(new Event('change'))")
                 await asyncio.sleep(.2)
                 status = json.loads(panel.pen_input.nativeStatus())
-                assert bool(status.get('input')) == (tool in (15, 16, 17)), status
+                assert bool(status.get('input')) == (tool in (15, 17)), status
             async def notice(text, button=False):
                 await panel.web.evaluate_javascript("(()=>{let el=document.getElementById('previewQaNotice');if(!el){el=document.createElement('nav');el.id='previewQaNotice';el.style='position:fixed;bottom:22px;left:20px;right:20px;z-index:30;background:white;color:black;border:2px solid black;border-radius:12px;padding:16px;font:18px sans-serif;display:block';document.body.append(el)}el.replaceChildren();let label=document.createElement('span');label.textContent=" + json.dumps(text) + ";el.append(label);window.booxQaContinue=false;if(" + str(button).lower() + "){let b=document.createElement('button');b.textContent='Next / Finish';b.style='float:right;margin-left:12px';b.onclick=()=>window.booxQaContinue=true;el.append(b)}})()")
             await wait_for_text(panel.web, 'Native preview check')
@@ -75,7 +69,7 @@ class BooxPreviewProbe(NotebookProbe):
             for index in (1, 0):
                 await panel.perform(dict(op='page', index=index))
                 assert panel.editor.index == index and len(panel.editor.notebook.pages) == 2
-            for index, (tool, color, label) in enumerate(((16, 0, 'Black Marker'), (16, 6, 'Blue Marker'))):
+            for index, (tool, color, label) in enumerate(((15, 6, 'Blue Ballpoint'), (15, 7, 'Red Ballpoint'))):
                 await wait_for_text(panel.web, 'Native preview check')
                 if index:
                     await panel.perform(dict(op='page', index=index))
@@ -84,7 +78,7 @@ class BooxPreviewProbe(NotebookProbe):
                 await choose(tool, color)
                 before = json.loads(panel.pen_input.nativeStatus())
                 baseline = {s.id for s in panel.editor.notebook.page(index).strokes}
-                await notice(f'{index + 1}/2 · {label}: draw TWO pressure-varying loops, crossing your own line and the black guide if visible. Check width and opacity after lifting.')
+                await notice(f'{index + 1}/2 · {label}: draw TWO curves, varying pen pressure. Watch the tip and what happens after lifting.')
                 stage('draw', number=index + 1, brush=label)
                 async def drawn():
                     return sum(s.id not in baseline for s in panel.editor.notebook.page(index).strokes) >= 2

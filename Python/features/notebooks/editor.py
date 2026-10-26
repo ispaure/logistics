@@ -13,6 +13,27 @@ class Editor:
         self.index = 0
         self.undo = []
         self.redo = []
+        self._background = (None, None)
+
+    def background(self):
+        book = self.notebook
+        if book.content.get('fileType') != 'pdf':
+            return None
+        index = book.pages[self.index].record.get('redir', {}).get('value', -1)
+        if index < 0:
+            return None
+        data = book.members[book.id + '.pdf']
+        key = (data, index)
+        if self._background[0] != key:
+            import base64
+            from features.pdf.document import PDFDocument
+            pdf = PDFDocument(data)
+            try:
+                image = 'data:image/png;base64,' + base64.b64encode(pdf.page(index)).decode()
+            finally:
+                pdf.close()
+            self._background = (key, image)
+        return self._background[1]
 
     def snapshot(self):
         book = self.notebook
@@ -122,4 +143,5 @@ class Editor:
                     brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS, shaders=SHADERS, widths=WIDTHS,
                     strokes=[s.payload() for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=self.notebook.pages[self.index].template,
+                    background=self.background(),
                     undo=bool(self.undo), redo=bool(self.redo))

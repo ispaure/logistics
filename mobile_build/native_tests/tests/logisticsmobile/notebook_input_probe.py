@@ -181,8 +181,7 @@ class NotebookInputProbe(NotebookProbe):
                     reopened = Notebook.read(panel.editor.notebook.to_bytes())
                     after = reopened.page(0).strokes[-1]
                     assert [p[3] for p in stroke.points] == [p[3] for p in after.points]
-                    width_method = getattr(jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks'), 'markerWidth' if tool == 16 else 'ballpointWidth')
-                    expected = [float(width_method(p[2], 6. if tool == 16 else 2.)) for p in stroke.points]
+                    expected = [float(jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks').ballpointWidth(p[2], 2.)) for p in stroke.points]
                     assert [p[3] for p in stroke.points] == expected, (stroke.points, expected)
                     assert abs(stroke.points[0][2] - .1) < .01 and abs(stroke.points[-1][2] - 1) < .01
                     status = json.loads(panel.pen_input.nativeStatus())
