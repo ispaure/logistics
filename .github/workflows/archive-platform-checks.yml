@@ -91,7 +91,6 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: '1'
-      LOGISTICS_MANAGER_CHECKOUT: ${{ runner.temp }}/build-deployment-manager
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -117,6 +116,7 @@ jobs:
         run: python Python/tests/run_platform_checks.py --install
         env:
           BROWSER_TEST_ARTIFACTS: ${{ runner.os == 'Windows' && 'test-results/browser-diagnostics' || '' }}
+          LOGISTICS_MANAGER_CHECKOUT: ${{ runner.temp }}/build-deployment-manager
       - name: Collect native macOS crash diagnostics
         if: always() && runner.os == 'macOS'
         run: |
