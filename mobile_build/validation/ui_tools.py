@@ -113,6 +113,17 @@ def _progress(path, stopped):
                     print('Native section: '+row['name']+' '+json.dumps(row.get('details',{}))+' '+str(round(row['elapsed_s'],2))+'s',flush=True)
 
 
+def clear_run_reports(logs, target):
+    """A new device must never inherit another device's success or crash report."""
+    names = [target + '-native-ui' + suffix for suffix in (
+        '.json', '-local.json', '-stdout.json', '-cached.json',
+        '-error.txt', '-fault.log', '-timings.json')]
+    if target == 'ios':
+        names.append('ios-report-transport.json')
+    for name in names:
+        (logs / name).unlink(missing_ok=True)
+
+
 def run(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False):
     if no_update:
         if target == 'ios':
@@ -130,6 +141,7 @@ def run(target, device, *, local=False, require_independent_windows=False, requi
                         '--Xemulator=swiftshader_indirect', '--shutdown-on-exit'])
     logs = Path('logs')
     logs.mkdir(exist_ok=True)
+    clear_run_reports(logs, target)
     path = logs / (target + '-native-ui.log')
     started_ns = time.time_ns()
     if target == 'ios':
