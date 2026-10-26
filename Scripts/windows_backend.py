@@ -137,8 +137,8 @@ foreach ($directory in @($p.source,(Join-Path $p.source 'Python\commonUtils'))) 
 $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.dumps(dict(guest=platform.machine(),python_platform=sysconfig.get_platform(),pointer_bits=8*struct.calcsize(chr(80)),version=sys.version)))'
 @{runtime=($version|ConvertFrom-Json);git=[string](& $p.git --version);path=$env:PATH}|ConvertTo-Json -Compress
 '''
-        info = json.loads(client.powershell(prepared['vm'], configure,
-            dict(source=target, git=prepared['git'], python=python), timeout=60))
+        info = json.loads(guest.call_idempotent(configure,
+            values=dict(source=target, git=prepared['git'], python=python), timeout=60))
         result.update(runtime=info['runtime'], git=info['git'])
         environment['PATH'] = str(PureWindowsPath(prepared['git']).parent) + ';' + str(root / 'environment/Scripts') + ';' + info['path']
         manager = 'manager-' + operation
@@ -146,7 +146,7 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
         if args.manager_checkout:
             from Scripts.guest_manager import archive
             guest.stage(manager, archive(args.manager_checkout, args.snapshot, 'zip'))
-            client.powershell(prepared['vm'], "foreach($folder in @($p.root,($p.root+'\\Python\\commonUtils'))){& $p.git -C $folder config core.fileMode false;if($LASTEXITCODE -ne 0){throw 'Manager Git setup failed'}}", dict(root=manager_path,git=prepared['git']))
+            guest.call_idempotent("foreach($folder in @($p.root,($p.root+'\\Python\\commonUtils'))){& $p.git -C $folder config core.fileMode false;if($LASTEXITCODE -ne 0){throw 'Manager Git setup failed'}}", values=dict(root=manager_path,git=prepared['git']))
             setup_command = ['-m','Scripts.guest_manager','--checkout',manager_path,'--project',target]
         else:
             setup_command = ['Scripts/install_build_manager.py','--from-pin',manager_path]
