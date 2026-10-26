@@ -190,3 +190,21 @@ def write_local_document(path, data, *, expected=None, allow_overwrite=False):
     """Ordinary host adapter preserves established permissions and conflict policy."""
     from commonUtils.persistence.text import write_text_file
     return write_text_file(path, data, expected=expected, allow_overwrite=allow_overwrite)
+
+
+def export_local_document(path, data, *, max_bytes, validate=lambda data: None,
+                          cancelled=lambda: False):
+    """Publish a picker-approved local copy without retargeting its source.
+
+    Capture an existing destination before validation so publication refuses
+    concurrent replacement. LocalFiles enforces host-owned path boundaries.
+    """
+    from commonUtils.runtime.resources.local import LocalFiles
+    target = Path(path).absolute()
+    provider = LocalFiles(target.parent)
+    try:
+        revision = provider.entry(target.name)['revision']
+    except FileNotFoundError:
+        revision = None
+    return DocumentResource.publish(provider, target.name, data, max_bytes=max_bytes,
+                                    expected_revision=revision, validate=validate, cancelled=cancelled)

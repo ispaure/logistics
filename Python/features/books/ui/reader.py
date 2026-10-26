@@ -12,6 +12,7 @@ from features.books.ui.tasks import BookTask
 from features.books.ui.reader_controls import build_controls
 from features.books.ui.navigation import BookNavigation
 from pathlib import Path
+from services.documents.storage import DocumentPolicy
 
 
 class BooksPage(Bookmarks, qt.QWidget):
@@ -57,7 +58,7 @@ class BooksPage(Bookmarks, qt.QWidget):
 
     @property
     def private(self):
-        return self.book is not None and self.book.source is not None
+        return self.book is not None and not DocumentPolicy.for_provider(self.book.source).persistent
 
     def show_find(self):
         self.find_panel.show()
@@ -546,11 +547,11 @@ class BooksPage(Bookmarks, qt.QWidget):
             self.title.setToolTip(book.title)
             self._current = current
             self._render(location=location)
-            self.status.setText(f'Metadata saved. Original backup: {backup.name}' if backup else 'Encrypted metadata saved.')
+            self.status.setText(f'Metadata saved. Original backup: {backup.name}' if backup else 'Metadata saved.')
             if self.reader_window() is not None:
                 self.reader_window().setWindowTitle(('🕵️ Private - ' if self.private else '') + book.path.name)
         self._run(lambda cancelled: save_metadata(self.book, changes, cancelled=cancelled), saved,
-                  'Saving encrypted metadata…' if self.private else 'Saving metadata and backing up the original…')
+                  'Saving metadata…' if self.book.source is not None else 'Saving metadata and backing up the original…')
 
     def prepare_close(self):
         from commonUtils.ui.resources.picker import resource_tasks_pending

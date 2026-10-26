@@ -140,3 +140,10 @@ so a writable local cache cannot grant writes or persistence to a remote source.
 Private formatted Markdown fails closed on unsupported native backends and leaves
 Source mode available. The boundary regression tests check imports, wrapped remote
 policy, Notes Library publication and workspace-drawer notebook dispatch.
+
+Desktop notebook Export Copy uses `export_local_document`: a picker-approved
+ordinary destination goes through the same bounded, validated, revision-checked
+publication and exact-byte reopening as other resources. It cannot write through
+an ordinary path into a host-protected provider root. Export keeps the source
+binding intact. EPUB/comic reader privacy follows shared persistence policy,
+including provider wrappers; a provider-backed ordinary file remains ordinary.

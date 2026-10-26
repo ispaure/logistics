@@ -10,6 +10,7 @@ import zipfile
 from .archive_io import archive_unchanged, validate_archive_members
 from .comicinfo import ComicInfoXML
 from commonUtils.archives.zip_access import open_archive, authenticate, archive_manifest
+from services.documents.storage import DocumentPolicy
 from services.documents.zip_passwords import resolve_password, remember_verified_password
 
 
@@ -20,7 +21,7 @@ class ComicDocument:
     def __init__(self, path, *, password=None, source=None):
         self.path = Path(path)
         self.source = source
-        self.private = source is not None
+        self.private = not DocumentPolicy.for_provider(source).persistent
         if source is None:
             self.snapshot = self.path.stat()
             validate_archive_members(self.path)

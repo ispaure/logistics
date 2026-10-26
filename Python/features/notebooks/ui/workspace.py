@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from commonUtils.ui import pyside as qt
-from commonUtils.persistence.atomic import atomic_write_bytes
+from services.documents.storage import export_local_document
 from PySide6 import QtQuick, QtQuickWidgets
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -202,7 +202,16 @@ class NotebookWorkspace(qt.QWidget):
                 if path:
                     if not path.lower().endswith('.rmdoc'):
                         path += '.rmdoc'
-                    atomic_write_bytes(path, self.editor.notebook.to_bytes())
+                        # The native picker confirmed the entered name, which
+                        # may differ from this format-suffixed destination.
+                        if Path(path).exists() and qt.QMessageBox.question(self, 'Replace notebook copy?',
+                                'The export destination already exists. Replace it?',
+                                qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.Cancel,
+                                qt.QMessageBox.StandardButton.Cancel) != qt.QMessageBox.StandardButton.Yes:
+                            self.web.page().runJavaScript(update_script(self.state(), 'Export cancelled.'))
+                            return
+                    export_local_document(path, self.editor.notebook.to_bytes(),
+                                          max_bytes=MAX_ARCHIVE, validate=Notebook.read)
                 else:
                     error = 'Export cancelled. Your notebook is saved on this device.'
             elif op == 'transfer':

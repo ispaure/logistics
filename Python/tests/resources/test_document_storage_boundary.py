@@ -15,7 +15,7 @@ class DocumentBoundaryTests(unittest.TestCase):
     def test_editor_features_do_not_import_encryption_implementations(self):
         root = Path(__file__).resolve().parents[2] / 'features'
         paths = list((root / 'text_editor').rglob('*.py'))
-        paths += [root / 'books/metadata.py', root / 'comics/library.py', root / 'notebooks/storage.py', root / 'notebooks/mobile/documents.py', root / 'comics/mobile/collection/workflows.py']
+        paths += [root / 'books/ui/reader.py', root / 'notebooks/ui/workspace.py', root / 'books/metadata.py', root / 'comics/library.py', root / 'notebooks/storage.py', root / 'notebooks/mobile/documents.py', root / 'comics/mobile/collection/workflows.py']
         for path in paths:
             tree = ast.parse(path.read_text())
             for node in ast.walk(tree):
@@ -52,3 +52,12 @@ class DocumentBoundaryTests(unittest.TestCase):
             publish_document_stream(source, 'book.epub', writer, expected_revision='old')
         writer.assert_not_called()
         source.replace_stream.assert_not_called()
+
+    def test_notebook_export_has_no_raw_filesystem_writer(self):
+        path = Path(__file__).resolve().parents[2] / 'features/notebooks/ui/workspace.py'
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                self.assertNotIn(node.module, ('commonUtils.persistence.atomic', 'commonUtils.persistence'))
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                self.assertNotIn(node.func.attr, ('write_bytes', 'write_text'))

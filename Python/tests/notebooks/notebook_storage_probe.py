@@ -67,6 +67,37 @@ def main(output):
                     dialog.button(qt.QMessageBox.StandardButton.Yes).click()
                 else:
                     qt.QTimer.singleShot(20, confirm)
+            # Exercise the actual desktop export action and native plaintext prompt.
+            exported = local_root / 'Export.rmdoc'
+            original_document = panel.document
+            with patch.object(qt.QFileDialog, 'getSaveFileName', return_value=(str(exported), '')):
+                qt.QTimer.singleShot(0, confirm)
+                panel.perform(dict(op='export'))
+            assert len(confirmed) == 1 and 'decrypted copy' in confirmed[0]['text']
+            assert len(Notebook.read(exported.read_bytes()).page(0).strokes) == 1
+            assert panel.document is original_document and panel.document.resource is resource
+            assert len(Notebook.read(resource.read()).page(0).strokes) == 1
+            assert encrypted.read_bytes() == ciphertext
+            from commonUtils.filesystem.local_access import protect_local_root
+            release_boundary = protect_local_root(object(), local_root, 'Use the document provider')
+            blocked = local_root / 'Blocked.rmdoc'
+            try:
+                with patch.object(qt.QFileDialog, 'getSaveFileName', return_value=(str(blocked), '')):
+                    qt.QTimer.singleShot(0, confirm)
+                    panel.perform(dict(op='export'))
+                assert not blocked.exists()
+                assert panel.document is original_document and not panel.busy
+            finally:
+                release_boundary()
+            # Appending .rmdoc must not bypass overwrite confirmation.
+            with patch.object(qt.QFileDialog, 'getSaveFileName', return_value=(str(exported.with_suffix('')), '')), \
+                    patch.object(qt.QMessageBox, 'question', side_effect=[qt.QMessageBox.StandardButton.Yes,
+                                                                         qt.QMessageBox.StandardButton.Cancel]) as prompt:
+                before_export = exported.read_bytes()
+                panel.perform(dict(op='export'))
+                assert prompt.call_count == 2
+                assert exported.read_bytes() == before_export and panel.document is original_document
+            confirmed.clear()
             with patch('services.documents.ui.editors.choose_editor_resource', return_value=choice):
                 qt.QTimer.singleShot(0, confirm)
                 assert panel.save_document(save_as=True)
@@ -80,7 +111,7 @@ def main(output):
             assert len(Notebook.read((local_root / 'Copy.rmdoc').read_bytes()).page(0).strokes) == 2
             assert encrypted.read_bytes() == ciphertext
             result = dict(success=True, cases=['qt-private-canvas-input', 'qt-encrypted-save',
-                'qt-off-record-profile', 'qt-native-decryption-confirmation', 'qt-save-as-retarget-and-resave'])
+                'qt-off-record-profile', 'qt-verified-export-copy', 'qt-protected-export-refused', 'qt-suffixed-export-overwrite-cancel', 'qt-native-decryption-confirmation', 'qt-save-as-retarget-and-resave'])
             (output / 'result.json').write_text(json.dumps(result, indent=2))
         finally:
             if panel.document:

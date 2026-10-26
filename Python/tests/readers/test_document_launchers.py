@@ -1,6 +1,7 @@
 """Explicit New/Open launch choices must not open an editor on cancellation."""
 import unittest
 from unittest.mock import Mock, patch
+from types import SimpleNamespace
 from features.text_editor import contributions
 from commonUtils.ui import pyside as qt
 
@@ -10,7 +11,7 @@ class TextLauncherTests(unittest.TestCase):
         parent = Mock()
         service = Mock()
         from pathlib import Path
-        choice = Mock(path='notes.txt', provider=Mock(root=Path('/work'), private=False))
+        choice = Mock(path='notes.txt', provider=SimpleNamespace(root=Path('/work'), private=False))
         with patch('services.documents.ui.editors.choose_editor_resource', return_value=choice), patch.object(contributions, '_service', return_value=service):
             self.assertIs(contributions.launch(parent), service.open.return_value)
             service.open.assert_called_once_with(Path('/work/notes.txt'))
