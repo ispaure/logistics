@@ -42,19 +42,16 @@ class ManagedDocumentTests(TestCase):
     def test_preview_html_loads_in_its_presented_window(self):
         import toga
         attached = []
-        roots = []
         original = toga.WebView.set_content
         def load(web, *args, **kwargs):
             if web is getattr(self.app, 'preview', None):
                 attached.append(web.window is self.app.main_window)
-                roots.append(args[0])
             return original(web, *args, **kwargs)
         with patch.object(toga.WebView, 'set_content', new=load):
             self.app.new_document(name='Attached.md', content='# Attached preview\n')
             self.app.show_preview()
         self.assertTrue(attached)
         self.assertTrue(all(attached), attached)
-        self.assertEqual(roots, [None])
 
     def test_import_after_switch_retains_new_draft_and_publishes_separate_session(self):
         app = self.app

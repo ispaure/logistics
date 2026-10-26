@@ -282,12 +282,60 @@ def ios_device(*, ipad=False, duo=False):
     return select_ios_device(data, ipad=ipad, duo=duo)
 
 
+def owned_ios_device(lease, *, ipad=False, duo=False, client=None, sdk=None):
+    """Use the same fresh, owned simulator lifecycle as local native QA."""
+    from build_manager.apple_simulators import AppleSimulators
+    from uuid import uuid4
+    client = client or AppleSimulators()
+    lease = Path(lease)
+    if lease.exists():
+        raise ValueError('Clean the previous owned simulator lease before creating another.')
+    sdk = sdk or subprocess.check_output(
+        ['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-version'], text=True).strip()
+    parts = sdk.split('.')
+    if len(parts) < 2 or not all(part.isdigit() for part in parts):
+        raise ValueError('Invalid selected Simulator SDK version.')
+    # The 27.1 runtime is Duo-only; ordinary phones/tablets use 27.0 with
+    # that SDK. Preserve the selected family's compatible runtime major.
+    prefix = 'com.apple.CoreSimulator.SimRuntime.iOS-' + parts[0]
+    devices = {runtime: rows for runtime, rows in client.devices()['devices'].items()
+               if runtime == prefix or runtime.startswith(prefix + '-')}
+    selected = select_ios_device(dict(devices=devices), ipad=ipad, duo=duo)
+    runtime, profile = next((runtime, row) for runtime, rows in devices.items()
+                            for row in rows if row['udid'] == selected)
+    name = 'Logistics Native Gate ' + uuid4().hex
+    device = client.create(name, profile['deviceTypeIdentifier'], runtime)
+    lease.parent.mkdir(parents=True, exist_ok=True)
+    lease.write_text(json.dumps(dict(device=device, name=name, runtime=runtime,
+        device_type=profile['deviceTypeIdentifier'], sdk=sdk)))
+    client.boot(device)
+    return device
+
+
+def cleanup_owned_ios_device(lease, *, client=None):
+    from build_manager.apple_simulators import AppleSimulators
+    lease = Path(lease)
+    if not lease.exists():
+        return
+    record = json.loads(lease.read_text())
+    if not record['name'].startswith('Logistics Native Gate '):
+        raise ValueError('Refusing cleanup without the native gate ownership label.')
+    client = client or AppleSimulators()
+    client.remove(record['device'], record['name'])
+    record['removed'] = client.matching(record['device'], record['name']) is None
+    lease.write_text(json.dumps(record))
+    if not record['removed']:
+        raise RuntimeError('Owned native gate simulator remains after cleanup.')
+
+
 def ios_diagnostics():
     """Preserve startup stderr and crash reports after a failed native gate."""
     logs = Path('logs').resolve()
     logs.mkdir(exist_ok=True)
     receipt = logs / 'ios-native-ui-device.json'
-    recorded = json.loads(receipt.read_text()) if receipt.is_file() else {}
+    owned = logs / 'ios-native-ui-owned.json'
+    recorded = json.loads(receipt.read_text()) if receipt.is_file() else (
+        json.loads(owned.read_text()) if owned.is_file() else {})
     device = recorded.get('device') or ios_device()
     if recorded.get('started_ns'):
         simulator_report(device, recorded['started_ns'], diagnostics=logs)
@@ -314,7 +362,8 @@ def ios_diagnostics():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('run', 'ios-device', 'ios-ipad', 'ios-duo', 'ios-diagnostics'))
+    parser.add_argument('command', choices=('run', 'ios-device', 'ios-ipad', 'ios-duo', 'ios-diagnostics', 'ios-cleanup'))
+    parser.add_argument('--owned', action='store_true', help='Create a fresh leased simulator in the selected SDK major series')
     parser.add_argument('target', choices=('android', 'ios'), nargs='?')
     parser.add_argument('--device')
     parser.add_argument('--local', action='store_true', help='Verify this exact local payload; not release evidence')
@@ -322,12 +371,12 @@ if __name__ == '__main__':
     parser.add_argument('--require-duo', action='store_true')
     parser.add_argument('--no-update', action='store_true', help='Reuse an already built test application')
     args = parser.parse_args()
-    if args.command == 'ios-device':
-        print(ios_device())
-    elif args.command == 'ios-ipad':
-        print(ios_device(ipad=True))
-    elif args.command == 'ios-duo':
-        print(ios_device(duo=True))
+    if args.command in ('ios-device', 'ios-ipad', 'ios-duo'):
+        options = dict(ipad=args.command == 'ios-ipad', duo=args.command == 'ios-duo')
+        print(owned_ios_device('logs/ios-native-ui-owned.json', **options)
+              if args.owned else ios_device(**options))
+    elif args.command == 'ios-cleanup':
+        cleanup_owned_ios_device('logs/ios-native-ui-owned.json')
     elif args.command == 'ios-diagnostics':
         ios_diagnostics()
     else:

@@ -17,6 +17,48 @@ spec.loader.exec_module(ui_tools)
 
 
 class NativeReportTests(unittest.TestCase):
+    def test_owned_simulator_matches_sdk_and_cleanup_uses_its_saved_identity(self):
+        old = dict(udid='old', name='iPhone', state='Booted', isAvailable=True,
+                   deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro')
+        current = dict(old, udid='current', state='Shutdown')
+        client = Mock()
+        client.devices.return_value = {'devices': {
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-5': [old],
+            'com.apple.CoreSimulator.SimRuntime.iOS-27-0': [current]}}
+        client.create.return_value = 'fresh-owned-device'
+        client.matching.return_value = None
+        with TemporaryDirectory() as directory:
+            lease = Path(directory) / 'lease.json'
+            device = ui_tools.owned_ios_device(lease, client=client, sdk='27.1')
+            record = json.loads(lease.read_text())
+            self.assertEqual(device, 'fresh-owned-device')
+            client.create.assert_called_once_with(record['name'], current['deviceTypeIdentifier'],
+                'com.apple.CoreSimulator.SimRuntime.iOS-27-0')
+            client.boot.assert_called_once_with(device)
+            with self.assertRaisesRegex(ValueError, 'previous owned'):
+                ui_tools.owned_ios_device(lease, client=client, sdk='27.1')
+            ui_tools.cleanup_owned_ios_device(lease, client=client)
+            client.remove.assert_called_once_with(device, record['name'])
+            self.assertTrue(json.loads(lease.read_text())['removed'])
+
+    def test_owned_boot_failure_retains_cleanup_lease_and_foreign_label_is_refused(self):
+        client = Mock()
+        client.devices.return_value = {'devices': {'com.apple.CoreSimulator.SimRuntime.iOS-27-1': [
+            dict(udid='profile', name='iPad', state='Shutdown', isAvailable=True,
+                 deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.iPad-Pro')]}}
+        client.create.return_value = 'created-before-failure'
+        client.boot.side_effect = RuntimeError('synthetic boot failure')
+        with TemporaryDirectory() as directory:
+            lease = Path(directory) / 'lease.json'
+            with self.assertRaisesRegex(RuntimeError, 'boot failure'):
+                ui_tools.owned_ios_device(lease, client=client, sdk='27.1', ipad=True)
+            record = json.loads(lease.read_text())
+            self.assertEqual(record['device'], 'created-before-failure')
+            lease.write_text(json.dumps(dict(record, name='Personal simulator')))
+            with self.assertRaisesRegex(ValueError, 'ownership label'):
+                ui_tools.cleanup_owned_ios_device(lease, client=client)
+            client.remove.assert_not_called()
+
     def test_shared_test_app_is_reused_and_wrong_or_missing_builds_fail_before_launch(self):
         import os
         from unittest.mock import patch

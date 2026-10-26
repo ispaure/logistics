@@ -6,6 +6,7 @@ retains identities and generations, including picker completion admission.
 """
 import asyncio
 from hashlib import sha256
+from uuid import uuid4
 
 import toga
 from toga.style import Pack
@@ -75,9 +76,7 @@ class ManagedDocumentWorkflows:
             if saved is not None:
                 from .reader_lifecycle import restore_loaded_scroll
                 restore_loaded_scroll(owner.preview, saved[1], lambda: self.workspace.accepts(token))
-            # This self-contained HTML has no relative resources. An opaque
-            # blank origin avoids a synthetic network site for local previews.
-            self.preview.set_content(None, content)
+            self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
             # Re-presenting an unchanged preview must preserve its in-flight
             # navigation, DOM and scroll rather than cancel it with another UUID.
             owner.preview_digest = digest

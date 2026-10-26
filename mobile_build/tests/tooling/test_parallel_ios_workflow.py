@@ -111,6 +111,10 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('bash'), 'Workflow shell needs bash')
     def test_each_device_invokes_its_required_suite_and_propagates_failure(self):
         run = script(self.workflow['ios-ui'], 'Exercise panels, rotation and safe areas')
+        self.assertIn('"$selector" --owned', run)
+        self.assertIn('      - name: Remove the owned native validation simulator\n        if: always()\n',
+                      self.workflow['ios-ui'])
+        self.assertIn('run: python validation/ui_tools.py ios-cleanup', self.workflow['ios-ui'])
         fixture = '''import json, os, sys
 from pathlib import Path
 assert Path(os.environ['BRIEFCASE_HOME']).is_dir(), 'Briefcase home must exist on a fresh runner'

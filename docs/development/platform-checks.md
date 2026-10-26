@@ -112,6 +112,12 @@ matrix. Android builds and validates independently of the iOS jobs.
 
 Every iOS validation run requires all three device families, including iPad
 independent-window checks. An iPad failure blocks the run. Device jobs use
+fresh simulators created through the build manager, matching the selected SDK
+major and required hardware family (the 27.1 runtime is Duo-only; ordinary
+phones/tablets use 27.0). Their saved ownership leases support
+cleanup after success, failure or boot errors; diagnostics are captured before
+the always-run cleanup step. Pre-existing simulators are left intact.
+Device jobs use
 separate runners and artifacts named
 `logistics-native-ios-iphone`, `logistics-native-ios-duo` and
 `logistics-native-ios-ipad`; their logs and reports cannot overwrite each other.

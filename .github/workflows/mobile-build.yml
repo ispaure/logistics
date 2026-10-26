@@ -198,11 +198,14 @@ jobs:
             ipad) selector=ios-ipad; flags=(--require-independent-windows) ;;
             *) exit 1 ;;
           esac
-          device=$(python validation/ui_tools.py "$selector")
+          device=$(python validation/ui_tools.py "$selector" --owned)
           python validation/ui_tools.py run ios --device "$device" --no-update "${flags[@]}"
       - name: Capture iOS startup and crash diagnostics
         if: failure()
         run: python validation/ui_tools.py ios-diagnostics
+      - name: Remove the owned native validation simulator
+        if: always()
+        run: python validation/ui_tools.py ios-cleanup
       - name: Preserve device reports and diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
