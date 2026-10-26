@@ -1071,7 +1071,12 @@ focus, keyboard navigation and dismissal in normal and injected E Ink CSS throug
 the existing browser and native probe drivers.
 
 
-### Android notebook view retirement
+### Native notebook view retirement
+
+Ordinary iOS notebook canvases also detach from their Toga parent when retired,
+so a retained panel does not retain a closed native view. Shared document
+retirement clears the live DOM before the final closed-page navigation.
+
 
 Retired Android notebook canvases first close native input/preview helpers,
 detach the Toga widget, clear its content and explicitly destroy the ordinary

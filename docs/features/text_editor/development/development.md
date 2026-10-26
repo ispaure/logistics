@@ -413,6 +413,12 @@ replacement of the live DOM before navigating to the closed-document page.
 WKWebView may defer navigation while a compact sidebar hides the article; the
 old note must already be cleared independently of that navigation. Native Notes
 Library checks retire a hidden article and verify that its previous text is gone.
+Ordinary document retirement replaces the DOM children directly instead of
+resetting the document with `document.open/write/close`. A hosted iOS simulator
+comparison reproduced later WebView startup stalls with the document-reset
+operation; the direct replacement passed the notebook-to-Markdown preview flow.
+The final closed-page navigation and private WebView teardown remain in place.
+This focused comparison does not replace the complete native release gates.
 
 ## Shortcut save failures
 

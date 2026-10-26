@@ -19,9 +19,10 @@ def retire_webview(view):
         native.navigationDelegate = None
         native.UIDelegate = None
         # WKWebView can defer replacement navigation while its pane is hidden.
-        # Clear the live document before queuing that navigation, so retired
-        # text cannot remain in an offscreen editor or Notes Library preview.
-        native.evaluateJavaScript('document.open();document.write("<p>Document closed.</p>");document.close();',
+        # Clear the live DOM without document.open/write: resetting a retired
+        # document can stall later WebKit process startup on iOS simulators.
+        # Keep the final navigation to replace the old document's script state.
+        native.evaluateJavaScript('(()=>{const body=document.createElement("body");body.textContent="Document closed.";document.documentElement.replaceChildren(body);})()',
                                   completionHandler=None)
     view.set_content('https://logistics.invalid/closed/', '<p>Document closed.</p>')
 
