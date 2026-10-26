@@ -397,7 +397,9 @@ posture and rendering validation remains pending.
 ## Mobile surface publication
 
 Format controllers prepare their own EPUB/comic surfaces and retain source-specific
-progress and metadata policy. Library and provider views publish through the
+progress and metadata policy. A retained surface stays attached while its chapter
+loads; publication removes other surfaces without detaching and reattaching the
+active native WebView. Library and provider views publish through the
 host's `mobile.reading.publication.ReadingPublication` coordinator for generation
 validation, retirement and footer/chrome synchronization. Keep preparation inside its scope
 so failed construction releases outgoing animation snapshots. Do not replace the

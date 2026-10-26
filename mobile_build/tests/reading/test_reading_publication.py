@@ -67,6 +67,23 @@ class ReadingPublicationTests(unittest.TestCase):
         self.assertFalse(reserved.disposed)
         self.assertEqual(box.children, [new])
 
+    def test_retained_surface_is_published_without_native_detachment(self):
+        surface = Surface()
+        box = Container(surface)
+        publication = ReadingPublication(SimpleNamespace(preferences=SimpleNamespace(values={})), box, lambda: True)
+        published = []
+        with patch.object(box, 'remove', side_effect=RuntimeError('In-flight native load detached')), \
+                patch.object(box, 'add') as add, \
+                patch('mobile.page_animation.begin_page_slide'), \
+                patch('mobile.page_animation.finish_page_slide') as finish, \
+                patch('mobile.page_animation.cancel_page_slide'):
+            self.assertTrue(publication.mount(surface, direction=1, publish=lambda: published.append('updated')))
+        self.assertEqual(published, ['updated'])
+        add.assert_not_called()
+        finish.assert_called_once_with(box, 1, {})
+        self.assertEqual(box.children, [surface])
+        self.assertFalse(surface.disposed)
+
     def test_source_tokens_reject_reader_replacement_and_closed_private_session(self):
         owner = SimpleNamespace(book_reader=object(), book_epoch=1, active_host=True)
         current = capture_library(owner)
