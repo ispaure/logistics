@@ -5,10 +5,14 @@ import json
 
 def native_state(view):
     """Capture attachment/loading evidence only after a real render failure."""
-    state = dict(backend=type(view._impl).__module__, parent=view.parent is not None,
-                 navigation=getattr(view, '_native_policy_trace', []))
+    state = {}
     try:
-        native = view._impl.native
+        impl = getattr(view, '_impl', None)
+        state.update(backend=type(impl).__module__, parent=getattr(view, 'parent', None) is not None,
+                     navigation=getattr(view, '_native_policy_trace', []))
+        if impl is None:
+            return state
+        native = impl.native
         if state['backend'].startswith('toga_iOS.'):
             state['loading'] = bool(native.isLoading())
             state['window'] = native.window is not None
