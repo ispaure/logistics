@@ -19,6 +19,8 @@ from build_manager.android_emulators import AndroidEmulator
 REPO = Path(__file__).resolve().parents[2]
 SOURCE = REPO
 BUNDLE = 'io.github.ispaure.logisticsstorageqa'
+QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticscreationqa',
+              'io.github.ispaure.logisticsnotebookqa'}
 
 
 def command(args, output, *, cwd=None, env=None, timeout=1200):
@@ -46,10 +48,42 @@ def copy_payload(payload, target, *, entry_point='tests.logisticsmobile.document
         f'from {entry_point} import main\nmain().main_loop()\n')
 
 
+def notebook_lifecycle(read, write, background, launch, stop):
+    """Background/resume, then terminate/relaunch only the isolated notebook QA app."""
+    background()
+    time.sleep(1)
+    launch()
+    time.sleep(1)
+    write('notebook-ui/acceptance/resume', b'resume')
+    def wait(name):
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            value = read(name)
+            if value:
+                try:
+                    result = json.loads(value)
+                except json.JSONDecodeError:
+                    time.sleep(.1)
+                    continue
+                if not result['success']:
+                    raise RuntimeError(result.get('error', 'Notebook lifecycle failed'))
+                return result
+            time.sleep(.2)
+        raise TimeoutError('Notebook lifecycle acknowledgement missing: ' + name)
+    wait('notebook-ui/acceptance/resumed.json')
+    write('notebook-result.json', b'')
+    stop()
+    launch()
+    result = wait('notebook-result.json')
+    if not result.get('process_restart') or not result.get('background_resume'):
+        raise RuntimeError('Notebook process restart/resume was not verified')
+    return result
+
+
 def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             entry_point='tests.logisticsmobile.document_storage_probe',
-            result_name='document-storage-result.json', family='iPhone'):
-    if bundle not in (BUNDLE, 'io.github.ispaure.logisticsnotebookqa'):
+            result_name='document-storage-result.json', family='iPhone', increase_contrast=False):
+    if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
     project = workspace / 'build/logisticsmobile/ios/xcode'
     template = REPO / 'mobile_build/build/logisticsmobile/ios/xcode'
@@ -79,6 +113,12 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
     cache = console = console_stream = None
     try:
         client.boot(device)
+        if increase_contrast:
+            client.invoke('ui', device, 'increase_contrast', 'enabled')
+            contrast = client.invoke('ui', device, 'increase_contrast')
+            (output / 'ios-contrast.json').write_text(json.dumps(dict(increase_contrast=contrast)))
+            if contrast != 'enabled':
+                raise RuntimeError('iOS Increase Contrast could not be enabled.')
         client.invoke('install', device, str(app))
         cache = Path(client.invoke('get_app_container', device, bundle, 'data')) / 'Library/Caches'
         console_stream = (output / 'ios-console.log').open('w')
@@ -93,10 +133,20 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
                 client.invoke('io', device, 'screenshot', str(output / 'ios-final.png'))
                 if not result['success']:
                     raise RuntimeError(result['error'])
+                if result_name == 'notebook-result.json':
+                    result = notebook_lifecycle(
+                        lambda name: (cache / name).read_bytes() if (cache / name).exists() else None,
+                        lambda name, data: (cache / name).write_bytes(data),
+                        lambda: client.invoke('launch', device, 'com.apple.Preferences'),
+                        lambda: client.invoke('launch', device, bundle),
+                        lambda: client.invoke('terminate', device, bundle))
+                    (output / 'ios-result.json').write_text(json.dumps(result, indent=2))
                 return result
             time.sleep(.3)
         raise TimeoutError('iOS focused QA probe timed out')
     finally:
+        if cache is not None and (cache / 'notebook-ui').is_dir():
+            shutil.copytree(cache / 'notebook-ui', output / 'notebook-ui', dirs_exist_ok=True)
         if cache is not None and (cache / result_name).exists():
             shutil.copyfile(cache / result_name, output / 'ios-result.json')
         try:
@@ -117,14 +167,18 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             (output / 'ios-cleanup.json').write_text(json.dumps(dict(device=device, removed=client.matching(device, name) is None)))
 
 
-def run_android(workspace, payload, output, env, options):
+def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
+                entry_point='tests.logisticsmobile.document_storage_probe',
+                result_name='document-storage-result.json'):
+    if bundle not in QA_BUNDLES:
+        raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
     project = workspace / 'build/logisticsmobile/android/gradle'
     shutil.copytree(REPO / 'mobile_build/build/logisticsmobile/android/gradle', project,
                     ignore=shutil.ignore_patterns('build', '.gradle', '__pycache__'))
     android()
-    copy_payload(payload, project / 'app/src/main/python')
+    copy_payload(payload, project / 'app/src/main/python', entry_point=entry_point)
     gradle = project / 'app/build.gradle'
-    gradle.write_text(re.sub(r'applicationId "[^"]+"', 'applicationId "' + BUNDLE + '"', gradle.read_text()))
+    gradle.write_text(re.sub(r'applicationId "[^"]+"', 'applicationId "' + bundle + '"', gradle.read_text()))
     command([project / 'gradlew', '--offline', '--no-daemon', 'assembleDebug'], output / 'android-build.log', cwd=project, env=env)
     emulator = AndroidEmulator(options['tools.android_sdk'], workspace / 'emulator', environment=env)
     record = None
@@ -132,11 +186,11 @@ def run_android(workspace, payload, output, env, options):
         record = emulator.start(options['android.image'], options['android.model'])
         serial = record['serial']
         emulator.invoke('-s', serial, 'install', str(project / 'app/build/outputs/apk/debug/app-debug.apk'), timeout=90)
-        emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', BUNDLE + '/org.beeware.android.MainActivity')
+        emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
         deadline = time.monotonic() + 240
         while time.monotonic() < deadline:
-            value = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', BUNDLE,
-                'cat', 'cache/document-storage-result.json'], env=env, capture_output=True, timeout=15)
+            value = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                'cat', 'cache/' + result_name], env=env, capture_output=True, timeout=15)
             if value.returncode == 0:
                 try:
                     result = json.loads(value.stdout)
@@ -146,17 +200,41 @@ def run_android(workspace, payload, output, env, options):
                 (output / 'android-result.json').write_text(json.dumps(result, indent=2))
                 if not result['success']:
                     raise RuntimeError(result['error'])
+                if result_name == 'notebook-result.json':
+                    def read(name):
+                        found = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                            'cat', 'cache/' + name], env=env, capture_output=True, timeout=15)
+                        return found.stdout if found.returncode == 0 else None
+                    def write(name, data):
+                        subprocess.run([str(emulator.adb), '-s', serial, 'shell', 'run-as', bundle,
+                            'tee', 'cache/' + name], input=data, env=env, capture_output=True, check=True, timeout=15)
+                    result = notebook_lifecycle(read, write,
+                        lambda: emulator.invoke('-s', serial, 'shell', 'input', 'keyevent', 'KEYCODE_HOME'),
+                        lambda: emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity'),
+                        lambda: emulator.invoke('-s', serial, 'shell', 'am', 'force-stop', bundle))
+                    (output / 'android-result.json').write_text(json.dumps(result, indent=2))
+                    for name in ('acceptance.rmdoc', 'modern.rmdoc'):
+                        archive = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                            'cat', 'cache/notebook-ui/acceptance/' + name], env=env, capture_output=True, check=True, timeout=15)
+                        (output / name).write_bytes(archive.stdout)
                 return result
             time.sleep(.3)
         raise TimeoutError('Android document storage probe timed out')
     finally:
         if record is not None:
+            try:
+                screen = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                    'screencap', '-p'], env=env, capture_output=True, timeout=15)
+                if screen.returncode == 0:
+                    (output / 'android-final.png').write_bytes(screen.stdout)
+            except (OSError, subprocess.SubprocessError):
+                pass  # A missing screenshot must not prevent owned cleanup.
             report_data = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
-                'run-as', BUNDLE, 'cat', 'cache/document-storage-result.json'], env=env, capture_output=True, timeout=15)
+                'run-as', bundle, 'cat', 'cache/' + result_name], env=env, capture_output=True, timeout=15)
             if report_data.returncode == 0 and report_data.stdout:
                 (output / 'android-result.json').write_bytes(report_data.stdout)
             (output / 'android-logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', '-t', '2000'))
-            emulator.invoke('-s', record['serial'], 'uninstall', BUNDLE)
+            emulator.invoke('-s', record['serial'], 'uninstall', bundle)
         # The manager's lease validates ownership before removing the AVD.
         emulator.cleanup()
         (output / 'android-cleanup.json').write_text(json.dumps(dict(removed=not emulator.marker.exists())))
@@ -169,12 +247,11 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'notebook'), default='storage')
+    parser.add_argument('--probe', choices=('storage', 'notebook', 'creation'), default='storage')
     parser.add_argument('--family', choices=('iPhone', 'iPad'), default='iPhone')
+    parser.add_argument('--increase-contrast', action='store_true')
     args = parser.parse_args()
     SOURCE = args.source_root.resolve()
-    if args.probe == 'notebook' and args.platform != 'ios':
-        parser.error('The notebook profile currently targets iOS only.')
     args.output.mkdir(parents=True, exist_ok=True)
     options, _ = manager_settings.settings(REPO / 'mobile_build')
     env = dict(os.environ, DEVELOPER_DIR=options['tools.xcode'], ANDROID_HOME=options['tools.android_sdk'],
@@ -188,13 +265,19 @@ def main():
         payload = workspace / 'payload'
         manifest = stage(SOURCE, payload, allow_dirty=SOURCE == REPO)
         (args.output / 'source.json').write_text(json.dumps(manifest, indent=2))
+        creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
+            entry_point='tests.logisticsmobile.document_creation_probe',
+            result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
         if args.platform == 'ios':
             profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                            entry_point='tests.logisticsmobile.notebook_probe',
-                           result_name='notebook-result.json') if args.probe == 'notebook' else {}
-            run_ios(workspace, payload, args.output, env, family=args.family, **profile)
+                           result_name='notebook-result.json') if args.probe == 'notebook' else creation_profile
+            run_ios(workspace, payload, args.output, env, family=args.family, increase_contrast=args.increase_contrast, **profile)
         else:
-            run_android(workspace, payload, args.output, env, options)
+            profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                           entry_point='tests.logisticsmobile.notebook_probe',
+                           result_name='notebook-result.json') if args.probe == 'notebook' else creation_profile
+            run_android(workspace, payload, args.output, env, options, **profile)
 
 
 if __name__ == '__main__':

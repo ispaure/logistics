@@ -73,6 +73,7 @@ def main(output):
             with patch.object(qt.QFileDialog, 'getSaveFileName', return_value=(str(exported), '')):
                 qt.QTimer.singleShot(0, confirm)
                 panel.perform(dict(op='export'))
+                wait(lambda: not panel.busy)
             assert len(confirmed) == 1 and 'decrypted copy' in confirmed[0]['text']
             assert len(Notebook.read(exported.read_bytes()).page(0).strokes) == 1
             assert panel.document is original_document and panel.document.resource is resource
@@ -85,6 +86,7 @@ def main(output):
                 with patch.object(qt.QFileDialog, 'getSaveFileName', return_value=(str(blocked), '')):
                     qt.QTimer.singleShot(0, confirm)
                     panel.perform(dict(op='export'))
+                wait(lambda: not panel.busy)
                 assert not blocked.exists()
                 assert panel.document is original_document and not panel.busy
             finally:

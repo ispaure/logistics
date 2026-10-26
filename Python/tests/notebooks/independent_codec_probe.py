@@ -12,7 +12,7 @@ from features.notebooks.ink import TOOLS
 from features.notebooks.editor import Editor
 
 
-def main(output, go):
+def main(output, go, archives=()):
     output = Path(output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     with scratch() as workspace:
@@ -42,7 +42,20 @@ def main(output, go):
             raise RuntimeError(second.stderr[-4000:])
         edited=json.loads(second.stdout)
         assert edited['stroke_counts']==[len(TOOLS)-1,1],edited['stroke_counts']
-        output.write_text(json.dumps(dict(status='passed',created=created,erased=edited),indent=2)+'\n')
+        additional = []
+        for path in archives:
+            path = Path(path).resolve()
+            expected = Notebook.read(path.read_bytes())
+            checked = subprocess.run([str(Path(go).resolve()), 'run', '.', str(path)],
+                cwd=workspace, env=env, text=True, capture_output=True, timeout=120)
+            if checked.returncode:
+                raise RuntimeError(checked.stderr[-4000:])
+            decoded = json.loads(checked.stdout)
+            assert decoded['page_ids'] == [p.id for p in expected.pages]
+            assert decoded['stroke_counts'] == [len(expected.page(i).strokes) for i in range(len(expected.pages))]
+            additional.append(dict(archive=str(path), pages=decoded['pages'],
+                                   page_ids=decoded['page_ids'], stroke_counts=decoded['stroke_counts']))
+        output.write_text(json.dumps(dict(status='passed',created=created,erased=edited,additional=additional),indent=2)+'\n')
         print('Independent native scene reader accepted multi-page brush exports and erased-stroke tombstones.')
 
 
@@ -50,4 +63,5 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--go',type=Path,required=True)
-    args=parser.parse_args();main(args.output,args.go)
+    parser.add_argument('--archive', type=Path, action='append', default=[])
+    args=parser.parse_args();main(args.output,args.go,args.archive)

@@ -1,5 +1,7 @@
 # Notebook implementation and acceptance
 
+The remaining physical procedure is [notebook hardware acceptance](hardware-acceptance.md).
+
 ## Brief elaboration and scope
 
 The four RMDOC briefs originally proposed one-way Android/Boox native-ink export.
@@ -433,8 +435,8 @@ on the actual reMarkable model/firmware. Select, move and erase exported strokes
 there, add another stroke, export it again and inspect the result. Include page
 add/reorder/copy, layers and current `cPages` ordering beyond one page. No hardware
 result, universal firmware parity or complete arbitrary-document support is
-claimed by the host tests. The four original briefs remain incomplete until
-their mandatory native and physical gates have passing evidence.
+claimed by the host tests. Briefs 02–04 remain open for physical hardware acceptance; the non-physical
+checks below do not establish digitizer behavior or reMarkable firmware compatibility.
 
 ## Provider-backed notebook documents
 
@@ -531,3 +533,55 @@ tombstones. Focused Android emulator and iPad WKWebView notebook QA additionally
 exercise handwriting bursts, close/cancel/resume, file actions and recovery.
 These checks establish software behavior, not physical stylus or reMarkable
 firmware acceptance. QA applications and manager-owned test devices are removed.
+
+
+## Non-physical acceptance for briefs 02–04 — October 25, 2026
+
+The remaining software acceptance passed on native macOS Qt, an Android 36
+arm64 emulator and an iPad simulator using WKWebView (iOS simulator SDK 27.1).
+Focused host regressions passed 47 desktop/model/resource cases and 50 mobile
+cases. Existing unrelated checkout edits are not included in this acceptance.
+Native build manifests retain the precise dirty-source fingerprint and shared
+library identity; Android and iPad used the same source fingerprint.
+
+`notebook_acceptance_probe.py` and the shared native test module
+`notebook_acceptance_checks.py` generate 36-page notebooks with 433 strokes,
+34,562 points, two layers, nine tools and three widths. Both legacy page lists
+and modern `cPages` exports passed independent remarquee v0.0.14 page-identity,
+page-order and stroke-count verification, including reorder/copy/delete and a
+retained tombstone. The independent probe accepts repeatable `--archive` arguments
+for archives generated in the actual Android/iOS runtimes as well as desktop.
+
+Partial-write ENOSPC/EACCES injection, duplicate-name refusal, cancellation,
+failed manifest publication and retry preserve the previous file and acknowledged
+ink. Desktop additionally kills disposable writer processes after a checkpoint
+and during manifest publication, then verifies recovery from a fresh repository.
+The native mobile driver rotates portrait/landscape/portrait, backgrounds/resumes
+its QA app, terminates it, relaunches it and explicitly reopens the recovered
+notebook while comparing page identities and exact ink-frame hashes. Native
+WebView export commands retain the draft after injected destination failures or
+cancellation and can continue drawing. Destination failures are injected rather
+than filling a device or changing its permissions.
+
+Desktop Export Copy now uses the existing OperationProgress worker for encoding
+and verified publication. Native timer delivery, cancellation before publication,
+failed export, retry, source preservation, encrypted-source confirmation and
+suffixed-name overwrite cancellation passed. Save/Save As, pending-ink ordering,
+nine-brush bursts, erase/move/undo, large-page drawing, menus/zoom and brush raster
+checks passed. The export worker does not retarget the source document.
+
+With allocation tracing enabled, this 36-page encoding took about 2.20 seconds
+on desktop, 1.09 seconds on Android and 2.68 seconds on iPad, with approximately
+1.1 MiB peak traced Python allocations during encoding. This excludes the
+pre-existing notebook model and native renderer memory. The mobile event loops
+continued to run; maximum observed timer gaps were 0.234/0.360 seconds on
+Android/iPad in these shared-host runs. These measurements establish neither
+hardware latency nor a hitch-free frame budget for every notebook size.
+All isolated QA apps and manager-owned simulator/emulator devices were removed.
+
+Only physical acceptance remains for these briefs: real Boox pressure/palm and
+pen-to-visible-pixel behavior, a physically drawn capture-to-export session,
+and actual reMarkable import/select/move/erase/re-export on the recorded model
+and firmware. Physical Apple Pencil behavior also remains unverified. Use the
+[hardware procedure](hardware-acceptance.md); generated archives and independent
+readback cannot satisfy those gates.

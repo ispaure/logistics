@@ -25,14 +25,16 @@ func main() {
  }
  _, _, pages, err := rmdoc.ParseContent(members[document+".content"]); if err != nil { panic(err) }
  counts := []int{}
+ ids := []string{}
  all := []rmdoc.Stroke{}
  for _, page := range pages {
+  ids=append(ids,page.PageID)
   data := members[document+"/"+page.PageID+".rm"]
   if len(data)==0 { counts=append(counts,0);continue }
   tree, e := rmdoc.ParseRMV6SceneTree(bytes.NewReader(data)); if e != nil { panic(e) }
   strokes,e := rmdoc.ExtractRMV6StrokesWithAnchors(tree); if e != nil { panic(e) }
   counts=append(counts,len(strokes)); all=append(all,strokes...)
  }
- result := map[string]any{"reader":"remarquee v0.0.14","pages":len(pages),"stroke_counts":counts,"strokes":all}
+ result := map[string]any{"reader":"remarquee v0.0.14","pages":len(pages),"page_ids":ids,"stroke_counts":counts,"strokes":all}
  output,err:=json.Marshal(result);if err!=nil {panic(err)};fmt.Println(string(output))
 }

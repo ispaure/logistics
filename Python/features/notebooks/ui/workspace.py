@@ -201,6 +201,8 @@ class NotebookWorkspace(qt.QWidget):
     def perform(self, action):
         if self.busy:
             return
+        if action['op'] == 'export':
+            return self.export_document()
         if action['op'] in {'save', 'save-as'}:
             return self.save_document(save_as=action['op'] == 'save-as')
         self.busy = True
@@ -216,28 +218,7 @@ class NotebookWorkspace(qt.QWidget):
                 else:
                     self.library()
                 return
-            if op == 'export':
-                if not self.confirm_export():
-                    self.web.page().runJavaScript(update_script(self.state(), 'Export cancelled.'))
-                    return
-                path, _ = qt.QFileDialog.getSaveFileName(self, 'Export notebook copy',
-                    self.editor.notebook.name + '.rmdoc', 'reMarkable notebook (*.rmdoc)')
-                if path:
-                    if not path.lower().endswith('.rmdoc'):
-                        path += '.rmdoc'
-                        # The native picker confirmed the entered name, which
-                        # may differ from this format-suffixed destination.
-                        if Path(path).exists() and qt.QMessageBox.question(self, 'Replace notebook copy?',
-                                'The export destination already exists. Replace it?',
-                                qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.Cancel,
-                                qt.QMessageBox.StandardButton.Cancel) != qt.QMessageBox.StandardButton.Yes:
-                            self.web.page().runJavaScript(update_script(self.state(), 'Export cancelled.'))
-                            return
-                    export_local_document(path, self.editor.notebook.to_bytes(),
-                                          max_bytes=MAX_ARCHIVE, validate=Notebook.read)
-                else:
-                    error = 'Export cancelled. Your notebook is saved on this device.'
-            elif op == 'transfer':
+            if op == 'transfer':
                 if not self.confirm_export():
                     self.web.page().runJavaScript(update_script(self.state(), 'Copy cancelled.'))
                     return
@@ -265,6 +246,37 @@ class NotebookWorkspace(qt.QWidget):
             self.acknowledge_stroke()
         else:
             self.web.page().runJavaScript(update_script(self.state(), error))
+
+    def export_document(self):
+        """Keep archive encoding and publication off the UI event loop."""
+        if not self.confirm_export():
+            self.web.page().runJavaScript(update_script(self.state(), 'Export cancelled.'))
+            return
+        path, _ = qt.QFileDialog.getSaveFileName(self, 'Export notebook copy',
+            self.editor.notebook.name + '.rmdoc', 'reMarkable notebook (*.rmdoc)')
+        if not path:
+            self.web.page().runJavaScript(update_script(self.state(), 'Export cancelled. Your notebook remains open.'))
+            return
+        if not path.lower().endswith('.rmdoc'):
+            path += '.rmdoc'
+            if Path(path).exists() and qt.QMessageBox.question(self, 'Replace notebook copy?',
+                    'The export destination already exists. Replace it?',
+                    qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.Cancel,
+                    qt.QMessageBox.StandardButton.Cancel) != qt.QMessageBox.StandardButton.Yes:
+                self.web.page().runJavaScript(update_script(self.state(), 'Export cancelled.'))
+                return
+        book = self.editor.notebook
+        self._pending_choice = None
+        self._pending_canvas = self.bridge
+        self._pending_operation = self.operation
+        self.busy = True
+        def work(report, cancelled):
+            from commonUtils.runtime.operations import check_cancelled
+            check_cancelled(cancelled)
+            data = book.to_bytes()
+            export_local_document(path, data, max_bytes=MAX_ARCHIVE,
+                                  validate=Notebook.read, cancelled=cancelled)
+        self.operation.start(work, message='Exporting notebook…')
 
     def confirm_export(self):
         if self.document is None or self.document.resource is None or self.document.resource.policy.persistent:
