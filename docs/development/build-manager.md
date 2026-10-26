@@ -649,6 +649,15 @@ installation performed only before sync does not satisfy this requirement.
 
 ## Independent mobile validation and shared resources
 
+Android device journeys accept the declared per-run field
+`devices.android_connections`, a JSON object mapping selected hardware IDs to
+explicit ADB serials. `Scripts.manager_devices` validates and captures the mapping
+in the hash-bound recipe without changing saved metadata or discovering devices.
+Installation retains the existing hardware-identity check for mapped transports.
+This supports USB deployment when a saved wireless endpoint has expired. Portable
+device contracts cover malformed values, unselected recipients and saved-setting
+preservation; actual emulator and device acceptance remain separate evidence.
+
 Android and iOS journey validation branches are independently eligible within the
 manager worker limit. The adapter no longer inserts a cross-platform admission
 phase or reserves a generic whole-run mobile-device session. It retains its

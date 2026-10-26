@@ -1,5 +1,6 @@
 """Project-owned saved recipients and exact-artifact, reviewed device installation."""
 import argparse
+import hashlib
 import json
 import os
 import plistlib
@@ -61,7 +62,27 @@ def selected_devices(root, platform, overrides):
     if not ids:
         raise ValueError('Choose at least one ' + ('Android test device' if platform == 'android' else 'iPhone / iPad') + ' under Delivery → Mobile dev devices.')
     known = saved_devices(root, platform)[platform]
-    return [known.get(key, dict(id=key, name=key, connection=key)) for key in ids]
+    targets = [dict(known.get(key, dict(id=key, name=key, connection=key))) for key in ids]
+    if platform == 'android':
+        connections = android_connections(overrides.get('devices.android_connections', '{}'))
+        if set(connections) - set(ids):
+            raise ValueError('Android connection overrides must name selected device IDs.')
+        for target in targets:
+            target['connection'] = connections.get(target['id'], target['connection'])
+    return targets
+
+
+def android_connections(value):
+    """Validate explicit per-run transports; installation still checks hardware identity."""
+    try:
+        connections = json.loads(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError('Android connections must be a JSON object of device ID to ADB serial.') from error
+    if not isinstance(connections, dict):
+        raise ValueError('Android connections must be a JSON object of device ID to ADB serial.')
+    selection_ids(json.dumps(list(connections)))
+    selection_ids(json.dumps(list(connections.values())))
+    return connections
 
 
 def make_plan(project, platform, targets, context, revision, *, shared=None):
@@ -89,7 +110,9 @@ def make_plan(project, platform, targets, context, revision, *, shared=None):
     save_json(path, recipe)
     package = workspace / ('app.apk' if platform == 'android' else 'app.zip')
     env = dict(PYTHONPATH=os.pathsep.join((str(snapshot), str(snapshot / 'Python'))),
-               LOGISTICS_DEPLOY_WORKSPACE=str(workspace), PYTHONUNBUFFERED='1')
+               LOGISTICS_DEPLOY_WORKSPACE=str(workspace), PYTHONUNBUFFERED='1',
+               PIP_FIND_LINKS=str(project.mobile / '.tools/release-wheels'),
+               PATH=str(project.mobile / '.tools/go/bin') + os.pathsep + os.environ.get('PATH', ''))
     for key, name in [('tools.android_sdk', 'ANDROID_HOME'), ('tools.java', 'JAVA_HOME'), ('tools.xcode', 'DEVELOPER_DIR')]:
         if options.get(key):env[name] = options[key]
     if env.get('ANDROID_HOME'):env['ANDROID_SDK_ROOT'] = env['ANDROID_HOME']
@@ -136,7 +159,7 @@ def prepare(path, digest):
         android.deploy(build_only=True, devices=[], discover=False)
         package = workspace / 'app.apk'
         shutil.copy2(android.PROJECT / 'app/build/outputs/apk/debug/app-debug.apk', package)
-        data['identity'] = dict(bundle_id=BUNDLE)
+        data['identity'] = dict(bundle_id=BUNDLE, certificate=sign_android_debug(data, package))
     elif platform == 'ios':
         from mobile_build.deployment import device_tools as ios
         if file_sha256(data['config']) != data['config_sha256']:
@@ -157,6 +180,55 @@ def prepare(path, digest):
     data.update(package=str(package), package_sha256=file_sha256(package), bundle_id=BUNDLE)
     check_source(data); save_json(workspace / 'prepared.json', data)
     return data
+
+
+def sign_android_debug(data, package):
+    """Choose the declared key before review, without contacting any device."""
+    from mobile_build.deployment import android_deploy as android
+    env, _ = android.tools_environment(android.deployment_environment())
+    tools = android.build_tools(env)
+    mode = data['source'].get('run_overrides', {}).get('devices.android_signing', 'debug')
+    if mode == 'debug':
+        return android.apk_certificate(package, tools, env)
+    if mode != 'beta':
+        raise ValueError('Unknown Android Debug signing mode.')
+    private = Path(data['root']) / 'mobile_build/.android-beta'
+    key, record = private / 'signing.p12', private / 'signing.json'
+    if not key.is_file() or not record.is_file():
+        raise ValueError('Existing Logistics Beta signing key is missing; no key is created.')
+    signing_env = dict(env, LOGISTICS_BETA_STORE_PASSWORD=read_json(record)['password'])
+    public = subprocess.check_output([str(Path(env['JAVA_HOME']) / 'bin/keytool'), '-exportcert',
+        '-keystore', str(key), '-alias', 'logistics-beta', '-storepass:env',
+        'LOGISTICS_BETA_STORE_PASSWORD'], env=signing_env, stderr=subprocess.PIPE)
+    certificate = hashlib.sha256(public).hexdigest()
+    signed = Path(data['workspace']) / 'signed.apk'
+    android.run([str(tools / 'apksigner'), 'sign', '--ks', str(key), '--ks-key-alias', 'logistics-beta',
+        '--ks-pass', 'env:LOGISTICS_BETA_STORE_PASSWORD', '--out', str(signed), str(package)], signing_env)
+    if android.apk_certificate(signed, tools, env) != certificate:
+        raise ValueError('Prepared Android signature does not match the selected Beta key.')
+    os.replace(signed, package)
+    return certificate
+
+
+def android_signature_preflight(data, target, adb, env):
+    """Reject incompatible prepared bytes before recording an install attempt."""
+    from mobile_build.deployment import android_deploy as android
+    certificate = data.get('identity', {}).get('certificate')
+    if not certificate:
+        return  # Compatibility for retained reports prepared before this field.
+    prefix = [str(adb), '-s', target['connection']]
+    paths = android.run([*prefix, 'shell', 'pm', 'path', BUNDLE], env)
+    installed = next((line.removeprefix('package:') for line in paths.splitlines()
+                      if line.startswith('package:') and line.endswith('/base.apk')), None)
+    if installed is None:
+        return
+    previous = Path(data['workspace']) / ('signature-check-' + uuid4().hex + '.apk')
+    try:
+        android.run([*prefix, 'pull', installed, str(previous)], env)
+        if android.apk_certificate(previous, android.build_tools(env), env) != certificate:
+            raise ValueError('Installed Android signing identity differs. Prepare a new package with its existing key; app data is preserved.')
+    finally:
+        previous.unlink(missing_ok=True)
 
 
 def prepare_shared(data):
@@ -232,6 +304,7 @@ def install(report, device, receipt):
             raise ValueError('Selected Android device is offline or unauthorized.')
         if serial != target['id'] and android.run([str(adb), '-s', serial, 'shell', 'getprop', 'ro.serialno'], env).strip() != target['id']:
             raise ValueError('Selected Android device identity changed; reload saved devices.')
+        android_signature_preflight(data, target, adb, env)
         # Exact reviewed bytes, no compatibility re-sign, downgrade or uninstall.
         command = [str(adb), '-s', serial, 'install', '-r', str(package)]
         perform = lambda: android.run(command, env, timeout=300)

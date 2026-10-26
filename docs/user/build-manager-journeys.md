@@ -87,6 +87,73 @@ Portable coverage uses mocked ADB/Xcode commands and harmless process graphs.
 No physical device was queried, installed, launched or otherwise changed, and no
 native signing/build or provider acceptance was performed for this implementation.
 
+## CLI: local Android validation and Boox deployment
+
+For repeat runs, save a project preset once in the manager and use:
+
+```sh
+.venv/bin/python -m build_manager.cli presets --project Logistics
+.venv/bin/python -m build_manager.cli start --project Logistics --preset 'Boox Deployment (incl. Testing)'
+```
+
+The CLI and GUI share presets. `start` captures fresh source and writes results
+under this project's result directory, then pauses before installation for the
+ordinary `review`/`resume` steps below. To inspect before execution, use
+`plan --project Logistics --preset 'Boox Deployment (incl. Testing)' --output PLAN.json`.
+Presets store choices, never installation approvals.
+
+Use the installed manager's `python -m build_manager.cli` interface. `list`
+returns registration IDs; use the Logistics registration ID as `REGISTRATION_ID`
+below. `inputs --project REGISTRATION_ID` returns saved hardware IDs.
+Local execution uses this Mac's disposable Android emulator; it does not dispatch
+hosted tests. Cold tool/dependency preparation can require downloads.
+
+```sh
+.venv/bin/python -m build_manager.cli journey --project REGISTRATION_ID \
+  --goal deliver --platform android --destination android-devices \
+  --execution 'android=This Mac — Android Emulator' --revision working-tree \
+  --run-value 'devices.android=["HARDWARE_ID"]' \
+  --run-value 'devices.android_connections={"HARDWARE_ID":"ADB_SERIAL"}' \
+  --run-value devices.android_signing=beta \
+  --run-value devices.android_variant=debug --output test-results/build-manager/boox-plan.json
+.venv/bin/python -m build_manager.cli show-plan test-results/build-manager/boox-plan.json
+.venv/bin/python -m build_manager.cli run test-results/build-manager/boox-plan.json \
+  --output test-results/build-manager/boox-run --expect-identity PLAN_SHA256 --events
+.venv/bin/python -m build_manager.cli review test-results/build-manager/boox-run
+.venv/bin/python -m build_manager.cli resume test-results/build-manager/boox-run \
+  --confirm --expect-identity PLAN_SHA256 --approval-identity STEP=REVIEW_SHA256
+```
+
+Use the plan identity returned by `journey`, then the exact pending step and review
+identity returned by `review`. Each output run directory must be fresh. Read
+`status RUN_DIRECTORY` for progress and `logs RUN_DIRECTORY --step STEP` for retained
+diagnostics. Exit 3 means preparation succeeded and installation awaits review.
+The existing deployment request can authorize continuation after inspecting the
+exact package and recipient; running tests alone never authorizes installation.
+
+The optional `devices.android_connections` JSON object selects a transport for
+this run without changing saved metadata. For USB, the ADB serial is usually the
+hardware ID. Only selected hardware IDs may appear in the mapping. A wireless
+serial still requires matching `ro.serialno` before installation. No automatic
+transport substitution, pairing, downgrade, uninstall or data clearing occurs.
+Validation includes required host contracts, native UI and Android runtime suites,
+with owned emulator cleanup. Device installation updates the main app in place.
+After Boox testing, verify its Logistics packages and remove temporary QA/probe
+apps, preserving `io.github.ispaure.logisticsmobile` and its data.
+
+Choose `devices.android_signing=beta` when updating an app signed with the existing
+Logistics Beta key. Debug compilation remains separate from Release; the selected
+key signs the package before review, without device discovery. The default
+`debug` signing mode uses the ordinary Android Debug key. New prepared reports
+retain the certificate; installation checks it against the installed app before
+recording an attempt. A mismatch requires a new preparation, never an uninstall
+or automatic signing fallback. Release packages retain their existing signature.
+
+The complete local Android gate measured about 17 minutes on this Mac: roughly
+7 minutes for host checks, 90 seconds for APK build/emulator startup, 8 minutes for
+native UI/rotation and 25 seconds for runtime/cleanup. These are one measured run,
+not a deadline guarantee. A preset shortens invocation but preserves all gates.
+
 ## Shared builds and device variants
 
 The manager overview reads left to right under Source, Testing and Delivery.

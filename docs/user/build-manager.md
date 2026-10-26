@@ -14,7 +14,9 @@ The guided plan panel supports selecting several platforms together, then
 independently reviewing delivery to GitHub, Firebase and TestFlight. See
 [combined validation and delivery](build-manager-journeys.md) for source
 requirements, explicit approvals, local manager setup and validation scope.
-Physical-device installs remain in their existing separate device tab.
+Development-device installs are also available in combined journeys; the
+[CLI Boox workflow](build-manager-journeys.md#cli-local-android-validation-and-boox-deployment)
+shows local emulator validation followed by reviewed installation.
 
 ## Settings and identity
 

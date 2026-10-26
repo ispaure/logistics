@@ -52,6 +52,17 @@ class ManagerDeviceTests(unittest.TestCase):
                     devices.install(self.report, 'hardware-1', self.receipt)
             run.assert_not_called()
 
+    def test_connection_override_is_explicit_scoped_and_does_not_change_saved_metadata(self):
+        from Scripts.manager_journeys import run_values
+        values = {'devices.android':'["hardware-1"]',
+                  'devices.android_connections':'{"hardware-1":"hardware-1"}'}
+        run_values(values)
+        self.assertEqual(devices.selected_devices(self.root, 'android', values)[0]['connection'], 'hardware-1')
+        self.assertEqual(devices.saved_devices(self.root)['android']['hardware-1']['connection'], 'usb-1')
+        for invalid in ('[]', '{"other":"usb-2"}', '{"hardware-1":12}', '{"hardware-1":""}'):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                devices.selected_devices(self.root, 'android', dict(values, **{'devices.android_connections':invalid}))
+
     def test_install_uses_exact_bytes_on_one_target_and_retains_attempt_receipt(self):
         from mobile_build.deployment import android_deploy as android
         with patch.dict(os.environ, self.env), patch.object(android, 'tools_environment', return_value=({},'/fake/adb')), \
@@ -95,6 +106,10 @@ class ManagerDeviceTests(unittest.TestCase):
         self.assertIn('--sha256', plan.phases[0].argv)
         self.assertIn('one', plan.phases[1].argv); self.assertNotIn('two', plan.phases[1].argv)
         self.assertEqual(len(plan.phases[0].artifacts), 2)
+        self.assertEqual(plan.phases[0].environment['PATH'].split(os.pathsep)[0],
+                         str(project.mobile / '.tools/go/bin'))
+        self.assertEqual(plan.phases[0].environment['PIP_FIND_LINKS'],
+                         str(project.mobile / '.tools/release-wheels'))
 
     def test_source_or_recipe_change_blocks_preparation_before_any_tools(self):
         recipe = self.root / 'recipe.json'; recipe.write_text('{}')
@@ -106,11 +121,47 @@ class ManagerDeviceTests(unittest.TestCase):
         workspace = self.root / 'workspace'; workspace.mkdir()
         apk = self.root / 'gradle/app/build/outputs/apk/debug/app-debug.apk'; apk.parent.mkdir(parents=True); apk.write_bytes(b'build')
         recipe = self.root / 'recipe.json'; recipe.write_text(json.dumps(dict(self.data, workspace=str(workspace), root=str(self.root))))
-        with patch.object(devices, 'check_source'), patch.object(android, 'PROJECT', self.root / 'gradle'), patch.object(android, 'deploy') as build:
+        with patch.object(devices, 'check_source'), patch.object(android, 'PROJECT', self.root / 'gradle'), \
+                patch.object(devices, 'sign_android_debug', return_value='certificate'), patch.object(android, 'deploy') as build:
             devices.prepare(recipe, file_sha256(recipe))
         build.assert_called_once_with(build_only=True, devices=[], discover=False)
         self.assertEqual((workspace / 'app.apk').read_bytes(), b'build')
         self.assertTrue((workspace / 'prepared.json').exists())
+
+    def test_signing_conflict_blocks_before_install_attempt_and_retires_pulled_apk(self):
+        from mobile_build.deployment import android_deploy as android
+        self.data.update(identity={'certificate':'prepared'}, workspace=str(self.root))
+        self.report.write_text(json.dumps(self.data))
+        self.env['BUILD_MANAGER_APPROVED_ARTIFACTS'] = json.dumps([
+            dict(original_path=str(self.report.resolve()), sha256=file_sha256(self.report))])
+        with patch.dict(os.environ, self.env), patch.object(android, 'tools_environment', return_value=({}, '/adb')), \
+                patch.object(android, 'build_tools', return_value=self.root), \
+                patch.object(android, 'apk_certificate', return_value='installed'), \
+                patch.object(android, 'run', side_effect=['device', 'hardware-1', 'package:/installed/base.apk', 'pulled']) as run:
+            with self.assertRaisesRegex(ValueError, 'signing identity differs'):
+                devices.install(self.report, 'hardware-1', self.receipt)
+        self.assertFalse(self.receipt.with_suffix('.attempt.json').exists())
+        self.assertFalse(any('install' in call.args[0] for call in run.call_args_list))
+        self.assertFalse(list(self.root.glob('signature-check-*.apk')))
+
+    def test_beta_signing_is_selected_before_review_without_device_discovery(self):
+        from mobile_build.deployment import android_deploy as android
+        private = self.root / 'mobile_build/.android-beta'; private.mkdir()
+        (private / 'signing.p12').write_bytes(b'fixture key')
+        (private / 'signing.json').write_text(json.dumps({'password':'fixture-password'}))
+        data = dict(self.data, root=str(self.root), workspace=str(self.root),
+                    source={'run_overrides':{'devices.android_signing':'beta'}})
+        (self.root / 'signed.apk').write_bytes(b'signed package')
+        import hashlib
+        certificate = hashlib.sha256(b'fixture certificate').hexdigest()
+        with patch.object(android, 'tools_environment', return_value=({'JAVA_HOME':'/java'}, '/adb')), \
+                patch.object(android, 'build_tools', return_value=Path('/tools')), \
+                patch('subprocess.check_output', return_value=b'fixture certificate'), \
+                patch.object(android, 'apk_certificate', return_value=certificate), patch.object(android, 'run') as run:
+            self.assertEqual(devices.sign_android_debug(data, self.package), certificate)
+        self.assertEqual(self.package.read_bytes(), b'signed package')
+        self.assertIn('sign', run.call_args.args[0])
+        self.assertNotIn('fixture-password', ' '.join(run.call_args.args[0]))
 
     def test_shared_release_apk_is_copied_exactly_without_build_or_device_discovery(self):
         from mobile_build.deployment import android_deploy as android

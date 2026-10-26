@@ -32,6 +32,11 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             manager = Path(directory) / 'manager'
             shutil.copytree(Path(build_manager.__file__).parent, manager / 'build_manager',
                             ignore=shutil.ignore_patterns('__pycache__'))
+            # Preserve the real manager's pinned dependency beside its package,
+            # matching the extracted checkout layout in an isolated interpreter.
+            shutil.copytree(Path(build_manager.__file__).parent.parent / 'commonUtils',
+                            manager / 'commonUtils',
+                            ignore=shutil.ignore_patterns('__pycache__', '.git', 'tests'))
             result = subprocess.run([sys.executable, '-I', '-X', 'utf8', '-c', code,
                 str(manager), str(REPO / 'mobile_build/validation/ui_tools.py')],
                 cwd=directory, capture_output=True, text=True, encoding='utf-8', timeout=30)

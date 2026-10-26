@@ -525,6 +525,22 @@
   },
   "run_fields": [
     {
+      "id": "devices.android_signing",
+      "label": "Android Debug package signing",
+      "kind": "choice",
+      "default": "debug",
+      "options": {"debug": "Android Debug key", "beta": "Existing Logistics Beta key"},
+      "destinations": ["android-devices"],
+      "description": "Select the existing Beta key when updating a Beta-signed main app. Signing happens before artifact review; installation never changes signing or clears data. Release packages retain their existing signature."
+    },
+    {
+      "id": "devices.android_connections",
+      "label": "Android connection overrides",
+      "kind": "text",
+      "destinations": ["android-devices"],
+      "description": "Optional JSON object mapping selected hardware IDs to explicit ADB serials for this run. Hardware identity is verified before installation; saved settings are preserved."
+    },
+    {
       "id": "testers.message",
       "label": "Message for testers (Firebase and TestFlight)",
       "kind": "multiline",

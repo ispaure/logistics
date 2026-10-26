@@ -57,7 +57,14 @@ class JourneyAdapterTests(unittest.TestCase):
                        'testflight.app_id': 'fixture-ios', 'testflight.external_group': 'Fixture testers',
                        'firebase.app_id': 'fixture-android', 'firebase.group': 'Fixture testers'}
         self.source = dict(logistics_commit='a' * 40, commonUtils_commit='b' * 40, dirty=False, fingerprint='fixture', selection='HEAD')
+        # These adapter tests exercise scheduling and reviewed delivery, not
+        # checkout identity. Keep the engine fixed across pause/resume even
+        # when the editable manager or commonUtils is being developed locally.
+        engine = dict(api=1,
+                      manager=dict(commit='c' * 40, dirty=False, fingerprint='manager-fixture'),
+                      commonUtils=dict(commit='b' * 40, dirty=False, fingerprint='commonutils-fixture'))
         for target, options in (
+                ('build_manager.identity.runtime_identity', {'return_value': engine}),
                 ('build_manager.test_manifest.discover', {'side_effect': lambda root, group: _discover(ROOT, group)}),
                 ('Scripts.build_retention.clean', {'return_value': []}),
                 ('Scripts.build_project.identity', {'return_value': self.source}),

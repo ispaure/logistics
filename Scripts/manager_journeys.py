@@ -24,7 +24,7 @@ class PlanningContext:
         return json.loads(self.captured)
 
 
-RUN_FIELDS={'devices.android_variant','devices.ios_variant','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
+RUN_FIELDS={'devices.android_signing','devices.android_connections','devices.android_variant','devices.ios_variant','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
 
 
 def run_values(values):
@@ -32,10 +32,15 @@ def run_values(values):
     if not isinstance(values,dict) or set(values)-RUN_FIELDS or any(not isinstance(v,str) or len(v)>20000 for v in values.values()):
         raise ValueError('Only tester notes and recipient groups can be changed for one run.')
     result = dict(values)
+    if result.get('devices.android_signing', 'debug') not in {'debug', 'beta'}:
+        raise ValueError('Choose Debug or the existing Beta key for Android device signing.')
     if 'testers.message' in result:
         message = result.pop('testers.message')
         result.update({'testflight.what_to_test': message, 'firebase.release_notes': message})
     from build_manager.run_fields import selection_ids
+    if 'devices.android_connections' in result:
+        from Scripts.manager_devices import android_connections
+        android_connections(result['devices.android_connections'])
     for key in ('devices.android', 'devices.ios'):
         if key in result:selection_ids(result[key])
     for target in ('android', 'ios'):
