@@ -697,3 +697,12 @@ Per-case timing, source manifests, durable receipts and cleanup proofs remain in
 the manager's ignored `test-results/logistics-native/`. Subsequent product edits
 need their own validation. Android x64 and final integration after Testing and
 Packaging 06 remain deferred; no push, hosted dispatch or release occurred.
+
+## Hosted desktop manager bootstrap
+
+The desktop workflow supplies `LOGISTICS_MANAGER_CHECKOUT` for its explicitly
+cloned, exact-pin manager. The Fedora container creates its own exact-pin checkout
+and supplies the same reference. After the locked dependency sync, the platform
+runner verifies and reinstalls this manager into the selected interpreter before
+starting checks. Dependency sync removes packages outside the project lock; an
+installation performed only before sync does not satisfy this requirement.
