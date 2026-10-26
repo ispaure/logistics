@@ -76,7 +76,9 @@ The native UI fixture keeps bounded navigation and WebKit load-event traces.
 On iOS, passive start/commit/failure/process-termination callbacks supplement
 the application policy trace; toolkit-preapproved initial URLs can bypass the
 application handler. Timeout snapshots include the pending preapproved URL,
-estimated progress, attachment and ancestor visibility. The fixture inherits
+estimated progress, attachment and ancestor visibility. Where available, optional
+test-only WebKit process identifiers and responsiveness accompany the snapshot;
+failure artifacts also retain host memory and relevant process summaries. The fixture inherits
 Toga's policy and finish handlers and retains the normal render deadline.
 
 The suite runner reports the active test and completed count every 60 seconds.

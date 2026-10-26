@@ -15,9 +15,18 @@ def native_state(view):
         native = impl.native
         if state['backend'].startswith('toga_iOS.'):
             from commonUtils.ui.native.keyboard import native_value
+            from rubicon.objc import SEL
             state['load_events'] = getattr(view, '_native_load_trace', [])
             state['allowed_url'] = getattr(impl, '_allowed_url', None)
             state['progress'] = float(native_value(native.estimatedProgress))
+            # Optional WebKit SPI is diagnostic-only, never a runtime dependency.
+            # It distinguishes a missing provisional process from a live stall.
+            for selector, key, convert in (
+                    ('_webProcessIdentifier', 'web_process_pid', int),
+                    ('_provisionalWebProcessIdentifier', 'provisional_process_pid', int),
+                    ('_webProcessIsResponsive', 'web_process_responsive', bool)):
+                if native.respondsToSelector(SEL(selector)):
+                    state[key] = convert(native_value(getattr(native, selector)))
             state['loading'] = bool(native.isLoading())
             state['window'] = native_value(native.window) is not None
             chain = []

@@ -356,6 +356,15 @@ def ios_diagnostics():
         (logs / 'ios-launch.result').write_bytes(result.stdout + result.stderr)
     except subprocess.TimeoutExpired:
         (logs / 'ios-launch.result').write_text('Diagnostic launch timed out.')
+    for name, command in (
+            ('host-memory.txt', ['sysctl', 'hw.memsize', 'hw.ncpu']),
+            ('host-vm.txt', ['vm_stat'])):
+        with (logs / name).open('w') as stream:
+            subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT, timeout=15, check=False)
+    processes = subprocess.run(['ps', '-axo', 'pid,ppid,state,%cpu,rss,comm'],
+                               capture_output=True, text=True, timeout=15, check=False)
+    (logs / 'host-webkit-processes.txt').write_text('\n'.join(line for line in processes.stdout.splitlines()
+        if any(name in line for name in ('WebKit', 'Simulator', 'Logistics Mobile'))))
     for source in (Path.home() / 'Library/Logs/DiagnosticReports').glob('*.ips'):
         if source.stat().st_size <= 10 * 1024 * 1024:
             header = source.read_text(errors='replace')[:8192]
