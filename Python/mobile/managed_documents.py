@@ -5,6 +5,7 @@ owns no additional state: views retain per-document controls and the workspace
 retains identities and generations, including picker completion admission.
 """
 import asyncio
+from hashlib import sha256
 from uuid import uuid4
 
 import toga
@@ -31,6 +32,7 @@ class ManagedDocumentWorkflows:
         if owner.preview is None:
             owner.preview = toga.WebView(on_navigation_starting=lambda widget, url, **kw: False,
                                          style=Pack(flex=1))
+            owner.preview_digest = None
         from .font_scaling import bind
         bind(self, owner.preview, lambda: owner.session.kind, web=True)
         self.preview = owner.preview
@@ -47,12 +49,17 @@ class ManagedDocumentWorkflows:
         prepare_managed_preview(owner, on_edit=back_to_editor,
             valid=lambda: self.active_host and owner.session.id in self.workspace.sessions)
         bind(self, owner.preview, lambda: owner.session.kind, web=True)
-        owner.preview_search.loading()
-        saved = self.__dict__.get('_closed_text_positions', {}).get(owner.session.resource)
-        if saved is not None:
-            from .reader_lifecycle import restore_loaded_scroll
-            restore_loaded_scroll(owner.preview, saved[1], lambda: self.workspace.accepts(token))
-        self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
+        digest = sha256(content.encode('utf-8')).digest()
+        if digest != getattr(owner, 'preview_digest', None):
+            owner.preview_search.loading()
+            saved = self.__dict__.get('_closed_text_positions', {}).get(owner.session.resource)
+            if saved is not None:
+                from .reader_lifecycle import restore_loaded_scroll
+                restore_loaded_scroll(owner.preview, saved[1], lambda: self.workspace.accepts(token))
+            self.preview.set_content('https://logistics.invalid/' + uuid4().hex + '/', content)
+            # Re-presenting an unchanged preview must preserve its in-flight
+            # navigation, DOM and scroll rather than cancel it with another UUID.
+            owner.preview_digest = digest
         from .action_menu import ActionMenu
         from .document_sources import folder_action
         if hasattr(owner, 'preview_actions'):

@@ -21,6 +21,24 @@ class ManagedDocumentTests(TestCase):
         self.addCleanup(self.app.main_window.close)
         self.app.show_documents()
 
+    def test_unchanged_preview_keeps_pending_navigation_and_changes_reload(self):
+        app = self.app
+        app.new_document(name='Preview.md', content='# Stable preview\n')
+        app.show_preview()
+        preview = app.preview
+        with patch.object(preview, 'set_content', wraps=preview.set_content) as load:
+            app.show_documents()
+            app.show_preview()
+            self.assertIs(app.preview, preview)
+            load.assert_not_called()
+            app.editor.value = '# Changed preview\n'
+            app.show_preview()
+            self.assertEqual(load.call_count, 1)
+            self.assertIn('Changed preview', load.call_args.args[1])
+            app.preferences.save(markdown_font_size='20')
+            app.show_preview()
+            self.assertEqual(load.call_count, 2)
+
     def test_import_after_switch_retains_new_draft_and_publishes_separate_session(self):
         app = self.app
         origin = app.editor_view

@@ -146,7 +146,9 @@ async def exercise_documents(app, passed):
     assert missing.id not in app.workspace.sessions
     app.show_documents()
     passed.append('native_text_workspace')
-    app.show_preview()
+    with patch.object(app.preview, 'set_content', wraps=app.preview.set_content) as reload:
+        app.show_preview()
+        reload.assert_not_called()
     await wait_for_text(app.preview, 'Native preview')
     original_preview = app.preview
     a_session = app.editor_view.session.id

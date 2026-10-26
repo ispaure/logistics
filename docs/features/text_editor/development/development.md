@@ -73,6 +73,12 @@ executes notebook acceptance followed by these document checks on iOS or Android
 it also covers native Back, preferences, close decisions and Markdown ownership.
 The runner removes its QA app and owned device after collecting results.
 
+Managed Markdown previews retain a digest of their rendered HTML. Presenting
+identical content again preserves the pending native navigation, DOM and scroll;
+changed source, font size or rendered styling still loads updated HTML in the
+same document-owned WebView. Host and native document acceptance cover repeated
+presentation without a second navigation, with the original render deadline.
+
 ## Notes document ownership
 
 The desktop Notes library clears `viewer.document_state` when retiring a private
