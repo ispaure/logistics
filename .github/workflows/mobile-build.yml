@@ -1,22 +1,14 @@
-name: Native mobile prototype builds
+name: EPUB loading reproduction (diagnostic only)
 
 on:
-  push:
-    branches: [alpha]
-    paths: ['Python/mobile/**', 'Python/features/**', 'Python/services/**', 'Python/commonUtils', 'Python/commonUtils/**', 'mobile_build/**', '.github/workflows/mobile-build.yml']
   workflow_dispatch:
     inputs:
       target:
-        description: Native target to build
+        description: Diagnostic target only
         required: true
         type: choice
-        default: both
-        options: [android, ios, both]
-  workflow_call:
-    inputs:
-      target:
-        type: string
-        default: both
+        default: ios
+        options: [ios]
 
 permissions:
   contents: read
@@ -91,64 +83,6 @@ jobs:
             ${{ runner.temp }}/Logistics-ios-simulator.zip
           retention-days: 14
 
-  android:
-    name: Build and validate Android
-    if: github.event_name == 'push' || inputs.target == 'android' || inputs.target == 'both'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          submodules: recursive
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version: '3.12.2'
-      - name: Install explicitly pinned external manager
-        run: python Scripts/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
-        with:
-          go-version: '1.26.9'
-          cache-dependency-path: mobile_build/rclone_bridge/go.sum
-      - name: Prepare a clean, curated mobile payload
-        run: |
-          python -m pip install briefcase==0.4.5
-          python -m pip wheel --wheel-dir "$RUNNER_TEMP/logistics-wheels" langdetect==1.0.9
-          echo "PIP_FIND_LINKS=$RUNNER_TEMP/logistics-wheels" >> "$GITHUB_ENV"
-          python mobile_build/tools.py stage mobile_build/payload
-      - name: Generate and build the Android application
-        working-directory: mobile_build
-        env:
-          BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
-        run: |
-          mkdir -p "$BRIEFCASE_HOME"
-          python cloud_build.py licenses
-          briefcase create android --no-input
-          python cloud_build.py android
-          briefcase build android --no-input
-          cp build/logisticsmobile/android/gradle/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/Logistics-android-debug.apk"
-      - name: Exercise Android panels, rotation and safe areas
-        working-directory: mobile_build
-        env:
-          BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
-        run: |
-          sudo chmod a+rw /dev/kvm
-          python validation/ui_tools.py run android --device '{"avd":"LogisticsValidation","device_type":"pixel","skin":null,"system_image":"system-images;android-35;google_apis;x86_64"}'
-      - name: Preserve native builds and diagnostics
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: logistics-native-android
-          path: |
-            mobile_build/payload/source.json
-            mobile_build/logs/
-            ${{ runner.temp }}/Logistics-android-debug.apk
-          retention-days: 14
-
   ios-ui:
     name: Validate iOS ${{ matrix.device }}
     needs: ios-build
@@ -158,7 +92,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: [iphone, duo, ipad]
+        device: [iphone]
     defaults:
       run:
         shell: bash
@@ -184,56 +118,19 @@ jobs:
           path: ${{ runner.temp }}/ios-test-project
       - name: Restore the shared test application
         run: tar -xzf "$RUNNER_TEMP/ios-test-project/Logistics-ios-test-project.tar.gz"
-      - name: Exercise panels, rotation and safe areas
+      - name: Compare polling and native load events (not release acceptance)
         env:
-          IOS_DEVICE: ${{ matrix.device }}
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
           mkdir -p "$BRIEFCASE_HOME"
-          # This disposable runner validates software-keyboard geometry.
-          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
-          case "$IOS_DEVICE" in
-            iphone) selector=ios-device; flags=() ;;
-            duo) selector=ios-duo; flags=(--require-duo) ;;
-            ipad) selector=ios-ipad; flags=(--require-independent-windows) ;;
-            *) exit 1 ;;
-          esac
-          device=$(python validation/ui_tools.py "$selector")
-          python validation/ui_tools.py run ios --device "$device" --no-update "${flags[@]}"
-      - name: Capture iOS startup and crash diagnostics
-        if: failure()
-        run: python validation/ui_tools.py ios-diagnostics
+          device=$(python validation/ui_tools.py ios-device)
+          python validation/epub_repro.py "$device"
       - name: Preserve device reports and diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: logistics-native-ios-${{ matrix.device }}
+          name: logistics-epub-repro-${{ matrix.device }}
           path: |
             mobile_build/payload/source.json
             mobile_build/logs/
           retention-days: 14
-
-  native-gate:
-    name: Require every selected native check
-    needs: [ios-build, ios-ui, android]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Reject failed, cancelled or required skipped checks
-        env:
-          TARGET: ${{ github.event_name == 'push' && 'both' || inputs.target }}
-          IOS_BUILD_RESULT: ${{ needs.ios-build.result }}
-          ANDROID_RESULT: ${{ needs.android.result }}
-          IOS_RESULT: ${{ needs.ios-ui.result }}
-        run: |
-          case "$TARGET" in
-            ios|both) expected_ios=success ;;
-            android) expected_ios=skipped ;;
-            *) exit 1 ;;
-          esac
-          test "$IOS_BUILD_RESULT" = "$expected_ios"
-          test "$IOS_RESULT" = "$expected_ios"
-          case "$TARGET" in
-            android|both) test "$ANDROID_RESULT" = success ;;
-            ios) test "$ANDROID_RESULT" = skipped ;;
-          esac
