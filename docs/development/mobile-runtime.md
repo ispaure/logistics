@@ -21,6 +21,26 @@ session identity, privacy exclusions and view-state rules remain in `workspace.p
 
 ## Owners
 
+On iOS, `cycle_collection.py` owns cyclic garbage collection for the process's
+UI loop. Toga constraint finalizers call UIKit, so automatic CPython collection
+must not run them during an unrelated worker allocation. Startup disables
+automatic cycle collection and polls the existing generation thresholds every
+250 ms, collecting eligible generations on the main thread. Reference counting
+continues normally. Secondary windows share the same owner; process shutdown
+retires its timer and restores the prior GC setting. Background jobs must not
+explicitly call `gc.collect()` on native widget cycles. Android's collection
+policy is unchanged.
+
+`mobile_build/tests/native/test_cycle_collection.py` checks worker allocation,
+main-thread finalization, generation pressure and timer retirement. Native
+validation also needs Main Thread Checker evidence: a complete UI report alone
+does not establish that native calls stayed on the UI thread.
+The separate `tests.logisticsmobile.cycle_collection_probe` native entry point
+retires nested scroll widgets, triggers executor allocation and checks both
+widget reclamation and finalizer thread identity. Its optional automatic-GC
+control intentionally reproduces the unsafe behavior. Its diagnostic report
+cannot satisfy the full native release contract.
+
 `mobile.snow.SeasonalSnow` uses `services.seasonal` for the shared
 December 15–January 2 season, including both endpoints. The default-on `seasonal_snow` preference is edited
 in Appearance on both platforms. A touch-transparent UIView with animated

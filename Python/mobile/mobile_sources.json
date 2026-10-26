@@ -27,6 +27,7 @@
     "composition/assembly.py",
     "composition/presentation.py",
     "control_icons.py",
+    "cycle_collection.py",
     "destination_names.py",
     "document_choices.py",
     "document_imports.py",
