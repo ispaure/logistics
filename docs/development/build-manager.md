@@ -622,3 +622,32 @@ and supplies the same reference. After the locked dependency sync, the platform
 runner verifies and reinstalls this manager into the selected interpreter before
 starting checks. Dependency sync removes packages outside the project lock; an
 installation performed only before sync does not satisfy this requirement.
+
+
+## Independent mobile validation and shared resources
+
+Android and iOS journey validation branches are independently eligible within the
+manager worker limit. The adapter no longer inserts a cross-platform admission
+phase or reserves a generic whole-run mobile-device session. It retains its
+per-step host mobile-build, project workspace, Android SDK/device workspace,
+signing-keychain and provider destination requirements. Shared build capacity is
+one slot by default; independent checks can proceed while another branch builds.
+Within-platform dependencies, including iPhone/Duo/iPad cleanup order, remain
+unchanged. A platform failure still blocks only destinations requiring that gate.
+
+The manager runs scoped cleanup as soon as its own prerequisites finish; unrelated
+platform work does not delay it. Whole-workflow cleanup retains its broader owned
+process retirement boundary. Resource contention is shown explicitly as Waiting
+for shared resource with the resource name, declared capacity and competing step
+requirements in the selected subtask details.
+
+Portable adapter fixtures run the actual generated dependency graph with harmless
+commands. They prove independent mobile contract steps overlap and the shared
+build steps do not overlap. Eighteen journey contracts and eleven adapter
+contracts pass with the project's isolated mobile interpreter and the current
+manager source. Test-generated settings are isolated from real checkout profiles.
+These checks do not establish simultaneous native hardware acceptance; no VM,
+physical device, signing, upload or hosted dispatch is started by these fixtures.
+
+Existing inspected/saved plans keep their original dependency graph. Restart the
+manager after updating and inspect a fresh plan to use independent branches.

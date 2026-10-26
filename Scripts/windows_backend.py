@@ -15,56 +15,26 @@ import zipfile
 from build_manager import Phase, Plan
 from build_manager.parallels import Parallels
 from build_manager.windows_guest import WindowsGuest
+from build_manager.guest_tools import WINDOWS_PREPARE, windows_parameters
 from Scripts.build_snapshots import source_members
 from Scripts.guest_results import GuestResultLifecycle
 
 
-PREPARE = r'''
-if ((Get-Process -Id $PID).SessionId -eq 0) { throw 'Use the existing interactive guest test account.' }
-if ($env:PROCESSOR_ARCHITECTURE -ne 'ARM64') { throw 'This tool catalog requires the selected Windows ARM64 guest.' }
-if ($p.token -notmatch '^[a-f0-9]{32}$') { throw 'Invalid workspace ownership token.' }
-$root=Join-Path ([Environment]::GetFolderPath('CommonDocuments')) ('bm\'+$p.token)
-if (Test-Path -LiteralPath $root) { throw 'Owned workspace already exists; inspect it before retry.' }
-$null=New-Item -ItemType Directory -Path $root
-@{token=$p.token}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root '.manager-owned.json') -Encoding UTF8
-$downloads=Join-Path $root 'downloads'; $null=New-Item -ItemType Directory -Path $downloads
-$tools=Join-Path $root 'tools'; $null=New-Item -ItemType Directory -Path $tools
-$resolved=@{}
-foreach ($entry in @(@{name='uv';value=$p.tools.uv},@{name='git';value=$p.tools.git})) {
- $tool=$entry.value
- if ($tool.url -notmatch '^https://github.com/' -or $tool.sha256 -notmatch '^[a-f0-9]{64}$') { throw 'Invalid pinned tool metadata.' }
- $zip=Join-Path $downloads ($entry.name+'.zip')
- Invoke-WebRequest -UseBasicParsing -Uri $tool.url -OutFile $zip -TimeoutSec 120
- if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $tool.sha256) { throw 'Tool archive hash mismatch.' }
- $folder=Join-Path $tools $entry.name
- Expand-Archive -LiteralPath $zip -DestinationPath $folder
- $resolved[$entry.name]=(Get-ChildItem -LiteralPath $folder -Filter ($entry.name+'.exe') -Recurse|Select-Object -First 1).FullName
- if (-not $resolved[$entry.name]) { throw ('Tool executable missing: '+$entry.name) }
-}
-$env:UV_PYTHON_INSTALL_DIR=Join-Path $root 'python';$env:UV_CACHE_DIR=Join-Path $root 'cache';$env:UV_PYTHON_ARCH='x86_64'
-$environment=Join-Path $root 'environment'
-& $resolved.uv venv --python cpython-3.12.2-windows-x86_64 --seed $environment
-if ($LASTEXITCODE -ne 0) { throw 'Pinned Windows interpreter preparation failed.' }
-$python=Join-Path $environment 'Scripts\python.exe'
-$version=& $python -c 'import json,platform,sys;print(json.dumps(dict(version=sys.version,architecture=platform.machine())))'
-if ($LASTEXITCODE -ne 0) { throw 'Pinned interpreter could not execute.' }
-$record=@{token=$p.token;workspace=$root;python=$python;uv=$resolved.uv;git=$resolved.git;runtime=($version|ConvertFrom-Json);guestArchitecture=$env:PROCESSOR_ARCHITECTURE;session=(Get-Process -Id $PID).SessionId}
-$record|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $root 'prepared.json') -Encoding UTF8
-$record|ConvertTo-Json -Depth 5 -Compress
-'''
+PREPARE = WINDOWS_PREPARE
 
 
 def prepare(vm, output):
     client = Parallels()
     guest = client.start(vm)
-    tools = json.loads(Path(__file__).with_name('build_manager_tools.json').read_text())['windows_arm64']
+    catalog = json.loads(Path(__file__).with_name('build_manager_tools.json').read_text())['windows_arm64']
     token = uuid4().hex
+    parameters = windows_parameters(token, catalog, **catalog['runtime'])
     record = dict(token=token, vm=guest['uuid'], status='preparing', tests_run=False)
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(record, indent=2) + '\n')
     try:
-        prepared = json.loads(client.powershell(guest['uuid'], PREPARE, dict(token=token, tools=tools), timeout=360))
+        prepared = json.loads(client.powershell(guest['uuid'], PREPARE, parameters, timeout=360))
         record.update(prepared, status='prepared', original_state=guest['status'])
         return record
     except (OSError, ValueError, RuntimeError) as error:

@@ -139,7 +139,6 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
 
     phases, gates, locks, resources, capacities = [], {}, set(), {}, {}
     branch_sources, evidence, executions = {}, {}, {}
-    previous_mobile = None
     plans = []
     def retain(plan):
         plans.append(plan)
@@ -161,13 +160,7 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
             _release_validation=delivery and mobile and (('testflight' if target == 'ios' else 'firebase') in destinations or target in release_devices))
         retain(plan)
         branch_sources[target] = plan.source
-        barrier = ()
-        if mobile and previous_mobile:
-            admission = Phase(target + '.admit-validation', (str(project.interpreter), '-c', 'pass'), str(project.root),
-                waits_for=(previous_mobile,), always=True, kind='setup', effect='inspect', section='platforms')
-            phases.append(admission)
-            barrier = (admission.id,)
-        branch = _namespace(plan, target + '.validation', barrier)
+        branch = _namespace(plan, target + '.validation')
         if any(phase.effect in EXTERNAL - {'dispatch'} for phase in branch):
             raise ValueError('Validation cannot publish or deliver builds.')
         executions[target] = dict(backend=backend,steps=[phase.id for phase in branch if phase.effect=='dispatch'])
@@ -176,8 +169,6 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
             dependencies=tuple(phase.id for phase in branch), effect='test', section='platforms')
         phases.append(gate)
         gates[target] = [gate.id]
-        if mobile:
-            previous_mobile = gate.id
 
     preparations = {}
     for target, provider, operation in (('ios', 'testflight', 'Prepare TestFlight'), ('android', 'firebase', 'Prepare Firebase')):

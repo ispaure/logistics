@@ -582,7 +582,7 @@ class LogisticsProject:
 
 
 def declare_resources(plan, target):
-    """Project policy: conservative mobile capacity and explicit device sequencing."""
+    """Project policy: lock actual shared build/cache/signing resources per step."""
     from dataclasses import replace
     if plan.backend == 'GitHub':
         return plan
@@ -600,10 +600,7 @@ def declare_resources(plan, target):
         if phase.effect in {'upload','publish'}:
             requirements['provider.destination:'+phase.provider+':'+plan.project]=1
         phases.append(replace(phase,resources=requirements,stop_grace=5 if target in {'ios','android'} else phase.stop_grace))
-    resources=dict(plan.resources)
-    if target in {'ios','android'} and (plan.effect=='test' or any(phase.id in {'android-native','iphone','duo'} for phase in plan.phases)):
-        resources['host.mobile-device-session']=1
-    return replace(plan,phases=tuple(phases),resources=resources)
+    return replace(plan,phases=tuple(phases))
 
 
 def main():

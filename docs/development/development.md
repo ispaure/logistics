@@ -81,6 +81,9 @@ validate a new change.
 
 ## Plans and historical assessments
 
+See the [October 26 build and deployment ownership audit](build-deployment-audit.md)
+for the keep/extract/retire inventory after the external manager extraction.
+
 Start with the [October 25 ecosystem refactoring audit](ecosystem-audit.md) for
 current cross-repository priorities and the documentation review. It separates
 remaining ownership seams from the completed work below.

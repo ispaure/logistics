@@ -17,6 +17,16 @@ to do; application features stay in `Python/`.
 | Host regression contracts | `mobile_build/tests/` |
 | On-device checks and synthetic fixtures | `mobile_build/native_tests/` |
 
+Linux bootstrap and Windows portable-tool preparation execute the external
+manager's `build_manager.guest_tools` programs. `Scripts/build_manager_tools.json`
+retains Logistics' uv/Git archives, interpreter selectors and architecture choices.
+`Scripts/vm_backend.py` and `Scripts/windows_backend.py` keep their entry points,
+suite routing, selected-guest policy and preparation/evidence receipts. Tool
+preparation does not imply a passed suite. The extraction preserves existing
+workspace ownership, interactive Windows account checks, archive hashes and
+collect-before-cleanup behavior; it does not replace dedicated-machine creation
+or silently select a different Python architecture.
+
 `build_support` edits only generated projects or explicitly requested canonical
 artwork. Its imports have no build or deployment side effects. `cloud_build.py`
 shows adapter composition explicitly before compiling the bridge. It uses the

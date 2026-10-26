@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from build_manager import Phase, Plan
 from build_manager.parallels import Parallels
+from build_manager.guest_tools import LINUX_BOOTSTRAP, linux_parameters
 from Scripts.build_snapshots import source_members
 from Scripts.guest_results import GuestResultLifecycle
 
@@ -21,15 +22,7 @@ print(json.dumps(dict(system=platform.system(),architecture=platform.machine(),
 os_release=pathlib.Path('/etc/os-release').read_text(),users=users)))
 '''
 
-BOOTSTRAP = '''import pathlib,subprocess,sys
-root=pathlib.Path(sys.argv[1]); bootstrap=root/'bootstrap'; environment=root/'environment'
-subprocess.run([sys.executable,'-m','venv',str(bootstrap)],check=True,timeout=120)
-python=bootstrap/'bin/python'
-subprocess.run([str(python),'-m','pip','install','uv==0.12.18'],check=True,timeout=300)
-subprocess.run([str(python),'-m','uv','venv','--python','3.12.2','--seed',str(environment)],check=True,timeout=600)
-'''
-
-
+BOOTSTRAP = LINUX_BOOTSTRAP
 
 
 def run(args):
@@ -111,9 +104,11 @@ r=pathlib.Path('/etc/os-release').read_text()
 if 'ID=fedora' not in r or 'VERSION_ID=43' not in r: raise ValueError('Expected Fedora43 container')
 p=pathlib.Path(sys.argv[1])/'reports';p.mkdir(exist_ok=True)
 (p/'container-environment.json').write_text(json.dumps(dict(os_release=r,architecture=platform.machine())))
-subprocess.run(['uv','venv','--python','3.12.2','--seed',sys.argv[1]+'/environment'],check=True,timeout=600)
+subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed',sys.argv[1]+'/environment'],check=True,timeout=600)
 '''
-        code = execute(['python3', '-c', bootstrap, workspace], env, 1020)
+        catalog = json.loads(Path(__file__).with_name('build_manager_tools.json').read_text())['linux']
+        parameters = linux_parameters(**catalog)
+        code = execute(['python3', '-c', bootstrap, workspace, json.dumps(parameters)], env, 1020)
         result['setup_seconds'] = time.monotonic() - setup_started
         if code:
             result['status'] = 'cancelled' if cancelled.is_set() else 'failed'

@@ -146,6 +146,18 @@ Firebase CLI diagnostic logs stay in ignored `.tools/`.
 Release-signed betas cannot update a debug-signed device installation in place;
 this launcher never uninstalls an app or deletes its data.
 
+Firebase preview and reservation use the pinned manager's `build_manager.versions`
+allocator. Logistics supplies the UTC date floor, Android version-code maximum,
+Firebase output/history numbers and saved debug-deployment counter. The existing
+`.android-beta/build.json` (`last_build`) and `build-counter.lock` stay compatible
+with older deployers and the local Android installer. A manager-format
+`.android-beta/build-manager-counter.json` retains reservations; successful
+reservation atomically updates the original `build.json` before returning.
+Both records contribute to the next number, so an older writer advancing
+`build.json`, or an interrupted compatibility update, cannot make the new
+allocator reuse a number. Preview writes neither record. Keep both records in
+the private directory backup; do not reset them when pruning generated builds.
+
 ## Double-click all deployments
 
 `deploy_all.command` runs the saved iOS device installs, Android device install,

@@ -132,31 +132,38 @@ def reserve_build(override=None):
         return _reserve_build(override)
 
 
-def next_build(root=None, private=None):
-    root = Path(root) if root is not None else ROOT
-    private = Path(private) if private is not None else PRIVATE
+def _allocation_inputs(root, private):
+    """Keep Android history/date policy outside the generic number allocator."""
     record = private / 'build.json'
     previous = json.loads(record.read_text())['last_build'] if record.exists() else 0
-    existing = [int(p.name) for p in (root / 'build/firebase').glob('*') if p.name.isdigit()]
+    existing = [previous, *(int(p.name) for p in (root / 'build/firebase').glob('*') if p.name.isdigit())]
     local = root / '.tools/android-deployment-build.json'
     if local.exists():
         existing.append(int(json.loads(local.read_text())['last_build']))
     history = Path(os.environ.get('LOGISTICS_BUILD_HISTORY', root / 'build')) / 'firebase'
     existing.extend(int(p.name) for p in history.glob('*') if p.name.isdigit())
-    number = max(int(datetime.now(timezone.utc).strftime('%Y%m%d')) * 10 + 1,
-                 previous + 1, max(existing, default=0) + 1)
-    return number
+    return dict(existing=existing, minimum=int(datetime.now(timezone.utc).strftime('%Y%m%d')) * 10 + 1)
+
+
+def next_build(root=None, private=None):
+    from build_manager.versions import next_number
+    root = Path(root) if root is not None else ROOT
+    private = Path(private) if private is not None else PRIVATE
+    return next_number(private / 'build-manager-counter.json', **_allocation_inputs(root, private))
 
 
 def _reserve_build(override=None):
-    number = next_build()
-    if override is not None:
-        if not str(override).isdigit() or int(override) < number:
-            raise ValueError('Explicit Android build must be increasing and unused locally.')
-        number = int(override)
-    if number > 2100000000:
-        raise ValueError('Android version code limit exceeded.')
-    private_json(PRIVATE / 'build.json', dict(last_build=number))
+    from build_manager.versions import reserve_number
+    counter = PRIVATE / 'build-manager-counter.json'
+    number = reserve_number(counter, **_allocation_inputs(ROOT, PRIVATE), maximum=2100000000, override=override)
+    counter.chmod(0o600)
+    # Older deployers still read/write last_build. Keep their record and lock;
+    # the allocator ledger prevents reuse if mirroring is interrupted. Replacing
+    # atomically also leaves the previous compatibility record intact on failure.
+    with tempfile.TemporaryDirectory(prefix='.build-counter-', dir=PRIVATE) as temporary:
+        record = Path(temporary) / 'build.json'
+        private_json(record, dict(last_build=number))
+        record.replace(PRIVATE / 'build.json')
     return number
 
 

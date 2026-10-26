@@ -175,3 +175,18 @@ review, captured TestFlight notes, automatic naming and seven passing local chec
 No live dispatch, upload or publication formed part of that verification.
 
 See the [adapter and validation guide](../development/build-manager.md) for developer contracts and platform acceptance.
+
+
+## Android and iOS can progress independently
+
+Selecting both platforms no longer makes one entire validation branch wait for
+the other. Steps can overlap within the run's worker limit. Shared build tools,
+workspaces, signing and SDK access still use declared resource locks: only steps
+competing for those resources wait. Existing sequences within a platform remain,
+including cleanup between successive iOS simulator tests.
+
+A waiting platform card names the shared resource. Open the card and select its
+subtask to inspect the resource capacity and other steps using the same resource.
+A resource wait is different from a failed prerequisite; unrelated work continues.
+After updating the manager and Logistics adapter, restart the app and inspect a
+fresh plan. Previously inspected or saved plans preserve their original order.

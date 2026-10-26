@@ -13,11 +13,34 @@ from mobile_build.deployment import firebase_deploy, manager_settings, testfligh
 
 class ManagerAdapterTests(unittest.TestCase):
     def setUp(self):
+        temporary = TemporaryDirectory(prefix='logistics-adapter-contracts-')
+        self.addCleanup(temporary.cleanup)
+        private = Path(temporary.name)
+        initialize = LogisticsProject.__init__
+        def isolated(project, root):
+            initialize(project, root)
+            from uuid import uuid4
+            project.private = private / uuid4().hex
+        initialization = patch.object(LogisticsProject, '__init__', isolated)
+        initialization.start(); self.addCleanup(initialization.stop)
         discovery = patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group))
         discovery.start(); self.addCleanup(discovery.stop)
         retention = patch("Scripts.build_retention.clean", return_value=[])
         retention.start()
         self.addCleanup(retention.stop)
+
+    def test_only_shared_step_resources_serialize_mobile_platforms(self):
+        from Scripts.build_project import declare_resources
+        from build_manager import Phase, Plan
+        with TemporaryDirectory() as directory:
+            phase = Phase('build', ('fixture-python', '-V'), directory, kind='build')
+            check = Phase('contracts', ('fixture-python', '-V'), directory)
+            for target in ('ios', 'android'):
+                plan = declare_resources(Plan('Fixture', 'Test', {}, (phase, check), directory), target)
+                self.assertEqual(plan.phases[0].resources['host.mobile-build'], 1)
+                self.assertEqual(plan.phases[0].resources['project.workspace:' + directory], 1)
+                self.assertFalse(plan.phases[1].resources)
+                self.assertNotIn('host.mobile-device-session', plan.resources)
 
     def test_prepared_report_keeps_embedded_identity_after_profile_changes(self):
         with TemporaryDirectory() as directory:

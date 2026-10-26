@@ -1,6 +1,15 @@
 {
   "schema": 1,
+  "linux": {
+    "uv_version": "0.12.18",
+    "python": "3.12.2"
+  },
   "windows_arm64": {
+    "runtime": {
+      "python": "cpython-3.12.2-windows-x86_64",
+      "guest_architecture": "ARM64",
+      "python_architecture": "x86_64"
+    },
     "uv": {
       "version": "0.12.18",
       "url": "https://github.com/astral-sh/uv/releases/download/0.12.18/uv-aarch64-pc-windows-msvc.zip",

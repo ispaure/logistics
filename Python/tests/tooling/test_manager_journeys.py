@@ -154,10 +154,43 @@ class JourneyAdapterTests(unittest.TestCase):
                 target = phase.id.split('.')[0]
                 self.assertIn(target + '.validated', ancestors(plan, phase.id))
         self.assertNotIn('android.validated', ancestors(plan, 'ios.validation.build'))
-        admission = next(p for p in plan.phases if p.id == 'ios.admit-validation')
-        self.assertEqual(admission.waits_for, ('android.validated',))
-        self.assertTrue(admission.always)
+        self.assertFalse(any('.admit-validation' in phase.id for phase in plan.phases))
+        for target, other in (('ios', 'android'), ('android', 'ios')):
+            for phase in plan.phases:
+                if phase.id.startswith(target + '.validation.'):
+                    self.assertFalse(any(name.startswith(other + '.') for name in (*phase.dependencies, *phase.waits_for)))
+        self.assertNotIn('host.mobile-device-session', plan.resources)
         self.assertIn(str(self.project.private / 'workspaces/android/operation.lock'), plan.resource_locks)
+
+    def test_mobile_branches_overlap_but_shared_build_steps_do_not(self):
+        plan = self.make('validate', platforms=['ios', 'android'], destinations=[])
+        ready = {target: self.root / (target + '-ready.json') for target in ('ios', 'android')}
+        def command(phase):
+            target = phase.id.split('.')[0]
+            report = self.root / (phase.id + '.json')
+            if phase.id in {'ios.validation.commonutils', 'android.validation.commonutils'}:
+                other = 'ios' if target == 'android' else 'android'
+                code = ('import time,json;from pathlib import Path;start=time.perf_counter_ns();'
+                        f'Path({str(ready[target])!r}).write_text(str(start));'
+                        'deadline=time.monotonic()+5\n'
+                        f'while not Path({str(ready[other])!r}).exists():\n'
+                        '    assert time.monotonic()<deadline, "Mobile branches were serialized"\n'
+                        '    time.sleep(.01)\n'
+                        'time.sleep(.1)\n'
+                        f'Path({str(report)!r}).write_text(json.dumps([start,time.perf_counter_ns()]))')
+            elif phase.id in {'ios.validation.build', 'android.validation.build'}:
+                code = ('import time,json;from pathlib import Path;start=time.perf_counter_ns();time.sleep(.2);'
+                        f'Path({str(report)!r}).write_text(json.dumps([start,time.perf_counter_ns()]))')
+            else:
+                code = 'pass'
+            return (sys.executable, '-c', code)
+        phases = tuple(replace(phase, argv=command(phase), artifacts=(), artifact_types={}, environment={}) for phase in plan.phases)
+        result = Executor(resource_directory=self.root / 'resources').run(replace(plan, phases=phases), self.root / 'result')
+        self.assertEqual(result['status'], 'passed')
+        checks = [json.loads((self.root / (target + '.validation.commonutils.json')).read_text()) for target in ('ios', 'android')]
+        self.assertLess(max(row[0] for row in checks), min(row[1] for row in checks))
+        builds = [json.loads((self.root / (target + '.validation.build.json')).read_text()) for target in ('ios', 'android')]
+        self.assertTrue(builds[0][1] <= builds[1][0] or builds[1][1] <= builds[0][0])
 
     def test_validation_has_no_preparation_or_external_effects_and_no_cleanup_deadlock(self):
         plan = self.make('validate', destinations=[])
