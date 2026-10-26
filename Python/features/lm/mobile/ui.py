@@ -22,6 +22,8 @@ class ChatTranscript(toga.WebView):
 
 class ChatUI:
     def show_chat(self, widget=None, *, present=True, **kwargs):
+        if not self.app.require_feature('lm', destination='chat', present=present):
+            return
         if not hasattr(self, 'chat_store'):
             self.chat_store = ChatStore(self.private_root / 'LM')
             self.state.current = None
@@ -359,6 +361,8 @@ class ChatUI:
         self.render_chat_workspace()
 
     def show_chat_configuration(self, widget=None, **kwargs):
+        if not self.app.require_feature('lm', destination='chat'):
+            return
         if not hasattr(self, 'chat_store'):
             self.show_chat()
         self.show_view(self.chat_config_view, destination='chat', route='chat-settings', title='Chat settings')
@@ -608,6 +612,8 @@ class ChatUI:
             self.chat_model.value = widget.value
 
     async def refresh_chat_models(self, widget=None, **kwargs):
+        if not self.app.require_feature('lm', destination='chat'):
+            return
         if self.state.busy:
             return
         self.set_chat_busy(True)
@@ -638,6 +644,8 @@ class ChatUI:
             self.set_chat_busy(False)
 
     async def send_chat(self, widget=None, **kwargs):
+        if not self.app.require_feature('lm', destination='chat'):
+            return
         if self.state.busy or self.state.current is None:
             return
         prompt = self.chat_prompt.value.strip()

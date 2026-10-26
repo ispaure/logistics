@@ -16,6 +16,7 @@ from build_manager import Phase, Plan
 from build_manager.parallels import Parallels
 from build_manager.windows_guest import WindowsGuest
 from Scripts.build_snapshots import source_members
+from Scripts.guest_results import GuestResultLifecycle
 
 
 PREPARE = r'''
@@ -117,8 +118,7 @@ def run(args):
     result = dict(schema=1, status='running', source=args.source_identity, backend='Parallels Windows', original_state=selected['status'],
                   started_at=datetime.now(timezone.utc).isoformat(), guest_architecture=prepared['guestArchitecture'],
                   runtime=prepared['runtime'], workspace=prepared['workspace'], operation=operation)
-    started = time.monotonic()
-    collected = False
+    lifecycle = GuestResultLifecycle(result, args.results, 'Parallels Windows', 'test_workspace')
     manager = 'manager-' + operation
     try:
         payload = source_zip(args.snapshot)
@@ -152,7 +152,8 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
             setup_command = ['Scripts/install_build_manager.py','--from-pin',manager_path]
         environment['LOGISTICS_MANAGER_CHECKOUT'] = manager_path
         setup = guest.run(python, setup_command, source, reports, environment, cancelled, timeout=600)
-        if setup:raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
+        if setup:
+            raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
         install = (python, 'Python/tests/run_platform_checks.py', '--install', '--results-dir', report_dir)
         if args.pattern:
             suite, pattern = ('shared', args.pattern[7:]) if args.pattern.startswith('shared:') else ('desktop', args.pattern)
@@ -163,6 +164,15 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
             phases = (Phase('platform', install, target, timeout=5400, environment=environment),
                       Phase('release-tooling', (python, '-m', 'unittest', 'discover', '-s', '.github/scripts', '-v'),
                             target, timeout=300, environment=environment))
+        if getattr(args, 'native_notebooks', False):
+            probe_count = len(args.notebook_probe or ('drawing-save-stress', 'page-two-memory', 'menus-zoom', 'brush-pixels'))
+            graphics_count = 4 if args.notebook_rendering == 'all' else 1
+            phases += (Phase('notebook-native', (python, 'Python/tests/notebooks/notebook_platform_probe.py',
+                '--output', str(root / reports / 'notebook-native'),
+                *(['--rendering', args.notebook_rendering] if args.notebook_rendering else []),
+                *(value for probe in args.notebook_probe or [] for value in ('--probe', probe))), target,
+                timeout=600 * probe_count * graphics_count + 30,
+                environment=environment, dependencies=('environment',)),)
         plan = Plan('Logistics', 'Focused Windows contracts' if args.pattern else 'Full local Windows platform checks',
                     args.source_identity, phases, str(root / ('operation-' + operation)), backend='Parallels Windows')
         plan_name = 'plan-' + operation + '.json'
@@ -174,35 +184,14 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         result.update(status='failed', error=str(error))
     finally:
-        try:
-            guest.collect([reports, source + '/test-results'], args.results / 'guest')
-            collected = True
-            evidence = args.results / 'guest' / reports / 'manager/result.json'
-            if evidence.is_file():
-                report = json.loads(evidence.read_text())
-                if report['source'] != args.source_identity or report['backend'] != 'Parallels Windows':
-                    raise ValueError('Retrieved Windows evidence belongs to another source/backend.')
-                result['phases'] = report['phases']
-                result['guest_result'] = str(evidence)
-                if result['status'] == 'passed' and report['status'] != 'passed':
-                    raise ValueError('Windows exit status disagrees with required validation result.')
-            elif result['status'] == 'passed':
-                raise ValueError('Windows did not produce its required validation result.')
-        except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
-            result.update(status='failed', retrieval_error=str(error))
-        if collected:
-            try:
-                guest.remove_paths([source, source + '.zip', manager, manager + '.zip', reports, 'plan-' + operation + '.json',
-                                    'operation-' + operation, 'cancel-' + operation, 'evidence-' + operation + '.zip'])
-                result['test_workspace_removed'] = True
-            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
-                result.update(status='failed', cleanup_error=str(error))
-        else:
-            result['test_workspace_preserved_for_recovery'] = True
-        result['seconds'] = time.monotonic() - started
+        lifecycle.collect(
+            lambda: guest.collect([reports, source + '/test-results'], args.results / 'guest'),
+            args.results / 'guest' / reports / 'manager/result.json',
+            lambda: guest.remove_paths([source, source + '.zip', manager, manager + '.zip', reports,
+                'plan-' + operation + '.json', 'operation-' + operation, 'cancel-' + operation,
+                'evidence-' + operation + '.zip']))
         result['public_tool_cache_retained'] = True
-        (args.results / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
-        print(json.dumps(result), flush=True)
+        lifecycle.finish()
     if args.shutdown and selected['status'] == 'stopped':
         client.shutdown(selected['uuid'])
     return int(result['status'] != 'passed')
@@ -217,9 +206,16 @@ def main():
     parser.add_argument('--source-identity', type=json.loads)
     parser.add_argument('--prepared', type=Path)
     parser.add_argument('--pattern', default='')
+    parser.add_argument('--native-notebooks', action='store_true', help='Run native notebook UI probes after focused setup')
+    parser.add_argument('--notebook-probe', action='append', choices=('drawing-save-stress', 'page-two-memory', 'menus-zoom', 'brush-pixels'),
+                        help='Select focused native checks; defaults to all checks')
+    parser.add_argument('--notebook-rendering', choices=('native', 'software', 'chromium-software', 'warp', 'all'),
+                        help='Select a graphics path for native notebook acceptance')
     parser.add_argument('--manager-checkout', type=Path)
     parser.add_argument('--shutdown', action='store_true')
     args = parser.parse_args()
+    if args.native_notebooks and not args.pattern:
+        parser.error('--native-notebooks requires an explicit focused test pattern')
     if args.snapshot:
         if not args.results or not args.source_identity:
             parser.error('A source snapshot requires explicit identity and result paths.')

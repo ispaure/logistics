@@ -60,7 +60,7 @@ class TextEditorView:
         self.conflict_copy = toga.Button('Save a copy…',
             on_press=lambda widget, **kw: self.actions.invoke(app.save_copy), style=Pack(height=48))
         self.action_items = [
-            ('Rename document…', self.rename_document), ('Find and replace…', self.toggle_search),
+            ('Find and replace…', self.toggle_search),
             ('Formatted editing', lambda: self.choose_mode('Formatted')),
             ('Source editing', lambda: self.choose_mode('Source')),
             ('View document', self.read),

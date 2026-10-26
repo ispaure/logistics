@@ -353,5 +353,70 @@
       ],
       "description": "Full native/runtime gates, preparation, and a separately reviewed upload. Cannot be narrowed."
     }
-  ]
+  ],
+  "journey": {
+    "schema": 1,
+    "platforms": {
+      "macos": {
+        "label": "macOS",
+        "operation": "Test",
+        "backend": "This Mac"
+      },
+      "linux": {
+        "label": "Linux (configured distributions)",
+        "operation": "Test",
+        "backend": "Local Parallels VM",
+        "backends_by_host": {
+          "linux": "This Linux host"
+        }
+      },
+      "windows": {
+        "label": "Windows",
+        "operation": "Test",
+        "backend": "Local Parallels VM",
+        "backends_by_host": {
+          "win32": "This Windows host"
+        }
+      },
+      "ios": {
+        "label": "iOS (native UI and runtime)",
+        "operation": "Test",
+        "backend": "This Mac \u2014 iOS Simulators"
+      },
+      "android": {
+        "label": "Android (native UI and runtime)",
+        "operation": "Test",
+        "backend": "This Mac \u2014 Android Emulator",
+        "backends_by_host": {
+          "linux": "This Linux host \u2014 Android Emulator",
+          "win32": "This Windows host \u2014 Android Emulator"
+        }
+      }
+    },
+    "destinations": {
+      "github": {
+        "label": "GitHub source release and hosted gates",
+        "platforms": [
+          "macos",
+          "linux",
+          "windows"
+        ],
+        "description": "Publishes a channel tag from the clean reviewed checkout; hosted release ZIP is separate from locally signed tester packages."
+      },
+      "firebase": {
+        "label": "Firebase \u00b7 Android testers",
+        "platforms": [
+          "android"
+        ],
+        "description": "Prepares one verified package, then pauses before upload to the configured group."
+      },
+      "testflight": {
+        "label": "TestFlight \u00b7 iOS testers",
+        "platforms": [
+          "ios"
+        ],
+        "description": "Requires complete iPhone, Duo, iPad and runtime gates; pauses before uploading the prepared archive."
+      }
+    }
+  }
 }

@@ -138,6 +138,8 @@ class FolderHubUI:
         if initialize and getattr(self, 'folder_source', 'Local') != 'Local':
             self.start_cloud_restore()
         box = self.folder_picker_or_error()
+        for tab in getattr(self, 'folder_tab_views', {}).values():
+            tab.select(None)
         self.show_view(box, destination='files', root=True)
 
     def folder_picker_or_error(self):
@@ -593,6 +595,17 @@ class FolderHubUI:
 
 
     async def open_picker_folder(self, entry):
+        key = (self.folder_source, self.folder_local_group if self.folder_source == 'Local' else None)
+        name = next((name for name, choice in self.folder_picker_choices.items()
+                     if entry == choice or entry == folder_browse_copy(choice, self.folder_source)),
+                    entry['name'])
+        opened = await self._open_picker_folder(entry)
+        if opened:
+            for tab_key, tab in self.folder_tab_views.items():
+                tab.select(name if tab_key == key else None)
+        return opened
+
+    async def _open_picker_folder(self, entry):
         kind, value = entry['kind'], entry['value']
         from .files_ui import local_read_available
         offline = entry['source'] == 'Local' or (entry['source'] == 'LocalCrypt'

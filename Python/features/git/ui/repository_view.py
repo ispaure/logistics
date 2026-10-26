@@ -116,6 +116,13 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         self.toolbar.setEnabled(not busy)
         for title, button in self.action_buttons.items():
             button.defaultAction().setEnabled(not busy and (available or title == 'Settings'))
+        status = self.snapshot.status if available else None
+        can_push = not busy and status is not None and status.branch != '(detached)'
+        self.action_buttons['Push'].defaultAction().setEnabled(can_push)
+        self.push_menu.setEnabled(can_push)
+        self.publish_action.setEnabled(can_push)
+        self.force_push_action.setVisible(self.preferences.options['allow_force_push'])
+        self.force_push_action.setEnabled(can_push and bool(status.upstream))
         self.content.setEnabled(available and not busy)
         self.operation_bar.setEnabled(available and not busy)
         self.cancel_button.setEnabled(busy)
@@ -281,11 +288,21 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         for title, icon, count, description in (
                 ('Commit', 'commit', len(status.changes), 'uncommitted files'),
                 ('Pull…', 'pull', status.behind if status.upstream else 0, 'incoming commits'),
-                ('Push…', 'push', status.ahead if status.upstream else 0, 'outgoing commits')):
+                ('Push', 'push', status.ahead if status.upstream else 0, 'outgoing commits')):
             button = self.action_buttons[title]
             button.setProperty('badge_count', count)
             button.defaultAction().setIcon(action_icon(icon, count))
             button.defaultAction().setToolTip(f'{title} · {count} {description}')
+        button = self.action_buttons['Push']
+        title = 'Push' if status.upstream else 'Publish branch…'
+        button.defaultAction().setText(title)
+        button.defaultAction().setIconText(title)
+        # Reserve room for the split arrow as the longer publishing label appears.
+        button.setMinimumWidth(max(54, button.fontMetrics().horizontalAdvance(title) + 28))
+        button.setAccessibleName(title)
+        button.defaultAction().setToolTip(
+            f'Push to {status.upstream} · {status.ahead} outgoing commits'
+            if status.upstream else 'Publish this branch and set its upstream')
 
     def _restore_change_preview(self, status):
         """Restore the requested changed-file side after snapshot controls settle."""
@@ -520,8 +537,11 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
     def pull_dialog(self):
         return self.commands.pull_dialog()
 
-    def push_dialog(self):
-        return self.commands.push_dialog()
+    def push(self, *, force_with_lease=False):
+        return self.commands.push(force_with_lease=force_with_lease)
+
+    def publish_dialog(self):
+        return self.commands.publish_dialog()
 
     def branch_dialog(self):
         return self.commands.branch_dialog()

@@ -543,3 +543,53 @@ The complete commonUtils sweep passed all 174 isolated files and
 or simulator/device validation; the Windows closed-pipe error convention has
 synthetic coverage. Fixes and their shared-library pin were committed locally,
 without pushing.
+
+## October 25 ecosystem refactor plan
+
+This plan follows inspection of Logistics, the extracted build-deployment-manager,
+Ally Tools and Blue Hole's `blender-5.2.2/alpha` branch. It supersedes proposals
+to extract a second copy of the manager. Implementation is incremental so it can
+coexist with ongoing mobile document, transfer and navigation work.
+
+### Immediate scope
+
+Reuse the pinned manager's existing process cleanup from
+`Scripts/mobile_processes.py`, retaining Logistics' command arguments, working
+directory, preparation timeout and failure message. Always retire the owned group,
+including after a successful parent exit or interruption. The shared manager
+already bounds the final wait after termination. Add focused command-lifecycle
+coverage and correct obsolete manager ownership references in its Logistics guide.
+No dependency update is needed for this step.
+
+This immediate step is implemented. Five command-lifecycle tests, nine existing
+manager-adapter tests and five documentation-layout tests passed. The lifecycle
+coverage includes a real harmless child timeout/reap plus failure, interruption
+and cleanup-error contracts. Focused lint and diff checks passed. No native
+build, device deployment, dependency update or shared-library migration was
+performed; active mobile application changes remain outside this pass.
+
+### Subsequent candidates
+
+| Candidate | Owner and conditions before implementation |
+| --- | --- |
+| Process supervision | commonUtils can supply the lower-level mechanism after comparing manager cleanup errors, bounded waits and Windows containment with existing shared supervision. Manager phase scheduling and native-tool policy stay with their callers. |
+| Private atomic state writes | Reuse commonUtils publication after preserving manager file/directory permissions, JSON serialization and failure behavior. Do not silently replace the current writer with a differently formatted JSON helper. |
+| Advisory file locks | Share the OS lock primitive in commonUtils; keep index cancellation/database coordination and manager resource leases in their owners. |
+| Diagnostic redaction | Compare complete-text filtering, explicit secrets, multiline keys and streaming boundaries before consolidating. Redaction remains best effort; sensitive callers retain output-discard policy. |
+| Adapter bridge and setting resolution | Consolidate repeated protocol dispatch and effective-value provenance in the manager, using Logistics and Blue Hole as consumers. Keep project interpreters isolated and project handlers local. Coordinate with active manager UI/workflow work first. |
+| Logistics plan builders | Separate backend-specific builders behind the existing adapter once manager workflow changes settle. Keep suites, snapshots, destinations and release policy in Logistics. |
+| Feature capabilities and state | Continue narrowing Logistics controller access to explicit services after active mobile work lands. Avoid moving application host contracts into commonUtils without another compatible consumer. |
+| Artifact verification | Compare Logistics and Blue Hole member validation/digest verification for small shared mechanisms. Keep packaging allowlists, alpha rules and existing fingerprint meanings project-owned. |
+
+commonUtils changes require independent consumer validation: Logistics and the
+manager pin different revisions, Ally uses Logistics' checkout, and Blue Hole
+vendors a revision under its own namespace. Preserve Blue Hole's exact-copy checks
+and namespace isolation. Preserve Ally's optional activation, lazy construction
+and separate documentation ownership; its existing batch/publication mechanisms
+do not require a new installer framework.
+
+Each later extraction needs focused shared tests and affected consumer checks
+before pins or vendored files change. Portable checks do not establish native
+Windows process containment, Blender integration or mobile acceptance. Build
+retention mechanisms remain manager-owned and Logistics storage policy remains
+in `Scripts.build_retention`.

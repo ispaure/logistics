@@ -14,6 +14,7 @@ function pump() {
   if (command.length > __MAX_COMMAND__) {
     queue = [];
     pendingInk = null;
+    pendingErase = null;
     draw();
     $('status').textContent = 'Command too large. Draw a shorter stroke.';
     return
@@ -29,6 +30,7 @@ window.notebookUpdate = function(next, error) {
   }
   state = next;
   pendingInk = null;
+  pendingErase = null;
   busy = false;
   queue.shift();
   $('status').textContent = error || state.save_status || 'Saved on this device. Export a copy to share.';

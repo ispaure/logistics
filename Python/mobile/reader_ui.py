@@ -17,6 +17,9 @@ from .reader_controls import page_buttons
 
 class ReaderUI(LibraryCatalog, ReaderChrome):
     def show_library(self, widget=None, *, present=True, **kwargs):
+        if present and not self.app.feature_enabled('books') and not self.app.feature_enabled('comics'):
+            self.app.require_feature('books')
+            return
         if not hasattr(self, 'library_store'):
             self.library_store = LibraryStore(self.private_root / 'Library')
             self.book_record = self.book_reader = None
@@ -118,6 +121,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         try:
             selected = await pick_document(self.app)
             if selected:
+                if not self.app.require_document_feature(str(selected[1])):
+                    return
                 record = await asyncio.to_thread(self.library_store.import_book, *selected)
                 self.refresh_library()
                 self.set_book_busy(False)

@@ -2,7 +2,7 @@
 
 ## Categories and adaptive layout
 
-Settings opens a category list: **App**, **Read aloud**, **Markdown**, **Text**,
+Settings opens a category list: **App**, **Features**, **Read aloud**, **Markdown**, **Text**,
 **EPUB**, **Books & Comics**, **LM Chat**, **Workspaces**, **Help**, and **About**.
 Both platforms include **Appearance** for Seasonal snow; Android also offers
 High contrast / E Ink there. On a phone, tap
@@ -29,6 +29,33 @@ independently. Rotating or resizing retains the selected category and its contro
 page stays open during a resize; Back returns to its category in the new layout.
 Preferences still save immediately, and each window keeps its own category
 selection.
+
+## Features
+
+Open **Settings → Features** to turn Text Editor, Notebooks, Books & Comics,
+PDF Reader, Image Tools, LM Chat, and rclone on or off. Names and the combined
+Books & Comics switch match desktop; each switch controls its feature group.
+All current features are on by default on iOS and Android, including when upgrading
+an existing installation. **Enable all features** restores that selection.
+
+Choices save immediately on this device and survive restarting the app. Turning
+a feature off hides its launchers, creation types, recent documents and related
+settings. Opening a file for a disabled feature offers an **Enable** action.
+The Chat tab stays available with an enable screen when LM Chat is off.
+Files, saved settings and conversations are kept. Enabling the feature brings
+its documents back into the lists. Disabling rclone leaves ordinary
+local browsing, document creation and editing available.
+
+Close a feature's open documents before disabling it, including documents in
+other app windows. A running chat or storage operation must finish first. The
+switch stays on and explains the required action; it never discards unsaved work.
+These switches select features in the installed app; they do not uninstall code
+or change desktop feature preferences. Image Tools stays enabled by default
+on Android too; Burst camera is available only on supported devices.
+
+**Settings → Help → Mobile documentation** always opens the built-in Markdown
+guide, even with every feature off. Its pages, links, search and history stay
+available independently of Text Editor.
 
 ## Appearance and E Ink status
 

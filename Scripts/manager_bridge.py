@@ -22,6 +22,11 @@ def main():
     with contextlib.redirect_stdout(sys.stderr):
         if action == 'plan':
             result = project.make_plan(values.pop('operation'), values.pop('target'), values.pop('backend'), **values).data()
+        elif action == 'journey_plan':
+            intent = values.pop('intent')
+            if intent.get('schema') != 1:
+                raise ValueError('Unsupported journey request schema.')
+            result = project.make_journey(intent['goal'], intent['platforms'], intent['destinations'], **values).data()
         elif action == 'settings':
             result = project.settings_view()
         elif action == 'save_settings':

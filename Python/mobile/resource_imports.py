@@ -18,6 +18,10 @@ class ResourceImports:
         from services.documents.locations import shared_documents_path
         shared_root = shared_documents_path(Path(root))
         self.shared_root = shared_root.resolve() if shared_root is not None else None
+        # Android relocates both ordinary folders to the selected drive. Only
+        # admit Received Files beside Local, never the rest of that drive.
+        self.received_root = (self.collection_root.parent / 'Received Files'
+                              if self.collection_root is not None and self.shared_root is None else None)
         self.path = self.root / 'resource-imports.json'
         self.items, self.error = {}, ''
         if self.path.exists():
@@ -51,6 +55,9 @@ class ResourceImports:
         elif self.shared_root is not None and resolved.is_relative_to(self.shared_root):
             relative = resolved.relative_to(self.shared_root)
             identity = 'SharedFiles/' + relative.as_posix()
+        elif self.received_root is not None and resolved.is_relative_to(self.received_root):
+            relative = resolved.relative_to(self.received_root)
+            identity = 'Received Files/' + relative.as_posix()
         else:
             raise ValueError('Choose a file in Local or private Downloads.')
         components = [path, *list(path.parents)[:max(0, len(relative.parts) - 1)]]

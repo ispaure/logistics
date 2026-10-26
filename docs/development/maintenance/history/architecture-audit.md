@@ -279,9 +279,9 @@ Dedicated `codex/ecosystem-maintenance` branches start from:
 
 | Repository | Checkout / original branch | Baseline commit |
 | --- | --- | --- |
-| Logistics | `/Users/marca/GIT/logistics`, `alpha` | `f5bbf252` |
+| Logistics | `<workspace>/logistics`, `alpha` | `f5bbf252` |
 | commonUtils | Logistics `Python/commonUtils` Git submodule, `main` | `07e8363` |
-| Blue Hole | `/Users/marca/GIT/BlueHole`, `blender-5.2.2/alpha` | `c6608c4` |
+| Blue Hole | `<workspace>/BlueHole`, `blender-5.2.2/alpha` | `c6608c4` |
 
 Logistics pins commonUtils; Blue Hole vendors that exact revision inside
 `Lib/commonUtils` and records it in `Lib/commonUtils.revision`. Namespaces remain

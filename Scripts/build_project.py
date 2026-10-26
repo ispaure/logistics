@@ -21,7 +21,7 @@ try:
         raise ImportError('Unsupported manager adapter API')
 except ImportError as error:
     raise RuntimeError('Install the external build-deployment-manager into this project environment '
-                       'with python -m pip install --no-deps -e /path/to/build-deployment-manager; '
+                       'with python -m pip install --no-deps -e /path/to/build-deployment-manager/Python; '
                        'adapter API 1 is required.') from error
 from mobile_build.deployment import manager_settings
 from Scripts.build_snapshots import git, identity, materialize
@@ -38,7 +38,15 @@ class LogisticsProject:
     def __init__(self, root):
         self.root = Path(root).resolve()
         descriptor = self.root / 'build-project.json'
-        self.test_suites = json.loads(descriptor.read_text()).get('test_suites', []) if descriptor.is_file() else []
+        metadata = json.loads(descriptor.read_text()) if descriptor.is_file() else {}
+        self.test_suites = metadata.get('test_suites', [])
+        try:
+            from build_manager.journeys import for_host
+        except ImportError:
+            # Keep API-1 single-platform operations usable with the published pin.
+            self.journey_capability = None
+        else:
+            self.journey_capability = for_host(metadata.get('journey'))
         self.mobile = self.root / 'mobile_build'
         self.interpreter = self.root / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
         self.runner_directory = self.root
@@ -119,11 +127,18 @@ class LogisticsProject:
     def set_app_version(self, value):
         manager_settings.set_app_version(self.mobile, value)
 
+    def make_journey(self, goal, platforms, destinations, **options):
+        if self.journey_capability is None:
+            raise RuntimeError('Install the reviewed local build-deployment-manager with journey schema 1 to use combined workflows; legacy single-platform operations remain available.')
+        from Scripts.manager_journeys import make_journey
+        return make_journey(self, dict(schema=1, goal=goal, platforms=platforms, destinations=destinations), **options)
+
     def make_plan(self, operation, target, backend, **options):
         from dataclasses import replace
         started = time.monotonic()
         from Scripts.manager_suites import selection, with_reports, with_host_gates, acceptance_phase
         suite = options.pop('suite', '')
+        release_validation = options.pop('_release_validation', False)
         selection(self.root, suite, operation, target, backend, options.get('pattern', ''))
         workflow = operation in ('Reviewed TestFlight workflow','Reviewed Firebase workflow')
         requested_operation = operation
@@ -131,7 +146,8 @@ class LogisticsProject:
             operation = 'Prepare TestFlight' if operation == 'Reviewed TestFlight workflow' else 'Prepare Firebase'
         from Scripts.build_retention import clean
         try:
-            clean(self.root, apply=True)
+            if options.get('_context') is None:
+                clean(self.root, apply=True)
         except (OSError, RuntimeError) as error:
             print('Build retention incomplete: ' + str(error), flush=True)
         plan = self._make_plan(operation, target, backend, suite=suite, **options)
@@ -157,6 +173,13 @@ class LogisticsProject:
                 dependencies=(preparation.id,),environment=dict(preparation.environment),kind='distribution',
                 effect='upload',provider='testflight' if target=='ios' else 'firebase',artifacts=(str(receipt),))
             plan = replace(plan,operation=requested_operation,phases=(*plan.phases,upload))
+        elif release_validation:
+            if target not in {'ios', 'android'} or operation != 'Test':
+                raise ValueError('Release validation applies only to complete mobile tests.')
+            host_python = plan.source['effective_settings']['values']['tools.desktop_python']
+            plan = with_host_gates(plan, host_python)
+            gate = acceptance_phase(plan, target)
+            plan = replace(plan, phases=(*plan.phases, gate))
         if suite == 'android.native':
             plan = replace(plan, phases=tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name != 'android-runtime-tools'))
                 for phase in plan.phases if phase.id not in {'android-runtime','android-runtime-tools'}))
@@ -196,17 +219,25 @@ class LogisticsProject:
         return replace(plan, phases=phases, secret_environment=secrets, resource_locks=(*plan.resource_locks,*resources),
                        source=dict(plan.source,destination=destination,plan_preparation_seconds=time.monotonic()-started))
 
-    def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag='', suite=''):
+    def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag='', suite='', _context=None):
         if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target, operation):
             raise ValueError('Unsupported operation/platform/backend selection.')
         if pattern and (not pattern.endswith('.py') or '/' in pattern or '\\' in pattern):
             raise ValueError('Use a focused test filename/glob, not a path or command.')
-        source = identity(self.root, revision)
-        source.update(host=platform.platform(), architecture=platform.machine())
-        source['app_version'] = manager_settings.app_version(self.mobile,
-            revision=None if revision == 'working-tree' else source['logistics_commit'])
-        options, origins = manager_settings.settings(self.mobile)
-        source['effective_settings'] = dict(values=options, origins=origins)
+        if _context is None:
+            source = identity(self.root, revision)
+            source.update(host=platform.platform(), architecture=platform.machine())
+            source['app_version'] = manager_settings.app_version(self.mobile,
+                revision=None if revision == 'working-tree' else source['logistics_commit'])
+            options, origins = manager_settings.settings(self.mobile)
+            source['effective_settings'] = dict(values=options, origins=origins)
+        else:
+            from Scripts.manager_journeys import PlanningContext
+            if not isinstance(_context, PlanningContext):
+                raise ValueError('Invalid internal planning context.')
+            source = _context.source(self, revision)
+            options = dict(source['effective_settings']['values'])
+            origins = dict(source['effective_settings']['origins'])
         workspace = self.private / 'workspaces' / target
         if backend == 'GitHub':
             return self.github_plan(operation, target, source, workspace, options, revision, release_tag)
@@ -221,7 +252,7 @@ class LogisticsProject:
             if source['toolchain']['system'] != expected_system:
                 raise ValueError('The selected interpreter does not run on the requested native host; no fallback was selected.')
         snapshot = self.private / 'snapshots' / source['fingerprint']
-        materialize(self.root, snapshot, revision)
+        materialize(self.root, snapshot, revision, expected=source)
         env = dict(PYTHONPATH=os.pathsep.join((str(snapshot), str(snapshot / 'Python'))),
                    QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1',
                    LOGISTICS_MANAGER_ACCOUNT_DEFAULTS=os.environ.get('LOGISTICS_MANAGER_ACCOUNT_DEFAULTS', '{}'))
@@ -295,7 +326,7 @@ class LogisticsProject:
         if len(selections) == 2 and selections[0][1]['uuid'] == selections[1][1]['uuid'] and options['vm.fedora_mode'] != 'container-on-ubuntu':
             raise ValueError('Select distinct Ubuntu and Fedora guests for the full Linux coverage.')
         snapshot = self.private / 'snapshots' / source['fingerprint']
-        materialize(self.root, snapshot, source['selection'])
+        materialize(self.root, snapshot, source['selection'], expected=source)
         phases = []
         for distribution, guest in selections:
             results = workspace / (distribution + '-' + uuid4().hex)
@@ -326,7 +357,7 @@ class LogisticsProject:
         from build_manager.parallels import Parallels
         guest = Parallels().selected(options['vm.windows'])
         snapshot = self.private / 'snapshots' / source['fingerprint']
-        materialize(self.root, snapshot, source['selection'])
+        materialize(self.root, snapshot, source['selection'], expected=source)
         results = workspace / ('windows-' + uuid4().hex)
         command = (str(self.interpreter), '-m', 'Scripts.windows_backend', '--vm', guest['uuid'],
                    '--snapshot', str(snapshot), '--results', str(results), '--source-identity', json.dumps(source))

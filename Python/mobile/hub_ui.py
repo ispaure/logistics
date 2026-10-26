@@ -210,6 +210,9 @@ def _home_state(hub, recent):
 
 class HubUI:
     def session_visible(self, session):
+        from services.mobile_features import session_enabled
+        if not session_enabled(self.app.preferences, session):
+            return False
         if session.provider == 'credential-reference':
             return getattr(session, 'cache_id', None) in self.app.credential_document_lists.states
         if session.provider == 'provider-session':
@@ -238,6 +241,13 @@ class HubUI:
         items, seen = [], set()
         for entry in [*active_missing, *history, *other_missing]:
             session = live.get(entry.identity, entry)
+            if session.id not in self.workspace.sessions and session.provider == 'file-reference':
+                from .document_sources import local_reference_available
+                if not local_reference_available(self.app, session.source):
+                    continue
+            from services.mobile_features import session_enabled
+            if not session_enabled(self.app.preferences, session):
+                continue
             aliases = session_identities(session, self.recent_documents)
             if aliases & (excluded | seen):
                 continue
@@ -269,6 +279,8 @@ class HubUI:
                     await reopen_file(self.app, source)
                 except (OSError, ValueError, KeyError) as error:
                     await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
+                    self.refresh_document_list()
+                    self.refresh_hub(self.app.native_host.state.destination)
             elif session.provider == 'notebook':
                 from features.notebooks.mobile.documents import open_notebook
                 await open_notebook(self.app, key=session.resource)
@@ -280,6 +292,8 @@ class HubUI:
 
     def recent_row(self, session, summary):
         title, kind, details = summary
+        if session.provider == 'library':
+            details = [*details, 'Saved copy on device']
         row = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
         opener = self.recent_opener(session)
         from .browser_ui import middle_filename
@@ -317,6 +331,9 @@ class HubUI:
             toga.Button('New document', on_press=self.new_hub_document, style=Pack(height=48, flex=1))],
             style=Pack(direction=ROW))
         self.home_content = box
+        from .document_choices import available_choices
+        if not available_choices(self.app):
+            self.home_actions.remove(self.home_actions.children[-1])
         box.add(self.home_actions)
         recent_box = toga.Box(style=Pack(direction=COLUMN))
         recent_box.add(heading('Recent'))
@@ -369,9 +386,9 @@ class HubUI:
         self.document_open_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_recent_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_saved_list = toga.Box(style=Pack(direction=COLUMN))
-        history = toga.Box(children=[self.document_recent_list, self.document_saved_list,
-            toga.Button('Open Books & Comics library', on_press=self.show_library, style=Pack(height=48))],
-            style=Pack(direction=COLUMN))
+        history = toga.Box(children=[self.document_recent_list, self.document_saved_list], style=Pack(direction=COLUMN))
+        if self.app.feature_enabled('books') or self.app.feature_enabled('comics'):
+            history.add(toga.Button('Open Books & Comics library', on_press=self.show_library, style=Pack(height=48)))
         box.add(self.document_open_list, history)
         self.refresh_document_list()
         if self.workspace.error:
@@ -435,6 +452,8 @@ class HubUI:
         self.document_saved_list.add(heading('Saved documents'))
         rows = []
         for record in self.store.cached_summaries():
+            if not self.app.feature_enabled('text_editor'):
+                continue
             if ('managed-text', record.id) in represented:
                 continue
             summary = record.name, text_document_kind(record.name), []
@@ -442,7 +461,7 @@ class HubUI:
                 session = Session('', 'managed-text', record.id, summary[1], title=record.name)
                 rows.append(self.recent_row(session, summary))
         from features.notebooks.mobile.documents import repository
-        for key, name in repository(self.app).list():
+        for key, name in (repository(self.app).list() if self.app.feature_enabled('notebooks') else ()):
             if ('notebook', key) not in represented:
                 summary = name, 'notebook', []
                 if matches(summary):
@@ -544,7 +563,7 @@ class HubUI:
         return box
 
     def new_hub_document(self, widget=None, **kwargs):
-        self.choose_document_type()
+        return self.choose_document_type()
 
     async def open_hub_file(self, widget=None, **kwargs):
         destination = self.app.native_host.state.destination

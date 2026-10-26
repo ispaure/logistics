@@ -24,6 +24,7 @@ class NotebookPanel:
         self.editor = None
         self.web = None
         self.boox_refresh = None
+        self.pen_input = None
         self.key = None
         self.busy = False
         self.closed = False
@@ -127,6 +128,7 @@ class NotebookPanel:
     def state(self):
         state = document_state(self.editor, self.document)
         state['native_close'] = hasattr(self.view, '_native_reader_buttons')
+        state['native_pen'] = self.pen_input is not None
         return state
 
     def open(self, book, key):
@@ -148,6 +150,8 @@ class NotebookPanel:
         if type(self.web._impl).__module__.startswith('toga_android.'):
             from java import jclass
             self.boox_refresh = jclass('io.github.ispaure.logistics.notebooks.BooxRefresh').attach(self.web._impl.native)
+            self.pen_input = jclass('io.github.ispaure.logistics.notebooks.NotebookInput').attach(
+                self.web._impl.native, self.boox_refresh)
         self.web.set_content('https://logistics.invalid/notebooks/', mobile_editor_html(self.state(), self.bridge.url))
         for child in list(self.view.children):
             self.view.remove(child)
@@ -171,6 +175,11 @@ class NotebookPanel:
         web, editor = self.web, self.editor
         try:
             op = validate_action(action)
+            if op == 'page-previews':
+                import json
+                from ..previews import page_previews
+                previews = await canvas.wait(asyncio.to_thread(page_previews, editor.notebook, action['start']))
+                await canvas.wait(web.evaluate_javascript('window.notebookPagePreviews(' + json.dumps(previews) + ')'))
             if op == 'library':
                 # Release the JS queue before native guards. Cancel/Keep editing
                 # must leave a usable canvas, and queued ink precedes this action.
@@ -226,7 +235,7 @@ class NotebookPanel:
                 saved = await canvas.wait(export_stream(self.app, name, lambda: BytesIO(data)))
                 if not saved:
                     error = 'Export cancelled. Your notebook remains open.'
-            elif op not in {'save', 'save-as', 'show-in-folder', 'delete-file'}:
+            elif op not in {'save', 'save-as', 'show-in-folder', 'delete-file', 'page-previews'}:
                 await canvas.wait(asyncio.to_thread(editor.apply, action))
                 if hasattr(self, 'session') and op == 'rename':
                     self.session.title = editor.notebook.name
@@ -321,14 +330,30 @@ class NotebookPanel:
         if bridge is not None:
             bridge.retire()
         self.busy = False
+        if self.pen_input is not None:
+            self.pen_input.close()
+            self.pen_input = None
         if self.boox_refresh is not None:
             self.boox_refresh.close()
             self.boox_refresh = None
         web = getattr(self, 'web', None)
         if web is not None:
             web.on_navigation_starting = None
+            android = type(web._impl).__module__.startswith('toga_android.')
+            private = callable(getattr(web, 'clear_private_content', None))
+            if android and not private and web.parent is not None:
+                web.parent.remove(web)
             from services.documents.mobile_views import retire_webview
             retire_webview(web)
+            if android and not private:
+                # Blanking HTML alone leaves retired Chromium/GPU resources
+                # alive across repeated notebook opens. Private views already
+                # destroy their native view in clear_private_content().
+                native = web._impl.native
+                native.stopLoading()
+                native.clearHistory()
+                native.removeAllViews()
+                native.destroy()
         self.web = None
 
     def dispose(self):

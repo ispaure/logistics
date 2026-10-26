@@ -226,6 +226,14 @@ class TransferReviewUI:
                 await asyncio.sleep(.05)
             self._transfer_review_view = None
             self._cancel_transfer_review = None
+            # A consumed comparison is no longer a destination. Retire its
+            # native controller too, even if another tab is currently visible.
+            screens = self.routes.screens['files']
+            index = next((index for index, screen in enumerate(screens)
+                          if screen[0] == 'transfer-review'), None)
+            if index is not None:
+                self.routes.trim('files', index)
+                self.routes.render('files')
             paths.text = ''
             details.value = ''
             status.text = 'Review closed.'

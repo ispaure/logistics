@@ -208,10 +208,23 @@ def local_document_path(app, path):
     return candidate if candidate.is_file() else path
 
 
+def local_reference_available(app, source):
+    """Check local history without probing cloud or locked credential sources."""
+    if not source or source.get('type') != 'local':
+        return True
+    try:
+        return local_document_path(app, source['path']).is_file()
+    except OSError:
+        return False
+
+
 async def _reopen_file(app, source):
     """Resolve credentials again before constructing any encrypted provider."""
     if source['type'] == 'local':
         path = local_document_path(app, source['path'])
+        if not path.is_file():
+            raise FileNotFoundError('This file is no longer available at its saved location. '
+                                    'It may have been moved or deleted. Open it from its current folder.')
         from commonUtils.runtime.resources.local import LocalFiles
         from services.documents.mobile_storage import open_provider_document
         return await open_provider_document(app, LocalFiles(path.parent), path.name)

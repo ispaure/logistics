@@ -124,6 +124,7 @@ SHARED_REQUIRED_MODULES = (
     'ui/native/markdown_search.py',
     'ui/native/memory.py',
     'ui/native/menus.py',
+    'ui/native/web_dropdown.py',
     'ui/native/navigation.py',
     'ui/native/navigation_state.py',
     'ui/native/password_input.py',

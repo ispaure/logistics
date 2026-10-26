@@ -20,13 +20,13 @@ class DestinationCancelProbe(DestinationProbe):
             if restoring is not None:
                 await restoring
             self.show_home()
-            self.choose_document_type()
             form = self.body
-            destination = self.native_host.state.destination
-            origin = (destination, len(self.routes.screens[destination]), len(self.adaptive.detail_routes))
+            await self.choose_document_type()
             picker = self.editor_picker()
-            await picker.show_document_creation('Cancelled.md', origin)
+            picker.save_as_name.value = 'Cancelled.md'
+            picker.creation_type.value = 'Markdown (.md)'
             await asyncio.sleep(.4)
+            assert await picker.browser_editor_location(('Local', '')), picker.save_as_status.value
             root = picker.editor_provider(picker.save_as_storage.value).root
             started = Event()
             def delayed(*args, **kwargs):
@@ -44,7 +44,7 @@ class DestinationCancelProbe(DestinationProbe):
             await self.wait(lambda: picker.creation is None, timeout=10)
             await asyncio.sleep(.4)
             from mobile.routes import contains
-            assert contains(self.body, form), 'Cancel did not restore the source creation form'
+            assert contains(self.body, form), 'Cancel did not restore the opening screen'
             assert not (root / 'Cancelled folder').exists()
             assert not (root / 'Cancelled.md').exists()
             report.update(success=True, cases=['native-deferred-new-folder-cancel'])

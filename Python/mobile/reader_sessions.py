@@ -156,6 +156,8 @@ class Readers:
         if not self.app.checkpoint():
             return False
         record = self.catalog.library_store.read_record(resource)[0]
+        if not self.app.require_document_feature(record['name'], kind=record['kind']):
+            return False
         existing = next((value for value in self.app.workspace.sessions.values()
                          if value.identity == ('library', resource)), None)
         session = self.app.workspace.open('library', resource, record['kind'], record['name'],
@@ -213,6 +215,9 @@ class ReaderWorkspace:
         return self.readers
 
     def show_library(self, widget=None, **kwargs):
+        if not self.feature_enabled('books') and not self.feature_enabled('comics'):
+            self.require_feature('books')
+            return
         self.reader_manager().show_catalog()
 
     def refresh_library(self):

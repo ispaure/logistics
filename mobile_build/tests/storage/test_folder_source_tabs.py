@@ -21,6 +21,51 @@ class FolderSourceTabTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_open_workspace_retains_selection_until_return_to_overview(self):
+        app = self.app
+        (app.private_root / 'LocalFiles' / 'Notes').mkdir(parents=True)
+        app.show_locations()
+        app.loop.run_until_complete(app.folder_buttons['Notes'].on_press())
+        selected = app.folder_buttons['Notes']
+        self.assertTrue(selected._workspace_selected)
+        self.assertEqual(selected.style.font_weight, 'bold')
+        app.show_locations()
+        self.assertIs(app.folder_buttons['Notes'], selected)
+        self.assertFalse(selected._workspace_selected)
+        app.change_folder_source('rclone')
+        app.change_folder_source('Local')
+        self.assertFalse(app.folder_buttons['Notes']._workspace_selected)
+        app.loop.run_until_complete(app.folder_buttons['All files'].on_press())
+        self.assertFalse(selected._workspace_selected)
+        self.assertTrue(app.folder_buttons['All files']._workspace_selected)
+
+    def test_workspace_selection_updates_child_contrast_and_resets_on_route_back(self):
+        app = self.app
+        (app.private_root / 'LocalFiles' / 'Notes').mkdir(parents=True)
+        app.show_locations()
+        app.loop.run_until_complete(app.folder_buttons['Notes'].on_press())
+        tab = next(tab for tab in app.folder_tab_views.values() if tab.selected_name == 'Notes')
+        row = next(row for row in tab.nodes.values() if row.name == 'Notes')
+        for control in (row.button, row.indicator, row.menu):
+            self.assertTrue(control._impl._surface_eink_selected)
+            self.assertIsNotNone(control._impl._surface_roles[1])
+            self.assertEqual(control._impl._surface_roles[0], 'transparent')
+        app.routes.back()
+        self.assertIsNone(tab.selected_name)
+        for control in (row.button, row.indicator, row.menu):
+            self.assertFalse(control._impl._surface_eink_selected)
+
+    def test_failed_workspace_open_keeps_previous_selection(self):
+        from unittest.mock import AsyncMock, patch
+        app = self.app
+        (app.private_root / 'LocalFiles' / 'Notes').mkdir(parents=True)
+        app.show_locations()
+        app.loop.run_until_complete(app.folder_buttons['Notes'].on_press())
+        with patch.object(app.folder_controller(), '_open_picker_folder', new=AsyncMock(return_value=False)):
+            app.loop.run_until_complete(app.folder_buttons['All files'].on_press())
+        self.assertTrue(app.folder_buttons['Notes']._workspace_selected)
+        self.assertFalse(app.folder_buttons['All files']._workspace_selected)
+
     def test_tabs_isolate_sources_and_reset_rclone_credential(self):
         from types import SimpleNamespace
         app = self.app

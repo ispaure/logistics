@@ -39,7 +39,7 @@ class FolderStackTests(TestCase):
         self.header = toga.Box(children=[toga.Button('Up')])
         self.header.parent_button = self.header.children[0]
         self.browser = SimpleNamespace(location_bar=self.header, search=SimpleNamespace(value=''),
-            selected=None, entries=[])
+            selected=None, entries=[], clear_selection=Mock())
         self.loaded = []
         async def navigate(location):
             self.loaded.append(location)
@@ -178,6 +178,38 @@ class FolderStackTests(TestCase):
         self.assertEqual(self.host.state.destination, 'home')
         self.assertIs(self.routes.body('files').children[0], self.view)
         self.assertEqual(self.loaded, [('Local files', 'Projects')])
+
+    def test_direct_route_trim_clears_transient_selection_but_repaint_keeps_it(self):
+        overview = self.routes.body().children[0]
+        clear = overview._clear_return_selection = Mock()
+        self.routes.render('files')
+        clear.assert_not_called()
+        self.show('Projects')
+        clear.assert_not_called()
+        self.routes.trim('files', 0)
+        clear.assert_not_called()
+        self.routes.render('files')
+        clear.assert_called_once_with()
+
+    def test_back_and_native_pop_clear_selection_on_returned_overview(self):
+        # Install the same return hook as a retained Workspaces tree.
+        self.routes.show(toga.Box(), destination='files', root=True)
+        overview = self.routes.body().children[0]
+        clear = overview._clear_return_selection = Mock()
+        self.view._folder_entry_location = ('Local files', 'Projects')
+        self.show('Projects')
+        self.routes.guard = lambda: False
+        self.routes.back()
+        clear.assert_not_called()
+        self.routes.guard = lambda: True
+        self.routes.back()
+        clear.assert_called_once_with()
+        clear.reset_mock()
+        self.show('Projects')
+        nav = self.navigation[self.host.destinations.index('files')]
+        nav.viewControllers.pop()
+        self.routes.native_popped(nav)
+        clear.assert_called_once_with()
 
     def test_reader_back_retains_folder_without_listing_and_guard_refusal_keeps_stack(self):
         self.show('Projects/Reports')
@@ -366,6 +398,25 @@ class ShowInFolderTests(TestCase):
             await second.browser.close()
         app.loop.run_until_complete(exercise())
 
+    def test_closing_document_clears_retained_browser_selection(self):
+        app = self.app
+        async def exercise():
+            await app.show_files(location=('Local files', 'Projects/Reports'))
+            browser = app.file_browser
+            entry = next(item for item in browser.entries if item.payload['name'] == 'note.txt')
+            await browser.select(entry)
+            self.assertIsNotNone(browser.selected)
+            await app.browser_file_open(entry.payload)
+            key = app.workspace.active
+            app.request_reader_close(key)
+            tasks = list(getattr(app, '_document_close_tasks', {}).values())
+            if tasks:
+                await asyncio.gather(*tasks)
+            self.assertIsNone(browser.selected)
+            self.assertEqual(app.file_selection.value, 'Select an item…')
+            self.assertEqual(app.file_path, 'Projects/Reports')
+        app.loop.run_until_complete(exercise())
+
     def test_home_import_reveals_file_in_workspaces_and_keeps_reader(self):
         from mobile.document_sources import folder_action, show_in_folder
         app = self.app
@@ -491,3 +542,29 @@ class ShowInFolderTests(TestCase):
             app.create_chosen_document('txt')
             self.assertFalse(folder_action(app, app.editor_view.session))
         app.loop.run_until_complete(exercise())
+
+
+class SecondarySelectionTests(TestCase):
+    def test_secondary_explicit_and_native_pop_clear_only_transient_selection(self):
+        from mobile.adaptive_workspace import AdaptiveWorkspace
+        for native in (False, True):
+            with self.subTest(native=native):
+                transient, persistent = toga.Box(), toga.Button('Current chapter')
+                cleared = transient._clear_return_selection = Mock()
+                panel = toga.Box(children=[transient, persistent])
+                parent, child = SimpleNamespace(controller=object()), SimpleNamespace(controller=object())
+                app = SimpleNamespace(
+                    routes=SimpleNamespace(clear_view_selection=MobileRoutes.clear_view_selection),
+                    native_host=SimpleNamespace(adapter=Mock(), state=SimpleNamespace(
+                        routes={}, destination='documents')),
+                    mark_navigation=Mock(), route_changed=Mock())
+                workspace = AdaptiveWorkspace(app)
+                workspace.split, workspace.secondary = Mock(), Mock()
+                workspace.detail_routes = [('browser', panel, parent), ('form', toga.Box(), child)]
+                if native:
+                    workspace.native_shown(parent.controller, animated=True)
+                else:
+                    workspace.trim_details(1)
+                cleared.assert_called_once_with()
+                self.assertEqual(workspace.detail_routes[0][0], 'browser')
+                self.assertEqual(persistent.text, 'Current chapter')

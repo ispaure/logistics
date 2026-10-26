@@ -6,8 +6,9 @@ See the notebook developer guide for sources and the tablet calibration gate.
 """
 import math
 
-TOOLS = {'Fineliner': 17, 'Ballpoint': 15, 'Pencil': 14, 'Mechanical pencil': 13,
-         'Marker': 16, 'Paintbrush': 12, 'Calligraphy': 21, 'Highlighter': 18, 'Shader': 23}
+TOOLS = {'Ballpoint': 15, 'Fineliner': 17, 'Highlighter': 18,
+         'Pencil': 14, 'Mechanical pencil': 13, 'Calligraphy': 21,
+         'Marker': 16, 'Shader': 23, 'Paintbrush': 12}
 # -1 is an editor choice, never a native PenColor. Orange uses HIGHLIGHT + RGBA.
 COLORS = {'Black': 0, 'Gray': 1, 'White': 2, 'Blue': 6, 'Red': 7,
           'Green': 10, 'Yellow': 13, 'Cyan': 11, 'Magenta': 12,
@@ -43,7 +44,7 @@ BRUSHES = {
     13: profile((1, 1.5, 2), family='mechanical', texture=True),
     16: profile((3, 6, 10), .25, family='marker'),
     12: profile((4, 8, 16), .9, 1.7, family='paintbrush'),
-    21: profile((3, 6, 12), .25, family='calligraphy', directional=True),
+    21: profile((3, 6, 12), .25, family='calligraphy', directional=True, nib_angle=-math.pi / 4, nib_ratio=.25),
     18: profile((15, 30, 60), colors=tuple(HIGHLIGHTS), family='highlighter'),
     23: profile((15, 30, 60), .7, colors=tuple(SHADERS), family='shader'),
 }
@@ -68,7 +69,8 @@ def stroke_points(points, tool, width):
         if brush.get('directional'):
             before = points[index - 1] if index else points[min(1, len(points) - 1)]
             angle = math.atan2(y - before[1], x - before[0])
-            value *= .25 + .75 * abs(math.sin(angle - math.pi / 4))
+            delta = angle - brush['nib_angle']
+            value *= math.hypot(math.sin(delta), brush['nib_ratio'] * math.cos(delta))
         # Match the codec's quarter-unit precision in the live preview too.
         result.append([x, y, pressure, max(.25, math.floor(value * 4 + .5) / 4)])
     return result

@@ -211,7 +211,7 @@ def fit_form(app, view, destination):
         fit_section(view, app.adaptive.content_width(destination, margin=0))
 
 
-def prepare_form(view, *, primary=None, cancel=None, back=None):
+def prepare_form(view, *, primary=None, cancel=None, back=None, primary_symbol='checkmark'):
     """Owners explicitly name navigation/completion actions; body actions stay put.
 
     Runs only for the iOS backend. Labels refer to declared buttons in the form,
@@ -232,7 +232,7 @@ def prepare_form(view, *, primary=None, cancel=None, back=None):
     buttons = {widget.text: widget for widget in walk(view) if isinstance(widget, toga.Button)}
     if primary in buttons:
         button = buttons[primary]
-        button._toolbar_prominent, button._toolbar_symbol = True, 'checkmark'
+        button._toolbar_prominent, button._toolbar_symbol = True, primary_symbol
         view._ios_toolbar_buttons = [button]
     if cancel in buttons or back in buttons:
         cancellation = cancel in buttons

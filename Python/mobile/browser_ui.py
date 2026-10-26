@@ -9,7 +9,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 from commonUtils.ui.native_browser.recycled import RecycledBrowser, BrowserPresentation
 from .appearance import list_button
-from .appearance import accessible_name, surface, template_icon
+from .appearance import accessible_name, surface, template_icon, selection_row
 from .hub_icons import icon
 from .folder_hub_style import (
     ENTRY_ICON_SIZE, ENTRY_ICON_MARGIN,
@@ -48,9 +48,11 @@ def entry_icon(directory, *, landing_page=False):
 
 
 def highlight_entry(widget, selected):
+    if not isinstance(widget, toga.Button):
+        selection_row(widget, selected)
+        return
     surface(widget, radius=8, background='hover' if selected else 'surface',
-            foreground=('muted' if getattr(widget, 'browser_hidden', False) else 'text')
-            if isinstance(widget, toga.Button) else None,
+            foreground='muted' if getattr(widget, 'browser_hidden', False) else 'text',
             outlined=False, eink_outlined=selected, eink_selected=selected)
 
 
@@ -326,6 +328,18 @@ class FileBrowser(RecycledBrowser):
         super().__init__(presentation=LogisticsBrowserPresentation(),
                          list_factory=RecycledFileList, inline_details=False, **kwargs)
         self.native_list.menu_provider = self._native_row_menu
+        self.widget._clear_return_selection = self.clear_selection
+
+    def clear_selection(self):
+        """Retire contextual selection without rebuilding the retained listing."""
+        self.selected = None
+        for child in list(self.info.children):
+            self.info.remove(child)
+        self.highlight_selection()
+        if self.on_selected is not None:
+            result = self.on_selected(None)
+            if asyncio.iscoroutine(result):
+                self._spawn(result)
 
     def back_action(self):
         """Choose one browser-local Back step; the route owns invoking it."""

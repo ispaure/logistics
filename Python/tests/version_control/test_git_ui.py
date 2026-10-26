@@ -84,6 +84,74 @@ class GitUITests(QtTestCase):
         self.page._set_busy(False)
         self.assertTrue(fetch.isEnabled())
 
+    def test_primary_push_publishes_once_then_pushes_without_a_dialog(self):
+        from unittest.mock import Mock
+        self.commit_fixture()
+        remote_path = self.root / 'remote.git'
+        self.repo.runner.run(['init', '--bare', str(remote_path)])
+        self.repo.remote_add('origin', str(remote_path))
+        self.open()
+        button = self.page.action_buttons['Push']
+        self.assertEqual(button.defaultAction().text(), 'Publish branch…')
+        self.assertEqual(button.popupMode(), qt.QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.assertIs(button.menu(), self.page.push_menu)
+        self.assertIn(self.page.push_menu.menuAction(),
+                      self.page.menu_controls.menus['Repository'].actions())
+        dialog = Mock()
+        dialog.choice.return_value.currentText.return_value = 'origin'
+        dialog.text.return_value.text.return_value = 'published'
+        dialog.submitted.return_value = True
+        with patch('features.git.ui.commands.forms.FormDialog', return_value=dialog) as form:
+            button.defaultAction().trigger()
+            self.wait()
+            form.assert_called_once()
+        self.assertEqual(self.repo.status().upstream, 'origin/published')
+        self.assertEqual(button.defaultAction().text(), 'Push')
+        self.assertIn('origin/published', button.defaultAction().toolTip())
+        (self.repo.path / 'file.txt').write_text('second')
+        self.repo.stage(['file.txt'])
+        self.repo.commit('Second')
+        self.page.refresh(); self.wait()
+        with patch('features.git.ui.commands.forms.FormDialog') as form:
+            button.defaultAction().trigger()
+            self.wait()
+            form.assert_not_called()
+        subject = Repository(remote_path).run(['log', '-1', '--format=%s', 'refs/heads/published']).stdout
+        self.assertEqual(subject.decode().strip(), 'Second')
+        self.assertEqual(self.repo.status().ahead, 0)
+
+    def test_push_options_force_confirmation_and_busy_guards(self):
+        from dataclasses import replace
+        self.commit_fixture()
+        self.open()
+        snapshot = self.page.snapshot
+        self.page._render(replace(snapshot, status=replace(snapshot.status, upstream='origin/main')))
+        self.assertFalse(self.page.force_push_action.isVisible())
+        self.page.preferences.options['allow_force_push'] = True
+        self.page.apply_preferences()
+        self.assertTrue(self.page.force_push_action.isVisible())
+        with patch.object(self.page, '_confirm', return_value=False) as confirm, \
+                patch.object(self.page.commands, 'dispatch') as dispatch:
+            self.page.force_push_action.trigger()
+            confirm.assert_called_once()
+            dispatch.assert_not_called()
+        with patch.object(self.page, '_confirm', return_value=True), \
+                patch.object(self.page.commands, 'dispatch') as dispatch:
+            self.page.force_push_action.trigger()
+            self.assertTrue(dispatch.call_args.kwargs['force_with_lease'])
+            self.assertEqual(dispatch.call_args.kwargs['branch'], 'main')
+        self.page._set_busy(True)
+        self.assertFalse(self.page.publish_action.isEnabled())
+        self.assertFalse(self.page.force_push_action.isEnabled())
+        self.assertFalse(self.page.action_buttons['Push'].defaultAction().isEnabled())
+        self.page._set_busy(False)
+        self.page._render(snapshot)
+        self.assertFalse(self.page.force_push_action.isEnabled())
+        self.repo.run(['checkout', '--detach', 'HEAD'])
+        self.page.refresh(); self.wait()
+        self.assertFalse(self.page.action_buttons['Push'].defaultAction().isEnabled())
+        self.assertFalse(self.page.push_menu.isEnabled())
+
     def test_menu_staging_uses_selected_files_and_history_hides_file_actions(self):
         self.open()
         (self.repo.path / 'menu.txt').write_text('menu staging')
@@ -130,7 +198,7 @@ class GitUITests(QtTestCase):
         self.assertTrue(self.page.changes.commit_button.isEnabled())
         snapshot = self.page.snapshot
         self.page._render(replace(snapshot, status=replace(snapshot.status, upstream='origin/main', ahead=3, behind=2)))
-        self.assertEqual(self.page.action_buttons['Push…'].property('badge_count'), 3)
+        self.assertEqual(self.page.action_buttons['Push'].property('badge_count'), 3)
         self.assertEqual(self.page.action_buttons['Pull…'].property('badge_count'), 2)
 
     def test_history_files_are_one_column_without_header_and_refs_use_icons(self):

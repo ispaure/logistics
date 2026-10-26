@@ -80,6 +80,8 @@ def tint_android(impl):
     if eink_enabled() and getattr(impl, '_surface_eink_selected', False):
         colors = dict(colors, text='#ffffff', muted='#ffffff')
     foreground = getattr(impl, '_surface_roles', ('', 'text', False))[1]
+    if eink_enabled() and getattr(impl, '_surface_eink_selected', False):
+        foreground = 'text'
     disabled, enabled = argb(colors['muted']), argb(colors.get(foreground, colors['text']))
     key = (disabled, enabled)
     if (getattr(impl, '_control_tint_drawable', None) is impl._control_drawable

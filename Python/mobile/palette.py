@@ -78,9 +78,9 @@ def android_palette(dark=False):
 
 
 EINK_CSS = (':root{color-scheme:light!important}'
-    'html,body,body *:not(img):not(svg):not(svg *){background-color:#fff!important;color:#000!important;'
+    'html,body,body *:not(canvas):not(img):not(svg):not(svg *){background-color:#fff!important;color:#000!important;'
     'text-shadow:none!important;box-shadow:none!important;animation:none!important;transition:none!important}'
-    'a{text-decoration:underline!important}button,input,textarea,select{border:1px solid #000!important}'
+    'a{text-decoration:underline!important}button:not([role=menuitem]),input,textarea,select{border:1px solid #000!important}'
     '::selection{background:#000!important;color:#fff!important}')
 
 

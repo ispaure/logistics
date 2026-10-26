@@ -52,6 +52,22 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertEqual(nav.sections.built, {})
         self.assertEqual(nav.options.built, {})
 
+    def test_reselecting_settings_resets_category_and_stays_at_list_after_rotation(self):
+        app, nav = self.app, self.nav
+        for width in (390, 900):
+            with self.subTest(width=width):
+                self.width.return_value = width
+                nav.reflow()
+                nav.choose('Text')
+                app.native_host._selected(app.native_host.root)
+                self.assertFalse(app.routes.screens['settings'])
+                self.assertFalse(nav.detail_requested)
+                self.assertFalse(nav.detail.children)
+                self.width.return_value = 390
+                nav.reflow()
+                self.assertFalse(app.routes.screens['settings'])
+                self.assertIs(app.body.children[0], nav)
+
     def test_category_selected_wide_survives_rotation_while_another_tab_is_visible(self):
         app, nav = self.app, self.nav
         self.width.return_value = 900

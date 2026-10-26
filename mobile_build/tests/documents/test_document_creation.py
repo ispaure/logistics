@@ -43,15 +43,113 @@ class DocumentCreationTests(unittest.TestCase):
         self.directory.cleanup()
 
     def choose(self, name, kind='Plain text (.txt)', *, local=True):
-        self.app.choose_document_type()
-        form = self.app.body.children[0].content
-        form.name_input.value, form.type_selector.value = name, kind
-        self.app.loop.run_until_complete(form.create_button.on_press())
+        self.app.loop.run_until_complete(self.app.choose_document_type())
         picker = self.app.editor_picker()
+        form = picker.panel
+        picker.save_as_name.value, picker.creation_type.value = name, kind
         if local:
             row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Local')
             self.app.loop.run_until_complete(picker.browser_editor_folder(row))
         return form, picker
+
+    def test_name_type_and_folder_share_one_route_until_publication(self):
+        from features.notebooks.notebook import Notebook
+        app = self.app
+        origin = app.body
+        _, picker = self.choose('Trip.txt')
+        panel, location = picker.panel, picker.editor_picker_location
+        self.assertTrue(picker.visible())
+        self.assertIn(picker.creation_type, picker.save_as_view.children)
+        self.assertFalse((self.root / 'LocalFiles/Trip.txt').exists())
+        picker.creation_type.value = 'Markdown (.md)'
+        self.assertEqual(picker.save_as_name.value, 'Trip.md')
+        picker.creation_type.value = 'Notebook (.rmdoc)'
+        self.assertEqual(picker.save_as_name.value, 'Trip.rmdoc')
+        self.assertIs(picker.panel, panel)
+        self.assertEqual(picker.editor_picker_location, location)
+        picker.save_as_name.value = 'Final title'
+        app.loop.run_until_complete(picker.confirm_editor_file())
+        path = self.root / 'LocalFiles/Final title.rmdoc'
+        self.assertEqual(Notebook.read(path.read_bytes()).name, 'Final title')
+        self.assertFalse((self.root / 'LocalFiles/Trip.rmdoc').exists())
+        self.assertNotIn('text-destination', [row[0] for row in app.routes.screens['home']])
+        self.assertIsNot(app.body, origin)
+
+    def test_received_files_notebook_creation_on_android_without_exclusive_rename(self):
+        import errno
+        from commonUtils.runtime.platform import OS
+        from features.notebooks.notebook import Notebook
+        from mobile.incoming_files import inbox_path
+        _, picker = self.choose('Received sketch', 'Notebook (.rmdoc)', local=False)
+        row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Received Files')
+        self.app.loop.run_until_complete(picker.browser_editor_folder(row))
+        with patch('commonUtils.runtime.resources.local.rename_exclusive',
+                   side_effect=OSError(errno.EINVAL, 'SD card rejects rename flags')), \
+                patch('commonUtils.runtime.platform.get_os', return_value=OS.ANDROID):
+            self.app.loop.run_until_complete(picker.confirm_editor_file())
+        received = inbox_path(self.root)
+        path = received / 'Received sketch.rmdoc'
+        self.assertTrue(path.is_file(), picker.save_as_status.value)
+        self.assertEqual(Notebook.read(path.read_bytes()).name, 'Received sketch')
+        self.assertIsNotNone(self.app.notebook_panel)
+        self.assertEqual(sorted(p.name for p in received.iterdir()), ['Received sketch.rmdoc'])
+
+    def test_sd_received_notebook_creation_and_workspace_reopen(self):
+        import json
+        from features.notebooks.mobile.documents import panels
+        external = TemporaryDirectory()
+        self.addCleanup(external.cleanup)
+        volume = Path(external.name).resolve()
+        base = volume / 'Logistics'
+        base.mkdir()
+        token = 'a' * 32
+        (base / '.logistics-storage').write_text(token)
+        (self.root / 'collection-storage.json').write_text(json.dumps(dict(volume=str(volume), token=token)))
+        _, picker = self.choose('SD notebook', 'Notebook (.rmdoc)', local=False)
+        row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Received Files')
+        self.app.loop.run_until_complete(picker.browser_editor_folder(row))
+        self.app.loop.run_until_complete(picker.confirm_editor_file())
+        panel = self.app.notebook_panel
+        self.assertTrue(panels(self.app), picker.save_as_status.value)
+        self.assertEqual(panel.document.resource.provider.root, base / 'Received Files')
+        session = panel.session
+        self.assertTrue(self.app.close_session(session.id))
+        self.app.loop.run_until_complete(self.app.open_download(path=base / 'Received Files/SD notebook.rmdoc'))
+        self.assertIn(self.app.notebook_panel.session.id, panels(self.app))
+        self.assertEqual(self.app.notebook_panel.session.resource, session.resource)
+
+    def test_cold_start_client_and_credentials_changes_do_not_leave_loading_form(self):
+        import asyncio
+        from types import SimpleNamespace
+        app = self.app
+        original = asyncio.to_thread
+        calls = []
+        async def restoring(*args, **kwargs):
+            calls.append(args[0])
+            if len(calls) == 1:
+                app.cloud_client = SimpleNamespace(generation=0, cancel=lambda: None)
+            elif len(calls) == 2:
+                app.cloud_client.generation = 1
+            return await original(*args, **kwargs)
+        with patch('mobile.editor_picker.asyncio.to_thread', side_effect=restoring):
+            app.loop.run_until_complete(app.choose_document_type())
+        picker = app.editor_picker()
+        self.assertEqual(picker.editor_picker_location, ('All files', ''))
+        self.assertIn('Local', [row['name'] for row in picker.editor_picker_rows.values()])
+        self.assertFalse(app.cloud_busy)
+        self.assertNotEqual(picker.save_as_status.value, 'Loading folder…')
+
+    def test_creation_keyboard_compaction_keeps_name_type_and_destination(self):
+        _, picker = self.choose('Keep my name', 'Notebook (.rmdoc)')
+        name, kind = picker.save_as_name, picker.creation_type
+        location = picker.editor_picker_location
+        picker.fit_keyboard(True)
+        self.assertIn(kind, picker.save_as_view.children)
+        self.assertIn(name, picker.save_as_view.children)
+        self.assertEqual(name.value, 'Keep my name')
+        picker.fit_keyboard(False)
+        self.assertEqual(picker.editor_picker_location, location)
+        self.assertEqual(kind.value, 'Notebook (.rmdoc)')
 
     def test_creation_starts_at_browse_all_files_and_can_return_from_collections(self):
         _, picker = self.choose('Anywhere', local=False)
@@ -59,6 +157,8 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertEqual(picker.editor_provider('All files').root, device_files(self.root).root)
         self.assertFalse(picker.picker_primary.enabled)
         self.assertFalse(picker.picker_new_folder.enabled)
+        self.assertEqual(picker.picker_primary.text, 'Create document')
+        self.assertIn('Choose a folder below', picker.save_as_status.value)
         for name in ('Local', 'Received Files'):
             row = next(row for row in picker.editor_picker_rows.values() if row['name'] == name)
             self.app.loop.run_until_complete(picker.browser_editor_folder(row))
@@ -98,11 +198,12 @@ class DocumentCreationTests(unittest.TestCase):
         _, picker = self.choose('Sketch', 'Notebook (.rmdoc)')
         self.assertEqual(picker.effective_name.text, 'Save as: Sketch.rmdoc')
         self.assertIn('Existing.rmdoc', [row['name'] for row in picker.editor_picker_rows.values()])
-        self.assertNotIn('Text.txt', [row['name'] for row in picker.editor_picker_rows.values()])
+        self.assertIn('Text.txt', [row['name'] for row in picker.editor_picker_rows.values()])
         picker.save_as_name.value = 'Invalid.txt'
         self.app.loop.run_until_complete(picker.confirm_editor_file())
         self.assertIn('Creation failed:', picker.save_as_status.value)
-        self.assertTrue(picker.save_as_status.readonly)
+        self.assertIsInstance(picker.save_as_status.label, __import__('toga').Label)
+        self.assertTrue(picker.save_as_status.children)
         self.assertFalse((local / 'Invalid.txt').exists())
         picker.save_as_name.value = 'Renamed'
         self.assertEqual(picker.effective_name.text, 'Save as: Renamed.rmdoc')
@@ -147,8 +248,7 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertIn('already exists', picker.save_as_status.value)
         self.assertIsNone(app.provider_sessions().active)
         picker.cancel_text_destination()
-        self.assertIs(app.body.children[0].content, form)
-        form.cancel_button.on_press()
+        self.assertIsNot(app.body, form)
         self.assertEqual(app.store.documents(), before)
 
     def test_localcrypt_creation_and_editing_use_encrypted_provider_without_managed_plaintext(self):
@@ -184,17 +284,13 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertIn('read-only', picker.save_as_status.value)
         self.assertFalse((self.root / 'LocalFiles/Read only.txt').exists())
 
-    def test_empty_unlocked_localcrypt_root_is_offered(self):
+    def test_uncreated_localcrypt_roots_are_not_offered(self):
         app = self.app
         app.cloud_client = CreationClient()
         app.cloud_crypt_remotes = {'Secret'}
         _, picker = self.choose('First encrypted file')
-        self.assertIn('LocalCrypt: Secret', picker.editor_storage_roots)
-        picker.save_as_storage.value = 'LocalCrypt: Secret'
-        app.loop.run_until_complete(picker.refresh_editor_browser())
-        app.loop.run_until_complete(picker.confirm_editor_file())
-        self.assertIsNotNone(app.private_sessions.active, picker.save_as_status.value)
-        self.assertTrue(app.private_sessions.active._crypt_reader_store.provider.private)
+        self.assertNotIn('LocalCrypt: Secret', picker.editor_storage_roots)
+        self.assertFalse(picker.save_as_status.children)
 
     def test_session_capacity_rejects_creation_before_publishing(self):
         _, picker = self.choose('No capacity')

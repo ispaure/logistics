@@ -22,6 +22,19 @@ from features.notebooks.ui.workspace import NotebookWorkspace, NotebookWindow
 from features.notebooks.ui.menus import NotebookMenus
 
 
+def windows_foreground():
+    """Qt's active widget is not proof of Windows' actual foreground process."""
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.WinDLL('user32', use_last_error=True)
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
+    window = user32.GetForegroundWindow()
+    process = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(window, ctypes.byref(process))
+    return dict(window=window, process=process.value)
+
+
 class Probe:
     def __init__(self, root):
         self.window_states = []
@@ -37,6 +50,10 @@ class Probe:
         self.ready()
 
     def ready(self):
+        # This synchronous probe does not run QApplication.exec(). Retire the
+        # previous WebView as the production event loop normally would, before
+        # timing a fresh renderer with large canvas buffers.
+        qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
         self.wait(lambda: self.js("typeof window.notebookUI==='function'"), 'canvas loading')
         # Chromium can finish executing the page before Windows creates its
         # native input child. Send mouse events to that child only once exposed.
@@ -51,7 +68,8 @@ class Probe:
         self.wait(lambda: self.js('window.qaPaintReady'), 'canvas presentation')
         self.idle()
         self.window_states.append(dict(active=self.window.isActiveWindow(), process=os.getpid(),
-            browser=self.js('({visibility:document.visibilityState,focused:document.hasFocus()})')))
+            native_foreground=windows_foreground() if platform.system() == 'Windows' else None,
+            browser=self.js('({visibility:document.visibilityState,focused:document.hasFocus(),dpr:devicePixelRatio,canvas:[canvas.width,canvas.height],context:ctx.getContextAttributes()})')))
 
     def wait(self, predicate, label, timeout=15):
         start = time.monotonic()
@@ -69,15 +87,18 @@ class Probe:
         assert result['ok'], result
         return result.get('value')
 
-    def idle(self):
-        self.wait(lambda: not self.panel.busy and self.js('!busy&&!queue.length&&active===null'), 'bridge idle')
+    def idle(self, timeout=15):
+        self.wait(lambda: not self.panel.busy and self.js('!busy&&!queue.length&&active===null'), 'bridge idle', timeout=timeout)
         QTest.qWait(35)  # Let progress-widget layout and resize observers settle.
 
     def action(self, op, **fields):
         self.panel.request_command(dict(op=op, **fields))
-        self.idle()
+        self.idle(timeout=60 if op in ('save', 'save-as', 'export') else 15)
 
     def stroke(self, row=0, samples=8, pause_ms=0, pace_ms=0, while_down=None):
+        if platform.system() == 'Windows':
+            foreground = windows_foreground()
+            assert foreground['process'] == os.getpid(), ('Editor is not the native foreground window', foreground)
         box = self.js('canvas.getBoundingClientRect().toJSON()')
         releases = self.js('qaPointerUps')
         target = self.panel.web.focusProxy() or self.panel.web
@@ -111,6 +132,9 @@ class Probe:
         return hashlib.sha256(self.js('canvas.toDataURL()').encode()).hexdigest()
 
     def close(self):
+        # A failed assertion must not destroy an asynchronous writer or remove
+        # its scratch file while publication is still running.
+        self.wait(lambda: not self.panel.busy, 'pending publication before teardown', timeout=120)
         with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Discard):
             self.window.close()
         QTest.qWait(50)
@@ -119,7 +143,8 @@ class Probe:
 def source_hashes():
     owner = Path(__file__).resolve().parents[2] / 'features' / 'notebooks'
     return {name: hashlib.sha256((owner / name).read_bytes()).hexdigest()
-            for name in ('canvas.py', 'assets/drawing.js', 'assets/desktop.js', 'ui/workspace.py')}
+            for name in ('canvas.py', 'assets/drawing.js', 'assets/input.js', 'assets/viewport.js',
+                         'assets/queue.js', 'assets/desktop.js', 'ui/workspace.py')}
 
 
 def main(output):
@@ -140,17 +165,29 @@ def main(output):
             print('Nine native brush strokes passed', flush=True)
             first = probe.panel.editor.notebook.page(0).strokes[0]
             point = list(first.points[0])
-            def edit_first(mode, dx=0, dy=0):
+            def edit_first(mode, dx=0, dy=0, eraser_kind='whole'):
                 probe.panel.request_ui(mode)
                 probe.idle()
+                if mode == 'erase':
+                    probe.wait(lambda: probe.js('eraserDialog.open'), 'eraser settings')
+                    probe.js("(()=>{$('eraserKind').value=" + json.dumps(eraser_kind) + ";$('eraserKind').onchange();$('closeEraser').click();return true})()")
                 box = probe.js('canvas.getBoundingClientRect().toJSON()')
                 x = int(box['left'] + point[0] / 1404 * box['width'])
                 y = int(box['top'] + point[1] / 1872 * box['height'])
                 target = probe.panel.web.focusProxy() or probe.panel.web
+                releases = probe.js('qaPointerUps')
                 QTest.mousePress(target, qt.Qt.MouseButton.LeftButton, pos=qt.QPoint(x, y))
                 QTest.mouseMove(target, qt.QPoint(x + dx, y + dy), delay=1)
                 QTest.mouseRelease(target, qt.Qt.MouseButton.LeftButton, pos=qt.QPoint(x + dx, y + dy))
+                probe.wait(lambda: probe.js('qaPointerUps') == releases + 1, 'native edit pointer release')
                 probe.idle()
+            original_points = len(first.points)
+            edit_first('erase', eraser_kind='partial')
+            remaining = next(stroke for stroke in probe.panel.editor.notebook.page(0).strokes if stroke.id == first.id)
+            assert remaining.points[0] != point and len(remaining.points) <= original_points
+            probe.action('undo')
+            assert probe.panel.editor.notebook.page(0).strokes[0].points[0] == point
+            report['checks']['native_partial_erase_and_undo'] = True
             edit_first('erase')
             assert probe.count() < len(tools)
             probe.action('undo')
@@ -298,6 +335,11 @@ def main(output):
             assert probe.count() == count + 1, dict(expected=count + 1, actual=probe.count(),
                 canvas=probe.js('({busy,queue:queue.length,active,mode,warning:state.warning,read_only:state.read_only})'))
             report['checks']['reopened_archive_remains_editable'] = True
+            probe.js("(()=>{window.qaSmallGap=0;window.qaSmallFrames=0;window.qaSmallPrevious=performance.now();window.qaSmallLoop=true;function frame(now){qaSmallFrames++;qaSmallGap=Math.max(qaSmallGap,now-qaSmallPrevious);qaSmallPrevious=now;if(qaSmallLoop)requestAnimationFrame(frame)}requestAnimationFrame(frame);$('tool').value='23';$('tool').onchange();return true})()")
+            probe.stroke(2, samples=200, pace_ms=5)
+            probe.idle()
+            report['small_page_metrics'] = probe.js('({frames:qaSmallFrames,max_frame_gap:qaSmallGap})')
+            probe.js('qaSmallLoop=false')
             # A substantial page catches accidental whole-scene replay in the
             # pointer path, which small synthetic documents can conceal.
             large = Notebook.new('Large-page responsiveness')
@@ -350,27 +392,52 @@ def main(output):
             # Windows' native QTest mouse delay can round down to zero. Also
             # measure a paced gesture, yielding the UI loop between samples,
             # to distinguish an artificial event flood from steady input.
-            probe.js('(()=>{qaDraws=0;qaFrames=0;qaGap=0;qaFramePrevious=performance.now();return true})()')
-            paced_duration = probe.stroke(6, samples=200, pace_ms=5)
-            probe.idle()
-            paced = probe.js('({draws:qaDraws,frames:qaFrames,max_frame_gap:qaGap})')
+            paced_runs = []
+            for gesture in range(3):
+                probe.js('(()=>{qaDraws=0;qaFrames=0;qaGap=0;qaFramePrevious=performance.now();return true})()')
+                duration = probe.stroke(6 + gesture, samples=200, pace_ms=5)
+                probe.idle()
+                row = probe.js('({draws:qaDraws,frames:qaFrames,max_frame_gap:qaGap})')
+                row['duration_ms'] = duration
+                paced_runs.append(row)
+            paced = dict(draws=sum(row['draws'] for row in paced_runs), frames=sum(row['frames'] for row in paced_runs),
+                         max_frame_gap=max(row['max_frame_gap'] for row in paced_runs))
             probe.js('qaFrameLoop=false')
-            assert probe.count() == 1003 and paced['draws'] == 0 and paced['frames'] > 5, paced
             report['paced_large_page_metrics'] = paced
+            report['paced_gestures'] = paced_runs
             report['render_costs'] = probe.js('({functions:qaCosts,long_tasks:qaLongTasks})')
             report['native_command_costs'] = host_costs
-            assert metrics['frames'] > 5, metrics
-            report['timings_ms']['large_page_200_paced_moves'] = paced_duration
+            assert probe.count() == 1005 and paced['draws'] == 0 and paced['frames'] > 5, paced
+            # Keep exercising history, saving and zoom after a latency failure;
+            # the final assertion still fails acceptance without hiding that coverage.
+            assert not report['render_costs']['functions'].get('line', {}).get('calls'), 'Pen-up replayed vector geometry'
+            report['timings_ms']['large_page_200_paced_moves'] = [row['duration_ms'] for row in paced_runs]
             report['checks']['paced_large_page_drawing_retains_ink_without_full_redraw'] = True
             probe.action('stroke', points=[[20, 30, .5]], tool=17, width=999)
-            assert probe.count() == 1003
+            assert probe.count() == 1005
             probe.stroke(5)
             probe.idle()
-            assert probe.count() == 1004
+            assert probe.count() == 1006
             report['checks']['rejected_stroke_recovers_bridge_and_retains_ink'] = True
+            probe.action('undo')
+            assert probe.count() == 1005
+            probe.action('redo')
+            assert probe.count() == 1006
+            for zoom in ['fit', '1', 'page']:
+                probe.panel.request_ui('zoom', zoom)
+                probe.wait(lambda: probe.js("$('zoom').value") == zoom, 'large page zoom')
+                probe.idle()
+            save_as('large-page.rmdoc')
+            probe.stroke(10, samples=60, pace_ms=5)
+            probe.idle()
+            assert probe.count() == 1007 and probe.panel.document.dirty
+            probe.action('save')
+            assert len(Notebook.read((root / 'large-page.rmdoc').read_bytes()).page(0).strokes) == 1007
+            report['checks']['large_page_undo_redo_zoom_and_verified_file_save'] = True
             print('Large-page rendering and mid-stroke acknowledgements passed: ' + repr(metrics), flush=True)
             probe.window.grab().save(str(output / 'desktop-stress.png'))
             assert report['source_hashes'] == source_hashes(), 'Sources changed during acceptance; rerun required'
+            assert paced['max_frame_gap'] < 80, ('Paced drawing stalled', paced)
             report['status'] = 'passed'
         except Exception as error:
             report.update(status='failed', error=repr(error))

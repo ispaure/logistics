@@ -91,7 +91,11 @@ class LibraryCatalogTests(unittest.TestCase):
             async def exercise():
                 await catalog.library_scan_task
                 self.assertEqual([button.text for button in catalog.library_row_buttons], ['Comics'])
-                await catalog.library_row_buttons[0].on_press()
+                listing = catalog.library_folder_list
+                listing.select_index(0)
+                opened = catalog._select_library_row(listing)
+                self.assertIsNone(listing.selection)
+                await opened
                 self.assertEqual(app.file_path, 'Collection/Comics')
                 self.assertEqual(app.file_provider.root, app.private_root / 'LocalFiles')
                 from features.rclone.localcrypt.mobile.resources import CryptFiles

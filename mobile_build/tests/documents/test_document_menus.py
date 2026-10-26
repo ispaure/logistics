@@ -213,7 +213,7 @@ class DocumentMenuTests(TestCase):
         box = app.body.children[0].content
         import toga
         self.assertGreater(sum(isinstance(child, toga.Divider) for child in box.children), 0)
-        rename = next(child for child in box.children if getattr(child, 'text', '') == 'Rename document…')
-        rename.on_press()
-        self.assertEqual(app.routes.screens[app.native_host.state.destination][-1][0], 'document-name')
+        find = next(child for child in box.children if getattr(child, 'text', '') == 'Find and replace…')
+        find.on_press()
+        self.assertIn(app.editor_view.search.box, app.editor_view.document_view.children)
         self.run_async(asyncio.sleep(0))

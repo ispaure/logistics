@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
-from .appearance import accessible_name, list_button
+from .appearance import accessible_name, list_button, selection_row
 from .control_icons import icon_button
 from .folder_hub import folder_row_presentation, folder_tree
 from .folder_hub_style import (
@@ -76,6 +76,32 @@ class FolderTreeView:
         self.content = toga.Box(style=Pack(direction=COLUMN))
         self.nodes, self.panels, self.extras = {}, {}, {}
         self.browse, self.buttons, self.tree_buttons = {}, {}, {}
+        self.selected_name = None
+        self.content._clear_return_selection = lambda: self.select(None)
+
+    def select(self, name):
+        """Retain the workspace that supplied the current browser pane."""
+        self.selected_name = name
+        for record in self.nodes.values():
+            if record.name is None:
+                continue
+            selected = record.name == name
+            selection_row(record.row, selected, (
+                (record.button, 'text'),
+                (record.indicator, getattr(record.indicator, '_folder_foreground', 'folder')),
+                (record.menu, 'muted'),
+            ), eink_outlined=True)
+            self._select_button(record.button, selected)
+
+    @staticmethod
+    def _select_button(button, selected):
+        button.style.font_weight = 'bold' if selected else 'normal'
+        button._workspace_selected = selected
+        backend = type(button._impl).__module__
+        if backend.startswith('toga_iOS.'):
+            button._impl.native.accessibilityTraits = 1 | (4 if selected else 0)
+        elif backend.startswith('toga_android.'):
+            button._impl.native.setSelected(selected)
 
     def render(self, visible, source, loaded_remotes, crypt_remotes, *, grouped=True):
         """Reconcile this source snapshot; unchanged rows keep native identity."""
@@ -135,33 +161,22 @@ class FolderTreeView:
         browse = {}
         for name, entry in visible.items():
             if entry.get('browser_root'):
-                button = self.browse.get(name)
-                if button is None:
-                    async def browse_all(widget=None, selected=name, **kwargs):
-                        return await self.browse_folder(selected)
-                    button = list_button(toga.Button('Browse All Files', on_press=browse_all,
-                        style=Pack(height=ROW_HEIGHT, margin_top=12)))
-                browse[name] = buttons[name] = button
-                content.append(button)
-        if 'legend' not in self.extras:
-            legend = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin_top=4))
-            for label, icon, color in (('Locked', 'folder_locked', 'folder_locked'),
-                                       ('Unlocked', 'folder_unlocked', 'folder_unlocked')):
-                mark = icon_button(icon, label + ' folder')
-                compact_icon(mark, width=28, height=32, size=22, background='window', foreground=color)
-                legend.add(mark)
-                legend.add(surface(toga.Label(label, style=Pack(font_size=11, margin_right=16)),
-                                   background='window', foreground='muted', outlined=False))
-            self.extras['legend'] = legend
-        content.append(self.extras['legend'])
+                path = (name,)
+                projected = folder_row_presentation('Browse All Files', entry, source,
+                    loaded_remotes, crypt_remotes)
+                record = self._row_for(path, projected.title, name, projected, menu=False)
+                nodes[path] = record
+                browse[name] = buttons[name] = record.button
+                content.append(record.row)
         _sync_children(self.content, content)
         for path, old in self.nodes.items():
             if nodes.get(path) is not old and getattr(old, 'commands', None) is not None:
                 old.commands.dispose()
         self.nodes, self.panels, self.browse = nodes, panels, browse
         self.buttons, self.tree_buttons = buttons, tree_buttons
+        self.select(self.selected_name)
 
-    def _row_for(self, path, title, name, projected):
+    def _row_for(self, path, title, name, projected, *, menu=True):
         """Reuse a path only while it still represents the same selectable folder."""
         if projected is not None:
             icon, description, state = projected.icon, projected.description, projected.state
@@ -177,17 +192,19 @@ class FolderTreeView:
                 record.indicator = icon_button(icon, name + ', ' + description, on_press=select)
                 record.button = folder_name(list_button(toga.Button(title, on_press=select,
                     style=Pack(height=ROW_HEIGHT, flex=1))))
-                def options(widget=None, selected=name, **kwargs):
-                    self.choose_folder(selected)
-                record.menu = icon_button('more', 'Workspace actions for ' + name, on_press=options)
-                compact_icon(record.menu, width=TOUCH_TARGET, size=18)
-                from .action_menu import WorkspaceMenu
-                record.commands = WorkspaceMenu(record.menu,
-                    lambda selected=name: self.load_actions(selected),
-                    invoke=self.invoke,
-                    context=self.native_context,
-                    fallback=lambda selected=name: self.choose_folder(selected))
-                row.add(record.indicator, record.button, record.menu)
+                row.add(record.indicator, record.button)
+                if menu:
+                    def options(widget=None, selected=name, **kwargs):
+                        self.choose_folder(selected)
+                    record.menu = icon_button('more', 'Workspace actions for ' + name, on_press=options)
+                    compact_icon(record.menu, width=TOUCH_TARGET, size=18)
+                    from .action_menu import WorkspaceMenu
+                    record.commands = WorkspaceMenu(record.menu,
+                        lambda selected=name: self.load_actions(selected),
+                        invoke=self.invoke,
+                        context=self.native_context,
+                        fallback=lambda selected=name: self.choose_folder(selected))
+                    row.add(record.menu)
                 folder_row(row)
             else:
                 record.group = surface(toga.Label(title,
@@ -208,6 +225,7 @@ class FolderTreeView:
                 accessible_name(record.indicator, name + ', ' + description)
                 accessible_name(record.button, name + ', ' + description)
                 color = 'folder_' + state if state else 'folder'
+                record.indicator._folder_foreground = color
                 if record.presentation is None:
                     compact_icon(record.indicator, width=ENTRY_ICON_SLOT, size=ENTRY_ICON_SIZE, foreground=color)
                 else:

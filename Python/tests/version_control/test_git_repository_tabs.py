@@ -56,7 +56,7 @@ class GitRepositoryTabsTests(QtTestCase):
         dock = next(d for d in self.page.workspace.docks if d.widget() is first)
         dock.setFloating(True); self.wait()
         self.assertIs(dock.widget(), first)
-        for title in ('Commit', 'Pull…', 'Push…', 'Fetch', 'Branch…', 'View Remote', 'Terminal'):
+        for title in ('Commit', 'Pull…', 'Push', 'Fetch', 'Branch…', 'View Remote', 'Terminal'):
             self.assertTrue(first.isAncestorOf(first.action_buttons[title]))
         self.assertTrue(first.isAncestorOf(first.action_buttons[
             'Show in Finder' if os.sys.platform == 'darwin' else 'Open Folder']))

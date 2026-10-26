@@ -158,9 +158,14 @@ fetch, edit its URL, or remove it. Removing a remote keeps the server repository
 
 - **Fetch** updates configured remote references.
 - **Pull…** offers fast-forward only (initial default), merge, or rebase of the upstream.
-- **Push…** pushes the current branch to its configured upstream. Alternatively,
-  publish to a chosen remote/branch and set the upstream. Force-with-lease is available
-  only after enabling it in Git preferences and confirming the individual push.
+- **Push** immediately pushes the current branch to its configured upstream.
+  For a branch without an upstream, the button reads **Publish branch…** and asks
+  for the remote and branch to remember as its destination.
+- The arrow beside **Push** opens **Push options**. **Publish to…** lets you choose
+  a destination and replace the upstream. **Force push with lease…** targets the
+  existing upstream and appears only after enabling it in Git preferences; each
+  force push still requires confirmation. These options are also available under
+  **Repository → Push options**.
 
 Ahead/behind counts reflect the last fetched local references. Fetch again to learn
 about server changes. Push affects only the current branch and does not automatically

@@ -1042,6 +1042,39 @@ failed switches can retain already verified destination trees for retry. The app
 exits after success so retained providers cannot continue using an old location.
 Root-level marker and private state must be preserved when manually moving cards.
 
+On Android, `CollectionFiles` first attempts exclusive rename for new-file
+publication. SD-card/FUSE filesystems can reject that operation with `EINVAL` or
+an unsupported-operation error. For regular files only, the provider then uses
+the rooted provider's exclusive-create operation, verifies SHA-256 bytes and removes the
+source after verification. Existing destinations are never overwritten. The copy
+fallback exposes the new file while writing and is not atomic; directory renames
+still require native exclusive-rename support. `test_storage_location.py` covers
+successful publication, a racing destination and partial-copy cleanup.
+
+October 25 physical Boox Note Air5 C validation used the main app's normal New
+document and New folder controls on its selected SD card. Build 202610302 created
+a valid one-page `.rmdoc` and opened its notebook editor. The in-place update
+retained existing document, preference and credential bytes; existing library
+metadata records also remained present. This verifies the creation path, not
+stylus latency or every file-management operation.
+
+A follow-up on the same build created plain-text and Markdown documents in two
+additional new SD-card folders and opened their respective editors. Direct file
+readback confirmed both destinations. A plain-text edit/save wrote the exact
+37-byte test line but reported a reopen-verification failure and retained its
+draft; that creation check did not certify edit/save round trips.
+Existing files and library records remained present, and the earlier notebook's
+archive members were unchanged. Only the main Logistics package remained installed.
+
+Build 202610303 resolves this SD-card reopen failure by retrying a changed-revision
+verification read once, requiring a stable revision and exact saved bytes. On the
+same Boox, the main app edited, saved, closed and reopened both test documents;
+Markdown also rendered the saved heading correctly. Direct readback matched both
+documents exactly. The isolated native SD-card probe additionally passed two
+consecutive saves and reopenings for each format and removed its test directory.
+Regression tests retain rejection of real external changes and strict ordinary
+reads. The update used the existing app identity and preserved its data.
+
 ### Incoming files and Inbox
 
 `mobile/incoming_files.py` consumes complete native handoffs into ordinary

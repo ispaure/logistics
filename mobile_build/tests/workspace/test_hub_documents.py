@@ -136,6 +136,61 @@ class HubDocumentTests(unittest.TestCase):
             app.loop.run_until_complete(app.recent_opener(recent)())
             self.assertNotIn('identity', unlock.await_args.kwargs)
 
+    def test_recent_hides_deleted_local_reference_but_preserves_history(self):
+        from mobile.workspace import Session
+        app = self.app
+        path = app.private_root / 'Recent.txt'
+        path.write_text('original')
+        source = dict(type='local', path=str(path))
+        app.recent_documents.remember_file(Session('old', 'provider-session', 'old', 'text',
+                                                 title=path.name, transient=True), source)
+        history = list(app.recent_documents.items)
+        self.assertTrue(any(session.provider == 'file-reference' for session, _ in app.recent_items()))
+        path.unlink()
+        self.assertFalse(any(session.provider == 'file-reference' for session, _ in app.recent_items()))
+        # Missing removable storage must not erase history or create an empty file.
+        self.assertEqual(app.recent_documents.items, history)
+        self.assertFalse(path.exists())
+        path.write_text('returned')
+        self.assertTrue(any(session.provider == 'file-reference' for session, _ in app.recent_items()))
+
+    def test_recent_deletion_after_render_explains_missing_file(self):
+        from mobile.workspace import Session
+        from unittest.mock import AsyncMock, patch
+        app = self.app
+        path = app.private_root / 'Gone.txt'
+        path.write_text('original')
+        app.recent_documents.remember_file(Session('old', 'provider-session', 'old', 'text',
+                                                 title=path.name, transient=True),
+                                           dict(type='local', path=str(path)))
+        recent = next(session for session, _ in app.recent_items() if session.provider == 'file-reference')
+        opener = app.recent_opener(recent)
+        path.unlink()
+        import toga
+        with (patch.object(app.main_window, 'dialog', new_callable=AsyncMock),
+              patch('mobile.hub_ui.toga.InfoDialog', wraps=toga.InfoDialog) as info):
+            app.loop.run_until_complete(opener())
+        self.assertIn('moved or deleted', info.call_args.args[1])
+        self.assertFalse(path.exists())
+        self.assertFalse(any(session.provider == 'file-reference' for session, _ in app.recent_items()))
+
+    def test_recent_library_copy_survives_original_deletion_and_is_labelled(self):
+        from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
+        from commonUtils.runtime.resources.documents import LocalDocuments
+        from mobile.workspace import Session
+        app = self.app
+        fixtures = app.private_root / 'fixtures'
+        fixtures.mkdir()
+        book, _ = make_books(fixtures)
+        store = app.reader_manager().catalog.library_store
+        record = store.import_book(LocalDocuments(), book)
+        session = Session('', 'library', record['id'], record['kind'])
+        app.recent_documents.remember(session)
+        book.unlink()
+        recent, summary = next(item for item in app.recent_items() if item[0].resource == record['id'])
+        self.assertIn('Saved copy on device', labels(app.recent_row(recent, summary)))
+        self.assertEqual(store.read_record(record['id'])[0]['name'], record['name'])
+
     def test_recent_cloud_open_shows_activity_until_finished_and_cleans_up_on_failure(self):
         import asyncio
         import toga
@@ -196,11 +251,10 @@ class HubDocumentTests(unittest.TestCase):
         first = app.current.id
         app.editor.value = 'Retain my draft'
         app.show_home()
-        app.new_hub_document()
-        form = app.body.children[0].content
-        form.name_input.value = 'My notes'
-        app.loop.run_until_complete(form.create_button.on_press())
-        app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
+        app.loop.run_until_complete(app.new_hub_document())
+        form = app.editor_picker()
+        form.save_as_name.value = 'My notes'
+        app.loop.run_until_complete(form.browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         owner = app.private_sessions.active
         self.assertEqual(owner.crypt_reader.name, 'My notes.txt')
@@ -774,38 +828,35 @@ class HubDocumentTests(unittest.TestCase):
         app = self.app
         previous = app.current
         count = len(app.store.documents()[0])
-        app.new_hub_document()
-        form = app.body.children[0].content
+        app.loop.run_until_complete(app.new_hub_document())
+        form = app.editor_picker()
         for invalid in ('', '../bad'):
-            form.name_input.value = invalid
-            app.loop.run_until_complete(form.create_button.on_press())
+            form.save_as_name.value = invalid
+            app.loop.run_until_complete(form.browser_editor_location(('Local', '')))
+            app.loop.run_until_complete(form.confirm_editor_file())
             self.assertIs(app.current, previous)
-            self.assertTrue(form.error_label.text)
+            self.assertTrue(form.save_as_status.value)
             self.assertEqual(len(app.store.documents()[0]), count)
-        form.cancel_button.on_press()
+        form.cancel_text_destination()
         self.assertIs(app.current, previous)
-        app.new_hub_document()
-        form = app.body.children[0].content
-        form.name_input.value = 'Notes.txt'
-        form.type_selector.value = 'Markdown (.md)'
-        form.type_selector.value = 'Plain text (.txt)'
-        app.loop.run_until_complete(form.create_button.on_press())
-        app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
+        app.loop.run_until_complete(app.new_hub_document())
+        form = app.editor_picker()
+        form.save_as_name.value = 'Notes.txt'
+        form.creation_type.value = 'Markdown (.md)'
+        form.creation_type.value = 'Plain text (.txt)'
+        app.loop.run_until_complete(form.browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Notes.txt')
         self.assertEqual(app.private_sessions.active.crypt_text.value, '')
 
     def test_markdown_choice_and_independent_chat_destination(self):
         app = self.app
-        app.new_hub_document()
-        form = app.body.children[0].content
-        import toga
-        self.assertEqual([widget.placeholder for widget in widgets(form)
-                          if isinstance(widget, toga.TextInput)], ['File name'])
-        form.name_input.value = 'Trip.markdown'
-        form.type_selector.value = 'Markdown (.md)'
-        app.loop.run_until_complete(form.create_button.on_press())
-        app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
+        app.loop.run_until_complete(app.new_hub_document())
+        form = app.editor_picker()
+        self.assertIn(form.creation_type, form.save_as_view.children)
+        form.save_as_name.value = 'Trip.markdown'
+        form.creation_type.value = 'Markdown (.md)'
+        app.loop.run_until_complete(form.browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
         self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Trip.markdown')
         self.assertEqual(app.private_sessions.active.crypt_text.value, '')

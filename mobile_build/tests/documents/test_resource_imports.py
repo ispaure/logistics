@@ -18,6 +18,32 @@ def seed_download(store, name, data):
 
 
 class ResourceImportTests(unittest.TestCase):
+    def test_android_received_files_on_sd_keep_identity_and_reject_siblings(self):
+        from mobile.resource_imports import ResourceImports
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            private, collection = root / 'private', root / 'sd/Logistics/Local'
+            original = private / 'Received Files/sketch.rmdoc'
+            original.parent.mkdir(parents=True)
+            original.write_bytes(b'fixture')
+            ResourceImports(private).remember(original, 'notebook', 'a' * 32)
+            collection.mkdir(parents=True)
+            moved = collection.parent / 'Received Files/sketch.rmdoc'
+            moved.parent.mkdir()
+            original.rename(moved)
+            imports = ResourceImports(private, collection_root=collection)
+            self.assertEqual(imports.find(moved), dict(provider='notebook', resource='a' * 32))
+            imports.remember(moved, 'notebook', 'b' * 32)
+            self.assertEqual(ResourceImports(private, collection_root=collection).find(moved)['resource'], 'b' * 32)
+            self.assertNotIn('sketch.rmdoc', imports.path.read_text())
+            for path in (collection.parent / 'LocalCrypt/secret.rmdoc', root / 'sd/other.rmdoc'):
+                with self.assertRaisesRegex(ValueError, 'Local or private Downloads'):
+                    imports.find(path)
+            linked = moved.parent / 'linked.rmdoc'
+            linked.symlink_to(moved)
+            with self.assertRaisesRegex(ValueError, 'Linked'):
+                imports.find(linked)
+
     def test_ios_inbox_import_identity_is_retained_without_plaintext_names(self):
         from mobile.resource_imports import ResourceImports
         from services.documents.locations import use_shared_local, _shared_local_roots

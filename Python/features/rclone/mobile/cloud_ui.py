@@ -46,7 +46,7 @@ class CloudUI(LocalCryptUI):
 
     def start_cloud_restore(self):
         """Load saved credentials once, independently of the connection screens."""
-        if getattr(self, '_storage_changing', False):
+        if not self.app.feature_enabled('rclone') or getattr(self, '_storage_changing', False):
             return
         self.prepare_cloud()
         task = getattr(self, 'cloud_restore_task', None)
@@ -56,6 +56,8 @@ class CloudUI(LocalCryptUI):
         return task
 
     def show_cloud(self, widget=None, *, present=True, **kwargs):
+        if present and not self.app.require_feature('rclone', destination='files'):
+            return
         if getattr(self, '_storage_changing', False):
             return
         self.prepare_cloud()
@@ -204,6 +206,8 @@ class CloudUI(LocalCryptUI):
             password.focus()
 
     def show_cloud_connections(self, widget=None, **kwargs):
+        if not self.app.require_feature('rclone'):
+            return
         self.show_cloud(present=False)
         self._cloud_connections_opened = True
         self.refresh_retained_credentials()
@@ -214,6 +218,8 @@ class CloudUI(LocalCryptUI):
         await self.choose_cloud_package()
 
     def show_cloud_import(self, widget=None, **kwargs):
+        if not self.app.require_feature('rclone'):
+            return
         self.show_cloud(present=False)
         self.show_view(self.cloud_import_view, destination='settings', route='import-credentials', title='Import credential ZIP')
 
@@ -268,6 +274,8 @@ class CloudUI(LocalCryptUI):
             self.set_cloud_busy(False)
 
     def show_smb_connection(self, widget=None, **kwargs):
+        if not self.app.require_feature('rclone'):
+            return
         return self.smb_connection.show_smb_connection(widget, **kwargs)
 
     def change_smb_guest(self, widget=None, **kwargs):
@@ -373,6 +381,8 @@ class CloudUI(LocalCryptUI):
         return self.credential_workflow.credential_groups(choices, loaded_remotes=loaded_remotes)
 
     def home_unlock_candidates(self):
+        if not self.app.feature_enabled('rclone'):
+            return []
         return self.credential_workflow.home_unlock_candidates()
 
     def show_home_unlock(self, widget=None, **kwargs):
@@ -382,9 +392,13 @@ class CloudUI(LocalCryptUI):
         return self.credential_workflow.retained_credential_associations()
 
     async def require_remote_credentials_async(self, remote, *, identity=None, resume=None):
+        if not self.app.require_feature('rclone'):
+            return False
         return await self.credential_workflow.require_remote_credentials_async(remote, identity=identity, resume=resume)
 
     def require_remote_credentials(self, remote, *, identity=None, resume=None, checked=False):
+        if not self.app.require_feature('rclone'):
+            return False
         return self.credential_workflow.require_remote_credentials(remote, identity=identity, resume=resume, checked=checked)
 
     def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files', choices=None):
@@ -415,6 +429,8 @@ class CloudUI(LocalCryptUI):
         return await self.credential_workflow.import_cloud_package(widget, **kwargs)
 
     async def browse_cloud(self, widget=None, *, preserve_path=False, **kwargs):
+        if not self.app.require_feature('rclone'):
+            return False
         return await self.browser_workflow.browse(self.cloud_client, self.selected_cloud_remote(),
             self.cloud_location.value.strip('/'), preserve_path=preserve_path)
 
@@ -469,6 +485,8 @@ class CloudUI(LocalCryptUI):
         return await self.browse_cloud()
 
     async def open_remote_document(self, row=None, **kwargs):
+        if not self.app.require_feature('rclone'):
+            return False
         if self.cloud_busy:
             await explain_remote_busy(self)
             return False

@@ -50,7 +50,7 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert choices == dict(open=True, brushes=properties['tools'], focus='Close panel'), choices
     await panel.web.evaluate_javascript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
     assert await panel.web.evaluate_javascript("document.getElementById('mobileSheet').hidden")
-    await panel.web.evaluate_javascript("document.getElementById('hideTools').click()")
+    await panel.web.evaluate_javascript("document.querySelector('header button[aria-label=\"Notebook actions\"]').click();document.getElementById('hideTools').click()")
     assert await panel.web.evaluate_javascript("document.body.classList.contains('tools-hidden') && [...document.querySelectorAll('button')].filter(b=>b.getClientRects().length).length===1")
     await panel.web.evaluate_javascript("document.getElementById('restoreTools').click()")
     assert await panel.web.evaluate_javascript("!document.body.classList.contains('tools-hidden')")
@@ -95,7 +95,7 @@ async def exercise_notebooks(app, *, return_to_home=True):
             break
         await asyncio.sleep(.1)
     assert len(panel.editor.notebook.pages) == 2
-    await panel.web.evaluate_javascript("document.getElementById('notebookName').value='Native notebook';document.getElementById('renameNotebook').click();document.getElementById('layerName').value='Details';document.getElementById('addLayer').click()")
+    await panel.web.evaluate_javascript("send({op:'rename',name:'Native notebook'});document.getElementById('layerName').value='Details';document.getElementById('addLayer').click()")
     for _ in range(100):
         if panel.editor.notebook.name == 'Native notebook' and len(panel.editor.notebook.page(1).layers) == 2 and not panel.busy:
             break

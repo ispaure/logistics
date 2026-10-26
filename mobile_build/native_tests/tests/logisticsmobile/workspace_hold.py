@@ -34,7 +34,7 @@ async def hold_workspace(app):
                 app.editor.value = command['text']
                 app.show_documents()
             elif action == 'new_prompt':
-                app.choose_document_type()
+                await app.choose_document_type()
             elif action == 'chat':
                 app.show_chat()
             elif action == 'activate':

@@ -60,6 +60,33 @@ class TransferFeedbackTests(TestCase):
         app.refresh_transfer_status()
         self.assertIs(view.children[0], view.transfer_banner)
 
+    def test_same_visible_progress_does_not_rewrite_banner_or_relayout_source_actions(self):
+        from contextlib import ExitStack
+        app = self.app
+        app.show_home()
+        app.show_transfers(present=False)
+        app.transfer_busy = True
+        app.transfer_percentage = 42
+        app.transfer_progress.value = 42
+        app.refresh_transfer_status()
+        banner = app.home_sections.content.transfer_banner
+        with ExitStack() as stack:
+            writes = [stack.enter_context(patch.object(impl, method)) for impl, method in (
+                (banner.notice._impl, 'set_text'),
+                (banner.dismiss._impl, 'set_enabled'),
+                (banner.progress._impl, 'set_value'),
+                (app.folder_source_actions._impl, 'refresh'),
+            )]
+            for _ in range(5):
+                app.refresh_transfer_status()
+            for write in writes:
+                write.assert_not_called()
+        app.transfer_percentage = 43
+        app.transfer_progress.value = 43
+        app.refresh_transfer_status()
+        self.assertIn('43%', banner.notice.text)
+        self.assertEqual(banner.progress.value, 43)
+
     def test_completion_timeout_clears_notice_but_cannot_dismiss_a_later_transfer(self):
         app = self.app
         scheduled = []

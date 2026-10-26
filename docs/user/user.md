@@ -6,6 +6,7 @@ libraries, servers and remote storage. **Documents** lists open readers/editors;
 together, and disabling a dependency with active dependents is refused.
 
 - [Files, search, storage, panes and Markdown](files-and-documents.md)
+- [Choose storage, save confidently and recover](working-safely.md)
 - [Bulk Rename: preview, apply and recover](../features/bulk_rename/user/user.md)
 - [Configuration: paths, credentials and saved settings](configuration.md)
 

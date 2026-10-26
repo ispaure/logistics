@@ -1,5 +1,6 @@
 """Compose offline notebook assets for desktop and native mobile WebViews."""
 import json
+from commonUtils.ui.native.web_dropdown import DROPDOWN_CSS, DROPDOWN_SCRIPT
 from .assets import asset
 from .bridge import MAX_COMMAND
 from .icons import ICON_SCRIPT
@@ -18,12 +19,19 @@ def editor_html(state, bridge, *, console_bridge=False, desktop=False, mobile=Fa
     elif mobile:
         style += '\n' + asset('mobile.css')
         presentation = ICON_SCRIPT + '\n' + asset('mobile.js')
+    style += '\n' + DROPDOWN_CSS
+    presentation = DROPDOWN_SCRIPT + '\n' + presentation
     setup = """'use strict';
 let state=__STATE__,bridge=__BRIDGE__,seq=0,queue=[],busy=false,mode='ink',
-    active=null,points=[],selected=new Set(),start=null,last=null,pan=null,
+    active=null,points=[],selected=new Set(),start=null,last=null,pan=null,pageSwipe=false,
     pendingInk=null,continuousInk=false,deferredUpdate=null;
-const $=id=>document.getElementById(id),canvas=$('paper'),ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id),canvas=$('paper'),ctx=canvas.getContext('2d',{desynchronized:true});
+const canvasPixelLimit=__CANVAS_PIXEL_LIMIT__;
 """
+    # The page, live preview and mask each own a backing bitmap. CSS zoom must
+    # not multiply all three without bound. Desktop gets a larger screen budget;
+    # neither budget changes native ink geometry or exported document quality.
+    setup = setup.replace('__CANVAS_PIXEL_LIMIT__', str((8 if mobile else 16) * 1024 * 1024))
     engine = setup + '\n'.join(asset(name) for name in (
         'drawing.js', 'queue.js', 'viewport.js', 'input.js', 'boot.js'))
     engine = engine.replace('__MAX_COMMAND__', str(MAX_COMMAND)).replace(

@@ -110,3 +110,11 @@ class SnapshotTests(unittest.TestCase):
         destination = self.directory/'snapshot'
         materialize(self.root, destination)
         self.assertEqual((destination/'source.py/child.py').read_text(), 'new directory content')
+
+    def test_shared_capture_rejects_source_change_before_snapshot_creation(self):
+        captured = identity(self.root)
+        (self.root / 'source.py').write_text('VERSION = 3\n')
+        destination = self.directory / 'changed-after-capture'
+        with self.assertRaisesRegex(ValueError, 'shared planning capture'):
+            materialize(self.root, destination, expected=captured)
+        self.assertFalse(destination.exists())

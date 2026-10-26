@@ -123,6 +123,8 @@ class ManagedDocumentWorkflows:
         self.refresh_document_list()
 
     def open_document(self, key):
+        if not self.require_feature('text_editor'):
+            return False
         self.__dict__.pop('_pending_managed_restore', None)
         opened = False
         previous_view = self.document_view
@@ -190,7 +192,7 @@ class ManagedDocumentWorkflows:
         if not self.checkpoint():
             return
         from .document_choices import choose_document_type
-        choose_document_type(self)
+        return choose_document_type(self)
 
     def create_chosen_document(self, extension, *, name=None, content=''):
         previous = self.current
@@ -212,6 +214,8 @@ class ManagedDocumentWorkflows:
         return False
 
     def new_document(self, widget=None, *, extension='txt', name=None, content='', **kwargs):
+        if not self.require_feature('text_editor'):
+            return False
         if not self.checkpoint():
             return
         try:

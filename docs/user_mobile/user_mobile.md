@@ -59,7 +59,8 @@ the native app; real-device interaction testing is still required.
 
 | Logistics capability | Mobile status |
 | --- | --- |
-| Plain-text editing | Implemented: create, select, rename, edit and save private documents |
+| Plain-text editing | Implemented: create in a chosen writable folder, reopen, edit and save; existing legacy saved documents remain available |
+| reMarkable notebooks | Implemented: create/open `.rmdoc`, draw, manage pages/layers, Save/Save As and export in Local or unlocked LocalCrypt; cloud previews remain read-only |
 | Workspaces and navigation | Native Home, Workspaces, Documents, Chat and Settings destinations; retained screen per destination |
 | Markdown | Text editing and offline preview: tables, headings, nested lists, quotes, emphasis and code |
 | Document import | Native picker adapters implemented; actual provider permissions still need device testing |
@@ -68,7 +69,8 @@ the native app; real-device interaction testing is still required.
 | EPUB and comics | Private library, EPUB chapter navigation and PNG/JPEG/WebP CBZ/ZIP pages, saved progress and bookmarks |
 | Preferences / INI settings | Private INI with font size and last-document restore controls; no desktop preference migration |
 | Export | Export a copy through the platform destination picker |
-| Share or save back to the original document | Not implemented |
+| Receive files from other apps | iOS share extension and Android share target copy attachments into Received Files |
+| Save back to another app's original attachment | Not implemented; folder-backed files opened within Logistics save to their selected file |
 | File browser | Shared native list/tile views, thumbnails and file information for app-managed Local/LocalCrypt files and remote browsing |
 | Bulk rename, IDE and Git/Perforce UI | Not ported |
 | LM chat | Native text conversations, configured server/model, streaming/cancel, private history and Markdown export |

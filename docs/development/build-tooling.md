@@ -7,6 +7,7 @@ to do; application features stay in `Python/`.
 | Work | Owner |
 | --- | --- |
 | Curate the public Python payload and verify its source identity | `mobile_build/tools.py` |
+| Validate collected guest evidence, report outcomes and clean only after collection | `Scripts/guest_results.py`; platform setup/transport stays in the Linux/Windows backends |
 | Build and link the native bridge; compose generated-project adapters | `mobile_build/cloud_build.py` |
 | Configure camera, scenes, privacy manifests and app artwork | `mobile_build/build_support/` |
 | Regenerate canonical navigation and folder artwork | `mobile_build/build_support/generate_navigation_icons.py`, `generate_folder_icons.py` |

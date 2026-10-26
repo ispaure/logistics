@@ -41,6 +41,14 @@ class ReaderBuildTests(unittest.TestCase):
             self.assertEqual(first.count('payload/commonUtils/ui/native/android'), 1)
             self.assertEqual(first.count('payload/features/books/mobile/android'), 1)
             self.assertEqual(first.count('payload/mobile/android'), 1)
+            self.assertEqual(first.count('payload/features/notebooks/mobile/android'), 1)
+            self.assertEqual(first.count('com.onyx.android.sdk:onyxsdk-device:1.3.5.3'), 1)
+            self.assertEqual(first.count('com.onyx.android.sdk:onyxsdk-pen:1.5.8'), 1)
+            self.assertEqual(first.count('configurations.configureEach { exclude group: "com.android.support" }'), 1)
+            self.assertEqual(first.count('pickFirst "lib/*/libc++_shared.so"'), 1)
+            self.assertEqual((root / 'gradle.properties').read_text().count('android.enableJetifier=true'), 1)
+            self.assertEqual(first.count('org.lsposed.hiddenapibypass:hiddenapibypass:4.3'), 1)
+            self.assertEqual(first.count('https://repo.boox.com/repository/maven-public/'), 1)
             menu = root / 'app/src/main/res/drawable/logistics_menu.xml'
             contrast = root / 'app/src/main/res/drawable/logistics_menu_contrast.xml'
             namespace = '{http://schemas.android.com/apk/res/android}'
@@ -65,10 +73,13 @@ class ReaderBuildTests(unittest.TestCase):
             )
             manifest = root / "app/src/main/AndroidManifest.xml"
             manifest.write_text(
-                '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application><activity android:name="Main" /></application></manifest>'
+                '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="@string/formal_name"><activity android:name="Main" /></application></manifest>'
             )
             configure_android_appearance(root)
             configure_android_appearance(root)
+            application = ET.parse(manifest).getroot().find('application')
+            self.assertEqual(application.get('{http://schemas.android.com/tools}replace'), 'android:label')
+            self.assertEqual(application.get('{http://schemas.android.com/apk/res/android}label'), '@string/formal_name')
             actions = ET.parse(manifest).getroot().findall("queries/intent/action")
             self.assertEqual(len(actions), 1)
             self.assertEqual(

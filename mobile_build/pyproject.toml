@@ -29,10 +29,13 @@ build_gradle_dependencies = [
     "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0",
     "androidx.webkit:webkit:1.15.0",
     "com.onyx.android.sdk:onyxsdk-device:1.3.5.3",
+    "com.onyx.android.sdk:onyxsdk-pen:1.5.8",
     "org.lsposed.hiddenapibypass:hiddenapibypass:4.3",
 ]
 build_gradle_extra_content = """
 repositories { maven { url = uri("https://repo.boox.com/repository/maven-public/") } }
+configurations.configureEach { exclude group: "com.android.support" }
+android { packagingOptions { pickFirst "lib/*/libc++_shared.so" } }
 android.sourceSets.main.java.srcDir(new File(rootProject.projectDir, "../../../../payload/mobile/android"))
 chaquopy.defaultConfig.staticProxy("toga_android.widgets.internal.webview")
 android.sourceSets.main.java.srcDir(new File(rootProject.projectDir, "../../../../payload/commonUtils/ui/native/android"))

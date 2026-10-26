@@ -1,6 +1,5 @@
 """Consume an exact manager-reviewed prepared artifact; never rebuild for upload."""
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -8,11 +7,12 @@ import shutil
 import subprocess
 import sys
 from uuid import uuid4
+from commonUtils.runtime.streams import file_sha256
 
 
 def reviewed(path):
     path=Path(path)
-    digest=hashlib.sha256(path.read_bytes()).hexdigest()
+    digest=file_sha256(path)
     rows=json.loads(os.environ.get('BUILD_MANAGER_APPROVED_ARTIFACTS','[]'))
     if not os.environ.get('BUILD_MANAGER_APPROVED_PLAN') or not any(
             row.get('original_path')==str(path.resolve()) and row['sha256']==digest for row in rows):
@@ -39,7 +39,7 @@ def distribute(report,receipt):
     elif provider=='Firebase':
         from mobile_build.deployment.firebase_deploy import ROOT,preflight
         apk=Path(data['apk'])
-        if hashlib.sha256(apk.read_bytes()).hexdigest()!=data['apk_sha256']:raise ValueError('Reviewed APK changed.')
+        if file_sha256(apk)!=data['apk_sha256']:raise ValueError('Reviewed APK changed.')
         local=ROOT/'.tools/firebase';cli=str(local) if local.is_file() else shutil.which('firebase')
         if not cli:raise ValueError('Install Firebase CLI explicitly before distribution.')
         config,group=preflight(cli,allow_login=False)

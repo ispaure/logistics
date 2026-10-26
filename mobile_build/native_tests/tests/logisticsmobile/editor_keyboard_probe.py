@@ -233,6 +233,14 @@ class Probe(LogisticsMobile):
             from commonUtils.runtime.resources.local import LocalFiles
             from features.text_editor.resources import LocalTextCopies
             from types import SimpleNamespace
+            class DraftText:
+                def __init__(self, field):
+                    self.field = field
+
+                @property
+                def text(self):
+                    return self.field.value
+
             local = output / 'local'
             local.mkdir(exist_ok=True)
             cases = [(name, source, False) for name, source in (
@@ -265,24 +273,29 @@ class Probe(LogisticsMobile):
                     if name.startswith('New'):
                         # Exercise the actual creation form while its name
                         # input still owns the software keyboard.
-                        self.choose_document_type()
-                        form = self.routes.body().children[0].content
-                        form.name_input.value = name
-                        form.type_selector.value = ('Markdown (.md)' if name.endswith('.md') else 'Plain text (.txt)')
-                        field = form.name_input._impl.native
+                        await self.choose_document_type()
+                        form = self.editor_picker()
+                        form.save_as_name.value = name
+                        form.creation_type.value = ('Markdown (.md)' if name.endswith('.md') else 'Plain text (.txt)')
+                        await form.browser_editor_location(('Local', ''))
+                        field = form.save_as_name._impl.native
                         field.requestFocus()
                         manager.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
                         await asyncio.sleep(.7)
-                        form.create_button._impl.native.performClick()
-                        assert self.current.name == name
+                        await form.confirm_editor_file()
+                        actual = self.private_sessions.active
+                        assert actual.crypt_reader.name == name
+                        owner = SimpleNamespace(editor=actual.crypt_text, formatted=actual.crypt_formatted,
+                            document=DraftText(actual.crypt_text), toolbar=actual.reader_toolbar,
+                            document_view=actual.crypt_view, footer=actual.crypt_markdown_footer)
                     else:
                         document = self.store.create(name, text.encode())
                         self.refresh_documents()
                         self.open_document(document.id)
                         self.show_documents(edit=True)
-                    owner = self.editor_view
-                    if name.endswith('.md') and source:
-                        owner.edit_mode.value = 'Source'
+                        owner = self.editor_view
+                        if name.endswith('.md') and source:
+                            owner.edit_mode.value = 'Source'
                 if name == 'Large-source.md':
                     large_source = owner
                 await asyncio.sleep(.6)

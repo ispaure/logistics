@@ -88,6 +88,12 @@ Terminal authentication prompts are disabled. HTTPS credentials/query tokens and
 password-bearing URLs are rejected; diagnostics redact common credential forms.
 There is no automatic retry of write operations.
 
+The primary toolbar/menu action pushes immediately for a tracked branch and
+opens the publishing form for an untracked branch. Its label follows that state.
+The split-button menu (also exposed under Repository) owns publishing to another
+destination and preference-gated, confirmed force-with-lease to the upstream.
+Push controls are disabled for detached HEAD and while busy.
+
 Branch push uses an explicit `HEAD:<configured-upstream>` refspec and disables
 automatic tag following, avoiding extra branches from `push.default=matching`.
 Tag publishing is separate unless the user opts into pushing tags with a branch.

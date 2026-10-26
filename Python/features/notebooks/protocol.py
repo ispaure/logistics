@@ -12,7 +12,7 @@ MODEL_COMMANDS = frozenset({
     'add-page', 'duplicate-page', 'delete-page', 'move-page', 'rename', 'undo', 'redo',
 })
 HOST_COMMANDS = frozenset({
-    'save', 'save-as', 'export', 'transfer', 'library', 'show-in-folder', 'delete-file',
+    'save', 'save-as', 'export', 'transfer', 'library', 'show-in-folder', 'delete-file', 'page-previews',
 })
 
 
@@ -25,13 +25,23 @@ def validate_action(action):
         raise ValueError('Unknown notebook command.')
     required = {
         'page': {'index': int}, 'move-page': {'index': int},
+        'page-previews': {'start': int},
         'stroke': {'points': list}, 'add-layer': {'name': str},
         'rename': {'name': str}, 'layer-visible': {'layer': str, 'visible': bool},
-        'erase': {'ids': list}, 'transform': {'ids': list},
+        'erase': ({'points': list, 'radius': int} if 'points' in action else {'ids': list}), 'transform': {'ids': list},
     }.get(op, {})
     if any(type(action.get(key)) is not kind for key, kind in required.items()):
         raise ValueError('Invalid ' + op + ' command fields.')
-    if op in {'erase', 'transform'}:
+    if op == 'erase' and 'points' in action:
+        from .eraser import SIZES
+        path = action['points']
+        if (action['radius'] not in SIZES.values() or action.get('kind', 'partial') not in ('partial', 'whole')
+                or not 1 <= len(path) <= 100_000
+                or any(not isinstance(p, list) or len(p) != 3
+                       or any(type(v) not in (int, float) or not math.isfinite(v) for v in p)
+                       or not 0 <= p[0] <= 1404 or not 0 <= p[1] <= 1872 or not 0 <= p[2] <= 1 for p in path)):
+            raise ValueError('Invalid eraser path or size.')
+    elif op in {'erase', 'transform'}:
         ids = action['ids']
         if len(ids) > 100_000 or any(not isinstance(value, str) for value in ids):
             raise ValueError('Invalid stroke selection.')

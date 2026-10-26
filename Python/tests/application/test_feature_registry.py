@@ -19,6 +19,18 @@ def feature(name, dependencies=(), optional_dependencies=(), **hooks):
 
 
 class FeatureRegistryTests(unittest.TestCase):
+    def test_mobile_switches_match_desktop_labels_and_groups(self):
+        from importlib import import_module
+        from features.feature_runtime import FeatureRegistry
+        from services.mobile_features import FEATURES, BY_NAME
+        modules = [import_module('features.' + name) for name in BY_NAME]
+        isolated = FeatureRegistry(feature_loader=lambda: modules)
+        desktop = {state.name: state for state in isolated.get_feature_states()}
+        for mobile in FEATURES:
+            with self.subTest(feature=mobile.name):
+                self.assertEqual(mobile.label, desktop[mobile.name].label)
+                self.assertEqual(set(mobile.names), set(desktop[mobile.name].members))
+
     def setUp(self):
         disabled = patch.object(registry, '_disabled_features', set())
         initialized = patch.object(registry, '_initialized_features', set())

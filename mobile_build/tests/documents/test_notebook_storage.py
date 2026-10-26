@@ -45,10 +45,9 @@ class NotebookStorageTests(unittest.TestCase):
 
     def create(self, *, private=True):
         with patch.object(self.app, 'existing_crypt_locations', return_value={'LocalCrypt: Secret': self.provider}):
-            self.app.choose_document_type()
-            form = self.app.body.children[0].content
-            form.name_input.value, form.type_selector.value = 'Private sketch', 'Notebook (.rmdoc)'
-            self.run_async(form.create_button.on_press())
+            self.run_async(self.app.choose_document_type())
+            picker = self.app.editor_picker()
+            picker.save_as_name.value, picker.creation_type.value = 'Private sketch', 'Notebook (.rmdoc)'
         picker = self.app.editor_picker()
         picker.save_as_storage.value = 'LocalCrypt: Secret' if private else 'Local'
         self.run_async(picker.refresh_editor_browser())
@@ -60,6 +59,34 @@ class NotebookStorageTests(unittest.TestCase):
 
     def stroke(self, panel):
         panel.editor.apply(dict(op='stroke', points=[[20,30,.4],[40,50,.8]], tool=12, width=2))
+
+    def test_delete_uses_resource_and_recovery_owners_for_local_and_private(self):
+        for private in (False, True):
+            with self.subTest(private=private):
+                panel = self.create(private=private)
+                document = panel.document
+                resource, recovery, key = document.resource, document.recovery, document.key
+                physical = resource.provider._physical(resource.path)
+                with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='delete')):
+                    self.run_async(panel.delete_document())
+                self.assertFalse(physical.exists())
+                if recovery is not None:
+                    self.assertFalse((recovery.root / key).exists())
+
+    def test_delete_cancel_and_changed_source_preserve_notebook_draft(self):
+        panel = self.create()
+        self.stroke(panel)
+        resource = panel.document.resource
+        with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='cancel')):
+            self.run_async(panel.delete_document())
+        self.assertTrue(panel.document.dirty)
+        DocumentResource.publish(self.provider, resource.path, Notebook.new('External').to_bytes(),
+            max_bytes=MAX_ARCHIVE, expected_revision=resource.revision)
+        with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='delete')):
+            with self.assertRaisesRegex(ValueError, 'changed'):
+                self.run_async(panel.delete_document())
+        self.assertTrue(panel.document.dirty)
+        self.assertEqual(len(panel.editor.notebook.page(0).strokes), 1)
 
     def test_private_creation_save_reopen_and_plaintext_persistence_exclusion(self):
         panel = self.create()

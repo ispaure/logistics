@@ -5,18 +5,34 @@ from threading import Event, Lock
 from typing import Protocol
 
 
-def coalesced_progress(loop, publish):
-    """Keep only the newest worker snapshot while native UI rendering is busy."""
+def coalesced_progress(loop, publish, *, interval=1.0):
+    """Keep the latest snapshot and leave UI time between native renders."""
     lock = Lock()
     latest, scheduled = None, False
+    next_render = 0
+
+    def schedule():
+        delay = next_render - loop.time()
+        if delay > 0:
+            loop.call_later(delay, drain)
+        else:
+            drain()
 
     def drain():
-        nonlocal latest, scheduled
+        nonlocal latest, scheduled, next_render
         with lock:
-            values, latest, scheduled = latest, None, False
-        # Rendering can be slow. Do not hold the worker lock across native UI;
-        # arrivals during this call can schedule at most one successor.
-        publish(values)
+            values, latest = latest, None
+        # Keep admission while rendering, without holding the worker lock. A
+        # slow render must not queue an immediate successor and starve input.
+        try:
+            publish(values)
+        finally:
+            next_render = loop.time() + interval
+            with lock:
+                pending = latest is not None
+                scheduled = pending
+            if pending:
+                loop.call_later(interval, drain)
 
     def progress(**values):
         nonlocal latest, scheduled
@@ -25,7 +41,7 @@ def coalesced_progress(loop, publish):
             if scheduled:
                 return
             scheduled = True
-        loop.call_soon_threadsafe(drain)
+        loop.call_soon_threadsafe(schedule)
 
     return progress
 

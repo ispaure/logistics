@@ -14,25 +14,34 @@ documents** lists other saved text and Markdown files. **Search documents**
 filters all three sections by filename. **Open Books & Comics library** is available
 below those lists. Empty lists show plain informational text without a rounded block.
 
-To create a document, enter its name and choose Plain text, Markdown or Notebook, then tap
-**Choose location…**. Select a folder in **Local**, **All files**, **Received Files**
-or an unlocked **LocalCrypt** location, then tap **Create document**. The file is
+New document shows the name, file type and destination together on one screen on
+iOS and Android. Enter a name, choose Plain text, Markdown or Notebook, and select
+a folder in **Local**, **All files**, **Received Files** or an unlocked **LocalCrypt**
+location. Changing the file type updates a matching document extension; a name
+without an extension receives the selected one. Tap **Create document** to create
+and open the file. On iOS this is a labeled navigation-bar action. Cancel
+returns directly to the screen where you started. Android system Back first
+closes browser search or goes up a folder, then leaves the form. The file is
 created in that folder and appears when you browse it from All files. **Save**
 writes edits back to the same file. LocalCrypt files stay encrypted on disk;
 cloud locations are read-only and receive changes through reviewed **Push**.
 New documents do not use the private saved-document store. Existing saved
 documents remain available in Documents.
 
-The location picker starts at **All files**, the same root as Workspaces’
+The folder browser starts at **All files**, the same root as Workspaces’
 **Browse All Files**. Open Local or Received Files to choose a folder; Up returns
-to All files from either collection. Creation errors appear in a scrollable text
-area beneath the destination. Correct the name or location and try again.
+to All files from either collection. On Android this root is a list of locations;
+the form prompts you to choose a folder and keeps **Create document** disabled there. Errors
+appear as messages beneath the destination, with no extra editable field.
+Correct the name or location and try again. Only existing LocalCrypt copies and
+linked pulled folders appear; loading an encrypted remote alone adds no destination.
 For a notebook, choose **Notebook (.rmdoc)** and a Local or unlocked LocalCrypt folder;
 see [Notebooks on mobile](../../features/notebooks/user_mobile/user_mobile.md).
 
 After **Create document** opens your new file, **×** closes it and returns to the
 screen where you opened New document. It does not reopen the completed creation
-form. Unsaved edits still offer Save, Quit without saving and Cancel.
+form. A notebook's **×** returns to the Home overview. Unsaved edits still offer
+Save, Quit without saving and Cancel.
 
 In a book, comic or provider-backed document reader, open the **…** actions menu
 and choose **All documents** to return to the Documents list without closing the

@@ -54,6 +54,8 @@ def paint_surface(impl, radius):
             background, outlined, radius = 'transparent', False, 0
     inset = getattr(impl, '_content_inset',
                     8 if background != 'transparent' and not getattr(impl.interface, 'control_icon', None) else 0)
+    if eink_enabled() and getattr(impl, '_surface_eink_selected', False) and foreground:
+        foreground = 'text'
     style = SurfaceStyle(radius=radius, background=background, foreground=foreground,
         outlined=outlined, border=border, glass=glass, content_inset=inset,
         trailing_inset=getattr(impl, '_content_trailing_inset', inset),
@@ -135,20 +137,37 @@ def described_button(button, description):
     return button
 
 
+def selection_row(row, selected, controls=(), *, eink_outlined=None):
+    """Paint a selection and its child targets as one readable surface.
+
+    Declared child roles keep ordinary theme colors, while high contrast uses
+    the same inverted foreground for every selected title and template icon.
+    """
+    surface(row, radius=8, background='hover' if selected else 'surface',
+            outlined=False, eink_outlined=selected if eink_outlined is None else eink_outlined,
+            eink_selected=selected)
+
+    def descendants(parent):
+        for child in parent.children:
+            roles = getattr(child._impl, '_surface_roles', None)
+            if roles is not None and roles[1]:
+                yield child, roles[1]
+            yield from descendants(child)
+
+    targets = dict(descendants(row))
+    targets.update((control, role) for control, role in controls if control is not None)
+    for control, foreground in targets.items():
+        surface(control, radius=0, background='transparent', foreground=foreground,
+                outlined=False, eink_outlined=False, eink_selected=selected)
+    return row
+
+
 def hierarchy_row_style(row, selected=False):
     """One quiet browser-style row for contents and documentation trees."""
     from .folder_hub_style import folder_row, folder_name
     folder_row(row)
     folder_name(row.title_button)
-    background = 'hover' if selected else 'surface'
-    surface(row, radius=8, background=background, outlined=False, eink_outlined=selected)
-    # All child targets share the row's fill, without looking like separate
-    # commands. Each remains a native accessible button.
-    for control in (row.title_button, row.disclosure):
-        if control is not None:
-            surface(control, radius=0, background='transparent',
-                    foreground='text' if control is row.title_button else 'muted',
-                    outlined=False, eink_outlined=False)
+    selection_row(row, selected, ((row.title_button, 'text'), (row.disclosure, 'muted')))
     row.title_button.style.font_weight = 'bold' if selected else 'normal'
     backend = type(row.title_button._impl).__module__
     if backend.startswith('toga_iOS.'):
@@ -639,6 +658,8 @@ def refresh_android_navigation(host):
 def configure_android_eink(app):
     """Android is a single-activity host; other platforms keep their own themes."""
     if type(app._impl).__module__.startswith('toga_android.'):
+        from java import jclass
+        jclass('io.github.ispaure.logisticsmobile.BooxWindow').configure(app._impl.native)
         from .palette import set_eink_enabled
         enabled = app.preferences.values['android_eink'] == 'true'
         set_eink_enabled(enabled)

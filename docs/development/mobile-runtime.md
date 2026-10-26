@@ -114,6 +114,12 @@ the generated assets. Mobile has no Qt runtime dependency. Material and UIKit
 own selection/theme tinting; iOS retains the artwork in each Toga OptionItem so
 native tab reconstruction preserves it.
 
+On Onyx/Boox devices, `BooxWindow.java` explicitly hides the unpainted status
+strip at startup. The existing activity inset listener still reserves real
+display cutouts and navigation space; keyboard resizing remains enabled. Other
+Android manufacturers retain their normal status-bar policy. Notebook native
+QA verified a zero canvas top inset on the NoteAir5C without a cutout.
+
 Android folder headers use symmetric action gutters around a 17sp title and
 12.75sp storage description. Inline image spans keep the 12dp storage/lock
 indicators centered with the description and preserve middle ellipsis at narrow
@@ -1287,6 +1293,40 @@ first access. `SettingsCategories` constructs application controls;
 `settings.forms` owns shared rows and connection forms, `settings.speech` owns
 voice controls, and `settings.information` builds installed-version/help content.
 The old `settings_ui.py` module is removed; use canonical imports and patch targets.
+
+### Mobile feature selection
+
+`services/mobile_features.py` declares the shipped mobile feature groups and
+maps document kinds/extensions to their owners. Mobile deliberately uses this
+portable catalogue rather than importing desktop registration hooks. The
+device's `Mobile.disabled_features` JSON list defaults to `[]`; absent values
+in existing preferences enable every current feature and future additions inherit
+the enabled baseline. Desktop selection is independent.
+Mobile switch labels and group members match the desktop registry, including
+the combined Books & Comics group. The portable catalogue retains the `comics`
+member ID for admission and existing preferences; either member API updates both
+members atomically. A legacy partial selection shows the group switch off and
+can be restored with one toggle.
+Scene windows reference the primary host's feature preference owner while
+retaining their own typography, navigation and other window preferences.
+
+`mobile/feature_settings.py` owns native switches, persistence, enable screens
+and coordinated window refresh. It refuses to disable groups with open documents
+or active chat/storage work and preserves all stored resources. Host admission
+checks cover library, provider, notebook and managed-text opens; provider names
+are checked again after decoding. Creation choices and related settings follow
+the same catalogue. Cloud infrastructure needed by ordinary local documents
+remains available, while cloud restoration and new remote workflows are gated.
+
+Use `app.set_feature_enabled(name, True, refresh=False)` to opt into a feature
+explicitly in isolated tests before constructing its UI; notebook native checks
+do this for `notebooks`. Normal user changes refresh affected hubs and settings.
+`test_mobile_features.py` covers defaults/upgrades, persistence, creation/open
+admission, draft preservation and native-control error recovery. The owning
+disposable-device runner supports `--probe features` on iOS and Android.
+Settings Help uses its own Markdown wiki viewer regardless of feature selection;
+`test_documentation_ui.py` covers opening, links, search and history with all
+features off. Disabling Text Editor only gates document editing and reading.
 Connection adapters receive the existing `ConnectionPresentation` callbacks from
 composition. Reload discards stale widget references and recreates categories
 lazily; preference keys and storage remain unchanged. Settings navigation/UI,

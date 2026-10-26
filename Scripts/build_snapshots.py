@@ -53,15 +53,17 @@ def identity(root, revision='working-tree'):
                 fingerprint=digest.hexdigest(), selection=revision)
 
 
-def materialize(root, destination, revision='working-tree'):
+def materialize(root, destination, revision='working-tree', *, expected=None):
     destination = Path(destination)
     with workspace_lock(destination.with_suffix('.lock')):
-        return _materialize(root, destination, revision)
+        return _materialize(root, destination, revision, expected=expected)
 
 
-def _materialize(root, destination, revision):
+def _materialize(root, destination, revision, *, expected=None):
     root, destination = Path(root), Path(destination)
     before = identity(root, revision)
+    if expected is not None and any(before[key] != expected.get(key) for key in ('logistics_commit', 'commonUtils_commit', 'dirty', 'fingerprint')):
+        raise ValueError('Source changed after the shared planning capture; prepare a fresh plan.')
     if destination.exists():
         metadata = destination / '.manager-source.json'
         if metadata.is_file():

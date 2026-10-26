@@ -121,6 +121,34 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn(navigation.options['Help'],
                       navigation.detail.children if navigation.wide else self.app.body.children)
 
+    def test_settings_guide_navigation_and_search_work_with_all_features_off(self):
+        from services.mobile_features import BY_NAME
+        import json
+        self.app.preferences.save(disabled_features=json.dumps(sorted(BY_NAME)))
+        with patch.object(self.app, 'require_feature', side_effect=AssertionError('Help must not require an optional feature')):
+            self.app.show_settings()
+            self.app.settings_navigation.choose('Help')
+            box = self.app.settings_navigation.sections['Help']
+            button = next(child for child in widgets(box) if getattr(child, 'text', '') == 'Mobile documentation')
+            button.on_press()
+            owner = self.app.documentation
+            first = owner.path
+            self.assertEqual(owner.title.text, 'Logistics on mobile')
+            owner.follow_link(owner.web, 'settings/settings.md')
+            self.assertEqual(owner.title.text, 'Mobile settings')
+            self.assertNotEqual(owner.path, first)
+            owner.show_page_search()
+            self.assertTrue(owner.reading)
+            owner.search.value = 'Features'
+            owner.mode.value = 'Page text'
+            owner.filter()
+            self.assertTrue(owner.rows.children)
+            self.assertTrue(owner.back())
+            self.assertEqual(owner.path, first)
+            self.assertTrue(self.app.routes.back())
+            self.assertEqual(self.app.settings_navigation.selected, 'Help')
+        self.assertFalse(any(self.app.feature_enabled(name) for name in BY_NAME))
+
     def test_close_and_page_history_are_separate_controls(self):
         from mobile.documentation_ui import show_documentation
         root = Path(self.temporary.name).resolve() / 'docs'

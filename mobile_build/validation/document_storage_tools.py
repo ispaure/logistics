@@ -19,8 +19,8 @@ from build_manager.android_emulators import AndroidEmulator
 REPO = Path(__file__).resolve().parents[2]
 SOURCE = REPO
 BUNDLE = 'io.github.ispaure.logisticsstorageqa'
-QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticscreationqa',
-              'io.github.ispaure.logisticsnotebookqa'}
+QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
+              'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa'}
 
 
 def command(args, output, *, cwd=None, env=None, timeout=1200):
@@ -145,6 +145,10 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             time.sleep(.3)
         raise TimeoutError('iOS focused QA probe timed out')
     finally:
+        if cache is not None and entry_point.endswith('.notebook_apple_memory_probe'):
+            for artifact_name in ('notebook-memory-progress.json', 'notebook-memory.rmdoc', 'notebook-memory.png'):
+                if (cache / artifact_name).exists():
+                    shutil.copyfile(cache / artifact_name, output / artifact_name)
         if cache is not None and (cache / 'notebook-ui').is_dir():
             shutil.copytree(cache / 'notebook-ui', output / 'notebook-ui', dirs_exist_ok=True)
         if cache is not None and (cache / result_name).exists():
@@ -169,7 +173,7 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
 
 def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 entry_point='tests.logisticsmobile.document_storage_probe',
-                result_name='document-storage-result.json'):
+                result_name='document-storage-result.json', device=None):
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
     project = workspace / 'build/logisticsmobile/android/gradle'
@@ -179,16 +183,62 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     copy_payload(payload, project / 'app/src/main/python', entry_point=entry_point)
     gradle = project / 'app/build.gradle'
     gradle.write_text(re.sub(r'applicationId "[^"]+"', 'applicationId "' + bundle + '"', gradle.read_text()))
-    command([project / 'gradlew', '--offline', '--no-daemon', 'assembleDebug'], output / 'android-build.log', cwd=project, env=env)
+    manifest = project / 'app/src/main/AndroidManifest.xml'
+    manifest.write_text(manifest.read_text().replace('io.github.ispaure.logisticsmobile', bundle))
+    if entry_point.endswith(('.notebook_input_probe', '.notebook_memory_probe')):
+        with gradle.open('a') as stream:
+            stream.write('\nandroid.sourceSets.main.java.srcDir(' + json.dumps(str(REPO / 'mobile_build/native_tests/android/notebooks')) + ')\n')
+    raw_ink = entry_point.endswith('.boox_raw_ink_probe')
+    hands_on = entry_point.endswith('.boox_preview_probe')
+    if raw_ink:
+        with gradle.open('a') as stream:
+            stream.write('\nandroid.sourceSets.main.java.srcDir(' + json.dumps(str(REPO / 'mobile_build/native_tests/android/boox_raw')) + ')\n')
+            stream.write('dependencies { implementation("com.onyx.android.sdk:onyxsdk-pen:1.5.8") { exclude group: "com.android.support" } }\n')
+            stream.write('android { packagingOptions { pickFirst "lib/*/libc++_shared.so" } }\n')
+        with (project / 'gradle.properties').open('a') as stream:
+            stream.write('\nandroid.enableJetifier=true\n')
+    command([project / 'gradlew', *([] if raw_ink else ['--offline']), '--no-daemon', 'assembleDebug'], output / 'android-build.log', cwd=project, env=env)
     emulator = AndroidEmulator(options['tools.android_sdk'], workspace / 'emulator', environment=env)
     record = None
     try:
-        record = emulator.start(options['android.image'], options['android.model'])
+        if device is not None:
+            if emulator.invoke('-s', device, 'get-state').strip() != 'device':
+                raise RuntimeError('The selected Android device is unavailable.')
+            record = dict(serial=device)
+        else:
+            record = emulator.start(options['android.image'], options['android.model'])
         serial = record['serial']
         emulator.invoke('-s', serial, 'install', str(project / 'app/build/outputs/apk/debug/app-debug.apk'), timeout=90)
+        if device is not None:
+            # Boox's launcher can auto-freeze a newly installed QA identity.
+            # Only this disposable package is enabled, then removed in finally.
+            time.sleep(2)
+            emulator.invoke('-s', serial, 'shell', 'pm', 'enable', bundle)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
-        deadline = time.monotonic() + 240
+        deadline = time.monotonic() + (2400 if hands_on else 900 if raw_ink else 240)
+        last_stage = None
         while time.monotonic() < deadline:
+            if entry_point.endswith('.notebook_memory_probe'):
+                progress = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                    'cat', 'cache/notebook-memory-progress.json'], env=env, capture_output=True, timeout=15)
+                if progress.returncode == 0 and progress.stdout != last_stage:
+                    last_stage = progress.stdout
+                    (output / 'memory-progress.json').write_bytes(progress.stdout)
+                    try:
+                        print('Memory QA: ' + json.dumps(json.loads(progress.stdout)['samples'][-1]), flush=True)
+                    except (ValueError, KeyError, IndexError):
+                        pass
+            if raw_ink or hands_on:
+                ready = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                    'cat', 'cache/boox-raw-ink/stage.json'], env=env, capture_output=True, timeout=15)
+                try:
+                    ready_stage = json.loads(ready.stdout) if ready.returncode == 0 else None
+                except json.JSONDecodeError:
+                    ready_stage = None
+                if isinstance(ready_stage, dict) and 'stage' in ready_stage and ready.stdout != last_stage:
+                    last_stage = ready.stdout
+                    (output / 'stage.json').write_bytes(ready.stdout)
+                    print('Raw ink QA: ' + ready.stdout.decode().strip(), flush=True)
             value = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                 'cat', 'cache/' + result_name], env=env, capture_output=True, timeout=15)
             if value.returncode == 0:
@@ -222,6 +272,24 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
         raise TimeoutError('Android document storage probe timed out')
     finally:
         if record is not None:
+            if raw_ink or hands_on:
+                for name in ('baseline.png', 'raw-final.png', 'comparison.rmdoc', 'stage.json', 'observations.json'):
+                    artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                        'run-as', bundle, 'cat', 'cache/boox-raw-ink/' + name], env=env, capture_output=True, timeout=15)
+                    if artifact.returncode == 0 and not artifact.stdout.startswith(b'cat: '):
+                        (output / name).write_bytes(artifact.stdout)
+            if entry_point.endswith('.notebook_input_probe'):
+                for name in ('canvas.png', 'dropdown.png', 'overview.png'):
+                    artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                        'run-as', bundle, 'cat', 'cache/notebook-input/' + name], env=env, capture_output=True, timeout=15)
+                    if artifact.returncode == 0:
+                        (output / name).write_bytes(artifact.stdout)
+            if entry_point.endswith('.notebook_memory_probe'):
+                for name in ('notebook-memory-progress.json', 'notebook-memory.rmdoc', 'notebook-memory.png'):
+                    artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                        'run-as', bundle, 'cat', 'cache/' + name], env=env, capture_output=True, timeout=15)
+                    if artifact.returncode == 0:
+                        (output / name).write_bytes(artifact.stdout)
             try:
                 screen = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
                     'screencap', '-p'], env=env, capture_output=True, timeout=15)
@@ -235,6 +303,9 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 (output / 'android-result.json').write_bytes(report_data.stdout)
             (output / 'android-logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', '-t', '2000'))
             emulator.invoke('-s', record['serial'], 'uninstall', bundle)
+            if device is not None:
+                remaining = emulator.invoke('-s', device, 'shell', 'pm', 'list', 'packages', 'logistics')
+                (output / 'remaining-packages.txt').write_text(remaining)
         # The manager's lease validates ownership before removing the AVD.
         emulator.cleanup()
         (output / 'android-cleanup.json').write_text(json.dumps(dict(removed=not emulator.marker.exists())))
@@ -247,10 +318,19 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'notebook', 'creation'), default='storage')
+    parser.add_argument('--probe', choices=('storage', 'recent-deletion', 'notebook', 'creation', 'features', 'notebook-input', 'notebook-memory', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPad'), default='iPhone')
     parser.add_argument('--increase-contrast', action='store_true')
     args = parser.parse_args()
+    if args.device and args.platform != 'android':
+        parser.error('--device requires Android.')
+    if args.probe == 'notebook-input' and args.platform != 'android':
+        parser.error('The notebook-input native probe requires Android.')
+    if args.probe == 'recent-deletion' and args.platform != 'android':
+        parser.error('The recent-deletion native probe requires Android.')
+    if args.probe in ('boox-raw-ink', 'boox-preview') and (args.platform != 'android' or not args.device):
+        parser.error('The raw ink probe requires an explicit physical Android --device.')
     SOURCE = args.source_root.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     options, _ = manager_settings.settings(REPO / 'mobile_build')
@@ -268,16 +348,37 @@ def main():
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
+        if args.probe == 'features':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsfeaturesqa',
+                entry_point='tests.logisticsmobile.features_probe', result_name='features-result.json')
+        if args.probe == 'recent-deletion':
+            creation_profile = dict(entry_point='tests.logisticsmobile.recent_deletion_probe',
+                                    result_name='recent-deletion-result.json')
         if args.platform == 'ios':
             profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                            entry_point='tests.logisticsmobile.notebook_probe',
                            result_name='notebook-result.json') if args.probe == 'notebook' else creation_profile
+            if args.probe == 'notebook-memory':
+                profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                    entry_point='tests.logisticsmobile.notebook_apple_memory_probe', result_name='notebook-memory-result.json')
             run_ios(workspace, payload, args.output, env, family=args.family, increase_contrast=args.increase_contrast, **profile)
         else:
             profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                            entry_point='tests.logisticsmobile.notebook_probe',
                            result_name='notebook-result.json') if args.probe == 'notebook' else creation_profile
-            run_android(workspace, payload, args.output, env, options, **profile)
+            if args.probe == 'notebook-input':
+                profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                    entry_point='tests.logisticsmobile.notebook_input_probe', result_name='notebook-input-result.json')
+            if args.probe == 'notebook-memory':
+                profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                    entry_point='tests.logisticsmobile.notebook_memory_probe', result_name='notebook-memory-result.json')
+            if args.probe == 'boox-raw-ink':
+                profile = dict(bundle='io.github.ispaure.logisticsrawinkqa',
+                    entry_point='tests.logisticsmobile.boox_raw_ink_probe', result_name='boox-raw-ink-result.json')
+            if args.probe == 'boox-preview':
+                profile = dict(bundle='io.github.ispaure.logisticsrawinkqa',
+                    entry_point='tests.logisticsmobile.boox_preview_probe', result_name='boox-preview-result.json')
+            run_android(workspace, payload, args.output, env, options, device=args.device, **profile)
 
 
 if __name__ == '__main__':

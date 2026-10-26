@@ -143,6 +143,8 @@ class AdaptiveWorkspace:
 
     def show_list(self):
         if self.split is not None:
+            if self.in_detail:
+                self.app.routes.clear_view_selection(self.app.routes.roots['documents'])
             self.in_detail = False
             self.split.showColumn(0)
             self.app.body = self.app.routes.roots['documents']
@@ -159,6 +161,7 @@ class AdaptiveWorkspace:
             return
         self.changing = True
         try:
+            removed = self.detail_routes[count:]
             retained = self.detail_routes[:count]
             self.secondary.setViewControllers([item[2].controller for item in retained]
                 or [self.placeholder_container.controller], animated=False)
@@ -166,6 +169,8 @@ class AdaptiveWorkspace:
                 self.app.native_host.adapter.release_pane(container)
             self.detail_routes = retained
             self.app.native_host.state.routes['documents'] = [item[0] for item in retained]
+            if removed and retained:
+                self.app.routes.clear_view_selection(retained[-1][1])
         finally:
             self.changing = False
 
@@ -174,11 +179,14 @@ class AdaptiveWorkspace:
             return
         shown = next((index for index, item in enumerate(self.detail_routes) if item[2].controller == controller), None)
         if shown is not None:
-            if shown < len(self.detail_routes) - 1:
+            returning = shown < len(self.detail_routes) - 1
+            if returning:
                 self.app.mark_navigation()
             for _, _, container in self.detail_routes[shown + 1:]:
                 self.app.native_host.adapter.release_pane(container)
             self.detail_routes = self.detail_routes[:shown + 1]
+            if returning:
+                self.app.routes.clear_view_selection(self.detail_routes[-1][1])
             self.app.native_host.state.routes['documents'] = [item[0] for item in self.detail_routes]
             if self.app.native_host.state.destination == 'documents':
                 self.app.body = self.detail_routes[-1][1]
@@ -192,6 +200,8 @@ class AdaptiveWorkspace:
                 return
             if animated and self.in_detail and self.app.native_host.state.destination == 'documents':
                 self.app.mark_navigation()
+            if animated and self.in_detail:
+                self.app.routes.clear_view_selection(self.app.routes.roots['documents'])
             self.in_detail = False
             self.app.native_host.state.routes['documents'] = []
             if self.app.native_host.state.destination == 'documents':

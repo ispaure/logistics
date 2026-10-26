@@ -15,6 +15,10 @@ const mask = document.createElement('canvas'),
   maskCtx = mask.getContext('2d');
 let draftCount = 0;
 let inkSettings = null;
+let frameBatchedInk = false;
+let draftBounds = null,
+  previewFrame = null,
+  previewCount = 0;
 
 function brushFor(tool) {
   return brushes[aliases[tool] ?? tool] || brushes[17]
@@ -61,7 +65,8 @@ function strokePoint(samples, i, tool, width) {
   if (brush.directional) {
     let before = samples[i ? i - 1 : Math.min(1, samples.length - 1)],
       angle = Math.atan2(y - before[1], x - before[0]);
-    w *= .25 + .75 * Math.abs(Math.sin(angle - Math.PI / 4))
+    let delta = angle - brush.nib_angle;
+    w *= Math.hypot(Math.sin(delta), brush.nib_ratio * Math.cos(delta))
   }
   return [x, y, p, Math.max(.25, Math.round(w * 4) / 4)];
 }
@@ -142,8 +147,41 @@ function ribbon(target, p) {
   target.fill();
 }
 
-function geometry(target, p, family) {
-  if (['fineliner', 'mechanical', 'highlighter'].includes(family) && p.length > 1 && p[0][3] > 0 && p.every(v => v[3] === p[0][3])) {
+function geometry(target, p, family, beforePoint = null) {
+  if (family === 'calligraphy') {
+    // A fixed broad nib. Recover its span from each stored perpendicular width;
+    // imported pressure/width is never applied a second time.
+    let angle = brushes[21].nib_angle, ratio = brushes[21].nib_ratio,
+      ux = Math.cos(angle), uy = Math.sin(angle), vx = -uy, vy = ux;
+    let nib = p.map((point, i) => {
+      let before = i ? p[i - 1] : beforePoint || p[Math.min(1, p.length - 1)],
+        direction = Math.atan2(point[1] - before[1], point[0] - before[0]),
+        radius = point[3] / (2 * Math.hypot(Math.sin(direction - angle), ratio * Math.cos(direction - angle)));
+      return {point, radius}
+    });
+    const edge = (item, nx, ny) => {
+      let du = nx * ux + ny * uy, dv = nx * vx + ny * vy,
+        divisor = Math.hypot(du, ratio * dv) || 1;
+      return [item.point[0] + item.radius * (ux * du + vx * ratio * ratio * dv) / divisor,
+        item.point[1] + item.radius * (uy * du + vy * ratio * ratio * dv) / divisor]
+    };
+    target.beginPath();
+    for (let i = 0; i < nib.length; i++) {
+      let b = nib[i];
+      target.moveTo(b.point[0] + ux * b.radius, b.point[1] + uy * b.radius);
+      target.ellipse(b.point[0], b.point[1], b.radius, b.radius * ratio, angle, 0, Math.PI * 2);
+      if (!i) continue;
+      let a = nib[i - 1], dx = b.point[0] - a.point[0], dy = b.point[1] - a.point[1],
+        length = Math.hypot(dx, dy);
+      if (!length) continue;
+      let nx = -dy / length, ny = dx / length,
+        corners = [edge(a, nx, ny), edge(a, -nx, -ny), edge(b, -nx, -ny), edge(b, nx, ny)];
+      target.moveTo(...corners[0]);
+      for (let point of corners.slice(1)) target.lineTo(...point);
+      target.closePath()
+    }
+    target.fill()
+  } else if (['fineliner', 'mechanical', 'highlighter'].includes(family) && p.length > 1 && p[0][3] > 0 && p.every(v => v[3] === p[0][3])) {
     target.lineWidth = p[0][3];
     target.beginPath();
     target.moveTo(p[0][0], p[0][1]);
@@ -196,7 +234,8 @@ function line(s, target = ctx) {
 function clearDraft() {
   draftCtx.clearRect(0, 0, state.width, state.height);
   maskCtx.clearRect(0, 0, state.width, state.height);
-  draftCount = 0
+  draftCount = 0;
+  draftBounds = null
 }
 
 function sizeDraft() {
@@ -206,6 +245,41 @@ function sizeDraft() {
   draft.style.height = canvas.style.height;
   for (let target of [draftCtx, maskCtx]) target.setTransform(canvas.width / state.width, 0, 0, canvas.height / state.height, 0, 0);
   draftCount = 0;
+  draftBounds = null;
+}
+
+function commitDraft(tool) {
+  if (draftBounds) {
+    let [left, top, right, bottom] = draftBounds,
+      family = brushFor(tool).family;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = family === 'highlighter' ? 'darken' : family === 'shader' ? 'multiply' : 'source-over';
+    // Keep pen-up work bounded to painted pixels, instead of replaying the
+    // complete stroke or compositing an entire transparent page.
+    ctx.drawImage(draft, left, top, right - left, bottom - top, left, top, right - left, bottom - top);
+    ctx.restore();
+  }
+  clearDraft();
+}
+
+function cancelPreview() {
+  if (previewFrame !== null) cancelAnimationFrame(previewFrame);
+  previewFrame = null;
+  previewCount = 0;
+}
+
+function flushPreview() {
+  if (previewFrame !== null) cancelAnimationFrame(previewFrame);
+  previewFrame = null;
+  if (mode === 'ink' && points.length > previewCount) {
+    preview(points.slice(Math.max(0, previewCount - 1)));
+    previewCount = points.length
+  }
+}
+
+function schedulePreview() {
+  if (previewFrame === null) previewFrame = requestAnimationFrame(flushPreview);
 }
 
 function preview(samples) {
@@ -227,8 +301,8 @@ function preview(samples) {
   // Accumulate opaque geometry in a mask. Recolor only the new segment's bounds,
   // applying texture and alpha once. Work per move is independent of stroke length.
   if (draftCount > points.length || (draftCount === 1 && points.length > 1)) clearDraft();
-  let pending = [];
-  for (let i = Math.max(0, draftCount - 1); i < points.length; i++) pending.push(strokePoint(points, i, tool, width));
+  let pending = [], first = Math.max(0, draftCount - 1), beforePoint = first ? points[first - 1] : null;
+  for (let i = first; i < points.length; i++) pending.push(strokePoint(points, i, tool, width));
   if (!pending.length) return;
   let family = brush.family,
     {
@@ -241,7 +315,7 @@ function preview(samples) {
   maskCtx.lineCap = family === 'highlighter' ? 'butt' : 'round';
   maskCtx.lineJoin = 'round';
   if (family === 'paintbrush') maskCtx.filter = 'blur(.4px)';
-  geometry(maskCtx, pending, family);
+  geometry(maskCtx, pending, family, beforePoint);
   if (family === 'highlighter' && draftCount >= 2) {
     let p = pending[0];
     maskCtx.beginPath();
@@ -250,7 +324,10 @@ function preview(samples) {
   }
   maskCtx.restore();
   draftCount = points.length;
-  let bounds = pending.reduce((b, p) => [Math.min(b[0], p[0] - p[3] / 2 - 4), Math.min(b[1], p[1] - p[3] / 2 - 4), Math.max(b[2], p[0] + p[3] / 2 + 4), Math.max(b[3], p[1] + p[3] / 2 + 4)], [Infinity, Infinity, -Infinity, -Infinity]);
+  let bounds = pending.reduce((b, p) => {
+    let radius = family === 'calligraphy' ? p[3] / (2 * brush.nib_ratio) : p[3] / 2;
+    return [Math.min(b[0], p[0] - radius - 4), Math.min(b[1], p[1] - radius - 4), Math.max(b[2], p[0] + radius + 4), Math.max(b[3], p[1] + radius + 4)]
+  }, [Infinity, Infinity, -Infinity, -Infinity]);
   let sx = canvas.width / state.width,
     sy = canvas.height / state.height;
   let left = Math.max(0, Math.floor(bounds[0] * sx)),
@@ -258,6 +335,7 @@ function preview(samples) {
     right = Math.min(canvas.width, Math.ceil(bounds[2] * sx)),
     bottom = Math.min(canvas.height, Math.ceil(bounds[3] * sy));
   if (right <= left || bottom <= top) return;
+  draftBounds = draftBounds ? [Math.min(left, draftBounds[0]), Math.min(top, draftBounds[1]), Math.max(right, draftBounds[2]), Math.max(bottom, draftBounds[3])] : [left, top, right, bottom];
   draftCtx.save();
   draftCtx.setTransform(1, 0, 0, 1, 0, 0);
   draftCtx.beginPath();

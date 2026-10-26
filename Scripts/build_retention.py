@@ -5,14 +5,41 @@ Run without --apply to preview expired outputs. A .keep file pins an artifact.
 import argparse
 from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 import tempfile
 
-from build_manager.retention import lease, prune, remove_tree
+from build_manager.locking import workspace_lock
+from build_manager.retention import lease, linked, prune, remove_tree
 
 ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_MARKER = '.manager-build-output'
+RESERVED_OUTPUTS = {'firebase', 'testflight', 'mobile_app', 'logisticsmobile',
+                    'physical-device', 'cloud-host', 'go-cache'}
+
+
+def enroll_output(name, root=ROOT):
+    """Explicitly enroll a reviewed, disposable legacy build; never infer ownership."""
+    if (not name or name in {'.', '..'} or name.startswith('.')
+            or '/' in name or '\\' in name or name in RESERVED_OUTPUTS):
+        raise ValueError('Select a named disposable build, not a provider or persistent build root.')
+    parent = Path(root).absolute() / 'mobile_build/build'
+    path = parent / name
+    if any(linked(part) for part in (path, *path.parents)):
+        raise ValueError('Build output enrollment refuses linked paths.')
+    if not path.is_dir():
+        raise ValueError('Build output must already exist under mobile_build/build.')
+    with workspace_lock(parent / '.retention.lock'):
+        with workspace_lock(parent / ('.' + name + '.retention.lock')):
+            marker = path / OUTPUT_MARKER
+            if marker.is_symlink():
+                raise ValueError('Build output marker must not be a link.')
+            # Enrollment starts a fresh review window; it never deletes on its own.
+            marker.write_text('Reviewed disposable build output; evidence saved separately.\n')
+            os.utime(path, None)
+    return path
 
 
 def clean(root=ROOT, *, apply=False, snapshots=True):
@@ -21,6 +48,7 @@ def clean(root=ROOT, *, apply=False, snapshots=True):
     removed = []
     for provider in ('testflight', 'firebase'):
         removed += prune(mobile / 'build' / provider, eligible=lambda p: p.name.isdigit(), order_key=lambda p: int(p.name), apply=apply)
+    removed += prune(mobile / 'build', eligible=reviewed_output, age_days=7, apply=apply)
     if snapshots:
         removed += prune(mobile / '.tools/build-manager/snapshots',
                          eligible=lambda p: bool(re.fullmatch('[0-9a-f]{64}', p.name)) and (p / '.manager-source.json').is_file(),
@@ -59,9 +87,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--apply', action='store_true', help='Delete expired owned outputs')
+    parser.add_argument('--enroll-output', action='append', default=[], metavar='NAME',
+                        help='Enroll a reviewed disposable build folder; save useful evidence first. Does not prune.')
     parser.add_argument('--scratch', nargs=argparse.REMAINDER,
                         help='Run a command in a disposable cwd; {workspace} arguments expand to its path')
     args = parser.parse_args()
+    if args.enroll_output:
+        if args.apply or args.scratch:
+            parser.error('Enroll outputs separately from pruning or scratch execution.')
+        try:
+            enrolled = [str(enroll_output(name, args.root)) for name in args.enroll_output]
+        except (OSError, ValueError, RuntimeError) as error:
+            parser.error(str(error))
+        print(json.dumps(dict(enrolled=enrolled), indent=2))
+        return 0
     if args.scratch:
         with scratch(args.root) as path:
             command = [value.replace('{workspace}', str(path)) for value in args.scratch]
@@ -70,13 +109,19 @@ def main():
     return 0
 
 
+def reviewed_output(path):
+    marker = path / OUTPUT_MARKER
+    return path.name not in RESERVED_OUTPUTS and not linked(marker) and marker.is_file()
+
+
 def storage_groups(root=ROOT):
-    """Manual cleanup owns the same provider, snapshot and scratch trees as retention."""
+    """Manual cleanup owns the same declared generated trees as retention."""
     root = Path(root)
     mobile = root / 'mobile_build'
     return {
         'iOS / TestFlight': dict(root=mobile / 'build/testflight', eligible=lambda p: p.name.isdigit()),
         'Android / Firebase': dict(root=mobile / 'build/firebase', eligible=lambda p: p.name.isdigit()),
+        'Reviewed build outputs': dict(root=mobile / 'build', eligible=reviewed_output),
         'Source snapshots': dict(root=mobile / '.tools/build-manager/snapshots',
             eligible=lambda p: bool(re.fullmatch('[0-9a-f]{64}', p.name)) and (p / '.manager-source.json').is_file(),
             lock_path=lambda p: p.with_suffix('.lock')),

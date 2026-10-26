@@ -67,7 +67,7 @@ class Repository:
         for index, page in enumerate(notebook.pages):
             ink = notebook.page(index)
             raw = ink.to_bytes()
-            decoded = InkPage.read(raw)
+            decoded = ink if raw is ink.raw else InkPage.read(raw, previous=ink)
             if decoded.warning and not ink.warning:
                 raise ValueError('This edit exceeds the supported ink scene: ' + decoded.warning)
             digest = sha256(raw).hexdigest()

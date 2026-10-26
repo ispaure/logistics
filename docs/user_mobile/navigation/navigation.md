@@ -20,7 +20,7 @@ playback and message composition remain with the content they affect.
 
 ## Opening documents
 
-Opening text, Markdown, PDF, EPUB or comic documents keeps the current tab selected
+Opening text, Markdown, notebook, PDF, EPUB or comic documents keeps the current tab selected
 on iOS and Android. Home opens a document above Home; Workspaces opens it above
 the current folder. Back returns through document detail screens to that retained
 origin, preserving its folder, search, selection and scroll state. Open sessions
@@ -28,6 +28,13 @@ and unsaved drafts remain available in Documents. Choosing **All documents**
 explicitly switches to the Documents list.
 
 ## Android Back
+
+In Workspaces, **Local** has **Rclone** and **Others** tabs. Rclone shows
+downloaded Local and LocalCrypt copies associated with remotes. Others shows
+ordinary folders, Received Files and **Browse All Files**. Ordinary names remain
+intact rather than being split into groups at hyphens. These tabs change the
+view, without moving any files. A notebook's **× (Close document)** closes its
+session with the usual unsaved-edit choices and returns to the Home overview.
 
 The Android Back button and back gesture dismiss the current temporary surface
 before leaving its screen. This includes a compact file/conversation drawer,
@@ -52,8 +59,11 @@ retain the edits. Secondary document panels keep their usual Back step.
 
 Each bottom tab or rail destination retains its own place. Back follows the
 current destination's screens. Opening a file from Workspaces keeps that tab selected; after leaving the file,
-Back returns to the same folder. Ordinary
-tab taps preserve each tab's place without creating these action return steps.
+Back returns to the same folder. Switching to another tab preserves that tab's
+place without creating these
+action return steps. Tapping the already selected tab returns to its main page
+without a close confirmation; open document and chat sessions remain available.
+Starting a Push or Pull removes its review page from Back history.
 At a destination's root, Back returns to **Home**. From Home's root,
 Android handles leaving the app. Switching tabs does not create a trail of tab
 selections to undo. Wide companion sidebars stay in place while Back leaves the

@@ -2,6 +2,11 @@
 
 The remaining physical procedure is [notebook hardware acceptance](hardware-acceptance.md).
 
+Desktop save/export progress uses commonUtils' shared compact `OperationProgress`
+footer below the canvas. The canvas takes the workspace stretch; progress stays
+in one row with the status message, meter and Cancel control. Notebook library
+messages use the shared `StatusLine` at the bottom of the listing.
+
 ## Brief elaboration and scope
 
 The four RMDOC briefs originally proposed one-way Android/Boox native-ink export.
@@ -125,6 +130,13 @@ physical mobile stylus behavior and older-firmware import remain acceptance gate
 
 ## Editing and recovery
 
+Deletion is composed through `NotebookDocument.delete`: revision-checked source
+removal belongs to `services.documents.storage.DocumentResource.delete`, and
+ordinary draft removal belongs to `recovery.Repository.delete`. The mobile panel
+keeps confirmation, window guards and session retirement, without raw file I/O.
+Private notebooks have no ordinary recovery repository. Host regressions cover
+cancel, changed sources and ordinary/private deletion.
+
 Desktop **New** opens a `NotebookDocument` without a storage resource or recovery
 repository. Edits mark this in-memory draft dirty; the first explicit Save
 chooses its destination. Cancelling Save retains the draft, and closing a dirty
@@ -174,17 +186,77 @@ and errors still return full state; in-progress pointer gestures defer received
 acknowledgements until release/cancellation. Save and history commands follow
 pending ink in the same ordered queue.
 
+Pointer samples and pressure are captured immediately. Desktop preview painting
+is batched to animation frames; mobile paints delivered pen batches immediately.
+Pen-up flushes the remaining samples before queuing
+the command; cancellation retires the scheduled paint. Masked brushes commit only
+their painted rectangle with the brush's blend mode, avoiding a second vector
+replay or a full-page bitmap copy. Resizing still reconstructs ink from the model.
+
 `Python/tests/notebooks/notebook_desktop_stress_probe.py` exercises nine brushes,
 rapid native mouse input with delayed acknowledgements, repeated undo/redo,
 actual file publication and failed-save recovery, cancelled save/close,
 Save As retargeting, multi-page reopening, zoom redraws and a 40,000-point page.
 Its large-page check verifies that ink does not invoke full-scene drawing and
 that an acknowledgement received mid-gesture is deferred without losing ink.
+Three paced 200-move gestures must stay below an 80 ms browser frame-gap guard.
+The large page additionally exercises undo/redo, zoom, Save As, continued editing
+and a second verified Save. Pixel checks compare live and committed brushes over
+colored ink, and input-burst checks retain every pressure sample while batching
+painting. The synchronous probe drains retired WebViews before measuring a new
+renderer, and pixel fixtures allocate only their ink bounds at high DPI.
 Run with the desktop runtime and `PYTHONPATH=Python:.`, passing
 `--output test-results/notebook-desktop-stress`. Documents and storage fixtures
 use manager scratch; retained reports include exact source hashes and observed
-frame timings. These timings describe this host, not physical stylus latency
-or Windows/Linux native acceptance.
+frame timings. Timings describe the tested runtime rather than physical stylus
+latency. The probe waits for the native input widget and canvas presentation
+after reopening, then observes delivery of each pointer release before checking
+bridge idleness; Windows can process a JavaScript query ahead of native input.
+
+For the existing Build Deployment Manager guests, the Logistics Windows/Linux
+backend commands accept `--native-notebooks` alongside a focused `--pattern`.
+After desktop dependency preparation, this runs `notebook_platform_probe.py`:
+the drawing/save stress probe, menu/zoom probe and brush pixel probe, using the
+Windows Qt backend or Linux X11 backend. Linux without a desktop session uses
+an owned `xvfb-run` display rather than Qt's offscreen plugin. Reports are collected
+with the manager's guest evidence before its temporary workspace is removed.
+Check that guests are idle before reserving them. Virtual mouse/frame timings
+do not establish physical pen latency or coverage of other guest architectures.
+Windows defaults to the normal app graphics configuration; it does not force
+software Chromium rendering. The standalone driver accepts `--rendering software`
+for a complete software backend or `--rendering chromium-software` for the previous
+Chromium-only software configuration. These are explicit graphics diagnostics;
+retain their failures separately from normal-renderer acceptance. Headless Linux
+uses the complete software configuration with X11. The stress report separates an
+unpaced 500-move input flood from the three paced gestures; the frame-gap guard
+applies to paced input rather than a synthetic flood that can block Qt's event loop.
+
+The Windows backend also accepts `--notebook-rendering native|software|chromium-software|warp|all`
+with `--native-notebooks`. Repeat `--notebook-probe` with a check name to focus
+on selected probes; the default still includes the page-two memory check. The
+standalone driver exposes the same selector as `--probe`. `warp` uses Microsoft's CPU Direct3D renderer in both
+Qt and Chromium; it is an explicit diagnostic, not the application's default.
+`all` includes WARP only on Windows. Reports record the actual PySide version,
+canvas context attributes, small-page timing and three paced large-page gestures.
+A failed latency guard is reported after history, zoom and verified saving have
+been exercised, so performance failures do not conceal functional coverage.
+
+Forced software acceptance remains unresolved on the manager's Windows ARM64
+VM with x64 Python/Qt under emulation. Both Qt 6.12 and an isolated 6.11.2
+comparison reproduced long frame gaps; WARP reduced them but did not reliably
+meet the 80 ms guard. Earlier default-renderer runs passed at 33–50 ms; the latest
+visible-console retest reached 83.3 ms and narrowly missed the same guard. The
+foreground check verifies the native Windows foreground PID matches the editor.
+The foreground-verified software run still reached 700 ms, and the final WARP
+run timed out waiting for JavaScript. These runs used the frozen source from the
+preceding memory acceptance; subsequent shared UI changes are outside their scope.
+Experimental canvas
+backing, blend-layer and raster-flush changes were removed because they did not
+resolve the stall. A native Python 3.12.2 ARM64 probe installed the locked wheels
+but could not import `QtWebEngineCore`: native Windows ARM64 WebEngine is absent
+from the official binaries ([Qt Windows support](https://doc.qt.io/qt-6.12/windows.html)).
+These results do not establish behavior on native x64 Windows hardware or prove
+whether Qt, emulation or their graphics interoperation is the ultimate cause.
 
 `bridge.py` validates the per-view origin token and monotonically ordered command
 numbers. The page contains no remote assets. Completed commands are recoverable;
@@ -193,11 +265,12 @@ an interrupted in-progress pointer gesture is not a completed saved stroke.
 ## Mobile editor presentation
 
 `mobile/surface.py` enhances the default offline canvas with a floating top icon
-strip and separate writing-tool, layer, page and notebook sheets. The document
+strip, an anchored notebook dropdown, and separate writing-tool, layer, page
+overview and view/input sheets. The document
 viewport fills the editor; no layout space is reserved for persistent title,
 status or navigation rows. A hide-tools state leaves one restore button and
 preserves drawing settings and scroll position. Routine status lives in the
-notebook sheet; errors also appear in a dismissible alert. It reparents
+notebook dropdown; errors also appear in a dismissible alert. It reparents
 existing controls, preserving the common command handlers and model values.
 Original SVG nibs and glyphs come from `icons.py`, shared with desktop.
 Brush cards, per-tool color swatches and three stroke samples follow the current
@@ -206,8 +279,10 @@ and leave the background inert while open. The floating dock remains compact in
 portrait and landscape; drawing actions have at least 44 × 44 CSS-pixel targets.
 The mobile source manifest includes both presentation and icon modules.
 
-The toolbar stays between the existing corner controls on wide views; below
-420 CSS pixels it occupies a second floating row to avoid overlap. Selected
+The close button, drawing tools and notebook actions share one floating row.
+Spacing contracts down to 320 CSS pixels while retaining 44 × 44 targets.
+Hide tools lives in the notebook actions dropdown; iOS hides the canvas close
+button when the native reader supplies one. Selected
 brushes have a dark fill, contrasting labels and a check mark, and the current
 nib button carries an ink-color indicator. Palette discs use explicit SVG circle
 paint with native button appearance disabled and forced-color adjustment scoped
@@ -220,9 +295,11 @@ expanding the action panel.
 
 The reusable `Python/tests/notebooks/notebook_mobile_ui_probe.py` checks this
 HTML in a native Qt WebEngine window at phone/tablet dimensions, including
-320-pixel portrait and short landscape. It checks actual browser geometry,
+320-pixel portrait, the former 419/420-pixel breakpoint and short landscape.
+It checks a single row with non-overlapping 44-pixel targets, both with a canvas
+close button and with the iOS native-close flag. It checks actual browser geometry,
 brush/color/width selection, panel dismissal/focus, pointer drawing, Undo/Redo,
-page and layer creation, naming and recovery. Run with the project interpreter,
+page and layer creation, thumbnails, insertion after the current page and recovery. Run with the project interpreter,
 `PYTHONPATH=Python:.`, and `--output` under ignored test results. It uses manager
 scratch storage for synthetic notebooks and cleans up its temporary window.
 The October 25 redesign passed the browser probe at six sizes, including a
@@ -290,6 +367,47 @@ pressure, palm behavior and pen-to-pixel latency are still unverified.
 
 ## E Ink drawing refresh
 
+### Android history and mobile page navigation
+
+`NotebookInput.java` requests unbuffered dispatch on native pen contact and
+forwards each MotionEvent history position/pressure and current sample to the
+canvas in order. Native coordinates are mapped using the current WebView size.
+The canvas suppresses duplicate trusted Chromium pen events, while buttons and
+finger input keep ordinary WebView dispatch. Cancellation, lost focus, detachment
+and retirement discard unfinished ink. No device polling-rate setting is changed.
+See Android's [advanced stylus input guidance](https://developer.android.com/develop/ui/views/touch-and-input/stylus-input/advanced-stylus-features).
+
+Mobile paints each delivered sample batch immediately and requests a
+desynchronized 2D context; unsupported browsers may ignore that hint. Desktop
+retains frame batching. The view-scoped Boox DU/quality lifecycle below remains
+in use. This reduces pipeline waits, without claiming optical latency parity
+with native handwriting apps or using the separate vendor raw-drawing pipeline.
+
+Horizontal single-finger swipes turn pages when the page fits the viewport width.
+Zoomed views retain panning; vertical, cancelled, multi-touch and out-of-range
+gestures do not turn pages. The overflow menu is an anchored dropdown. Pages
+Overview requests ink-only SVG previews in batches of 16, each bounded to 256
+strokes and roughly 2048 sampled points. Hidden layers are excluded. Preview
+requests do not edit page state or save; templates/unsupported content are labelled
+as outside the thumbnail scope. Direct page navigation and Add page use the same
+ordered command bridge; Add page inserts at `editor.index + 1`.
+
+The calligraphy profile uses an original fixed 45-degree elliptical nib with
+quarter-unit perpendicular widths shared by preview and the native codec. Its
+slant depends on stroke direction, never hardware tilt. Stored widths are used
+without applying pressure again when rendering imported ink.
+
+The focused `notebook_input_probe` passed on the physical NoteAir5C: 22 injected
+native pen history samples became one stroke, pressure 0.2–0.8 produced widths
+1.25–5.75, and the canvas top matched the zero cutout inset. Synthetic swipe
+guards, four thumbnails, direct page navigation and insertion after the current
+page passed. The temporary QA package was uninstalled, leaving the main app.
+These are software/native event checks, not digitizer or optical measurements.
+Run the owned build/cleanup helper with `--probe notebook-input --device SERIAL`
+for this focused connected-Android check. Browser checks cover six phone/tablet
+sizes and live/saved brush pixel parity. Open-file rename tests cover retaining
+unsaved ink and saving only to the renamed source.
+
 The canvas paints only incoming segments during ink movement, including
 coalesced samples and the event itself when a browser returns an empty coalesced
 list. Pointer-up captures its final position. Completed ink stays visible until
@@ -344,6 +462,145 @@ freeze. Use a distinct FileProvider authority as well as a distinct app ID.
 The test app was removed afterward and only the main Logistics package remained.
 Physical pen-to-visible-pixel latency still requires external camera measurement.
 
+### Boox native handwriting and fallback
+
+`BooxInk.java` uses Onyx `onyxsdk-pen:1.5.8` and
+`TouchHelper.FEATURE_SF_TOUCH_RENDER` to request a direct display preview.
+The official [pen SDK guide](https://github.com/onyx-intl/OnyxAndroidDemo/blob/master/doc/Onyx-Pen-SDK.md)
+describes this separate handwriting path. `NotebookInput` owns the single
+Android listener and attaches the optional bridge only on supported Boox devices.
+Fineliner uses the vendor Pencil style, which the [official demo](https://github.com/onyx-intl/OnyxAndroidDemo/blob/master/app/OnyxPenDemo/src/main/java/com/onyx/android/eink/pen/demo/scribble/ui/ScribbleTouchHelperDemoActivity.java) renders as a
+plain constant-width path. Its nine opaque `PEN_COLORS` use the canonical
+canvas' displayed RGB as opaque ARGB, including grayscale preview. The Java
+boundary independently restricts tool/color IDs and rejects translucent or
+invalid ARGB. Final ink always uses Logistics' brush model.
+
+The earlier Ballpoint Fountain preview was disabled after the physical test showed a thickness change
+at pen-up. On the NoteAir5C, the SDK's Fountain companion raster renderer at a
+nominal width of 40 produced widths 26/40/56/70/80 for pressures
+0.1/0.25/0.5/0.75/1.0; Logistics' Ballpoint profile gives approximately
+15.6/18.9/25.3/32.4/40.0. A single width multiplier cannot match the entire
+pressure curve. This raster diagnostic does not measure the physical raw overlay.
+
+The replacement `BooxBallpoint.java` uses the same plain native Pencil style
+as Fineliner, with pressure-driven width updates. Raw position drawing remains
+under the native driver's control. Raw move callbacks update `TouchHelper`'s
+stroke width only when the canonical quarter-page-unit diameter changes,
+using Ballpoint's existing pressure exponent and converting to screen pixels.
+Each contact starts at the canonical minimum width; subsequent raw samples
+update it. Original pressure samples still enter the existing canvas and save
+queue; no vendor-computed widths replace stored ink. A failed width update leaves
+the current contact's save handoff intact and selects ordinary input for future
+Ballpoint contacts. The SDK's bitmap API is absent from this NoteAir5C firmware;
+its separate direct-point API completed calls but produced no visible ink in
+the physical test, so neither experimental path is used. Pressure-width updates
+passed the synthetic callback/save/reopen checks and the subsequent physical
+blue/red Ballpoint comparison. The tester confirmed live drawing and stable
+thickness after lifting for both colors. Two blue contacts delivered 1,515
+samples and two red contacts delivered 573; both pages saved and reopened with
+identical widths and pressure within the format's 1/255 quantization. This is
+subjective display acceptance, not an optical latency measurement.
+
+Marker, textured pencils, Paintbrush, fixed-angle
+calligraphy, Highlighter and Shader also retain fallback because their
+pressure, texture, nib or blending behavior differs. Erasing and selection use
+ordinary rendering and the existing DU refresh policy.
+
+The bridge disables SDK-generated Android input. Native begin locks the current
+canvas gesture; the completed point list then enters `logisticsNativePen` once
+and follows the existing brush and ordered save queue. Pressure is normalized
+using the device-reported maximum. Raw input pauses during reconciliation;
+the raw preview retires after WebView's visual-state callback, then the current
+configuration resumes. Notebook tools, pressure-derived widths and binary saving
+remain under Logistics' control.
+
+The local notebook WebView exposes only a bounded numeric preview configuration
+interface, with no filesystem access. Mobile chrome publishes canvas/viewport
+clipping, toolbar exclusions and brush/layer/page identity. Menus, read-only
+state, warnings and non-stroke commands disable native preview. Changes to the
+configuration cancel an outstanding native gesture; focus loss, detach and
+close retire it. SDK initialization/configuration failures leave ordinary input
+available. Android history samples are backed up during raw ownership; if a
+completed contact produces no native begin callback, they replay once and the
+native helper closes for that view. This guards firmware which reports an enabled
+reader without delivering hardware samples.
+
+Packaging excludes obsolete Android support dependencies, enables Jetifier and
+selects one shared C++ runtime as in the vendor demo. The source manifest and
+reused-project configuration both include the pen dependency and native bridge.
+
+Run the physical comparison with the mobile interpreter:
+
+```sh
+PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools android \
+  --probe boox-raw-ink --device DEVICE_SERIAL \
+  --output test-results/boox-native-ink/physical
+```
+
+The comparison manager additionally includes the older standalone test-only
+`BooxRawInk.java` bridge. Its baseline disables the production native preview.
+The manager creates a disposable build with this test source. Its isolated package is `io.github.ispaure.logisticsrawinkqa`.
+The on-screen instructions request two physical pressure-varying strokes with
+the current renderer, then two with the native preview. The probe checks raw
+callbacks, duplicate strokes, pressure and save/reopen precision. It saves
+evidence before uninstalling the QA package, including on timeout; it preserves
+the main app and its data. ADB-injected input cannot validate this hardware path.
+
+On October 26, the NoteAir5C/Android 15 build loaded the SDK, discovered the Wacom
+digitizer and reported a maximum pressure of 4095. The first comparison timed
+out waiting for baseline strokes. A subsequent physical trial completed both
+stages: the native path delivered 3,999 samples across two strokes, with pressure
+up to 1.0, no rejected or duplicate strokes, and canonical widths of 1.5–4.0.
+Both strokes saved and reopened with identical coordinates, pressure and widths.
+The user reported that stage 2 was noticeably faster. This is a subjective
+comparison using Ballpoint and an approximate vendor Fountain preview, not an
+optical timing measurement or acceptance of the other brushes. Native-window
+bitmap captures do not establish display latency or raw-overlay appearance.
+The helper closed and the QA package was removed; only the main Logistics
+package remained. A separate nine-brush codec fixture retained tool/color/width
+data and pressure within the native format's 1/255 quantization; it does not
+validate live native previews for all those tools.
+
+The production integration's `notebook-input` device probe checks native enablement
+for Fineliner and Ballpoint, fallback for the other seven brushes, menu clipping, all nine
+palette colors in both normal/grayscale views and missing-callback
+Android replay. It also injects three timed raw Ballpoint contacts (black, blue
+and red) through the production callback and native width setter, comparing each
+canonical width with the Java preview width and the reopened archive. This
+checks the handoff and serialization, not physical digitizer latency. The earlier black-Ballpoint NoteAir5C run also passed pressure history,
+no-duplicate ink, finger paging, page insertion and thumbnails. These checks do
+not measure optical latency. Broader physical brush previews remain gated on
+appearance comparisons; camera-based timing and continued real-pen lifecycle
+checks remain useful acceptance work.
+
+The earlier expanded NoteAir5C SDK matrix passed all 36 color/grayscale configurations,
+both style selections, seven fallback brushes, menu clipping, missing-callback
+replay and retained pressure history with no duplicate strokes. Main build
+202610317 includes this extension and the separate mobile bitmap-memory fix.
+The isolated QA package was removed and main restored with its data preserved.
+These configuration checks do not measure physical hue accuracy or optical
+pen-to-pixel latency.
+
+The host `notebook_mobile_ui_probe.py` injects a configuration-only fake bridge
+before page startup. It verifies 18 Fineliner and 18 Ballpoint color/grayscale configurations
+and seven other brush fallbacks in a real browser, alongside its mobile
+layout, pointer, pressure, page and recovery checks. This validates configuration
+production and saved-model independence, not the physical screen's hue or nib
+appearance; the Android companion probe exercises the actual SDK setters.
+
+For a physical appearance/save check, run the same Android driver with
+`--probe boox-preview --device DEVICE_SERIAL`. It opens a synthetic two-page
+notebook: blue Ballpoint and red Ballpoint. Every page asks for
+two curves, saves and reads back coordinates/pressure/widths, then replaces the
+live model from the saved archive in the existing WebView. The test explicitly
+adopts the observed recovery revision before further edits; the stale-writer
+guard remains enabled. The tester inspects the reopened
+ink and advances with Next / Finish. All pages are pre-created and their
+transitions preflighted. The driver retains observations and the synthetic
+archive before removing its isolated package; main-app documents are untouched.
+Short strokes during native-frame reconciliation may use ordinary input, so
+raw callback counts alone do not establish duplicate strokes.
+
 ## Mobile persistence and export
 
 Mobile uses existing native pick/export adapters. Imports copy selected bytes
@@ -370,6 +627,10 @@ Run the focused suites using `dev.py test desktop test_notebooks.py`,
 The reusable native desktop probe is
 `Python/tests/notebooks/notebook_canvas_probe.py`; it checks real mouse input,
 Undo/Redo, page creation, recovery and export in manager-owned scratch storage.
+It also checks square ink swatches inline at desktop width, narrow-window wrapping,
+the desktop Pages Overview thumbnail response and selection, and insertion after
+the current page. Desktop and mobile overviews share bounded `page_previews`
+responses; previews do not change notebook bytes or page order.
 Use the build manager's native Android/iOS plans; preserve its disposable-device
 cleanup and retain evidence only under ignored test results.
 `Scripts/mobile_payload.py` refreshes generated payloads with scratch rollback
@@ -585,3 +846,148 @@ and actual reMarkable import/select/move/erase/re-export on the recorded model
 and firmware. Physical Apple Pencil behavior also remains unverified. Use the
 [hardware procedure](hardware-acceptance.md); generated archives and independent
 readback cannot satisfy those gates.
+
+## Partial and whole-stroke erasing
+
+The shared pointer engine defaults to partial erasing with Small/Medium/Large
+radii of 8/16/32 page units. Pressing Erase opens a shared accessible settings
+dialog on desktop and a nonmodal floating panel on mobile; type and size remain
+local to that canvas. The mobile brush picker also floats below its toolbar
+button. Outside pointer-down dismisses either panel without consuming the event;
+the direct Android pen entry follows the same dismissal path. Tapping the opener
+again closes its panel, and opening another panel replaces it.
+`eraser.py` clips polylines against the swept circular path, including gaps
+between delivered pointer samples. Cut boundaries interpolate pressure and
+width; fragments retain brush, color, RGBA, thickness and layer. Hidden layers
+are excluded. Whole-stroke mode uses the same swept hit geometry. Commands
+checkpoint once per gesture and participate in ordinary undo/redo. The legacy
+ID-based erase command remains available for existing callers.
+
+Partial-eraser movement paints only the new segment batch into the page canvas;
+it does not replay the whole page or the accumulated eraser path per movement.
+The completed mask stays visible until the host acknowledges the edit, avoiding
+old ink flashing back at pen-up. Cancellation and failed commands reconstruct
+the durable scene. The shared input probe checks bounded preview batches, no
+full-page clears during movement and mask persistence through pen-up.
+
+For longer gestures, the commit algorithm indexes eraser sweep bounds in page
+cells, then applies the unchanged exact capsule/variable-width intersection only
+to nearby candidates. Long sweeps use a bounded fallback list; short gestures
+keep the simpler full scan. Whole-stroke mode stops at its first confirmed hit.
+`test_eraser_index.py` compares indexed and full-scan geometry for dense paths,
+long sweeps, dots, hidden ink and both erase modes. A host fixture with roughly
+14,000 ink segments and 499 eraser segments improved from 13.25 s to 0.15 s;
+this is a software benchmark, not physical Boox display latency.
+
+Native export places new fragments between their original scene neighbors,
+preserving stacking order when an imported stroke is split. The model tests
+cover sparse crossings, size differences, dots, hidden layers, repeated cuts,
+round-trip order/style, recovery and failed-checkpoint rollback. The shared
+brush WebEngine probe checks settings and pointer command fields in both
+presentations. Physical stylus acceptance remains separate.
+
+
+## Canvas memory bounds
+
+The shared viewport reuses the page, draft and mask bitmaps when their backing
+dimensions stay the same. Assigning canvas width/height, even to their existing
+values, discards storage; ordinary page changes now redraw without reallocating
+all three surfaces. A real resize resets their transforms and redraws stored ink.
+
+The mobile composer supplies an 8-megapixel budget per bitmap. CSS dimensions
+still follow zoom, but backing scale stops growing at that budget. This bounds
+the three RGBA stores to approximately 96 MiB before compositor/driver copies;
+it is not a limit on total app memory. Page coordinates, pressure and exported
+geometry are unchanged. Desktop uses a 16-megapixel budget per bitmap
+(approximately 192 MiB for the three RGBA stores, before compositor copies).
+The budgets preserve normal full-page resolution; very high magnification can
+soften the screen preview without changing saved native ink.
+
+The isolated `notebook_memory_probe.py` exercises timed native Android pen events
+on pages one and two at fit width and 200% zoom, repeated page switches, buffer
+resize-write counts and exported ink readback. Use the owning document-storage
+runner with `--probe notebook-memory --device SERIAL`; it saves incremental
+memory evidence and removes its QA identity afterward. The unbounded renderer
+reproduced foreground low-memory kills on NoteAir5C during the 200% zoom change.
+Keep private document backups and raw device evidence under ignored test results.
+
+The October 26 NoteAir5C fixed run completed 128 synthetic strokes across both
+pages, including timed pen events at fit width and 200% zoom, with all 128
+strokes present after export/readback. Same-size page switches made zero
+backing-dimension writes; the largest bitmap was 2508 × 3344 pixels. Available
+system memory stayed above 1.7 GiB in this run. This is a focused reproduction
+and regression check, not a guarantee against all device-wide memory pressure.
+
+The iOS `notebook_apple_memory_probe.py` and desktop
+`Python/tests/notebooks/notebook_memory_probe.py` exercise all nine brushes and
+three widths on pages one and two through fit, 100%, 150%, 200% and 400% zoom.
+The shared checks compare native-decoded stroke dynamics, colors, widths, layers
+and page order, require source files to stay unchanged until explicit Save, and
+verify saved/exported readback. Native author UUIDs generated during encoding
+are excluded from the ink comparison. Settled page pixels must match after a
+zoom round trip on the same native rendering backend. The existing brush probe
+separately checks live-preview geometry and brush raster behavior.
+
+The October 26 cross-platform memory gate passed on native macOS Qt WebEngine
+(109 synthetic strokes), an iPhone simulator (108), and an iPad simulator (108).
+All three completed page-two writing and zoom through 400%, respected their
+bitmap budgets, and retained source bytes until explicit Save. Native-decoded
+saved ink matched, and settled pixels matched after fit/200% zoom round trips.
+The separate all-brush live rendering probe and model/storage suites passed.
+The iOS runs use real WKWebView with simulated pen events; this gate does not
+certify physical Apple Pencil behavior. All
+manager-owned iOS QA apps and simulators were removed.
+
+The follow-up Fedora 43 aarch64 run passed the same page-two memory probe with
+109 strokes, the 16-megapixel bound, zero same-size page reallocations, identical
+settled zoom-round-trip pixels and exact native-decoded saved ink. The native
+Qt 6.12 X11 backend ran under an owned Xvfb display with software graphics;
+all-brush pixels, desktop drawing/history/saving stress and menus/zoom also passed.
+This does not establish Linux GPU-driver or x86-64 parity. Ubuntu 24.04 model
+regressions passed, but its native UI phase could not run without an existing
+desktop display or Xvfb. Both Linux guest workspaces were removed after evidence
+collection.
+
+The Windows ARM64 guest with x64 Python/Qt 6.12 also passed the focused memory
+probe (109 strokes), all-brush rendering and menus/zoom. Page-two mouse input,
+16-megapixel backing bounds, unchanged source bytes before Save, exact saved ink
+and zero zoom-round-trip raster differences all passed. This is emulated x64
+coverage, not native x64 hardware acceptance. The broader normal-renderer stress
+run exceeded its latency guard and its original 15-second large-file save wait;
+those failures remain separate from the passing focused memory checks. The probe
+now allows 60 seconds for save/export actions and drains pending publication
+before teardown, preventing a failed test from destroying a writer or removing
+its scratch files while they are in use. The drawing latency guard is unchanged.
+The isolated retest with only these QA changes passed all 16 functional stress
+checks, including saving a 1,007-stroke page after continued drawing, and removed
+its guest workspace without a thread failure. Its normal-renderer frame gap
+still reached 300.1 ms against the 80 ms guard, so Windows responsiveness remains
+unresolved despite the passing memory, ink-quality and file-preservation checks.
+
+## Dropdown presentation
+
+The mobile WebView overflow uses commonUtils' `ui.native.web_dropdown` for
+borderless command rows, menu semantics, initial focus and arrow/Home/End/Escape
+navigation. The notebook host owns panel visibility, outside dismissal, focus
+restoration and dispatch. The overflow and writing-tool popovers leave the
+canvas visible and interactive, with no backdrop; an outside pointer dismisses
+them without consuming the event. Mobile supplies touch sizing through CSS variables.
+Logistics' E Ink stylesheet excludes menuitem buttons from its generic control
+border rule, preserving flat command lists while outlining form controls.
+Native mobile menus use `mobile.action_menu`; desktop menus use the shared Qt
+menu host and theme. Keep native menus in those owners rather than replacing
+them with WebView controls. `notebook_chrome_checks.py` checks computed borders,
+focus, keyboard navigation and dismissal in normal and injected E Ink CSS through
+the existing browser and native probe drivers.
+
+
+### Android notebook view retirement
+
+Retired Android notebook canvases first close native input/preview helpers,
+detach the Toga widget, clear its content and explicitly destroy the ordinary
+native WebView. Private WebViews already destroy their native view through
+their existing privacy teardown. Blanking ordinary HTML alone retained native
+renderer resources during repeated complete editor reopens; the physical QA
+recorded an Android foreground LOW_MEMORY kill. Six subsequent remounts with
+explicit destruction completed with app PSS around 346–351 MB. This retirement
+check supplements the separate page/zoom bitmap-memory limits.

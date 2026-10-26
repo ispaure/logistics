@@ -45,13 +45,18 @@ def configure_android_sources(project):
     if count != 1:
         raise ValueError('Expected one Android versionCode in generated build.gradle.')
     for line in android['build_gradle_extra_content'].splitlines():
-        if line.startswith(('android.sourceSets.main.java.srcDir(', 'repositories { maven {')) and line not in text.splitlines():
+        if line.startswith(('android.sourceSets.main.java.srcDir(', 'repositories { maven {',
+                            'configurations.configureEach {', 'android { packagingOptions {')) and line not in text.splitlines():
             text += '\n' + line + '\n'
     # Reused Briefcase projects also need newly declared native dependencies.
     missing = [dependency for dependency in android['build_gradle_dependencies'] if dependency not in text]
     if missing:
         text += '\ndependencies {\n' + ''.join('    implementation "' + dependency + '"\n' for dependency in missing) + '}\n'
     gradle.write_text(text)
+    properties = Path(project) / 'gradle.properties'
+    settings = properties.read_text() if properties.exists() else ''
+    settings = re.sub(r'(?m)^android.enableJetifier=.*\n?', '', settings)
+    properties.write_text(settings.rstrip() + '\nandroid.enableJetifier=true\n')
     # Chaquopy isolates pip from PIP_* environment variables. Forward the
     # prepared wheel directory explicitly, including on reused projects.
     wheel_links = os.environ.get('PIP_FIND_LINKS')

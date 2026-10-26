@@ -55,13 +55,16 @@ class MirrorUI(TransferReviewUI):
                                 or getattr(parent, '_reader_fullscreen', False)):
                 if bar not in parent.children:
                     parent.insert(0, bar)
-                bar.notice.text = 'Transfer in progress · Details' if busy else 'Transfer finished · 100% · Details'
+                notice = 'Transfer in progress · Details' if busy else 'Transfer finished · 100% · Details'
                 percentage = getattr(self, 'transfer_percentage', None)
                 if busy and percentage is not None:
-                    bar.notice.text = f'Transfer · {percentage:.0f}% of known work · Details'
+                    notice = f'Transfer · {percentage:.0f}% of known work · Details'
                 if not busy and not getattr(self, 'transfer_complete', False):
-                    bar.notice.text = 'Transfer stopped · Details'
-                bar.dismiss.enabled = not busy
+                    notice = 'Transfer stopped · Details'
+                if bar.notice.text != notice:
+                    bar.notice.text = notice
+                if bar.dismiss.enabled != (not busy):
+                    bar.dismiss.enabled = not busy
                 source = getattr(self, 'transfer_progress', None)
                 if busy and source is not None and source.max is None:
                     if bar.progress.max is not None:
@@ -71,7 +74,9 @@ class MirrorUI(TransferReviewUI):
                     if bar.progress.max is None:
                         bar.progress.stop()
                         bar.progress.max = 100
-                    bar.progress.value = source.value if source is not None else 0
+                    value = source.value if source is not None else 0
+                    if bar.progress.value != value:
+                        bar.progress.value = value
             elif bar in parent.children:
                 bar.progress.stop()
                 parent.remove(bar)
@@ -81,6 +86,8 @@ class MirrorUI(TransferReviewUI):
             refresh_chrome()
 
     def existing_crypt_locations(self, *, roots=None):
+        if not self.app.feature_enabled('rclone'):
+            return {}
         result = {}
         client = getattr(self, 'cloud_client', None)
         if client is None or not hasattr(client, 'request'):
@@ -110,6 +117,8 @@ class MirrorUI(TransferReviewUI):
         return self.mirror_store().guard(collection_path(self.private_root, True) / identity)
 
     def linked_crypt_locations(self):
+        if not self.app.feature_enabled('rclone'):
+            return {}
         result = {}
         client = getattr(self, 'cloud_client', None)
         if client is None or not hasattr(client, 'request'):
@@ -137,6 +146,8 @@ class MirrorUI(TransferReviewUI):
         return self.mirrors
 
     def show_transfers(self, widget=None, *, present=True, **kwargs):
+        if not self.app.require_feature('rclone'):
+            return
         if getattr(self, '_transfer_review_view', None) is not None:
             if present:
                 self.show_view(self._transfer_review_view, destination='files', route='transfer-review', title='Transfer review')
@@ -222,6 +233,8 @@ class MirrorUI(TransferReviewUI):
         return True
 
     def start_mirror_pull(self, key):
+        if not self.app.require_feature('rclone'):
+            return
         self.begin_transfer_review(key, push=False)
 
     @staticmethod
@@ -230,6 +243,8 @@ class MirrorUI(TransferReviewUI):
 
 
     def start_mirror_review(self, key):
+        if not self.app.require_feature('rclone'):
+            return
         self.begin_transfer_review(key, push=True)
 
     async def pull_remote_copy(self, widget=None, **kwargs):
@@ -315,8 +330,11 @@ class MirrorUI(TransferReviewUI):
             # changed percentage or a switch from discovery to a known total.
             return
         self._mirror_progress_widgets = widgets
-        self.transfer_notice.text = import_hint(self.transfer_message.replace(' · ', '\n'))
-        self.cloud_status.value = self.transfer_message
+        notice = import_hint(self.transfer_message.replace(' · ', '\n'))
+        if self.transfer_notice.text != notice:
+            self.transfer_notice.text = notice
+        if self.cloud_status.value != self.transfer_message:
+            self.cloud_status.value = self.transfer_message
         origin = getattr(self, 'cloud_transfer_progress', None)
         for bar in (self.transfer_progress, origin):
             if bar is None:
@@ -325,7 +343,8 @@ class MirrorUI(TransferReviewUI):
                 if bar.max is None:
                     bar.stop()
                     bar.max = 100
-                bar.value = self.transfer_percentage
+                if bar.value != self.transfer_percentage:
+                    bar.value = self.transfer_percentage
             elif bar.max is not None:
                 bar.max = None
                 bar.start()

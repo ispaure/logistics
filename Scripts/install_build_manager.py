@@ -28,16 +28,17 @@ def main():
     if args.checkout is None:
         parser.error('Supply a reviewed manager checkout or --from-pin DESTINATION.')
     root = args.checkout.expanduser().absolute()
-    config = root / 'pyproject.toml'
+    project = root / 'Python' if (root / 'Python/pyproject.toml').is_file() else root
+    config = project / 'pyproject.toml'
     if not config.is_file() or tomllib.loads(config.read_text()).get('project', {}).get('name') != 'build-deployment-manager':
         parser.error('Select a reviewed build-deployment-manager checkout.')
     if importlib.util.find_spec('pip'):
-        command=[sys.executable,'-m','pip','install','--no-deps','-e',str(root)]
+        command=[sys.executable,'-m','pip','install','--no-deps','-e',str(project)]
     else:
         from Scripts.development import find_uv
         uv=find_uv()
         if not uv:parser.error('This environment has no pip. Install uv, then run this explicit setup again.')
-        command=[uv,'pip','install','--python',sys.executable,'--no-deps','-e',str(root)]
+        command=[uv,'pip','install','--python',sys.executable,'--no-deps','-e',str(project)]
     subprocess.run(command,check=True)
     return 0
 

@@ -87,8 +87,6 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         self.search.idle.connect(self.idle)
         layout.addWidget(self.search)
         self.status = StatusLine()
-        self.status.setWordWrap(True)
-        self.status.setSizePolicy(qt.QSizePolicy.Policy.Preferred, qt.QSizePolicy.Policy.Maximum)
         layout.addWidget(self.status)
         self.autosave_notice = qt.QLabel()
         self.autosave_notice.setWordWrap(True)

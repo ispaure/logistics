@@ -43,10 +43,9 @@ class DocumentStorageProbe(LogisticsMobile):
 
     async def create_notebook(self, location, name):
         self.show_home()
-        self.choose_document_type()
-        form = self.body.children[0].content
-        form.name_input.value, form.type_selector.value = name, 'Notebook (.rmdoc)'
-        await form.create_button.on_press()
+        await self.choose_document_type()
+        form = self.editor_picker()
+        form.save_as_name.value, form.creation_type.value = name, 'Notebook (.rmdoc)'
         picker = self.editor_picker()
         await asyncio.sleep(.4)
         picker.save_as_storage.value = location

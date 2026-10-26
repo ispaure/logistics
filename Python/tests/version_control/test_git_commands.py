@@ -67,6 +67,34 @@ class CommandFormCaptureTests(unittest.TestCase):
             commands.merge_dialog()
         view._operation.assert_not_called()
 
+    def test_publish_form_cannot_retarget_a_different_repository(self):
+        from features.git.ui.commands.forms import RepositoryCommands
+        view = SimpleNamespace(path=Path('/first'), closing=False,
+            snapshot=SimpleNamespace(status=SimpleNamespace(branch='original', upstream=''),
+                                     remotes=['origin']), _operation=Mock())
+        dialog = Mock()
+        dialog.choice.return_value.currentText.return_value = 'origin'
+        dialog.text.return_value.text.return_value = 'published'
+        def submitted():
+            view.path = Path('/second')
+            return True
+        dialog.submitted.side_effect = submitted
+        with patch('features.git.ui.commands.forms.FormDialog', return_value=dialog):
+            RepositoryCommands(view).publish_dialog()
+        view._operation.assert_not_called()
+
+    def test_force_push_confirmation_cannot_retarget_a_different_repository(self):
+        from features.git.ui.commands.forms import RepositoryCommands
+        view = SimpleNamespace(path=Path('/first'), closing=False,
+            snapshot=SimpleNamespace(status=SimpleNamespace(branch='original', upstream='origin/original')),
+            preferences=SimpleNamespace(options={'allow_force_push': True}), _operation=Mock())
+        def confirm(*args):
+            view.path = Path('/second')
+            return True
+        view._confirm = confirm
+        RepositoryCommands(view).push(force_with_lease=True)
+        view._operation.assert_not_called()
+
     def test_stash_application_revalidates_active_branch_on_worker(self):
         from features.git.ui.commands.forms import RepositoryCommands
         view = SimpleNamespace(path=Path('/fixture'), closing=False, _operation=Mock())

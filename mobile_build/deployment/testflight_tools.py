@@ -2,6 +2,7 @@
 import argparse
 from fnmatch import fnmatchcase
 from hashlib import sha256
+from commonUtils.runtime.streams import file_sha256, iter_chunks
 import json
 import os
 from pathlib import Path
@@ -141,7 +142,9 @@ def archive_fingerprint(app):
     for path in sorted(app.rglob('*')):
         if path.is_file():
             digest.update(path.relative_to(app).as_posix().encode() + b'\0')
-            digest.update(path.read_bytes())
+            with path.open('rb') as stream:
+                for chunk in iter_chunks(stream):
+                    digest.update(chunk)
     return digest.hexdigest()
 
 
@@ -224,7 +227,7 @@ def export_release(workspace, env, *, upload=False):
         verified = json.loads((workspace / 'export-verified.json').read_text())
         ipas = list((workspace / 'export').glob('*.ipa'))
         if (verified.get('archive_sha256') != archive_fingerprint(archived_app)
-                or len(ipas) != 1 or verified.get('ipa_sha256') != sha256(ipas[0].read_bytes()).hexdigest()):
+                or len(ipas) != 1 or verified.get('ipa_sha256') != file_sha256(ipas[0])):
             raise ValueError('Reviewed archive/IPA has changed. Export and verify again before uploading.')
         if not os.environ.get('TESTFLIGHT_UPLOAD') == '1':
             raise ValueError('Uploading is explicit: set TESTFLIGHT_UPLOAD=1 and run upload after reviewing the exported build.')
@@ -253,7 +256,7 @@ def export_release(workspace, env, *, upload=False):
             if len(apps) != 1:
                 raise ValueError('Unexpected IPA layout.')
             report = inspect_app(apps[0], identity, record['build']['build_number'], distribution=True)
-        report.update(archive_sha256=archive_fingerprint(archived_app), ipa_sha256=sha256(ipas[0].read_bytes()).hexdigest())
+        report.update(archive_sha256=archive_fingerprint(archived_app), ipa_sha256=file_sha256(ipas[0]))
         (workspace / 'export-verified.json').write_text(json.dumps(report, indent=2) + '\n')
         print('Verified App Store distribution IPA: ' + str(ipas[0]))
 
@@ -278,9 +281,15 @@ def main():
         raise ValueError('Briefcase bundle identity has changed.')
     workspace = ROOT / 'build/testflight' / args.build_number
     from contextlib import nullcontext
+    from build_manager.locking import workspace_lock
     from build_manager.retention import lease
     from Scripts.build_retention import clean_builds
-    with nullcontext() if args.command == 'plan' else lease(workspace):
+    # Archive creation must own the retention lock before its directory exists.
+    # lease() creates that directory, which archive_release correctly rejects.
+    protection = (nullcontext() if args.command == 'plan' else
+                  workspace_lock(workspace.parent / ('.' + workspace.name + '.retention.lock'))
+                  if args.command == 'archive' else lease(workspace))
+    with protection:
         if args.command != 'plan':
             clean_builds(ROOT)
         if args.command == 'distribute':

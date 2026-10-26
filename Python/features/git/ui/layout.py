@@ -2,7 +2,7 @@
 from commonUtils.ui.appearance.typography import point_size
 import sys
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.appearance.status_line import StatusLine
+from commonUtils.ui.appearance.status_line import StatusFooter
 from .changes import ChangesPanel
 from .history import HistoryPanel
 from .search import SearchPanel
@@ -63,11 +63,18 @@ class RepositoryLayout:
         self.action_buttons = {}
         for title, icon, callback in (
                 ('Commit', 'commit', self.focus_commit), ('Pull…', 'pull', self.pull_dialog),
-                ('Push…', 'push', self.push_dialog), ('Fetch', 'fetch', self.fetch),
+                ('Push', 'push', self.push), ('Fetch', 'fetch', self.fetch),
                 ('Branch…', 'branch', self.branch_dialog), ('Merge…', 'merge', self.merge_dialog),
                 ('Stash…', 'stash', self.stash_dialog)):
             button = toolbar_button(title, icon, callback, self.toolbar)
             self.action_buttons[title] = button
+        self.push_menu = qt.QMenu('Push options', self)
+        self.publish_action = self.push_menu.addAction('Publish to…', self.publish_dialog)
+        self.force_push_action = self.push_menu.addAction(
+            'Force push with lease…', lambda: self.push(force_with_lease=True))
+        push_button = self.action_buttons['Push']
+        push_button.setMenu(self.push_menu)
+        push_button.setPopupMode(qt.QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.toolbar.addSeparator()
         for title, icon, callback in (
                 ('View Remote', 'remote', self.view_remote), ('Show in Finder' if sys.platform == 'darwin' else 'Open Folder', 'folder', self.open_folder),
@@ -168,11 +175,9 @@ class RepositoryLayout:
         layout.addWidget(self.content, 1)
         self._connect_workspace_signals()
     def _build_status(self, layout):
-        status = qt.QHBoxLayout()
-        self.status = StatusLine('Ready')
-        self.status.setTextFormat(qt.Qt.TextFormat.PlainText)
-        self.status.setWordWrap(True)
-        status.addWidget(self.status, 1)
+        footer = StatusFooter('Ready', self)
+        status = footer.layout()
+        self.status = footer.message
         self.progress = qt.QProgressBar()
         self.progress.setMaximumWidth(140)
         self.progress.setRange(0, 0)
@@ -185,7 +190,7 @@ class RepositoryLayout:
         self.log_toggle.setText('Operation log')
         self.log_toggle.setCheckable(True)
         status.addWidget(self.log_toggle)
-        layout.addLayout(status)
+        layout.addWidget(footer)
         self.log = qt.QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setLineWrapMode(qt.QPlainTextEdit.LineWrapMode.NoWrap)

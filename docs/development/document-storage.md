@@ -9,6 +9,17 @@ cannot gain write access through a local cache or wrapper.
 
 ## Ownership
 
+`services.documents.destinations.DestinationRequest` captures a picker operation
+before worker I/O. It owns destination resolution and publication; its result
+distinguishes unchanged storage from successful publication and a saved file that
+could not reopen. UI dialogs, current-selection/credential guards and route/editor
+handoff remain in `mobile.editor_picker`. Failed reopening retains the source draft.
+
+`DocumentResource.delete()` checks the retained revision before provider deletion.
+Notebook documents then ask their ordinary recovery repository to delete that
+validated recovery identity. Views do not perform provider deletion or raw recovery
+directory cleanup themselves. Private notebook documents have no recovery repository.
+
 The host resolves ordinary folders, LocalCrypt copy references and remote sources.
 Providers own encryption, credentials, name mapping and publication mechanics.
 Credential replacement never revives an old resource. The document session holds
@@ -21,6 +32,35 @@ fresh read. Android SD-card/FUSE storage can retain the replaced inode's metadat
 until the first open refreshes it. The retry must have a stable revision, match
 the published bytes by SHA-256 and pass format validation. Ordinary reads still
 reject revision changes; failed verification retains the previous save baseline.
+
+Mobile Local and Received Files use the same `MobileLocalFiles` publication
+adapter. When an Android SD-card/FUSE mount rejects exclusive rename flags, it
+creates the destination exclusively, verifies the copied bytes and removes the
+staged source. This fallback preserves existing destinations but exposes a partial
+file during copying; it does not provide atomic visibility. Failed copying cleans
+its partial destination, while verification or source-cleanup failures report an
+incomplete mutation for inspection. The notebook creation regression exercises
+Received Files with an injected `EINVAL` rename failure. Physical Boox validation
+also created and reopened a valid `.rmdoc` on the SD card under Received Files,
+rejected duplicate creation without changing its bytes, and removed the temporary
+probe app and test directory afterward.
+
+The mobile import index recognizes both Local and its sibling Received Files on
+the selected Android drive. Received Files retains its private-storage identity
+after relocation; other drive folders remain outside the import boundary. Host
+regressions cover notebook creation through editor handoff and reopening from
+the SD-card Received Files path, plus identity retention and link rejection.
+The updated main app also opened an existing `.rmdoc` from Workspaces → Received
+Files on the physical Boox; its data was preserved and only the main Logistics
+package remained installed.
+
+Collection and Android device-folder browsing share an ordinary-folder snapshot.
+It validates the collection location at listing boundaries rather than reopening
+its settings and SD-card marker for every child. Child link, regular-file and
+protected-root checks still apply. The device root exposes only Local and
+Received Files. Host regressions cover a 120-file snapshot with at most three
+collection-location checks, private-folder rejection and cancellation; these
+checks do not establish physical Boox latency.
 
 Formats own parsing, validation, serialization, size limits and editing state.
 They do not create crypt configurations or write virtual paths to disk.
@@ -132,6 +172,27 @@ Native bridge tests cover binary round trips, limits, cancellation and rejection
 of nonempty output descriptors. Host tests do not establish native widget or
 physical-device behavior.
 
+Recent deletion acceptance uses
+`Python/tests/editing/recent_deletion_probe.py --output <evidence-directory>`
+with the desktop interpreter and `PYTHONPATH=Python:.`, and
+`python -m mobile_build.validation.document_storage_tools android --probe recent-deletion
+--device <serial> --output <evidence-directory>` with the mobile interpreter.
+Keep evidence under ignored `test-results/`. Both use retention-owned scratch
+storage. The Android helper installs an isolated QA identity, collects its result
+and screenshot, then uninstalls it; the main app and its data are preserved.
+The desktop probe uses Cocoa Qt windows with inspectable Qt message dialogs.
+
+On October 26, 2026, the physical Boox Note Air5 C passed deletion while clean
+and edited text/Markdown files were open: live buffers remained accessible,
+failed saves retained edits without recreating files, and closed deleted files
+disappeared from Recent. A stale Recent row displayed the native missing-file
+dialog; an imported EPUB retained its labelled saved copy and reopened after
+original-source deletion. Cleanup verified only the main Logistics package
+remained. Desktop Cocoa checks cover the same four text/Markdown cases plus
+file-watcher warnings and exclusion from Open recent while the buffer is open.
+These checks cover ordinary local files and a retained book import, not remote
+deletion or encrypted storage.
+
 ## Document action matrix
 
 These are Logistics document-editor actions. Creation is offered for text,
@@ -197,6 +258,20 @@ publication and exact-byte reopening as other resources. It cannot write through
 an ordinary path into a host-protected provider root. Export keeps the source
 binding intact. EPUB/comic reader privacy follows shared persistence policy,
 including provider wrappers; a provider-backed ordinary file remains ordinary.
+
+## Mobile creation form
+
+`mobile/document_choices.py` opens the shared `EditorPicker` directly. New
+documents choose their name, format and provider folder on one route; there is
+no preliminary completion action before location selection. iOS retains a text
+**Create document** action, while Android uses the same action in the form.
+The selected format validates the filename; notebook bytes are generated from
+the final name at publication so renaming cannot leave a stale notebook title.
+Cancellation returns to the opening screen and successful creation retires the
+route before opening the editor. The shared picker keeps its existing keyboard
+compaction, provider validation, collision protection and encryption boundary.
+Initial listings retry discarded tokens during cold-start client/credential
+restoration, without waiting for cloud setup or accepting stale directory data.
 
 
 ## Enforced architecture contract

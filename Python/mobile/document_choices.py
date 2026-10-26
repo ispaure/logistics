@@ -1,47 +1,37 @@
-"""Shared new-document form for every mobile entry point."""
-import toga
-from toga.style import Pack
-from toga.style.pack import COLUMN
-from features.text_editor.names import document_name
+"""Shared new-document entry point and format choices for mobile."""
+from pathlib import PurePosixPath
 
 CHOICES = (('Plain text (.txt)', 'txt'), ('Markdown (.md)', 'md'), ('Notebook (.rmdoc)', 'rmdoc'))
 
 
+def available_choices(app):
+    from services.mobile_features import enabled
+    return tuple((label, extension) for label, extension in CHOICES
+        if enabled(app.preferences, 'notebooks' if extension == 'rmdoc' else 'text_editor'))
+
+
+def creation_filename(name, extension):
+    """Validate the visible name against the explicitly selected format."""
+    from features.text_editor.names import document_name
+    from .destination_names import save_filename
+    extensions = ('.md', '.markdown') if extension == 'md' else ('.' + extension,)
+    return document_name(save_filename(name, 'Untitled.' + extension, extensions=extensions))
+
+
+def change_creation_suffix(name, extension):
+    """Replace a known document suffix when switching formats; keep base names."""
+    suffix = PurePosixPath(name).suffix
+    if suffix.lower() in ('.txt', '.md', '.markdown', '.rmdoc'):
+        if extension == 'md' and suffix.lower() in ('.md', '.markdown'):
+            return name
+        return name[:-len(suffix)] + '.' + extension
+    return name
+
+
 def choose_document_type(app):
+    if not available_choices(app):
+        app.require_feature('text_editor')
+        return
     destination = app.native_host.state.destination
     origin = (destination, len(app.routes.screens[destination]), len(app.adaptive.detail_routes))
-    box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-    name = toga.TextInput(placeholder='File name', style=Pack(height=48))
-    error = toga.Label('', style=Pack(margin_top=8))
-    kind = toga.Selection(items=[label for label, extension in CHOICES],
-                          style=Pack(height=48))
-
-    async def create(widget, **kwargs):
-        if not app.active_host:
-            return
-        extension = dict(CHOICES)[kind.value]
-        try:
-            filename = document_name(name.value)
-            # Selecting a type controls the extension; accept either a base
-            # name or the full filename without doubling a matching suffix.
-            suffixes = ('.md', '.markdown') if extension == 'md' else ('.' + extension,)
-            if not filename.lower().endswith(suffixes):
-                filename = document_name(filename + '.' + extension)
-        except ValueError as exc:
-            error.text = str(exc)
-            return
-        data = None
-        if extension == 'rmdoc':
-            from features.notebooks.notebook import Notebook
-            data = Notebook.new(filename[:-6]).to_bytes()
-        await app.editor_picker().show_document_creation(filename, origin, data=data)
-
-    box.name_input, box.type_selector, box.error_label = name, kind, error
-    box.create_button = toga.Button('Choose location…', on_press=create, style=Pack(height=48))
-    box.cancel_button = toga.Button('Cancel', on_press=lambda widget, **kw: app.routes.back(),
-                                    style=Pack(height=48))
-    box.add(toga.Label('File name'), name, toga.Label('File type'), kind, error,
-            box.create_button, box.cancel_button)
-    app.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)),
-                  route='new-document', title='New document')
-    name.focus()
+    return app.loop.create_task(app.editor_picker().show_document_creation('', origin))

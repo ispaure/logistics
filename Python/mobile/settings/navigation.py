@@ -62,7 +62,7 @@ class SettingsNavigation(toga.Box):
         menu = toga.Box(style=Pack(direction=COLUMN, margin=16))
         menu.add(surface(toga.Label('Settings', style=Pack(font_size=28, font_weight='bold', margin_bottom=24)),
                          radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False))
-        icons = {'Camera': 'preferences', 'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
+        icons = {'Features': 'preferences', 'Camera': 'preferences', 'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
                  'Markdown': 'edit', 'Text': 'edit', 'EPUB': 'books', 'Books & Comics': 'books', 'LM Chat': 'chat',
                  'Workspaces': 'folder', 'Reset': 'preferences', 'Help': 'help', 'About': 'info'}
         rows = []
@@ -81,7 +81,7 @@ class SettingsNavigation(toga.Box):
                     outlined=False, eink_outlined=False)
             self.buttons[title] = button
             rows.append(button)
-            end_group = title == ('Appearance' if 'Appearance' in sections else 'App')
+            end_group = title == ('Features' if 'Features' in sections else 'Appearance' if 'Appearance' in sections else 'App')
             if end_group or title in ('Books & Comics', 'Workspaces', 'Reset', 'About'):
                 menu.add(group_rows(rows, icon_inset=True))
                 rows = []

@@ -2,6 +2,33 @@
 
 ## Frame and drawer ownership
 
+Opening a Workspaces folder retains a highlighted, bold row in the source tree,
+connecting the left workspace pane to the browser on the right. Source refreshes
+and tab changes preserve the selection; another successful open moves it.
+Failed opens leave the previous selection in place. Returning to the Workspaces
+overview clears the folder highlight, including native Back gestures. Returning
+from a document or child folder clears the browser's contextual selection while
+preserving the folder, search and scroll position. Native folder buttons expose
+their selected state to accessibility; the row and its child controls share
+readable monochrome selection colors in high contrast mode.
+
+Transient selection cleanup is an opt-in view lifecycle contract. File browsers
+and Workspaces trees register `_clear_return_selection` on their retained widget.
+`MobileRoutes.trim()` records the returning panel and `render()` clears its
+registered selections after the panel is mounted. Native folder pops flush the
+same return, and secondary Documents stacks use `clear_view_selection()` when
+popping details. This also covers Cancel and failed-open routes that trim the
+stack directly. Repaints, forward navigation, tab switches and layout changes
+preserve selections. Library folder commands clear their native activation row
+once the command has been captured.
+
+Persistent selections (current chapter, displayed documentation page, active
+conversation and settings category) do not register a return reset. A blanket
+reset of every native selection would lose meaningful state. Composite rows use
+`appearance.selection_row()` so selected titles, disclosures and template icons
+share their parent contrast. High contrast maps selected foreground roles to
+white; ordinary themes retain semantic icon colors and photo previews.
+
 `workspace_navigation.WorkspaceNavigation` owns destination routes, open/closed
 drawer state, retained drawer references and paired-session selection.
 `WorkspaceFrame` mounts and restores existing widgets for compact, split and
@@ -279,6 +306,17 @@ creation retains the form for retry or Cancel. `test_document_navigation.py`
 covers creation from Home, Documents and a retained folder browser, including
 unsaved-change decisions and returning to the original panel.
 
+Creation starts at the ordinary All files provider used by Workspaces. Entering
+Local or Received Files switches to its collection provider; Up and system Back
+return to All files from a collection root. Android's collection-only browse root
+requires entering a collection before creating anything. Filename preview,
+listing and publication share the picker extension policy, including `.rmdoc`
+for notebooks. Operation errors use a fitted, noneditable message instead of a
+text input or single-line browser header label. Its form height uses Travertino's logical
+minimum height directly, so Android density conversion does not clip the status
+area. `test_document_creation.py` covers these paths,
+including iOS shared Documents and notebook validation followed by retry.
+
 ## File loading panels
 
 `document_sources.opening_status` presents a temporary `file-loading:` route with
@@ -545,6 +583,27 @@ Evidence must identify the staged source; a simulated width in a host test does
 not establish native Duo fold-gesture support.
 
 ## Workspaces and file browser naming
+
+The Local source retains separate Rclone and Others tree views. Classification
+uses each local copy's remote association, including mapped LocalCrypt copies;
+Others owns ordinary copies and Browse All Files. Mixed catalog entries keep
+only the selected group's copies, while managed entries retain their remote
+actions. Others renders literal folder names; remote naming groups remain
+available in Rclone. Picker destinations include existing encrypted copies and
+linked pull targets, without synthesizing empty roots for every loaded remote.
+Android's virtual location root disables publication and explains the required
+folder choice. Picker status uses a fitted label mounted only when nonempty.
+Notebook Close uses the shared save/discard transition with Home as its return
+target, instead of leaving a retained session behind another tab.
+
+Physical Boox Note Air5 C validation on October 25 used build 202610305. Local's
+two groups displayed separate ordinary and managed folders. The virtual root
+showed its folder-choice explanation; a new SD-card folder accepted a valid
+`.rmdoc`, which opened, closed to Home, and reopened from Others. Closing that
+Workspaces-opened notebook also returned Home. Owned test files were archived
+and removed; the user's test folder and notebook remained. Existing app files
+and library records were checked against a pre-update backup. iOS shared-root
+behavior is covered by host tests, not this physical Android check.
 
 **Workspaces** is the desktop/mobile product name for the configured-folder
 destination formerly called Folder Hub. Its per-folder tools are labelled
@@ -1077,7 +1136,10 @@ Documents root separately from the managed Local directory. The app-owned
 protects its root from mutations. Entering it switches to `CollectionFiles`.
 Local lists imported folders and downloaded/synced copies individually, alongside
 shared subfolders. The root choice is marked `browser_root` and rendered as a
-**Browse All Files** action below the folder tree, without a workspace menu.
+**Browse All Files** folder button below the folder tree, using the same row
+surface, title metrics and folder icon as Received Files, without a workspace
+menu. Local and Cloud omit the lock-state legend; folder icons and accessible
+labels carry the lock state.
 The local and LocalCrypt browser omit the source strip and places its actions
 button at the trailing edge of `FolderLocationHeader`, alongside Search. The
 `overflow` icon uses `ellipsis.circle` on iOS and vertical dots on Android.

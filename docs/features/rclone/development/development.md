@@ -505,7 +505,12 @@ credential generation cannot receive the older result's controls or preferences.
 ## Native execution and wire boundaries
 
 `transfers/mobile/execution.py` owns `TransferState`, writer admission, coalesced
-progress delivery and worker retirement. `TransferController` exposes its existing
+progress delivery and worker retirement. Progress renders the latest snapshot,
+then leaves at least one second before another render, including when updates
+arrive during slow native layout. Native polling and cancellation keep their
+existing cadence; terminal outcomes publish immediately after worker retirement.
+The presentation skips unchanged text, banner values and source-action spacing
+to avoid repeated native layout work. `TransferController` exposes its existing
 app fields through that state; `TransferExecutionPresentation` projects state into
 controls. A second caller which also awaited credential restoration must pass a
 fresh busy check before starting a writer. Cancellation retains busy ownership
@@ -550,6 +555,11 @@ machine. Desktop sync and mobile jobs retain mandatory execution preflight and
 mutation/collision policy. A completed comparison is not an atomic storage lock
 or a guarantee against later remote changes. Focused coverage includes
 `test_review_session`, `test_rclone_review`, push-policy and mobile review tests.
+
+Mobile retires the review route and its native controller when comparison closes,
+before showing execution details. Back cannot reopen a consumed Push/Pull review,
+including when comparison closes while another tab is visible. Reselecting the
+Workspaces tab cancels an open comparison and returns to its root.
 
 ## Desktop provider lifetimes
 

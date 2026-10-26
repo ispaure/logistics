@@ -59,6 +59,7 @@ class ApplicationPreferences:
         self.preview.highlighter.rehighlight()
         self.log_toggle.setChecked(options['full_output'])
         self.debug_action.setVisible(options['debug_menu'])
+        self.force_push_action.setVisible(options['allow_force_push'])
         self.custom_menu.clear()
         for entry in options['custom_actions']:
             action = self.custom_menu.addAction(entry['caption'], lambda checked=False, entry=deepcopy(entry): self.run_custom_action(entry))

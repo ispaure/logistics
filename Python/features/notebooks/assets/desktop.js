@@ -1,4 +1,6 @@
 continuousInk = true;
+// Desktop bounds work to display frames; mobile paints delivered pen batches immediately.
+frameBatchedInk = true;
 document.querySelectorAll('[data-icon]').forEach(el => el.insertAdjacentHTML('afterbegin', icon(glyphs[el.dataset.icon])));
 
 function choice(parent, label, value, content, callback) {
@@ -63,10 +65,7 @@ function syncChrome() {
     $(id).classList.toggle('active', mode === id);
     $(id).setAttribute('aria-pressed', String(mode === id))
   }
-  $('colorName').textContent = $('color').selectedOptions[0]?.textContent || '';
-  let selectedSwatch = $('swatches').querySelector('[aria-pressed=true]');
-  if (selectedSwatch) $('inkDot').style.background = selectedSwatch.style.getPropertyValue('--swatch');
-  $('toolHint').textContent = mode === 'erase' ? 'Erase whole strokes' : mode === 'select' ? 'Select one stroke, then drag' : $('tool').selectedOptions[0]?.textContent || 'Choose your instrument';
+  $('toolHint').textContent = mode === 'erase' ? (eraserKind === 'whole' ? 'Erase whole strokes' : 'Erase parts of strokes') : mode === 'select' ? 'Select one stroke, then drag' : $('tool').selectedOptions[0]?.textContent || 'Choose your instrument';
   canvas.style.cursor = mode === 'select' ? 'move' : mode === 'erase' ? 'cell' : 'crosshair';
 }
 $('ink').onclick = () => {
@@ -90,6 +89,52 @@ $('grayscale').onchange = () => {
   syncChrome()
 };
 $('focus').onclick = () => document.body.classList.toggle('hide-toolbar');
+let previewStart = 0;
+function requestPagePreviews() {
+  if (busy) return;
+  $('morePages').disabled = true;
+  $('overviewStatus').textContent = 'Loading thumbnails…';
+  send({op: 'page-previews', start: previewStart})
+}
+$('pagesOverview').onclick = () => {
+  if (busy || active !== null || $('pagesDialog').open) return;
+  previewStart = 0;
+  $('pagePreviews').replaceChildren();
+  $('overviewCurrent').textContent = 'Current page: ' + (state.index + 1) + ' of ' + state.count;
+  $('morePages').hidden = false;
+  $('pagesDialog').showModal();
+  requestPagePreviews()
+};
+$('closePages').onclick = () => $('pagesDialog').close();
+$('morePages').onclick = requestPagePreviews;
+$('overviewAdd').onclick = () => {
+  if (busy) return;
+  $('pagesDialog').close();
+  send({op: 'add-page'})
+};
+window.notebookPagePreviews = rows => {
+  if (!$('pagesDialog').open) return;
+  for (let row of rows) {
+    let card = document.createElement('button'), image = document.createElement('img'), caption = document.createElement('span');
+    card.type = 'button';
+    card.dataset.page = row.index;
+    card.setAttribute('aria-label', 'Page ' + (row.index + 1) + (row.warning ? ': preview unavailable' : ''));
+    card.setAttribute('aria-current', String(row.index === state.index));
+    image.src = row.image;
+    image.alt = '';
+    caption.textContent = 'Page ' + (row.index + 1);
+    card.append(image, caption);
+    card.onclick = () => {
+      if (busy) return;
+      $('pagesDialog').close();
+      send({op: 'page', index: row.index})
+    };
+    $('pagePreviews').append(card)
+  }
+  previewStart = rows.length ? rows.at(-1).index + 1 : previewStart;
+  $('morePages').hidden = previewStart >= state.count;
+  $('overviewStatus').textContent = ''
+};
 // Zoom the ink surface rather than the browser chrome. Preserve the page point
 // under the wheel cursor, or the viewport center for keys and menu commands.
 function setZoom(value, anchor = null) {
@@ -176,6 +221,8 @@ window.notebookCommand = action => {
 const baseUpdate = window.notebookUpdate;
 window.notebookUpdate = (next, error) => {
   baseUpdate(next, error);
+  $('morePages').disabled = false;
+  if (error && $('pagesDialog').open) $('overviewStatus').textContent = error;
   syncChrome()
 };
 document.addEventListener('pointerdown', e => {
@@ -183,6 +230,7 @@ document.addEventListener('pointerdown', e => {
     if (panel.open && !panel.contains(e.target)) panel.open = false
 });
 document.addEventListener('keydown', e => {
+  if ($('pagesDialog').open || eraserDialog.open) return;
   let key = e.key.toLowerCase(),
     command = e.metaKey || e.ctrlKey;
   if (command && !e.altKey && ['+', '=', '-', '0'].includes(key)) {

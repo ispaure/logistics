@@ -28,7 +28,10 @@ class AndroidEInkTests(unittest.TestCase):
             android = type('Android', (), {'__module__': 'toga_android.app'})()
             android.native = SimpleNamespace(getDelegate=lambda: delegate)
             app = SimpleNamespace(_impl=android, preferences=prefs)
-            configure_android_eink(app)
+            window = Mock()
+            with patch.dict('sys.modules', {'java': SimpleNamespace(jclass=lambda name: window)}):
+                configure_android_eink(app)
+            window.configure.assert_called_once_with(android.native)
             self.assertTrue(palette.eink_enabled())
             delegate.setLocalNightMode.assert_called_once_with(1)
             palette.set_eink_enabled(False)

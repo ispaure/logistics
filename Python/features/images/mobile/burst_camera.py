@@ -2,10 +2,13 @@
 
 
 def available(app):
-    return type(app.main_window._impl).__module__.startswith('toga_iOS.')
+    from services.mobile_features import enabled
+    return enabled(app.preferences, 'images') and type(app.main_window._impl).__module__.startswith('toga_iOS.')
 
 
 def present(app):
+    if not app.require_feature('images'):
+        return
     from rubicon.objc import ObjCClass, ObjCInstance, Block, objc_id
     from ctypes import c_bool, c_double
     controller = ObjCClass('LGBurstCameraController').alloc().init()

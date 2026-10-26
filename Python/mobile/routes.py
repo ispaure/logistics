@@ -22,6 +22,7 @@ class MobileRoutes(Routes):
         self.app = app
         self.back_task = None
         self.origins = {}
+        self._selection_returns = {}
         from .folder_navigation import FolderNavigation
         self.folders = FolderNavigation(self)
         super().__init__(*args, **kwargs)
@@ -84,6 +85,36 @@ class MobileRoutes(Routes):
         for route in removed:
             self.origins.pop((destination, route), None)
             self.folders.forget(destination, route)
+        if removed:
+            self._selection_returns[destination] = self.body(destination)
+
+    def render(self, destination):
+        super().render(destination)
+        self.flush_return_selection(destination)
+
+    def flush_return_selection(self, destination):
+        panel = self._selection_returns.pop(destination, None)
+        if panel is self.body(destination):
+            self.clear_return_selection(destination)
+
+    def clear_return_selection(self, destination):
+        """A returned screen keeps its viewport but starts without a selection."""
+        self.clear_view_selection(self.body(destination))
+
+    @staticmethod
+    def clear_view_selection(view):
+        """Clear only transient selections explicitly owned by this subtree."""
+        def clear(view):
+            callback = getattr(view, '_clear_return_selection', None)
+            if callback is not None:
+                callback()
+                return
+            if isinstance(view, toga.ScrollContainer) and view.content is not None:
+                clear(view.content)
+            else:
+                for child in view.children:
+                    clear(child)
+        clear(view)
 
     def return_to(self, destination):
         if self.app.select_destination(destination) is not False:
@@ -113,7 +144,7 @@ class MobileRoutes(Routes):
         count = len(screens)
         origin = self.origins.get((destination, screens[-1][0])) if screens else None
         handled = super().back()
-        if self.apple and len(screens) < count:
+        if len(screens) < count:
             self.folders.restore(destination)
         if origin is not None and len(screens) < count:
             self.return_to(origin)

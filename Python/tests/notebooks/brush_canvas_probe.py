@@ -16,6 +16,27 @@ from features.notebooks.ui.workspace import QWebEngineView
 CHECKS = r'''
 (()=>{try{
 const check=(value,message)=>{if(!value)throw Error(message)};
+check(frameBatchedInk===expectedFrameBatching,'Wrong desktop/mobile paint scheduling');
+check(eraserKind==='partial'&&eraserRadius===16,'Partial eraser must be the default');
+$('erase').click();check(mode==='erase'&&eraserDialog.open,'Eraser button must show settings');
+check($('eraserSize').options.length===3,'Expected three eraser sizes');
+$('eraserKind').value='whole';$('eraserKind').dispatchEvent(new Event('change'));
+$('eraserSize').value='32';$('eraserSize').dispatchEvent(new Event('change'));
+check(eraserKind==='whole'&&eraserRadius===32,'Eraser controls did not change settings');
+$('closeEraser').click();
+$('erase').click();check(eraserDialog.open&&eraserKind==='whole','Pressing active eraser must reopen settings');
+$('eraserKind').value='partial';$('eraserKind').dispatchEvent(new Event('change'));
+$('eraserSize').value='16';$('eraserSize').dispatchEvent(new Event('change'));
+$('closeEraser').click();
+// Exercise the actual shared pointer path, inspecting the queued command without sending it.
+let originalSend=send,erased=null;send=action=>{erased=action};
+let bounds=canvas.getBoundingClientRect(),event=(x,y)=>({pointerId:12345,pointerType:'pen',nativePen:true,
+clientX:bounds.left+x/state.width*bounds.width,clientY:bounds.top+y/state.height*bounds.height,
+pressure:.5,preventDefault(){}});
+canvas.onpointerdown(event(100,100));canvas.onpointermove(event(200,200));finish(event(300,300));
+send=originalSend;
+check(erased?.op==='erase'&&erased.kind==='partial'&&erased.radius===16&&erased.points.length===3,'Pointer gesture lost eraser path, kind or size');
+$('tool').onchange();
 const before=JSON.stringify(state),samples=[[30,60,.15],[85,60,.85],[130,110,.85],[185,60,.4],[240,60,.7]];
 const surface=document.createElement('canvas');surface.width=280;surface.height=150;const target=surface.getContext('2d');
 const reset=()=>{target.clearRect(0,0,280,150);target.fillStyle='white';target.fillRect(0,0,280,150)};
@@ -59,16 +80,32 @@ check(nativeColor(23,-1).color_rgba.join(',')==='254,178,0,115','Shader orange m
 // Compare geometry at native resolution: fit-to-phone makes pencil grain
 // subpixel-sized and magnifies rasterization differences between masks.
 $('zoom').value='1';resize();
-let previewErrors=[],previewWork=[];
+// All fixture ink fits in this rectangle. Full-page comparison canvases at
+// high DPI waste hundreds of MiB and can make emulated Windows swap mid-test.
+const pw=Math.ceil(280*canvas.width/state.width),ph=Math.ceil(150*canvas.height/state.height);
+let previewErrors=[],previewWork=[],committedBrushes=[];
 for(let tool of Object.values(state.tools)){
 let color=tool===18?13:tool===23?1:0;
 inkSettings={tool,color,width:3,layer:state.layers[0][0]};points=[];clearDraft();ctx.clearRect(0,0,state.width,state.height);
 for(let sample of samples){let before=points.at(-1);points.push(sample);preview(before?[before,sample]:[sample])}
-let composed=document.createElement('canvas');composed.width=canvas.width;composed.height=canvas.height;let actual=composed.getContext('2d',{willReadFrequently:true});actual.fillStyle='white';actual.fillRect(0,0,composed.width,composed.height);actual.drawImage(canvas,0,0);actual.globalCompositeOperation=draft.style.mixBlendMode||'source-over';actual.drawImage(draft,0,0);
-let expectedCanvas=document.createElement('canvas');expectedCanvas.width=canvas.width;expectedCanvas.height=canvas.height;let final=expectedCanvas.getContext('2d',{willReadFrequently:true});final.fillStyle='white';final.fillRect(0,0,canvas.width,canvas.height);final.setTransform(canvas.width/state.width,0,0,canvas.height/state.height,0,0);line({tool,...nativeColor(tool,color),points:strokePoints(samples,tool,3)},final);
-let a=actual.getImageData(0,0,canvas.width,Math.ceil(150*canvas.height/state.height)).data,b=final.getImageData(0,0,canvas.width,Math.ceil(150*canvas.height/state.height)).data,inkPixels=0,badPixels=0,totalError=0,totalInk=0;
+let composed=document.createElement('canvas');composed.width=pw;composed.height=ph;let actual=composed.getContext('2d',{willReadFrequently:true});actual.fillStyle='white';actual.fillRect(0,0,pw,ph);actual.drawImage(canvas,0,0);actual.globalCompositeOperation=draft.style.mixBlendMode||'source-over';actual.drawImage(draft,0,0);
+let expectedCanvas=document.createElement('canvas');expectedCanvas.width=pw;expectedCanvas.height=ph;let final=expectedCanvas.getContext('2d',{willReadFrequently:true});final.fillStyle='white';final.fillRect(0,0,pw,ph);final.setTransform(canvas.width/state.width,0,0,canvas.height/state.height,0,0);line({tool,...nativeColor(tool,color),points:strokePoints(samples,tool,3)},final);
+let a=actual.getImageData(0,0,pw,ph).data,b=final.getImageData(0,0,pw,ph).data,inkPixels=0,badPixels=0,totalError=0,totalInk=0;
 for(let i=0;i<a.length;i+=4){if(a[i]<250||a[i+1]<250||a[i+2]<250||b[i]<250||b[i+1]<250||b[i+2]<250){inkPixels++;for(let c=0;c<3;c++){totalError+=Math.abs(a[i+c]-b[i+c]);totalInk+=255-b[i+c]}if(Math.max(Math.abs(a[i]-b[i]),Math.abs(a[i+1]-b[i+1]),Math.abs(a[i+2]-b[i+2]))>25)badPixels++}}
 let error=totalError/Math.max(1,totalInk);previewErrors.push({tool,error,edgeDifferences:badPixels/Math.max(1,inkPixels)});check(error<.18,'Streaming/saved brush mismatch '+tool+': '+error);
+if(!['fineliner','ballpoint'].includes(brushFor(tool).family)){
+ctx.fillStyle='#789abc';ctx.fillRect(20,40,160,50);
+let reference=document.createElement('canvas');reference.width=pw;reference.height=ph;let overlay=reference.getContext('2d',{willReadFrequently:true});overlay.fillStyle='white';overlay.fillRect(0,0,pw,ph);overlay.drawImage(canvas,0,0);overlay.globalCompositeOperation=draft.style.mixBlendMode||'source-over';overlay.drawImage(draft,0,0);
+let painted=overlay.getImageData(0,0,pw,ph).data;
+let original=geometry,replayed=0;geometry=(...args)=>{replayed++;return original(...args)};
+try{commitDraft(tool)}finally{geometry=original}
+check(replayed===0,'Pen-up rebuilt completed geometry '+tool);
+let committed=document.createElement('canvas');committed.width=pw;committed.height=ph;let result=committed.getContext('2d',{willReadFrequently:true});result.fillStyle='white';result.fillRect(0,0,pw,ph);result.drawImage(canvas,0,0);
+let pixels=result.getImageData(0,0,pw,ph).data;
+let changed=false;for(let i=0;i<painted.length;i++)if(Math.abs(painted[i]-pixels[i])>1){changed=true;break}
+check(!changed,'Pen-up changed painted brush pixels '+tool);
+check(draftCount===0&&draftBounds===null,'Pen-up retained draft geometry '+tool);committedBrushes.push(tool);
+}
 // Instrument geometry work after 2,000 samples. A move must touch only the
 // trailing segment, not replay the entire active stroke or saved scene.
 points=Array.from({length:2000},(_,i)=>[30+i/20,60+Math.sin(i/20)*10,.6]);clearDraft();preview(points);
@@ -76,6 +113,11 @@ let original=geometry,touched=0;geometry=(target,p,family)=>{touched+=p.length;o
 try{let previous=points.at(-1);points.push([131,65,.6]);preview([previous,points.at(-1)])}finally{geometry=original}
 check(touched<=2,'Preview work grows with stroke length '+tool);previewWork.push({tool,touched});
 }
+// A burst keeps every pressure sample but paints once, including a forced
+// final flush when pen-up precedes the scheduled animation frame.
+points=[];inkSettings={tool:17,color:0,width:2,layer:state.layers[0][0]};cancelPreview();
+let paint=preview,paints=0;preview=(...args)=>{paints++;return paint(...args)};
+try{let box=canvas.getBoundingClientRect();for(let i=0;i<100;i++)sample({clientX:box.left+(30+i)*box.width/state.width,clientY:box.top+60*box.height/state.height,pointerType:'pen',pressure:i/100});check(paints===0&&points.length===100,'Input burst painted eagerly or discarded samples');flushPreview();check(paints===1&&previewFrame===null&&previewCount===100,'Pen-up failed to flush all samples');flushPreview();check(paints===1,'Final preview painted twice');check(points[99][2]===.99,'Frame batching lost pressure')}finally{preview=paint;cancelPreview()}
 points=[];inkSettings=null;pendingInk={tool:23,...nativeColor(23,7),points:[[30,60,.6,20],[240,60,.6,20]]};draw();
 let x=Math.round(80*canvas.width/state.width),y=Math.round(60*canvas.height/state.height);
 let pendingColor=ctx.getImageData(x,y,1,1).data;check(pendingColor[0]>pendingColor[1],'Pending completed stroke lost on redraw');
@@ -91,7 +133,7 @@ let y=70+row*180;g.fillStyle='#fff';g.fillRect(10,y,1080,170);g.fillStyle='#222'
 for(let width=1;width<=3;width++){g.save();g.translate(195+(width-1)*290,y+30);line({tool,...nativeColor(tool,tool===18?13:tool===23?1:0),points:strokePoints(samples,tool,width)},g);g.restore()}
 row++}
 choose(17);$('zoom').value='fit';resize();
-return JSON.stringify({success:true,controls,distinct:signatures.length,grayscale:true,native_rgba:true,width_parity:true,shader_blending:true,previewErrors,previewWork,sheet:sheet.toDataURL()});
+return JSON.stringify({success:true,controls,distinct:signatures.length,grayscale:true,native_rgba:true,width_parity:true,eraser_controls:true,eraser_pointer_path:true,shader_blending:true,previewErrors,previewWork,committedBrushes,frame_batching:true,sheet:sheet.toDataURL()});
 }catch(error){return JSON.stringify({success:false,error:String(error),stack:error.stack})}})()
 '''
 
@@ -135,7 +177,7 @@ def main(output):
                 failed.append('WebEngine load failed')
                 app.quit()
                 return
-            view.page().runJavaScript('const expected=' + json.dumps(expected) + ';' + CHECKS, checked)
+            view.page().runJavaScript('const expectedFrameBatching=' + json.dumps(desktop) + ';const expected=' + json.dumps(expected) + ';' + CHECKS, checked)
 
         view.loadFinished.connect(loaded)
         state = Editor(Notebook.new('Brush compatibility')).state()
@@ -146,7 +188,7 @@ def main(output):
         view.setHtml(html)
 
     run(True)
-    qt.QTimer.singleShot(30000, lambda: (failed.append('Probe timed out'), app.quit()))
+    qt.QTimer.singleShot(60000, lambda: (failed.append('Probe timed out'), app.quit()))
     app.exec()
     for view in views:
         view.close()

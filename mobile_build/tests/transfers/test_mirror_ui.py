@@ -8,14 +8,37 @@ from mobile.app import LogisticsMobile
 from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
 
 
+class ProgressLoop:
+    """Deterministic clock for worker wakeups and delayed UI delivery."""
+    def __init__(self, queued):
+        self.queued = queued
+        self.timers = []
+        self.now = 0
+
+    def time(self):
+        return self.now
+
+    def call_soon_threadsafe(self, callback):
+        self.queued.append(callback)
+
+    def call_later(self, delay, callback):
+        self.timers.append((self.now + delay, callback))
+
+    def advance(self, seconds):
+        self.now += seconds
+        ready = [timer for timer in self.timers if timer[0] <= self.now]
+        self.timers = [timer for timer in self.timers if timer[0] > self.now]
+        for _, callback in ready:
+            callback()
+
+
 class ProgressDeliveryTests(unittest.TestCase):
     def test_worker_bursts_queue_one_callback_with_latest_values(self):
         from threading import Thread
-        from types import SimpleNamespace
         from unittest.mock import Mock
         from features.rclone.transfers.mobile.execution import coalesced_progress
         queued, published = [], Mock()
-        loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
+        loop = ProgressLoop(queued)
         progress = coalesced_progress(loop, published)
         def worker(start):
             for done in range(start, start + 100):
@@ -33,10 +56,9 @@ class ProgressDeliveryTests(unittest.TestCase):
 
     def test_arrivals_during_render_queue_one_successor_without_blocking_worker(self):
         from threading import Thread
-        from types import SimpleNamespace
         from features.rclone.transfers.mobile.execution import coalesced_progress
         queued, published = [], []
-        loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
+        loop = ProgressLoop(queued)
         def publish(values):
             published.append(values['done'])
             if values['done'] == 0:
@@ -51,10 +73,39 @@ class ProgressDeliveryTests(unittest.TestCase):
         progress(done=0)
         queued.pop(0)()
         self.assertEqual(published, [0])
-        self.assertEqual(len(queued), 1)
-        queued.pop(0)()
+        self.assertFalse(queued)
+        self.assertEqual(len(loop.timers), 1)
+        loop.advance(.99)
+        self.assertEqual(published, [0])
+        loop.advance(.01)
         self.assertEqual(published, [0, 100])
         self.assertFalse(queued)
+
+    def test_steady_updates_leave_a_full_interval_after_slow_render(self):
+        from features.rclone.transfers.mobile.execution import coalesced_progress
+        queued, published = [], []
+        loop = ProgressLoop(queued)
+        def publish(values):
+            published.append(values['done'])
+            loop.now += .4  # Native layout consumes time too.
+        progress = coalesced_progress(loop, publish)
+        progress(done=0)
+        queued.pop(0)()
+        for done in range(1, 6):
+            progress(done=done)
+            while queued:
+                queued.pop(0)()
+            loop.advance(.19)
+        self.assertEqual(published, [0])
+        self.assertEqual(len(loop.timers), 1)
+        loop.advance(.06)
+        self.assertEqual(published, [0, 5])
+        self.assertFalse(loop.timers)
+        progress(done=6)
+        queued.pop(0)()
+        self.assertEqual(published, [0, 5])
+        loop.advance(1)
+        self.assertEqual(published, [0, 5, 6])
 
     def test_old_queued_progress_cannot_overwrite_terminal_or_new_transfer(self):
         from types import SimpleNamespace
@@ -62,7 +113,7 @@ class ProgressDeliveryTests(unittest.TestCase):
         from features.rclone.transfers.mobile.ui import MirrorUI
         from features.rclone.transfers.mobile.execution import coalesced_progress
         queued = []
-        loop = SimpleNamespace(call_soon_threadsafe=lambda callback: queued.append(callback))
+        loop = ProgressLoop(queued)
         bar = SimpleNamespace(max=100, value=100, start=Mock(), stop=Mock())
         app = SimpleNamespace(active_host=True, transfer_epoch=1, transfer_busy=True,
             transfer_message='Finished', transfer_notice=SimpleNamespace(text='Finished'),
@@ -82,6 +133,8 @@ class ProgressDeliveryTests(unittest.TestCase):
         new_progress(**dict(values, done=30))
         for callback in queued:
             callback()
+        # The old transfer can also have a delayed delivery after completion.
+        loop.advance(1)
         self.assertEqual(bar.value, 30)
         app.refresh_transfer_status.assert_called_once()
 
@@ -130,6 +183,7 @@ class MirrorUITests(unittest.TestCase):
                     def show(*args, **kwargs):
                         original(*args, **kwargs)
                         if getattr(app, 'transfer_endpoints', None):
+                            self.assertNotIn('transfer-review', app.native_host.state.routes['files'])
                             self.assertEqual(app.transfer_view.content.children[1].text, expected)
                             shown.append(app.transfer_busy)
                     async def exercise():
@@ -138,6 +192,9 @@ class MirrorUITests(unittest.TestCase):
                             app.begin_transfer_review(None if new else job['id'], push=push,
                                                       remote=remote, folder='folder', storage=storage)
                             self.assertTrue(await drive_review(app))
+                            self.assertEqual(app.routes.screens['files'][-1][0], 'transfers')
+                            app.routes.back()
+                            self.assertNotIn('transfer-review', app.native_host.state.routes['files'])
                             app.show_locations()
                             app.show_transfers()
                         self.assertIn(True, shown)

@@ -86,30 +86,46 @@ class RepositoryCommands:
             self.dispatch('Pull upstream', 'pull', value, repository=captured_path, branch=captured_branch)
 
 
-    def push_dialog(self):
+    def push(self, *, force_with_lease=False):
         view = self.view
         captured_path = view.path
-        captured_branch = view.snapshot.status.branch if view.snapshot else None
         if not view.snapshot: return
         status = view.snapshot.status
         if status.branch == '(detached)':
             view._message('Create or switch to a branch before pushing.', error=True)
             return
-        dialog = FormDialog('Push branch', view, f'Push {status.branch}. Upstream: {status.upstream or "not configured"}.')
-        force = dialog.check('Force push with lease')
-        force.setVisible(view.preferences.options['allow_force_push'])
-        publish = dialog.check('Publish branch and set upstream', not bool(status.upstream))
-        remote = dialog.choice('Remote for publishing', view.snapshot.remotes)
-        branch = dialog.text('Remote branch for publishing', status.branch)
+        if force_with_lease:
+            if not view.preferences.options['allow_force_push'] or not status.upstream:
+                return
+            if not view._confirm('Force push with lease?',
+                                 f'Replace history at {status.upstream} only if its tip matches the last fetched state?'):
+                return
+        elif not status.upstream:
+            return self.publish_dialog()
+        self.dispatch('Force push branch' if force_with_lease else 'Push branch', 'push',
+                      force_with_lease=force_with_lease, repository=captured_path, branch=status.branch)
+
+    def publish_dialog(self):
+        view = self.view
+        captured_path = view.path
+        if not view.snapshot: return
+        status = view.snapshot.status
+        if status.branch == '(detached)':
+            view._message('Create or switch to a branch before pushing.', error=True)
+            return
+        dialog = FormDialog('Publish branch', view,
+                            f'Push {status.branch} to the selected destination and remember it as the upstream.'
+                            + (f' This replaces the current upstream: {status.upstream}.' if status.upstream else ''))
+        remote = dialog.choice('Remote', view.snapshot.remotes)
+        if 'origin' in view.snapshot.remotes:
+            remote.setCurrentText('origin')
+        branch = dialog.text('Remote branch', status.branch)
         if dialog.submitted():
-            forced = force.isChecked() and view.preferences.options['allow_force_push']
-            if forced and not view._confirm('Force push with lease?', 'Replace remote branch history only if its tip matches the last fetched state?'): return
-            if publish.isChecked():
-                if not remote.currentText(): view._message('Add a remote before publishing.', error=True); return
-                name, target = remote.currentText(), branch.text()
-                self.dispatch('Publish branch', 'push', name, target, force_with_lease=forced, repository=captured_path, branch=captured_branch)
-            else:
-                self.dispatch('Push branch', 'push', force_with_lease=forced, repository=captured_path, branch=captured_branch)
+            if not remote.currentText():
+                view._message('Add a remote before publishing.', error=True)
+                return
+            self.dispatch('Publish branch', 'push', remote.currentText(), branch.text(),
+                          repository=captured_path, branch=status.branch)
 
 
     def branch_dialog(self):

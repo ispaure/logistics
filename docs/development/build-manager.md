@@ -8,6 +8,14 @@ then run the reviewed plan. GitHub, deployment and upload effects require an
 explicit confirmation. Existing tester buttons still ask for the final upload
 decision after a verified build is ready.
 
+## Combined validation and delivery
+
+The guided plan panel supports selecting several platforms together, then
+independently reviewing delivery to GitHub, Firebase and TestFlight. See
+[combined validation and delivery](build-manager-journeys.md) for source
+requirements, explicit approvals, local manager setup and validation scope.
+Physical-device installs remain in their existing separate device tab.
+
 ## Implemented operations and extension points
 
 The manager integrates the existing physical-device, TestFlight and Firebase
@@ -53,6 +61,10 @@ suites and workflows. Install it explicitly in each tooling environment; see
 [external manager installation](#external-manager-installation-adapter-api-1).
 
 ## Plan, result and source contracts
+
+For the current consolidation priorities, see the
+[ecosystem audit](ecosystem-audit.md). The external manager's own wiki maintains
+its engine/developer and operator guides; this page owns Logistics adapter policy.
 
 `Plan` schema 1 records project, operation, source identity, backend, workspace,
 effect and ordered phases. A `Phase` carries structured argv, cwd, timeout,
@@ -439,6 +451,8 @@ inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
 - Manager source snapshots keep the three most recently used snapshots and every
   snapshot used within seven days. Snapshot reuse refreshes its age. Execution
   holds a snapshot resource lock; pruning skips a leased snapshot.
+- Explicitly enrolled legacy build outputs keep the three most recently used
+  directories plus everything used within seven days. Enrollment refreshes age.
 - A `.keep` file anywhere inside a tree pins that enclosing build or snapshot.
   Pin a prepared artifact before keeping its path for long-term upload/retry use.
 - Shared SDKs, signing keys, profiles, monotonic counters, existing simulators,
@@ -450,6 +464,24 @@ skips symbolic links and reports filesystem errors. Old saved plans can refer to
 expired snapshots: prepare a fresh plan before running them. Retention preserves
 recent failures for diagnosis; it does not guarantee a fixed disk-size ceiling.
 The numeric families deliberately exclude unclassified historical backup names.
+
+For an older named directory directly under `mobile_build/build/`, first review
+its contents and save useful reports, recordings, source backups and recovery
+material under `test-results/`. Then explicitly enroll only disposable output:
+
+```sh
+python -m Scripts.build_retention --enroll-output old-disposable-probe
+python -m Scripts.build_retention
+python -m Scripts.build_retention --apply
+```
+
+Enrollment writes `.manager-build-output` and starts a seven-day review window;
+it never prunes in the same command. Unknown directories are never enrolled by
+name pattern or swept automatically. Provider roots, canonical build directories,
+missing paths and links are rejected. Producers reusing an enrolled directory
+must hold `build_manager.retention.lease(path)` for the whole operation; the lease
+refreshes its age. Use `.keep` for retained recovery material. SDKs, deployment
+workspaces, logs, credentials and general test evidence remain outside this policy.
 
 For a one-off probe, use `Scripts.build_retention.scratch(root)` as a context
 manager, or run a command in a disposable working directory:
@@ -469,7 +501,7 @@ as human-driven builds, not a system-wide cache cleaner.
 ## Reviewing and deleting local builds
 
 Choose **Clean up builds…** in the manager. Filter by iOS/TestFlight,
-Android/Firebase, source snapshots or disposable scratch; select individual rows
+Android/Firebase, reviewed build outputs, source snapshots or disposable scratch; select individual rows
 or choose **Delete all unprotected…** for the displayed category. The confirmation
 includes the exact paths. This manual action can remove even the newest local
 artifacts; automatic retention still keeps its normal recent-build allowance.

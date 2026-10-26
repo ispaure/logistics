@@ -35,6 +35,8 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+# Explicit mobile output owner; tracked mobile_build sources stay visible.
+/mobile_build/build/
 
 # ----------------------------------------------------------------------------------------------------------------------
 # OPERATING SYSTEM FILES

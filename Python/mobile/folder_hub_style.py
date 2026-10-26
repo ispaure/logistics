@@ -189,4 +189,6 @@ def source_actions(host):
             host.folder_source_actions.remove(child)
         for child in actions:
             host.folder_source_actions.add(child)
-    host.folder_source_actions.style.margin_bottom = 12 if actions else 0
+    margin = 12 if actions else 0
+    if host.folder_source_actions.style.margin_bottom != margin:
+        host.folder_source_actions.style.margin_bottom = margin

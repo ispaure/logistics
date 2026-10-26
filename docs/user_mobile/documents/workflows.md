@@ -57,14 +57,12 @@ beside a folder opens its Browse Local/LocalCrypt/Remote, Pull, Push and managem
 actions. The main Browse action is prominent; Delete local folder is separated
 and uses destructive styling. Pull/Push direction is shown for mapped copies.
 Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
-the entire device filesystem. Choose **New document** from Home. Enter a file
-name and select **Plain text (.txt)** or **Markdown (.md)**, then tap
-**Choose location…**. The selected extension is added when needed. Choose the
-destination folder in Local, All files, Received Files or an unlocked LocalCrypt
-location, then tap **Create document**. New documents start empty in that browsable
-folder; LocalCrypt stores them encrypted. No private app-storage destination is
-offered. Cloud locations remain read-only; use reviewed Push to upload changes.
-**Cancel** before creation creates nothing.
+the entire device filesystem. **New document** now shows the name, type and folder
+together. Choose Plain text, Markdown or Notebook and a writable Local,
+Received Files or unlocked LocalCrypt folder, then **Create document**. New files
+are created in that browsable location. Cloud remains read-only; use reviewed
+Push for changes. Cancel before creation creates nothing. The
+[document guide](documents.md) owns the current creation controls and navigation.
 **Open file** from Home or Documents opens a browser. Use the folder arrow to go
 up; at the root, Back returns to the hub. Android Back first clears search or
 retraces visited folders, then returns to the hub.
@@ -97,6 +95,18 @@ session without reloading its file. Documents lists open files once in **All ope
 with the active one first and a Close button beside each. Its **Recent** section
 shows closed entries. **Saved documents** includes other saved text and Markdown
 files, including files older than Recent. Search filters these three lists by name.
+Recent hides closed local file references whose files are missing or deleted.
+If a file disappears after its row was displayed, opening it explains that it
+may have been moved or deleted; open it again from its current folder.
+Missing references remain in history so reconnecting storage can restore them.
+Cloud and locked encrypted references remain available to retry after connecting
+or unlocking; their presence does not confirm the source file still exists.
+An already open document can retain its in-memory content after source deletion.
+Imported text and retained book/comic copies are separate documents on the device:
+deleting the original does not delete these copies. Book/comic rows in Recent
+show **Saved copy on device**. Use **Delete local copy** in Settings → Books &
+Comics → Saved books & comics to remove a retained book or comic and its history.
+Use **Document actions → Delete document…** to remove an app-stored text document.
 Reopening a file from Home or Recent shows a small activity bar and an
 **Opening file…** status below the current view. Cloud files show
 **Opening cloud file…** while credentials are checked and any required download

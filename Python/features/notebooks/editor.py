@@ -81,10 +81,12 @@ class Editor:
             elif op == 'erase':
                 if ink.warning:
                     raise ValueError(ink.warning)
-                ids = action['ids']
-                if not isinstance(ids, list) or len(ids) > 100_000:
-                    raise ValueError('Invalid stroke selection.')
-                ink.strokes = [s for s in ink.strokes if s.id not in ids]
+                if 'points' in action:
+                    from .eraser import erase
+                    ink.strokes = erase(ink.strokes, ink.layers, action['points'],
+                                        action['radius'], action.get('kind') == 'whole')
+                else:
+                    ink.strokes = [s for s in ink.strokes if s.id not in action['ids']]
             elif op == 'add-page':
                 book.add_page(self.index + 1)
                 self.index += 1

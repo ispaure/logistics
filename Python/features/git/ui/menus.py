@@ -37,9 +37,11 @@ class RepositoryMenus(qt.QObject):
         self.log_action.setCheckable(True)
         view.log_toggle.toggled.connect(self.log_action.setChecked)
         self.log_action.setChecked(view.log_toggle.isChecked())
-        for title in ('Refresh', 'Commit', 'Pull…', 'Push…', 'Fetch', 'Branch…', 'Merge…', 'Stash…', 'Settings'):
+        for title in ('Refresh', 'Commit', 'Pull…', 'Push', 'Fetch', 'Branch…', 'Merge…', 'Stash…', 'Settings'):
             action = view.action_buttons[title].defaultAction()
             self.menus['Repository'].addAction(action)
+            if title == 'Push':
+                self.menus['Repository'].addMenu(view.push_menu)
             if title == 'Refresh': self.shortcut(action, key.Refresh)
         self.menus['Repository'].addSeparator()
         for action in view.more_menu.actions():

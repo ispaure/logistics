@@ -78,6 +78,12 @@ class SettingsCategories:
         app.android_eink_choice.on_change = app.change_android_eink
         return box
 
+    def features(self):
+        from ..feature_settings import feature_controls
+        box = self.category('Features')
+        feature_controls(self.app, box)
+        return box
+
 
     def speech(self):
         app = self.app
@@ -194,7 +200,7 @@ class Category:
 
 
 CATEGORIES = (
-    Category('App', 'application'), Category('Appearance', 'appearance'),
+    Category('App', 'application'), Category('Appearance', 'appearance'), Category('Features', 'features'),
     Category('Camera', 'camera', camera_required=True), Category('Read aloud', 'speech'),
     Category('Markdown', 'text_size', ('Markdown', 'markdown_font_size')),
     Category('Text', 'text_size', ('Text', 'text_font_size')),
@@ -210,5 +216,10 @@ def settings_sections(app):
     from features.images.mobile.burst_camera import available
     app.settings_status = SettingsLabel(app.preferences.error, style=Pack(margin_top=12))
     owner = SettingsCategories(app)
+    from services.mobile_features import enabled
+    requirements = {'Camera': ('images',), 'Markdown': ('text_editor',), 'Text': ('text_editor',),
+        'EPUB': ('books',), 'Books & Comics': ('books', 'comics', 'pdf'), 'LM Chat': ('lm',)}
     return {entry.title: lambda entry=entry: getattr(owner, entry.factory)(*entry.arguments)
-            for entry in CATEGORIES if not entry.camera_required or available(app)}
+            for entry in CATEGORIES if (not entry.camera_required or available(app))
+            and (entry.title not in requirements or any(enabled(app.preferences, name)
+                 for name in requirements[entry.title]))}

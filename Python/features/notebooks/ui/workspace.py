@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.status_line import StatusLine
 from services.documents.storage import export_local_document, read_local_bytes, local_document_resource
 from PySide6 import QtQuick, QtQuickWidgets
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
@@ -97,8 +98,7 @@ class NotebookWorkspace(qt.QWidget):
             button = qt.QPushButton(label)
             button.clicked.connect(callback)
             actions.addWidget(button)
-        self.status = qt.QLabel('')
-        self.layout.addWidget(self.status)
+        self.status = StatusLine()
         listing = qt.QWidget()
         listing_layout = qt.QVBoxLayout(listing)
         for key, name in self.repository.list():
@@ -109,7 +109,8 @@ class NotebookWorkspace(qt.QWidget):
         scroll = qt.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(listing)
-        self.layout.addWidget(scroll)
+        self.layout.addWidget(scroll, 1)
+        self.layout.addWidget(self.status)
 
     def new(self):
         try:
@@ -187,7 +188,7 @@ class NotebookWorkspace(qt.QWidget):
         self.web.setHtml(editor_html(self.state(), self.bridge.url, console_bridge=True, desktop=True))
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
-        self.layout.addWidget(self.web)
+        self.layout.addWidget(self.web, 1)
         from commonUtils.ui.tasks.operation_progress import OperationProgress
         self.operation = OperationProgress(self)
         self.operation.completed.connect(self.saved)
@@ -209,7 +210,11 @@ class NotebookWorkspace(qt.QWidget):
         error = ''
         try:
             op = validate_action(action)
-            if op == 'library':
+            if op == 'page-previews':
+                from ..previews import page_previews
+                rows = page_previews(self.editor.notebook, action['start'])
+                self.web.page().runJavaScript('window.notebookPagePreviews(' + json.dumps(rows) + ')')
+            elif op == 'library':
                 from commonUtils.ui.document_host import current_document_host
                 host = current_document_host()
                 if host is not None:
@@ -218,7 +223,7 @@ class NotebookWorkspace(qt.QWidget):
                 else:
                     self.library()
                 return
-            if op == 'transfer':
+            elif op == 'transfer':
                 if not self.confirm_export():
                     self.web.page().runJavaScript(update_script(self.state(), 'Copy cancelled.'))
                     return

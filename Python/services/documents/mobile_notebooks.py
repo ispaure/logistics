@@ -14,6 +14,10 @@ def panels(app):
 
 
 async def open_notebook(app, *, path=None, resource=None, key=None, name=None, destination=None):
+    if not app.require_feature('notebooks'):
+        if resource is not None:
+            resource.close()
+        return False
     if not app.active_host or not app.checkpoint():
         if resource is not None:
             resource.close()

@@ -5,12 +5,15 @@ TestFlight/Firebase builds, build the pinned pure-Python language detector wheel
 and expose it to the child package installers (run from the repository root):
 
 ```sh
-mobile_build/.venv/bin/python -m pip wheel --wheel-dir mobile_build/.tools/python-wheels langdetect==1.0.9
-export PIP_FIND_LINKS="$PWD/mobile_build/.tools/python-wheels"
+mobile_build/.venv/bin/python -m pip wheel --wheel-dir mobile_build/.tools/release-wheels langdetect==1.0.9
+export PIP_FIND_LINKS="$PWD/mobile_build/.tools/release-wheels"
 ```
 
 The native build and TestFlight GitHub workflows prepare the same wheel in their
-temporary directories. Generated wheels stay outside tracked source.
+temporary directories. Generated wheels stay outside tracked source. The local
+manager adapter selects `.tools/release-wheels`; use the same cache for standalone
+helpers. An existing `.tools/python-wheels` cache also works when explicitly set
+through `PIP_FIND_LINKS`, but the manager does not select that older name.
 
 For the combined PySide test-device and tester-distribution window, use
 `mobile_build/deploy_test_devices.command`; see the
@@ -29,7 +32,9 @@ for setup and commands. This workflow does not automate TestFlight.
 
 Routine validation uses the iOS simulator and Android emulator on the computer,
 including tablet checks when navigation/layout changes. A paired iPhone can
-receive an installation while locked. Request an unlock only when physical
+receive an installation while locked when its development services are available.
+Xcode can still refuse the build destination until the device is unlocked; follow
+that actual diagnostic. Request an unlock only when development-service admission, physical
 hardware behavior or an explicitly requested on-device launch/screenshot check
 requires it; ordinary regression checks should not depend on the user unlocking
 their phone.

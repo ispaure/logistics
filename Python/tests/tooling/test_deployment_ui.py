@@ -20,6 +20,7 @@ class DeploymentUITests(QtTestCase):
         self.addCleanup(window.deleteLater)
         dialog = SettingsDialog(window.manager.project, window)
         self.addCleanup(dialog.deleteLater)
+        self.wait_until(lambda: not dialog.busy, message='Deployment settings did not load')
         self.assertIsInstance(dialog.navigation, SettingsNavigation)
         self.assertGreater(dialog.sidebar.topLevelItemCount(), 5)
         self.assertTrue(all(field.toolTip() for field in dialog.controls.values()))

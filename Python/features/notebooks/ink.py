@@ -66,11 +66,29 @@ class InkPage:
     _original_layers: list = field(default_factory=list, repr=False)
 
     @classmethod
-    def read(cls, data):
+    def read(cls, data, *, previous=None):
         page = cls(raw=data)
         try:
             page._frames = frames(data)
-            page._blocks = list(ss.read_blocks(BytesIO(data)))
+            # Checkpoint normalization must not duplicate every old point into
+            # each undo snapshot. Native frames are immutable; reuse unchanged
+            # frame bytes and parsed blocks, and decode only new/changed frames.
+            if previous is None:
+                page._blocks = list(ss.read_blocks(BytesIO(data)))
+            else:
+                reusable = {raw: (raw, block) for raw, block in zip(previous._frames, previous._blocks)}
+                fresh = iter(ss.read_blocks(BytesIO(HEADER_V6 + b''.join(
+                    raw for raw in page._frames if raw not in reusable))))
+                blocks = []
+                for index, raw in enumerate(page._frames):
+                    if raw in reusable:
+                        page._frames[index], block = reusable[raw]
+                    else:
+                        block = next(fresh)
+                    blocks.append(block)
+                if next(fresh, None) is not None:
+                    raise ValueError('Inconsistent ink frame count.')
+                page._blocks = blocks
             if len(page._blocks) != len(page._frames):
                 raise ValueError('Inconsistent ink frame count.')
             tree = SceneTree()
@@ -80,6 +98,8 @@ class InkPage:
                    for b in page._blocks):
                 raise ValueError('This page has text, highlights or unknown objects. Ink editing is disabled; all bytes are preserved.')
             mapping = {id(b.item.value): b for b in page._blocks if isinstance(b, ss.SceneLineItemBlock)}
+            prior_strokes = {s.id: s for s in previous.strokes} if previous else {}
+            prior_blocks = {id(block) for block in previous._blocks} if previous else set()
             total = 0
             def visit(group, depth=0):
                 nonlocal total
@@ -99,6 +119,16 @@ class InkPage:
                         block = mapping[id(child)]
                         if block.item.deleted_length:
                             continue
+                        identity = f'{block.item.item_id.part1}:{block.item.item_id.part2}'
+                        baseline = previous._baseline.get(identity) if previous and id(block) in prior_blocks else None
+                        candidate = prior_strokes.get(identity)
+                        if baseline is not None and candidate is not None and candidate.payload() == baseline:
+                            total += len(candidate.points)
+                            if total > MAX_PAGE_POINTS:
+                                raise ValueError('Ink page exceeds the editable point limit.')
+                            page.strokes.append(candidate)
+                            page._baseline[identity] = baseline
+                            continue
                         if child.tool in (si.Pen.ERASER, si.Pen.ERASER_AREA):
                             raise ValueError('Native eraser objects are preserved but cannot yet be rendered or edited.')
                         total += len(child.points)
@@ -112,7 +142,7 @@ class InkPage:
                         page.strokes.append(Stroke(f'{block.item.item_id.part1}:{block.item.item_id.part2}', key,
                             int(child.tool), int(child.color), points, child.thickness_scale, child.color_rgba))
             visit(tree.root)
-            page._baseline = {s.id: deepcopy(s.payload()) for s in page.strokes}
+            page._baseline.update({s.id: deepcopy(s.payload()) for s in page.strokes if s.id not in page._baseline})
             page._original_layers = list(page.layers)
         except Exception as error:
             page.warning = str(error)
@@ -193,10 +223,17 @@ class InkPage:
                 elif key in self._baseline and current[key].payload() != self._baseline[key]:
                     changed = current[key]
                     block = deepcopy(block)
-                    if len(changed.points) != len(block.item.value.points):
-                        raise ValueError('Invalid transformed stroke.')
-                    for point, values in zip(block.item.value.points, changed.points):
-                        point.x, point.y = values[0] - WIDTH / 2, values[1]
+                    original = block.item.value.points
+                    if len(changed.points) == len(original) and all(
+                            values[2:] == baseline[2:] for values, baseline in
+                            zip(changed.points, self._baseline[key]['points'])):
+                        # Ordinary movement retains native point dynamics exactly.
+                        for point, values in zip(original, changed.points):
+                            point.x, point.y = values[0] - WIDTH / 2, values[1]
+                    else:
+                        block.item.value.points = [si.Point(x - WIDTH / 2, y, 0, 0,
+                            max(0, min(65535, round(w * 4))), round(p * 255))
+                            for x, y, p, w in changed.points]
                     raw = encode([block])[len(HEADER_V6):]
             if isinstance(block, ss.TreeNodeBlock):
                 key = f'{block.group.node_id.part1}:{block.group.node_id.part2}'
@@ -214,21 +251,26 @@ class InkPage:
         if author is None:
             raise ValueError('Ink author space exhausted.')
         additions = [ss.AuthorIdsBlock({author: uuid4()})]
+        identities = {s.id: (CrdtId(*map(int, s.id.split(':'))) if s.id in self._baseline
+                              else CrdtId(author, index + 1))
+                      for index, s in enumerate(self.strokes)}
+        right_neighbors, next_by_layer = {}, {}
+        for stroke in reversed(self.strokes):
+            right_neighbors[stroke.id] = next_by_layer.get(stroke.layer, CrdtId(0, 0))
+            if stroke.id in self._baseline:
+                next_by_layer[stroke.layer] = identities[stroke.id]
         tails = {}
-        from ._vendor.rmscene.crdt_sequence import CrdtSequence
-        for parent in {b.parent_id for b in self._blocks if isinstance(b, ss.SceneLineItemBlock)}:
-            ordered = CrdtSequence([b.item for b in self._blocks if isinstance(b, ss.SceneLineItemBlock) and b.parent_id == parent]).keys()
-            if ordered:
-                tails[parent] = ordered[-1]
         for index, stroke in enumerate(self.strokes):
             if stroke.id in self._baseline:
+                parent = CrdtId(*map(int, stroke.layer.split(':')))
+                tails[parent] = identities[stroke.id]
                 continue
             parent = CrdtId(*map(int, stroke.layer.split(':')))
-            identity = CrdtId(author, index + 1)
+            identity = identities[stroke.id]
             line = si.Line(si.PenColor(stroke.color), si.Pen(stroke.tool),
-                [si.Point(x - WIDTH / 2, y, 0, 0, max(1, min(65535, round(w * 4))), round(p * 255))
+                [si.Point(x - WIDTH / 2, y, 0, 0, max(0, min(65535, round(w * 4))), round(p * 255))
                  for x, y, p, w in stroke.points], stroke.scale, 0, color_rgba=stroke.color_rgba)
             additions.append(ss.SceneLineItemBlock(parent, CrdtSequenceItem(identity,
-                tails.get(parent, CrdtId(0, 0)), CrdtId(0, 0), 0, line)))
+                tails.get(parent, CrdtId(0, 0)), right_neighbors[stroke.id], 0, line)))
             tails[parent] = identity
         return HEADER_V6 + b''.join(chunks) + encode(additions)[len(HEADER_V6):]

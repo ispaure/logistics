@@ -21,7 +21,7 @@ class NotebookMenus:
         self.add('Edit', 'undo', 'Undo', lambda: self.command('undo'), keys.Undo)
         self.add('Edit', 'redo', 'Redo', lambda: self.command('redo'), keys.Redo)
         self.menus['Edit'].addSeparator()
-        for key, title in [('ink', 'Draw'), ('erase', 'Erase Whole Strokes'), ('select', 'Select and Move')]:
+        for key, title in [('ink', 'Draw'), ('erase', 'Eraser Type and Size…'), ('select', 'Select and Move')]:
             self.add('Edit', key, title, lambda key=key: self.ui(key))
         self.add('View', 'toolbar', 'Drawing Toolbar', lambda: self.ui('toolbar'), checkable=True)
         self.add('View', 'grayscale', 'Grayscale Preview', lambda: self.ui('grayscale'), checkable=True)
@@ -37,6 +37,8 @@ class NotebookMenus:
             action = zoom.addAction(label)
             action.triggered.connect(lambda checked=False, value=value: self.ui('zoom', value))
         self.zoom_menu = zoom
+        self.add('Page', 'pages-overview', 'Pages Overview…', lambda: self.ui('pagesOverview'))
+        self.menus['Page'].addSeparator()
         for key, label, shortcut in [('prev', 'Previous Page', 'Alt+Left'), ('next', 'Next Page', 'Alt+Right'),
                                       ('add-page', 'Add Page', None), ('duplicate-page', 'Duplicate Page', None),
                                       ('delete-page', 'Delete Page…', None), ('move-earlier', 'Move Earlier', None),

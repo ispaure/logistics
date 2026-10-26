@@ -72,13 +72,16 @@ credentials and settings. External services need their own accounts/software.
 The Android/iOS development app supports file browsing, text and Markdown editing,
 EPUB/comic/PDF reading, LM chat, and local or encrypted remote-folder workflows.
 It includes reviewed transfers, metadata editing, search, adaptive document
-panes, and an Inbox for files shared from other apps. See [mobile usage](docs/user_mobile/user_mobile.md) for supported workflows,
+panes, and an Inbox for files shared from other apps. **Settings → Features** turns
+mobile feature groups on or off; all current features are enabled by default.
+See [mobile usage](docs/user_mobile/user_mobile.md) for supported workflows,
 storage choices, format limits and validation status.
 
 For local builds, paired-device installation, Firebase and TestFlight distribution,
 start with the [mobile build and release handbook](docs/development/mobile-handbook.md).
 The existing deployment launcher also exposes reviewed test/build plans and local
 profiles in the [build manager](docs/development/build-manager.md).
+The guided flow supports [combined platform validation and reviewed GitHub/Firebase/TestFlight delivery](docs/development/build-manager-journeys.md).
 
 | Tool | Use it to… |
 | --- | --- |

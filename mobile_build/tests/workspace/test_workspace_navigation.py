@@ -8,6 +8,44 @@ from mobile.app import LogisticsMobile
 
 
 class WorkspaceNavigationTests(unittest.TestCase):
+    def test_reselecting_each_tab_returns_to_root_and_keeps_sessions(self):
+        import toga
+        app = self.app
+        app.editor.value = 'Keep this draft'
+        editor = app.editor_view
+        for destination in app.native_host.destinations:
+            with self.subTest(destination=destination):
+                app.native_host.activate(destination)
+                app.select_destination(destination)
+                app.show_view(toga.Label('Nested page'), destination=destination, route='nested-test')
+                if destination == 'documents':
+                    self.navigation.menu_open['documents'] = True
+                with patch.object(app.main_window, 'dialog') as dialog:
+                    app.native_host._selected(app.native_host.root)
+                dialog.assert_not_called()
+                self.assertFalse(app.routes.screens[destination])
+                self.assertFalse(app.native_host.state.routes[destination])
+                self.assertIs(app.body, app.routes.roots[destination])
+                if destination in self.navigation.menu_open:
+                    self.assertFalse(self.navigation.menu_open[destination])
+        self.assertIs(app.editor_view, editor)
+        self.assertEqual(editor.editor.value, 'Keep this draft')
+
+    def test_reselecting_workspaces_cancels_review_and_closes_drawer(self):
+        import toga
+        from unittest.mock import Mock
+        app = self.app
+        app.show_locations()
+        app.show_view(toga.Label('Review Pull'), destination='files', route='transfer-review')
+        app._cancel_transfer_review = cancel = Mock()
+        self.navigation.menu_open['files'] = True
+        app.native_host._selected(app.native_host.root)
+        cancel.assert_called_once_with()
+        self.assertFalse(app.routes.screens['files'])
+        self.assertFalse(self.navigation.menu_open['files'])
+        self.assertIs(app.body, app.routes.roots['files'])
+        app._cancel_transfer_review = None
+
     def test_rotating_a_reader_with_explicit_file_browser_keeps_it_open(self):
         self.app.create_chosen_document('md')
         owner = self.app.editor_view

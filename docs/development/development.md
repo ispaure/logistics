@@ -51,6 +51,7 @@ Read only the contracts relevant to your change. Feature-specific implementation
 | Mobile file/conversation drawers and paired panes | [Workspace navigation](mobile-workspace-navigation.md) |
 | Mobile build/deployment reference | [Mobile launchers](mobile-launchers.md) |
 | Unified plans, profiles and reusable orchestration | [Build manager](build-manager.md) |
+| Combined platform validation and reviewed tester/release delivery | [Combined journeys](build-manager-journeys.md) |
 | Paired iPhone/iPad installation | [Device deployment](mobile-device-deployment.md) |
 | TestFlight archives and uploads | [TestFlight](mobile-testflight.md) |
 | Desktop and mobile release gates | [Releasing](releasing.md), [platform checks](platform-checks.md) |
@@ -80,8 +81,12 @@ validate a new change.
 
 ## Plans and historical assessments
 
-Use the [current audit implementation status](maintenance/remaining-work-audit.md)
-for completed units and the remaining native acceptance gate. The
+Start with the [October 25 ecosystem refactoring audit](ecosystem-audit.md) for
+current cross-repository priorities and the documentation review. It separates
+remaining ownership seams from the completed work below.
+
+Use the [earlier audit implementation record](maintenance/remaining-work-audit.md)
+for completed units and the scope of their native acceptance. The
 [history index](maintenance/history/history.md) preserves dated assessments and
 implementation evidence; old proposed next steps are not today's backlog.
 Current code and test owners are linked above. Host source lives in

@@ -76,11 +76,10 @@ class DocumentNavigationTests(TestCase):
                         app.loop.run_until_complete(app.browser_file_location(('Local files', 'Fixtures')))
                     origin = app.body
                     routes = [screen[0] for screen in app.routes.screens[destination]]
-                    app.choose_document_type()
-                    form = app.body.children[0].content
-                    form.name_input.value = 'Created ' + destination + ' ' + choice
-                    form.type_selector.value = kind
-                    app.loop.run_until_complete(form.create_button.on_press())
+                    app.loop.run_until_complete(app.choose_document_type())
+                    picker = app.editor_picker()
+                    picker.save_as_name.value = 'Created ' + destination + ' ' + choice
+                    picker.creation_type.value = kind
                     app.loop.run_until_complete(app.editor_picker().browser_editor_location(('Local', '')))
                     app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
                     owner = app.private_sessions.active
@@ -100,19 +99,17 @@ class DocumentNavigationTests(TestCase):
         app = self.app
         app.show_home()
         origin = app.body
-        app.choose_document_type()
+        app.loop.run_until_complete(app.choose_document_type())
         panel = app.body
-        form = panel.children[0].content
-        form.name_input.value = 'Could not create'
-        app.loop.run_until_complete(form.create_button.on_press())
+        picker = app.editor_picker()
+        picker.save_as_name.value = 'Could not create'
         picker = app.editor_picker()
         app.loop.run_until_complete(picker.browser_editor_location(('Local', '')))
         with patch('services.documents.storage.save_resource_and_reopen', side_effect=OSError('No space')):
             app.loop.run_until_complete(picker.confirm_editor_file())
         self.assertIn('No space', picker.save_as_status.value)
         picker.cancel_text_destination()
-        self.assertIs(app.body, panel)
-        form.cancel_button.on_press()
+        self.assertIsNot(app.body, panel)
         self.assertIs(app.body, origin)
 
     def test_tab_selection_uses_the_incoming_destinations_document_state(self):

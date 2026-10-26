@@ -54,11 +54,35 @@ function resize() {
   canvas.style.width = (state.width * scale) + 'px';
   canvas.style.height = (state.height * scale) + 'px';
   let ratio = Math.min(devicePixelRatio || 1, 2);
-  canvas.width = Math.ceil(state.width * scale * ratio);
-  canvas.height = Math.ceil(state.height * scale * ratio);
-  ctx.setTransform(canvas.width / state.width, 0, 0, canvas.height / state.height, 0, 0);
-  sizeDraft();
+  let backingScale = Math.min(scale * ratio, Math.sqrt(canvasPixelLimit / (state.width * state.height))),
+    width = Math.max(1, Math.floor(state.width * backingScale)),
+    height = Math.max(1, Math.floor(state.height * backingScale));
+  // Assigning unchanged dimensions also reallocates canvas storage. A page
+  // change needs a redraw, not three replacement GPU-backed bitmaps.
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+    ctx.setTransform(canvas.width / state.width, 0, 0, canvas.height / state.height, 0, 0);
+    sizeDraft()
+  }
   draw()
+}
+
+function previewErase(samples, radius = eraserRadius) {
+  if (!samples.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.lineWidth = radius * 2;
+  ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(samples[0][0], samples[0][1]);
+  for (let p of samples) ctx.lineTo(p[0], p[1]);
+  ctx.stroke();
+  const end = samples[samples.length - 1];
+  ctx.beginPath();
+  ctx.arc(end[0], end[1], radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore()
 }
 
 function draw() {
@@ -75,5 +99,10 @@ function draw() {
         points: strokePoints(action.points, action.tool, action.width)
       });
   if (pendingInk) line(pendingInk);
-  if (points.length && mode === 'ink') preview(points)
+  if (pendingErase) previewErase(pendingErase.points, pendingErase.radius);
+  if (points.length && mode === 'erase' && eraserKind === 'partial') previewErase(points);
+  if (points.length && mode === 'ink') {
+    preview(points);
+    previewCount = points.length
+  }
 }

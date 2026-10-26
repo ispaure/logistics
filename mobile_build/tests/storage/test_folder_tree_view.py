@@ -81,10 +81,13 @@ class FolderTreeViewTests(unittest.IsolatedAsyncioTestCase):
     async def test_empty_and_browse_all_controls_reuse_identity_across_source_refreshes(self):
         entries = {'All files': dict(local('All files'), browser_root=True)}
         self.view.render(entries, 'Local', set(), set())
-        empty, browse, legend = self.view.content.children
+        empty, row = self.view.content.children
+        browse = self.view.buttons['All files']
+        self.assertIn(browse, row.children)
+        self.assertIsNone(self.view.nodes[('All files',)].menu)
         await browse.on_press()
         self.browse.assert_awaited_once_with('All files')
         self.view.render({}, 'Local', set(), set())
-        self.assertEqual(list(self.view.content.children), [empty, legend])
+        self.assertEqual(list(self.view.content.children), [empty])
         self.assertFalse(self.view.buttons)
         self.assertFalse(self.view.nodes)

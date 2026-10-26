@@ -24,9 +24,10 @@ The desktop editor uses the application's header menus. The document name appear
 in its tab; the page has no second title bar or file-action buttons.
 
 The compact toolbar across the top groups **Undo/Redo**, drawing modes, brush
-icons, three stroke-width samples, **Ink** colors and the active layer. Hover an
+icons, three stroke-width samples, circular ink-color swatches and the active layer.
+Colors appear directly in the toolbar; the toolbar wraps when the window narrows. Hover an
 icon for its name. Pick a brush directly with keys `1`–`9`, or click its icon;
-use `B` for Draw, `E` for whole-stroke Erase and `V` for Select and Move.
+use `B` for Draw, `E` for Eraser settings and `V` for Select and Move.
 Single-key drawing shortcuts leave text fields alone. Select and Move picks the
 topmost stroke at the pointer, then moves it by dragging. On narrow windows the
 toolbar wraps while the page keeps the full content width.
@@ -40,7 +41,14 @@ shortcuts. The same menus follow the document into a detached window.
 current editing session. Edits to an unsaved draft stay in memory until saved.
 Reopening a saved notebook starts a fresh undo history.
 
-The footer provides page navigation, **Add page** (`＋`) and zoom. **Fit page**
+The footer provides **Pages Overview**, page navigation, **Add Page** (`＋`) and zoom.
+Open **Pages Overview** in the footer or the **Page** menu to select a page by its
+numbered ink thumbnail. The current page is marked; **More pages** loads the next
+batch of previews. Preserved templates and unsupported content may not appear in
+thumbnails. **Add Page**, including the action inside the overview, inserts a blank
+page immediately after the current page and opens it. Undo restores the previous
+page order and selection.
+**Fit page**
 is the desktop default and keeps the entire page visible as the window resizes.
 Choose **Fit width** or a fixed percentage in the footer or **View → Zoom**
 when you want a closer view. Use `Ctrl`/`⌘ +` (or `Ctrl`/`⌘ =`) to zoom in,
@@ -48,7 +56,9 @@ when you want a closer view. Use `Ctrl`/`⌘ +` (or `Ctrl`/`⌘ =`) to zoom in,
 Command while scrolling the mouse wheel or trackpad over the page to zoom
 around the pointer; ordinary scrolling still pans. Keyboard/menu zoom keeps
 the viewport center in place. Manual zoom ranges from 10% to 400%, and the
-footer shows the current percentage. **Page** also
+footer shows the current percentage. The editor
+uses a bounded screen-preview resolution at high magnification; saved and
+exported native ink retains its full geometry. **Page** also
 provides previous/next (`Alt+Left` / `Alt+Right`), add, duplicate, delete, reorder
 and copy-to-notebook actions. Import or create a destination notebook before
 copying a page; copying preserves the source. At least one page must remain.
@@ -98,7 +108,7 @@ PDF/EPUB-backed archives are rejected without changing the source.
 
 The page surface uses 1404 × 1872 notebook units. Existing templates are preserved
 but are not rendered behind the ink. Stroke selection currently moves one stroke;
-there is no multi-stroke lasso, partial eraser, OCR, cloud sync or exact brush
+there is no multi-stroke lasso, OCR, cloud sync or exact brush
 texture simulation. Archives are limited to 32 MiB compressed, 128 MiB expanded,
 4096 members and 1000 pages. Very long strokes or densely populated pages can
 reach editing limits; rejected edits keep the previous saved content. Error
@@ -109,3 +119,13 @@ A successfully encoded archive is not proof of editability on every tablet.
 Physical Boox pressure/palm behavior and reMarkable import/select/move/erase checks
 remain required before calling this fully tablet-verified. See the
 [development guide](../development/development.md) for the current evidence scope.
+
+## Eraser types and sizes
+
+Press **Erase** to select the eraser and open its settings. **Erase parts of
+strokes** is the default: only ink under the eraser path is removed, leaving
+the rest of a long stroke intact. Choose **Small**, **Medium** (the default) or
+**Large**, then **Done** to draw with the eraser. Press the tool again to
+change its size or switch to **Erase whole strokes**. Both types respect hidden
+layers and support Undo/Redo. The selected type and size remain active while
+you work in that editor.

@@ -88,6 +88,8 @@ class ReopenSourceTests(IsolatedAsyncioTestCase):
             self.addCleanup(_shared_local_roots.pop, private, None)
             app = SimpleNamespace(private_root=private, require_document_feature=Mock(return_value=True), show_cloud=Mock(), open_crypt=AsyncMock(return_value=True))
             old = '/var/mobile/Containers/Data/Application/OLD-CONTAINER/Documents/Welcome to Local.txt'
+            from mobile.document_sources import local_reference_available
+            self.assertTrue(local_reference_available(app, dict(type='local', path=old)))
             self.assertTrue(await reopen_file(app, dict(type='local', path=old)))
             copies = app.open_crypt.await_args.kwargs['copies']
             self.assertEqual(copies.provider.root, documents)

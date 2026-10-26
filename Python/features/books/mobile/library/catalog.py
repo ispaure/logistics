@@ -110,6 +110,11 @@ class LibraryCatalog(ImportedComicBatch):
         self.library_row_buttons = []
         rows = []
         for record in self.library_records:
+            from services.mobile_features import enabled
+            if not enabled(self.preferences, 'comics'):
+                continue
+            if record['provider'].private and not enabled(self.preferences, 'rclone'):
+                continue
             if not self.library_host.folder_visible(record):
                 continue
 
@@ -160,7 +165,10 @@ class LibraryCatalog(ImportedComicBatch):
         if row is not None and any(
             record is row.entry for record in self.library_records
         ):
-            self.loop.create_task(row.callback())
+            # Capture the command before clearing the native activation row.
+            # A library folder is a launcher, not a persistent active item.
+            widget.select_index(None)
+            return self.loop.create_task(row.callback())
 
     async def refresh_library_folders(self, widget=None, **kwargs):
         """Serialize discovery and briefly reuse the same credential/config snapshot."""
@@ -253,6 +261,9 @@ class LibraryCatalog(ImportedComicBatch):
             self._library_inventory_task = self.loop.create_task(refresh())
 
     def _publish_library_inventory(self, records, failures):
+        from services.mobile_features import document_feature, enabled
+        records = [record for record in records
+            if enabled(self.preferences, document_feature(record['name'], record['kind']))]
         previous = self.book_loading
         self.book_loading = True
         self.imported_records = records

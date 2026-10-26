@@ -60,14 +60,14 @@ class ReaderCohesionTests(unittest.TestCase):
             owner.set_reading_mode(False)
             self.assertIs(owner.reader_footer.parent, view)
 
-    def test_editor_toolbar_tracks_unsaved_edits_and_keeps_rename_available(self):
+    def test_editor_toolbar_tracks_unsaved_edits_and_leaves_rename_to_browser(self):
         self.app.create_chosen_document('md')
         owner = self.app.editor_view
         view = owner.document_view
         self.assertEqual([b.control_icon for b in view._native_reader_buttons()], ['view', 'more'])
         owner.editor.value = '# Unsaved passage\n'
         self.assertEqual([b.control_icon for b in view._native_reader_buttons()], ['save', 'more'])
-        self.assertIn('Rename document…', [label for label, callback in owner.actions.actions])
+        self.assertNotIn('Rename document…', [label for label, callback in owner.actions.actions])
         owner.rename_document()
         rename_view = self.app.routes.body('documents').children[0]
         rename_view.children[1].value = 'Renamed.md'

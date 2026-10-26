@@ -46,6 +46,87 @@ class NotebookTests(unittest.TestCase):
     def draw(self, tool=17, color=0):
         self.editor.apply(dict(op='stroke', points=[[10,20,.25],[50,60,.8]],tool=tool,color=color))
 
+    def test_partial_eraser_splits_sparse_stroke_and_roundtrips_order_and_style(self):
+        from features.notebooks.ink import Stroke
+        ink = self.book.page(0)
+        layer = ink.layers[0][0]
+        ink.strokes = [Stroke('long', layer, 23, 9, [[100, 200, .25, 4], [900, 200, .75, 12]],
+                              3, (90, 120, 180, 80)),
+                       Stroke('overlap', layer, 17, 0, [[800, 100, .5, 2], [800, 300, .5, 2]])]
+        # Start with imported native identities, so fragments must remain below overlap.
+        self.book.pages[0].ink = InkPage.read(ink.to_bytes())
+        original = self.book.page(0).strokes[0].payload()
+        self.editor.apply(dict(op='erase', points=[[500, 100, .5], [500, 300, .5]], radius=16))
+        cut = self.book.page(0).strokes
+        self.assertEqual(len(cut), 3)
+        self.assertLess(cut[0].points[-1][0], 500)
+        self.assertGreater(cut[1].points[0][0], 500)
+        self.assertEqual(cut[0].points[0], original['points'][0])
+        self.assertEqual(cut[1].points[-1], original['points'][-1])
+        for fragment in cut[:2]:
+            self.assertEqual((fragment.tool, fragment.color_rgba, fragment.scale), (23, (90, 120, 180, 80), 3))
+        reopened = Notebook.read(self.book.to_bytes()).page(0)
+        self.assertFalse(reopened.warning)
+        self.assertEqual([s.tool for s in reopened.strokes], [23, 23, 17])
+        self.assertAlmostEqual(reopened.strokes[0].points[-1][0], cut[0].points[-1][0], places=3)
+        self.assertEqual(len(self.repo.open(self.key).page(0).strokes), 3)
+        self.editor.apply(dict(op='undo'))
+        self.assertEqual(self.book.page(0).strokes[0].payload(), original)
+        self.editor.apply(dict(op='redo'))
+        self.assertEqual(len(self.book.page(0).strokes), 3)
+
+    def test_eraser_sizes_whole_mode_hidden_layers_dots_and_repeated_cuts(self):
+        from features.notebooks.eraser import erase, SIZES
+        from features.notebooks.ink import Stroke
+        line = Stroke('long', 'visible', 17, 0, [[100, 200, .5, 2], [900, 200, .5, 2]])
+        hidden = Stroke('hidden', 'hidden', 17, 0, line.points)
+        layers = [('visible', 'Visible', True), ('hidden', 'Hidden', False)]
+        gaps = []
+        for radius in SIZES.values():
+            cut = erase([line, hidden], layers, [[500, 200, .5]], radius)
+            self.assertEqual(len(cut), 3)
+            self.assertIs(cut[-1], hidden)
+            gaps.append(cut[1].points[0][0] - cut[0].points[-1][0])
+        self.assertEqual(gaps, sorted(set(gaps)))
+        self.assertEqual(erase([line, hidden], layers, [[500, 100, .5], [500, 300, .5]], 8, True), [hidden])
+        cut = erase([line], layers, [[400, 200, .5]], 8)
+        cut = erase(cut, layers, [[600, 200, .5]], 8)
+        self.assertEqual(len(cut), 3)
+        dot = Stroke('dot', 'visible', 17, 0, [[500, 200, .5, 2]])
+        self.assertEqual(erase([dot], layers, [[500, 200, .5]], 8), [])
+        self.assertEqual(erase([line], layers, [[500, 400, .5]], 8), [line])
+
+    def test_invalid_eraser_paths_and_checkpoint_failure_leave_ink_unchanged(self):
+        self.draw()
+        self.book.pages[0].ink = InkPage.read(self.book.page(0).to_bytes())
+        before = self.editor.state()
+        for fields in ({'points': [], 'radius': 8}, {'points': [[1, 2, .5]], 'radius': 9},
+                       {'points': [[float('nan'), 2, .5]], 'radius': 8},
+                       {'points': [[1, 2, .5]], 'radius': 8, 'kind': 'other'}):
+            with self.assertRaises(ValueError):
+                self.editor.apply(dict(op='erase', **fields))
+            self.assertEqual(self.editor.state(), before)
+        with patch.object(self.editor, 'checkpoint', side_effect=OSError('full')):
+            with self.assertRaises(OSError):
+                self.editor.apply(dict(op='erase', points=[[30, 40, .5]], radius=8))
+        self.assertEqual(self.editor.state(), before)
+
+    def test_add_page_inserts_after_current_page_and_undo_restores_order(self):
+        self.book.add_page()
+        self.book.add_page()
+        original = [page.id for page in self.book.pages]
+        self.editor.apply(dict(op='page', index=1))
+        self.editor.apply(dict(op='add-page'))
+        inserted = self.book.pages[2].id
+        self.assertEqual(self.editor.index, 2)
+        self.assertEqual([page.id for page in self.book.pages], original[:2] + [inserted] + original[2:])
+        self.editor.apply(dict(op='undo'))
+        self.assertEqual(self.editor.index, 1)
+        self.assertEqual([page.id for page in self.book.pages], original)
+        self.editor.apply(dict(op='redo'))
+        self.assertEqual(self.editor.index, 2)
+        self.assertEqual(self.book.pages[2].id, inserted)
+
     def test_layers_visibility_and_recovery_conflict(self):
         self.draw()
         self.editor.apply(dict(op='add-layer',name='Second layer'))
@@ -145,7 +226,7 @@ class NotebookTests(unittest.TestCase):
             self.assertLess(widths[0], widths[1])
         diagonal = [[20, 20, .6], [40, 40, .6], [60, 20, .6]]
         calligraphy = stroke_points(diagonal, 21, 2)
-        self.assertLess(calligraphy[1][3], calligraphy[2][3])
+        self.assertGreater(calligraphy[1][3], calligraphy[2][3])
 
     def test_shader_uses_its_native_palette_and_color_specific_alpha(self):
         # Independent native ARGB values from the color definitions, not

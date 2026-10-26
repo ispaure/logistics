@@ -549,7 +549,6 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         if self.routes.apple:
             from .ios_toolbar import prepare_form
             form_actions = {
-                'new-document': dict(primary='Choose location…', cancel='Cancel'),
                 'chat-settings': dict(primary='Save & return to chat', back='Back to conversation'),
                 'transfer-settings': dict(primary='Save settings', cancel='Cancel'),
                 'unlock-credential': dict(primary='Unlock', cancel='Cancel'),
@@ -714,6 +713,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             self.recovery_notice.text = str(error)
 
     def show_documents(self, widget=None, *, resume=False, edit=False, destination=None, **kwargs):
+        if not self.require_feature('text_editor'):
+            return False
         if self.current is None:
             pending = self.__dict__.pop('_pending_managed_restore', None)
             if pending is None or not self.open_document(pending):

@@ -91,8 +91,6 @@ class FolderPreview:
             self.browser.search.value = entry.query
             self.browser.sort.value = entry.browser.sort.value
             self.browser.set_tree(entry.browser.tree)
-            self.browser.selected = entry.selected
-            self.browser.highlight_selection()
             self.status.value = ''
         else:
             self.task = app.loop.create_task(self.prepare())
@@ -324,11 +322,14 @@ class FolderNavigation:
     def restore(self, destination):
         routes = self.routes
         screens = routes.screens[destination]
+        routes.flush_return_selection(destination)
         if not screens:
             return
         entry = self.screens.get((destination, screens[-1][0]))
         if entry is None:
             return
+        entry.selected = None
+
         def mount_live_header():
             header = getattr(entry.browser, 'location_bar', None)
             container = screens[-1][2]
@@ -364,9 +365,7 @@ class FolderNavigation:
                 if entry.view.parent is not None:
                     entry.view.parent.remove(entry.view)
                 entry.browser.search.value = entry.query
-                selected = next((item for item in entry.browser.entries if item.identity == entry.selected), None)
-                if selected is not None:
-                    await entry.browser.select(selected)
+                entry.browser.clear_selection()
                 for child in list(panel.children):
                     panel.remove(child)
                 panel.add(entry.view)

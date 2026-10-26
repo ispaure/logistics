@@ -107,9 +107,9 @@ class ToolbarProbe(LogisticsMobile):
             sample = await self.record('chat-settings')
             assert sample['pinned'] == ['Save & return to chat'], sample
             self.show_home()
-            self.choose_document_type()
+            await self.choose_document_type()
             sample = await self.record('new-document')
-            assert sample['pinned'] == ['Choose location…'], sample
+            assert sample['pinned'] == ['Create document'], sample
             self.routes.back()
             assert self.create_chosen_document('md', name='Toolbar.md', content='# Toolbar')
             await self.record('markdown-editor')

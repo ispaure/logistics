@@ -13,6 +13,7 @@ from uuid import uuid4
 from build_manager import Phase, Plan
 from build_manager.parallels import Parallels
 from Scripts.build_snapshots import source_members
+from Scripts.guest_results import GuestResultLifecycle
 
 
 INSPECT = '''import json,os,pathlib,platform,pwd
@@ -60,10 +61,9 @@ def run(args):
     result = dict(schema=1, vm=vm, original_state=original['status'], environment=info,
                   workspace=workspace, source=args.source_identity, status='running', phases=[])
     args.results.mkdir(parents=True, exist_ok=False)
-    started = time.monotonic()
+    lifecycle = GuestResultLifecycle(result, args.results, 'Parallels ' + args.distribution, 'guest_workspace')
     staged = False
     transfer_attempted = False
-    collected = False
     try:
         transfer_started = time.monotonic()
         transfer_attempted = True
@@ -142,6 +142,10 @@ subprocess.run(['uv','venv','--python','3.12.2','--seed',sys.argv[1]+'/environme
                         workspace + '/source', timeout=3000, environment=env),
                   Phase('release-tooling', (guest_python, '-m', 'unittest', 'discover', '-s', '.github/scripts', '-v'),
                         workspace + '/source', timeout=300, environment=env))
+        if getattr(args, 'native_notebooks', False):
+            phases += (Phase('notebook-native', (guest_python, 'Python/tests/notebooks/notebook_platform_probe.py',
+                '--output', reports + '/notebook-native'), workspace + '/source', timeout=1200,
+                environment=env, dependencies=('environment',)),)
         plan = Plan('Logistics', 'Focused Linux contracts' if args.pattern else 'Full local Linux platform checks', args.source_identity, phases,
                     workspace + '/operation', backend='Parallels ' + args.distribution)
         client.write_owned(vm, workspace, token, 'plan.json', json.dumps(plan.data()).encode(),
@@ -167,33 +171,11 @@ subprocess.run(['uv','venv','--python','3.12.2','--seed',sys.argv[1]+'/environme
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
                 result['cleanup_check_error'] = str(error)
         if staged:
-            try:
-                client.collect(vm, workspace, token, args.results / 'guest')
-                collected = True
-                evidence = args.results / 'guest/reports/manager/result.json'
-                if evidence.is_file():
-                    report = json.loads(evidence.read_text())
-                    if report['source'] != args.source_identity or report['backend'] != 'Parallels ' + args.distribution:
-                        raise ValueError('Retrieved guest report belongs to different source/backend.')
-                    result['phases'] = report['phases']
-                    result['guest_result'] = str(evidence)
-                    if result['status'] == 'passed' and report['status'] != 'passed':
-                        raise ValueError('Guest exit status disagrees with its required test result.')
-                elif result['status'] == 'passed':
-                    raise ValueError('A passing guest process did not produce its required result.')
-            except (OSError, RuntimeError, ValueError, KeyError, subprocess.SubprocessError) as error:
-                result.update(status='failed', retrieval_error=str(error))
-            if collected:
-                try:
-                    client.remove(vm, workspace, token)
-                    result['guest_workspace_removed'] = True
-                except (OSError, RuntimeError, subprocess.SubprocessError) as error:
-                    result.update(status='failed', cleanup_error=str(error))
-            else:
-                result['guest_workspace_preserved_for_recovery'] = True
-        result['seconds'] = time.monotonic() - started
-        (args.results / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
-        print(json.dumps(result), flush=True)
+            lifecycle.collect(
+                lambda: client.collect(vm, workspace, token, args.results / 'guest'),
+                args.results / 'guest/reports/manager/result.json',
+                lambda: client.remove(vm, workspace, token))
+        lifecycle.finish()
         if args.shutdown and original['status'] == 'stopped':
             client.shutdown(vm)
 
@@ -208,8 +190,11 @@ def main():
     parser.add_argument('--container-image', default='')
     parser.add_argument('--shutdown', action='store_true')
     parser.add_argument('--pattern', default='')
+    parser.add_argument('--native-notebooks', action='store_true', help='Run native notebook UI probes after focused setup')
     parser.add_argument('--manager-checkout', type=Path)
     args = parser.parse_args()
+    if args.native_notebooks and not args.pattern:
+        parser.error('--native-notebooks requires an explicit focused test pattern')
     code = run(args)
     report = json.loads((args.results / 'result.json').read_text())
     return code or int(report['status'] != 'passed')

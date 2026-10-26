@@ -58,6 +58,11 @@ happen through Apple after upload.
 
 ## Local commands
 
+Before packaging, prepare the pure-Python language-detector wheel and expose the
+same ignored wheel cache used by the local manager adapter; see
+[dependency wheels](mobile-device-deployment.md). A binary-only mobile installer
+cannot install a source-only package merely because it works in the host venv.
+
 Use the persistent Python 3.12/Briefcase 0.4.5 environment prepared for device
 deployment and Go 1.26.9. For example, from the repository root:
 
@@ -98,6 +103,30 @@ session once API setup is complete. External group automation requires API
 authentication; see the configuration below.
 `--profile /path/to/distribution.mobileprovision` selects manual signing for
 archiving; install the matching certificate/private key and profile first.
+
+### App and Inbox profiles must match
+
+The app and its Inbox extension both require App Store profiles with
+`group.io.github.ispaure.logisticsmobile`. An older main-app profile without that
+App Group cannot export the current archive. Automatic export can also stop if
+the account lacks cloud-managed certificate permission. If the configured Mac
+already has valid manual profiles and their distribution certificate, select both:
+
+```sh
+mobile_build/deploy_ios_testflight.command \
+  --profile /absolute/path/Logistics-App.mobileprovision \
+  --inbox-profile /absolute/path/Logistics-Inbox.mobileprovision
+```
+
+These are placeholders for existing protected files. Preserve bundle/team identity;
+do not remove the extension or App Group to make export succeed. The launcher
+forwards these arguments to archive preparation. A new archive attempt needs a new
+build number. Once upload succeeds, use `distribute` for that uploaded build if
+processing/group assignment needs another attempt; do not upload it again.
+
+The archive command holds the retention lock without precreating its release
+directory. Other commands lease existing outputs. This preserves both active-build
+protection and the refusal to overwrite an earlier release workspace.
 
 ## Automatic distribution to Friends
 

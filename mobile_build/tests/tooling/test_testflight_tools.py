@@ -9,6 +9,36 @@ class TestFlightWorkflowTests(unittest.TestCase):
     identity = dict(bundle_id=BUNDLE, team_id='ABCDEFGHIJ', application_identifier='ABCDEFGHIJ.' + BUNDLE,
                     keychain_access_groups=[])
 
+    def test_archive_lock_does_not_precreate_release_directory(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from build_manager.locking import workspace_lock
+        from mobile_build.deployment import testflight_tools as tools
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'pyproject.toml').write_text('[tool.briefcase]\nbundle="io.github.ispaure"\nversion="0.1.9"\n')
+            workspace = root / 'build/testflight/123'
+
+            def archive(args, destination, identity, env):
+                self.assertEqual(destination, workspace)
+                self.assertFalse(destination.exists())
+                with self.assertRaises(RuntimeError):
+                    with workspace_lock(destination.parent / '.123.retention.lock'):
+                        pass
+                destination.mkdir()
+
+            with patch.object(tools, 'ROOT', root), \
+                    patch.object(tools, 'release_identity', return_value=self.identity), \
+                    patch.object(tools, 'installed', return_value=[]), \
+                    patch.object(tools, 'choose', return_value=('/Applications/Xcode.app', 'sdk')), \
+                    patch.object(tools, 'archive_release', side_effect=archive) as build, \
+                    patch('Scripts.build_retention.clean_builds'), \
+                    patch.dict('os.environ'), \
+                    patch('sys.argv', ['testflight_tools', 'archive', '--build-number', '123']):
+                tools.main()
+                build.assert_called_once()
+            self.assertTrue(workspace.is_dir())
+
     def test_xcode_uses_saved_api_key_and_rejects_partial_environment_override(self):
         from mobile_build.deployment.testflight_tools import auth_args
         from pathlib import Path

@@ -5,6 +5,7 @@
     "build_version.py",
     "documents/__init__.py",
     "documents/archive_access.py",
+    "documents/destinations.py",
     "documents/limits.py",
     "documents/locations.py",
     "documents/markdown.py",

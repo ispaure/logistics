@@ -193,20 +193,17 @@ setZoom(20);let upper=document.getElementById('zoom').value==='4';setZoom(.001);
 
         def check_layouts(sizes):
             if not sizes:
-                (output / 'desktop-canvas.json').write_text(json.dumps(dict(status='passed',
-                    native_mouse_input=True, brush=12, color=6, visual_controls=True, undo=True, redo=True,
-                    recovered_pages=2, rename=True, add_layer=True, document_host=True,
-                    responsive_widths=[720, 1280], horizontal_toolbar=True, native_menus=True, default_fit_page=True,
-                    save_shortcut=True, hidden_toolbar=True, keyboard_modes=True, brush_number_shortcuts=True,
-                    zoom_shortcuts=True, anchored_modifier_wheel=True, zoom_bounds=[.1, 4],
-                    export_bytes=len(workspace.editor.notebook.to_bytes())), indent=2))
-                return app.quit()
+                return check_overview()
             width, height = sizes[0]
             host.resize(width, height)
             def measure():
-                workspace.web.page().runJavaScript("JSON.stringify({width:innerWidth,zoom:document.getElementById('zoom').value,toolbarHeight:document.querySelector('header').getBoundingClientRect().height,brushRows:new Set([...document.querySelectorAll('#brushes button')].map(button=>button.offsetTop)).size,overflow:document.body.scrollWidth>innerWidth,viewport:document.getElementById('viewport').getBoundingClientRect().toJSON(),paper:document.getElementById('paper').getBoundingClientRect().toJSON()})", measured)
+                workspace.web.page().runJavaScript("JSON.stringify({width:innerWidth,zoom:document.getElementById('zoom').value,toolbarHeight:document.querySelector('header').getBoundingClientRect().height,brushRows:new Set([...document.querySelectorAll('#brushes button')].map(button=>button.offsetTop)).size,swatches:[...document.querySelectorAll('.swatch')].map(b=>({w:b.offsetWidth,h:b.offsetHeight})),inline:Math.abs(document.getElementById('swatches').getBoundingClientRect().top-document.getElementById('brushes').getBoundingClientRect().top)<8,overflow:document.body.scrollWidth>innerWidth,viewport:document.getElementById('viewport').getBoundingClientRect().toJSON(),paper:document.getElementById('paper').getBoundingClientRect().toJSON()})", measured)
             def measured(encoded):
                 data = json.loads(encoded)
+                if any(dot['w'] != dot['h'] or dot['w'] != 24 for dot in data['swatches']):
+                    return fail('Stretched color swatches: ' + encoded)
+                if width == 1280 and not data['inline']:
+                    return fail('Colors did not share the desktop toolbar row: ' + encoded)
                 if (data['overflow'] or data['brushRows'] != 1 or data['toolbarHeight'] > 90
                         or data['viewport']['height'] < 150 or data['zoom'] != 'page'
                         or data['paper']['right'] > data['viewport']['right'] + 1
@@ -226,6 +223,45 @@ setZoom(20);let upper=document.getElementById('zoom').value==='4';setZoom(.001);
                 qt.QTimer.singleShot(150, focused)
             qt.QTimer.singleShot(250, measure)
 
+        def check_overview():
+            original = [page.id for page in workspace.editor.notebook.pages]
+            window.notebook_menus.actions['pages-overview'].trigger()
+            def inspect():
+                workspace.web.page().runJavaScript("JSON.stringify({open:document.getElementById('pagesDialog').open,count:document.querySelectorAll('#pagePreviews img').length,loaded:[...document.querySelectorAll('#pagePreviews img')].every(img=>img.complete&&img.naturalWidth>0),busy})", inspected)
+            def inspected(encoded):
+                data = json.loads(encoded)
+                if data != dict(open=True, count=2, loaded=True, busy=False):
+                    if time.monotonic() - started > 25:
+                        return fail('Pages Overview did not load thumbnails: ' + encoded)
+                    return qt.QTimer.singleShot(100, inspect)
+                workspace.grab().save(str(output / 'desktop-pages-overview.png'))
+                workspace.web.page().runJavaScript("document.querySelector('#pagePreviews [data-page=\"1\"]').click()")
+                until(lambda: workspace.editor.index == 1, select_first)
+            def select_first():
+                workspace.request_command(dict(op='page', index=0))
+                until(lambda: workspace.editor.index == 0, insert)
+            def insert():
+                workspace.request_ui('pagesOverview')
+                qt.QTimer.singleShot(200, lambda: workspace.web.page().runJavaScript("document.getElementById('overviewAdd').click()"))
+                until(lambda: len(workspace.editor.notebook.pages) == 3, inserted)
+            def inserted():
+                order = [page.id for page in workspace.editor.notebook.pages]
+                if order[0] != original[0] or order[2] != original[1] or workspace.editor.index != 1:
+                    return fail('Add Page did not insert after current page')
+                workspace.request_command(dict(op='undo'))
+                until(lambda: len(workspace.editor.notebook.pages) == 2, completed)
+            def completed():
+                (output / 'desktop-canvas.json').write_text(json.dumps(dict(status='passed',
+                    native_mouse_input=True, brush=12, color=6, visual_controls=True, undo=True, redo=True,
+                    recovered_pages=2, rename=True, add_layer=True, document_host=True,
+                    responsive_widths=[720, 1280], horizontal_toolbar=True, native_menus=True, default_fit_page=True,
+                    save_shortcut=True, hidden_toolbar=True, keyboard_modes=True, brush_number_shortcuts=True,
+                    zoom_shortcuts=True, anchored_modifier_wheel=True, zoom_bounds=[.1, 4],
+                    round_inline_swatches=True, pages_overview=True, thumbnail_selection=True, insert_after_current=True,
+                    export_bytes=len(workspace.editor.notebook.to_bytes())), indent=2))
+                return app.quit()
+            qt.QTimer.singleShot(200, inspect)
+
         loaded_once = False
         def loaded(ok):
             nonlocal loaded_once
@@ -240,7 +276,7 @@ setZoom(20);let upper=document.getElementById('zoom').value==='4';setZoom(.001);
                 sizes = json.loads(encoded)
                 if sizes['page'] <= 0 or sizes['header'] > sizes['body'] * .18:
                     return fail('Expanded notebook toolbar hides the page: ' + encoded)
-                workspace.web.page().runJavaScript("document.querySelector('details').open=false;JSON.stringify({brushes:document.querySelectorAll('#brushes button').length,colors:document.querySelectorAll('#swatches button').length,shortcuts:(()=>{for(let key of ['e','v','b'])document.dispatchEvent(new KeyboardEvent('keydown',{key}));let draw=document.getElementById('ink').getAttribute('aria-pressed');for(let key of ['9','6'])document.dispatchEvent(new KeyboardEvent('keydown',{key}));return draw==='true'&&document.getElementById('tool').value==='12'})()})", check_chrome)
+                workspace.web.page().runJavaScript("document.querySelector('details').open=false;JSON.stringify({brushes:document.querySelectorAll('#brushes button').length,colors:document.querySelectorAll('#swatches button').length,shortcuts:(()=>{for(let key of ['e','v','b']){document.dispatchEvent(new KeyboardEvent('keydown',{key}));if(eraserDialog.open)$('closeEraser').click()}let draw=document.getElementById('ink').getAttribute('aria-pressed');for(let key of ['9','6'])document.dispatchEvent(new KeyboardEvent('keydown',{key}));return draw==='true'&&Number(document.getElementById('tool').value)===Object.values(state.tools)[5]})()})", check_chrome)
             def check_chrome(encoded):
                 chrome = json.loads(encoded)
                 if chrome != dict(brushes=9, colors=9, shortcuts=True):
