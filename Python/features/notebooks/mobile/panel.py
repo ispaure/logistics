@@ -350,7 +350,9 @@ class NotebookPanel:
             web.on_navigation_starting = None
             android = type(web._impl).__module__.startswith('toga_android.')
             private = callable(getattr(web, 'clear_private_content', None))
-            if android and not private and web.parent is not None:
+            # A retained panel must not retain its retired native WebView too.
+            # Private retirement performs its own detach before clearing bytes.
+            if not private and web.parent is not None:
                 web.parent.remove(web)
             from services.documents.mobile_views import retire_webview
             retire_webview(web)

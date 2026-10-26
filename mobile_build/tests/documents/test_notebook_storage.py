@@ -307,3 +307,19 @@ class NotebookStorageTests(unittest.TestCase):
                 self.assertIsNotNone(panel.web)
                 self.assertIsNone(panel._repository)
         self.assertEqual(list((self.root / 'notebooks').glob('**/base.rmdoc')), [])
+
+    def test_ordinary_retired_canvas_is_detached_even_while_its_panel_is_retained(self):
+        panel = self.create(private=False)
+        retired = panel.web
+        self.assertIs(retired.parent, panel.view)
+        panel.retire_canvas()
+        self.assertIsNone(panel.web)
+        self.assertIsNone(retired.parent)
+        self.assertNotIn(retired, panel.view.children)
+        self.assertIsNotNone(panel.editor)
+        panel.mount_canvas()
+        replacement = panel.web
+        self.assertIsNot(replacement, retired)
+        panel.dispose()
+        self.assertIsNone(replacement.parent)
+        self.assertNotIn(replacement, panel.view.children)
