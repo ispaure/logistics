@@ -1,5 +1,30 @@
 """Bounded checks for content rendered by the actual native WebView."""
 import asyncio
+import json
+
+
+def native_state(view):
+    """Capture attachment/loading evidence only after a real render failure."""
+    state = dict(backend=type(view._impl).__module__, parent=view.parent is not None,
+                 navigation=getattr(view, '_native_policy_trace', []))
+    try:
+        native = view._impl.native
+        if state['backend'].startswith('toga_iOS.'):
+            state['loading'] = bool(native.isLoading())
+            state['window'] = native.window is not None
+            chain = []
+            node = native
+            while node is not None and len(chain) < 12:
+                chain.append(dict(hidden=bool(node.isHidden()), alpha=float(node.alpha),
+                    width=float(node.bounds.size.width), height=float(node.bounds.size.height)))
+                node = node.superview
+            state['ancestors'] = chain
+        elif state['backend'].startswith('toga_android.'):
+            state.update(attached=bool(native.isAttachedToWindow()), visibility=int(native.getVisibility()),
+                         width=int(native.getWidth()), height=int(native.getHeight()))
+    except Exception as error:
+        state['diagnostic_error'] = str(error)
+    return state
 
 
 async def wait_for_text(view, expected, *, absent=None, timeout=30):
@@ -30,7 +55,9 @@ async def wait_for_text(view, expected, *, absent=None, timeout=30):
     task = asyncio.create_task(loaded())
     done, _ = await asyncio.wait([task], timeout=timeout)
     if not done:
+        state = native_state(view)
+        print('LOGISTICS_NATIVE_WEBVIEW_STATE=' + json.dumps(state), flush=True)
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
-        raise RuntimeError(f'WebView did not render {expected!r}; last value={last!r}, url={view.url!r}') from None
+        raise RuntimeError(f'WebView did not render {expected!r}; last value={last!r}, url={view.url!r}, native={state!r}') from None
     await task

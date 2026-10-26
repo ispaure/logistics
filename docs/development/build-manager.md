@@ -616,6 +616,15 @@ and reviewed TestFlight delivery include both. Generated runtime receipts take
 precedence over the legacy `LOGISTICS_IOS_RUNTIME_EVIDENCE` fallback; host reports
 cannot satisfy the gate.
 
+For full native UI reproduction in an isolated QA application, the existing
+`mobile_build.validation.document_storage_tools` runner accepts
+`--probe native-suite` on iOS and Android. It invokes the unchanged native suite,
+uses its normal 30-minute iOS/40-minute Android budgets, retains timing/failure
+diagnostics and removes its owned app and device. The iOS runner prints progress
+from completed case checkpoints. A timed-out WebView render also records native
+attachment, loading and ancestor visibility state; these diagnostics do not retry
+the render or change its acceptance deadline.
+
 `Scripts/ios_testbed.py` adapts only the generated upstream test app: it adds a
 real window-scene delegate and configuration, and raises the fixture's deployment
 minimum to iOS 15 for current Xcode SDKs. The pinned CPython source, interpreter

@@ -119,6 +119,8 @@ async def exercise(app):
 class NativeCheckApp(LogisticsMobile):
     def startup(self):
         print('LOGISTICS_NATIVE_STARTUP', flush=True)
+        from .navigation_trace import install
+        install()
         if get_os() is OS.IOS:
             from . import enable_native_fault_log
             self._native_fault_stream = enable_native_fault_log(self.paths.cache)
@@ -147,4 +149,9 @@ class NativeCheckApp(LogisticsMobile):
 
 
 
-NativeCheckApp('Logistics Mobile', 'io.github.ispaure.logisticsmobile').main_loop()
+def main():
+    return NativeCheckApp('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
+
+
+if __name__ == '__main__':
+    main().main_loop()

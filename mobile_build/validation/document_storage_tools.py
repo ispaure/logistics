@@ -21,6 +21,8 @@ SOURCE = REPO
 BUNDLE = 'io.github.ispaure.logisticsstorageqa'
 QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa'}
+NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt',
+                      'logistics-native-ui-fault.log')
 
 
 def command(args, output, *, cwd=None, env=None, timeout=1200):
@@ -124,8 +126,19 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
         console_stream = (output / 'ios-console.log').open('w')
         console = subprocess.Popen(['xcrun', 'simctl', 'launch', '--console-pty', device, bundle],
             env=env, stdout=console_stream, stderr=subprocess.STDOUT)
-        deadline = time.monotonic() + 240
+        deadline = time.monotonic() + (1800 if result_name == 'logistics-native-ui-result.json' else 240)
+        next_progress = 0
         while time.monotonic() < deadline:
+            if result_name == 'logistics-native-ui-result.json' and time.monotonic() >= next_progress:
+                next_progress = time.monotonic() + 30
+                timings = cache / NATIVE_DIAGNOSTICS[0]
+                if timings.exists():
+                    value = json.loads(timings.read_text())
+                    summary = value['summary']
+                    checkpoints = summary['checkpoints']
+                    print(json.dumps(dict(native_elapsed_s=round(summary['elapsed_s'], 1),
+                        last_case=checkpoints[-1]['case'] if checkpoints else None,
+                        active=[row['name'] for row in value['records'] if row['status'] == 'running'])), flush=True)
             report = cache / result_name
             if report.exists():
                 result = json.loads(report.read_text())
@@ -145,6 +158,10 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             time.sleep(.3)
         raise TimeoutError('iOS focused QA probe timed out')
     finally:
+        if cache is not None:
+            for artifact_name in NATIVE_DIAGNOSTICS:
+                if (cache / artifact_name).exists():
+                    shutil.copyfile(cache / artifact_name, output / artifact_name)
         if cache is not None and entry_point.endswith('.notebook_apple_memory_probe'):
             for artifact_name in ('notebook-memory-progress.json', 'notebook-memory.rmdoc', 'notebook-memory.png'):
                 if (cache / artifact_name).exists():
@@ -216,7 +233,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
             time.sleep(2)
             emulator.invoke('-s', serial, 'shell', 'pm', 'enable', bundle)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
-        deadline = time.monotonic() + (2400 if hands_on else 900 if raw_ink or memory_probe else 240)
+        deadline = time.monotonic() + (2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 240)
         last_stage = None
         while time.monotonic() < deadline:
             if memory_probe:
@@ -306,6 +323,11 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 'run-as', bundle, 'cat', 'cache/' + result_name], env=env, capture_output=True, timeout=15)
             if report_data.returncode == 0 and report_data.stdout:
                 (output / 'android-result.json').write_bytes(report_data.stdout)
+            for name in NATIVE_DIAGNOSTICS:
+                artifact = subprocess.run([str(emulator.adb), '-s', record['serial'], 'exec-out',
+                    'run-as', bundle, 'cat', 'cache/' + name], env=env, capture_output=True, timeout=15)
+                if artifact.returncode == 0:
+                    (output / name).write_bytes(artifact.stdout)
             (output / 'android-logcat.txt').write_text(emulator.invoke('-s', record['serial'], 'logcat', '-d', '-t', '2000'))
             try:
                 (output / 'android-exit-info.txt').write_text(emulator.invoke(
@@ -328,7 +350,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('storage', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPad'), default='iPhone')
     parser.add_argument('--increase-contrast', action='store_true')
@@ -375,6 +397,9 @@ def main():
         if args.probe == 'localcrypt':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.localcrypt_probe', result_name='localcrypt-result.json')
+        if args.probe == 'native-suite':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.native_suite_probe', result_name='logistics-native-ui-result.json')
         if args.platform == 'ios':
             profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                            entry_point='tests.logisticsmobile.notebook_probe',

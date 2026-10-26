@@ -12,6 +12,11 @@ from .document_checks import exercise_documents
 class DocumentWorkspaceProbe(NotebookProbe):
     result_name = 'document-workspace-result.json'
 
+    def startup(self):
+        from .navigation_trace import install
+        install()
+        super().startup()
+
     async def run_checks(self, app, report):
         await exercise_notebooks(app)
         report['cases'].append('native_notebooks')
