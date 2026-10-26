@@ -240,6 +240,11 @@ class ChapterBridge:
     def navigation(self, widget, url, **kwargs):
         if self.closed:
             return False
+        # WKWebView requests its internal blank bootstrap before committing
+        # loadHTMLString's base URL. Keep that inert navigation alive only
+        # while the new trusted chapter is loading.
+        if url == 'about:blank' and not self.ready:
+            return True
         if url.startswith(self.root):
             action = url[len(self.root):].split('?', 1)[0]
             try:
