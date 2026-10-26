@@ -27,8 +27,15 @@ class LMAppearanceTests(QtTestCase):
         short_height = page.composer.height()
         short_transcript = page.transcript.height() - page.composer_dock.height()
         page.composer.setPlainText('\n'.join(f'Line {index}' for index in range(10)))
-        self.wait_until(lambda: page.composer.height() > 150 and page.composer.verticalScrollBar().maximum() == 0 and
-                        page.transcript.height() - page.composer_dock.height() < short_transcript)
+        # Native font metrics differ across desktop platforms. Require actual
+        # multiline growth and a fully visible draft instead of a pixel height
+        # which a ten-line Linux font need not reach.
+        self.wait_until(lambda: page.composer.height() > short_height + 4 * page.composer.fontMetrics().lineSpacing() and
+                        page.composer.verticalScrollBar().maximum() == 0 and
+                        page.transcript.height() - page.composer_dock.height() < short_transcript,
+                        message=lambda: str(dict(height=page.composer.height(), short=short_height,
+                            line_spacing=page.composer.fontMetrics().lineSpacing(),
+                            scroll_maximum=page.composer.verticalScrollBar().maximum())))
         self.assertLess(page.transcript.height() - page.composer_dock.height(), short_transcript)
         page.composer.setPlainText('\n'.join(f'Line {index}' for index in range(100)))
         self.wait_until(lambda: page.composer.verticalScrollBar().isVisible() and
