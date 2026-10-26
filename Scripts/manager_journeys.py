@@ -121,8 +121,6 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
     for name,target in (('testflight','ios'),('firebase','android')):
         if name in destinations and locations.get(target,project.journey_capability['platforms'][target]['backend']) == 'GitHub':
             raise ValueError(name+' preparation needs local native validation and matching receipts. Choose the local host for '+target+' or remove this delivery destination; GitHub validation is available for checks-only runs.')
-    if delivery and 'linux' in targets and values.get('vm.linux_scope') != 'both' and sys.platform == 'darwin':
-        raise ValueError('Coordinated Linux delivery requires both declared Linux distributions, not partial coverage.')
     if 'github' in destinations:
         from Scripts.build_snapshots import git
         if git(project.root, 'status', '--porcelain') or git(project.root, 'rev-parse', 'HEAD') != source['logistics_commit']:

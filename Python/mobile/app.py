@@ -685,7 +685,13 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                 return False
             if len(self.scene_manager.owners.hosts) > 1:
                 raise ValueError('Close other app windows before deleting a document.')
-            return self.close_session(key, choice='delete')
+            closing = self.__dict__.setdefault('_reader_closing', set())
+            if self.visible_reader() == key:
+                closing.add(key)
+            try:
+                return self.close_session(key, choice='delete')
+            finally:
+                closing.discard(key)
         except (OSError, ValueError) as error:
             owner.status.text = 'Could not delete; document retained: ' + str(error)
             return False

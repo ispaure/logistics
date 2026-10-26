@@ -78,7 +78,7 @@ def close_managed_text(host, key, choice, *, leaving_reader=False):
             host.editor_view.bind()
     host.save_workspace()
     host.refresh_documents()
-    host.reader_closed(key)
+    host.reader_closed(key, refresh_roots=choice == 'delete')
     if was_current and host.adaptive.split is not None and not leaving_reader:
         if host.current is not None:
             host.adaptive.present(host.document_view, route='editor', title=host.current.name if host.current else 'New document')

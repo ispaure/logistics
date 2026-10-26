@@ -108,16 +108,16 @@ class ManagerAdapterTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[3]
         project = LogisticsProject(root)
         values = manager_settings.defaults(root / 'mobile_build')
-        values.update({'vm.linux': 'Synthetic Ubuntu', 'vm.fedora': 'Synthetic Fedora'})
+        values.update({'vm.fedora': 'Synthetic Fedora'})
         source = dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture', selection='working-tree')
         with patch('Scripts.build_project.sys.platform', 'darwin'), patch('Scripts.build_project.identity', return_value=source), patch('Scripts.build_project.materialize') as snapshot, \
                 patch('Scripts.build_project.manager_settings.settings', return_value=(values, {})), \
                 patch('build_manager.parallels.Parallels') as provider:
-            provider.return_value.selected.side_effect = [dict(uuid='ubuntu-id', name='Synthetic Ubuntu', status='stopped'),
-                                                        dict(uuid='fedora-id', name='Synthetic Fedora', status='running')]
+            provider.return_value.selected.return_value = dict(uuid='fedora-id', name='Synthetic Fedora', status='running')
             plan = project.make_plan('Test', 'linux', 'Local Parallels VM')
-            self.assertEqual([phase.id for phase in plan.phases], ['ubuntu', 'fedora'])
-            self.assertEqual(plan.source['linux_coverage'], 'both')
+            self.assertEqual([phase.id for phase in plan.phases], ['fedora'])
+            self.assertEqual(plan.source['linux_coverage'], 'fedora')
+            provider.return_value.selected.assert_called_once_with('Synthetic Fedora')
             self.assertTrue(all(phase.cwd == str(project.private / 'snapshots/fixture') for phase in plan.phases))
             self.assertTrue(all(phase.artifacts for phase in plan.phases))
             snapshot.assert_called_once()
@@ -128,6 +128,23 @@ class ManagerAdapterTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Guest is unavailable'):
                 project.make_plan('Test', 'linux', 'Local Parallels VM')
             snapshot.assert_not_called()
+
+    def test_linux_container_uses_only_fedora_on_explicit_host(self):
+        root = Path(__file__).resolve().parents[3]
+        project = LogisticsProject(root)
+        values = manager_settings.defaults(project.mobile)
+        values.update({'vm.fedora_mode': 'container-on-ubuntu',
+                       'vm.fedora_container_host': 'Authorized host'})
+        source = dict(fingerprint='fixture', selection='HEAD')
+        with patch('Scripts.build_project.materialize'), patch('build_manager.parallels.Parallels') as provider:
+            provider.return_value.selected.return_value = dict(uuid='host-id', name='Authorized host', status='running')
+            plan = project.local_vm_plan('Test', 'linux', source, root / 'test-results/fixture', values, '')
+        provider.return_value.selected.assert_called_once_with('Authorized host')
+        self.assertEqual([phase.id for phase in plan.phases], ['fedora'])
+        command = plan.phases[0].argv
+        self.assertEqual(command[command.index('--distribution') + 1], 'fedora')
+        self.assertIn('--container-image', command)
+        self.assertEqual(plan.source['linux_coverage'], 'fedora')
 
     def test_ios_sequence_has_one_build_strict_families_and_owned_cleanup(self):
         project = LogisticsProject(Path(__file__).resolve().parents[3])

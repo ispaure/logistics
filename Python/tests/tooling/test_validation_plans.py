@@ -33,9 +33,24 @@ class ValidationPlanTests(unittest.TestCase):
 
     def test_package_manager_preparation_is_bounded_and_does_not_ignore_errors(self):
         root = Path(__file__).resolve().parents[3]
-        for workflow in ('archive-platform-checks.yml', 'mobile-runtime.yml'):
+        for workflow in ('mobile-runtime.yml',):
             lines = (root / '.github/workflows' / workflow).read_text().splitlines()
             apt = [line.strip() for line in lines if 'sudo apt-get' in line]
             self.assertEqual(len(apt), 2)
             self.assertTrue(all(line.startswith('timeout --kill-after=10s ') for line in apt))
             self.assertTrue(all('|| true' not in line for line in apt))
+
+    def test_fedora_is_the_only_declared_linux_distribution(self):
+        root = Path(__file__).resolve().parents[3]
+        rows = {row['name']: row for row in inventory(root)['suites']}
+        for name in ('shared-host', 'static', 'desktop', 'mobile-host', 'release-tooling', 'manager', 'bridge'):
+            self.assertIn('fedora', rows[name]['platforms'])
+            self.assertNotIn('ubuntu', rows[name]['platforms'])
+        workflow = (root / '.github/workflows/archive-platform-checks.yml').read_text()
+        desktop = workflow.split('  desktop:\n', 1)[1].split('  fedora43:\n', 1)[0]
+        self.assertNotIn('ubuntu-latest', desktop)
+        self.assertIn("inputs.target != 'linux'", desktop)
+        self.assertIn("inputs.target == 'linux'", workflow.split('  fedora43:\n', 1)[1])
+        fedora = (root / 'Python/tests/platform/fedora43.sh').read_text()
+        self.assertIn('Python/tests/run_platform_checks.py --install', fedora)
+        self.assertIn('unittest discover -s .github/scripts', fedora)

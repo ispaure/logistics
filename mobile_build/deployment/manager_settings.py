@@ -28,8 +28,8 @@ def defaults(root):
         'tools.manager_checkout': '',
         'ios.iphone': '', 'ios.duo': '', 'ios.ipad': '', 'android.avd': '',
         'android.image': 'system-images;android-36;google_apis;arm64-v8a', 'android.model': 'pixel_9',
-        'vm.linux': '', 'vm.fedora': '', 'vm.windows': '',
-        'vm.linux_scope': 'both', 'vm.fedora_mode': 'guest', 'vm.fedora_container_host': '',
+        'vm.fedora': '', 'vm.windows': '',
+        'vm.fedora_mode': 'guest', 'vm.fedora_container_host': '',
         'vm.windows_prepared_reference': str(root / '.tools/build-manager/windows-prepared.json'),
         'vm.shared_host': '', 'vm.shared_guest': '', 'vm.shutdown_after_run': False,
         'auth.testflight_reference': str(root / '.testflight-auth.json'),
@@ -52,6 +52,11 @@ VARIABLES = {
 }
 
 
+def current_settings(values):
+    """Discard retired Ubuntu selectors from saved profiles and captured overrides."""
+    return {key: value for key, value in values.items() if key not in {'vm.linux', 'vm.linux_scope'}}
+
+
 def settings(root, *, overrides=None):
     configured = defaults(root)
     from build_manager.settings import Field, resolve
@@ -60,8 +65,8 @@ def settings(root, *, overrides=None):
                         machine=key.startswith(('tools.', 'vm.', 'ios.', 'android.')),
                         guarded=key in {'testflight.app_id', 'testflight.bundle_id', 'firebase.bundle_id'},
                         variable=VARIABLES.get(key)) for key, value in configured.items()}
-    values, sources = resolve(schema, account=account, profile=load_profile(profile_path(root)),
-                              environment=os.environ, overrides=overrides)
+    values, sources = resolve(schema, account=account, profile=current_settings(load_profile(profile_path(root))),
+                              environment=os.environ, overrides=current_settings(overrides or {}))
     validate(values, configured)
     return values, sources
 
@@ -71,8 +76,6 @@ def validate(values, configured):
         raise ValueError('Unsupported GitHub account reference kind.')
     if values['auth.github_kind']=='environment-name' and not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',values['auth.github_reference']):
         raise ValueError('GitHub account references contain environment names, never tokens.')
-    if values['vm.linux_scope'] not in ('both', 'ubuntu', 'fedora'):
-        raise ValueError('Linux coverage must be both, ubuntu or fedora; partial runs remain labelled partial.')
     for name in ('testflight.poll_interval_seconds', 'testflight.processing_timeout_seconds'):
         try:
             values[name] = int(values[name])
@@ -119,7 +122,7 @@ def distribution(root, provider, original):
 def save(root, changes):
     base = defaults(root)
     current = load_profile(profile_path(root))
-    incoming = dict(current, **changes)
+    incoming = current_settings(dict(current, **changes))
     values, _ = effective(base, incoming)
     validate(values, base)
     for key in ('testflight.poll_interval_seconds', 'testflight.processing_timeout_seconds'):

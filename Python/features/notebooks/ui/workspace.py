@@ -376,6 +376,8 @@ class NotebookWorkspace(qt.QWidget):
 
 
 class NotebookWindow(qt.QMainWindow):
+    document_editor_id = 'rmdoc'
+    document_editor_name = 'Notebook (.rmdoc)'
     pending_close = False
 
     def resource_provider(self):

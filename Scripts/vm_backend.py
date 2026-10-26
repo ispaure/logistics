@@ -186,7 +186,7 @@ def main():
     parser.add_argument('--snapshot', type=Path, required=True)
     parser.add_argument('--results', type=Path, required=True)
     parser.add_argument('--source-identity', type=json.loads, required=True)
-    parser.add_argument('--distribution', choices=('ubuntu', 'fedora'), required=True)
+    parser.add_argument('--distribution', choices=('fedora',), required=True)
     parser.add_argument('--container-image', default='')
     parser.add_argument('--shutdown', action='store_true')
     parser.add_argument('--pattern', default='')

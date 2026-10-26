@@ -53,7 +53,7 @@ class JourneyAdapterTests(unittest.TestCase):
         descriptor = json.loads((ROOT / 'build-project.json').read_text())
         (self.root / 'build-project.json').write_text(json.dumps(descriptor))
         self.values = {'tools.desktop_python': sys.executable, 'tools.mobile_python': sys.executable,
-                       'auth.github_reference': 'GH_TOKEN', 'vm.linux_scope': 'both', 'github.repository': 'fixture/repo',
+                       'auth.github_reference': 'GH_TOKEN', 'github.repository': 'fixture/repo',
                        'testflight.app_id': 'fixture-ios', 'testflight.external_group': 'Fixture testers',
                        'firebase.app_id': 'fixture-android', 'firebase.group': 'Fixture testers'}
         self.source = dict(logistics_commit='a' * 40, commonUtils_commit='b' * 40, dirty=False, fingerprint='fixture', selection='HEAD')

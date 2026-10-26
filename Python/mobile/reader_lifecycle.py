@@ -212,6 +212,6 @@ class ReaderLifecycle:
         from .session_workflows.transitions import transitions_for
         return transitions_for(self).document_close_dialog(key, title, save, discard)
 
-    def reader_closed(self, key):
+    def reader_closed(self, key, *, refresh_roots=False):
         from .session_workflows.transitions import transitions_for
-        return transitions_for(self).reader_closed(key)
+        return transitions_for(self).reader_closed(key, refresh_roots=refresh_roots)

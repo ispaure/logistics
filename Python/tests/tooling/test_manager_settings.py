@@ -18,6 +18,27 @@ class ManagerSettingsTests(unittest.TestCase):
         for name in ('testflight-distribution.json', 'firebase-distribution.json', 'pyproject.toml'):
             shutil.copyfile(source / name, self.root / name)
 
+    def test_retired_ubuntu_settings_do_not_block_fedora_and_are_removed_on_save(self):
+        path = settings.profile_path(self.root)
+        legacy = {'vm.linux': 'Retired Ubuntu', 'vm.linux_scope': 'both',
+                  'vm.fedora': 'Synthetic Fedora', 'vm.fedora_mode': 'container-on-ubuntu',
+                  'vm.fedora_container_host': 'Authorized container host'}
+        settings.save_profile(path, legacy, allowed=legacy)
+        before = path.read_bytes()
+        values, _ = settings.settings(self.root, overrides={'vm.linux_scope': 'ubuntu'})
+        self.assertNotIn('vm.linux', values)
+        self.assertNotIn('vm.linux_scope', values)
+        self.assertEqual(values['vm.fedora'], 'Synthetic Fedora')
+        self.assertEqual(values['vm.fedora_container_host'], 'Authorized container host')
+        self.assertEqual(path.read_bytes(), before)
+        settings.save(self.root, {'vm.fedora': 'Replacement Fedora'})
+        saved = settings.load_profile(path)
+        self.assertNotIn('vm.linux', saved)
+        self.assertNotIn('vm.linux_scope', saved)
+        self.assertEqual(saved['vm.fedora'], 'Replacement Fedora')
+        with self.assertRaisesRegex(ValueError, 'Unknown settings field'):
+            settings.settings(self.root, overrides={'vm.unknown': 'invalid'})
+
     def test_settings_round_trip_and_environment_source_does_not_change_defaults(self):
         before = (self.root / 'testflight-distribution.json').read_text()
         settings.save(self.root, {'testflight.external_group': 'Synthetic group', 'testflight.poll_interval_seconds': '12'})
@@ -41,7 +62,7 @@ class ManagerSettingsTests(unittest.TestCase):
         self.assertEqual(settings.distribution(self.root, 'firebase', original)['group'], 'Synthetic testers')
 
     def test_vm_only_profile_preserves_callers_loaded_provider_defaults(self):
-        settings.save(self.root, {'vm.linux': 'Synthetic Ubuntu'})
+        settings.save(self.root, {'vm.fedora': 'Synthetic Fedora'})
         original = dict(group='Provider file group', bundle_id='fixture.bundle')
         self.assertEqual(settings.distribution(self.root, 'firebase', original), original)
         path = settings.profile_path(self.root)

@@ -18,10 +18,8 @@ HELP = {
     'android.avd': 'Legacy existing AVD selector is unsupported. Leave empty; the manager creates and removes its own emulator.',
     'android.image': 'Installed Android SDK system-image package used to create the disposable test emulator.',
     'android.model': 'Android hardware profile used for the disposable emulator, such as pixel_9.',
-    'vm.linux': 'Parallels VM name or UUID for authorized Ubuntu/Linux testing. Leave blank until a dedicated test VM is configured.',
     'vm.fedora': 'Parallels VM name or UUID for authorized Fedora guest testing. Leave blank when no dedicated guest is authorized.',
     'vm.windows': 'Parallels VM name or UUID for authorized Windows testing. Leave blank until a dedicated test VM is available.',
-    'vm.linux_scope': 'Linux suites to run: both, ubuntu or fedora. Single-distribution runs remain labelled partial.',
     'vm.fedora_mode': 'Run Fedora as a guest, or as a rootless container on the configured Linux host (container-on-ubuntu).',
     'vm.fedora_container_host': 'Authorized Parallels Linux host used for the rootless Fedora container.',
     'vm.windows_prepared_reference': 'Local JSON reference to prepared Windows tools. This is a path, not a tool download or credential.',
@@ -85,8 +83,6 @@ def describe_settings(rows):
             entry['kind'] = 'multiline'
         if name == 'auth.github_kind':
             entry['choices'] = ('auto','credential-helper','environment-name')
-        if name == 'vm.linux_scope':
-            entry['choices'] = ('both', 'ubuntu', 'fedora')
         if name == 'vm.fedora_mode':
             entry['choices'] = ('guest', 'container-on-ubuntu')
         if entry.get('kind') == 'int':

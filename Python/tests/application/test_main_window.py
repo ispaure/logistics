@@ -555,6 +555,30 @@ class MainWindowTests(QtTestCase):
             self.assertIn('text', window.sidebar.editor_groups)
             window.dlg.close()
 
+    def test_notebook_document_appears_under_its_launcher(self):
+        from features import notebooks
+        from features.notebooks.ui.workspace import NotebookWindow
+        from commonUtils.ui.document_host import show_document
+        launcher = RegisteredContribution('notebooks', 'Notebooks', notebooks.register().document_launchers[0])
+        with patch.object(main_window.registry, 'get_document_launchers', return_value=[launcher]):
+            window = self.window()
+            window.dlg.show()
+            notebook = NotebookWindow()
+            panel = qt.QWidget()
+            panel.busy, panel.document, panel.dispose = False, None, Mock()
+            notebook.setCentralWidget(panel)
+            notebook.setWindowTitle('Meeting notes')
+            try:
+                show_document(notebook)
+                self.app.processEvents()
+                window.sidebar._populate_document_tree()
+                groups = window.sidebar.editor_groups
+                self.assertNotIn('other', groups)
+                self.assertEqual(groups['rmdoc'].child(0).text(0), 'Meeting notes')
+            finally:
+                notebook.close()
+                window.dlg.close()
+
     def test_document_overlay_new_open_and_cancel_keep_current_page(self):
         from features.contributions import DocumentLauncherContribution
         opener, creator = Mock(), Mock()

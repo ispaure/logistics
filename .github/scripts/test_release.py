@@ -21,7 +21,7 @@ class PackageTests(unittest.TestCase):
                    '.env.local', 'local-signing.p12', 'profile.prof', 'debug.log',
                    'test-results/mobile-evidence/report.json',
                    'docs/development/mobile-evidence/screenshot.png',
-                   'docs/developer/mobile-evidence/old-report.json',
+                   'docs/development/mobile-evidence/old-report.json',
                    'Python/features/books/docs/mobile-evidence/report.json',
                    'docs/features/books/mobile-evidence/report.json']
         for folder in ('Mobile', 'mobile_build'):
@@ -49,9 +49,9 @@ class PackageTests(unittest.TestCase):
                     'node_modules/package/index.js', 'DerivedData/project/file',
                     'app.xcarchive/Info.plist', 'app.dSYM/file']
         excluded.extend(['docs/development/mobile-evidence/report.json',
-                         'docs/developer/mobile-evidence/old-report.json',
+                         'docs/development/mobile-evidence/old-report.json',
                          'docs/development/mobile-evidence/nested/screenshot.png',
-                         'Python/commonUtils/docs/developer/mobile-evidence/report.json',
+                         'Python/commonUtils/docs/development/mobile-evidence/report.json',
                          'test-results/mobile-evidence/report.json'])
         for name in excluded:
             with self.subTest(name=name):
@@ -65,7 +65,7 @@ class PackageTests(unittest.TestCase):
             root = Path(directory)
             names = ['docs/development/validation-artifacts.md',
                      'docs/development/mobile-evidence/nested/screenshot.png',
-                     'Python/commonUtils/docs/developer/mobile-evidence/report.json',
+                     'Python/commonUtils/docs/development/mobile-evidence/report.json',
                      'test-results/mobile-evidence/report.json']
             for name in names:
                 path = root / name

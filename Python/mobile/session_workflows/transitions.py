@@ -220,7 +220,7 @@ class SessionTransitions:
         return True
 
 
-    def reader_closed(self, key):
+    def reader_closed(self, key, *, refresh_roots=False):
         host = self.host
         returns = host.__dict__.setdefault('_reader_returns', {})
         target = returns.pop(key, None)
@@ -237,6 +237,8 @@ class SessionTransitions:
                           or any(getattr(child, '_reader_session_id', None) == key for child in panel.children)), None)
             if index is not None:
                 host.routes.trim(current, index)
+                if refresh_roots and not host.routes.screens[current]:
+                    host.refresh_hub(current)
                 host.routes.render(current)
         details = host.adaptive.detail_routes
         index = next((i for i, (name, panel, _) in enumerate(details)
@@ -252,6 +254,10 @@ class SessionTransitions:
         host.routes.trim(destination, count)
         if destination == 'documents' and host.adaptive.split is not None:
             host.adaptive.show_list()
+        if refresh_roots and route is None:
+            # A retained root can still contain the reader's old recent row.
+            # Rebuild it from the committed workspace/store before revealing it.
+            host.refresh_hub(destination)
         # This restores an existing route, not a second tap on Documents (which
         # intentionally collapses its stack to the overview).
         host.native_host.activate(destination)

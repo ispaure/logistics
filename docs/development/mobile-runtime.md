@@ -483,6 +483,12 @@ session owner's existing cleanup/save guards, flushes pending EPUB progress,
 and retires document/close-prompt routes before restoring the retained origin
 folder and viewport. Section changes continue to retain sessions.
 
+Confirmed managed-text deletion follows the same origin return path as Close.
+It refreshes exposed Home and Documents roots from the committed workspace and
+store before rendering, so retained recent/saved rows cannot show the deleted
+document while the background inventory scan finishes. Ordinary Close preserves
+the existing root panels and viewport.
+
 `PrivateSessions.positions` is a bounded, memory-only cache keyed by the existing
 opaque source identity. It retains page indices, EPUB offsets and supported
 native text/Markdown scroll offsets after Close, without content or filenames.

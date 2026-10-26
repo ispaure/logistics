@@ -83,6 +83,46 @@ class DocumentDeletionTests(unittest.TestCase):
         self.assertEqual(self.app.store.open(owner.document.id).text, 'Retain me')
         self.assertIn('read-only', owner.status.text)
 
+    def test_delete_returns_to_refreshed_origin_before_background_inventory_finishes(self):
+        app = self.app
+        def texts(view):
+            values = [getattr(view, 'text', None)]
+            content = getattr(view, 'content', None)
+            if content is not None:
+                values.extend(texts(content))
+            for child in view.children:
+                values.extend(texts(child))
+            return values
+        for destination in ('home', 'documents'):
+            with self.subTest(destination=destination):
+                app.show_home() if destination == 'home' else app.show_documents_hub()
+                app.new_document()
+                owner = app.editor_view
+                name = 'Delete from ' + destination + '.txt'
+                owner.document.name = name
+                app.store.checkpoint(owner.document)
+                # Build the root while this document is present, then open its
+                # reader over that retained root, as a Recent row would do.
+                app.show_home() if destination == 'home' else app.show_documents_hub()
+                self.assertIn(name, texts(app.routes.roots[destination]))
+                app.show_documents(resume=True)
+                observed = []
+                original = app.routes.render
+                def render(target):
+                    if not app.routes.screens[target] and target == destination:
+                        observed.append(texts(app.routes.roots[target]))
+                        self.assertNotIn(name, observed[-1])
+                    return original(target)
+                with patch.object(app.routes, 'render', side_effect=render):
+                    self.assertTrue(self.delete(owner)[0])
+                self.assertEqual(app.native_host.state.destination, destination)
+                self.assertTrue(observed)
+                self.assertTrue(all(name not in rows for rows in observed))
+                self.assertNotIn(owner.document.id, [record.id for record in app.store.cached_summaries()])
+                task = getattr(app, '_document_refresh_task', None)
+                if task is not None:
+                    app.loop.run_until_complete(task)
+
     def test_close_or_delete_from_other_tab_retires_hidden_editor_and_preview(self):
         app = self.app
         for destination, other in (('home', 'documents'), ('documents', 'home')):

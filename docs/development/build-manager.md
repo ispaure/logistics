@@ -14,7 +14,7 @@ and an unused channel tag, then waits for the existing gated release workflow.
 An existing tag is never moved. These capabilities do not grant permission to
 publish a project; the operator still chooses and confirms the operation.
 
-Local macOS, Ubuntu/Fedora and Windows commands use the project-owned desktop
+Local macOS, Fedora and Windows commands use the project-owned desktop
 plans. Sequential iOS and accelerated local Android backends are implemented and
 have complete local acceptance evidence. Windows is implemented; its complete declared plan requires a guest account
 with normal-user symbolic-link capability, and missing capability remains a
@@ -117,12 +117,13 @@ reported by the manager; it never falls back to a different interpreter/backend.
 
 ## Parallels Linux backend
 
-The Linux selector accepts existing guest names or UUIDs in `vm.linux` (Ubuntu)
-and `vm.fedora`. `vm.linux_scope` is `both` by default; explicit `ubuntu` or
-`fedora` runs remain labelled partial Linux coverage. This permits rerunning a
-blocked distribution without repeating the other guest's unchanged complete
-suite. Full Linux acceptance still requires both distributions. Windows guest
-execution is a separate backend and is not inferred from a Linux result.
+Fedora is the only required Linux test distribution. Set `vm.fedora` to an
+existing authorized Fedora guest name or UUID. The complete Fedora suite satisfies
+the Linux validation gate for coordinated delivery; Ubuntu has no separate test
+run. Retired `vm.linux` and `vm.linux_scope` profile values are ignored and removed
+on the next settings save. The Fedora container backend remains available through
+its explicitly configured host. Windows guest execution is a separate backend
+and is not inferred from a Linux result.
 
 The reusable `build_manager.parallels` transport discovers guests, starts only a
 selected stopped guest, transports an explicit source allowlist over guest tools,

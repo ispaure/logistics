@@ -1,7 +1,8 @@
 # Cross-platform archive checks
 
-`.github/workflows/archive-platform-checks.yml` runs on macOS, Ubuntu and Windows,
-plus an official Fedora 43 container hosted on Ubuntu. It checks the same committed
+`.github/workflows/archive-platform-checks.yml` runs on macOS, Windows and an
+official Fedora 43 container hosted on Ubuntu. Fedora is the only Linux test
+distribution; Ubuntu is infrastructure for the container and static/mobile tooling. It checks the same committed
 commonUtils submodule that Logistics uses. Jobs continue independently on failure.
 Each job runs all commonUtils tests, all Logistics tests and a full historical
 compression comparison, then uploads JSON summaries and logs for 14 days.

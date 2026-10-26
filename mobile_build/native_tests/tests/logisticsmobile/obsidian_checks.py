@@ -30,7 +30,7 @@ async def exercise_obsidian(app, encrypted):
         with scope:
             app.show_picker_folder(entry)
             await app._notes_offer_task
-        button = next(button for button, _ in app.folder_action_controls if button.text == 'Open Notes Library')
+        button = next(button for button, _ in app.folder_action_controls if button.text == 'Open as Notes Library')
         assert button.parent is not None
         await capture_window(app, output / (label + '-button.png'))
         await button.on_press()
@@ -40,7 +40,12 @@ async def exercise_obsidian(app, encrypted):
         assert owner.session.provider == 'notes-library'
         assert owner is not None and owner.provider.root == provider.root
         if label == 'localcrypt':
-            assert owner.provider is provider
+            # Each Notes Library now owns an independently closable grant.
+            assert owner.provider is not provider
+            assert owner.provider.client is provider.client
+            assert owner.provider.identity == provider.identity
+            assert owner.provider.storage_namespace == provider.storage_namespace
+            assert not owner.provider.closed and not provider.closed
         assert {row.children[-1].vault_path for row in owner.rows.children} == {
             'Native Obsidian Vault/Projects', 'Native Obsidian Vault/Home.md'}
         await owner.toggle_folder('Native Obsidian Vault/Projects')
@@ -75,6 +80,8 @@ async def exercise_obsidian(app, encrypted):
         owner.sidebar.show_sidebar()
         owner.dispose()
         assert owner.path is None and not owner.rows.children
+        if label == 'localcrypt':
+            assert owner.provider.closed and not provider.closed
         if hasattr(owner.web, 'private_closed'):
             # Android deliberately destroys a private WebView; evaluating JS on
             # a destroyed view cannot produce a callback.

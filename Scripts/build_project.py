@@ -337,41 +337,32 @@ class LogisticsProject:
             raise ValueError('This Linux backend accepts Test plans; no Build operation is implied.')
         from build_manager.parallels import Parallels
         client = Parallels()
-        selections = []
-        for distribution, key in (('ubuntu', 'vm.linux'), ('fedora', 'vm.fedora')):
-            if options['vm.linux_scope'] not in ('both', distribution):
-                continue
-            selector = options['vm.fedora_container_host'] if distribution == 'fedora' and options['vm.fedora_mode'] == 'container-on-ubuntu' else options[key]
-            if options['vm.fedora_mode'] not in ('guest', 'container-on-ubuntu'):
-                raise ValueError('Choose an explicit supported Fedora backend mode.')
-            guest = client.selected(selector)
-            selections.append((distribution, guest))
-        if len(selections) == 2 and selections[0][1]['uuid'] == selections[1][1]['uuid'] and options['vm.fedora_mode'] != 'container-on-ubuntu':
-            raise ValueError('Select distinct Ubuntu and Fedora guests for the full Linux coverage.')
+        if options['vm.fedora_mode'] not in ('guest', 'container-on-ubuntu'):
+            raise ValueError('Choose an explicit supported Fedora backend mode.')
+        selector = options['vm.fedora_container_host'] if options['vm.fedora_mode'] == 'container-on-ubuntu' else options['vm.fedora']
+        guest = client.selected(selector)
         snapshot = self.private / 'snapshots' / source['fingerprint']
         materialize(self.root, snapshot, source['selection'], expected=source)
-        phases = []
-        for distribution, guest in selections:
-            results = workspace / (distribution + '-' + uuid4().hex)
-            command = (str(self.interpreter), '-m', 'Scripts.vm_backend', '--vm', guest['uuid'],
-                '--snapshot', str(snapshot), '--results', str(results), '--distribution', distribution,
-                '--source-identity', json.dumps(source))
-            if distribution == 'fedora' and options['vm.fedora_mode'] == 'container-on-ubuntu':
-                command += ('--container-image', 'localhost/logistics-fedora-tests:43')
-            if options['tools.manager_checkout']:
-                command += ('--manager-checkout', options['tools.manager_checkout'])
-            if options['vm.shutdown_after_run']:
-                command += ('--shutdown',)
-            if pattern:
-                command += ('--pattern', pattern)
-            phases.append(Phase(distribution, command, str(snapshot), timeout=5400, stop_grace=240,
-                                artifacts=(str(results / 'result.json'),)))
-        source['selected_guests'] = [{'distribution': distro, 'name': guest['name'],
-                                      'uuid': guest['uuid'], 'initial_state': guest['status']} for distro, guest in selections]
-        source['linux_coverage'] = options['vm.linux_scope']
+        results = workspace / ('fedora-' + uuid4().hex)
+        command = (str(self.interpreter), '-m', 'Scripts.vm_backend', '--vm', guest['uuid'],
+            '--snapshot', str(snapshot), '--results', str(results), '--distribution', 'fedora',
+            '--source-identity', json.dumps(source))
+        if options['vm.fedora_mode'] == 'container-on-ubuntu':
+            command += ('--container-image', 'localhost/logistics-fedora-tests:43')
+        if options['tools.manager_checkout']:
+            command += ('--manager-checkout', options['tools.manager_checkout'])
+        if options['vm.shutdown_after_run']:
+            command += ('--shutdown',)
+        if pattern:
+            command += ('--pattern', pattern)
+        phases = (Phase('fedora', command, str(snapshot), timeout=5400, stop_grace=240,
+                        artifacts=(str(results / 'result.json'),)),)
+        source['selected_guests'] = [{'distribution': 'fedora', 'name': guest['name'],
+                                      'uuid': guest['uuid'], 'initial_state': guest['status']}]
+        source['linux_coverage'] = 'fedora'
         source['fedora_mode'] = options['vm.fedora_mode']
         source['focused_pattern'] = pattern
-        return Plan('Logistics', 'Local Linux tests (' + options['vm.linux_scope'] + ')', source, tuple(phases), str(workspace),
+        return Plan('Logistics', 'Local Linux tests (Fedora)', source, tuple(phases), str(workspace),
                     backend='Local Parallels VM')
 
     def windows_vm_plan(self, operation, source, workspace, options, pattern):
