@@ -35,3 +35,8 @@ the commonUtils submodule was not included; see
 [installation](../../README.md#get-started).
 
 - [Browse all feature guides](features.md)
+
+## Further reading
+
+- [Using the Logistics build manager](build-manager.md)
+- [Validating and delivering Logistics](build-manager-journeys.md)

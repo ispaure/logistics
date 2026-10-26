@@ -51,7 +51,7 @@ Read only the contracts relevant to your change. Feature-specific implementation
 | Mobile file/conversation drawers and paired panes | [Workspace navigation](mobile-workspace-navigation.md) |
 | Mobile build/deployment reference | [Mobile launchers](mobile-launchers.md) |
 | Unified plans, profiles and reusable orchestration | [Build manager](build-manager.md) |
-| Combined platform validation and reviewed tester/release delivery | [Combined journeys](build-manager-journeys.md) |
+| Combined platform validation and reviewed tester/release delivery | [Combined journey contracts](build-manager-journeys.md) |
 | Paired iPhone/iPad installation | [Device deployment](mobile-device-deployment.md) |
 | TestFlight archives and uploads | [TestFlight](mobile-testflight.md) |
 | Desktop and mobile release gates | [Releasing](releasing.md), [platform checks](platform-checks.md) |

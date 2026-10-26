@@ -54,7 +54,7 @@ remain with their existing components.
 
 Both editor presentations use commonUtils' toolkit-independent
 `formats.code_language.LanguageSelection` and `runtime.choices.ChoiceSet`.
-The [shared language API](../../../../Python/commonUtils/docs/reference/formats/formats.md#editor-language-selection)
+The [shared language API](../../../../Python/commonUtils/docs/development/reference/formats/formats.md#editor-language-selection)
 owns IDs, catalogue expansion and automatic/manual detection mechanics. Desktop
 `Document` retains its model; mobile binds directly to CodeInput's model rather
 than keeping a second override. Logistics retains the chooser/dropdown, the
@@ -88,7 +88,7 @@ The desktop Notes library clears `viewer.document_state` when retiring a private
 draft, then clears the reading/source/formatted surfaces. Saved byte and rich
 baselines therefore retire through the declared shared owner rather than through
 separate private viewer attributes. The ownership contract is documented in
-[commonUtils Markdown](../../../../Python/commonUtils/docs/reference/ui/markdown/markdown.md#internal-ownership-and-embedding-contracts),
+[commonUtils Markdown](../../../../Python/commonUtils/docs/development/reference/ui/markdown/markdown.md#internal-ownership-and-embedding-contracts),
 and `test_notes_library_desktop.py` verifies that retired drafts retain no saved
 byte baseline.
 
@@ -167,7 +167,7 @@ PYTHONPATH=Python .venv/bin/python -m unittest discover -s Python/commonUtils/te
 
 Tests cover byte preservation, legacy and Unicode encodings, conflicts, binary
 handling, queue/window lifetime, shared browser activation, feature toggles,
-search/replace undo, language definitions and theme-safe presentation. Headless Qt regressions run on macOS, Windows, Ubuntu and Fedora in CI.
+search/replace undo, language definitions and theme-safe presentation. Headless Qt regressions run on macOS, Windows and Fedora in CI.
 Native desktop interaction, including platform window behavior, requires separate
 manual validation.
 
@@ -179,7 +179,7 @@ recovery failure paths. The reusable `test_code*.py`, `test_session_store.py`,
 `test_text_files.py` and `test_workspace.py` suites cover the shared components.
 `test_document_workspace.py`, `test_main_window.py` and
 `test_application_instance.py` cover surrounding Logistics integration. These
-headless Qt checks run on macOS, Windows, Ubuntu, and Fedora 43 in CI; native
+headless Qt checks run on macOS, Windows, and Fedora 43 in CI; native
 desktop interaction still benefits from manual validation. New UI surfaces have also been rendered and inspected in both themes.
 
 ## Merge external changes

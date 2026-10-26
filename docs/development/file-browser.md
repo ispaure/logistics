@@ -217,5 +217,5 @@ The commonUtils regular and provider browsers now share list, tile and column
 presentation. Logistics retains crypt credentials, private-reader routing, transfer
 policy and domain-specific comic/EPUB cover loaders. The shared model supports
 opaque identities and custom properties; its API belongs to
-[commonUtils](../../Python/commonUtils/docs/reference/ui/resource-providers.md#shared-item-presentation).
+[commonUtils](../../Python/commonUtils/docs/development/reference/ui/resource-providers.md#shared-item-presentation).
 The mobile UI has not been migrated in this first phase.

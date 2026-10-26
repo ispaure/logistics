@@ -103,7 +103,7 @@ add decoding and authenticated native archive access. The generic
 `services/documents/provider_documents.py:ProviderDocuments` adapter uses that
 boundary for text, PDF, EPUB and comics; notebooks retain bounded
 `DocumentResource` sessions over the same provider byte contract. See the shared
-[content factory and replacement contracts](../../Python/commonUtils/docs/reference/ui/resource-providers.md#injected-content-mechanisms).
+[content factory and replacement contracts](../../Python/commonUtils/docs/development/reference/ui/resource-providers.md#injected-content-mechanisms).
 
 Mobile `document_source` selects a provider's optional `document_readers` and
 `document_key` hooks, with the generic adapter as its default. It imports no
@@ -164,7 +164,7 @@ The [notebook development guide](../features/notebooks/development/development.m
 covers notebook draft/recovery adapters. The
 [LocalCrypt guide](../features/rclone/development/localcrypt.md) owns encryption
 and credential policy. Reusable resource API documentation remains in
-[commonUtils](../../Python/commonUtils/docs/reference/ui/resource-providers.md).
+[commonUtils](../../Python/commonUtils/docs/development/reference/ui/resource-providers.md).
 
 Focused host contracts live in `Python/tests/resources/test_document_storage.py`,
 `Python/tests/resources/test_local_crypt.py` and the mobile document-storage tests.

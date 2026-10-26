@@ -192,7 +192,7 @@ store uploads or physical-device signing.
 The shared foundation previously passed Android and iOS in
 [run 38277821906](https://github.com/ispaure/commonUtils/actions/runs/38277821906),
 with seven cases per runtime. Its
-[mobile test guide](../../Python/commonUtils/docs/developer/mobile-testing.md)
+[mobile test guide](../../Python/commonUtils/docs/development/mobile-testing.md)
 records those source/runtime details; this is separate from Logistics validation.
 
 The new Logistics 14-case host harness, packaging/verifier tests and Toga dummy

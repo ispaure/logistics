@@ -218,7 +218,7 @@ the independent portable testbed consumes them. Root fixture and driver files
 also retain their paths: they are shared inputs, not extra subject groups.
 Desktop cross-group imports name `tests.<owner>` explicitly; shared contracts use
 `commonUtils.tests.<owner>`. The shared test owner map lives in
-[commonUtils](../../Python/commonUtils/docs/reference/tests/tests.md).
+[commonUtils](../../Python/commonUtils/docs/development/reference/tests/tests.md).
 The small package initializers enable recursive standard `unittest discover`
 and contain no setup or runtime registration.
 
@@ -299,7 +299,7 @@ fixtures so windows and watchers are destroyed before their directories are
 removed, including on assertion failures. Register fixture-specific cleanup after
 creating the directory. Use `wait_until()` for condition-based Qt waits with
 operation-specific timeout messages. Tests must not depend on windows retained by
-other tests. See the [shared test guide](../../Python/commonUtils/docs/reference/tests/tests.md)
+other tests. See the [shared test guide](../../Python/commonUtils/docs/development/reference/tests/tests.md)
 for lifecycle details.
 
 ## CI, release gates and advanced validation

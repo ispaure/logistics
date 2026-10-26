@@ -155,7 +155,7 @@ per-field reset, external-edit conflict detection, and four live font roles.
 Regression coverage checks the shared INI mechanics, malformed-file preservation,
 font/code-block refresh without document changes, palette contrast, launcher
 inheritance, and Logistics page scope routing. Release validation runs the shared
-and application suites on Windows, macOS, Ubuntu and Fedora before packaging.
+and application suites on Windows, macOS and Fedora before packaging.
 
 Settings category navigation uses the tree column size hint, font-based padding,
 frame and scrollbar allowance to set its width. Refreshing categories or changing

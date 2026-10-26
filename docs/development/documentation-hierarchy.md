@@ -16,6 +16,9 @@ for locations and packaging rules. Public guides must not link to local-only fil
 
 Each wiki starts at `docs/docs.md`. Audience branches use `user/user.md`,
 `development/development.md`, and `user_mobile/user_mobile.md` when applicable.
+Keep user workflows under `user/` and technical contracts under `development/`
+in Logistics, Build Deployment Manager and commonUtils. commonUtils API references
+use `development/reference/`; Logistics retains its feature and mobile branches.
 Every nested folder has a same-named landing, and its parent links to it.
 Every Markdown file starts with an H1, following optional YAML frontmatter.
 The H1 supplies the visible navigation title. Parent pages explicitly mention

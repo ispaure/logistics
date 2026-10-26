@@ -3,7 +3,7 @@
 Logistics owns rclone crypt settings, credential sessions, ciphertext mapping and
 transfer policy. commonUtils supplies backend-independent browsing, bounded binary
 process I/O, range streams and Markdown storage hooks. Its
-[provider contracts](../../../../Python/commonUtils/docs/reference/ui/resource-providers.md) are owned
+[provider contracts](../../../../Python/commonUtils/docs/development/reference/ui/resource-providers.md) are owned
 and documented in that repository.
 
 ## Initial Pull storage choice

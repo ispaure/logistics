@@ -141,3 +141,8 @@ See [Mobile panels](navigation/panels.md#credential-groups-open-documents-and-pr
 
 See [Mobile panels](navigation/panels.md#focused-browsing-and-setup).
 
+## Further reading
+
+- [Workspaces on mobile](folder_hub/folder_hub.md)
+- [Mobile navigation](navigation/navigation.md)
+- [Mobile settings](settings/settings.md)

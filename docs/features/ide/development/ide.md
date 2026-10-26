@@ -166,7 +166,7 @@ Markdown views retain the shared editor's `document_state` owner for file identi
 and exact saved-byte baselines. `MarkdownBuffer.configure()` updates that owner
 for each view while the source QTextDocument remains shared; rich imports and
 search/table presentation stay local to the view. See the
-[shared Markdown ownership contract](../../../../Python/commonUtils/docs/reference/ui/markdown/markdown.md#internal-ownership-and-embedding-contracts).
+[shared Markdown ownership contract](../../../../Python/commonUtils/docs/development/reference/ui/markdown/markdown.md#internal-ownership-and-embedding-contracts).
 Internal groups are QTabWidgets with project-confined tab bars. Browser mutations refuse to rename or
 delete paths containing an open document or pending open; only empty directory
 deletion is available. The shared model owns lazy loading and rename validation.

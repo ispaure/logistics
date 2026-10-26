@@ -57,7 +57,7 @@ The pinned shared revision now uses direct Python packages. Historical root impo
 such as `commonUtils.fileUtils`, `commonUtils.fileTypes` and `commonUtils.osUtils`
 are no longer supplied by an import adapter. Use the current filesystem, formats,
 runtime and integration packages shown in the
-[shared API guide](https://github.com/ispaure/commonUtils/blob/main/docs/developer/public-apis.md).
+[shared API guide](https://github.com/ispaure/commonUtils/blob/main/docs/development/public-apis.md).
 Do not restore the removed compatibility hook to fix a consumer import. This is
 separate from Logistics' feature hooks and persisted settings migration rules.
 Settings callers import shared editors and schemas directly and request typed keys
