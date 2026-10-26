@@ -240,10 +240,37 @@ async def exercise_library(app, fixtures, epub, comic, passed):
             bridge.ready, bridge.at_end)
         await asyncio.sleep(.05)
     print('LOGISTICS_EPUB_READY=' + json.dumps(pagination), flush=True)
-    await wait_for_reader(app.reader_manager().active)
-    await app.next_book_page()
-    assert app.reader_manager().active.book_content.children[0] is original_reader
-    await wait_for_text(app.reader_manager().active.book_content.children[0], 'Native EPUB second')
+    owner = app.reader_manager().active
+    events = []
+    original_event = owner.epub_event
+    def event_state(reader, epoch, index, action):
+        pending = getattr(owner, '_epub_location_task', None)
+        return dict(action=action, received_index=index,
+            reader_current=owner.book_reader is reader, epoch_current=owner.book_epoch == epoch,
+            active_host=bool(owner.active_host), session_open=owner.session.id in owner.workspace.sessions,
+            busy=owner.book_busy, position=owner.book_record['position'],
+            pending_done=None if pending is None else pending.done(),
+            status=owner.book_status.text)
+    def trace(reader, epoch, index, action, offset):
+        state = event_state(reader, epoch, index, action)
+        events.append(state)
+        if action in {'next', 'previous'}:
+            print('LOGISTICS_EPUB_EVENT=' + json.dumps(state), flush=True)
+        return original_event(reader, epoch, index, action, offset)
+    from unittest.mock import patch
+    with patch.object(owner, 'epub_event', side_effect=trace):
+        await wait_for_reader(owner)
+        print('LOGISTICS_EPUB_BEFORE_NEXT=' + json.dumps(event_state(
+            owner.book_reader, owner.book_epoch, 0, 'request-next')), flush=True)
+        await app.next_book_page()
+        assert app.reader_manager().active.book_content.children[0] is original_reader
+        try:
+            await wait_for_text(original_reader, 'Native EPUB second')
+        except BaseException:
+            state = event_state(owner.book_reader, owner.book_epoch, 0, 'failed-next')
+            state['events'] = events[-20:]
+            print('LOGISTICS_EPUB_FAILURE=' + json.dumps(state), flush=True)
+            raise
     passed.append('native_epub_reader')
     await app.toggle_bookmark()
     assert app.reader_manager().catalog.library_store.open(record['id'])[0]['epub_bookmarks'] == [
