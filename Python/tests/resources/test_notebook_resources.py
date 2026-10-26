@@ -10,7 +10,7 @@ from features.rclone import executable, session
 from local_crypt_fixture import crypt_fixture
 from features.notebooks.notebook import Notebook, MAX_ARCHIVE
 from features.notebooks.storage import NotebookDocument
-from features.notebooks.workspace import Editor
+from features.notebooks.editor import Editor
 from services.documents.storage import DocumentResource
 
 

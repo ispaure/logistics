@@ -280,6 +280,13 @@ def folder_location(app, session, owner=None):
     """Resolve a live folder source without guessing paths for imported copies."""
     if session is None:
         return None
+    if session.provider == 'notebook':
+        notebook = owner or getattr(app, '_notebook_views', {}).get(session.id)
+        resource = notebook.document.resource if notebook and notebook.document else None
+        if resource is not None:
+            resource.check()
+            return dict(provider=resource.provider, key=resource.path)
+        return None
     manager = getattr(app, 'private_sessions', None)
     owner = owner or (manager.controllers.get(session.id) if manager else None)
     reader = getattr(owner, 'crypt_reader', None)

@@ -159,7 +159,7 @@ class MobileCryptNativeTests(unittest.TestCase):
     def test_notebook_binary_session_uses_real_native_provider_and_revocation(self):
         from features.notebooks.notebook import Notebook, MAX_ARCHIVE
         from features.notebooks.storage import NotebookDocument
-        from features.notebooks.workspace import Editor
+        from features.notebooks.editor import Editor
         from features.rclone.localcrypt.mobile.resources import CryptFiles
         from services.documents.storage import DocumentResource
         client = CloudClient(library=os.environ['LOGISTICS_MOBILE_BRIDGE'])

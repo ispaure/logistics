@@ -9,7 +9,7 @@ import subprocess
 from Scripts.build_retention import scratch
 from features.notebooks.notebook import Notebook
 from features.notebooks.ink import TOOLS
-from features.notebooks.workspace import Editor
+from features.notebooks.editor import Editor
 
 
 def main(output, go):

@@ -1,53 +1,38 @@
-"""Offline vector notebook surface shared by native mobile and desktop hosts."""
+"""Compose offline notebook assets for desktop and native mobile WebViews."""
 import json
+from .assets import asset
 from .bridge import MAX_COMMAND
-from .drawing import SCRIPT as DRAWING_SCRIPT
+from .icons import ICON_SCRIPT
 
 
-def editor_html(state, bridge, *, console_bridge=False):
-    data = json.dumps(state, ensure_ascii=True).replace('<', '\\u003c')
-    return (HTML.replace('__DRAWING__', DRAWING_SCRIPT)
-            .replace('__BRIDGE__', json.dumps(bridge))
-            .replace('__MAX_COMMAND__', str(MAX_COMMAND))
-            .replace('__SEND_COMMAND__', 'console.info(command)' if console_bridge else 'location.href=command')
-            .replace('__STATE__', data))
-
-
-HTML = r'''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
-<style>
-*{box-sizing:border-box}body{margin:0;font:15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#e7e7e3;color:#20221e;display:flex;flex-direction:column;height:100dvh}
-header{max-height:50dvh;overflow:auto;background:#fafaf7;border-bottom:1px solid #aaa;padding:8px;flex:none}#title{font-weight:650;font-size:18px;margin:0 4px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0}button,select,input{font:inherit;color:inherit;background:white;border:1px solid #888;border-radius:7px;min-height:38px;padding:5px 9px}button:disabled{opacity:.4}button.active{background:#222;color:white}input[type=number]{width:65px}#status{font-size:12px;margin:5px 4px;white-space:pre-wrap}#viewport{overflow:auto;flex:1;min-height:0;padding:12px;text-align:center;overscroll-behavior:contain}canvas{background:white;box-shadow:0 1px 8px #0003;touch-action:none;display:block;margin:auto}#warning{color:#7b2600;max-width:650px;text-align:left;margin:auto}details{font-size:14px}summary{cursor:pointer;padding:6px}label{white-space:nowrap}#pageinfo{min-width:72px;text-align:center}
-#paperWrap{position:relative;width:fit-content;margin:auto}#draft{position:absolute;top:0;left:0;background:transparent;box-shadow:none;pointer-events:none}
-</style></head><body><header><div id="title"></div><div class="row">
-<select id="tool" aria-label="Brush"></select><select id="color" aria-label="Ink color"></select><label>Width <select id="width" aria-label="Stroke width"></select></label>
-<select id="layer" aria-label="Layer"></select><button id="erase">Erase</button><button id="select">Select / move</button>
-<button id="undo" onclick="send({op:'undo'})">Undo</button><button id="redo" onclick="send({op:'redo'})">Redo</button></div>
-<div class="row"><button id="prev">‹</button><span id="pageinfo"></span><button id="next">›</button><button onclick="send({op:'add-page'})">＋ Page</button><button onclick="send({op:'save'})">Save</button><button onclick="send({op:'save-as'})">Save As</button><button onclick="send({op:'export'})">Export .rmdoc</button><button onclick="send({op:'library'})">Documents</button></div>
-<details><summary>Page and drawing options</summary><div class="row"><label>Layer name <input id="layerName" maxlength="80" value="New layer"></label><button id="addLayer" onclick="send({op:'add-layer',name:$('layerName').value})">Add layer</button><select id="layerVisibility" aria-label="Layer visibility"></select><button onclick="let row=state.layers.find(x=>x[0]===$('layerVisibility').value);if(row)send({op:'layer-visible',layer:row[0],visible:!row[2]})">Show / hide layer</button><button onclick="send({op:'duplicate-page'})">Duplicate page</button><button onclick="if(confirm('Delete this page? Undo is available.'))send({op:'delete-page'})">Delete page</button><button onclick="send({op:'move-page',index:Math.max(0,state.index-1)})">Move earlier</button><button onclick="send({op:'move-page',index:Math.min(state.count-1,state.index+1)})">Move later</button><button onclick="send({op:'transfer'})">Copy page to notebook…</button></div><div class="row"><label><input type="checkbox" id="finger"> Draw with finger</label><label><input type="checkbox" id="grayscale"> Grayscale preview (older models)</label><label>Zoom <select id="zoom"><option value="fit">Fit</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></label><label>Notebook name <input id="notebookName" maxlength="120"></label><button id="renameNotebook" onclick="send({op:'rename',name:$('notebookName').value})">Rename</button></div></details><div id="status" role="status">Saved on this device. Export a copy to share.</div></header>
-<div id="viewport"><div id="warning"></div><div id="templateNotice"></div><div id="paperWrap"><canvas id="paper" aria-label="Notebook page"></canvas><canvas id="draft" aria-hidden="true"></canvas></div></div>
-<script>
-'use strict';let state=__STATE__,bridge=__BRIDGE__,seq=0,queue=[],busy=false,mode='ink',active=null,points=[],selected=new Set(),start=null,last=null,pan=null,pendingInk=null;
+def editor_html(state, bridge, *, console_bridge=False, desktop=False, mobile=False):
+    if desktop and mobile:
+        raise ValueError('Choose one notebook presentation.')
+    style = asset('base.css')
+    chrome = asset('controls.html')
+    presentation = ''
+    if desktop:
+        style += '\n' + asset('desktop.css')
+        chrome = asset('desktop.html')
+        presentation = ICON_SCRIPT + '\n' + asset('desktop.js')
+    elif mobile:
+        style += '\n' + asset('mobile.css')
+        presentation = ICON_SCRIPT + '\n' + asset('mobile.js')
+    setup = """'use strict';
+let state=__STATE__,bridge=__BRIDGE__,seq=0,queue=[],busy=false,mode='ink',
+    active=null,points=[],selected=new Set(),start=null,last=null,pan=null,
+    pendingInk=null,continuousInk=false,deferredUpdate=null;
 const $=id=>document.getElementById(id),canvas=$('paper'),ctx=canvas.getContext('2d');
-__DRAWING__
-function send(action){$('status').textContent=['export','library','transfer','page'].includes(action.op)?'Opening…':'Saving…';queue.push(action);pump()}
-function pump(){if(busy||!queue.length)return;let action=queue[0];const command=bridge+'?command='+encodeURIComponent(JSON.stringify({sequence:seq+1,action}));if(command.length>__MAX_COMMAND__){queue=[];pendingInk=null;draw();$('status').textContent='Command too large. Draw a shorter stroke.';return}busy=true;seq++;__SEND_COMMAND__;}
-window.notebookUpdate=function(next,error){state=next;pendingInk=null;busy=false;queue.shift();$('status').textContent=error||state.save_status||'Saved on this device. Export a copy to share.';if(error)queue=[];render();pump()};
-function options(id,values){let el=$(id),old=el.value;el.replaceChildren();for(let [name,value] of values){let o=document.createElement('option');o.textContent=name;o.value=value;el.append(o)}if([...el.options].some(o=>o.value===old))el.value=old}
-function render(){
-$('title').textContent=state.name;if(document.activeElement!==$('notebookName'))$('notebookName').value=state.name;$('pageinfo').textContent=(state.index+1)+' / '+state.count;$('warning').textContent=state.warning||'';$('templateNotice').textContent=state.template&&state.template!=='Blank'?'Template '+state.template+' is preserved in export; this view shows ink only.':'';
-$('undo').disabled=!state.undo;$('redo').disabled=!state.redo;$('prev').disabled=!state.index;$('next').disabled=state.index+1===state.count;
-options('layerVisibility',state.layers.map(x=>[(x[2]?'Visible: ':'Hidden: ')+x[1],x[0]]));options('tool',Object.entries(state.tools));brushOptions();options('layer',state.layers.filter(x=>x[2]).map(x=>[x[1],x[0]]));
-$('prev').onclick=()=>send({op:'page',index:state.index-1});$('next').onclick=()=>send({op:'page',index:state.index+1});resize();}
-function resize(){let fit=Math.max(.1,($('viewport').clientWidth-24)/state.width);let scale=$('zoom').value==='fit'?Math.min(fit,1):Number($('zoom').value);canvas.style.width=(state.width*scale)+'px';canvas.style.height=(state.height*scale)+'px';let ratio=Math.min(devicePixelRatio||1,2);canvas.width=Math.ceil(state.width*scale*ratio);canvas.height=Math.ceil(state.height*scale*ratio);ctx.setTransform(canvas.width/state.width,0,0,canvas.height/state.height,0,0);sizeDraft();draw()}
-function draw(){clearDraft();ctx.clearRect(0,0,state.width,state.height);let visible=new Set(state.layers.filter(x=>x[2]).map(x=>x[0]));for(let s of state.strokes)if(visible.has(s.layer))line(s);if(pendingInk)line(pendingInk);if(points.length&&mode==='ink')preview(points)}
-function sample(event){let point=coord(event);last=point;if(points.length>=100000)return;let previous=points[points.length-1];if(previous&&point.every((v,i)=>v===previous[i]))return;points.push(point);if(mode==='ink')preview(previous?[previous,point]:[point]);else if(mode==='erase')for(let id of hits(point))selected.add(id)}
-function coord(e){let r=canvas.getBoundingClientRect();return [Math.max(0,Math.min(state.width,(e.clientX-r.left)/r.width*state.width)),Math.max(0,Math.min(state.height,(e.clientY-r.top)/r.height*state.height)),e.pointerType==='pen'?Math.max(0,Math.min(1,e.pressure)):.5]}
-function distance(p,a,b){let dx=b[0]-a[0],dy=b[1]-a[1],v=dx*dx+dy*dy,t=v?Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/v)):0;return Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy)}
-function hits(p){let visible=new Set(state.layers.filter(x=>x[2]).map(x=>x[0]));return state.strokes.filter(s=>visible.has(s.layer)&&s.points.some((v,i)=>distance(p,i?s.points[i-1]:v,v)<Math.max(12,v[3]/2))).map(s=>s.id)}
-canvas.onpointerdown=e=>{if(busy||state.warning||active!==null)return;if(e.pointerType==='touch'&&!$('finger').checked){pan={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);return}canvas.style.touchAction='none';e.preventDefault();active=e.pointerId;canvas.setPointerCapture(active);inkSettings=chosenInk();start=last=coord(e);points=[start];if(mode==='erase'){selected=new Set(hits(start));draw()}else if(mode==='select'){let ids=hits(start);selected=new Set(ids.slice(-1));draw()}else preview(points)};
-canvas.onpointermove=e=>{if(pan&&pan.id===e.pointerId){$('viewport').scrollLeft+=pan.x-e.clientX;$('viewport').scrollTop+=pan.y-e.clientY;pan.x=e.clientX;pan.y=e.clientY;return}if(e.pointerId!==active)return;e.preventDefault();let events=e.getCoalescedEvents?e.getCoalescedEvents():[];for(let event of events)sample(event);sample(e);if(mode!=='ink')draw()};
-function finish(e,cancelled=false){if(pan&&pan.id===e.pointerId){pan=null;return}if(e.pointerId!==active)return;active=null;if(cancelled){points=[];draw();return}let end=coord(e);if(!last||end[0]!==last[0]||end[1]!==last[1])sample(e);let captured=points;points=[];if(mode==='erase')send({op:'erase',ids:[...selected]});else if(mode==='select'&&selected.size){send({op:'transform',ids:[...selected],dx:last[0]-start[0],dy:last[1]-start[1]})}else if(mode==='ink'&&captured.length){pendingInk={tool:inkSettings.tool,...nativeColor(inkSettings.tool,inkSettings.color),points:strokePoints(captured,inkSettings.tool,inkSettings.width)};send({op:'stroke',points:captured,...inkSettings})}if(mode!=='ink'||!busy)draw()}
-canvas.onpointerup=e=>finish(e);canvas.onpointercancel=e=>finish(e,true);canvas.onlostpointercapture=e=>finish(e,true);$('erase').onclick=()=>{mode=mode==='erase'?'ink':'erase';$('erase').classList.toggle('active',mode==='erase');$('select').classList.remove('active');selected.clear();draw()};$('select').onclick=()=>{mode=mode==='select'?'ink':'select';$('select').classList.toggle('active',mode==='select');$('erase').classList.remove('active');selected.clear();draw()};$('tool').onchange=()=>{brushOptions();mode='ink';$('erase').classList.remove('active');$('select').classList.remove('active')};$('grayscale').onchange=draw;$('zoom').onchange=resize;new ResizeObserver(()=>{if(active===null)resize()}).observe($('viewport'));render();
-</script></body></html>'''
+"""
+    engine = setup + '\n'.join(asset(name) for name in (
+        'drawing.js', 'queue.js', 'viewport.js', 'input.js', 'boot.js'))
+    engine = engine.replace('__MAX_COMMAND__', str(MAX_COMMAND)).replace(
+        '__SEND_COMMAND__', 'console.info(command)' if console_bridge else 'location.href=command')
+    # Substitute code first and user-controlled values last. Marker-like titles
+    # remain data, never another pass through template expansion.
+    engine = engine.replace('__BRIDGE__', json.dumps(bridge))
+    # Compose before inserting state to protect titles containing template markers.
+    template = asset('document.html').replace('__STYLE__', style).replace('__CHROME__', chrome)
+    template = template.replace('__ENGINE__', engine).replace(
+        '__PRESENTATION__', '<script>\n' + presentation + '\n</script>')
+    return template.replace('__STATE__', json.dumps(state, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c'))

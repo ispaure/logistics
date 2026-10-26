@@ -5,13 +5,27 @@ from uuid import uuid4
 
 MAX_COMMAND = 8 * 1024 * 1024
 
+class RetiredCanvas(Exception):
+    """An awaited operation completed after its originating surface retired."""
+
+
 class Bridge:
     def __init__(self):
         self.url = 'logistics-notebook://' + uuid4().hex + '/'
         self.sequence = 0
+        self.active = True
+
+    def retire(self):
+        self.active = False
+
+    async def wait(self, operation):
+        result = await operation
+        if not self.active:
+            raise RetiredCanvas()
+        return result
 
     def command(self, url):
-        if len(url) > MAX_COMMAND or url.split('?', 1)[0] != self.url:
+        if not self.active or len(url) > MAX_COMMAND or url.split('?', 1)[0] != self.url:
             return None
         try:
             values = parse_qs(urlsplit(url).query, strict_parsing=True)
@@ -27,7 +41,3 @@ class Bridge:
             return action
         except (ValueError, KeyError, TypeError):
             return None
-
-
-def update_script(state, error=''):
-    return 'window.notebookUpdate(' + json.dumps(state, allow_nan=False) + ',' + json.dumps(error) + ')'

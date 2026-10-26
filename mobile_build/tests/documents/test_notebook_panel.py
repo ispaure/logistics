@@ -6,12 +6,16 @@ import unittest
 from mobile.app import LogisticsMobile
 from mobile.navigation import DESTINATIONS
 from features.notebooks.notebook import Notebook
-from features.notebooks.workspace import Editor
 from features.notebooks.mobile.documents import open_notebook
 
 
 class NotebookPanelTests(unittest.TestCase):
     def setUp(self):
+        from unittest.mock import AsyncMock, patch
+        import toga
+        evaluator = patch.object(toga.WebView, 'evaluate_javascript', new_callable=AsyncMock)
+        evaluator.start()
+        self.addCleanup(evaluator.stop)
         self.temp=TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         LogisticsMobile.storage_root=Path(self.temp.name)
@@ -19,6 +23,135 @@ class NotebookPanelTests(unittest.TestCase):
         self.app=LogisticsMobile('Logistics','io.github.ispaure.logisticsmobile')
         self.addCleanup(self.app.loop.close)
         self.addCleanup(self.app.main_window.close)
+
+    def test_reopen_uses_document_recovery_owner_and_can_checkpoint_afterward(self):
+        app = self.app
+        app.loop.run_until_complete(open_notebook(app))
+        panel = app.notebook_panel
+        self.assertIs(panel.repository, panel.document.recovery)
+        key = panel.key
+        app.loop.run_until_complete(panel.load(lambda: panel.repository.open(key), key))
+        panel.editor.apply({'op': 'stroke', 'points': [[30, 40, .5]]})
+        self.assertEqual(len(panel.document.recovery.open(key).page(0).strokes), 1)
+
+    def test_replacing_canvas_during_native_confirmation_does_not_delete_new_page(self):
+        from unittest.mock import patch
+        app = self.app
+        app.loop.run_until_complete(open_notebook(app))
+        panel = app.notebook_panel
+        panel.editor.apply({'op': 'add-page'})
+        old_editor, old_bridge = panel.editor, panel.bridge
+        replacement = Notebook.new('Replacement')
+        async def confirm(dialog):
+            panel.open(replacement, panel.repository.create(replacement))
+            return True
+        with patch.object(app.main_window, 'dialog', side_effect=confirm):
+            app.loop.run_until_complete(panel.perform({'op': 'delete-page'}))
+        self.assertEqual(len(old_editor.notebook.pages), 2)
+        self.assertEqual(len(replacement.pages), 1)
+        self.assertFalse(old_bridge.active)
+        self.assertFalse(panel.busy)
+        panel.web.evaluate_javascript.assert_not_awaited()
+        app.loop.run_until_complete(panel.perform({'op': 'rename', 'name': 'Usable replacement'}))
+        self.assertEqual(replacement.name, 'Usable replacement')
+
+    def test_queued_command_for_retired_canvas_cannot_rename_replacement(self):
+        app = self.app
+        app.loop.run_until_complete(open_notebook(app))
+        panel = app.notebook_panel
+        old = panel.bridge
+        panel.mount_canvas()
+        app.loop.run_until_complete(panel.perform({'op': 'rename', 'name': 'Stale'}, canvas=old))
+        self.assertNotEqual(panel.editor.notebook.name, 'Stale')
+        self.assertFalse(panel.document.dirty)
+
+    def test_close_acknowledges_before_cancelled_dirty_guard(self):
+        app = self.app
+        path = Path(self.temp.name) / 'cancel-close.rmdoc'
+        path.write_bytes(Notebook.new().to_bytes())
+        app.loop.run_until_complete(open_notebook(app, path=path))
+        panel = app.notebook_panel
+        panel.editor.apply(dict(op='rename', name='Dirty'))
+        app.loop.run_until_complete(panel.perform(dict(op='library')))
+        panel.web.evaluate_javascript.assert_awaited()
+        app.keep_reader_editing(panel.session.id)
+        self.assertFalse(panel.busy)
+        self.assertIn(panel.session.id, app.workspace.sessions)
+
+    def test_delete_notebook_draft_cancel_then_confirm(self):
+        from unittest.mock import AsyncMock, patch
+        app = self.app
+        app.loop.run_until_complete(open_notebook(app))
+        panel = app.notebook_panel
+        recovery = panel.repository.root / panel.key
+        key = panel.session.id
+        self.assertTrue(panel.state()['can_delete'])
+        self.assertFalse(panel.state()['has_source'])
+        del panel.session
+        self.assertTrue(panel.state()['can_delete'], 'Draft menu must initialize before session attachment')
+        panel.session = app.workspace.sessions[key]
+        with patch.object(app.main_window, 'dialog', AsyncMock(return_value='cancel')):
+            app.loop.run_until_complete(panel.perform(dict(op='delete-file')))
+        self.assertTrue(recovery.exists())
+        self.assertIn(key, app.workspace.sessions)
+        with patch.object(app.main_window, 'dialog', AsyncMock(return_value='delete')):
+            app.loop.run_until_complete(panel.perform(dict(op='delete-file')))
+        self.assertFalse(recovery.exists())
+        self.assertNotIn(key, app.workspace.sessions)
+        self.assertTrue(panel.closed)
+
+    def test_delete_saved_notebook_preserves_external_changes(self):
+        from unittest.mock import AsyncMock, patch
+        app = self.app
+        path = Path(self.temp.name) / 'delete-source.rmdoc'
+        path.write_bytes(Notebook.new().to_bytes())
+        app.loop.run_until_complete(open_notebook(app, path=path))
+        panel = app.notebook_panel
+        original = path.read_bytes()
+        path.write_bytes(Notebook.new('Changed elsewhere').to_bytes())
+        with patch.object(app.main_window, 'dialog', AsyncMock(return_value='delete')):
+            app.loop.run_until_complete(panel.perform(dict(op='delete-file')))
+        self.assertTrue(path.exists())
+        self.assertFalse(panel.closed)
+        self.assertNotEqual(path.read_bytes(), original)
+        self.assertIn('File changed', panel.web.evaluate_javascript.call_args.args[0])
+        # Reopen to admit the new revision, then delete its file and recovery.
+        panel.document.resource.read()
+        recovery = panel.repository.root / panel.key
+        with patch.object(app.main_window, 'dialog', AsyncMock(return_value='delete')):
+            app.loop.run_until_complete(panel.perform(dict(op='delete-file')))
+        self.assertFalse(path.exists())
+        self.assertFalse(recovery.exists())
+
+    def test_folder_action_uses_live_notebook_source(self):
+        from mobile.document_sources import folder_location
+        app = self.app
+        app.loop.run_until_complete(open_notebook(app))
+        panel = app.notebook_panel
+        self.assertIsNone(folder_location(app, panel.session))
+        path = Path(self.temp.name) / 'reveal.rmdoc'
+        path.write_bytes(Notebook.new().to_bytes())
+        app.loop.run_until_complete(open_notebook(app, path=path))
+        panel = app.notebook_panel
+        location = folder_location(app, panel.session)
+        self.assertIs(location['provider'], panel.document.resource.provider)
+        self.assertEqual(location['key'], path.name)
+        self.assertTrue(panel.state()['has_source'])
+
+    def test_page_delete_cancel_then_confirm_retains_history(self):
+        from unittest.mock import AsyncMock, patch
+        app = self.app
+        app.loop.run_until_complete(open_notebook(app))
+        panel = app.notebook_panel
+        panel.editor.apply(dict(op='add-page'))
+        with patch.object(app.main_window, 'dialog', AsyncMock(return_value=False)):
+            app.loop.run_until_complete(panel.perform(dict(op='delete-page')))
+        self.assertEqual(len(panel.editor.notebook.pages), 2)
+        with patch.object(app.main_window, 'dialog', AsyncMock(return_value=True)):
+            app.loop.run_until_complete(panel.perform(dict(op='delete-page')))
+        self.assertEqual(len(panel.editor.notebook.pages), 1)
+        panel.editor.apply(dict(op='undo'))
+        self.assertEqual(len(panel.editor.notebook.pages), 2)
 
     def test_destination_order_and_retained_workspace(self):
         app=self.app
@@ -51,6 +184,32 @@ class NotebookPanelTests(unittest.TestCase):
         self.assertIsNone(panel.boox_refresh)
         panel.dispose()
         controller.close.assert_called_once_with()
+
+    def test_notebook_close_returns_home_and_retires_session_from_another_tab(self):
+        app = self.app
+        app.show_locations()
+        app.loop.run_until_complete(open_notebook(app, destination='files'))
+        panel = app.notebook_panel
+        key = panel.session.id
+        app.loop.run_until_complete(panel.perform(dict(op='library')))
+        self.assertNotIn(key, app.workspace.sessions)
+        self.assertTrue(panel.closed)
+        self.assertEqual(app.native_host.state.destination, 'home')
+        self.assertFalse(app.routes.screens['home'])
+
+    def test_notebook_close_keeps_unsaved_edits_for_the_close_prompt(self):
+        app = self.app
+        path = Path(self.temp.name) / 'unsaved.rmdoc'
+        path.write_bytes(Notebook.new('Original').to_bytes())
+        original = path.read_bytes()
+        app.loop.run_until_complete(open_notebook(app, path=path))
+        panel = app.notebook_panel
+        panel.editor.apply(dict(op='rename', name='Unsaved title'))
+        app.loop.run_until_complete(panel.perform(dict(op='library')))
+        self.assertIn(panel.session.id, app.workspace.sessions)
+        self.assertTrue(panel.document.dirty)
+        self.assertFalse(panel.closed)
+        self.assertEqual(path.read_bytes(), original)
 
     def test_workspace_opens_a_notebook_copy_without_changing_source(self):
         from unittest.mock import patch

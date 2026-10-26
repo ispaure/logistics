@@ -8,9 +8,11 @@ from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 
 from ..notebook import Notebook, MAX_ARCHIVE
-from ..workspace import Repository, Editor
-from ..bridge import Bridge, update_script
-from ..canvas import editor_html
+from ..recovery import Repository
+from ..editor import Editor
+from ..bridge import Bridge, RetiredCanvas
+from ..protocol import document_state, stroke_script, update_script, validate_action
+from .surface import mobile_editor_html
 
 
 class NotebookPanel:
@@ -26,6 +28,14 @@ class NotebookPanel:
         self.busy = False
         self.closed = False
         self.view = toga.Box(style=Pack(direction=COLUMN, flex=1))
+        if type(self.view._impl).__module__.startswith('toga_iOS.'):
+            from mobile.control_icons import icon_button
+            async def close(widget=None, **kwargs):
+                if self.web is not None:
+                    await self.web.evaluate_javascript("send({op:'library'})")
+            self.view._reader_close_button = icon_button('close', 'Close document', on_press=close)
+            self.view._native_reader_toolbar = toga.Box()
+            self.view._native_reader_buttons = lambda: []
         if library:
             self.library()
         else:
@@ -34,6 +44,8 @@ class NotebookPanel:
 
     @property
     def repository(self):
+        if self.document is not None and self.document.recovery is not None:
+            self._repository = self.document.recovery
         if self._repository is None:
             self._repository = Repository(Path(self.app.private_root) / 'notebooks')
         return self._repository
@@ -119,12 +131,16 @@ class NotebookPanel:
         self.open(document.book, document.key)
 
     def state(self):
-        state = self.editor.state()
-        state['save_status'] = ('Unsaved changes' if self.document.dirty else 'Saved') if self.document else 'Saved on this device. Export a copy to share.'
-        state['read_only'] = bool(self.document and not self.document.writable)
+        state = document_state(self.editor, self.document)
+        state['native_close'] = hasattr(self.view, '_native_reader_buttons')
         return state
 
     def open(self, book, key):
+        if self.document is not None and self.document.book is not book:
+            if self.document.recovery is not None:
+                self._repository = self.document.recovery
+            self.document.close()
+            self.document = None
         self.key = key
         self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book))
         self.mount_canvas()
@@ -138,7 +154,7 @@ class NotebookPanel:
         if type(self.web._impl).__module__.startswith('toga_android.'):
             from java import jclass
             self.boox_refresh = jclass('io.github.ispaure.logistics.notebooks.BooxRefresh').attach(self.web._impl.native)
-        self.web.set_content('https://logistics.invalid/notebooks/', editor_html(self.state(), self.bridge.url))
+        self.web.set_content('https://logistics.invalid/notebooks/', mobile_editor_html(self.state(), self.bridge.url))
         for child in list(self.view.children):
             self.view.remove(child)
         self.view.add(self.web)
@@ -149,63 +165,96 @@ class NotebookPanel:
         action = self.bridge.command(url)
         if action is not None:
             self.busy = True
-            self.app.loop.create_task(self.perform(action))
+            self.app.loop.create_task(self.perform(action, canvas=self.bridge))
         return False
 
-    async def perform(self, action):
+    async def perform(self, action, *, canvas=None):
+        canvas = canvas or self.bridge
+        if canvas is not self.bridge or not canvas.active:
+            return
         self.busy = True
         error = ''
         web, editor = self.web, self.editor
         try:
-            op = action['op']
+            op = validate_action(action)
+            if op == 'library':
+                # Release the JS queue before native guards. Cancel/Keep editing
+                # must leave a usable canvas, and queued ink precedes this action.
+                self.busy = False
+                await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
+            if op == 'show-in-folder':
+                self.busy = True
+                from mobile.document_sources import show_in_folder
+                await canvas.wait(show_in_folder(self.app, self.session, self))
+            if op == 'delete-file':
+                self.busy = True
+                await canvas.wait(self.delete_document())
             if op == 'library':
                 if hasattr(self, 'session'):
-                    await web.evaluate_javascript(update_script(self.state(), ''))
-                    self.app.show_documents_hub()
+                    # Match the other document editors: close with their normal
+                    # save/discard guard, then return to the Home overview.
+                    self.busy = False
+                    self.app.__dict__.setdefault('_reader_returns', {})[self.session.id] = ('home', None, False)
+                    self.app.request_reader_close(self.session.id)
                 else:
                     self.library()
                 return
+            if op == 'delete-page':
+                if not await canvas.wait(self.app.main_window.dialog(toga.ConfirmDialog(
+                        'Delete this page?', 'This removes the current page. Undo is available.'))):
+                    self.busy = False
+                    await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
+                    return
             if op == 'save':
                 if self.document is not None and self.document.resource is not None:
-                    await asyncio.to_thread(self.document.save)
+                    await canvas.wait(asyncio.to_thread(self.document.save))
                 else:
-                    await web.evaluate_javascript(update_script(self.state(), ''))
-                    await self.app.editor_picker().show_notebook_destination(self)
+                    await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
+                    await canvas.wait(self.app.editor_picker().show_notebook_destination(self))
                     return
             elif op == 'save-as':
-                await web.evaluate_javascript(update_script(self.state(), ''))
-                await self.app.editor_picker().show_notebook_destination(self)
+                await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
+                await canvas.wait(self.app.editor_picker().show_notebook_destination(self))
                 return
             elif op == 'transfer':
-                if not await self.confirm_export():
-                    await web.evaluate_javascript(update_script(self.state(), 'Cancelled.'))
+                if not await canvas.wait(self.confirm_export()):
+                    await canvas.wait(web.evaluate_javascript(update_script(self.state(), 'Cancelled.')))
                     return
                 self.transfer_panel()
                 return
             elif op == 'export':
-                if not await self.confirm_export():
-                    await web.evaluate_javascript(update_script(self.state(), 'Cancelled.'))
+                if not await canvas.wait(self.confirm_export()):
+                    await canvas.wait(web.evaluate_javascript(update_script(self.state(), 'Cancelled.')))
                     return
                 from commonUtils.ui.native.documents import export_stream
-                data = await asyncio.to_thread(editor.notebook.to_bytes)
+                data = await canvas.wait(asyncio.to_thread(editor.notebook.to_bytes))
                 name = editor.notebook.name.replace('/', '-').replace('\\', '-') + '.rmdoc'
-                saved = await export_stream(self.app, name, lambda: BytesIO(data))
+                saved = await canvas.wait(export_stream(self.app, name, lambda: BytesIO(data)))
                 if not saved:
-                    error = 'Export cancelled. Your notebook is saved on this device.'
-            elif op not in {'save', 'save-as'}:
-                await asyncio.to_thread(editor.apply, action)
+                    error = 'Export cancelled. Your notebook remains open.'
+            elif op not in {'save', 'save-as', 'show-in-folder', 'delete-file'}:
+                await canvas.wait(asyncio.to_thread(editor.apply, action))
                 if hasattr(self, 'session') and op == 'rename':
                     self.session.title = editor.notebook.name
                     self.app.refresh_document_list()
+        except RetiredCanvas:
+            return
         except Exception as failure:
             error = str(failure)
         finally:
-            self.busy = False
+            if canvas is self.bridge:
+                self.busy = False
+        if canvas is not self.bridge or not canvas.active:
+            return
         if hasattr(self, 'session') and self.document is not None:
             self.session.dirty = self.document.dirty
         if not self.closed and self.app.active_host and web in self.view.children:
             try:
-                await web.evaluate_javascript(update_script(self.state(), error))
+                if action['op'] == 'stroke' and not error:
+                    script = stroke_script(editor, self.document)
+                else:
+                    script = update_script(self.state(), error)
+                await web.evaluate_javascript(script)
             except Exception as failure:
                 if not self.closed and self.web is web:
                     if self.document is not None and self.document.recovery is None:
@@ -218,6 +267,43 @@ class NotebookPanel:
                     else:
                         self.library()
                         self.status.text = 'Notebook saved. Reopen it to resume: ' + str(failure)
+
+    async def delete_document(self):
+        from features.text_editor.mobile.document_dialogs import DocumentDialog
+        document = self.document
+        if document is None or not document.writable:
+            raise ValueError('This notebook cannot be deleted.')
+        if len(self.app.scene_manager.owners.hosts) > 1:
+            raise ValueError('Close other app windows before deleting a document.')
+        resource = document.resource
+        warning = ('Permanently delete this notebook and its recovery draft? '
+                   'Unsaved changes will also be removed.')
+        if resource is not None:
+            warning += ' The file will be deleted from its folder.'
+        choice = await self.app.main_window.dialog(DocumentDialog(
+            'Delete ' + document.book.name + '?', warning, delete=True))
+        if choice != 'delete' or self.closed or self.document is not document or not self.app.active_host:
+            return
+        if len(self.app.scene_manager.owners.hosts) > 1:
+            raise ValueError('Close other app windows before deleting a document.')
+        def remove():
+            if resource is not None:
+                if resource.check()['revision'] != resource.revision:
+                    raise ValueError('File changed; reopen it before deleting.')
+                resource.provider.remove_empty(resource.path, resource.revision)
+            if document.recovery is not None:
+                import shutil
+                from ..notebook import identifier
+                shutil.rmtree(document.recovery.root / identifier(document.key))
+        await asyncio.to_thread(remove)
+        self.app.recent_documents.forget('notebook', self.session.resource)
+        from mobile.resource_imports import ResourceImports
+        imports = getattr(self.app, 'resource_imports', None) or ResourceImports(self.app.private_root)
+        imports.forget('notebook', self.session.resource)
+        self.busy = False
+        self.app.__dict__.setdefault('_reader_returns', {})[self.session.id] = ('home', None, False)
+        self.app.__dict__.setdefault('_reader_closing', set()).add(self.session.id)
+        self.app.close_session(self.session.id, choice='discard')
 
     async def confirm_export(self):
         from services.documents.mobile_storage import confirm_export
@@ -255,11 +341,15 @@ class NotebookPanel:
                 return
             self.view.remove(self.view.children[0])
             self.view.add(self.web)
-            await self.web.evaluate_javascript(update_script(self.editor.state()))
+            await self.web.evaluate_javascript(update_script(self.state()))
         box.add(toga.Button('Back to notebook', on_press=back, style=Pack(height=48, margin_top=16)))
         self.view.add(toga.ScrollContainer(content=box, horizontal=False, style=Pack(flex=1)))
 
     def retire_canvas(self):
+        bridge = getattr(self, 'bridge', None)
+        if bridge is not None:
+            bridge.retire()
+        self.busy = False
         if self.boox_refresh is not None:
             self.boox_refresh.close()
             self.boox_refresh = None

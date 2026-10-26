@@ -7,7 +7,10 @@ import time
 
 from commonUtils.ui import pyside as qt
 from PySide6.QtTest import QTest
-from features.notebooks.ui.workspace import NotebookWorkspace
+from features.notebooks.ui.workspace import NotebookWorkspace, NotebookWindow
+from features.notebooks.ui.menus import NotebookMenus
+from features.notebooks.protocol import update_script
+from unittest.mock import patch
 from Scripts.build_retention import scratch
 
 
@@ -17,10 +20,23 @@ def main(output):
     app = qt.QApplication.instance() or qt.QApplication([])
     failed = []
     with scratch() as temporary:
-        workspace = NotebookWorkspace(root=temporary / 'notebooks')
-        workspace.resize(1000, 850)
-        workspace.show()
+        from desktop.documents import DocumentsPage, register_document_host, show_document
+        host = qt.QMainWindow()
+        host.setWindowTitle('Logistics host')
+        documents = DocumentsPage(lambda: None, host)
+        host.setCentralWidget(documents)
+        host.resize(1000, 850)
+        host.show()
+        register_document_host(documents)
+        window = NotebookWindow()
+        workspace = NotebookWorkspace(window, root=temporary / 'notebooks')
+        window.setCentralWidget(workspace)
+        window.notebook_menus = NotebookMenus(window)
+        show_document(window)
         workspace.new()
+        assert window in documents.records
+        assert window.windowTitle() == workspace.editor.notebook.name
+        assert host.windowTitle() == 'Logistics host'
         started = time.monotonic()
 
         def fail(error):
@@ -56,17 +72,17 @@ def main(output):
             stroke = workspace.editor.notebook.page(0).strokes[0]
             if stroke.tool != 12 or stroke.color != 6:
                 return fail('Native drawing did not retain the selected brush/color.')
-            workspace.web.page().runJavaScript("send({op:'undo'})")
+            window.notebook_menus.actions['undo'].trigger()
             until(lambda: not workspace.editor.notebook.page(0).strokes, redo)
 
         def redo():
             print('Undo completed', flush=True)
-            workspace.web.page().runJavaScript("send({op:'redo'})")
+            window.notebook_menus.actions['redo'].trigger()
             until(lambda: len(workspace.editor.notebook.page(0).strokes) == 1, add_page)
 
         def add_page():
             print('Redo completed', flush=True)
-            workspace.web.page().runJavaScript("send({op:'add-page'})")
+            window.notebook_menus.actions['add-page'].trigger()
             until(lambda: len(workspace.editor.notebook.pages) == 2, rename)
 
         def rename():
@@ -82,20 +98,133 @@ def main(output):
             try:
                 book = workspace.repository.open(workspace.key)
                 assert len(book.pages) == 2 and len(book.page(0).strokes) == 1
+                assert host.windowTitle() == 'Logistics host'
+                assert window.windowTitle() == 'Native canvas'
                 assert book.name == 'Native canvas' and book.page(1).layers[-1][1] == 'Details'
                 data = book.to_bytes()
                 (output / 'native-canvas.rmdoc').write_bytes(data)
                 workspace.editor.index = 0
-                workspace.web.page().runJavaScript("send({op:'page',index:0})")
+                workspace.web.page().runJavaScript("send({op:'page',index:0});send({op:'library'})")
                 def capture():
                     workspace.grab().save(str(output / 'desktop-canvas.png'))
-                    (output / 'desktop-canvas.json').write_text(json.dumps(dict(status='passed',
-                        native_mouse_input=True, brush=12, color=6, undo=True, redo=True,
-                        recovered_pages=2, rename=True, add_layer=True, export_bytes=len(data)), indent=2))
-                    app.quit()
+                    check_save_shortcut()
                 qt.QTimer.singleShot(300, capture)
             except Exception as error:
                 fail(error)
+
+        def check_save_shortcut():
+            picker_patch = patch('services.documents.ui.editors.choose_editor_resource', return_value=None)
+            picker = picker_patch.start()
+            # Qt's standard keys map to Command on macOS and Ctrl elsewhere.
+            keys = [qt.QKeySequence(qt.QKeySequence.StandardKey.Save)[0],
+                    qt.QKeySequence(qt.QKeySequence.StandardKey.SaveAs)[0]]
+            host.raise_()
+            host.activateWindow()
+            workspace.web.setFocus()
+            def press(index):
+                target = workspace.web.focusProxy() or workspace.web
+                key = keys[index]
+                QTest.keyClick(target, key.key(), key.keyboardModifiers())
+                qt.QTimer.singleShot(250, lambda: checked(index))
+            def checked(index):
+                if picker.call_count != index + 1:
+                    picker_patch.stop()
+                    return fail('Native Save/Save As shortcut did not open exactly one save picker: ' + str(picker.call_count))
+                if index == 0:
+                    return press(1)
+                picker_patch.stop()
+                workspace.web.page().runJavaScript(update_script(workspace.state(), ''))
+                check_zoom_shortcuts()
+            qt.QTimer.singleShot(200, lambda: press(0))
+
+        def zoom_snapshot(callback):
+            workspace.web.page().runJavaScript("JSON.stringify({zoom:document.getElementById('zoom').value,scale:canvas.getBoundingClientRect().width/state.width,paper:canvas.getBoundingClientRect().toJSON(),viewport:document.getElementById('viewport').getBoundingClientRect().toJSON()})", lambda encoded: callback(json.loads(encoded)))
+
+        def check_zoom_shortcuts():
+            def baseline(data):
+                initial = data['scale']
+                steps = [('Ctrl+=', initial * 1.2),
+                         (qt.QKeySequence.StandardKey.ZoomOut, initial),
+                         (qt.QKeySequence.StandardKey.ZoomIn, initial * 1.2), ('Ctrl+0', initial)]
+                def press(index):
+                    key = qt.QKeySequence(steps[index][0])[0]
+                    QTest.keyClick(workspace.web.focusProxy() or workspace.web, key.key(), key.keyboardModifiers())
+                    qt.QTimer.singleShot(150, lambda: zoom_snapshot(lambda data: checked(index, data)))
+                def checked(index, data):
+                    if abs(data['scale'] - steps[index][1]) > .0002:
+                        return fail('Zoom shortcut changed scale incorrectly: ' + repr((steps[index], data)))
+                    if index + 1 < len(steps):
+                        return press(index + 1)
+                    if data['zoom'] != 'page':
+                        return fail('Ctrl/Cmd+0 did not restore Fit Page')
+                    workspace.request_ui('zoom', '1')
+                    qt.QTimer.singleShot(150, lambda: zoom_snapshot(wheel))
+                press(0)
+            def wheel(before):
+                box = before['viewport']
+                x, y = box['left'] + box['width'] / 2, box['top'] + box['height'] / 2
+                target = workspace.web.focusProxy() or workspace.web
+                event = qt.QWheelEvent(qt.QPointF(x, y), qt.QPointF(target.mapToGlobal(qt.QPoint(int(x), int(y)))),
+                    qt.QPoint(), qt.QPoint(0, 120), qt.Qt.MouseButton.NoButton,
+                    qt.Qt.KeyboardModifier.ControlModifier, qt.Qt.ScrollPhase.NoScrollPhase, False)
+                qt.QApplication.sendEvent(target, event)
+                def checked(after):
+                    old, new = before['paper'], after['paper']
+                    for coordinate, edge, size in [(x, 'left', 'width'), (y, 'top', 'height')]:
+                        if abs((coordinate-old[edge])/old[size] - (coordinate-new[edge])/new[size]) > .003:
+                            return fail('Modified wheel lost its page anchor: ' + repr((before, after)))
+                    if after['scale'] <= before['scale'] or workspace.web.zoomFactor() != 1:
+                        return fail('Modified wheel did not zoom only the notebook page: ' + repr(after))
+                    script = """(()=>{
+let v=document.getElementById('viewport'),r=v.getBoundingClientRect(),x=r.left+v.clientWidth/2,y=r.top+v.clientHeight/2;
+let before=canvas.getBoundingClientRect().width;
+v.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:120,clientX:x,clientY:y}));
+let plain=canvas.getBoundingClientRect().width===before;
+for(let modifier of ['ctrlKey','metaKey']){let size=canvas.getBoundingClientRect().width;v.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:-80,clientX:x,clientY:y,[modifier]:true}));if(canvas.getBoundingClientRect().width<=size)return false}
+setZoom(20);let upper=document.getElementById('zoom').value==='4';setZoom(.001);let lower=document.getElementById('zoom').value==='0.1';setZoom('page');return plain&&upper&&lower;
+})()"""
+                    def finished(ok):
+                        if not ok:
+                            return fail('Zoom modifier, ordinary scroll or zoom bounds regression')
+                        check_layouts([(1280, 900), (720, 760)])
+                    workspace.web.page().runJavaScript(script, finished)
+                qt.QTimer.singleShot(200, lambda: zoom_snapshot(checked))
+            zoom_snapshot(baseline)
+
+        def check_layouts(sizes):
+            if not sizes:
+                (output / 'desktop-canvas.json').write_text(json.dumps(dict(status='passed',
+                    native_mouse_input=True, brush=12, color=6, visual_controls=True, undo=True, redo=True,
+                    recovered_pages=2, rename=True, add_layer=True, document_host=True,
+                    responsive_widths=[720, 1280], horizontal_toolbar=True, native_menus=True, default_fit_page=True,
+                    save_shortcut=True, hidden_toolbar=True, keyboard_modes=True, brush_number_shortcuts=True,
+                    zoom_shortcuts=True, anchored_modifier_wheel=True, zoom_bounds=[.1, 4],
+                    export_bytes=len(workspace.editor.notebook.to_bytes())), indent=2))
+                return app.quit()
+            width, height = sizes[0]
+            host.resize(width, height)
+            def measure():
+                workspace.web.page().runJavaScript("JSON.stringify({width:innerWidth,zoom:document.getElementById('zoom').value,toolbarHeight:document.querySelector('header').getBoundingClientRect().height,brushRows:new Set([...document.querySelectorAll('#brushes button')].map(button=>button.offsetTop)).size,overflow:document.body.scrollWidth>innerWidth,viewport:document.getElementById('viewport').getBoundingClientRect().toJSON(),paper:document.getElementById('paper').getBoundingClientRect().toJSON()})", measured)
+            def measured(encoded):
+                data = json.loads(encoded)
+                if (data['overflow'] or data['brushRows'] != 1 or data['toolbarHeight'] > 90
+                        or data['viewport']['height'] < 150 or data['zoom'] != 'page'
+                        or data['paper']['right'] > data['viewport']['right'] + 1
+                        or data['paper']['bottom'] > data['viewport']['bottom'] + 1):
+                    return fail('Notebook layout overflow: ' + encoded)
+                workspace.grab().save(str(output / f'desktop-{width}.png'))
+                if width == 1280:
+                    host.grab().save(str(output / 'desktop-host.png'))
+                workspace.web.page().runJavaScript("window.notebookUI('toolbar')")
+                def focused():
+                    workspace.web.page().runJavaScript("JSON.stringify({hidden:getComputedStyle(document.querySelector('header')).display==='none'})", focus_checked)
+                def focus_checked(encoded):
+                    if json.loads(encoded) != dict(hidden=True):
+                        return fail('Focus layout failed: ' + encoded)
+                    workspace.web.page().runJavaScript("window.notebookUI('toolbar')")
+                    check_layouts(sizes[1:])
+                qt.QTimer.singleShot(150, focused)
+            qt.QTimer.singleShot(250, measure)
 
         loaded_once = False
         def loaded(ok):
@@ -109,20 +238,25 @@ def main(output):
                 workspace.web.page().runJavaScript("document.querySelector('details').open=true;JSON.stringify({header:document.querySelector('header').getBoundingClientRect().height,body:document.body.clientHeight,page:document.getElementById('viewport').clientHeight})", toolbar)
             def toolbar(encoded):
                 sizes = json.loads(encoded)
-                if sizes['page'] <= 0 or sizes['header'] > sizes['body'] * .55:
+                if sizes['page'] <= 0 or sizes['header'] > sizes['body'] * .18:
                     return fail('Expanded notebook toolbar hides the page: ' + encoded)
-                workspace.web.page().runJavaScript("document.querySelector('details').open=false")
+                workspace.web.page().runJavaScript("document.querySelector('details').open=false;JSON.stringify({brushes:document.querySelectorAll('#brushes button').length,colors:document.querySelectorAll('#swatches button').length,shortcuts:(()=>{for(let key of ['e','v','b'])document.dispatchEvent(new KeyboardEvent('keydown',{key}));let draw=document.getElementById('ink').getAttribute('aria-pressed');for(let key of ['9','6'])document.dispatchEvent(new KeyboardEvent('keydown',{key}));return draw==='true'&&document.getElementById('tool').value==='12'})()})", check_chrome)
+            def check_chrome(encoded):
+                chrome = json.loads(encoded)
+                if chrome != dict(brushes=9, colors=9, shortcuts=True):
+                    return fail('Visual notebook controls failed: ' + encoded)
                 workspace.web.page().runJavaScript("send({op:'stroke',points:[],padding:'x'.repeat(8*1024*1024)});document.getElementById('status').textContent", rejected)
             def rejected(status):
                 if 'too large' not in str(status):
                     return fail('Oversized canvas command did not report an error.')
-                workspace.web.page().runJavaScript("document.getElementById('tool').value='12';document.getElementById('color').value='6';JSON.stringify(document.getElementById('paper').getBoundingClientRect())", draw)
+                workspace.web.page().runJavaScript("document.querySelector('#brushes [data-value=\"12\"]').click();document.querySelector('#swatches [data-value=\"6\"]').click();document.querySelector('#widths [data-value=\"3\"]').click();JSON.stringify(document.getElementById('paper').getBoundingClientRect())", draw)
             qt.QTimer.singleShot(300, ready)
 
         workspace.web.loadFinished.connect(loaded)
         qt.QTimer.singleShot(30000, lambda: fail('Native canvas probe timed out.'))
         app.exec()
-        workspace.close()
+        window.close()
+        host.close()
     if failed:
         raise RuntimeError('; '.join(failed))
     print('Native desktop drawing, undo/redo, page creation, recovery and export passed.')

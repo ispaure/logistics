@@ -1,5 +1,6 @@
 """Synthetic native-ink archives, recovery, preservation and editing contracts."""
 import json
+import re
 from io import BytesIO
 from pathlib import Path
 import struct
@@ -16,7 +17,8 @@ from features.notebooks._vendor.rmscene.scene_tree import SceneTree
 from features.notebooks.notebook import Notebook, read_archive
 from features.notebooks.ink import InkPage, TOOLS
 from features.notebooks.brushes import BRUSHES, WIDTHS, native_color
-from features.notebooks.workspace import Repository, Editor
+from features.notebooks.recovery import Repository
+from features.notebooks.editor import Editor
 from features.notebooks.bridge import Bridge
 
 
@@ -389,11 +391,12 @@ class NotebookTests(unittest.TestCase):
 
     def test_notebook_titles_cannot_replace_canvas_template_instructions(self):
         from features.notebooks.canvas import editor_html
-        title = '__BRIDGE__ __MAX_COMMAND__ __SEND_COMMAND__ __STATE__ </script>'
+        title = '__BRIDGE__ __MAX_COMMAND__ __SEND_COMMAND__ __STATE__ __STYLE__ __CHROME__ __ENGINE__ __PRESENTATION__ </script>'
         self.book.metadata['visibleName'] = title
-        html = editor_html(self.editor.state(), 'logistics-notebook://fixture/')
-        encoded = html.split("'use strict';let state=", 1)[1].split(',bridge=', 1)[0]
-        self.assertEqual(json.loads(encoded)['name'], title)
+        for desktop in (False, True):
+            html = editor_html(self.editor.state(), 'logistics-notebook://fixture/', desktop=desktop)
+            encoded = re.split(r'let state\s*=\s*', html, maxsplit=1)[1].split(',bridge=', 1)[0]
+            self.assertEqual(json.loads(encoded)['name'], title)
 
     def test_invalid_page_operations_do_not_partially_mutate_the_notebook(self):
         self.book.add_page()

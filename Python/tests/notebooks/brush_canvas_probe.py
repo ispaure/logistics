@@ -1,4 +1,4 @@
-"""Real WebEngine checks for the shared notebook surface at wide and narrow sizes."""
+"""Real WebEngine checks for both notebook presentations and brush pixels."""
 import argparse
 import base64
 import json
@@ -8,7 +8,8 @@ from commonUtils.ui import pyside as qt
 from features.notebooks.brushes import BRUSHES, stroke_points
 from features.notebooks.canvas import editor_html
 from features.notebooks.notebook import Notebook
-from features.notebooks.workspace import Editor
+from features.notebooks.editor import Editor
+from features.notebooks.mobile.surface import mobile_editor_html
 from features.notebooks.ui.workspace import QWebEngineView
 
 
@@ -20,11 +21,13 @@ const surface=document.createElement('canvas');surface.width=280;surface.height=
 const reset=()=>{target.clearRect(0,0,280,150);target.fillStyle='white';target.fillRect(0,0,280,150)};
 const pixel=(x,y)=>Array.from(target.getImageData(x,y,1,1).data);
 let signatures=[],controls=[];
-const choose=tool=>{$('tool').value=tool;$('tool').onchange()};
+const choose=tool=>{let button=document.querySelector('#brushes [data-value="'+tool+'"]')||document.querySelector('.brush-card[data-tool="'+tool+'"]');check(button,'Missing visual brush choice');button.click()};
 for(let tool of Object.values(state.tools)){
 choose(tool);
 check($('width').options.length===3,'Expected three widths');
 check(JSON.stringify(Array.from($('color').options,o=>Number(o.value)))===JSON.stringify(brushes[tool].colors),'Wrong brush palette '+tool);
+check(document.querySelectorAll('.swatch').length===brushes[tool].colors.length,'Visual swatches out of sync '+tool);
+for(let b of document.querySelectorAll('.swatch')){let choice=Number(b.dataset.value??b.dataset.color),dot=b.querySelector('circle')||b.querySelector('span')||b;let shown=(dot.tagName.toLowerCase()==='circle'?getComputedStyle(dot).fill:getComputedStyle(dot).backgroundColor).match(/\d+/g).slice(0,3).map(Number);check(shown.join(',')===swatchColor(tool,choice).join(','),'Swatch ignores brush RGBA '+tool+'/'+choice)}
 if(tool===18)check(!$('color').querySelector('option[value="0"]'),'Black must not be a highlighter choice');
 for(let width=1;width<=3;width++)check(JSON.stringify(strokePoints(samples,tool,width))===JSON.stringify(expected[tool][width]),'Preview/model widths differ '+tool+'/'+width);
 controls.push({tool,colors:$('color').options.length,widths:$('width').options.length});
@@ -105,7 +108,7 @@ def main(output):
     def run(desktop):
         name = 'desktop' if desktop else 'mobile'
         view = QWebEngineView()
-        view.resize(1200, 900) if desktop else view.resize(390, 844)
+        view.resize(1200, 900)
         views.append(view)
         view.show()
 
@@ -136,7 +139,10 @@ def main(output):
 
         view.loadFinished.connect(loaded)
         state = Editor(Notebook.new('Brush compatibility')).state()
-        html = editor_html(state, 'logistics-notebook://brush-probe/', console_bridge=True)
+        if desktop:
+            html = editor_html(state, 'logistics-notebook://brush-probe/', console_bridge=True, desktop=True)
+        else:
+            html = mobile_editor_html(state, 'logistics-notebook://brush-probe/', console_bridge=True)
         view.setHtml(html)
 
     run(True)

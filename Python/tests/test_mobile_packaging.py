@@ -117,6 +117,11 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             self.assertTrue((payload / 'mobile/settings/navigation.py').is_file())
             self.assertEqual(manifest['features'], ['text', 'markdown', 'epub', 'comics', 'lm', 'rclone', 'notebooks'])
             self.assertTrue((payload / 'features/notebooks/mobile/android/io/github/ispaure/logistics/notebooks/BooxRefresh.java').is_file())
+            assets = REPO / 'Python/features/notebooks/assets'
+            for asset in assets.iterdir():
+                self.assertEqual((payload / 'features/notebooks/assets' / asset.name).read_bytes(),
+                                 asset.read_bytes())
+            self.assertFalse((payload / 'features/notebooks/workspace.py').exists())
             self.assertTrue((payload / 'mobile/app.py').is_file())
             self.assertTrue((payload / 'logisticsmobile/__main__.py').is_file())
             self.assertFalse((payload / 'logisticsmobile/app.py').exists())

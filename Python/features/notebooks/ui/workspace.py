@@ -1,4 +1,5 @@
 """Desktop Notebooks page and .rmdoc activation using the same native-ink model."""
+import json
 from pathlib import Path
 
 from commonUtils.ui import pyside as qt
@@ -7,8 +8,10 @@ from PySide6 import QtQuick, QtQuickWidgets
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from ..notebook import Notebook, MAX_ARCHIVE
-from ..workspace import Repository, Editor
-from ..bridge import Bridge, update_script
+from ..recovery import Repository
+from ..editor import Editor
+from ..bridge import Bridge
+from ..protocol import document_state, save_status, stroke_script, update_script, validate_action
 from ..canvas import editor_html
 
 # Register Quick wrapper types before WebEngine creates internal objects.
@@ -64,11 +67,15 @@ class NotebookWorkspace(qt.QWidget):
 
     @property
     def repository(self):
+        if self.document is not None and self.document.recovery is not None:
+            self._repository = self.document.recovery
         if self._repository is None:
             self._repository = Repository(self.repository_root)
         return self._repository
 
     def clear(self):
+        if self.web is not None:
+            self.web.page().bridge.retire()
         self.web = None
         while self.layout.count():
             item = self.layout.takeAt(0)
@@ -137,14 +144,31 @@ class NotebookWorkspace(qt.QWidget):
         self.open(document.book, document.key)
 
     def state(self):
-        value = self.editor.state()
-        if self.document is not None:
-            if self.document.resource is None and self.document.recovery is None:
-                value['save_status'] = 'Unsaved changes' if self.document.dirty else 'Not saved yet'
-            else:
-                value['save_status'] = 'Unsaved changes' if self.document.dirty else 'Saved'
-            value['read_only'] = not self.document.writable
+        value = document_state(self.editor, self.document)
+        menus = getattr(self.document_window, 'notebook_menus', None)
+        if menus is not None:
+            menus.update(value)
         return value
+
+    def save_status(self):
+        return save_status(self.document)
+
+    def acknowledge_stroke(self):
+        # Share the queued-ink protocol without rebuilding or replaying the page.
+        editor = self.editor
+        menus = getattr(self.document_window, 'notebook_menus', None)
+        if menus is not None:
+            menus.update(dict(index=editor.index, count=len(editor.notebook.pages),
+                              undo=bool(editor.undo), redo=bool(editor.redo)))
+        self.web.page().runJavaScript(stroke_script(editor, self.document))
+
+    def request_command(self, action):
+        if self.web is not None:
+            self.web.page().runJavaScript('window.notebookCommand && window.notebookCommand(' + json.dumps(action) + ')')
+
+    def request_ui(self, name, value=None):
+        if self.web is not None:
+            self.web.page().runJavaScript('window.notebookUI && window.notebookUI(' + json.dumps(name) + ',' + json.dumps(value) + ')')
 
     def open(self, book, key):
         if self.document is not None and self.document.book is not book:
@@ -154,13 +178,13 @@ class NotebookWorkspace(qt.QWidget):
         if self.document_window is not None:
             self.document_window.setWindowTitle(book.name)
         self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book))
-        self.bridge = Bridge()
         self.clear()
+        self.bridge = Bridge()
         self.web = QWebEngineView(self)
         page = CanvasPage(self.web, self.bridge)
         self.web.setPage(page)
         page.command.connect(lambda action: self.deliver(page, action))
-        self.web.setHtml(editor_html(self.state(), self.bridge.url, console_bridge=True))
+        self.web.setHtml(editor_html(self.state(), self.bridge.url, console_bridge=True, desktop=True))
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
         self.layout.addWidget(self.web)
@@ -182,7 +206,7 @@ class NotebookWorkspace(qt.QWidget):
         self.busy = True
         error = ''
         try:
-            op = action['op']
+            op = validate_action(action)
             if op == 'library':
                 from commonUtils.ui.document_host import current_document_host
                 host = current_document_host()
@@ -237,7 +261,10 @@ class NotebookWorkspace(qt.QWidget):
             self.busy = False
         if self.document_window is not None:
             self.document_window.setWindowTitle(self.editor.notebook.name)
-        self.web.page().runJavaScript(update_script(self.state(), error))
+        if op == 'stroke' and not error:
+            self.acknowledge_stroke()
+        else:
+            self.web.page().runJavaScript(update_script(self.state(), error))
 
     def confirm_export(self):
         if self.document is None or self.document.resource is None or self.document.resource.policy.persistent:
@@ -254,6 +281,8 @@ class NotebookWorkspace(qt.QWidget):
         from services.documents.ui.editors import choose_editor_resource
         from ..storage import NotebookDocument
         document = self.document
+        canvas = self.bridge
+        book = self.editor.notebook
         if not save_as and document is not None and document.resource is not None:
             self._pending_choice = None
             work = lambda cancelled: document.save(cancelled=cancelled)
@@ -270,17 +299,24 @@ class NotebookWorkspace(qt.QWidget):
                     self.web.page().runJavaScript(update_script(self.state(), 'Save As cancelled.'))
                     return False
             self._pending_choice = choice
+            recovery = self.repository if DocumentPolicy.for_provider(choice.provider).persistent else None
             def work(cancelled):
-                data = self.editor.notebook.to_bytes()
+                data = book.to_bytes()
                 DocumentResource.publish(choice.provider, choice.path, data, max_bytes=MAX_ARCHIVE, validate=Notebook.read, cancelled=cancelled)
                 resource = DocumentResource(choice.provider, choice.path, max_bytes=MAX_ARCHIVE)
                 try:
                     resource.read()
-                    recovery = self.repository if resource.policy.persistent else None
-                    return NotebookDocument(self.editor.notebook, resource=resource, recovery=recovery)
+                    return NotebookDocument(book, resource=resource, recovery=recovery)
                 except Exception:
                     resource.close()
                     raise
+        if canvas is not self.bridge or not canvas.active:
+            if self._pending_choice is not None:
+                self._pending_choice.close()
+                self._pending_choice = None
+            return False
+        self._pending_canvas = canvas
+        self._pending_operation = self.operation
         self.busy = True
         self.operation.start(lambda report, cancelled: work(cancelled), message='Saving notebook…')
         return True
@@ -289,6 +325,13 @@ class NotebookWorkspace(qt.QWidget):
         choice, self._pending_choice = self._pending_choice, None
         if choice is not None:
             choice.close()
+        canvas = self._pending_canvas
+        self._pending_operation.hide()
+        if canvas is not self.bridge or not canvas.active:
+            if document is not None:
+                document.close()
+            self.busy = False
+            return
         if document is not None and not error:
             previous = self.document
             self.document = document
@@ -362,6 +405,8 @@ def open_workspace(parent=None, path=None, *, resource=None, document=None):
     window.setWindowTitle('Notebook')
     panel = NotebookWorkspace(window, library=resource is None and document is None)
     window.setCentralWidget(panel)
+    from .menus import NotebookMenus
+    window.notebook_menus = NotebookMenus(window)
     window.resize(1000, 850)
     window.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
     _windows.append(window)

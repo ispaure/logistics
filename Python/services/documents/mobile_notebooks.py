@@ -1,7 +1,7 @@
 """Notebook documents in the shared mobile workspace, history and saved list."""
 from pathlib import Path
 
-from features.notebooks.workspace import Repository
+from features.notebooks.recovery import Repository
 from features.notebooks.mobile.panel import NotebookPanel
 
 
@@ -99,7 +99,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
                         elif binding is None:
                             book = recovered
                         else:
-                            book._recovery_revision = recovered._recovery_revision
+                            recovery.adopt(key, book, recovered)
                             recovery.save(key, book)
             else:
                 book = recovery.open(key) if key else Notebook.new(name or 'Untitled notebook')
@@ -183,6 +183,9 @@ async def retarget_notebook(app, panel, resource):
         raise
     adopt_notebook_document(app, panel, document)
     present(app, panel)
+    if panel.web is not None:
+        from features.notebooks.protocol import update_script
+        await panel.web.evaluate_javascript(update_script(panel.state()))
     return True
 
 

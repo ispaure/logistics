@@ -76,6 +76,9 @@ class StorageTransitionTests(QtTestCase):
             panel = NotebookWorkspace(window, library=False)
             window.setCentralWidget(panel)
             panel.editor, panel.operation, panel._pending_choice = SimpleNamespace(checkpoint=None), Mock(), None
+            from features.notebooks.bridge import Bridge
+            panel.bridge = panel._pending_canvas = Bridge()
+            panel._pending_operation = panel.operation
             document = NotebookDocument(Notebook.new(), resource=DocumentResource(provider, 'Saved.rmdoc', max_bytes=MAX_ARCHIVE))
             panel.saved(document, None)
             self.assertIs(window._private_view_guard.provider, provider)

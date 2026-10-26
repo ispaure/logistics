@@ -31,7 +31,7 @@ def load_source_modules(repo):
         for name in data['modules']:
             if (not isinstance(name, str) or not name or '\\' in name or ':' in name
                     or PurePosixPath(name).is_absolute() or '..' in PurePosixPath(name).parts
-                    or PurePosixPath(name).as_posix() != name or PurePosixPath(name).suffix not in {'.py', '.java', '.m'}):
+                    or PurePosixPath(name).as_posix() != name or PurePosixPath(name).suffix not in {'.py', '.java', '.m', '.js', '.css', '.html'}):
                 raise ValueError('Invalid mobile source path in ' + owner)
             if name in selected:
                 raise ValueError('Duplicate mobile source path in ' + owner)
