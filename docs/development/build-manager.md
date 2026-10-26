@@ -666,3 +666,34 @@ source/settings JSON in Parallels command arguments. The owned write checks the
 workspace token, rejects destination symlinks and assigns the normal test account.
 This avoids misleading session errors when a legitimate plan exceeds Parallels'
 command-line limit.
+
+## Dedicated Windows/Fedora acceptance — 2026-10-25
+
+The complete declared platform plans were exercised in the new manager-owned
+Windows 11 ARM64 and Fedora 44 ARM64 guests. CPython is 3.12.2 on both; Windows
+runs the x64 interpreter under emulation. Qt is 6.12. Historical full failures
+remain retained, with unchanged suite/package/dependency inputs checked before
+reuse. At Logistics `14e9c13c` / commonUtils `b105857d`, all 117 corrected or affected
+application cases across 12 isolated modules passed on each guest. Native shared,
+compression, release and extracted Windows batch-launcher/CRLF checks passed.
+
+Manager `798587b` passed 154 native contracts per guest (three explicit POSIX-only
+skips on Windows). Its transport probes preserved actual exit 0 and exit 7 without
+replaying work after a lost handle, including while the guest worker was running;
+a request made before admission prevented the child from starting. Final normal
+backend flows passed their environment gate, four focused source-transfer tests,
+report collection and cleanup: Windows `12cc9598` in 68.02 seconds and Fedora
+`14e9c13c` in 39.41 seconds. The final cleanup audit also removed collected transfer
+ZIPs and added them to the ordinary per-operation cleanup list. Reusable prepared
+tools remain cached, with host sharing disabled.
+
+Earlier application failures were corrected through portable host fixtures,
+asynchronous reader teardown, a private Markdown provider fixture and original
+ZIP-name validation before Windows normalization. The Qt ownership fix prevents
+heap corruption when closing the manager. The declared suite inventory was not
+reduced. Full attempt records remain failed where they originally failed; final
+acceptance combines unchanged full coverage with successful affected checks.
+Per-case timing, source manifests, durable receipts and cleanup proofs remain in
+the manager's ignored `test-results/logistics-native/`. Subsequent product edits
+need their own validation. Android x64 and final integration after Testing and
+Packaging 06 remain deferred; no push, hosted dispatch or release occurred.

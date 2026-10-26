@@ -193,7 +193,7 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
         if collected:
             try:
                 guest.remove_paths([source, source + '.zip', manager, manager + '.zip', reports, 'plan-' + operation + '.json',
-                                    'operation-' + operation, 'cancel-' + operation])
+                                    'operation-' + operation, 'cancel-' + operation, 'evidence-' + operation + '.zip'])
                 result['test_workspace_removed'] = True
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
                 result.update(status='failed', cleanup_error=str(error))
