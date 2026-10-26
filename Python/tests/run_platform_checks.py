@@ -61,6 +61,7 @@ def main():
     # A shared project-owned plan feeds CI and the local manager. Functional
     # test discovery remains with the existing isolated regression runner.
     sys.path.insert(0, str(REPO))
+    sys.path.insert(0, str(REPO / 'Python'))
     from Scripts.validation_plans import desktop_checks
     checks = desktop_checks(platform.system(), results)
     for name, command, timeout in checks:

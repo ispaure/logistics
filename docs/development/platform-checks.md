@@ -6,6 +6,11 @@ commonUtils submodule that Logistics uses. Jobs continue independently on failur
 Each job runs all commonUtils tests, all Logistics tests and a full historical
 compression comparison, then uploads JSON summaries and logs for 14 days.
 
+The direct runner bootstraps both the repository and its `Python/` source root
+before importing the external manager. The manager imports the pinned shared
+library in the runner process as well as in its child checks. An isolated
+entry-point regression exercises the real manager without inherited PYTHONPATH.
+
 From a normal recursive clone, use the project's Python 3.12.2 environment:
 
 ```sh
