@@ -12,6 +12,7 @@ to do; application features stay in `Python/`.
 | Configure camera, scenes, privacy manifests and app artwork | `mobile_build/build_support/` |
 | Regenerate canonical navigation and folder artwork | `mobile_build/build_support/generate_navigation_icons.py`, `generate_folder_icons.py` |
 | Device install, deployment policy, Firebase and TestFlight | `mobile_build/deployment/`; reusable command controls and sequencing in external `build_manager.deployment_commands*` |
+| App Store Connect signing/HTTP/polling and Firebase CLI transport | External `build_manager.app_store_connect` and `build_manager.firebase`; app/destination policy remains in `mobile_build/deployment/` |
 | User-facing deployment commands | Existing `mobile_build/*.command` launchers |
 | Native report verification, lifecycle drivers and synthetic fixture generators | `mobile_build/validation/` |
 | Host regression contracts | `mobile_build/tests/` |
@@ -41,6 +42,22 @@ inherit terminal input; they do not produce release-acceptance evidence or retry
 effects. An earlier failure remains a failure after continuing. The existing
 `deployment_confirmation.py` wrapper preserves `LOGISTICS_UPLOAD_CONFIRM:` while
 delegating framing/input to the manager. All six `.command` paths remain intact.
+
+`testflight_external.py` retains credential-reference selection, the Logistics
+bundle/app and external-group checks, audience/expiry restrictions, localization
+and review-state decisions, additive group assignment and its project report.
+It delegates JWT signing, authenticated same-origin HTTP, pagination and exact
+processing waits to the external App Store Connect client. Cryptography remains
+an optional host dependency pinned by `requirements-testflight.txt`; importing
+the manager does not load it or read project credentials.
+
+Firebase CLI installation/location, authentication permission, app/package/group
+checks, signing, counters and explicit upload approval remain here. The external
+Firebase client owns CLI invocation and response parsing, including direct
+console delivery and captured operation receipts. `Scripts/distribute_prepared.py`
+still checks the reviewed artifact/destination and writes its attempt marker
+before a provider write. Missing/ambiguous receipts keep that marker and prevent
+blind replay. Neither reusable client automatically retries writes or signs in.
 
 `build_support` edits only generated projects or explicitly requested canonical
 artwork. Its imports have no build or deployment side effects. `cloud_build.py`

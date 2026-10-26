@@ -64,6 +64,25 @@ class FirebaseDeployTests(unittest.TestCase):
                 beta.main()
             run.assert_not_called()
 
+    def test_explicit_yes_delegates_one_upload_and_build_only_never_asks(self):
+        for arguments, expected in (([], 1), (['--build-only'], 0)):
+            with self.subTest(arguments=arguments), TemporaryDirectory() as directory, \
+                    patch.object(beta, 'PRIVATE', Path(directory)), \
+                    patch.object(beta, 'firebase_cli', return_value='firebase'), \
+                    patch.object(beta, 'preflight', return_value=({'app_id': 'test-app'}, 'testers')), \
+                    patch.object(beta, 'build', return_value=(Path('beta.apk'), Path('notes.txt'))), \
+                    patch('builtins.input', return_value='yes') as ask, \
+                    patch.object(beta.FirebaseCLI, 'distribute') as distribute, \
+                    patch.object(beta.sys, 'argv', ['beta', *arguments]):
+                beta.main()
+                self.assertEqual(distribute.call_count, expected)
+                if expected:
+                    ask.assert_called_once()
+                    distribute.assert_called_once_with(Path('beta.apk'), app_id='test-app',
+                                                       group='testers', release_notes=Path('notes.txt'))
+                else:
+                    ask.assert_not_called()
+
     def test_preview_uses_utc_floor_without_creating_counter_files(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

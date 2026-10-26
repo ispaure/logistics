@@ -37,6 +37,7 @@ def distribute(report,receipt):
                  '--build-number',str(data['release']['build']['build_number'])]
         env=dict(os.environ,TESTFLIGHT_UPLOAD='1')
     elif provider=='Firebase':
+        from build_manager.firebase import FirebaseCLI
         from mobile_build.deployment.firebase_deploy import ROOT,preflight
         apk=Path(data['apk'])
         if file_sha256(apk)!=data['apk_sha256']:raise ValueError('Reviewed APK changed.')
@@ -44,18 +45,15 @@ def distribute(report,receipt):
         if not cli:raise ValueError('Install Firebase CLI explicitly before distribution.')
         config,group=preflight(cli,allow_login=False)
         if config!=data['destination']:raise ValueError('Reviewed Firebase destination changed.')
-        command=[cli,'appdistribution:distribute',str(apk),'--app',config['app_id'],'--groups',group,
-                 '--release-notes-file',str(apk.parent/'release-notes.txt'),'--non-interactive','--json']
-        env=dict(os.environ)
+        transport=FirebaseCLI(cli,ROOT/'.tools',environment=dict(os.environ))
     else:raise ValueError('Unsupported prepared distribution provider.')
     attempt.write_text(json.dumps(dict(schema=1,operation_id=os.environ.get('BUILD_MANAGER_OPERATION_ID') or str(uuid4()),provider=provider,
         plan=os.environ['BUILD_MANAGER_APPROVED_PLAN'],status='unknown until reconciled'))+'\n')
-    result=subprocess.run(command,env=env,text=True,capture_output=True,check=True)
     if provider=='Firebase':
-        response=json.loads(result.stdout)
-        remote=response.get('result',{})
-        if not remote:raise RuntimeError('Firebase returned no operation receipt; reconcile the recorded attempt.')
+        remote=transport.distribute(apk,app_id=config['app_id'],group=group,
+            release_notes=apk.parent/'release-notes.txt',capture_result=True)
     else:
+        subprocess.run(command,env=env,text=True,capture_output=True,check=True)
         remote=json.loads((workspace/'upload-result.json').read_text())
     value=dict(schema=1,provider=provider,status='completed',operation=json.loads(attempt.read_text())['operation_id'],
                destination=data['destination'],remote=remote)

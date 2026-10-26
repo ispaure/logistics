@@ -157,6 +157,13 @@ a group or enables a public link. Set `enabled` to `false` for an upload that sh
 remain unassigned. Direct `deploy_ios.command` installs are separate and do not
 upload or distribute a TestFlight build.
 
+The project helper keeps app/group checks, credential-reference configuration,
+review/compliance decisions and distribution reports. Reusable signing, HTTP,
+pagination and processing waits live in the pinned manager's
+`build_manager.app_store_connect` module. The host environment still installs
+the project's `requirements-testflight.txt`; no signing dependency is added to
+the mobile app payload.
+
 One-time local setup:
 
 1. In App Store Connect, open **Users and Access → Integrations → App Store Connect

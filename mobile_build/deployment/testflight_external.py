@@ -1,21 +1,21 @@
 """Distribute a specific uploaded iOS build to the configured external group."""
 import argparse
-import base64
 import json
 import os
 from pathlib import Path
 import re
 import sys
 import time
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlsplit
-from urllib.request import Request, build_opener, HTTPRedirectHandler
 from uuid import UUID
+
+from build_manager.app_store_connect import (
+    API as API, NoRedirect as NoRedirect, AppStoreConnectClient, SigningDependencyError,
+    token as signing_token, wait_for_processed_build,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = ROOT / 'testflight-distribution.json'
 AUTH = ROOT / '.testflight-auth.json'
-API = 'https://api.appstoreconnect.apple.com'
 BUNDLE = 'io.github.ispaure.logisticsmobile'
 
 
@@ -62,67 +62,15 @@ def auth_reference():
 
 def token(auth, now=None):
     try:
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import ec, utils
-    except ImportError:
+        return signing_token(auth, now=now)
+    except SigningDependencyError:
         raise ValueError('Install mobile_build/requirements-testflight.txt in the build environment.') from None
-    key = serialization.load_pem_private_key(Path(auth['key_path']).read_bytes(), password=None)
-    if not isinstance(key, ec.EllipticCurvePrivateKey) or not isinstance(key.curve, ec.SECP256R1):
-        raise ValueError('The App Store Connect key must be a P-256 EC private key.')
-    now = int(time.time() if now is None else now)
-    def encode(value):
-        return base64.urlsafe_b64encode(value).rstrip(b'=')
-    header = encode(json.dumps({'alg': 'ES256', 'kid': auth['key_id'], 'typ': 'JWT'}, separators=(',', ':')).encode())
-    payload = encode(json.dumps({'iss': auth['issuer_id'], 'iat': now - 10, 'exp': now + 600,
-                                 'aud': 'appstoreconnect-v1'}, separators=(',', ':')).encode())
-    message = header + b'.' + payload
-    r, s = utils.decode_dss_signature(key.sign(message, ec.ECDSA(hashes.SHA256())))
-    return (message + b'.' + encode(r.to_bytes(32, 'big') + s.to_bytes(32, 'big'))).decode()
 
 
-class NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-class Client:
+class Client(AppStoreConnectClient):
+    """Keep the established project import while using the reusable transport."""
     def __init__(self, auth):
-        self.auth = auth
-        self.opener = build_opener(NoRedirect())
-        # Validate the key locally before an upload can start.
-        token(auth)
-
-    def request(self, method, path, *, params=None, body=None):
-        url = path if path.startswith('https://') else API + path
-        parsed = urlsplit(url)
-        if parsed.scheme != 'https' or parsed.netloc != 'api.appstoreconnect.apple.com' or not parsed.path.startswith('/v1/'):
-            raise ValueError('Refusing an API URL outside App Store Connect.')
-        if params:
-            url += '?' + urlencode(params)
-        request = Request(url, data=json.dumps(body).encode() if body is not None else None, method=method,
-                          headers={'Authorization': 'Bearer ' + token(self.auth), 'Content-Type': 'application/json'})
-        try:
-            with self.opener.open(request, timeout=30) as response:
-                raw = response.read()
-                return json.loads(raw) if raw else {}
-        except HTTPError as error:
-            # Log Apple's error descriptions, never JWTs or private-key material.
-            try:
-                errors = json.loads(error.read()).get('errors', [])
-                detail = '; '.join(str(e.get('detail') or e.get('title') or e.get('code')) for e in errors)
-            except (ValueError, AttributeError):
-                detail = 'See the App Store Connect build and beta review information.'
-            raise RuntimeError(f'App Store Connect HTTP {error.code}: {detail}') from None
-        except URLError:
-            raise RuntimeError('Could not reach App Store Connect. Retry distribution; do not re-upload the build.') from None
-
-    def list(self, path, **params):
-        result = self.request('GET', path, params=params)
-        items = result['data']
-        while result.get('links', {}).get('next'):
-            result = self.request('GET', result['links']['next'])
-            items.extend(result['data'])
-        return items
+        super().__init__(auth, token_factory=token)
 
 
 def target(client, config):
@@ -145,28 +93,14 @@ def prepare():
 
 
 def wait_for_build(client, config, number, version, *, sleep=time.sleep, clock=time.monotonic):
-    deadline = clock() + config['processing_timeout_seconds']
-    while True:
-        builds = client.list('/v1/builds', **{'filter[app]': config['app_id'], 'filter[version]': number,
-                            'filter[preReleaseVersion.version]': version,
-                            'filter[preReleaseVersion.platform]': 'IOS', 'limit': 200})
-        if len(builds) > 1:
-            raise ValueError('Multiple iOS builds match the exact app, version and build number.')
-        if builds:
-            build = builds[0]
-            attrs = build['attributes']
-            if attrs.get('expired') or attrs.get('buildAudienceType') == 'INTERNAL_ONLY':
-                raise ValueError('Expired or internal-only build cannot be distributed externally.')
-            state = attrs['processingState']
-            if state == 'VALID':
-                return build
-            if state != 'PROCESSING':
-                raise ValueError('Apple build processing stopped with state ' + state + '.')
-        remaining = deadline - clock()
-        if remaining <= 0:
-            raise RuntimeError('Apple is still processing this build. Run distribute again later; do not re-upload.')
-        print('Waiting for Apple to process iOS ' + version + ' (' + number + ')…', flush=True)
-        sleep(min(config['poll_interval_seconds'], remaining))
+    def validate(build):
+        attrs = build['attributes']
+        if attrs.get('expired') or attrs.get('buildAudienceType') == 'INTERNAL_ONLY':
+            raise ValueError('Expired or internal-only build cannot be distributed externally.')
+    return wait_for_processed_build(client, app_id=config['app_id'], number=number, version=version,
+        platform='IOS', timeout=config['processing_timeout_seconds'], interval=config['poll_interval_seconds'],
+        validate=validate, progress=lambda: print('Waiting for Apple to process iOS ' + version + ' (' + number + ')…', flush=True),
+        sleep=sleep, clock=clock)
 
 
 def distribute(workspace, prepared=None):

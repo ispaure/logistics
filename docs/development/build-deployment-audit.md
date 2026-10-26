@@ -128,6 +128,16 @@ failure-after-continuation. Device discovery/build/signing and per-platform
 deployment policy stay here. Portable subprocess and native macOS Qt checks use
 harmless fixtures; they do not claim a new device installation or provider upload.
 
+Provider-client consolidation now shares App Store Connect signing, authenticated
+HTTP, pagination and processing polling, plus Firebase CLI login/query/delivery
+transport. Logistics keeps credential references, dependency/bootstrap choices,
+app and group identities, signing, release/review eligibility and attempt/receipt
+policy. Existing module names, launcher paths and the `Client`/`token` entry
+points remain usable. Synthetic provider failures and a harmless local CLI
+verify that ambiguous writes are not automatically replayed; reviewed Firebase
+delivery retains its attempt marker until reconciliation. No real upload or
+provider login was performed for this extraction.
+
 1. **Use the existing allocator for Firebase.** `firebase_deploy.reserve_build`,
    `next_build` and `_reserve_build` repeat monotonic reservation logic already
    available in `build_manager.versions`. TestFlight already consumes that API.

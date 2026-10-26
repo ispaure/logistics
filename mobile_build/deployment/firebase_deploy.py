@@ -13,6 +13,8 @@ import tempfile
 import tomllib
 from urllib.request import urlopen
 
+from build_manager.firebase import FirebaseCLI, FirebaseError
+
 from . import android_deploy as android
 from .deployment_confirmation import gui_input
 
@@ -49,14 +51,12 @@ def firebase_cli():
 
 
 def firebase_json(cli, *args):
-    # Firebase debug logs can contain authentication data; keep its cwd ignored.
-    result = subprocess.run([cli, *args, '--json', '--non-interactive'],
-                            cwd=ROOT / '.tools', capture_output=True, text=True)
-    if result.returncode:
+    try:
+        return FirebaseCLI(cli, ROOT / '.tools').query(*args)
+    except FirebaseError:
         raise ValueError('Firebase access failed. Run deploy_android_firebase.command --login '
                          'and use the Google account that owns the Firebase project. '
-                         'Also check App Distribution is enabled in the console.')
-    return json.loads(result.stdout)['result']
+                         'Also check App Distribution is enabled in the console.') from None
 
 
 def resolve_group(groups, requested):
@@ -80,14 +80,14 @@ def preflight(cli, *, login=False, allow_login=True):
     if not match or config['bundle_id'] != android.BUNDLE:
         raise ValueError('Invalid Firebase app/package configuration.')
     if login:
-        subprocess.run([cli, 'login', '--reauth'], cwd=ROOT / '.tools', check=True)
+        FirebaseCLI(cli, ROOT / '.tools').login(reauth=True)
     else:
         accounts = firebase_json(cli, 'login:list')
         if not accounts:
             if not allow_login:
                 raise ValueError('Firebase sign-in is needed. Run mobile_build/deploy_android_firebase.command --login once, then retry.')
             print('Sign in with the Google account that owns your Firebase project.', flush=True)
-            subprocess.run([cli, 'login'], cwd=ROOT / '.tools', check=True)
+            FirebaseCLI(cli, ROOT / '.tools').login()
     projects = firebase_json(cli, 'projects:list')
     project = next((p['projectId'] for p in projects if str(p['projectNumber']) == match[1]), None)
     if not project:
@@ -261,9 +261,8 @@ def main():
             if answer.strip().lower() not in ('y', 'yes'):
                 print('Build saved. Nothing uploaded.')
                 return
-            subprocess.run([cli, 'appdistribution:distribute', str(apk), '--app', config['app_id'],
-                            '--groups', group, '--release-notes-file', str(notes), '--non-interactive'],
-                           cwd=ROOT / '.tools', check=True)
+            FirebaseCLI(cli, ROOT / '.tools').distribute(apk, app_id=config['app_id'],
+                group=group, release_notes=notes)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, EOFError) as error:
         print('Android beta stopped: ' + str(error), file=sys.stderr)
         print('Build logs: mobile_build/build/firebase/<build>/. No app is uninstalled.', file=sys.stderr)
