@@ -39,6 +39,16 @@ class NotesLibraryDesktopTests(QtTestCase):
             fixture.provider.mkdir('.obsidian')
             fixture.provider.mkdir('Nested')
             fixture.provider.create_file('Nested/Next.md', BytesIO(b'# Nested note'))
+            fixture.provider.create_file('Nested/Tech.md', BytesIO(b'# Tech'))
+            from features.rclone.localcrypt.ui.views import CryptBrowserView
+            with patch('features.rclone.executable.get_rclone_path', return_value=binary):
+                view = CryptBrowserView(fixture.item)
+            view.show()
+            offer = view.notes_offer
+            self.wait_until(lambda: offer.location is not None and not offer.progress.busy)
+            self.assertIsNotNone(offer.candidate, offer.progress.message.text())
+            self.assertFalse(offer.isHidden())
+            view.close()
             # Seed the synthetic cloud crypt with the same vault marker and nested note.
             environment, source, destination = session.launch(
                 fixture.context, str(fixture.item.data), str(fixture.cloud))
@@ -59,11 +69,23 @@ class NotesLibraryDesktopTests(QtTestCase):
                     window.open_note('note.md')
                     self.wait_until(lambda: not window.progress.busy)
                     self.assertIn('Original note', window.viewer.browser.toPlainText(), window.viewer.status.text())
+                    self.assertEqual(len(window.storage.resources), 1)
+                    url = window.viewer.browser.document().baseUrl().resolved(qt.QUrl('page.png'))
+                    image = window.viewer.browser.document().resource(qt.QTextDocument.ResourceType.ImageResource, url)
+                    self.assertFalse(image.isNull())
                     window.items['Nested'].setExpanded(True)
                     self.wait_until(lambda: not window.progress.busy)
                     window.open_note('Nested/Next.md')
                     self.wait_until(lambda: not window.progress.busy)
                     self.assertIn('Nested note', window.viewer.browser.toPlainText(), window.viewer.status.text())
+                    window.viewer.follow_link(qt.QUrl('note.md'))
+                    self.wait_until(lambda: not window.progress.busy)
+                    self.assertEqual(window.storage.path, (window.provider.root / 'note.md').resolve(), window.viewer.status.text())
+                    window.viewer.follow_link(qt.QUrl('Tech.md'))
+                    self.wait_until(lambda: not window.progress.busy)
+                    self.assertEqual(window.storage.path, (window.provider.root / 'Nested/Tech.md').resolve(), window.viewer.status.text())
+                    window.open_note('Nested/Next.md')
+                    self.wait_until(lambda: not window.progress.busy)
                     if not remote:
                         for mode in ('formatted', 'source'):
                             window.viewer.set_edit_mode(mode)
@@ -93,10 +115,10 @@ class NotesLibraryDesktopTests(QtTestCase):
             with patch.object(service.remotes, 'open', side_effect=lambda location: LocalFiles(root)) as remote:
                 local_actions = actions(replace(entry, storage_scope='local'))
                 remote.assert_not_called()
-                self.assertEqual([action.name for action in local_actions], ['Open Notes Library'])
+                self.assertEqual([action.name for action in local_actions], ['Open as Notes Library'])
                 cloud_actions = actions(replace(entry, storage_scope='remote'))
                 remote.assert_called_once()
-                self.assertEqual([action.name for action in cloud_actions], ['Open Notes Library'])
+                self.assertEqual([action.name for action in cloud_actions], ['Open as Notes Library'])
                 with patch('features.text_editor.ui.notes_library.open_notes') as opened:
                     cloud_actions[0].callback()
                     self.assertTrue(opened.call_args.kwargs['remote'])
@@ -179,7 +201,7 @@ class NotesLibraryDesktopTests(QtTestCase):
         with self.temporary_directory() as directory:
             root=Path(directory);self.fixture(root)
             commands=actions(FolderEntry('Notes',local=LocalFolder(root)))
-            self.assertEqual([item.name for item in commands], ['Open Notes Library'])
+            self.assertEqual([item.name for item in commands], ['Open as Notes Library'])
             host=DocumentsPage(lambda: None);host.show();register_document_host(host)
             try:
                 window=commands[0].callback()
@@ -278,3 +300,50 @@ class NotesLibraryDesktopTests(QtTestCase):
                 if isValid(window):
                     self.assertEqual(window.storage.data, b'')
                     self.assertIsNone(window.viewer.document_state.source_bytes)
+
+    def test_provider_library_embeds_load_from_memory_in_both_modes(self):
+        from PIL import Image
+        from commonUtils.formats.markdown.images import image_targets
+        from services.documents.markdown import prepare_markdown
+        for remote in (False, True):
+            with self.subTest(remote=remote), self.temporary_directory() as directory:
+                root = Path(directory)
+                self.fixture(root)
+                (root / 'Attachments').mkdir()
+                embeds = []
+                for kind in ('PNG', 'JPEG', 'WEBP', 'GIF'):
+                    filename = 'photo #1.' + kind.lower()
+                    Image.new('RGB', (800, 400), 'blue').save(root / 'Attachments' / filename, kind)
+                    embeds.append('![[Attachments/' + filename + '|900]]')
+                source = '\n\n'.join(embeds) + '\n\nFollowing text'
+                path = root / 'Nested/Next.md'
+                path.write_text(source)
+                provider = RemoteFiles(root) if remote else LocalFiles(root)
+                window = NotesLibraryWindow(lambda: provider, 'Images', remote=remote)
+                window.show()
+                self.wait_until(lambda: not window.progress.busy)
+                window.open_note('Nested/Next.md')
+                self.wait_until(lambda: not window.progress.busy)
+                self.assertEqual(len(window.storage.resources), 4)
+                for editing in ((False,) if remote else (False, True)):
+                    window.viewer.set_editing(editing)
+                    window.viewer.set_edit_mode('formatted')
+                    surface = window.viewer.formatted_editor if editing else window.viewer.browser
+                    for target in image_targets(source):
+                        url = surface.document().baseUrl().resolved(qt.QUrl(target))
+                        image = surface.document().resource(qt.QTextDocument.ResourceType.ImageResource, url)
+                        self.assertIsInstance(image, qt.QImage)
+                        self.assertFalse(image.isNull(), target)
+                    self.assertFalse(window.viewer.is_modified)
+                if remote:
+                    self.assertEqual(provider.calls, [''])
+                    window.retire()
+                    self.assertEqual(window.storage.resources, {})
+                window.close()
+                # Direct provider Markdown also collects wiki images, references,
+                # spaces and literal hashes, ignoring fenced code.
+                sibling = root / 'Nested/photo #1.png'
+                Image.new('RGB', (800, 400), 'blue').save(sibling)
+                direct = b'![[photo #1.png|500]]\n\n![Reference][pic]\n\n[pic]: <photo #1.png>\n\n```\n![[absent.png]]\n```'
+                _, resources = prepare_markdown(LocalFiles(root), path, data=direct)
+                self.assertEqual(set(resources), {sibling.resolve()})

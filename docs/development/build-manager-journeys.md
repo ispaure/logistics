@@ -27,8 +27,9 @@ itself trust or change registrations.
    by planning. Use a committed revision for validation when that is your intent.
 4. Check readiness and review plan. Inspect exact source, native hosts, required
    gates, recipient app/group identities, release tag and the dependency board.
-5. Start validation and preparation only when ready. All selected platform gates
-   must pass before preparation of tester packages and before any delivery.
+5. Start validation and preparation only when ready. Each destination waits for its own declared platforms:
+   Firebase waits for Android, TestFlight for iOS, and GitHub for the three desktop
+   platforms. A failed unrelated platform does not block successful delivery branches.
    Native/runtime evidence and owned cleanup remain required; iOS delivery also
    requires the complete iPhone, Duo and iPad inventory. Linux delivery from the
    configured Mac VM backend requires both declared distributions.
@@ -61,8 +62,9 @@ under this shared context, not by assuming independently captured sources match.
 Existing workspace operation locks, snapshot holds, resource requirements and
 project retention remain authoritative. Mobile validation branches run in sequence
 so their disposable device lifecycles do not overlap. An always-run admission step
-lets later platform validation proceed after an earlier platform fails, while the
-common required gates still block every delivery. Owned cleanup is scoped to its
+lets later platform validation proceed after an earlier platform fails, without making one platform’s success a validation prerequisite for the other.
+The admission step uses a completion-only scheduling edge. Artifact review follows
+only success-required dependencies, so an unrelated failure cannot veto delivery. Owned cleanup is scoped to its
 branch so it cannot wait forever on delivery steps that depend on it.
 
 Credentials remain protected references or inherited environment variables.
@@ -91,3 +93,62 @@ separate, explicitly authorized work at exact source/artifact identities.
 
 - [Build manager](build-manager.md)
 - [Developer home](development.md)
+
+## Shared tests and suite discovery
+
+The project-owned `build-tests.json` is resolved by the headless manager
+`build_manager.test_manifest` API against the selected source snapshot.
+Desktop validation and full mobile host gates run the pinned
+`Python/commonUtils/tests` suite first; project tests depend on its success.
+Mobile tooling, desktop UI and mobile host tests may run together after that
+shared gate, before native acceptance. A shared failure blocks those consumers.
+Focused advanced suites intentionally run only their requested scope and cannot
+stand in for complete release acceptance. CI/local desktop checks consume the
+same desktop inventory. Native/runtime acceptance remains project-owned.
+
+Suites use stable IDs, `test_*.py` files (existing isolated runner also supports
+`test*.py`), explicit `after` prerequisites and named interpreter environments.
+Dependency suites must name an in-checkout Git submodule owner at its pinned
+commit; no sibling checkout or dependency installation is inferred.
+The manager wiki’s test-manifest contract documents the complete schema.
+New checkouts must contain this manifest in the source revision selected for a
+run; old revisions that predate it must use their matching adapter version.
+
+## Tester messages and development devices
+
+Delivery configuration offers one per-run tester message for Firebase and
+TestFlight. The adapter maps it to each service’s existing notes field. Leaving
+it untouched preserves different saved defaults; editing it applies the same
+text to both selected tester services. Recipient groups remain service-specific.
+These overrides are captured for review and do not update saved settings.
+
+Development-device delivery is now integrated under Delivery → Dev devices.
+Choose explicit Android devices or iPhone/iPad UDIDs from saved metadata, or enter
+an already connected paired ID. Reload only reads `.tools/test-devices.json` and
+`.device.json`; it performs no discovery, connection or device mutation. No target
+is selected by default. The project captures IDs, labels and connection mappings
+in a hash-bound preparation recipe. Per-device review names the actual recipient.
+
+`Scripts.manager_devices` builds from the same isolated captured source as the
+validation branch, prepares an APK or zipped development-signed iOS app, then
+requires manager approval of the exact retained report and package before each
+installation. The iOS development profile must already cover all selected UDIDs;
+preparation never registers devices or updates provisioning automatically.
+Android preparation disables wireless discovery and device version queries.
+Installation validates exact bytes and recipient identity, updates in place and
+never uninstalls, clears storage, downgrades or re-signs on failure. Build/version
+or signing conflicts stop the target with an error. Installing does not launch or
+force-stop the app. Offline targets never cause another device to be substituted.
+
+Each installation records an attempt before its first mutating command and a
+receipt after confirmed success. Interrupted/uncertain outcomes require explicit
+reconciliation before retry; other successful recipients remain recorded. Owned
+build workspaces and the existing device deployment lock prevent competing writers.
+Runtime credential/signing inputs remain protected references outside source.
+Device-only runs may use captured current files; selecting tester services or
+GitHub retains committed-source/release-acceptance policy. Device preparation and
+local native validation currently require the configured Mac environment.
+
+Portable coverage uses mocked ADB/Xcode commands and harmless process graphs.
+No physical device was queried, installed, launched or otherwise changed, and no
+native signing/build or provider acceptance was performed for this implementation.

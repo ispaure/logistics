@@ -76,5 +76,5 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
         for name in ('../Escape', '.hidden', 'bad/name'):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 model.create(name)
-        with self.assertRaises(ValueError):
-            model.image_source('Vault/Home.md')('../outside.png')
+        # Blocked images remain absent so rendering can retain their alt text.
+        self.assertIsNone(model.image_source('Vault/Home.md')('../outside.png'))

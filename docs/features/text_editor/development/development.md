@@ -543,3 +543,59 @@ simulator run passed using WebKit's paragraph command. Both runs also checked
 native multiline insertion in Markdown Source mode and plain text. This scope
 does not certify every software keyboard or physical iOS keyboard. Temporary QA
 apps were removed after collecting results; the main app and its data were kept.
+
+
+## Markdown image resource parity
+
+Desktop provider opening uses the shared parser's image destinations, including
+Obsidian embeds and Markdown reference images, instead of a regular expression.
+Resource loading stays on the opening worker; Qt receives only the collected
+in-memory resources, keyed by canonical document URLs. Notes Library pages use
+their library-scoped image source for the same preparation and clear retained
+image resources on revocation. LocalCrypt continues to use provider reads.
+
+Mobile remote previews use the reader's retained resource session, so closing
+the browser's original remote handle does not remove document image access.
+Notes Library image sources additionally accept root-relative paths and a bounded
+set of common attachment-directory candidates; they never recursively list folders.
+
+`test_notes_library_desktop.py` covers local/remote image resources and their
+revocation. `test_markdown_image_layout_dom.py` measures production mobile preview
+and formatted HTML in a real Chromium document at 320, 500 and 700 pixels for
+PNG/JPEG/WebP/GIF, checking width, aspect ratio and following-text spacing.
+Shared `test_markdown_image_sizes.py` measures Qt Read/Formatted layout for the
+same formats. These are host checks, not iOS/Android device appearance evidence.
+
+
+## Library presentation boundaries
+
+commonUtils owns Documentation Library (`ui.markdown.wiki.WikiPanel` and
+`ui.native.markdown.MarkdownWikiView`): heading-based labels and a navigation-only
+sidebar. Alt/Option enables document editing without enabling tree mutations.
+Logistics owns filename-based notes, provider mutations and Obsidian-folder
+choices under `features/text_editor/`. Desktop uses `ui/notes_offer.py` with a
+cancellable probe and a nonmodal banner; mobile reuses the published immediate
+folder listing through `mobile/obsidian.offer_vault`. Refresh and native back-stack
+restoration do not repeat the mobile choice. Stale navigation and credential
+responses cannot open a library.
+
+Notes creation and moves validate containment and provider capabilities in
+`NotesLibrary`. Desktop moves resolve unsaved edits before dispatch; successful
+moves refresh loaded folders and remap note history. Mobile moves refresh the
+loaded tree, history and reading positions. Existing destinations are preserved;
+links are not rewritten. Cloud storage retains its read-only policy.
+
+Focused checks: `test_markdown_library_modes.py` (desktop) and
+`test_notes_library_modes.py` (mobile host), alongside the existing Notes Library
+and Markdown editor workflow suites. Host checks do not replace native device QA.
+
+Note links resolve on the opening worker through `NotesLibrary.link`: first the
+current folder, then the library root, then a unique matching path suffix across
+visible subfolders. Extensionless links receive `.md`. Explicit `./` and `../`
+links keep relative semantics; hidden configuration and paths outside the library
+remain excluded. Lookup is cancellable and limited to 10,000 listed entries,
+with no persistent index or decoded-name cache. Ambiguous names require an
+explicit path. Desktop and mobile use the same resolver, including LocalCrypt's
+decoded provider paths. Mobile's shared renderer also recognizes bare `[[Tech]]`
+links in formatted headings. Root-vault offers are covered by actual desktop
+local/LocalCrypt browsers and mobile host tests; these are not device QA.

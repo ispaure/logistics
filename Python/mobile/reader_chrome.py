@@ -209,6 +209,8 @@ class ReaderChrome:
         self.reading_frame = ReadingFrame(content,
             [self.reader_header, self.reader_footer], margin=0, restore=self.reader_restore)
         self.library_view = self.reading_frame.widget
+        from .document_location import install_document_location
+        install_document_location(self.library_view)
         self.library_view._native_reader_title = lambda: self.session.title
         self.library_view._native_reader_toolbar = self.reader_header
         self.library_view._native_reader_status = self.book_status

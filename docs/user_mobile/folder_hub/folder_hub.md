@@ -25,7 +25,7 @@ folder and retained views survive these changes.
 ## Notes Library
 
 Select a Local, LocalCrypt or Remote location, then open its actions page (the
-page with Push/Pull). **Open Notes Library** appears when that location's root
+page with Push/Pull). **Open as Notes Library** appears when that location's root
 contains an actual `.obsidian` directory. It opens under **Documents**, with a
 hamburger for the folder/page hierarchy, like Settings documentation. The old
 crystal button is no longer in the file browser.

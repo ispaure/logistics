@@ -401,33 +401,68 @@
           "linux",
           "windows"
         ],
-        "description": "Publishes a channel tag from the clean reviewed checkout; hosted release ZIP is separate from locally signed tester packages."
+        "description": "Publishes a channel tag from the clean reviewed checkout; hosted release ZIP is separate from locally signed tester packages.",
+        "category": "Source releases"
       },
       "firebase": {
         "label": "Firebase \u00b7 Android testers",
         "platforms": [
           "android"
         ],
-        "description": "Prepares one verified package, then pauses before upload to the configured group."
+        "description": "Prepares one verified package, then pauses before upload to the configured group.",
+        "category": "Mobile tester platforms"
       },
       "testflight": {
         "label": "TestFlight \u00b7 iOS testers",
         "platforms": [
           "ios"
         ],
-        "description": "Requires complete iPhone, Duo, iPad and runtime gates; pauses before uploading the prepared archive."
+        "description": "Requires complete iPhone, Duo, iPad and runtime gates; pauses before uploading the prepared archive.",
+        "category": "Mobile tester platforms"
+      },
+      "android-devices": {
+        "label": "Android test devices",
+        "platforms": [
+          "android"
+        ],
+        "category": "Mobile dev devices",
+        "description": "Prepare a development app, then review each installation. App data is preserved; signing or version conflicts stop the update.",
+        "recipient_field": "devices.android"
+      },
+      "ios-devices": {
+        "label": "iPhone / iPad",
+        "platforms": [
+          "ios"
+        ],
+        "category": "Mobile dev devices",
+        "description": "Prepare a development app, then review each installation. App data is preserved; signing or version conflicts stop the update.",
+        "recipient_field": "devices.ios"
       }
     },
-    "selectable_backends": true
+    "selectable_backends": true,
+    "unavailable_destinations": [
+      {
+        "label": "App Store and Play Store",
+        "category": "Mobile stores",
+        "reason": "Store submission is not implemented by this project. Use tester platforms or development devices."
+      }
+    ]
   },
   "run_fields": [
+    {
+      "id": "testers.message",
+      "label": "Message for testers (Firebase and TestFlight)",
+      "kind": "multiline",
+      "destinations": [
+        "firebase",
+        "testflight"
+      ],
+      "description": "One message for both tester services. Leave untouched to keep each saved service default."
+    },
     {
       "id": "testflight.what_to_test",
       "label": "What should TestFlight testers try?",
       "kind": "multiline",
-      "destinations": [
-        "testflight"
-      ],
       "operations": [
         "Prepare TestFlight",
         "Reviewed TestFlight workflow"
@@ -451,9 +486,6 @@
       "id": "firebase.release_notes",
       "label": "What should Android testers try?",
       "kind": "multiline",
-      "destinations": [
-        "firebase"
-      ],
       "operations": [
         "Prepare Firebase",
         "Reviewed Firebase workflow"
@@ -472,6 +504,25 @@
         "Reviewed Firebase workflow"
       ],
       "description": "Uses the saved group unless you choose another group for this build."
+    },
+    {
+      "id": "devices.android",
+      "label": "Android devices",
+      "kind": "multiselect",
+      "destinations": [
+        "android-devices"
+      ],
+      "description": "Select saved devices or enter a paired device ID. No automatic discovery or installation happens here."
+    },
+    {
+      "id": "devices.ios",
+      "label": "iPhones and iPads",
+      "kind": "multiselect",
+      "destinations": [
+        "ios-devices"
+      ],
+      "description": "Select saved devices or enter a paired device ID. No automatic discovery or installation happens here."
     }
-  ]
+  ],
+  "dynamic_run_inputs": true
 }

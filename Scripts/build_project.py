@@ -124,7 +124,11 @@ class LogisticsProject:
 
     def run_defaults(self, *, cancelled=lambda:False):
         rows=self.settings_view()
-        return {field['id']:rows[field['id']]['value'] for field in self.run_fields}
+        defaults = {field['id']:rows[field['id']]['value'] for field in self.run_fields if field['id'] in rows}
+        ios = rows['testflight.what_to_test']['value']
+        android = rows['firebase.release_notes']['value']
+        defaults['testers.message'] = ios if ios == android else ''
+        return defaults
 
     def save_settings(self, values):
         manager_settings.save(self.mobile, values)
@@ -191,6 +195,9 @@ class LogisticsProject:
             plan = with_host_gates(plan, host_python)
             gate = acceptance_phase(plan, target)
             plan = replace(plan, phases=(*plan.phases, gate))
+        elif target in {'ios', 'android'} and operation == 'Test' and not suite and not options.get('pattern') and backend != 'GitHub':
+            host_python = plan.source.get('effective_settings', {}).get('values', {}).get('tools.desktop_python', str(self.interpreter))
+            plan = with_host_gates(plan, host_python)
         if suite == 'android.native':
             plan = replace(plan, phases=tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name != 'android-runtime-tools'))
                 for phase in plan.phases if phase.id not in {'android-runtime','android-runtime-tools'}))
@@ -273,7 +280,7 @@ class LogisticsProject:
                 raise ValueError('Requested native target is unsupported on this host; no fallback was selected.')
             if operation != 'Test':
                 raise ValueError('Desktop Build is not implemented by the existing source-package workflow; select Test or GitHub release.')
-            commands = [('focused', ['dev.py', 'test', 'desktop', pattern, '--python', python], 600)] if pattern else desktop_checks(expected_system, workspace / 'reports')
+            commands = [('focused', ['dev.py', 'test', 'desktop', pattern, '--python', python], 600)] if pattern else desktop_checks(expected_system, workspace / 'reports', snapshot)
             if suite in {'portable.contracts', 'desktop.ui'}:
                 directory = 'Python/tests/tooling' if suite == 'portable.contracts' else 'Python/tests/application'
                 commands = [(suite, ['Python/tests/run_regressions.py', directory, '--isolate-modules',
@@ -283,8 +290,10 @@ class LogisticsProject:
             env['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] = '1'
             prerequisites = Phase('environment', (python, '-m', 'Scripts.local_desktop'), str(snapshot),
                                   timeout=180, environment=env, kind='setup')
+            from build_manager.test_manifest import discover as discover_tests
+            test_dependencies = {row['id']: tuple(row['after']) for row in discover_tests(snapshot, 'desktop')} if not pattern and not suite else {}
             phases = (prerequisites,) + tuple(Phase(name, (python, *arguments), str(snapshot), timeout=timeout,
-                                 environment=env, dependencies=('environment',)) for name, arguments, timeout in commands)
+                                 environment=env, dependencies=('environment', *test_dependencies.get(name, ()))) for name, arguments, timeout in commands)
             return Plan('Logistics', operation, source, phases, str(workspace), backend=backend)
         if operation == 'Test' and target == 'ios' and suite == 'ios.runtime':
             return self.ios_simulator_plan(source, snapshot, workspace, options, env, pattern, False, runtime_only=True)

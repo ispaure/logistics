@@ -117,7 +117,10 @@ records the source audit, synthetic native phone/tablet checks and validation
 limits. `test_workspace_surfaces.py` covers background-padding preservation and
 the iOS disclosure reservation.
 
-Native file lists use 16-unit outer group corners and inset separators. Android
+Native file lists use 28-unit file/folder icons, 16-unit outer group corners and
+inset separators. Row height and contextual action touch targets remain 48 units.
+UIKit uses a 12-point leading gutter without reserving a second icon slot.
+Android uses a 6-dp icon-to-text gap and 4-dp text-to-action gap. It
 clips list drawing and child selection to the group's visible extent, ending
 short groups at the final row; high contrast adds a black outline with the same extent and rounded
 corners. UIKit masks only the first and last cells' outer corners and clears
@@ -463,7 +466,7 @@ recovery using the dummy native backend.
 
 `features.text_editor.notes` owns rooted containment, immediate-folder filtering,
 marker detection and bounded revision-checked note reads for both desktop and
-mobile. Desktop Text Editor contributes **Open Notes Library** to location
+mobile. Desktop Text Editor contributes **Open as Notes Library** to location
 actions through `notes_actions` and hosts `ui.notes_library` in Documents.
 `mobile.notes_actions` resolves the selected Local, LocalCrypt, mapped
 copy or Remote scope without opening its file browser; a background root probe

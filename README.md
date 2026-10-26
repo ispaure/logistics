@@ -85,7 +85,7 @@ The guided flow supports [combined platform validation and reviewed GitHub/Fireb
 
 | Tool | Use it to… |
 | --- | --- |
-| [File Browser & Markdown](docs/user/files-and-documents.md) | Browse files, explore storage usage, and open Markdown Notes Libraries from location actions |
+| [File Browser & Markdown](docs/user/files-and-documents.md) | Browse files and storage usage; choose Notes Library for Obsidian folders or heading-based Documentation Library for guides |
 | [Git](docs/features/git/user/user.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
 | [Bulk Rename](docs/features/bulk_rename/user/user.md) | Preview and apply changes to many filenames at once |
 | [Text Editor](docs/features/text_editor/user/user.md) | Edit text and code in tabs, search/replace, see Git change markers, and preserve file encodings |
@@ -95,7 +95,7 @@ The guided flow supports [combined platform validation and reviewed GitHub/Fireb
 | [Notebooks](docs/features/notebooks/user/user.md) | Create Notebook documents from New document, open/edit .rmdoc files and export native ink copies (experimental) |
 | [PDF Reader](docs/features/pdf/user/user.md) | Read and search PDFs on desktop and mobile, jump to pages, swipe vertically, and duplicate a PDF as an annotatable .rmdoc beside it |
 | [Archives](docs/features/archives/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
-| [Images](docs/features/images/user/user.md) | Compress images, work with photo metadata, and [capture bursts on iPhone](docs/features/images/user_mobile/user_mobile.md) |
+| [Images](docs/features/images/user/user.md) | View images with previous/next file navigation, compress images, work with photo metadata, and [capture bursts on iPhone](docs/features/images/user_mobile/user_mobile.md) |
 | [rclone](docs/features/rclone/user/user.md) | Browse remotes in read-only tabs, open supported files in memory, and use managed Pull/Push for local or encrypted folders |
 | [FUSE](docs/features/fuse/user/user.md) | Open supported remote storage as a mounted folder |
 | [Calibre](docs/features/calibre/user/user.md) | Open book libraries and export books |

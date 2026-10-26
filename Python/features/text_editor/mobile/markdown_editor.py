@@ -44,7 +44,7 @@ def editor_blocks(text, *, image_source=None):
         token = items[index]
         title = token.attrGet('title')
         suffix = (' \"' + title.replace('\"', '\\\"') + '\"') if title else ''
-        original = '![' + token.content + '](' + (token.attrGet('src') or '') + suffix + ')'
+        original = token.meta.get('wiki_source') or ('![' + token.content + '](' + (token.attrGet('src') or '') + suffix + ')')
         return '<span contenteditable="false" data-markdown="' + escape(original, quote=True) + '">' + embedded_image(token.attrGet('src') or '', token.content or 'Image', image_source) + '</span>'
     parser.add_render_rule('image', image)
     ranges = []

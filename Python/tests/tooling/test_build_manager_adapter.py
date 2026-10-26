@@ -7,11 +7,14 @@ import unittest
 from unittest.mock import patch
 
 from Scripts.build_project import LogisticsProject
+from build_manager.test_manifest import discover as _discover
 from mobile_build.deployment import firebase_deploy, manager_settings, testflight_deploy, testflight_external
 
 
 class ManagerAdapterTests(unittest.TestCase):
     def setUp(self):
+        discovery = patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group))
+        discovery.start(); self.addCleanup(discovery.stop)
         retention = patch("Scripts.build_retention.clean", return_value=[])
         retention.start()
         self.addCleanup(retention.stop)
@@ -86,7 +89,8 @@ class ManagerAdapterTests(unittest.TestCase):
         names = [phase.id for phase in plan.phases]
         expected = [name for name, _, _ in desktop_checks('Darwin', 'reports')]
         self.assertEqual(names, ['environment', *expected, 'release-tooling'])
-        self.assertTrue(all(phase.dependencies == ('environment',) for phase in plan.phases[1:]))
+        self.assertEqual(next(phase for phase in plan.phases if phase.id == 'logistics').dependencies, ('environment', 'commonutils'))
+        self.assertTrue(all('environment' in phase.dependencies for phase in plan.phases[1:]))
         self.assertTrue(all(phase.environment['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] == '1' for phase in plan.phases))
         self.assertEqual(plan.source['toolchain']['system'], 'Darwin')
         with patch('Scripts.build_project.sys.platform', 'darwin'), patch('Scripts.build_project.platform.system', return_value='Darwin'), patch('Scripts.build_project.identity', return_value=dict(logistics_commit='a' * 40, dirty=True, fingerprint='fixture')), \

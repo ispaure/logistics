@@ -191,7 +191,7 @@ class FolderHubUI:
         choices = self.folder_choices() if choices is None else choices
         self.folder_source = getattr(self, 'folder_source', 'Local')
         self._build_folder_source_tabs()
-        self.folder_local_group = getattr(self, 'folder_local_group', 'Others')
+        self.folder_local_group = getattr(self, 'folder_local_group', self.preferences.values['workspace_local_group'])
         self.folder_local_styled = None
         self.folder_local_tabs = toga.Box(style=Pack(direction=ROW, margin_bottom=8))
         self.folder_local_buttons = {}
@@ -199,6 +199,10 @@ class FolderHubUI:
             def select_local(widget=None, selected=group, **kwargs):
                 self.folder_local_group = selected
                 self.update_folder_list(self.folder_all_choices)
+                try:
+                    self.preferences.save(workspace_local_group=selected)
+                except (OSError, ValueError) as error:
+                    self.set_folder_loading('Could not remember workspace tab: ' + str(error))
             button = toga.Button(group, on_press=select_local,
                                  style=Pack(flex=1, height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT)))
             self.folder_local_buttons[group] = button
@@ -413,7 +417,7 @@ class FolderHubUI:
         status = self.folder_picker_status
         actions = []
         for button, _ in self.folder_action_controls:
-            if not button.enabled or button.text == 'Open Notes Library':
+            if not button.enabled or button.text == 'Open as Notes Library':
                 continue
             async def invoke(control=button):
                 if self.folder_picker_choices.get(name) != snapshot:
@@ -438,7 +442,7 @@ class FolderHubUI:
                 return
             from .notes_actions import offer_notes
             box = page.children[0].content
-            button = toga.Button('Open Notes Library')
+            button = toga.Button('Open as Notes Library')
             await offer_notes(self.app, snapshot, box, button, status)
             if button in box.children and button.on_press is not None:
                 await button.on_press()
@@ -447,7 +451,7 @@ class FolderHubUI:
                     status.text = 'No Notes Library found in this folder.'
                 self.show_view(page, destination='files', route='folder-options', title=snapshot['name'])
         if not self.cloud_busy or entry['source'] == 'Local':
-            actions.append(('Open Notes Library', notes))
+            actions.append(('Open as Notes Library', notes))
         return actions
 
     def choose_folder(self, name):
@@ -582,7 +586,7 @@ class FolderHubUI:
         if present:
             self.show_view(page, destination='files', route='folder-options', title=entry['name'])
         from .notes_actions import offer_notes
-        notes_button = toga.Button('Open Notes Library', style=Pack(height=48))
+        notes_button = toga.Button('Open as Notes Library', style=Pack(height=48))
         self.folder_action_controls.append((notes_button, entry['source'] == 'Remote'))
         notes_button._requires_crypt_session = entry['source'] == 'LocalCrypt'
         host = getattr(self, 'app', self)

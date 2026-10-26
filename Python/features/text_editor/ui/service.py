@@ -157,6 +157,9 @@ class BrowserController(qt.QObject):
         super().__init__(host)
         self.service = editor_service()
         browser = getattr(host, "file_browser", host)
+        from .notes_offer import NotesFolderOffer
+        self.notes_offer = NotesFolderOffer(browser)
+        self.notes_offer.progress.completed.connect(lambda *args: self.idle.emit())
         refresh = getattr(browser, "refresh_item", None)
         if refresh:
             self.service.saved.connect(refresh)
@@ -165,4 +168,4 @@ class BrowserController(qt.QObject):
         return self.service.open(path, force=force)
 
     def prepare_close(self):
-        return True
+        return self.notes_offer.prepare_close()

@@ -95,6 +95,12 @@ class CryptBrowserView(qt.QMainWindow):
         self.file_browser.idle.connect(self.idle)
         from desktop.location_context import install_browser_location
         install_browser_location(self.file_browser, self.provider)
+        from features.application import registry
+        self.notes_offer = None
+        if registry.is_feature_enabled('text_editor'):
+            from features.text_editor.ui.notes_offer import NotesFolderOffer
+            self.notes_offer = NotesFolderOffer(self.file_browser)
+            self.notes_offer.progress.completed.connect(lambda *args: self.idle.emit())
         self._private_view_guard.revoked.connect(self.file_browser.storage_location.refresh)
         self.workspace_controls = self.file_browser.workspace_controls
         from commonUtils.ui.file_browser.controls import navigation_button
@@ -116,6 +122,11 @@ class CryptBrowserView(qt.QMainWindow):
         from commonUtils.runtime.operations import check_cancelled
         path = self.provider.root / relative
         suffix = path.suffix.lower()
+        from features.images.document import IMAGE_EXTENSIONS
+        if suffix in IMAGE_EXTENSIONS:
+            from features.images.ui.viewer import open_image_choice
+            from commonUtils.runtime.resources.selection import ResourceChoice
+            return open_image_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)
         check_cancelled(cancelled)
         if suffix in {'.cbz', '.zip'}:
             from features.comics.library import ComicDocument
@@ -352,7 +363,9 @@ class CryptBrowserView(qt.QMainWindow):
         self.closing = True
         self.open_operation.request_cancel()
         browser_busy = self.file_browser.stop() if self.file_browser else False
-        ready = not (browser_busy or self.open_operation.busy)
+        notes = getattr(self, 'notes_offer', None)
+        notes_ready = notes is None or notes.prepare_close()
+        ready = not (browser_busy or self.open_operation.busy) and notes_ready
         if ready and self.provider is not None:
             self._release_provider()
         return ready

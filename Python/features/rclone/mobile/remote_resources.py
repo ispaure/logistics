@@ -27,6 +27,23 @@ class NativeRemoteResources:
         self.root = Path('/remote') / str(self.generation) / self.remote
 
     @property
+    def session_only(self):
+        return any(self.remote in item.get('remotes', ()) and not item.get('saved', False)
+                   for item in getattr(self.client, 'package_records', ()))
+
+    @property
+    def encrypted(self):
+        return any(self.remote in item.get('crypt_identities', {})
+                   for item in getattr(self.client, 'package_records', ()))
+
+    @property
+    def storage_label(self):
+        from services.folders.catalog import source_category
+        package = next((item.get('package_name') for item in getattr(self.client, 'package_records', ())
+                        if self.remote in item.get('remotes', ())), None)
+        return source_category('rclone', package)
+
+    @property
     def closed(self):
         return self._access.closed
 

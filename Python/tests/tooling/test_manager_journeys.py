@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from build_manager import Executor, Phase, Plan
+from build_manager.test_manifest import discover as _discover
 from build_manager.journeys import for_host, validate_plan
 from build_manager.workflows import ancestors, approve
 from Scripts.build_project import LogisticsProject
@@ -55,9 +56,10 @@ class JourneyAdapterTests(unittest.TestCase):
                        'firebase.app_id': 'fixture-android', 'firebase.group': 'Fixture testers'}
         self.source = dict(logistics_commit='a' * 40, commonUtils_commit='b' * 40, dirty=False, fingerprint='fixture', selection='HEAD')
         for target, options in (
+                ('build_manager.test_manifest.discover', {'side_effect': lambda root, group: _discover(ROOT, group)}),
                 ('Scripts.build_retention.clean', {'return_value': []}),
                 ('Scripts.build_project.identity', {'return_value': self.source}),
-                ('Scripts.build_project.manager_settings.settings', {'side_effect': lambda *_: (dict(self.values), {})}),
+                ('Scripts.build_project.manager_settings.settings', {'side_effect': lambda *_, **kwargs: (dict(self.values, **kwargs.get('overrides', {})), {})}),
                 ('Scripts.build_project.manager_settings.defaults', {'side_effect': lambda *_: dict(self.values)}),
                 ('Scripts.build_project.manager_settings.app_version', {'return_value': '1.2.3'}),
                 ('Scripts.build_project.sys.platform', {'new': 'darwin'})):
@@ -70,7 +72,29 @@ class JourneyAdapterTests(unittest.TestCase):
         return self.project.make_journey(goal, platforms or ['android', 'ios'],
             destinations if destinations is not None else ['firebase', 'testflight'], revision='HEAD', **options)
 
-    def test_complete_shared_capture_and_all_platform_gates_precede_each_delivery(self):
+    def test_development_device_destination_is_scoped_and_allows_captured_local_edits(self):
+        self.source['dirty'] = True
+        def device_plan(project, target, recipients, context, revision):
+            build = Phase('prepare-device-app', (sys.executable, '-c', 'pass'), str(self.root), effect='build', kind='build')
+            install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy', dependencies=(build.id,))
+            return Plan('Logistics', 'Device app', context.source(project, revision), (build, install), str(self.root / 'devices'))
+        with patch('Scripts.manager_devices.make_plan', side_effect=device_plan) as make:
+            plan = self.make(platforms=['android'], destinations=['android-devices'], run_overrides={'devices.android':'["serial-1"]'})
+        self.assertIn('android.validated', ancestors(plan, 'android.devices.install-phone'))
+        self.assertEqual(plan.journey['destinations']['android-devices']['platforms'], ['android'])
+        self.assertEqual(make.call_args.args[2][0]['id'], 'serial-1')
+        self.assertTrue(plan.source['dirty'])
+        self.assertNotIn('android.validation.release-acceptance', {phase.id for phase in plan.phases})
+        validate_plan(plan)
+
+    def test_shared_tester_message_maps_to_both_owned_service_fields(self):
+        from Scripts.manager_journeys import run_values
+        self.assertEqual(run_values({'testers.message': 'Try search'}),
+            {'firebase.release_notes': 'Try search', 'testflight.what_to_test': 'Try search'})
+        self.assertEqual(run_values({'testers.message': ''}),
+            {'firebase.release_notes': '', 'testflight.what_to_test': ''})
+
+    def test_shared_capture_and_destination_platform_gates_precede_their_delivery(self):
         plan = self.make()
         validate_plan(plan)
         contexts = [call[2] for call in self.project.calls]
@@ -79,16 +103,25 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertTrue(next(call[3] for call in self.project.calls if call[:2] == ('Test', 'ios')))
         names = {phase.id for phase in plan.phases}
         self.assertIn('ios.validation.ipad', names)
+        for target in ('ios', 'android'):
+            for consumer in ('portable-contracts', 'desktop-ui', 'mobile-host'):
+                self.assertIn(target + '.validation.commonutils', ancestors(plan, target + '.validation.' + consumer))
+            self.assertIn(target + '.validation.commonutils', ancestors(plan, target + '.validated'))
         self.assertIn('android.validation.release-acceptance', names)
         self.assertIn('ios.validation.release-acceptance', names)
-        for name in ('firebase.upload', 'testflight.upload'):
-            self.assertTrue({'android.validated', 'ios.validated'}.issubset(ancestors(plan, name)))
+        for name, target in (('firebase.upload', 'android'), ('testflight.upload', 'ios')):
+            self.assertIn(target + '.validated', ancestors(plan, name))
+            other = 'ios' if target == 'android' else 'android'
+            self.assertNotIn(other + '.validated', ancestors(plan, name))
         self.assertEqual(sum(phase.id.endswith('.prepare-verified-artifact') for phase in plan.phases), 2)
         for phase in plan.phases:
             if '.preparation.' in phase.id:
-                self.assertTrue({'android.validated', 'ios.validated'}.issubset(ancestors(plan, phase.id)))
-        self.assertIn('android.validated', ancestors(plan, 'ios.validation.build'))
-        self.assertEqual(next(p for p in plan.phases if p.id == 'ios.admit-validation').always, True)
+                target = phase.id.split('.')[0]
+                self.assertIn(target + '.validated', ancestors(plan, phase.id))
+        self.assertNotIn('android.validated', ancestors(plan, 'ios.validation.build'))
+        admission = next(p for p in plan.phases if p.id == 'ios.admit-validation')
+        self.assertEqual(admission.waits_for, ('android.validated',))
+        self.assertTrue(admission.always)
         self.assertIn(str(self.project.private / 'workspaces/android/operation.lock'), plan.resource_locks)
 
     def test_validation_has_no_preparation_or_external_effects_and_no_cleanup_deadlock(self):
@@ -135,7 +168,7 @@ class JourneyAdapterTests(unittest.TestCase):
         retained = {row['id']: row for row in first['phases'] if row['status'] == 'passed'}
         self.assertTrue(all(row['started_at'] == retained[row['id']]['started_at'] for row in last['phases'] if row['id'] in retained))
 
-    def test_failed_platform_still_allows_next_platform_cleanup_but_blocks_every_delivery(self):
+    def test_failed_android_blocks_firebase_but_ios_can_prepare_and_deliver(self):
         plan = self.make()
         phases = tuple(replace(p, argv=(sys.executable, '-c', 'raise SystemExit(1)' if p.id == 'android.validation.android-native' else 'pass'),
                                artifacts=(), artifact_types={}, environment={}) for p in plan.phases)
@@ -144,16 +177,24 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertEqual(states['android.validation.cleanup'], 'passed')
         self.assertEqual(states['ios.validated'], 'passed')
         self.assertEqual(states['firebase.upload'], 'skipped')
-        self.assertEqual(states['testflight.upload'], 'skipped')
+        self.assertEqual(states['testflight.upload'], 'awaiting_review')
+        scoped_plan = replace(plan, phases=phases)
+        approval = approve(scoped_plan, 'testflight.upload', report)
+        final = Executor(resource_directory=self.root / 'resources').run(scoped_plan, self.root / 'result',
+            resume=True, approvals=(approval,))
+        self.assertEqual(next(row['status'] for row in final['phases'] if row['id'] == 'testflight.upload'), 'passed')
 
-    def test_github_branch_is_explicit_publish_after_all_platforms_and_has_exact_tag(self):
+    def test_github_publication_requires_desktop_platforms_and_has_exact_tag(self):
         with patch('Scripts.build_snapshots.git', side_effect=lambda _, *args: '' if args[0] == 'status' else self.source['logistics_commit']):
             plan = self.make(platforms=['macos', 'linux', 'windows', 'android', 'ios'],
                 destinations=['github', 'firebase', 'testflight'], release_tag='v1.2.3-alpha.1')
         self.assertEqual(set(plan.journey['destinations']), {'github', 'firebase', 'testflight'})
         step = next(p for p in plan.phases if p.id == 'github.delivery.release-source-and-gates')
         self.assertEqual(step.effect, 'publish')
-        self.assertTrue(set(sum(plan.journey['platforms'].values(), [])).issubset(ancestors(plan, step.id)))
+        required = {gate for target in ('macos', 'linux', 'windows') for gate in plan.journey['platforms'][target]}
+        self.assertTrue(required.issubset(ancestors(plan, step.id)))
+        self.assertNotIn('ios.validated', ancestors(plan, step.id))
+        self.assertNotIn('android.validated', ancestors(plan, step.id))
         self.assertIn('v1.2.3-alpha.1', plan.journey['destinations']['github']['identity'])
 
     def test_dirty_source_missing_platform_focused_tests_and_changed_settings_fail_before_delivery(self):

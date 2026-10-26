@@ -50,6 +50,7 @@ class NotesHost:
 class VaultBrowser:
     def __init__(self, host, provider, root, destination):
         self.host, self.provider, self.destination = host, provider, destination
+        self.release_provider = lambda: None
         self.library = NotesLibrary(provider, root)
         self.root = self.library.root
         self.history, self.history_index = [], -1
@@ -207,8 +208,11 @@ class VaultBrowser:
         if hasattr(self, "reader_actions"):
             self.reader_actions.dispose()
         actions = []
-        if self.library.writable:
+        if self.library.supports('create'):
             actions.append(("New note…", self.new_note))
+            actions.append(("New folder…", lambda: self.manage_entry(folder=True)))
+        if self.selected_path is not None and self.library.supports('rename'):
+            actions.append(("Rename / move selected…", lambda: self.manage_entry(move=True)))
         if self.path is not None:
             actions.append(("Find in this page…", self.show_page_search))
             actions.append(("Read aloud…", self.speech.show))
@@ -271,6 +275,7 @@ class VaultBrowser:
             if path not in self.folders:
                 await self.load_folder(path)
         self.render_tree()
+        self.refresh_reader_actions()
 
     def render_tree(self):
         if not self.valid():
@@ -335,25 +340,30 @@ class VaultBrowser:
         elif not flattened:
             self.rows.add(toga.Label("No Markdown notes in this folder."))
 
-    async def open_note(self, path, *, remember=True, fragment=""):
+    async def open_note(self, path, *, remember=True, fragment="", resolve_link=False):
         if not self.valid():
             return False
         await self.remember_position()
         self.speech.close()
         self.epoch += 1
         epoch = self.epoch
+        current = self.path
+        cancelled = lambda: not self.valid() or epoch != self.epoch
         try:
-            path = self.contained(path)
-            if PurePosixPath(path).suffix.lower() not in MARKDOWN:
+            if not resolve_link:
+                path = self.contained(path)
+            if not resolve_link and PurePosixPath(path).suffix.lower() not in MARKDOWN:
                 raise ValueError("Choose a Markdown note.")
 
             def read():
-                data = self.library.read(path, cancelled=lambda: not self.valid())
-                html = self.host.preview(data.decode("utf-8-sig"), image_source=self.library.image_source(path))
+                resolved, anchor = (self.library.link(current, path, cancelled=cancelled)
+                                    if resolve_link else (path, fragment))
+                data = self.library.read(resolved, cancelled=cancelled)
+                html = self.host.preview(data.decode("utf-8-sig"), image_source=self.library.image_source(resolved))
                 self.access.validate_preview(html, MAX_NOTE)
-                return html
+                return resolved, anchor, html
 
-            html = await asyncio.to_thread(read)
+            path, fragment, html = await asyncio.to_thread(read)
             if not self.valid() or epoch != self.epoch:
                 return False
             if remember and path != self.path:
@@ -416,14 +426,14 @@ class VaultBrowser:
         ):
             return False
         try:
-            path = self.contained(
+            self.contained(
                 posixpath.normpath(
                     posixpath.join(posixpath.dirname(self.path), unquote(link.path))
                 )
             )
         except ValueError:
             return False
-        self.host.loop.create_task(self.open_note(path, fragment=link.fragment))
+        self.host.loop.create_task(self.open_note(target, resolve_link=True))
         return False
 
     def scroll_fragment(self, fragment):
@@ -509,17 +519,17 @@ class VaultBrowser:
         )
 
     def new_note(self, widget=None, **kwargs):
-        if not self.valid() or not self.library.writable:
+        if not self.valid() or not self.library.supports('create'):
             return False
         name = toga.TextInput(placeholder='Untitled.md', style=Pack(height=48))
         status = toga.Label('')
         create = toga.Button('Create note', style=Pack(height=48))
         async def submit(widget=None, **kwargs):
-            if not self.valid() or not self.library.writable:
+            if not self.valid() or not self.library.supports('create'):
                 return
             create.enabled = False
             try:
-                parent = posixpath.dirname(self.path) if self.path else self.root
+                parent = self.selected_parent()
                 path = await asyncio.to_thread(self.library.create, name.value, parent,
                                               cancelled=lambda: not self.valid())
                 if not self.valid():
@@ -540,6 +550,70 @@ class VaultBrowser:
             style=Pack(direction=COLUMN, margin=16))
         panel = toga.ScrollContainer(content=form, horizontal=False, style=Pack(flex=1))
         return self.host.show_view(panel, destination=self.destination, route='notes-new', title='New note')
+
+    def selected_parent(self):
+        selected = self.selected_path
+        if selected in self.folders or selected in self.expanded:
+            return selected
+        return posixpath.dirname(selected) if selected else self.root
+
+    def manage_entry(self, *, folder=False, move=False):
+        if not self.valid() or not self.library.supports('rename' if move else 'create'):
+            return False
+        source = self.selected_path if move else None
+        if move and source is None:
+            return False
+        title = 'Rename or move' if move else 'New folder'
+        initial = PurePosixPath(source).relative_to(self.root or '.').as_posix() if move else ''
+        name = toga.TextInput(value=initial, style=Pack(height=48))
+        status = toga.Label('Links are not rewritten.' if move else '')
+        submit_button = toga.Button('Move' if move else 'Create folder', style=Pack(height=48))
+        cancel = toga.Button('Cancel', on_press=lambda widget: self.present(), style=Pack(height=48))
+        parent = self.selected_parent()
+        async def submit(widget=None, **kwargs):
+            if not self.valid():
+                return
+            submit_button.enabled = cancel.enabled = False
+            try:
+                if move:
+                    destination = posixpath.join(self.root, name.value)
+                    await asyncio.to_thread(self.library.move, source, destination, cancelled=lambda: not self.valid())
+                    def remap(path):
+                        return destination + path[len(source):] if path is not None and (
+                            path == source or path.startswith(source + '/')) else path
+                    self.history = [remap(path) for path in self.history]
+                    self.positions = {remap(path): value for path, value in self.positions.items()}
+                    self.path, self.selected_path = remap(self.path), destination
+                    self.expanded = {remap(path) for path in self.expanded}
+                    paths = {remap(path) for path in self.folders}
+                    paths.add(posixpath.dirname(destination))
+                else:
+                    await asyncio.to_thread(self.library.create_folder, name.value, parent,
+                                            cancelled=lambda: not self.valid())
+                    paths = set(self.folders) | {parent}
+                if not self.valid():
+                    return
+                self.epoch += 1
+                self.folders.clear()
+                for path in sorted(paths | {self.root}):
+                    await self.load_folder(path)
+                self.present()
+                if self.path:
+                    await self.open_note(self.path, remember=False)
+                self.refresh_reader_actions()
+            except OperationCancelled:
+                return
+            except (OSError, ValueError) as error:
+                if self.valid():
+                    status.text = fill(str(error)[:180], width=28)
+            finally:
+                submit_button.enabled = cancel.enabled = True
+        submit_button.on_press = submit
+        form = toga.Box(children=[toga.Label(title, style=Pack(font_size=20)),
+            toga.Label('Path inside Notes Library (existing folders)' if move else 'Folder name'),
+            name, status, submit_button, cancel], style=Pack(direction=COLUMN, margin=16))
+        return self.host.show_view(toga.ScrollContainer(content=form, horizontal=False, style=Pack(flex=1)),
+                                  destination=self.destination, route='notes-manage', title=title)
 
     def show_page_search(self, widget=None, **kwargs):
         if self.valid() and self.path is not None:
@@ -574,3 +648,5 @@ class VaultBrowser:
             self.web.clear_private_content()
         else:
             retire_webview(self.web)
+        self.release_provider()
+        self.release_provider = lambda: None

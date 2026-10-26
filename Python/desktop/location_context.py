@@ -116,7 +116,8 @@ def document_title(window, original=None):
         return original
     context = location_context(path, provider)
     modified = ' *' if ' *' in original or window.isWindowModified() else ''
-    suffix = f' {context.suffix}' if context.name else ''
+    suffix = (' (🕵️ Session-Only)' if context.session_only else
+              f' {context.suffix}' if context.name and context.storage != 'Remote' else '')
     return f'{Path(path).name}{modified}{suffix}'
 
 
@@ -173,3 +174,40 @@ def install_browser_location(browser, provider=None):
     row = BrowserLocationRow(browser, provider)
     browser.storage_location = row
     return row
+
+
+class DocumentLocationRow(qt.QWidget):
+    """Storage identity below the document tab, matching browser location rows."""
+    def __init__(self, window, parent):
+        super().__init__(parent)
+        self.document = window
+        row = qt.QHBoxLayout(self)
+        row.setContentsMargins(6, 0, 6, 0)
+        row.setSpacing(6)
+        self.icon, self.label = qt.QLabel(), qt.QLabel()
+        self.label.setTextFormat(qt.Qt.TextFormat.PlainText)
+        self.label.setWordWrap(True)
+        row.addWidget(self.icon)
+        row.addWidget(self.label, 1)
+        self.refresh()
+
+    def refresh(self):
+        path, provider = document_location(self.document)
+        self.setVisible(bool(path))
+        if not path:
+            self.label.clear()
+            return
+        context = location_context(path, provider)
+        from services.documents.storage import document_writable
+        readonly = (getattr(self.document, 'document_read_only', False)
+                    or not document_writable(provider))
+        if getattr(self.document, 'document_editor_id', None) != 'text':
+            readonly = readonly or getattr(self.document, 'read_only', False)
+        from desktop.pages.workspace_icons import folder_icon
+        icon = folder_icon(self, 'unlocked' if context.unlocked else
+                           'cloud' if context.storage == 'Remote' else None)
+        self.icon.setPixmap(icon.pixmap(20, 20))
+        text = context.status + (' · (Read-Only)' if readonly else '')
+        self.label.setText(text)
+        self.setAccessibleName('Storage location: ' + text)
+        self.setToolTip(text)

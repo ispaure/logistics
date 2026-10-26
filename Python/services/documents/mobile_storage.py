@@ -31,7 +31,8 @@ async def open_provider_document(app, provider, path, *, destination=None, **opt
         if getattr(provider, 'remote_storage', False):
             raise ValueError('Cloud notebooks are read-only. Create a local copy before opening.')
         return await open_notebook(app, resource=DocumentResource(provider, path, max_bytes=MAX_ARCHIVE), destination=destination)
-    if suffix in SOURCE_EXTENSIONS or not DocumentPolicy.for_provider(provider).persistent:
+    from features.images.document import IMAGE_EXTENSIONS
+    if suffix in SOURCE_EXTENSIONS or suffix in IMAGE_EXTENSIONS or not DocumentPolicy.for_provider(provider).persistent:
         return await app.open_crypt(copies=copies, key=key, destination=destination, **options)
     return await app.open_download(path=provider._locate(path), destination=destination)
 

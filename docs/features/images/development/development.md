@@ -61,6 +61,29 @@ Use disposable copies when testing behavioral changes to these operations.
 
 `validation.py` validates bounded PNG/JPEG/WebP dimensions before native decoding. Books, Comics and provider readers share it without loading Qt, Toga or image-processing tools. The existing 8 MiB, 8192-pixel-axis and 16-megapixel limits are unchanged.
 
+## Image document sessions
+
+`document.py` owns the bounded image reader and same-folder PNG/JPEG/WebP
+selection. `ui/viewer.py` loads images through the selected resource provider
+on the existing cancellable operation worker, publishes decoded pixels only
+after success, retains the provider choice until close and clears pixels on
+credential revocation. Desktop registration contributes file activation and an
+Image Viewer document launcher. LocalCrypt and remote browsers dispatch to the
+same viewer.
+
+`mobile/navigation.py` uses the retained provider/resource and the mobile
+session manager. It checks session tokens and selection after asynchronous
+listing, opens the replacement before retiring the previous session, and
+serializes navigation presses. Image documents have the `image` session kind.
+The shared provider reader opens local and LocalCrypt images; RemoteReaders
+uses the same image reader with its credential-bound source.
+
+Focused validation: `test_image_viewer.py` covers desktop natural ordering,
+folder boundaries, storage chrome, failed replacement and provider release.
+`test_image_documents.py` covers mobile local/LocalCrypt/remote opening,
+replacement, failure retention, and Home Server read-only/session-only identity
+using host backends. Native device appearance is not covered by these tests.
+
 ## Mobile source manifest
 
 `../../mobile_sources.json` declares this feature's selected portable/mobile sources. Update it when adding an imported module. The build tool aggregates and checks the allowlists without starting desktop registration.

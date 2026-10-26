@@ -30,6 +30,7 @@
     "destination_names.py",
     "document_choices.py",
     "document_imports.py",
+    "document_location.py",
     "document_mutations.py",
     "document_sources.py",
     "documentation_ui.py",

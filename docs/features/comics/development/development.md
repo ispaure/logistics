@@ -444,3 +444,29 @@ so failed construction releases outgoing animation snapshots. Do not replace the
 shared publication sequence with another format-specific container-clear path.
 See [mobile publication ownership](../../../development/mobile-runtime.md#reader-publication-boundary)
 for failure boundaries and focused/native verification.
+
+## Adjacent-volume provider navigation
+
+Mobile folder-backed LocalCrypt and read-only cloud readers list neighboring
+CBZ/ZIP files in the current folder and use natural filename order. Navigation
+requires folder-listing access independently of metadata write permission. A
+successful switch retires the outgoing provider session after the new comic is
+published, preserving its session-owned reading position without accumulating
+one of the four file-document slots for every volume. A failed open retains the
+outgoing reader and page. Independently opened documents still count toward the
+existing slot and memory limits.
+
+Provider adapters pass the complete relative document path to `PrivateReader`;
+the display filename remains separate. This applies to archive/page access,
+ComicInfo, EPUB and PDF sources in nested folders. The regression checks in
+`mobile_build/tests/reading/test_comic_file_navigation.py` traverse six naturally
+ordered volumes forward and backward for LocalCrypt and cloud, including ZIP,
+fullscreen mode, position restoration and corrupt-target recovery. Storage opening checks also
+exercise nested LocalCrypt paths for each supported book format. These are
+host checks using fixture providers, not native-device or live-cloud validation.
+
+Desktop local CBZ navigation is covered by
+`Python/tests/comics/test_comic_spreads.py`, including next/previous controls,
+boundary gestures and corrupt-target recovery. Desktop private/provider-backed
+readers currently restrict the sibling list to the open comic, so adjacent-file
+controls remain unavailable there.

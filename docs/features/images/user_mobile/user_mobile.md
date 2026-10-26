@@ -1,4 +1,20 @@
-# Burst camera on iPhone
+# Images on mobile
+
+## Image viewer
+
+Open a PNG, JPEG or WebP from Files or a folder drawer. Local, LocalCrypt,
+Cloud and connected Home Server locations use the image document viewer.
+Use **Previous image** / **Next image** to move through the same folder in natural
+filename order. The buttons stop at the first/last image and skip subfolders and
+other formats. Failed opens keep the current image. **Fit image** is available
+in the reader controls.
+
+The row below the title uses the browser's storage icons and caption style,
+including LocalCrypt/unlocked, session-only and **(Read-Only)** state. Images
+are read-only and use the shared 8 MiB, 8192-pixel-axis and 16-megapixel limits.
+Cloud and Home Server documents remain read-only; copy them locally to edit.
+
+## Burst camera on iPhone
 
 Open **Home**, scroll to the bottom, and tap **Burst camera**. Allow Camera and
 Add Photos access when iOS asks. The camera uses the rear main lens by default.

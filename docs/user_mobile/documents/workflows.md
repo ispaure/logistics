@@ -1,5 +1,12 @@
 # Document workflows
 
+## File actions and long names
+
+In a file browser list, touch and hold a file or folder, or tap its **⋯** button,
+to open the same actions on iOS and Android. The full name wraps above the actions;
+the compact list may shorten it with an ellipsis in the middle. Tap an action to
+continue, or **Cancel** to return to browsing. Holding an item does not delete it.
+
 ## Receive files from another app
 
 On iPhone or iPad, choose **Share → Logisticks**, wait for the receiving result,

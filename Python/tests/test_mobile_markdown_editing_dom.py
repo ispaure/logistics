@@ -18,7 +18,7 @@ from PySide6.QtWebEngineCore import QWebEnginePage
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
 
-def editor_html(source):
+def editor_html(source, *, image_source=None):
     # Load the HTML builder without importing/initializing the Toga backend.
     owner = Path(__file__).parents[1] / 'features/text_editor/mobile'
     namespace = dict(escape=escape, json=json, re=re, uuid4=uuid4,
@@ -33,7 +33,7 @@ def editor_html(source):
     tree.body = [node for node in tree.body if isinstance(node, ast.FunctionDef)
                  and node.name in ('editor_html', 'editor_blocks')]
     exec(compile(tree, 'markdown_editor.py', 'exec'), namespace)
-    return namespace['editor_html'](source, 'logistics-editor://test/')
+    return namespace['editor_html'](source, 'logistics-editor://test/', image_source=image_source)
 
 
 class EditorPage(QWebEnginePage):

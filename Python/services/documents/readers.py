@@ -27,8 +27,9 @@ class MemorySource:
 
 class PrivateReader:
     """Bounded text, EPUB or CBZ reader. Never import into persistent libraries."""
-    def __init__(self, name, data=None, *, source=None):
+    def __init__(self, name, data=None, *, source=None, path=None):
         self.name, self.data = name, data
+        self.path = Path(path if path is not None else name)
         self.streaming = source is not None
         self.source = source or MemorySource(name, data)
         self.kind = Path(name).suffix.lower()
@@ -44,13 +45,13 @@ class PrivateReader:
             self.labels = [name]
         elif self.kind == '.pdf':
             from features.pdf.document import PDFDocument
-            self.pdf = PDFDocument.from_source(name, self.source) if self.streaming else PDFDocument(data)
+            self.pdf = PDFDocument.from_source(self.path, self.source) if self.streaming else PDFDocument(data)
             self.data = self.pdf.data
             self.read_only = True
             self.labels = [f'Page {i + 1}' for i in range(self.pdf.count)]
         elif self.kind in {'.epub', '.cbz', '.zip'}:
             from services.documents.limits import MAX_BOOK, MAX_MEMBER
-            with self.source.open_archive(name) if self.streaming else ZipFile(BytesIO(data)) as archive:
+            with self.source.open_archive(self.path) if self.streaming else ZipFile(BytesIO(data)) as archive:
                 validate_members(archive)
                 members = archive.infolist()
                 if len(members) > 10000 or (not self.streaming and (sum(m.file_size for m in members) > MAX_BOOK or any(m.file_size > MAX_MEMBER for m in members))):
@@ -67,7 +68,7 @@ class PrivateReader:
                         self.right_to_left = False
             if self.kind == '.epub':
                 from features.books.epub import EPUBBook
-                self.book = EPUBBook(Path(name), source=self.source)
+                self.book = EPUBBook(self.path, source=self.source)
                 from features.books.mobile.navigation import chapter_labels
                 self.labels = chapter_labels(self.book)
         else:
@@ -78,7 +79,7 @@ class PrivateReader:
         # Malformed metadata must not prevent reading otherwise valid comic pages.
         if not hasattr(self, '_comic'):
             from features.comics.library import ComicDocument
-            self._comic = ComicDocument(Path(self.name), source=self.source)
+            self._comic = ComicDocument(self.path, source=self.source)
         return self._comic
 
     def page(self, index):
@@ -92,7 +93,7 @@ class PrivateReader:
         if self.kind == '.pdf':
             return 'image', self.pdf.page(index)
         from features.images.validation import image_dimensions, MAX_IMAGE
-        with self.source.open_archive(self.name) if self.streaming else ZipFile(BytesIO(self.data)) as archive:
+        with self.source.open_archive(self.path) if self.streaming else ZipFile(BytesIO(self.data)) as archive:
             member = archive.getinfo(self.pages[index])
             if member.file_size > MAX_IMAGE:
                 raise ValueError('Comic page exceeds 8 MiB.')

@@ -121,11 +121,10 @@ def with_host_gates(plan, desktop_python):
     from build_manager import Phase
     first = plan.phases[0]
     env = dict(first.environment, QT_QPA_PLATFORM='offscreen')
-    hosts = tuple(Phase(name, (python, 'Python/tests/run_regressions.py', directory, '--isolate-modules'),
-        first.cwd, timeout=900, environment=env, effect='test') for name, python, directory in (
-            ('portable-contracts', desktop_python, 'Python/tests/tooling'),
-            ('desktop-ui', desktop_python, 'Python/tests/application'),
-            ('mobile-host', first.argv[0], 'mobile_build/tests')))
+    from build_manager.test_manifest import phases as manifest_phases
+    hosts = manifest_phases(first.cwd, 'mobile-host',
+        {'desktop': desktop_python, 'mobile': first.argv[0]},
+        ('Python/tests/run_regressions.py', '{directory}', '--isolate-modules'), environment=env)
     dependencies = tuple(phase.id for phase in hosts)
     phases = tuple(replace(phase, dependencies=dependencies) if not phase.dependencies and not phase.always else phase
                    for phase in plan.phases)

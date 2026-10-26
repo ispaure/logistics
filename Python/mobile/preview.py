@@ -19,7 +19,9 @@ def markdown_preview(text, font_size=16, *, local_links=False, image_source=None
 
 
 def reader_image_source(copies, reader):
-    provider = getattr(copies, 'provider', None)
+    provider = (getattr(copies, 'provider', None)
+                or getattr(getattr(reader, 'source', None), 'resource', None)
+                or getattr(copies, 'resource', None))
     key = getattr(reader, 'key', None)
     if provider is not None and key is not None:
         return folder_image_source(provider, key)
@@ -50,6 +52,8 @@ def prepare_managed_preview(owner, *, on_edit, valid):
     owner.preview_search = MarkdownPageSearch(owner.preview, owner.preview_box, insertion_index=1,
         valid=valid)
     owner.preview.on_webview_load = lambda widget=None, *args, **kwargs: owner.preview_search.loaded(widget, **kwargs)
+    from .document_location import install_document_location
+    install_document_location(owner.preview_box, copies=owner.document)
     owner.preview_box._workspace_toolbar = owner.preview_toolbar
     owner.preview_box._native_reader_toolbar = owner.preview_toolbar
     owner.preview_box._native_reader_buttons = lambda: [owner.preview_edit, owner.preview_actions_button]

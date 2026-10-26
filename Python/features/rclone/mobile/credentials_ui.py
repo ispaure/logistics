@@ -123,8 +123,10 @@ class CredentialWorkflow:
                     return
                 cloud.cloud_remote.value = selected
                 cloud.cloud_location.value = ''
+                previous_notes = getattr(cloud.app, 'vault_browser', None)
                 if await cloud.browse_cloud():
-                    cloud.show_cloud()
+                    if getattr(cloud.app, 'vault_browser', None) is previous_notes:
+                        cloud.show_cloud()
             box.add(toga.Button(remote, on_press=browse, enabled=not cloud.cloud_busy, style=Pack(height=48)))
         if not names:
             box.add(cloud.rclone_ui.settings.note('Unlock this package to load its remotes.'))

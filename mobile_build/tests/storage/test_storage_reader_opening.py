@@ -37,7 +37,12 @@ class StorageReaderOpeningTests(unittest.TestCase):
                     with self.subTest(storage=storage, suffix=suffix, entry=entry):
                         self.check_open(storage, suffix, entry)
 
-    def check_open(self, storage, suffix, entry):
+    def test_localcrypt_formats_keep_nested_source_paths(self):
+        for suffix in ('.epub', '.pdf', '.cbz', '.zip'):
+            with self.subTest(suffix=suffix):
+                self.check_open('localcrypt', suffix, 'direct', nested=True)
+
+    def check_open(self, storage, suffix, entry, *, nested=False):
         with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf):
             root = Path(directory).resolve()
             private = root / 'private'
@@ -46,7 +51,7 @@ class StorageReaderOpeningTests(unittest.TestCase):
             fixtures.mkdir()
             epub, comic = make_books(fixtures)
             data = PDF if suffix == '.pdf' else (epub if suffix == '.epub' else comic).read_bytes()
-            filename = 'book' + suffix
+            filename = ('Shelf/book' if nested else 'book') + suffix
             LogisticsMobile.storage_root = private
             app = None
             try:
@@ -60,6 +65,7 @@ class StorageReaderOpeningTests(unittest.TestCase):
                 client = app.cloud_client = ReaderClient()
                 if storage == 'localcrypt':
                     provider = CryptFiles(private / 'LocalCryptFolders', client, 'Secret')
+                    provider._physical(filename).parent.mkdir(parents=True, exist_ok=True)
                     provider._physical(filename).write_bytes(data[::-1])
                 else:
                     provider = LocalFiles(local)

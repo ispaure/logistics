@@ -1,3 +1,4 @@
+from build_manager.test_manifest import discover as _discover
 """Named suite routing and required release evidence; no live provider/device work."""
 import json
 from pathlib import Path
@@ -147,12 +148,12 @@ class ManagerSuiteTests(unittest.TestCase):
             runtime = Phase('android-runtime', (sys.executable, '-c', 'pass'), str(root), artifacts=(str(root/'runtime.json'),))
             prepared = Plan('Logistics', 'Prepare Firebase', source, (build,), str(root/'workspace'), effect='build')
             tests = Plan('Logistics', 'Test', source, (native, runtime), str(root/'workspace'))
-            with patch('Scripts.build_retention.clean'), patch.object(project, '_make_plan', side_effect=[prepared, tests]):
+            with patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group)), patch('Scripts.build_retention.clean'), patch.object(project, '_make_plan', side_effect=[prepared, tests]):
                 plan = project.make_plan('Reviewed Firebase workflow', 'android', 'This Mac')
             rows = {phase.id: phase for phase in plan.phases}
-            self.assertEqual(rows['release-acceptance'].dependencies, ('portable-contracts','desktop-ui','mobile-host','android-native','android-runtime'))
-            self.assertEqual(rows['android-native'].dependencies, ('portable-contracts','desktop-ui','mobile-host'))
-            self.assertEqual(rows['android-runtime'].dependencies, ('portable-contracts','desktop-ui','mobile-host'))
+            self.assertEqual(rows['release-acceptance'].dependencies, ('commonutils','portable-contracts','desktop-ui','mobile-host','android-native','android-runtime'))
+            self.assertEqual(rows['android-native'].dependencies, ('commonutils','portable-contracts','desktop-ui','mobile-host'))
+            self.assertEqual(rows['android-runtime'].dependencies, ('commonutils','portable-contracts','desktop-ui','mobile-host'))
             self.assertIn('Python/tests/tooling', rows['portable-contracts'].argv)
             self.assertIn('Python/tests/application', rows['desktop-ui'].argv)
             self.assertIn('mobile_build/tests', rows['mobile-host'].argv)
@@ -169,7 +170,7 @@ class ManagerSuiteTests(unittest.TestCase):
             phases = tuple(Phase(kind,(sys.executable,'-c','pass'),str(root),artifacts=(str(root/(kind+'.json')),)) for kind in ('iphone','duo','ipad'))
             prepared = Plan('Logistics','Prepare TestFlight',source,(build,),str(root/'workspace'),effect='build')
             native = Plan('Logistics','Test',source,phases,str(root/'workspace'))
-            with patch('Scripts.build_retention.clean'), patch.object(project,'_make_plan',side_effect=[prepared,native]) as make:
+            with patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group)), patch('Scripts.build_retention.clean'), patch.object(project,'_make_plan',side_effect=[prepared,native]) as make:
                 plan = project.make_plan('Reviewed TestFlight workflow','ios','This Mac',include_ipad=False)
             self.assertTrue(make.call_args_list[1].kwargs['include_ipad'])
             gate = next(phase for phase in plan.phases if phase.id=='release-acceptance')

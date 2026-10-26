@@ -180,7 +180,8 @@ class ProviderComicController:
     async def refresh_provider_comic_neighbors(self):
         header = getattr(self, "comic_header", None)
         reader = self.crypt_reader
-        provider = getattr(self._crypt_reader_store, "provider", None)
+        provider = (getattr(self._crypt_reader_store, "provider", None)
+                    or getattr(self._crypt_reader_store, "resource", None))
         if header is None or reader is None or provider is None:
             return
         header.sync(False, False)
@@ -213,7 +214,7 @@ class ProviderComicController:
         ):
             return
         store = self._crypt_reader_store
-        provider = getattr(store, "provider", None)
+        provider = getattr(store, "provider", None) or getattr(store, "resource", None)
         if provider is None:
             self.crypt_title.text = self.format_services.private_label(
                 "Open a folder-backed comic to navigate neighboring files."
@@ -221,7 +222,8 @@ class ProviderComicController:
             return
         from features.comics.mobile.navigation import adjacent_comic, folder_comics
 
-        key = self.crypt_reader.key
+        reader = self.crypt_reader
+        key = reader.key
         token = self.workspace.token(self.session.id)
         try:
             rows = await asyncio.to_thread(provider.list, key.rpartition("/")[0])
@@ -232,6 +234,7 @@ class ProviderComicController:
             return
         if (
             not self.active_host
+            or self.crypt_reader is not reader
             or not self.workspace.accepts(token)
             or self.manager.active is not self.app
         ):
@@ -247,8 +250,15 @@ class ProviderComicController:
                 store, target, destination=self.presentation_destination
             ):
                 owner = self.manager.active
+                if (owner is None or owner.crypt_reader is None
+                        or owner.session.resource != self.manager.identity(store, target)):
+                    return
                 if owner.crypt_immersive != immersive:
                     owner.toggle_private_reading_mode()
+                # Adjacent-volume reading replaces the outgoing comic. Retire it
+                # only after successful publication so failures keep it readable.
+                if owner is not self.app:
+                    self.manager.close(self.session.id)
 
     async def previous_provider_comic_file(self, widget=None, **kwargs):
         await self.adjacent_provider_comic(-1)

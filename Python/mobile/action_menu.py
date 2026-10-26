@@ -1,6 +1,7 @@
 """Native Apple button menus and Android anchored popup commands."""
 import inspect
 import weakref
+from pathlib import PurePosixPath
 from commonUtils.ui.native.menus import NativeMenu as SharedNativeMenu
 
 
@@ -68,8 +69,12 @@ class BrowserActions:
         self.browser = weakref.ref(browser)
         self.actions = tuple(actions)
         self.epoch, self.selected = browser.epoch, browser.selected
+        entry = browser.tree.entries[self.selected]
+        self.filename = entry.payload.get('display_name') or PurePosixPath(entry.label).name
         self.disposed = False
         self.native = None
+        self.android = False
+        self.listener = None
         self.blocks = []
 
     def invoke(self, callback):
@@ -89,35 +94,65 @@ class BrowserActions:
             return
         native = browser.native_list._impl.native
         if backend.startswith('toga_android.'):
-            from types import SimpleNamespace
-            anchor = native
-            offset = native.getCheckedItemPosition() - native.getFirstVisiblePosition()
-            if 0 <= offset < native.getChildCount():
-                row = native.getChildAt(offset)
-                anchor = row.getChildAt(row.getChildCount() - 1)
-            impl = type('BrowserMenuAnchor', (), {'__module__': 'toga_android.widgets'})()
-            impl.native = anchor
-            button = SimpleNamespace(_impl=impl)
-            self.native = NativeMenu(button, self.actions, invoke=self.invoke,
-                context=lambda: browser._app._impl.native, fallback=lambda: None)
+            from android.app import AlertDialog
+            from android.content import DialogInterface
+            from android.widget import TextView
+            from java import dynamic_proxy
+            self.android = True
+            context = android_menu_context(browser._app._impl.native)
+            title = TextView(context)
+            title.setText(self.filename)
+            title.setSingleLine(False)
+            title.setTextIsSelectable(True)
+            title.setTextSize(18)
+            padding = round(24 * context.getResources().getDisplayMetrics().density)
+            title.setPadding(padding, padding, padding, padding // 2)
+            menu = self
+            class Listener(dynamic_proxy(DialogInterface.OnClickListener)):
+                def onClick(self, dialog, index):
+                    if 0 <= index < len(menu.actions):
+                        menu.invoke(menu.actions[index][1])
+            self.listener = Listener()
+            self.native = (AlertDialog.Builder(context).setCustomTitle(title)
+                .setItems([label for label, _ in self.actions], self.listener)
+                .setNegativeButton('Cancel', None).create())
             self.native.show()
         elif backend.startswith('toga_iOS.'):
-            # List accessory buttons own a deferred UIMenu. They request these
-            # actions after the exact row has passed selection/credential guards.
-            return
-
-    def ios_actions(self):
-        return ios_menu_actions(self.actions, self.invoke, self.blocks)
+            from rubicon.objc import ObjCClass, Block, objc_id
+            self.native = ObjCClass('UIAlertController').alertControllerWithTitle(
+                self.filename, message=None, preferredStyle=0)
+            for label, callback in self.actions:
+                def selected(action, target=callback):
+                    self.invoke(target)
+                block = Block(selected, None, objc_id)
+                self.blocks.append(block)
+                self.native.addAction(ObjCClass('UIAlertAction').actionWithTitle(label,
+                    style=2 if label.startswith('Delete') else 0, handler=block))
+            self.native.addAction(ObjCClass('UIAlertAction').actionWithTitle('Cancel', style=1, handler=None))
+            popover = self.native.popoverPresentationController
+            if popover is not None:
+                popover.sourceView = native
+                popover.sourceRect = native.bounds
+                row = browser._list_rows.get(self.selected)
+                if row is not None:
+                    from toga_iOS.libs import NSIndexPath
+                    popover.sourceRect = native.rectForRowAtIndexPath(
+                        NSIndexPath.indexPathForRow(row.index, inSection=0))
+            controller = browser._app.main_window._impl.native.rootViewController
+            while controller.presentedViewController:
+                controller = controller.presentedViewController
+            controller.presentViewController(self.native, animated=True, completion=None)
 
     def dispose(self):
         if self.disposed:
             return
         self.disposed = True
-        if isinstance(self.native, NativeMenu):
-            self.native.dispose()
+        if self.native is not None and self.android:
+            self.native.dismiss()
         elif self.native is not None:
-            self.native.dismissViewControllerAnimated(True, completion=None)
+            self.native.dismissViewControllerAnimated(False, completion=None)
         self.native = None
+        self.listener = None
         self.actions = ()
         self.blocks.clear()
 

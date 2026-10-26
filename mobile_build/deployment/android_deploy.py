@@ -196,13 +196,14 @@ def compatible_apk(adb, env, serial, apk):
     return signed
 
 
-def deploy(device=None, *, build_only=False, devices=None):
+def deploy(device=None, *, build_only=False, devices=None, discover=True):
     config = tomllib.loads((ROOT / 'pyproject.toml').read_text())['tool']['briefcase']
     if config['bundle'] + '.logisticsmobile' != BUNDLE:
         raise ValueError('Android bundle identity changed; deployment stopped.')
     env = deployment_environment()
     env, adb = tools_environment(env)
-    discover_wireless(adb, env)
+    if discover:
+        discover_wireless(adb, env)
     if devices is None:
         output = run([str(adb), 'devices'], env)
         devices = ([line.split()[0] for line in output.splitlines()

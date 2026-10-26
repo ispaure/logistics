@@ -24,14 +24,21 @@ class PlanningContext:
         return json.loads(self.captured)
 
 
-RUN_FIELDS={'testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
+RUN_FIELDS={'devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
 
 
 def run_values(values):
     reject_secrets(values)
     if not isinstance(values,dict) or set(values)-RUN_FIELDS or any(not isinstance(v,str) or len(v)>20000 for v in values.values()):
         raise ValueError('Only tester notes and recipient groups can be changed for one run.')
-    return dict(values)
+    result = dict(values)
+    if 'testers.message' in result:
+        message = result.pop('testers.message')
+        result.update({'testflight.what_to_test': message, 'firebase.release_notes': message})
+    from build_manager.run_fields import selection_ids
+    for key in ('devices.android', 'devices.ios'):
+        if key in result:selection_ids(result[key])
+    return result
 
 
 def capture(project, revision, run_overrides=None):
@@ -41,7 +48,7 @@ def capture(project, revision, run_overrides=None):
     source.update(host=owner.platform.platform(), architecture=owner.platform.machine())
     source['app_version'] = owner.manager_settings.app_version(project.mobile,
         revision=None if revision == 'working-tree' else source['logistics_commit'])
-    values, origins = (owner.manager_settings.settings(project.mobile, overrides=run_values(run_overrides))
+    values, origins = (owner.manager_settings.settings(project.mobile, overrides={key: value for key, value in run_values(run_overrides).items() if not key.startswith('devices.')})
                        if run_overrides else owner.manager_settings.settings(project.mobile))
     if run_overrides:
         source['run_overrides'] = run_values(run_overrides)
@@ -65,7 +72,8 @@ def _namespace(plan, prefix, barrier=()):
         if not phase.always and not dependencies:
             mapped = (*mapped, *barrier)
         effect = phase.effect if phase.effect != 'inherit' else plan.effect
-        phases.append(replace(phase, id=names[phase.id], dependencies=mapped, effect=effect,
+        phases.append(replace(phase, id=names[phase.id], dependencies=mapped,
+                              waits_for=tuple(names[key] for key in phase.waits_for), effect=effect,
                               kind='publication' if effect == 'publish' and phase.kind == 'test' else phase.kind))
     return phases
 
@@ -78,7 +86,7 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         raise ValueError('Unsupported Logistics journey intent schema.')
     targets, destinations = selected['platforms'], selected['destinations']
     delivery = selected['goal'] == 'deliver'
-    if any(name not in {'github', 'firebase', 'testflight'} for name in destinations):
+    if any(name not in {'github', 'firebase', 'testflight', 'android-devices', 'ios-devices'} for name in destinations):
         raise ValueError('This Logistics destination has no reviewed integrated delivery implementation.')
     if pattern:
         raise ValueError('Combined validation uses complete project suites. Use an advanced operation for focused checks.')
@@ -94,7 +102,7 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         print('Build retention incomplete: ' + str(error), flush=True)
     context = capture(project, revision, run_overrides)
     source = context.source(project, revision)
-    if delivery and source['dirty']:
+    if delivery and source['dirty'] and any(name in destinations for name in ('github', 'firebase', 'testflight')):
         raise ValueError('Delivery requires committed source. Select a committed revision or commit your intended edits.')
     values = source['effective_settings']['values']
     if 'github' in destinations and not release_tag:
@@ -111,6 +119,15 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
             raise ValueError('GitHub publication uses the current clean checkout. Commit intended changes and select its HEAD before planning a release.')
     if any(name in destinations for name in ('firebase', 'testflight')) and sys.platform != 'darwin':
         raise ValueError('Local tester preparation currently requires the configured macOS signing/build host.')
+
+    device_targets = {}
+    from Scripts.manager_devices import selected_devices
+    for target in ('android', 'ios'):
+        if target + '-devices' in destinations:
+            if sys.platform != 'darwin':raise ValueError('Device app preparation currently requires the configured Mac build host.')
+            if locations.get(target, project.journey_capability['platforms'][target]['backend']) == 'GitHub':
+                raise ValueError('Choose local validation for device delivery; hosted evidence is not linked to local development packages.')
+            device_targets[target] = selected_devices(project.root, target, run_values(run_overrides or {}))
 
     phases, gates, locks, resources, capacities = [], {}, set(), {}, {}
     branch_sources, evidence, executions = {}, {}, {}
@@ -133,13 +150,13 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         backend = locations.get(target,row['backend'])
         plan = project.make_plan('Test', target, backend, revision=revision,
             include_ipad=delivery and target == 'ios', _context=context,
-            _release_validation=delivery and mobile)
+            _release_validation=delivery and mobile and ('testflight' if target == 'ios' else 'firebase') in destinations)
         retain(plan)
         branch_sources[target] = plan.source
         barrier = ()
         if mobile and previous_mobile:
             admission = Phase(target + '.admit-validation', (str(project.interpreter), '-c', 'pass'), str(project.root),
-                dependencies=(previous_mobile,), always=True, kind='setup', effect='inspect')
+                waits_for=(previous_mobile,), always=True, kind='setup', effect='inspect')
             phases.append(admission)
             barrier = (admission.id,)
         branch = _namespace(plan, target + '.validation', barrier)
@@ -153,25 +170,36 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         gates[target] = [gate.id]
         if mobile:
             previous_mobile = gate.id
-    all_gates = tuple(step for steps in gates.values() for step in steps)
 
     for name in destinations:
+        required_platforms = list(project.journey_capability['destinations'][name]['platforms'])
+        required_gates = tuple(step for target in required_platforms for step in gates[target])
+        if name in {'android-devices', 'ios-devices'}:
+            from Scripts.manager_devices import make_plan as device_plan
+            target = required_platforms[0]
+            plan = device_plan(project, target, device_targets[target], context, revision)
+            retain(plan)
+            branch = _namespace(plan, target + '.devices', required_gates)
+            phases.extend(branch)
+            evidence[name] = dict(identity='Install in place · ' + ', '.join(row['name'] + ' [' + row['id'] + ']' for row in device_targets[target]),
+                steps=[phase.id for phase in branch if phase.effect == 'deploy'], platforms=required_platforms)
+            continue
         if name == 'github':
             plan = project.make_plan('Release', targets[0], 'GitHub', revision=revision,
                                      release_tag=release_tag, _context=context)
             retain(plan)
             branch = _namespace(plan, 'github.delivery')
-            branch = [replace(phase, dependencies=tuple(dict.fromkeys((*phase.dependencies, *all_gates)))) for phase in branch]
+            branch = [replace(phase, dependencies=tuple(dict.fromkeys((*phase.dependencies, *required_gates)))) for phase in branch]
             phases.extend(branch)
             evidence[name] = dict(identity=values['github.repository'] + ' · ' + release_tag +
                 ' · commit ' + source['logistics_commit'] + ' · pushes shared/app source and tag; hosted release ZIP (separate from local tester packages)',
-                steps=[phase.id for phase in branch if phase.effect in EXTERNAL])
+                steps=[phase.id for phase in branch if phase.effect in EXTERNAL], platforms=required_platforms)
             continue
         target, operation, provider = ('ios', 'Prepare TestFlight', 'testflight') if name == 'testflight' else ('android', 'Prepare Firebase', 'firebase')
         plan = project.make_plan(operation, target, 'This Mac', revision=revision,
                                  build_override=build_override, _context=context)
         retain(plan)
-        preparation = _namespace(plan, target + '.preparation', all_gates)
+        preparation = _namespace(plan, target + '.preparation', required_gates)
         if any(phase.effect in EXTERNAL for phase in preparation):
             raise ValueError('Tester preparation must stop before upload.')
         phases.extend(preparation)
@@ -180,13 +208,13 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         receipt = report.with_name(report.stem + '-distribution.json')
         upload = Phase(name + '.upload', (output.argv[0], '-m', 'Scripts.distribute_prepared',
             '--report', str(report), '--receipt', str(receipt)), output.cwd, timeout=14400,
-            dependencies=(*all_gates, *(phase.id for phase in preparation)), environment=dict(output.environment),
+            dependencies=(*required_gates, *(phase.id for phase in preparation)), environment=dict(output.environment),
             kind='distribution', effect='upload', provider=provider, artifacts=(str(receipt),),
             resources={'provider.destination:' + provider + ':Logistics': 1})
         phases.append(upload)
         identity = (str(values['testflight.app_id']) + ' · ' + values['testflight.external_group']
                     if name == 'testflight' else values['firebase.app_id'] + ' · ' + values['firebase.group'])
-        evidence[name] = dict(identity=provider + ' · app ' + identity + ' · version ' + source['app_version'], steps=[upload.id])
+        evidence[name] = dict(identity=provider + ' · app ' + identity + ' · version ' + source['app_version'], steps=[upload.id], platforms=required_platforms)
 
     # Refuse changes during preparation, including changing selected settings.
     final = capture(project, revision, run_overrides).source(project, revision)

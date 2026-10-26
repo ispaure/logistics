@@ -105,6 +105,9 @@ class ProviderDocumentOpening:
             privacy.refresh()
         owner.watch_provider_layout()
         owner.watch_provider_epub_width()
+        if getattr(reader, 'image_document', False):
+            from features.images.mobile.navigation import refresh
+            await refresh(owner)
         if view.crypt_reader.kind in {'.cbz', '.zip'}:
             await owner.refresh_provider_comic_neighbors()
         return True

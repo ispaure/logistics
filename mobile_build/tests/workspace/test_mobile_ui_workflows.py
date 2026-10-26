@@ -2,6 +2,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import Mock
 from mobile.app import LogisticsMobile
 
 
@@ -312,6 +313,7 @@ class MobileWorkflowTests(unittest.TestCase):
         row = next(row for row in browser.native_list.data if row.entry is entry)
         app.loop.run_until_complete(browser._select_row(row))
         menu = browser._item_menu
+        self.assertEqual(menu.filename, 'Two.md')
         self.assertEqual(menu.selected, browser.selected)
         self.assertEqual(app.selected_file()[1], 'Two.md')
         self.assertIsNone(getattr(app, 'crypt_reader', None))
@@ -319,6 +321,26 @@ class MobileWorkflowTests(unittest.TestCase):
         menu.invoke(rename)
         self.assertEqual(app.file_name.value, 'Two.md')
         self.assertEqual((root / 'Two.md').read_text(), 'two')
+
+    def test_item_menu_keeps_full_long_filename_and_rejects_obsolete_actions(self):
+        app = self.app
+        app.loop.run_until_complete(app.show_files())
+        app.loop.run_until_complete(app.browser_file_location(('Local files', '')))
+        filename = 'Report_' + 'long_filename_' * 12 + 'final.txt'
+        (app.private_root / 'LocalFiles' / filename).write_text('keep')
+        app.loop.run_until_complete(app.browse_files())
+        browser = app.file_browser
+        row = next(row for row in browser.native_list.data if row.title == filename)
+        app.loop.run_until_complete(browser._select_row(row))
+        menu = browser._item_menu
+        self.assertEqual(menu.filename, filename)
+        callback = Mock()
+        app.loop.run_until_complete(app.browse_files())
+        menu.invoke(callback)
+        callback.assert_not_called()
+        menu.dispose()
+        menu.invoke(callback)
+        callback.assert_not_called()
 
 
 if __name__ == '__main__':

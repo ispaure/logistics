@@ -414,7 +414,7 @@ class PrivateSessions:
             if reader.book is not None:
                 owner._provider_epub_locations = {reader.book.spine[index]: offset}
             await owner.move_private_page(index)
-        session.kind = ('pdf' if reader.kind == '.pdf' else 'epub' if reader.kind == '.epub' else 'comic' if not reader.editable
+        session.kind = ('image' if getattr(reader, 'image_document', False) else 'pdf' if reader.kind == '.pdf' else 'epub' if reader.kind == '.epub' else 'comic' if not reader.editable
                         else 'markdown' if reader.kind in {'.md', '.markdown'} else 'text')
         session.title = Path(reader.name).name
         from .document_sources import file_source

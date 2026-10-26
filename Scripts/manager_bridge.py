@@ -27,6 +27,11 @@ def main():
             if intent.get('schema') != 1:
                 raise ValueError('Unsupported journey request schema.')
             result = project.make_journey(intent['goal'], intent['platforms'], intent['destinations'], backends=intent.get('backends'), **values).data()
+        elif action == 'run_choices':
+            from Scripts.manager_devices import choices
+            result = choices(ROOT)
+        elif action == 'run_defaults':
+            result = project.run_defaults()
         elif action == 'settings':
             result = project.settings_view()
         elif action == 'save_settings':

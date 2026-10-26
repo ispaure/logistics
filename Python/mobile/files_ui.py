@@ -83,6 +83,8 @@ class FilesUI:
                 self.file_loaded_location = label, path
                 self.populate_file_browser(rows, self.file_password.value, location=self.file_loaded_location)
                 self.file_status.value = ''
+                from .obsidian import offer_vault
+                await offer_vault(self.app, browser, provider, path, rows)
                 return True
             except Exception as error:
                 if (listing.accepts(work, request, private=request is None)
@@ -129,6 +131,7 @@ class FilesUI:
                     self.file_destination.value = destination if destination in roots else 'Local files'
                 finally:
                     self.file_changing_location = False
+            previous_notes = getattr(self.app, 'vault_browser', None)
             opened = None
             if location is not None:
                 self.files_view._folder_entry_location = location
@@ -148,6 +151,8 @@ class FilesUI:
                     self.file_browser.search.value = ''
                     self.file_browser.history.clear()
                 opened = await self.browse_files()
+            if getattr(self.app, 'vault_browser', None) is not previous_notes:
+                return opened
             self.refresh_file_source_tabs()
             self.show_view(self.files_view, destination='files', route='browser', title='Local File Browser')
             return opened

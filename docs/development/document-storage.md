@@ -352,3 +352,18 @@ cannot undo deletion. A still-current canvas receives an interruption response;
 a replacement canvas keeps its own busy state. Failed/refused session closing
 reports that notebook data was already deleted and restores the prior navigation
 intent so closing can be retried safely.
+
+
+## Document storage chrome
+
+Desktop `DocumentPane` mounts `DocumentLocationRow` before reader controls;
+title/idle/catalog changes refresh its active provider/path, including adjacent
+image navigation and Save As. Remote names remain in the storage row instead
+of the session-only document title. Credential revocation hides the identity row.
+
+Mobile `document_location.py` builds storage rows with the browser's icon and
+muted-caption roles. Provider sessions, managed text/Markdown, library readers
+and notebook presentation mount these beneath native titles. Reader rows join
+the existing ReadingFrame controls so immersive mode hides them with the other
+controls. Native remote resources expose credential package source, encryption
+and session-only metadata without granting publication capabilities.

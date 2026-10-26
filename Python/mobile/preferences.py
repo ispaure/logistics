@@ -11,7 +11,7 @@ from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_
 from features.images.mobile.burst_camera import DEFAULTS as CAMERA_DEFAULTS, validate_preferences as validate_camera
 
 DEFAULTS = {'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16', 'markdown_font_size': '16', 'text_font_size': '16', 'epub_font_size': '16', 'restore_last_document': 'true', 'last_document': '',
-            'document_card_overview': 'false', 'show_legacy': 'false', 'disabled_features': '[]',
+            'workspace_local_group': 'Others', 'document_card_overview': 'false', 'show_legacy': 'false', 'disabled_features': '[]',
             'markdown_justify': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false',
             'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'comic_split_wide': 'true', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS, **CAMERA_DEFAULTS}
@@ -80,6 +80,8 @@ class Preferences:
             raise ValueError('Choose a supported font size.')
         if values['restore_last_document'] not in {'true', 'false'}:
             raise ValueError('Invalid document restore preference.')
+        if values['workspace_local_group'] not in {'Rclone', 'Others'}:
+            raise ValueError('Invalid local workspace tab.')
         if values['show_legacy'] not in {'true', 'false'}:
             raise ValueError('Invalid legacy folder preference.')
         if values['document_card_overview'] != 'false':

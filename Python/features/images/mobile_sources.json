@@ -3,6 +3,8 @@
   "modules": [
     "__init__.py",
     "validation.py",
+    "document.py",
+    "mobile/navigation.py",
     "mobile/__init__.py",
     "mobile/burst_camera.py",
     "mobile/ios/BurstCamera.m"

@@ -5,6 +5,6 @@ Choose a guide for the task you want to complete.
 ## Further reading
 
 - [Images Feature](development/development.md)
-- [Compress images and edit JPG comments](user/user.md)
+- [View and process images](user/user.md)
 
-- [Burst camera on iPhone](user_mobile/user_mobile.md)
+- [Images on mobile](user_mobile/user_mobile.md)

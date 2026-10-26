@@ -12,6 +12,43 @@ from mobile_build.tests.transfers.test_mirror_jobs import MirrorClient
 
 
 class FolderHubTests(unittest.TestCase):
+    def test_local_tab_survives_picker_rebuild_and_cold_app_start(self):
+        from mobile.app import LogisticsMobile
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            def launch():
+                app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                self.addCleanup(app.loop.close)
+                self.addCleanup(app.main_window.close)
+                app.build_folder_picker(choices={})
+                return app
+            app = launch()
+            self.assertEqual(app.folder_local_group, 'Others')
+            app.folder_local_buttons['Rclone'].on_press()
+            app.build_folder_picker(choices={})
+            self.assertEqual(app.folder_local_group, 'Rclone')
+            restored = launch()
+            self.assertEqual(restored.folder_local_group, 'Rclone')
+            restored.folder_local_buttons['Others'].on_press()
+            self.assertEqual(launch().folder_local_group, 'Others')
+
+    def test_failed_local_tab_save_keeps_navigation_available_and_reports_failure(self):
+        from mobile.app import LogisticsMobile
+        with TemporaryDirectory() as directory:
+            LogisticsMobile.storage_root = Path(directory)
+            self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
+            app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+            self.addCleanup(app.loop.close)
+            self.addCleanup(app.main_window.close)
+            app.build_folder_picker(choices={})
+            with patch.object(app.preferences, 'save', side_effect=OSError('Disk full')):
+                app.folder_local_buttons['Rclone'].on_press()
+            self.assertEqual(app.folder_local_group, 'Rclone')
+            self.assertIn('Disk full', app.folder_loading_status.text)
+            self.assertIn(app.folder_loading_status, app.folder_loading_box.children)
+            self.assertEqual(Preferences(Path(directory)).values['workspace_local_group'], 'Others')
+
     def test_remote_only_crypt_icon_uses_loaded_credential_snapshot(self):
         from mobile.app import LogisticsMobile
         from types import SimpleNamespace

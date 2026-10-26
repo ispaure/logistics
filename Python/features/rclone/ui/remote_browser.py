@@ -61,6 +61,12 @@ class RemoteBrowserView(qt.QMainWindow):
         self.file_browser.idle.connect(self.idle)
         from desktop.location_context import install_browser_location
         install_browser_location(self.file_browser, self.provider)
+        from features.application import registry
+        self.notes_offer = None
+        if registry.is_feature_enabled('text_editor'):
+            from features.text_editor.ui.notes_offer import NotesFolderOffer
+            self.notes_offer = NotesFolderOffer(self.file_browser)
+            self.notes_offer.progress.completed.connect(lambda *args: self.idle.emit())
         self.operation = OperationProgress(self)
         self.operation.completed.connect(self._completed)
         layout.addWidget(self.file_browser)
@@ -89,6 +95,11 @@ class RemoteBrowserView(qt.QMainWindow):
         if self.closing or self.operation.busy:
             return
         suffix = Path(path).suffix.lower()
+        from features.images.document import IMAGE_EXTENSIONS
+        if suffix in IMAGE_EXTENSIONS:
+            from features.images.ui.viewer import open_image_choice
+            from commonUtils.runtime.resources.selection import ResourceChoice
+            return open_image_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)
         if suffix in {'.pdf', '.epub', '.cbz', '.zip'}:
             from commonUtils.runtime.resources.selection import ResourceChoice
             from services.documents.ui.readers import open_reader_choice
@@ -141,7 +152,8 @@ class RemoteBrowserView(qt.QMainWindow):
         self.closing = True
         self.operation.request_cancel()
         browser_busy = self.file_browser.stop()
-        ready = not browser_busy and not self.operation.busy
+        notes_ready = self.notes_offer is None or self.notes_offer.prepare_close()
+        ready = not browser_busy and not self.operation.busy and notes_ready
         if ready:
             self._release()
         return ready

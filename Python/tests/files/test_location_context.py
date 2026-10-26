@@ -56,11 +56,11 @@ class LocationContextTests(QtTestCase):
         provider = SimpleNamespace(root=self.root, remote='Library', remote_storage=True, private=True,
                                    session_only=True)
         window.choice = SimpleNamespace(path='guide.pdf', provider=provider)
-        self.assertEqual(document_title(window), 'guide.pdf [Remote: Library (🕵️ Session-Only)]')
+        self.assertEqual(document_title(window), 'guide.pdf (🕵️ Session-Only)')
         provider.session_only = False
-        self.assertEqual(document_title(window), 'guide.pdf [Remote: Library]')
+        self.assertEqual(document_title(window), 'guide.pdf')
         provider.connection = SimpleNamespace(remote='Private-Library')
-        self.assertEqual(document_title(window), 'guide.pdf [Local: Private-Library (🕵️ Session-Only)]')
+        self.assertEqual(document_title(window), 'guide.pdf (🕵️ Session-Only)')
         window._private_view_guard = SimpleNamespace(locked=True)
         window.setWindowTitle('Private session locked')
         self.assertEqual(document_title(window), 'Private session locked')

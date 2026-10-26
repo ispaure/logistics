@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "suites": [
+    {
+      "id": "commonutils",
+      "owner": "Python/commonUtils",
+      "directory": "tests",
+      "groups": [
+        "desktop",
+        "mobile-host"
+      ],
+      "interpreter": "desktop",
+      "timeout": 1800
+    },
+    {
+      "id": "logistics",
+      "directory": "Python/tests",
+      "groups": [
+        "desktop"
+      ],
+      "after": [
+        "commonutils"
+      ],
+      "interpreter": "desktop",
+      "timeout": 1800
+    },
+    {
+      "id": "portable-contracts",
+      "directory": "Python/tests/tooling",
+      "groups": [
+        "mobile-host"
+      ],
+      "after": [
+        "commonutils"
+      ],
+      "interpreter": "desktop"
+    },
+    {
+      "id": "desktop-ui",
+      "directory": "Python/tests/application",
+      "groups": [
+        "mobile-host"
+      ],
+      "after": [
+        "commonutils"
+      ],
+      "interpreter": "desktop"
+    },
+    {
+      "id": "mobile-host",
+      "directory": "mobile_build/tests",
+      "groups": [
+        "mobile-host"
+      ],
+      "after": [
+        "commonutils"
+      ],
+      "interpreter": "mobile"
+    }
+  ]
+}

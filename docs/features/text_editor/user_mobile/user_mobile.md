@@ -116,11 +116,17 @@ the text and selection unchanged. The URL field appears only in this prompt.
 
 ## Images in folder-backed Markdown
 
-Markdown opened from Local or LocalCrypt displays animated GIFs and static
+Markdown opened from Local, LocalCrypt or a connected remote displays animated GIFs and static
 WebP, PNG and JPEG images in preview and formatted editing. Use a path relative to the Markdown
 file, for example `![Photo](../../../../Python/features/text_editor/docs/user_mobile/images/photo.webp)` or `![[images/photo.webp]]`.
 Parent-folder paths work within the same storage root. Bare filenames refer to
 the Markdown file's folder; there is no vault-wide filename search.
+
+Obsidian embeds accept spaces and `#` in filenames, such as
+`![[photo #1.png|400]]`. In a Notes Library, missing relative images are also
+looked up from the library root, then in `Attachments`, `Assets` and `Images`
+(with lowercase variants). Explicit `./` or `../` paths keep their relative meaning.
+The first matching image is used; this does not scan the library recursively.
 
 Images fit within the page width on phones and tablets. To request a smaller
 width in pixels, use `![[images/demo.gif|200]]` or
@@ -143,17 +149,41 @@ Play/Pause and approximate 15-second skips. Session-only credentials require an
 explicit saved opt-in for background speech; it defaults to off. See
 [Speech while locked](../../../user_mobile/settings/settings.md#speech-while-locked).
 
-## Notes Library
+## Notes Library and Documentation Library
 
-From a Local, LocalCrypt or Remote location's actions page, choose **Open Notes
+Opening a folder with an `.obsidian` subfolder offers **Open as Notes Library**
+or **Browse Files**. Browsing keeps the ordinary folder view. Notes Library keeps
+actual filenames in its sidebar; refreshes of the current folder do not repeat
+the choice. Returning from a parent folder offers it again.
+
+In writable libraries, **••• → New folder…** creates a folder beside the selected
+note or inside the selected folder. **Rename / move selected…** accepts a new
+path inside the library, with existing folders. These actions also work on
+selected folders. Moves preserve navigation history and do not overwrite existing
+entries. Links in other notes are not rewritten. Use **New note…** to write a
+Markdown note in the selected folder.
+
+**Documentation Library** is the shared viewer for built-in guides. It uses each
+page's opening Markdown heading as its sidebar title, with a filename fallback.
+Its sidebar supports browsing and search; page editing does not enable sidebar
+creation, renaming or moving. Notes editing and file organization belong to
+Logistics' Notes Library.
+
+
+From a Local, LocalCrypt or Remote location's actions page, choose **Open as Notes
 Library** when the root contains an `.obsidian` directory. The reader opens in
 Documents with a folder/page sidebar, note history and read-aloud controls.
 Folder and file icons identify each sidebar entry; the selected row is highlighted.
 When the sidebar and page appear side by side, navigation, edit and read-aloud
 controls sit above the Markdown page.
-Remote libraries have no filename filter or recursive index; folders load only
+Remote libraries have no filename filter or recursive index; browser folders load only
 when expanded. Local filtering searches only loaded note names. Reading is
 limited to 2 MiB. Hidden configuration is excluded and links stay inside the library.
+
+Links such as `[[Tech]]` can open `Tech.md` in an unloaded subfolder. The current
+folder and library root take priority; otherwise following the link searches for
+a unique match across subfolders, up to 10,000 entries. Use an explicit path such
+as `[[Topics/Tech]]` when more than one note has that name.
 
 Local and unlocked LocalCrypt libraries support editing. Tap the pencil to open
 the current note in formatted editing, or choose **••• → New note…** to create a

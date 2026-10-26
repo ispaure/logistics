@@ -29,6 +29,9 @@ class DocumentPane(qt.QWidget):
             window.windowIconChanged.connect(self.setWindowIcon)
         self.setMinimumSize(320, 220)
         layout = qt.QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
+        from desktop.location_context import DocumentLocationRow
+        self.storage_location = DocumentLocationRow(window, self)
+        layout.addWidget(self.storage_location)
         self.workspace_controls = getattr(window, 'workspace_controls', None)
         if self.workspace_controls is None:
             self.workspace_controls_widget = qt.QWidget(self)
@@ -49,6 +52,7 @@ class DocumentPane(qt.QWidget):
     def refresh_title(self):
         from desktop.location_context import document_title
         self.view_title = document_title(self.document)
+        self.storage_location.refresh()
         self.title_changed.emit(self.view_title)
 
     def prepare_close(self):

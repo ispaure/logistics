@@ -149,6 +149,8 @@ class ManagedDocumentWorkflows:
                     session.view.update(saved[0])
                 view = self.editor_view if self.editor_view.document is None else TextEditorView(self)
                 view.load(doc, session)
+                from .document_location import install_document_location
+                install_document_location(view.document_view, copies=doc)
                 self.text_views[session.id] = view
             elif doc.conflict:
                 view.document.conflict = True
@@ -297,6 +299,8 @@ class ManagedDocumentWorkflows:
                         'markdown' if imported.name.lower().endswith(('.md', '.markdown')) else 'text', imported.name)
                     view = TextEditorView(self)
                     view.load(imported, session)
+                    from .document_location import install_document_location
+                    install_document_location(view.document_view, copies=imported)
                     self.text_views[session.id] = view
                     self.workspace.active = active
                     origin.status.text = 'Imported document is available in Open documents.'

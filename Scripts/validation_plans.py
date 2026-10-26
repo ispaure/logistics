@@ -3,14 +3,17 @@ import ast
 from pathlib import Path
 
 
-def desktop_checks(system, results):
+def desktop_checks(system, results, root=None):
     """The existing platform gate, with no platform's required checks omitted."""
     checks = []
     if system == 'Windows':
         checks.append(('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
+    from build_manager.test_manifest import discover
+    root = Path(root) if root is not None else Path(__file__).resolve().parents[1]
+    checks.extend((row['id'], ['Python/tests/run_regressions.py', row['directory'], '--isolate-modules'],
+                   row['timeout'] if system == 'Windows' else min(row['timeout'], 600 if row['id'] == 'commonutils' else 900))
+                  for row in discover(root, 'desktop'))
     checks.extend([
-        ('commonutils', ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'], 1800 if system=='Windows' else 600),
-        ('logistics', ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'], 1800 if system=='Windows' else 900),
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),
         ('manager-contracts', ['-m', 'build_manager.contracts'], 120),
     ])

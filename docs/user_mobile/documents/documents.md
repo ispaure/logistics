@@ -1,5 +1,13 @@
 # Documents and readers
 
+Open documents show a storage row beneath their title, using the browser's
+storage icons and caption style. It identifies on-device/Cloud/Home Server,
+LocalCrypt and unlocked/session-only state where applicable, and includes
+**(Read-Only)** for read-only sessions. Connected Home Server locations offer
+the same supported viewers as Cloud and keep documents read-only. Images open
+as documents with previous/next image controls for the same folder.
+
+
 Use the document workspace to return to open text, Markdown, books, comics and
 conversations. Switching to another part of the app keeps these sessions available.
 Tap **Documents** while that tab is already selected to return to the Documents
@@ -142,10 +150,12 @@ you want an offline Local or LocalCrypt folder.
 - [Reading and editing on mobile](reading-and-editing.md)
 - [Document workflows](workflows.md)
 
-## Markdown images from Local and LocalCrypt
+## Markdown images from Local, LocalCrypt and Remotes
 
 Folder-backed Markdown displays WebP, PNG and JPEG images in preview and formatted
 editing. Both `![Photo](images/photo.webp)` and `![[images/photo.webp]]` resolve
-relative to the Markdown file. LocalCrypt image bytes remain in memory.
+relative to the Markdown file. GIFs are supported too. LocalCrypt and remote
+image bytes remain in memory. Notes Libraries also try library-root paths and
+common attachment folders when a relative image is missing.
 See the [Text Editor mobile guide](../../features/text_editor/user_mobile/user_mobile.md#images-in-folder-backed-markdown)
 for supported paths and image limits.

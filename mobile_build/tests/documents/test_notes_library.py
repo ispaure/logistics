@@ -105,7 +105,7 @@ class NotesLibraryTests(unittest.TestCase):
                 for kind, source, value in [('crypt', 'Local', 'Secret'), ('remote', 'Cloud', ('Secret', ''))]:
                     with self.subTest(kind=kind):
                         status = toga.Label('')
-                        button = toga.Button('Open Notes Library')
+                        button = toga.Button('Open as Notes Library')
                         box = toga.Box(children=[status])
                         self.app.show_view(box, destination='files', route='encrypted-notes-action')
                         entry = dict(source=source, kind=kind, value=value, name='Secret')
@@ -139,7 +139,7 @@ class NotesLibraryTests(unittest.TestCase):
             page = self.app.show_picker_folder(entry)
             await self.app._notes_offer_task
             button = next(child for child, _ in self.app.folder_action_controls
-                if getattr(child, 'text', '') == 'Open Notes Library')
+                if getattr(child, 'text', '') == 'Open as Notes Library')
             self.assertIsNotNone(button.parent)
             await button.on_press()
             owner = self.app.vault_browser
@@ -170,7 +170,7 @@ class NotesLibraryTests(unittest.TestCase):
             restore = getattr(self.app, 'cloud_restore_task', None)
             if restore is not None:await restore
             client = self.app.cloud_client = Client(self.vault)
-            status = toga.Label('');button = toga.Button('Open Notes Library');box = toga.Box(children=[status], style=Pack())
+            status = toga.Label('');button = toga.Button('Open as Notes Library');box = toga.Box(children=[status], style=Pack())
             self.app.show_view(box, destination='files', route='notes-action')
             entry = dict(source='Remote', kind='remote', value=('remote', ''), name='Remote')
             await offer_notes(self.app, entry, box, button, status)
@@ -198,7 +198,7 @@ class NotesLibraryTests(unittest.TestCase):
             restore = getattr(self.app, 'cloud_restore_task', None)
             if restore is not None:await restore
             client = self.app.cloud_client = Client(self.vault)
-            status = toga.Label('');button = toga.Button('Open Notes Library');box = toga.Box(children=[status])
+            status = toga.Label('');button = toga.Button('Open as Notes Library');box = toga.Box(children=[status])
             self.app.show_view(box, destination='files', route='notes-action')
             entry = dict(source='Remote', kind='remote', value=('remote', ''), name='Remote')
             with patch.object(client, 'entries', return_value=[dict(path='.obsidian', directory=False)]):

@@ -118,3 +118,27 @@ class MarkdownImageTests(unittest.TestCase):
             self.assertIn('data:image/gif;base64,' + base64.b64encode(raw).decode(),
                 editor_html(text, 'logistics-editor://gif/', image_source=factory()))
             self.assertEqual((root / 'two colors #1.GIF').read_bytes(), raw)
+
+    def test_remote_reader_resources_supply_preview_images(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'photo.png').write_bytes(self.image('PNG'))
+            provider = LocalFiles(root)
+            provider.remote_storage = True
+            copies = SimpleNamespace(resource=SimpleNamespace(entry=lambda path: (_ for _ in ()).throw(ValueError('Browser closed'))))
+            reader = SimpleNamespace(key='read.md', source=SimpleNamespace(resource=provider))
+            html = markdown_preview('![[photo.png|900x600]]', image_source=reader_image_source(copies, reader))
+            self.assertIn('data:image/png;base64,', html)
+            self.assertIn('max-width:100%;height:auto', html)
+            self.assertIn('vertical-align:middle', html)
+            self.assertIn('aspect-ratio:900/600', html)
+
+    def test_sized_wiki_embeds_keep_the_exact_spelling_in_formatted_dom(self):
+        for extension, kind in (('png', 'PNG'), ('jpeg', 'JPEG'), ('webp', 'WEBP'), ('gif', 'GIF')):
+            source = f'![[ photo #1.{extension}|900x600 ]]\n'
+            data = self.image(kind)
+            blocks = editor_blocks(source, image_source=lambda target: ('image/' + ('jpeg' if kind == 'JPEG' else extension), data))
+            self.assertEqual(''.join(block['source'] for block in blocks), source)
+            self.assertIn('data-markdown="' + source.strip() + '"', blocks[0]['html'])
+            self.assertIn('max-width:100%;height:auto', blocks[0]['html'])
+            self.assertIn('vertical-align:middle', blocks[0]['html'])

@@ -191,17 +191,6 @@ class RemoteReaders:
             raise
 
 
-class RemoteImageReader:
-    editable = False
-    book = None
-    read_only = True
-    image_document = True
 
-    def __init__(self, name, data, source):
-        self.name, self.data, self.source = name, data, source
-        self.kind = Path(name).suffix.lower()
-        self.labels = [Path(name).name]
-
-    def page(self, index):
-        self.source.check()
-        return 'image', self.data
+# Compatibility import for existing remote-reader callers.
+from features.images.document import ImageReader as RemoteImageReader

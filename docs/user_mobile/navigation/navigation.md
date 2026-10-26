@@ -33,7 +33,8 @@ In Workspaces, **Local** has **Rclone** and **Others** tabs. Rclone shows
 downloaded Local and LocalCrypt copies associated with remotes. Others shows
 ordinary folders, Received Files and **Browse All Files**. Ordinary names remain
 intact rather than being split into groups at hyphens. These tabs change the
-view, without moving any files. A notebook's **× (Close document)** closes its
+view, without moving any files. The app remembers the last Local tab on this
+device across restarts, starting with **Others** on first use. A notebook's **× (Close document)** closes its
 session with the usual unsaved-edit choices and returns to the Home overview.
 
 The Android Back button and back gesture dismiss the current temporary surface

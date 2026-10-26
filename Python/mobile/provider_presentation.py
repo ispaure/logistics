@@ -61,7 +61,10 @@ def compact_private_view(self, view):
         _mount_reader(self, view, controls, comic, neighbors)
     else:
         _mount_editor(self, view, controls)
-    view.crypt_view._native_reader_title = lambda: Path(view.crypt_reader.name).name
+    from .document_location import install_document_location
+    install_document_location(view.crypt_view, copies=view._crypt_reader_store, reader=view.crypt_reader)
+    view.crypt_view._native_reader_title = lambda: (Path(view.crypt_reader.name).name +
+        (' (🕵️ Session-Only)' if 'Session-Only' in view.crypt_view._document_storage_status else ''))
     view.crypt_immersive = view.crypt_reader.kind in {'.cbz', '.zip'}
     if view.crypt_immersive:
         view.reading_frame.set_immersive(True, comic=True)
@@ -75,7 +78,8 @@ def _private_actions(self, view, comic):
     if comic:
         host = getattr(self, 'app', self)
         writable = not getattr(view.crypt_reader, 'read_only', False)
-        neighbors = writable and getattr(view._crypt_reader_store, 'provider', None) is not None
+        neighbors = (getattr(view._crypt_reader_store, 'provider', None) is not None
+                     or getattr(view._crypt_reader_store, 'resource', None) is not None)
         actions = comic_actions(pages=self.show_private_tools, appearance=self.show_provider_layout,
             reading_mode=self.toggle_private_reading_mode, fit=self.fit_private_page,
             metadata=self.edit_crypt_metadata if writable else None, info=self.show_provider_comic_info,
@@ -236,7 +240,12 @@ def _mount_reader(self, view, controls, comic, neighbors):
         view.crypt_view._native_reader_buttons = lambda: [view.pdf_tools.button, view.crypt_actions]
     else:
         view.fit_button = icon_button('fit', 'Fit image', on_press=self.fit_private_page)
-        view.crypt_view._native_reader_buttons = lambda: [view.fit_button, view.crypt_actions]
+        if image:
+            from features.images.mobile.navigation import install
+            view.image_file_buttons = install(self, view)
+            for button in view.image_file_buttons:
+                header.insert(len(header.children) - 1, button)
+        view.crypt_view._native_reader_buttons = lambda: [*getattr(view, 'image_file_buttons', ()), view.fit_button, view.crypt_actions]
     if reader_menu is not None:
         view.crypt_view._workspace_menu_button = reader_menu
     view.crypt_controls = view.reading_frame.controls

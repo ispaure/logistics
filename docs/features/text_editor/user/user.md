@@ -232,15 +232,53 @@ Session-only text editor tabs and windows begin with **🕵️ Private -**, foll
 
 - [Text Editor preferences](preferences.md)
 
-## Notes Library
+## Notes Library and Documentation Library
 
-From a Local, LocalCrypt or Remote location's actions page, choose **Open Notes
+**Documentation Library** is the shared guide viewer used by Logistics and
+other consumers such as the build/deployment manager. Sidebar titles come from
+the opening Markdown heading (falling back to the filename). The sidebar does
+not create, rename or move files, even when Alt/Option enables page editing.
+
+**Notes Library** is Logistics' workspace for writing notes. Sidebar entries keep
+their actual filenames. When you enter a folder containing an `.obsidian`
+subfolder, a small banner offers **Open as Notes Library** and **Browse Files**.
+The latter keeps the ordinary file browser. The choice applies to that visit;
+refreshing the same folder does not offer it again.
+
+For writable libraries, use **New note**, **New folder** and **Rename / Move…**
+in the sidebar. Drag an entry onto a folder to move it; drop on empty sidebar
+space to move it to the library root. Rename / Move accepts a path relative to
+the library root, using existing folders. Moves preserve note history; unsaved
+changes must be resolved first. Existing destinations are never overwritten.
+Links in other notes are not rewritten when files move.
+
+
+From a Local, LocalCrypt or Remote location's actions page, choose **Open as Notes
 Library** when the root contains an `.obsidian` directory. The reader opens in
 Documents with a folder/page sidebar, note history and read-aloud controls.
-Remote libraries have no search or recursive index; folders load only when
+Remote libraries have no search or recursive index; browser folders load only when
 expanded. Local filtering searches only loaded note names. The desktop workspace
 action opens only the selected Local or Cloud context, without a storage choice.
 Local and LocalCrypt libraries start in edit mode, support Formatted and Source
 editing, and save into that same local copy. Unsaved changes are checked before
 switching notes or closing. Cloud libraries remain read-only. Notes are limited
 to 2 MiB. Hidden configuration is excluded and links stay inside the library.
+
+Links such as `[[Tech]]` can open `Tech.md` in a subfolder. The current folder
+and library root take priority; otherwise the app looks for a unique match across
+subfolders when you follow the link. If several notes match, use an explicit path
+such as `[[Topics/Tech]]`. Lookup stops after 10,000 entries.
+
+
+## Markdown images
+
+PNG, JPEG, WebP and GIF images work with standard Markdown references and Obsidian
+embeds such as `![[images/photo #1.png|400]]`. Width hints are optional;
+`|400x200` requests both dimensions. Images shrink to fit the document panel,
+including after resizing, and following text keeps normal paragraph spacing.
+LocalCrypt resources and Notes Library images load through their selected provider.
+
+In a Notes Library, resolution tries the note's folder, the library root, then
+`Attachments`, `Assets` and `Images` (including lowercase variants) for a bare
+filename. Explicit `./` and `../` paths stay relative to the note. Images remain
+inside the selected library; no recursive attachment scan is performed.

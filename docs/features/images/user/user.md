@@ -1,10 +1,27 @@
-# Compress images and edit JPG comments
+# View and process images
 
 Enable **Image Tools** under **Settings → Features** to use these tools.
 
 WEBP compression opens from a folder’s File Browser context menu. EXIF comments
 remain a Debug tool. Comics uses the
 same image encoder through its own workflow.
+
+## View images
+
+Open a PNG, JPEG or WebP from File Browser, LocalCrypt or a remote browser,
+or choose **Image Viewer → Open…** from the document chooser. The viewer opens
+as a document tab and can also be detached. **Previous image** and **Next image**
+load images from the same folder in natural filename order; they stop at the
+folder boundaries and skip other file types and subfolders. **Fit image** fits
+the displayed image to the viewport. A failed load keeps the previous image.
+
+Images are read-only. The storage row below the tab/window title shows the
+source, encryption/session state and **(Read-Only)**. Session-only tabs keep the
+🕵️ marker without including the remote name in the title.
+
+The viewer accepts static PNG/JPEG/WebP images within the shared reader limits:
+8 MiB, 8192 pixels per axis and 16 megapixels. Remote and LocalCrypt image bytes
+stay in memory.
 
 ## Compress images
 

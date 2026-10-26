@@ -327,7 +327,6 @@ class FileBrowser(RecycledBrowser):
             kwargs['resource_search'] = local_search.search
         super().__init__(presentation=LogisticsBrowserPresentation(),
                          list_factory=RecycledFileList, inline_details=False, **kwargs)
-        self.native_list.menu_provider = self._native_row_menu
         self.widget._clear_return_selection = self.clear_selection
 
     def clear_selection(self):
@@ -512,15 +511,6 @@ class FileBrowser(RecycledBrowser):
             del self._search_toolbar, self._search_toolbar_children
         if self.page_label in self.widget.children:
             self.widget.remove(self.page_label)
-
-    async def _native_row_menu(self, row):
-        self.dismiss_item_menu()
-        await self._select_row(row)
-        menu = getattr(self, '_item_menu', None)
-        if (menu is not None and menu.epoch == row.epoch
-                and menu.selected == row.entry.identity and self._entry_current(row.entry)):
-            return menu.ios_actions()
-        return []
 
     def show_item_menu(self, actions):
         from .action_menu import show_browser_actions

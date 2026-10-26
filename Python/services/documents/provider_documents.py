@@ -39,7 +39,13 @@ class ProviderDocuments:
         from commonUtils.archives.zip_access import ArchivePasswordError
         content = ProviderContent(read_provider or self.provider, key, password=password, cancelled=cancelled)
         try:
-            if Path(key).suffix.lower() not in {'.pdf', '.epub', '.cbz', '.zip'}:
+            from features.images.document import IMAGE_EXTENSIONS, ImageReader
+            if Path(key).suffix.lower() in IMAGE_EXTENSIONS:
+                from features.images.validation import MAX_IMAGE
+                with content.open(key) as stream:
+                    data = read_up_to(stream, MAX_IMAGE + 1, cancelled=cancelled)
+                reader = ImageReader(Path(key).name, data, content)
+            elif Path(key).suffix.lower() not in {'.pdf', '.epub', '.cbz', '.zip'}:
                 with content.open(key) as stream:
                     data = read_up_to(stream, 1024 * 1024 + 1, cancelled=cancelled)
                 if len(data) > 1024 * 1024:
@@ -49,7 +55,7 @@ class ProviderDocuments:
             else:
                 from services.documents.readers import PrivateReader
                 try:
-                    reader = PrivateReader(Path(key).name, source=content)
+                    reader = PrivateReader(Path(key).name, source=content, path=key)
                 except ArchivePasswordError:
                     configured = getattr(self.provider, 'archive_password', None)
                     if password or configured is None:
@@ -59,7 +65,7 @@ class ProviderDocuments:
                         raise
                     content.close()
                     content = ProviderContent(self.provider, key, password=password, cancelled=cancelled)
-                    reader = PrivateReader(Path(key).name, source=content)
+                    reader = PrivateReader(Path(key).name, source=content, path=key)
             reader.source = content
             reader.key, reader.revision, reader.document_revision = key, content.expected, content.expected
             reader.password = password

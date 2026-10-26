@@ -160,8 +160,10 @@ class CloudUI(LocalCryptUI):
             style=Pack(direction=COLUMN, margin=12, flex=1))
 
     async def browse_cloud_path(self, widget=None, **kwargs):
+        previous_notes = getattr(self.app, 'vault_browser', None)
         if await self.browse_cloud(preserve_path=True):
-            self.show_cloud()
+            if getattr(self.app, 'vault_browser', None) is previous_notes:
+                self.show_cloud()
 
     def show_cloud_actions(self, widget=None, **kwargs):
         if not self.cloud_busy:
@@ -431,8 +433,13 @@ class CloudUI(LocalCryptUI):
     async def browse_cloud(self, widget=None, *, preserve_path=False, **kwargs):
         if not self.app.require_feature('rclone'):
             return False
-        return await self.browser_workflow.browse(self.cloud_client, self.selected_cloud_remote(),
+        opened = await self.browser_workflow.browse(self.cloud_client, self.selected_cloud_remote(),
             self.cloud_location.value.strip('/'), preserve_path=preserve_path)
+        if opened:
+            from mobile.obsidian import offer_vault
+            await offer_vault(self.app, self.remote_browser, self.browser_workflow.state.resource,
+                              self.cloud_path, list(self.cloud_rows.values()))
+        return opened
 
     async def parent_cloud(self, widget=None, **kwargs):
         if not self.cloud_path:

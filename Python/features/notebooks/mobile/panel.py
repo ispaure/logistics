@@ -158,6 +158,9 @@ class NotebookPanel:
         for child in list(self.view.children):
             self.view.remove(child)
         self.view.add(self.web)
+        location = getattr(self.view, '_document_location_row', None)
+        if location is not None:
+            self.view.insert(0, location)
         self.web.set_content('https://logistics.invalid/notebooks/', mobile_editor_html(self.state(), self.bridge.url))
 
     def navigate(self, widget, url, **kwargs):
@@ -324,6 +327,9 @@ class NotebookPanel:
                 return
             self.view.remove(self.view.children[0])
             self.view.add(self.web)
+            location = getattr(self.view, '_document_location_row', None)
+            if location is not None:
+                self.view.insert(0, location)
             await self.web.evaluate_javascript(update_script(self.state()))
         box.add(toga.Button('Back to notebook', on_press=back, style=Pack(height=48, margin_top=16)))
         self.view.add(toga.ScrollContainer(content=box, horizontal=False, style=Pack(flex=1)))

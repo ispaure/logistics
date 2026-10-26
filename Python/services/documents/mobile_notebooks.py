@@ -144,6 +144,8 @@ def present(app, panel, *, destination=None):
                   title=panel.editor.notebook.name)
     if panel.web is None:
         panel.mount_canvas()
+    from mobile.document_location import install_document_location
+    install_document_location(panel.view, copies=panel.document.resource)
     app.save_workspace()
     app.refresh_document_list()
 

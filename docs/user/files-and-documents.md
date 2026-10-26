@@ -11,9 +11,14 @@ On Windows, the launch terminal minimizes once the chooser is displayed. You can
 restore it from the taskbar to inspect startup output.
 
 The **Read & edit** section always includes Markdown Editor. Enabled features add
-their registered document tools, such as Text Editor, EPUB Reader, Comic Reader and
-Archives. **Open…** picks a file; **New** appears where creation is supported.
+their registered document tools, such as Text Editor, EPUB Reader, Comic Reader,
+Image Viewer and Archives. **Open…** picks a file; **New** appears where creation is supported.
 Cancelling keeps the chooser visible. Opened documents use the shared workspace.
+
+Document windows show a storage row beneath the title, using the file browser's
+icons and source/state labels. Read-only documents include **(Read-Only)**.
+Session-only document titles keep **(🕵️ Session-Only)** without the remote name;
+the source remains visible in the storage row.
 
 Cards adapt to the available width: up to three per row in landscape windows,
 fewer columns in narrower windows. Wider views give cards more room. Cards
@@ -446,7 +451,7 @@ not show hover previews. Missing, binary and external web links have no preview.
 
 ## Notes Library
 
-On a location's Workspaces actions page, **Open Notes Library** is offered when
+On a location's Workspaces actions page, **Open as Notes Library** is offered when
 its root contains an `.obsidian` directory. It opens a document under Documents
 with an expandable folder/page sidebar and Back/Forward/Up navigation. Remote
 libraries have no search or recursive index; local filtering only filters loaded
