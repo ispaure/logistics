@@ -5,14 +5,19 @@ from .web_checks import wait_for_text
 
 
 async def exercise_notebooks(app):
-    app.select_destination('notebooks')
-    app.native_host.activate('notebooks')
+    from features.notebooks.mobile.documents import open_notebook
+    app.select_destination('documents')
+    app.native_host.activate('documents')
+    assert await open_notebook(app, destination='documents')
     panel = app.notebook_panel
+    assert panel.session.provider == 'notebook'
+    assert panel.session.id in app.workspace.sessions
+    assert app.native_host.state.destination == 'documents'
     await panel.new()
     await wait_for_text(panel.web, 'Notebook')
     result = await panel.web.evaluate_javascript("JSON.stringify({canvas:!!document.getElementById('paper'),pen:typeof PointerEvent,tools:document.getElementById('tool').options.length})")
     properties = json.loads(result)
-    assert properties['canvas'] and properties['pen'] == 'function' and properties['tools'] == 8
+    assert properties['canvas'] and properties['pen'] == 'function' and properties['tools'] == 9
     retired = panel.web
     await panel.new()
     await wait_for_text(panel.web, 'Notebook')
@@ -54,4 +59,7 @@ async def exercise_notebooks(app):
     assert not imported.page(0).warning and imported.page(0).strokes[0].tool == 12
     panel.library()
     assert panel.web is None
+    key = panel.session.id
+    assert app.close_session(key, choice='discard')
+    assert key not in app.workspace.sessions
     app.show_home()
