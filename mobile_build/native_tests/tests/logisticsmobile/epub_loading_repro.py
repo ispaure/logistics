@@ -17,6 +17,15 @@ from features.books.mobile.presentation import ChapterBridge, chapter_view
 from .web_checks import wait_for_text
 from . import start_native_check
 
+# The existing simulator bundle names this delegate in its launch metadata.
+# Match the repository's standalone native probes without starting LogisticsMobile.
+if toga.platform.current_platform == 'iOS':
+    from toga_iOS.app import PythonAppDelegate
+
+    class LogisticsSceneAppDelegate(PythonAppDelegate):
+        pass
+
+
 START = time.monotonic()
 EVENTS = []
 
