@@ -218,3 +218,20 @@ async def exercise_navigation(app):
         assert not proof_widgets.intersection(app.widgets.keys())
     result['widget_cleanup_verified'] = True
     return result
+
+
+async def wait_for_transitions(app):
+    """Wait for UIKit navigation to finish before issuing the next user action."""
+    if get_os() is not OS.IOS:
+        return
+    from commonUtils.ui.native.keyboard import native_value
+    await asyncio.sleep(.05)
+    for _ in range(100):
+        controllers = list(app.native_host.adapter.navigation)
+        secondary = getattr(app.adaptive, 'secondary', None)
+        if secondary is not None:
+            controllers.append(secondary)
+        if all(native_value(controller.transitionCoordinator) is None for controller in controllers):
+            return
+        await asyncio.sleep(.05)
+    raise RuntimeError('Native navigation transition did not finish before the next action.')

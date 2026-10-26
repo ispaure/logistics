@@ -56,9 +56,13 @@ class ReadingPublication:
                     if hasattr(child, 'dispose'):
                         child.dispose()
                     disposed.add(id(child))
+            # A retained WebView may already be loading its replacement chapter.
+            # Keep its native attachment; only retire other mounted surfaces.
             for child in list(self.container.children):
-                self.container.remove(child)
-            self.container.add(surface)
+                if child is not surface:
+                    self.container.remove(child)
+            if surface not in self.container.children:
+                self.container.add(surface)
             finish_page_slide(self.container, direction, self.owner.preferences.values)
             self.begun = False
             return True

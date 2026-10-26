@@ -124,7 +124,8 @@ else:
             root = Path(directory)
             (root / 'validation').mkdir()
             (root / 'validation/ui_tools.py').write_text(fixture)
-            command = 'python() { ' + shlex.quote(sys.executable) + ' "$@"; }\n' + run
+            command = ('python() { ' + shlex.quote(sys.executable) + ' "$@"; }\n'
+                       'defaults() { printf "%s\\n" "$*" > keyboard-setting.txt; }\n' + run)
             for device, selector, flags in (
                     ('iphone', 'ios-device', []), ('duo', 'ios-duo', ['--require-duo']),
                     ('ipad', 'ios-ipad', ['--require-independent-windows'])):
@@ -136,5 +137,7 @@ else:
                                      BRIEFCASE_HOME=str(root / 'fresh-homes' / f'{device}-{code}')),
                             capture_output=True)
                         self.assertEqual(result.returncode, code)
+                        self.assertEqual((root / 'keyboard-setting.txt').read_text(),
+                            'write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false\n')
                         self.assertEqual(json.loads((root / 'invocation.json').read_text()),
                             ['run', 'ios', '--device', 'synthetic-device-' + selector, '--no-update', *flags])

@@ -116,6 +116,7 @@ jobs:
         run: python Python/tests/run_platform_checks.py --install
         env:
           BROWSER_TEST_ARTIFACTS: ${{ runner.os == 'Windows' && 'test-results/browser-diagnostics' || '' }}
+          LOGISTICS_MANAGER_CHECKOUT: ${{ runner.temp }}/build-deployment-manager
       - name: Collect native macOS crash diagnostics
         if: always() && runner.os == 'macOS'
         run: |
@@ -156,6 +157,12 @@ jobs:
         run: git -C Python/commonUtils fetch --no-tags origin d5c42ffd4306c010d9625b8a9bae57cdf097a567
       - name: Run all checks inside Fedora 43
         run: docker run --rm -v "$PWD:/workspace" -w /workspace fedora:43 bash Python/tests/platform/fedora43.sh
+      - name: Return container reports to the runner account
+        if: always()
+        run: |
+          if [ -d test-results ] && [ ! -L test-results ]; then
+            sudo chown -R --no-dereference "$(id -u):$(id -g)" test-results
+          fi
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

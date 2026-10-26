@@ -29,6 +29,7 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert hasattr(app, 'notebook_panel'), (picker.save_as_status.value, picker.save_as_name.value, picker.source_filename, form.save_as_status.value)
     panel = app.notebook_panel
     assert panel.session.provider == 'notebook', picker.save_as_status.value
+    assert panel.session.id in app.workspace.sessions
     assert app.native_host.state.destination == 'home'
     await wait_for_text(panel.web, 'Notebook')
     result = await panel.web.evaluate_javascript("JSON.stringify({canvas:!!document.getElementById('paper'),pen:typeof PointerEvent,tools:document.getElementById('tool').options.length})")
@@ -110,6 +111,7 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert not imported.page(0).warning and imported.page(0).strokes[0].tool == 12
     key, session_id = panel.key, panel.session.id
     assert app.close_session(session_id)
+    assert session_id not in app.workspace.sessions
     assert panel.web is None
     assert await open_notebook(app, key=key)
     assert len(app.notebook_panel.editor.notebook.pages) == 2

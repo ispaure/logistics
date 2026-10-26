@@ -109,8 +109,7 @@ class DestinationWorkflowTests(unittest.TestCase):
             self.picker.new_folder_name.value = 'Late'
             with patch.object(LocalFiles, 'mkdir', delayed):
                 task = asyncio.create_task(self.picker.create_picker_folder())
-                while not started.is_set():
-                    await asyncio.sleep(.01)
+                self.assertTrue(await asyncio.to_thread(started.wait, 5), 'Folder worker did not start')
                 self.app.navigation_generation += 1
                 release.set()
                 await task
@@ -140,8 +139,7 @@ class DestinationWorkflowTests(unittest.TestCase):
             self.picker.new_folder_name.value = 'Cancelled'
             with patch('commonUtils.runtime.resources.mutations.create_resource_folder', delayed):
                 task = asyncio.create_task(self.picker.create_picker_folder())
-                while not started.is_set():
-                    await asyncio.sleep(.01)
+                self.assertTrue(await asyncio.to_thread(started.wait, 5), 'Folder worker did not start')
                 self.picker.cancel_text_destination()
                 release.set()
                 await task

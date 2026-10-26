@@ -18,7 +18,7 @@ class ComicSafeGeometryTests(unittest.TestCase):
         def insets(mask):
             masks.append(mask)
             return State(left=0,top=cutout if mask&2 else 0,right=0,bottom=0)
-        decor=State(getRootWindowInsets=lambda:State(getInsets=insets),getWidth=lambda:1080,getHeight=lambda:2424)
+        decor=State(getLocationOnScreen=lambda values:values.__setitem__(slice(None),[0,0]),getRootWindowInsets=lambda:State(getInsets=insets),getWidth=lambda:1080,getHeight=lambda:2424)
         native=State(getDrawable=lambda:State(getIntrinsicWidth=lambda:100,getIntrinsicHeight=lambda:100),
             getImageMatrix=lambda:State(mapRect=mapped),getWidth=lambda:1080,getHeight=lambda:height,
             getLocationOnScreen=lambda values:values.__setitem__(slice(None),[0,cutout]))

@@ -44,6 +44,8 @@ def _assert_comic_centered(view, *, fullscreen=False):
             location = jarray(jint)(2)
             native.getLocationOnScreen(location)
             decor = view._impl._native_activity.getWindow().getDecorView()
+            decor_location = jarray(jint)(2)
+            decor.getLocationOnScreen(decor_location)
             insets = decor.getRootWindowInsets()
             Types = jclass('android.view.WindowInsets$Type')
             system_bars = insets.getInsets(Types.systemBars())
@@ -53,13 +55,19 @@ def _assert_comic_centered(view, *, fullscreen=False):
             cutout = insets.getInsets(Types.displayCutout())
             inset_proof = dict(bars=[int(system_bars.left),int(system_bars.top),int(system_bars.right),int(system_bars.bottom)],
                                cutout=[int(cutout.left),int(cutout.top),int(cutout.right),int(cutout.bottom)],
-                               location=list(location))
+                               location=list(location), decor_location=list(decor_location))
             assert abs(native.getWidth() - (decor.getWidth() - bars.left - bars.right)) <= 2, ('Comic viewport loses screen width', native.getWidth(), decor.getWidth(), inset_proof)
             assert abs(native.getHeight() - (decor.getHeight() - bars.top - bars.bottom)) <= 2, ('Comic viewport loses screen height', native.getHeight(), decor.getHeight(), inset_proof)
-            dy = location[1] + rect.centerY() - (bars.top + decor.getHeight() - bars.bottom) / 2
+            # Both positions are in screen coordinates. A pre-edge-to-edge
+            # decor can start below the display origin even with hidden bars.
+            dx = location[0] + rect.centerX() - (decor_location[0] +
+                (bars.left + decor.getWidth() - bars.right) / 2)
+            dy = location[1] + rect.centerY() - (decor_location[1] +
+                (bars.top + decor.getHeight() - bars.bottom) / 2)
+            assert abs(dx) < 2, ('Comic misses horizontal screen centre', dx, inset_proof)
         assert abs(dy) < 2, ('Comic misses screen centre', dy,
             float(native.bounds.size.height) if hasattr(view._impl, 'picture') else
-            (list(location), native.getHeight(), decor.getHeight(), bars.top, bars.bottom))
+            (list(location), native.getHeight(), decor.getHeight(), bars.top, bars.bottom, list(decor_location)))
 
 
 async def assert_comic_centered(view, *, fullscreen=False):
@@ -201,23 +209,158 @@ def exercise_sampled_apple_decode(app):
     assert (image.width, image.height) == (64, 96), (image.width, image.height)
 
 
+def _ios_webview_state(native):
+    from commonUtils.ui.native.keyboard import native_value
+    from rubicon.objc import ObjCClass
+    window = native_value(native.window)
+    application = ObjCClass('UIApplication').sharedApplication
+    return dict(url=str(native.URL), loading=bool(native_value(native.isLoading)),
+        progress=float(native_value(native.estimatedProgress)),
+        width=float(native.bounds.size.width), height=float(native.bounds.size.height),
+        attached=window is not None, hidden=bool(native_value(native.isHidden)),
+        key_window=None if window is None else bool(native_value(window.isKeyWindow)),
+        application_state=int(native_value(application.applicationState)))
+
+
+def _log_ios_webview(phase, native, error=None):
+    # Diagnostics cannot replace or change the toolkit's navigation decision.
+    try:
+        state = _ios_webview_state(native)
+        state.update(phase=phase, error=None if error is None else str(error))
+        print('LOGISTICS_EPUB_NATIVE=' + json.dumps(state), flush=True)
+    except Exception as failure:
+        print('LOGISTICS_EPUB_NATIVE_DIAGNOSTIC_ERROR=' + str(failure), flush=True)
+
+
 async def exercise_library(app, fixtures, epub, comic, passed):
+    """Retain actual native load events; preserve the original failure deadline."""
+    from contextlib import ExitStack
+    from features.books.mobile.presentation import ChapterBridge
+    from unittest.mock import patch
+    original = ChapterBridge.navigation
+    initialize = ChapterBridge.__init__
+    bridges = []
+    def created(bridge, *args, **kwargs):
+        initialize(bridge, *args, **kwargs)
+        bridges.append(bridge)
+    def navigation(bridge, widget, url, **kwargs):
+        decision = original(bridge, widget, url, **kwargs)
+        print('LOGISTICS_EPUB_NAVIGATION=' + json.dumps(dict(
+            url=url, root=bridge.root, closed=bridge.closed,
+            ready=bridge.ready, decision=decision,
+            allowed_url=getattr(bridge.view._impl, '_allowed_url', None))), flush=True)
+        return decision
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(ChapterBridge, 'navigation', navigation))
+        stack.enter_context(patch.object(ChapterBridge, '__init__', created))
+        if get_os() is OS.IOS:
+            from rubicon.objc import objc_method, py_from_ns
+            from toga_iOS.widgets import webview
+            original_native = webview.TogaWebView
+            class LogisticsDiagnosticWebView(original_native):
+                @objc_method
+                def webView_didStartProvisionalNavigation_(self, webview, navigation) -> None:
+                    _log_ios_webview('start', self)
+                @objc_method
+                def webView_didCommitNavigation_(self, webview, navigation) -> None:
+                    _log_ios_webview('commit', self)
+                @objc_method
+                def webView_didFailProvisionalNavigation_withError_(self, webview, navigation, error) -> None:
+                    _log_ios_webview('provisional-error', self, py_from_ns(error))
+                @objc_method
+                def webView_didFailNavigation_withError_(self, webview, navigation, error) -> None:
+                    _log_ios_webview('load-error', self, py_from_ns(error))
+                @objc_method
+                def webViewWebContentProcessDidTerminate_(self, webview) -> None:
+                    _log_ios_webview('web-process-terminated', self)
+            stack.enter_context(patch.object(webview, 'TogaWebView', LogisticsDiagnosticWebView))
+        try:
+            return await _exercise_library(app, fixtures, epub, comic, passed)
+        except Exception:
+            if get_os() is OS.IOS and bridges:
+                bridge = bridges[-1]
+                _log_ios_webview('original-failure', bridge.view._impl.native)
+                # This probe never counts as passing acceptance. Always re-raise
+                # the original failure, even if the document arrives later.
+                await asyncio.sleep(60)
+                _log_ios_webview('late-probe', bridge.view._impl.native)
+                try:
+                    value = await asyncio.wait_for(bridge.view.evaluate_javascript(
+                        'String(document.body ? document.body.textContent || "" : "")'), 5)
+                    print('LOGISTICS_EPUB_LATE_BODY=' + json.dumps(value[:200]), flush=True)
+                except Exception as failure:
+                    print('LOGISTICS_EPUB_LATE_ERROR=' + str(failure), flush=True)
+            raise
+
+
+async def _exercise_library(app, fixtures, epub, comic, passed):
+    from .navigation_checks import wait_for_transitions
+    await wait_for_transitions(app)
     exercise_sampled_apple_decode(app)
     app.show_library()
+    await wait_for_transitions(app)
     record = await asyncio.to_thread(app.reader_manager().catalog.library_store.import_book, LocalDocuments(), epub)
     app.refresh_library()
     await app.open_book(record['id'])
     assert app.reader_manager().active.book_reader is not None, app.reader_manager().active.book_status.text
+    await wait_for_transitions(app)
     await wait_for_text(app.reader_manager().active.book_content.children[0], 'Native EPUB first')
     original_reader = app.reader_manager().active.book_content.children[0]
     deadline = asyncio.get_running_loop().time() + 15
-    while not await original_reader.evaluate_javascript('Boolean(window.reader)'):
-        assert asyncio.get_running_loop().time() < deadline, 'EPUB navigation bridge did not initialize'
+    pagination = None
+    while True:
+        raw = await original_reader.evaluate_javascript(
+            'JSON.stringify(window.reader ? window.reader.pagination() : null)')
+        pagination = json.loads(raw) if raw else None
+        bridge = original_reader._chapter_bridge
+        # The initial position acknowledgement proves the native navigation
+        # channel is live and the tiny first chapter fits its settled viewport.
+        # A JavaScript object can exist before its first animation-frame event.
+        if (pagination and bridge.at_end
+                and pagination['count'] <= pagination['columns']):
+            break
+        assert asyncio.get_running_loop().time() < deadline, (
+            'EPUB navigation did not acknowledge initial pagination', pagination,
+            bridge.ready, bridge.at_end)
         await asyncio.sleep(.05)
-    await wait_for_reader(app.reader_manager().active)
-    await app.next_book_page()
-    assert app.reader_manager().active.book_content.children[0] is original_reader
-    await wait_for_text(app.reader_manager().active.book_content.children[0], 'Native EPUB second')
+    print('LOGISTICS_EPUB_READY=' + json.dumps(pagination), flush=True)
+    owner = app.reader_manager().active
+    events = []
+    original_event = owner.epub_event
+    def event_state(reader, epoch, index, action):
+        pending = getattr(owner, '_epub_location_task', None)
+        return dict(action=action, received_index=index,
+            reader_current=owner.book_reader is reader, epoch_current=owner.book_epoch == epoch,
+            active_host=bool(owner.active_host), session_open=owner.session.id in owner.workspace.sessions,
+            busy=owner.book_busy, position=owner.book_record['position'],
+            pending_done=None if pending is None else pending.done(),
+            status=owner.book_status.text,
+            displayed_is_original=owner.book_content.children[0] is original_reader,
+            retained_is_original=owner.epub_view is original_reader,
+            bridge_root=owner.epub_view._chapter_bridge.root,
+            bridge_ready=owner.epub_view._chapter_bridge.ready,
+            allowed_url=getattr(owner.epub_view._impl, '_allowed_url', None),
+            native_url=owner.epub_view.url)
+    def trace(reader, epoch, index, action, offset):
+        state = event_state(reader, epoch, index, action)
+        events.append(state)
+        if action in {'next', 'previous'}:
+            print('LOGISTICS_EPUB_EVENT=' + json.dumps(state), flush=True)
+        return original_event(reader, epoch, index, action, offset)
+    from unittest.mock import patch
+    with patch.object(owner, 'epub_event', side_effect=trace):
+        await wait_for_reader(owner)
+        print('LOGISTICS_EPUB_BEFORE_NEXT=' + json.dumps(event_state(
+            owner.book_reader, owner.book_epoch, 0, 'request-next')), flush=True)
+        await app.next_book_page()
+        assert app.reader_manager().active.book_content.children[0] is original_reader
+        try:
+            await wait_for_text(original_reader, 'Native EPUB second')
+        except BaseException:
+            state = event_state(owner.book_reader, owner.book_epoch, 0, 'failed-next')
+            state['events'] = events[-20:]
+            print('LOGISTICS_EPUB_FAILURE=' + json.dumps(state), flush=True)
+            raise
     passed.append('native_epub_reader')
     await app.toggle_bookmark()
     assert app.reader_manager().catalog.library_store.open(record['id'])[0]['epub_bookmarks'] == [

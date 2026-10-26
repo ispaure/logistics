@@ -1,7 +1,6 @@
 """Direct edits preserve disk revisions, live buffers, formatting and Git staging."""
 import json
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 import subprocess
@@ -20,8 +19,7 @@ class LMEditTests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
     def setUp(self):
-        self.temp = TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
+        self.temp = self.temporary_directory()
         self.root = Path(self.temp.name).resolve()
         self.path = self.root / 'main.py'
         self.path.write_bytes(b'\xef\xbb\xbfvalue = 1\r\nother = 2\r\n')

@@ -122,7 +122,13 @@ and metadata-writing workflows are unchanged; source-backed books are read-only.
 `mobile/content.py` owns sanitized HTML and the provider text fallback;
 `locations.py` and `mobile/navigation.py` supply text locations, search, nested
 contents and chapter labels. `mobile/presentation.py` owns trusted WebView
-commands. `mobile/provider_reader.py` reuses that bridge for private rich EPUBs;
+commands. The bridge permits the native WebKit `about:blank` bootstrap only
+before its chapter load completes; external URLs, stale chapter callbacks and
+blank-page variants remain blocked. Next/Previous events wait for pending
+position writes before changing chapters. These policy contracts are checked by
+`test_epub_load_policy.py` and `test_epub_boundary_flush.py`; actual rendered
+chapter replacement still requires native acceptance.
+`mobile/provider_reader.py` reuses that bridge for private rich EPUBs;
 `mobile/private_view.py` retains the Books HTML byte policy over the shared
 nonpersistent native WebView, which clears content on disposal. `mobile/text_reader.py` remains the unsupported-backend fallback.
 `mobile/appearance.py` supplies the shared native Books & Comics appearance form.
@@ -391,7 +397,9 @@ posture and rendering validation remains pending.
 ## Mobile surface publication
 
 Format controllers prepare their own EPUB/comic surfaces and retain source-specific
-progress and metadata policy. Library and provider views publish through the
+progress and metadata policy. A retained surface stays attached while its chapter
+loads; publication removes other surfaces without detaching and reattaching the
+active native WebView. Library and provider views publish through the
 host's `mobile.reading.publication.ReadingPublication` coordinator for generation
 validation, retirement and footer/chrome synchronization. Keep preparation inside its scope
 so failed construction releases outgoing animation snapshots. Do not replace the

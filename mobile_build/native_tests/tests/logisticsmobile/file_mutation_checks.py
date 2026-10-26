@@ -121,19 +121,33 @@ async def exercise_destination_edges(app):
     for orientation in ('portrait', 'landscape-left', 'portrait'):
         await rotate(app, orientation)
         picker.save_as_name.focus()
+        if type(app._impl).__module__.startswith('toga_iOS.'):
+            native = picker.save_as_name._impl.native
+            for _ in range(100):
+                if native.window is not None:
+                    native.becomeFirstResponder()
+                if app.native_host.adapter.keyboard_visible:
+                    break
+                await asyncio.sleep(.05)
         if type(app._impl).__module__.startswith('toga_android.'):
             from java import jclass
             native = picker.save_as_name._impl.native
             native.requestFocus()
             manager = app._impl.native.getSystemService(jclass('android.content.Context').INPUT_METHOD_SERVICE)
-            manager.showSoftInput(native, 1)
-            # A fresh emulator may start its IME service asynchronously. Wait
-            # for actual visibility instead of sampling during its animation.
-            for _ in range(100):
+            # Rotation can finish its input-connection restart after the
+            # first focus request. Re-request visibility until the actual IME
+            # insets acknowledge it; a focused field alone is not proof.
+            controller = jclass('androidx.core.view.WindowCompat').getInsetsController(
+                app._impl.native.getWindow(), native)
+            ime = jclass('androidx.core.view.WindowInsetsCompat$Type').ime()
+            for _ in range(20):
+                native.requestFocus()
+                controller.show(ime)
+                manager.showSoftInput(native, 0)
+                await asyncio.sleep(.25)
                 insets = jclass('androidx.core.view.ViewCompat').getRootWindowInsets(native)
-                if insets is not None and insets.isVisible(jclass('androidx.core.view.WindowInsetsCompat$Type').ime()):
+                if insets is not None and insets.isVisible(ime):
                     break
-                await asyncio.sleep(.05)
         await asyncio.sleep(.6)
         assert_visible_controls(app)
         sample = dict(orientation=orientation, width=app.main_window.size.width,
@@ -161,6 +175,9 @@ async def exercise_destination_edges(app):
             sample['name_bounds'] = [int(point[0]), int(point[1]), int(native.getWidth()), int(native.getHeight())]
             sample['keyboard_visible'] = bool(insets and insets.isVisible(ime))
             sample['fullscreen_ime'] = bool(manager.isFullscreenMode())
+            sample['window_focused'] = bool(native.hasWindowFocus())
+            sample['input_focused'] = bool(native.hasFocus())
+            sample['input_active'] = bool(manager.isActive(native))
             assert not sample['fullscreen_ime'], sample
             if sample['keyboard_visible']:
                 bounds = app._impl.native.getWindowManager().getCurrentWindowMetrics().getBounds()
