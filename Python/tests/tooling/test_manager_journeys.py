@@ -111,12 +111,14 @@ class JourneyAdapterTests(unittest.TestCase):
                 ready = [self.root / (name + '.ready') for name in ('firebase', 'testflight')]
                 own = ready[0 if phase.id == 'firebase.upload' else 1]
                 script = ('import json,time\nfrom pathlib import Path\n'
-                    'start=time.time()\ndeadline=time.monotonic()+30\n'
+                    # Windows wall-clock timestamps can share a coarse tick.
+                    # QPC-backed integer intervals retain the strict overlap check.
+                    'start=time.perf_counter_ns()\ndeadline=time.monotonic()+30\n'
                     f'Path({str(own)!r}).touch()\n'
                     f'while not all(Path(p).exists() for p in {[str(p) for p in ready]!r}):\n'
                     '    assert time.monotonic()<deadline, "Uploads did not execute concurrently"\n'
                     '    time.sleep(.01)\n'
-                    f'Path({str(target)!r}).write_text(json.dumps([start,time.time()]))')
+                    f'Path({str(target)!r}).write_text(json.dumps([start,time.perf_counter_ns()]))')
                 return (sys.executable, '-c', script)
             return (sys.executable, '-c', 'pass')
         phases = tuple(replace(p, argv=command(p), artifacts=(), artifact_types={}, environment={}) for p in plan.phases)
