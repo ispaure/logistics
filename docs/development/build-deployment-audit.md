@@ -68,7 +68,7 @@ and project adapter while migrating a reusable mechanism after consumer tests.
 | `vm_backend.py`, `windows_backend.py` | Keep adapters; extract generic environment preparation | Project suite commands, Fedora selection and pinned runtime requirements belong here. Download verification, portable-tool extraction and environment bootstrap are mechanisms. Transport, process ownership and dedicated VM creation are already external. |
 | `guest_results.py` | Keep now; possible small manager lifecycle API | Combines reusable collect-before-cleanup behavior with exact Logistics source/backend/report checks. Split callbacks from report validation only if a second adapter uses it. |
 | `android_backend.py`, `ios_backend.py`, `mobile_payload.py` | Keep | App-specific Briefcase builds, curated payload staging, binary/source checks and native suite invocation. Emulator/simulator ownership already comes from the manager. |
-| `mobile_runtime.py`, `ios_runtime.py`, `ios_testbed.py` | Keep callers; extract reusable runtime preparation in stages | Upstream CPython download/build/cache and testbed adaptation can be reused. Logistics payload, `mobile.smoke`, manifest verification and required cases remain project-owned. |
+| `mobile_runtime.py`, `ios_runtime.py`, `ios_testbed.py` | Keep policy adapters; reusable runtime preparation extracted | Upstream CPython download/build/cache and testbed adaptation now delegate to the pinned manager. Logistics payload, `mobile.smoke`, manifest verification and required cases remain project-owned. |
 | `mobile_processes.py` | Keep small wrapper, or delegate through a public manager command helper | Only 19 lines; already uses manager `stop_process`. It is not a second executor. Migration value is consistency, not file-count reduction. |
 | `build_manager_tools.json`, `mobile_runtime_tools.json` | Keep selected versions/requirements; possibly share a catalog | Separate version policy from download/cache mechanics. Do not substitute the manager's bootstrap interpreter for Logistics' test interpreter. |
 | `architecture.py`, `architecture.json`, `document_architecture.py`, `ownership.py`, `ownership.json` | Keep | Logistics architecture and test-owner contracts used by contributor tooling/tests. These are not deployment leftovers. |
@@ -138,6 +138,16 @@ verify that ambiguous writes are not automatically replayed; reviewed Firebase
 delivery retains its attempt marker until reconciliation. No real upload or
 provider login was performed for this extraction.
 
+CPython mobile runtime preparation now delegates to `build_manager.cpython_mobile`
+and `cpython_testbed`. Logistics retains pins/configure choices, source payload,
+smoke-test arguments, acceptance and simulator cleanup policy. Existing source,
+wheel and prepared-artifact cache paths/receipts are preserved; all current
+script and launcher paths remain. The hosted iOS workflow installs the exact
+manager pin before the standalone testbed adapter. Portable fixtures cover cold
+and reused compilers, corrupt caches, cancellation/environment restoration,
+caller-specific testbed setup and retained project cleanup. They do not establish
+new native runtime acceptance. See [runtime ownership](build-manager.md).
+
 1. **Use the existing allocator for Firebase.** `firebase_deploy.reserve_build`,
    `next_build` and `_reserve_build` repeat monotonic reservation logic already
    available in `build_manager.versions`. TestFlight already consumes that API.
@@ -167,7 +177,7 @@ provider login was performed for this extraction.
    `PreparedEffect`/`ProviderContract` are a starting boundary, not evidence that
    working Firebase/TestFlight clients have already moved. Verify no accidental
    upload replay after ambiguous transport outcomes.
-5. **Extract CPython runtime preparation if another project needs it.** Move
+5. **CPython preparation extraction (now implemented).** Move
    archive verification, compiler setup and prepared-cache identity behind a
    parameterized API. Keep source/test payload assembly and acceptance here.
    Preserve native platform, complete cases, exact manifest and owned cleanup

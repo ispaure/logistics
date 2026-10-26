@@ -1,122 +1,39 @@
 """Pinned upstream CPython preparation and source-verified mobile runtime tests."""
 import argparse
-import hashlib
 import json
-import os
 from pathlib import Path
-import shutil
 import signal
 import subprocess
 import sys
-import tarfile
-import urllib.request
 
+from build_manager import cpython_mobile, cpython_testbed
 from build_manager.locking import workspace_lock
 from Scripts.mobile_processes import command, interrupt
 
 
 def checksum(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return cpython_mobile.checksum(path)
 
 
 def source(cache, pin):
-    archive = cache.parent/('cpython-'+pin['revision']+'.tar.gz')
-    if not archive.exists():
-        partial = archive.with_suffix('.download')
-        with urllib.request.urlopen(pin['archive'],timeout=60) as incoming, partial.open('wb') as output:
-            shutil.copyfileobj(incoming,output)
-        if checksum(partial)!=pin['sha256']:
-            partial.unlink()
-            raise ValueError('Pinned CPython archive digest mismatch.')
-        partial.rename(archive)
-    if checksum(archive)!=pin['sha256']:
-        raise ValueError('Pinned CPython cache archive digest differs.')
-    if not cache.exists():
-        cache.mkdir()
-        with tarfile.open(archive) as stream:
-            for item in stream:
-                item.name = '/'.join(Path(item.name).parts[1:])
-                if item.name:
-                    stream.extract(item,cache,filter='data')
-    # Reject a modified upstream source cache; generated cross-build/testbed
-    # output is separate from the archive's immutable source members.
-    with tarfile.open(archive) as stream:
-        for item in stream:
-            relative = Path(*Path(item.name).parts[1:])
-            if item.isfile():
-                with stream.extractfile(item) as incoming:
-                    expected = hashlib.sha256(incoming.read()).hexdigest()
-                if not (cache/relative).is_file() or checksum(cache/relative)!=expected:
-                    raise ValueError('Pinned CPython source cache changed: '+str(relative))
-
+    return cpython_mobile.source(cache, pin)
 
 
 def runtime_wheels(cache, *, download=False):
     pins = json.loads(Path(__file__).with_name('mobile_runtime_tools.json').read_text())['runtime_wheels']
-    folder = cache/'manager-wheels'
-    folder.mkdir(exist_ok=True)
-    for pin in pins:
-        path = folder/pin['filename']
-        if not path.exists() and download:
-            temporary = path.with_suffix('.download')
-            with urllib.request.urlopen(pin['url'], timeout=60) as incoming, temporary.open('wb') as output:
-                shutil.copyfileobj(incoming, output)
-            if checksum(temporary) != pin['sha256']:
-                temporary.unlink()
-                raise ValueError('Runtime wheel download digest differs: '+pin['filename'])
-            temporary.replace(path)
-        if not path.is_file() or checksum(path) != pin['sha256']:
-            raise ValueError('Prepare the pinned runtime wheel cache before testing: '+pin['filename'])
-    return folder
-
+    return cpython_mobile.runtime_wheels(cache, pins, download=download)
 
 
 def host_interpreter(cache):
-    """Resolve the executable after a build, including macOS's python.exe name."""
-    build = Path(cache) / 'cross-build/build'
-    return next((path for path in (build / 'python.exe', build / 'python')
-                 if path.is_file() and os.access(path, os.X_OK)), None)
+    return cpython_mobile.host_interpreter(cache)
 
 
 def prepare(cache, result):
-    pin = json.loads(Path(__file__).with_name('mobile_runtime_tools.json').read_text())['cpython']
-    cache.parent.mkdir(parents=True,exist_ok=True)
-    with workspace_lock(cache.parent/'mobile-runtime.lock'):
-        source(cache,pin)
-        runtime_wheels(cache, download=True)
-        target=pin['android_target']
-        host=host_interpreter(cache)
-        library=cache/'cross-build'/target/'prefix/lib/libpython3.14.so'
-        record=cache/'prepared-manager.json'
-        if record.exists():
-            saved=json.loads(record.read_text())
-            if saved['revision']==pin['revision'] and host is not None and library.is_file() and saved['host_sha256']==checksum(host) and saved['library_sha256']==checksum(library):
-                result.parent.mkdir(parents=True,exist_ok=True)
-                result.write_text(json.dumps(dict(saved,reused=True),indent=2)+'\n')
-                return
-            raise ValueError('Prepared runtime artifacts changed; inspect the cache before rebuilding.')
-        if host is None or not library.is_file():
-            previous=dict(os.environ)
-            try:
-                sdk=subprocess.check_output(['xcrun','--sdk','macosx','--show-sdk-path'],text=True).strip()
-                developer=Path(os.environ.get('DEVELOPER_DIR') or subprocess.check_output(['xcode-select','-p'],text=True).strip())
-                for link,target_path in [(cache/'macos-sdk',Path(sdk)),(cache/'xcode-toolchain',developer/'Toolchains/XcodeDefault.xctoolchain')]:
-                    if not link.exists():link.symlink_to(target_path,target_is_directory=True)
-                os.environ.update(SDKROOT=str(cache/'macos-sdk'),CC=str(cache/'xcode-toolchain/usr/bin/clang'),
-                    CXX=str(cache/'xcode-toolchain/usr/bin/clang++'),
-                    PATH=str(developer/'usr/bin')+os.pathsep+str(cache/'xcode-toolchain/usr/bin')+os.pathsep+os.environ.get('PATH',''))
-                command([sys.executable,'Android/android.py','build','build','--','--with-openssl=/opt/homebrew/opt/openssl@3'],cache,1800)
-            finally:
-                os.environ.clear();os.environ.update(previous)
-            command([sys.executable,'Android/android.py','build',pin['android_target']],cache,1800)
-        host=host_interpreter(cache)
-        if host is None:
-            raise RuntimeError('Pinned CPython build produced no executable host interpreter.')
-        version=subprocess.check_output([str(host),'-c','import platform;print(platform.python_version())'],text=True,timeout=30).strip()
-        if version!=pin['version']:raise ValueError('Pinned CPython host version mismatch.')
-        record.write_text(json.dumps(dict(revision=pin['revision'],version=version,target=target,
-            host_sha256=checksum(host),library_sha256=checksum(library),archive_sha256=pin['sha256'],status='prepared'),indent=2)+'\n')
-        result.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(record,result)
+    settings = json.loads(Path(__file__).with_name('mobile_runtime_tools.json').read_text())
+    return cpython_mobile.prepare_android(cache, result, settings['cpython'],
+        library_relative=settings['preparation']['android_library'],
+        host_configure_args=settings['preparation']['host_configure_args'],
+        command=command, prepare_source=source, prepare_wheels=runtime_wheels)
 
 
 def test(root, cache, serial, output):
@@ -126,13 +43,13 @@ def test(root, cache, serial, output):
     manifest=tools.stage(root,payload,testbed=True,allow_dirty=True)
     # These two pure-Python packages are the exact dependencies declared by the
     # canonical runtime workflow; they never contain native host binaries.
-    command([sys.executable,'-m','pip','install','--no-index','--find-links',str(runtime_wheels(cache)),'--target',str(payload),'--no-deps',
-             'markdown-it-py==4.2.0','mdurl==0.1.2'],root,180)
+    cpython_testbed.install_payload_wheels(root, payload, runtime_wheels(cache),
+        ['markdown-it-py==4.2.0', 'mdurl==0.1.2'], command=command)
     with workspace_lock(cache.parent/'mobile-runtime.lock'):
         with output.with_suffix('.log').open('w') as log:
-            process=subprocess.Popen([sys.executable,'Android/android.py','test','--connected',serial,
-                '--site-packages',str(payload),'--','-m','mobile.smoke','--target','android','--local-source-sha256',manifest['source_sha256']],cwd=cache,
-                stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+            process=subprocess.Popen(cpython_testbed.android_test_command(serial, payload,
+                ['-m', 'mobile.smoke', '--target', 'android', '--local-source-sha256', manifest['source_sha256']]),
+                cwd=cache, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             try:
                 code=process.wait(timeout=1800)
             finally:

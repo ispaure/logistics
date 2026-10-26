@@ -18,5 +18,14 @@
       "url": "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl",
       "sha256": "84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8"
     }
-  ]
+  ],
+  "preparation": {
+    "host_configure_args": [
+      "--with-openssl=/opt/homebrew/opt/openssl@3"
+    ],
+    "android_library": "cross-build/aarch64-linux-android/prefix/lib/libpython3.14.so",
+    "ios_target": "arm64-apple-ios-simulator",
+    "ios_framework": "cross-build/arm64-apple-ios-simulator/Apple/iOS/Frameworks/arm64-iphonesimulator",
+    "ios_deployment_target": "15.0"
+  }
 }

@@ -500,6 +500,27 @@ from completed case checkpoints. A timed-out WebView render also records native
 attachment, loading and ancestor visibility state; these diagnostics do not retry
 the render or change its acceptance deadline.
 
+CPython runtime preparation delegates through the preserved
+`Scripts/mobile_runtime.py`, `Scripts/ios_runtime.py` and `Scripts/ios_testbed.py`
+entry points to the pinned manager's `cpython_mobile` and `cpython_testbed`.
+Logistics selects the CPython revision/archive digest, wheel pins, OpenSSL
+configure arguments, Android library and iOS framework paths, native ARM host
+requirement and iOS 15 minimum in `Scripts/mobile_runtime_tools.json` and its
+adapters. Payload assembly, dependency requirements, `mobile.smoke` arguments,
+manifest/case/platform verification and owned simulator cleanup remain here.
+The manager performs verified downloads, upstream-source checks, compiler setup,
+prepared-cache validation, offline wheel installation and testbed cloning/setup.
+
+Existing cache roots, `mobile-runtime.lock`, `manager-wheels`,
+`prepared-manager.json` and `prepared-manager-ios.json` are retained. No cache
+migration or automatic rebuild of changed receipts is performed. Android reuse
+also checks the receipt's recorded archive digest, version and target; iOS reuse
+continues to require the selected toolchain and framework digest. Prepared
+artifacts do not establish test acceptance. Portable fixtures cover cold/reused
+preparation, corrupt downloads/caches, compiler cancellation/environment
+restoration, testbed adaptation and owned cleanup. This extraction was not a
+new native Android/iOS runtime acceptance run.
+
 `Scripts/ios_testbed.py` adapts only the generated upstream test app: it adds a
 real window-scene delegate and configuration, and raises the fixture's deployment
 minimum to iOS 15 for current Xcode SDKs. The pinned CPython source, interpreter
@@ -507,7 +528,9 @@ and XCTest/core test inventory are preserved. The same adapter runs in the hoste
 iOS runtime workflow. Local execution retains raw Xcode output and normalized
 system-log output, verifying the exact staged-source digest, native platform,
 complete case count, zero skips and successful owned cleanup. The report records
-toolchain, dependency/framework checksums and the clone adapter identity.
+toolchain, dependency/framework checksums and both project and manager clone
+adapter identities. The hosted workflow explicitly installs the exact manager
+pin before invoking the preserved standalone testbed script.
 Existing Prepare-only operations continue to produce development
 preparation without implying native release acceptance.
 

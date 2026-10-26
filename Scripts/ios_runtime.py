@@ -1,17 +1,15 @@
 """Pinned CPython iOS core tests in an owned disposable simulator testbed."""
 import argparse
-import importlib.util
 import json
-import os
 from pathlib import Path
 import platform
-import shutil
 import signal
 import subprocess
 import sys
 import time
 from uuid import uuid4
 
+from build_manager import cpython_mobile, cpython_testbed
 from build_manager.apple_simulators import AppleSimulators
 from build_manager.locking import workspace_lock
 from build_manager.profiles import save_json
@@ -25,68 +23,31 @@ def pins():
     return json.loads(Path(__file__).with_name('mobile_runtime_tools.json').read_text())['cpython']
 
 
+def settings():
+    return json.loads(Path(__file__).with_name('mobile_runtime_tools.json').read_text())['preparation']
+
+
 def toolchain():
-    return dict(xcode=subprocess.check_output(['xcodebuild', '-version'], text=True).strip(),
-                sdk=subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-build-version'], text=True).strip())
+    return cpython_mobile.toolchain()
 
 
 def framework(cache):
-    return cache / 'cross-build/arm64-apple-ios-simulator/Apple/iOS/Frameworks/arm64-iphonesimulator'
+    return cpython_mobile.framework(cache, settings()['ios_framework'])
 
 
 def validate_prepared(cache):
-    pin = pins()
-    saved = json.loads((cache / 'prepared-manager-ios.json').read_text())
-    if (saved['revision'] != pin['revision'] or saved['archive_sha256'] != pin['sha256']
-            or saved['toolchain'] != toolchain() or not framework(cache).is_dir()
-            or saved['framework_sha256'] != bundle_digest(framework(cache))):
-        raise ValueError('Prepared iOS core runtime differs; inspect the owned cache before rebuilding.')
-    return saved
+    return cpython_mobile.validate_ios(cache, pins(), framework_relative=settings()['ios_framework'],
+                                      tree_digest=bundle_digest, current_toolchain=toolchain)
 
 
 def prepare(cache, result):
     if sys.platform != 'darwin' or platform.machine() != 'arm64':
         raise ValueError('This project-owned iOS core compiler requires a native macOS ARM host.')
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    pin = pins()
-    with workspace_lock(cache.parent / 'mobile-runtime.lock'):
-        source(cache, pin)
-        runtime_wheels(cache, download=True)
-        saved = cache / 'prepared-manager-ios.json'
-        if saved.exists():
-            save_json(result, dict(validate_prepared(cache), reused=True))
-            return
-        host = cache / 'cross-build/build/python.exe'
-        if not host.exists():
-            previous = dict(os.environ)
-            try:
-                developer = Path(os.environ.get('DEVELOPER_DIR') or subprocess.check_output(['xcode-select', '-p'], text=True).strip())
-                sdk = subprocess.check_output(['xcrun', '--sdk', 'macosx', '--show-sdk-path'], text=True).strip()
-                for link, target in [(cache / 'macos-sdk', Path(sdk)),
-                                     (cache / 'xcode-toolchain', developer / 'Toolchains/XcodeDefault.xctoolchain')]:
-                    if link.is_symlink() and link.resolve() != target.resolve():
-                        raise ValueError('Cached compiler reference changed; inspect before rebuilding.')
-                    if not link.exists():
-                        link.symlink_to(target, target_is_directory=True)
-                os.environ.update(SDKROOT=str(cache / 'macos-sdk'), CC=str(cache / 'xcode-toolchain/usr/bin/clang'),
-                    CXX=str(cache / 'xcode-toolchain/usr/bin/clang++'),
-                    PATH=str(developer / 'usr/bin') + os.pathsep + str(cache / 'xcode-toolchain/usr/bin') + os.pathsep + previous.get('PATH', ''))
-                command([sys.executable, 'Apple', 'build', 'iOS', 'build', '--', '--with-openssl=/opt/homebrew/opt/openssl@3'], cache, 1800)
-            finally:
-                os.environ.clear()
-                os.environ.update(previous)
-        if not host.exists():
-            host = cache / 'cross-build/build/python'
-        version = subprocess.check_output([str(host), '-c', 'import platform;print(platform.python_version())'], text=True).strip()
-        if version != pin['version']:
-            raise ValueError('Pinned CPython host version mismatch.')
-        command([sys.executable, 'Apple', 'build', 'iOS', 'arm64-apple-ios-simulator'], cache, 2400)
-        downloads = cache / 'cross-build/downloads'
-        record = dict(status='prepared', revision=pin['revision'], version=version, archive_sha256=pin['sha256'],
-            host_sha256=checksum(host), framework_sha256=bundle_digest(framework(cache)), toolchain=toolchain(),
-            dependencies={path.name: checksum(path) for path in downloads.iterdir() if path.is_file()})
-        save_json(saved, record)
-        save_json(result, record)
+    options = settings()
+    return cpython_mobile.prepare_ios(cache, result, pins(), target=options['ios_target'],
+        framework_relative=options['ios_framework'], host_configure_args=options['host_configure_args'],
+        command=command, prepare_source=source, prepare_wheels=runtime_wheels,
+        tree_digest=bundle_digest, current_toolchain=toolchain)
 
 
 def test(root, cache, model, runtime, lease, output):
@@ -110,25 +71,21 @@ def _test(root, cache, model, runtime, lease, output, run):
             payload = run / 'payload'
             manifest = tools.stage(root, payload, testbed=True, allow_dirty=True)
             record['source'] = manifest
-            command([sys.executable, '-m', 'pip', 'install', '--no-index', '--find-links', str(runtime_wheels(cache)),
-                     '--target', str(payload), '--no-deps', 'markdown-it-py==4.2.0', 'mdurl==0.1.2'], root, 180)
+            cpython_testbed.install_payload_wheels(root, payload, runtime_wheels(cache),
+                ['markdown-it-py==4.2.0', 'mdurl==0.1.2'], command=command)
             testbed = run / 'app'
-            command([sys.executable, 'Apple/testbed', 'clone', '--platform', 'iOS', '--framework', str(framework(cache)), str(testbed)], cache, 180)
-            record['testbed_compatibility'] = modernize(testbed)
-            shutil.copytree(payload, testbed / 'iOSTestbed/app', dirs_exist_ok=True)
-            spec = importlib.util.spec_from_file_location('logistics_owned_testbed', testbed / '__main__.py')
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            module.update_test_plan(testbed, 'iOS', ['mobile.smoke', '--target', 'ios', '--local-source-sha256', manifest['source_sha256']])
+            record['testbed_compatibility'] = cpython_testbed.prepare_ios(
+                cache, testbed, framework(cache), payload,
+                ['mobile.smoke', '--target', 'ios', '--local-source-sha256', manifest['source_sha256']],
+                command=command, adapt=modernize)
             client = AppleSimulators()
             name = 'Build Manager core ' + uuid4().hex
             device = client.create(name, model, runtime)
             save_json(lease, dict(device=device, name=name))
             record.update(device=device, model=model, runtime=runtime)
             client.boot(device)
-            base = ['xcodebuild', '-project', str(testbed / 'iOSTestbed.xcodeproj'), '-scheme', 'iOSTestbed',
-                    '-destination', 'platform=iOS Simulator,id=' + device, '-derivedDataPath', str(testbed / 'DerivedData'),
-                    '-parallel-testing-enabled', 'NO', 'IPHONEOS_DEPLOYMENT_TARGET=15.0']
+            base = cpython_testbed.ios_build_command(testbed, device,
+                                                    deployment_target=settings()['ios_deployment_target'])
             command([*base, 'build-for-testing'], testbed, 600)
             log = output.with_suffix('.log')
             raw = output.with_suffix('.raw.log')

@@ -56,7 +56,7 @@ class RuntimeWheelCacheTests(unittest.TestCase):
             folder=root/'manager-wheels';folder.mkdir()
             wheel=folder/'fixture.whl';wheel.write_bytes(b'public synthetic wheel')
             pins={'runtime_wheels':[dict(filename=wheel.name,sha256=hashlib.sha256(wheel.read_bytes()).hexdigest())]}
-            with patch('Scripts.mobile_runtime.json.loads',return_value=pins), patch('Scripts.mobile_runtime.urllib.request.urlopen',side_effect=AssertionError('test must not use network')):
+            with patch('Scripts.mobile_runtime.json.loads',return_value=pins), patch('build_manager.cpython_mobile.urllib.request.urlopen',side_effect=AssertionError('test must not use network')):
                 self.assertEqual(runtime_wheels(root),folder)
                 wheel.write_bytes(b'changed cache')
                 with self.assertRaisesRegex(ValueError,'Prepare'):
