@@ -3,6 +3,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from build_manager.deployment_commands import Command, CommandStep, run_sequence
+
 ROOT = Path(__file__).resolve().parents[1]
 STEPS = (
     ('iOS device install', 'deploy_ios.command'),
@@ -13,16 +15,13 @@ STEPS = (
 
 
 def deploy_all(*, ask=input):
-    failed = []
-    for label, launcher in STEPS:
-        print('\nStarting ' + label, flush=True)
-        result = subprocess.run([str(ROOT / launcher)], cwd=ROOT)
-        if result.returncode:
-            failed.append(label)
-            if ask(label + ' failed. Continue with the remaining deployments? [y/N] ').strip().lower() not in ('y', 'yes'):
-                break
+    steps = (CommandStep(label, Command((str(ROOT / launcher),), str(ROOT))) for label, launcher in STEPS)
+    failed = run_sequence(steps,
+        starting=lambda step: print('\nStarting ' + step.label, flush=True),
+        continue_after_failure=lambda step, code: ask(step.label +
+            ' failed. Continue with the remaining deployments? [y/N] ').strip().lower() in ('y', 'yes'))
     if failed:
-        print('Failed: ' + ', '.join(failed), file=sys.stderr)
+        print('Failed: ' + ', '.join(step.label for step in failed), file=sys.stderr)
         return 1
     print('All launchers completed. Distribution prompts determine which builds were uploaded.')
     return 0

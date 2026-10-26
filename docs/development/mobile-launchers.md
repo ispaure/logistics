@@ -73,6 +73,12 @@ in-place installation remain in force; deployment never uninstalls the app or
 clears its data. The S8+ is not considered validated until it has actually been
 connected, installed and tested.
 
+The window and sequential launcher share reusable command controls from the
+pinned build manager. Logistics still chooses the commands, destinations,
+device identities and toolchain settings. Direct device/tester commands retain
+their development behavior and upload prompts; they do not imply that the
+manager's complete release-validation gates have run.
+
 Test-device deployments use separate persistent workspaces under ignored
 `mobile_build/.deploy-workspaces/android/` and `mobile_build/.deploy-workspaces/ios/`. Each
 owns its staged payload, Briefcase project/cache, generated native libraries,

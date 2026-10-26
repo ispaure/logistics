@@ -119,6 +119,15 @@ parameter validation and preparation receipts; this extraction does not claim a
 new native Windows/Fedora run. Further sharing with first-boot installation is
 optional; initial-machine and project-test environments remain separate stages.
 
+Legacy deployment UI and sequencing now delegate to the manager's
+`deployment_commands` and `deployment_commands_ui` modules. Logistics retains a
+small policy adapter/window shell, the original upload marker and all launcher
+paths. Reusable controls cover streaming, explicit confirmation, selection
+retention and busy state; the sequencer preserves inherited terminal input and
+failure-after-continuation. Device discovery/build/signing and per-platform
+deployment policy stay here. Portable subprocess and native macOS Qt checks use
+harmless fixtures; they do not claim a new device installation or provider upload.
+
 1. **Use the existing allocator for Firebase.** `firebase_deploy.reserve_build`,
    `next_build` and `_reserve_build` repeat monotonic reservation logic already
    available in `build_manager.versions`. TestFlight already consumes that API.

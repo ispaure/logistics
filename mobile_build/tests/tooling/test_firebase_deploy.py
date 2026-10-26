@@ -174,3 +174,5 @@ class FirebaseDeployTests(unittest.TestCase):
         with patch.object(all_deploy.subprocess, 'run', return_value=result) as run:
             self.assertEqual(all_deploy.deploy_all(ask=lambda _: 'y'), 1)
             self.assertEqual(run.call_count, 4)
+            self.assertEqual([call.args[0] for call in run.call_args_list],
+                             [[str(all_deploy.ROOT / launcher)] for _, launcher in all_deploy.STEPS])

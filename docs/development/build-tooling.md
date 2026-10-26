@@ -11,7 +11,7 @@ to do; application features stay in `Python/`.
 | Build and link the native bridge; compose generated-project adapters | `mobile_build/cloud_build.py` |
 | Configure camera, scenes, privacy manifests and app artwork | `mobile_build/build_support/` |
 | Regenerate canonical navigation and folder artwork | `mobile_build/build_support/generate_navigation_icons.py`, `generate_folder_icons.py` |
-| Device install, UI batch deployment, Firebase and TestFlight | `mobile_build/deployment/` |
+| Device install, deployment policy, Firebase and TestFlight | `mobile_build/deployment/`; reusable command controls and sequencing in external `build_manager.deployment_commands*` |
 | User-facing deployment commands | Existing `mobile_build/*.command` launchers |
 | Native report verification, lifecycle drivers and synthetic fixture generators | `mobile_build/validation/` |
 | Host regression contracts | `mobile_build/tests/` |
@@ -26,6 +26,21 @@ preparation does not imply a passed suite. The extraction preserves existing
 workspace ownership, interactive Windows account checks, archive hashes and
 collect-before-cleanup behavior; it does not replace dedicated-machine creation
 or silently select a different Python architecture.
+
+The legacy `deploy_ui.py` entry point now composes `ManagerPanel` and the external
+manager's `CommandPanel`. `LogisticsDeployment` supplies device inventory parsing,
+module arguments, destination labels, interpreter/profile/toolchain settings and
+log locations. The manager owns target retention, asynchronous process output,
+explicit GUI confirmation and busy controls. The shell prevents closing during
+either a manager run or a direct deployment; the two paths cannot start together.
+
+`deploy_all.py` retains the ordered iOS-device, Android-device, TestFlight and
+Firebase launcher policy and its failure prompt. It delegates ordered execution
+to `build_manager.deployment_commands.run_sequence`. These interactive commands
+inherit terminal input; they do not produce release-acceptance evidence or retry
+effects. An earlier failure remains a failure after continuing. The existing
+`deployment_confirmation.py` wrapper preserves `LOGISTICS_UPLOAD_CONFIRM:` while
+delegating framing/input to the manager. All six `.command` paths remain intact.
 
 `build_support` edits only generated projects or explicitly requested canonical
 artwork. Its imports have no build or deployment side effects. `cloud_build.py`

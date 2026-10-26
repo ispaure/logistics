@@ -1,9 +1,7 @@
 """Explicit upload confirmation shared by the CLI and small desktop launcher."""
-import json
-
 MARKER = 'LOGISTICS_UPLOAD_CONFIRM:'
 
 
 def gui_input(prompt):
-    print('\n' + MARKER + json.dumps(prompt), flush=True)
-    return input()
+    from build_manager.deployment_commands import confirmation_input
+    return confirmation_input(prompt, marker=MARKER)
