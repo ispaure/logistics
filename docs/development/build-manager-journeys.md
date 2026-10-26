@@ -152,3 +152,34 @@ local native validation currently require the configured Mac environment.
 Portable coverage uses mocked ADB/Xcode commands and harmless process graphs.
 No physical device was queried, installed, launched or otherwise changed, and no
 native signing/build or provider acceptance was performed for this implementation.
+
+## Shared builds and device variants
+
+The manager overview reads left to right under Source, Testing and Delivery.
+Delivery includes build and export/signing cards as well as destinations. The
+project descriptor declares package dependencies; the overview displays each
+shared package once. Review and execution show the actual project phases.
+
+Device delivery defaults to Debug. Choose Release in the device destination to
+reuse the tester build: Android copies the exact signed Firebase Release APK;
+iOS exports a separately provisioned device app from the same Release archive
+used for TestFlight. An iOS Release device-only run omits the TestFlight export
+and upload. Debug and Release remain separate builds, and simulator validation
+remains distinct from physical-device packaging.
+
+Release devices require committed source, full native/runtime release gates and
+the existing tester build/signing configuration. iOS device exports use already
+available signing assets and validate every selected UDID, including extension
+profiles; they do not register devices or enable provisioning updates. All
+installs still require review of exact bytes and recipients. Signing/version
+conflicts stop the install without clearing data or changing identity.
+
+GitHub publication, Firebase, TestFlight and Release device packages require
+committed source. Debug device delivery and local validation can capture current
+files. Latest commit excludes local edits without committing them; GitHub
+publication additionally requires the current checkout to be clean and to match
+the selected commit. Requirements appear in the overview before preparation.
+
+Portable contracts cover sharing, stage dependencies, checksums and mocked
+export/install commands. They do not establish successful native signing,
+TestFlight processing, Firebase distribution or personal-device installation.

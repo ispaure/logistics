@@ -41,7 +41,9 @@ class FixtureProject(LogisticsProject):
             return Plan('Logistics', 'Test', source, phases, str(workspace), backend=backend)
         if operation == 'Release':
             return Plan('Logistics', operation, source, (phase('release-source-and-gates'),), str(workspace), backend='GitHub', effect='publish')
-        return Plan('Logistics', operation, source, (phase('prepare-verified-artifact', 'build'),), str(workspace), backend=backend, effect='build')
+        preparation = phase('prepare-verified-artifact', 'build', deps=('build-release-archive',) if target == 'ios' else ())
+        phases = (phase('build-release-archive', 'build'), preparation) if target == 'ios' else (preparation,)
+        return Plan('Logistics', operation, source, phases, str(workspace), backend=backend, effect='build')
 
 
 class JourneyAdapterTests(unittest.TestCase):
@@ -86,6 +88,39 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertTrue(plan.source['dirty'])
         self.assertNotIn('android.validation.release-acceptance', {phase.id for phase in plan.phases})
         validate_plan(plan)
+
+    def test_release_device_reuses_one_preparation_regardless_of_destination_order(self):
+        def device_plan(project, target, recipients, context, revision, *, shared):
+            prepare = Phase('prepare-device-app', (sys.executable, '-c', 'pass'), str(self.root), effect='build', kind='build')
+            install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy', dependencies=(prepare.id,))
+            return Plan('Logistics', 'Release device', context.source(project, revision), (prepare, install), str(self.root / 'devices'))
+        for target, service in (('android','firebase'), ('ios','testflight')):
+            self.project.calls.clear()
+            with patch('Scripts.manager_devices.make_plan', side_effect=device_plan) as make:
+                plan = self.make(platforms=[target], destinations=[target+'-devices', service], run_overrides={
+                    'devices.'+target:'["phone"]', 'devices.'+target+'_variant':'release'})
+            shared = make.call_args.kwargs['shared']
+            expected = target + '.preparation.' + ('build-release-archive' if target == 'ios' else 'prepare-verified-artifact')
+            self.assertEqual(shared.id, expected)
+            self.assertIn(shared.id, ancestors(plan, target+'.devices.install-phone'))
+            self.assertEqual(sum(call[0].startswith('Prepare ') for call in self.project.calls), 1)
+            validate_plan(plan)
+
+    def test_release_only_ios_devices_do_not_export_or_upload_testflight(self):
+        def device_plan(project, target, recipients, context, revision, *, shared):
+            install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy')
+            return Plan('Logistics', 'Release device', context.source(project, revision), (install,), str(self.root / 'devices'))
+        with patch('Scripts.manager_devices.make_plan', side_effect=device_plan):
+            plan = self.make(platforms=['ios'], destinations=['ios-devices'], run_overrides={
+                'devices.ios':'["phone"]', 'devices.ios_variant':'release'})
+        self.assertIn('ios.preparation.build-release-archive', ancestors(plan, 'ios.devices.install-phone'))
+        self.assertFalse(any(p.effect == 'upload' or p.id.endswith('prepare-verified-artifact') for p in plan.phases))
+
+    def test_release_device_requires_committed_source(self):
+        self.source['dirty'] = True
+        with self.assertRaisesRegex(ValueError, 'committed source'):
+            self.make(platforms=['android'], destinations=['android-devices'], run_overrides={
+                'devices.android':'["phone"]', 'devices.android_variant':'release'})
 
     def test_shared_tester_message_maps_to_both_owned_service_fields(self):
         from Scripts.manager_journeys import run_values

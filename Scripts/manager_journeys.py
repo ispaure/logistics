@@ -24,7 +24,7 @@ class PlanningContext:
         return json.loads(self.captured)
 
 
-RUN_FIELDS={'devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
+RUN_FIELDS={'devices.android_variant','devices.ios_variant','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
 
 
 def run_values(values):
@@ -38,6 +38,9 @@ def run_values(values):
     from build_manager.run_fields import selection_ids
     for key in ('devices.android', 'devices.ios'):
         if key in result:selection_ids(result[key])
+    for target in ('android', 'ios'):
+        if result.get('devices.' + target + '_variant', 'debug') not in {'debug', 'release'}:
+            raise ValueError('Choose Debug or Release for device packages.')
     return result
 
 
@@ -74,7 +77,8 @@ def _namespace(plan, prefix, barrier=()):
         effect = phase.effect if phase.effect != 'inherit' else plan.effect
         phases.append(replace(phase, id=names[phase.id], dependencies=mapped,
                               waits_for=tuple(names[key] for key in phase.waits_for), effect=effect,
-                              kind='publication' if effect == 'publish' and phase.kind == 'test' else phase.kind))
+                              kind='publication' if effect == 'publish' and phase.kind == 'test' else phase.kind,
+                              section='platforms' if prefix.endswith('.validation') else 'delivery'))
     return phases
 
 
@@ -86,6 +90,9 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         raise ValueError('Unsupported Logistics journey intent schema.')
     targets, destinations = selected['platforms'], selected['destinations']
     delivery = selected['goal'] == 'deliver'
+    overrides = run_values(run_overrides or {})
+    release_devices = {target for target in ('android', 'ios') if target + '-devices' in destinations
+                       and overrides.get('devices.' + target + '_variant', 'debug') == 'release'}
     if any(name not in {'github', 'firebase', 'testflight', 'android-devices', 'ios-devices'} for name in destinations):
         raise ValueError('This Logistics destination has no reviewed integrated delivery implementation.')
     if pattern:
@@ -102,8 +109,11 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         print('Build retention incomplete: ' + str(error), flush=True)
     context = capture(project, revision, run_overrides)
     source = context.source(project, revision)
-    if delivery and source['dirty'] and any(name in destinations for name in ('github', 'firebase', 'testflight')):
-        raise ValueError('Delivery requires committed source. Select a committed revision or commit your intended edits.')
+    if delivery and source['dirty'] and (any(name in destinations for name in ('github', 'firebase', 'testflight')) or release_devices):
+        names = [project.journey_capability['destinations'][name]['label'].split(' · ')[0]
+                 for name in destinations if name in {'github', 'firebase', 'testflight'} or name.split('-')[0] in release_devices]
+        raise ValueError(', '.join(names) + ' requires committed source. Commit the edits you want to deliver, or choose Latest commit to exclude them.'
+                         + (' GitHub releases also require a clean current checkout.' if 'github' in destinations else ''))
     values = source['effective_settings']['values']
     if 'github' in destinations and not release_tag:
         from Scripts.release_naming import suggest_tag
@@ -150,13 +160,13 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         backend = locations.get(target,row['backend'])
         plan = project.make_plan('Test', target, backend, revision=revision,
             include_ipad=delivery and target == 'ios', _context=context,
-            _release_validation=delivery and mobile and ('testflight' if target == 'ios' else 'firebase') in destinations)
+            _release_validation=delivery and mobile and (('testflight' if target == 'ios' else 'firebase') in destinations or target in release_devices))
         retain(plan)
         branch_sources[target] = plan.source
         barrier = ()
         if mobile and previous_mobile:
             admission = Phase(target + '.admit-validation', (str(project.interpreter), '-c', 'pass'), str(project.root),
-                waits_for=(previous_mobile,), always=True, kind='setup', effect='inspect')
+                waits_for=(previous_mobile,), always=True, kind='setup', effect='inspect', section='platforms')
             phases.append(admission)
             barrier = (admission.id,)
         branch = _namespace(plan, target + '.validation', barrier)
@@ -165,11 +175,25 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         executions[target] = dict(backend=backend,steps=[phase.id for phase in branch if phase.effect=='dispatch'])
         phases.extend(branch)
         gate = Phase(target + '.validated', (str(project.interpreter), '-c', 'pass'), str(project.root),
-            dependencies=tuple(phase.id for phase in branch), effect='test')
+            dependencies=tuple(phase.id for phase in branch), effect='test', section='platforms')
         phases.append(gate)
         gates[target] = [gate.id]
         if mobile:
             previous_mobile = gate.id
+
+    preparations = {}
+    for target, provider, operation in (('ios', 'testflight', 'Prepare TestFlight'), ('android', 'firebase', 'Prepare Firebase')):
+        if provider not in destinations and target not in release_devices:continue
+        plan = project.make_plan(operation, target, 'This Mac', revision=revision,
+                                 build_override=build_override, _context=context)
+        if target == 'ios' and provider not in destinations:
+            plan = replace(plan, phases=tuple(p for p in plan.phases if p.id != 'prepare-verified-artifact'))
+        retain(plan)
+        preparation = _namespace(plan, target + '.preparation', tuple(gates[target]))
+        if any(phase.effect in EXTERNAL for phase in preparation):
+            raise ValueError('Release preparation must stop before delivery.')
+        phases.extend(preparation)
+        preparations[target] = preparation
 
     for name in destinations:
         required_platforms = list(project.journey_capability['destinations'][name]['platforms'])
@@ -177,9 +201,13 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         if name in {'android-devices', 'ios-devices'}:
             from Scripts.manager_devices import make_plan as device_plan
             target = required_platforms[0]
-            plan = device_plan(project, target, device_targets[target], context, revision)
+            shared = None
+            if target in release_devices:
+                shared = next((p for p in preparations[target] if p.id.endswith('.build-release-archive')), preparations[target][-1])
+            plan = (device_plan(project, target, device_targets[target], context, revision, shared=shared) if shared else
+                    device_plan(project, target, device_targets[target], context, revision))
             retain(plan)
-            branch = _namespace(plan, target + '.devices', required_gates)
+            branch = _namespace(plan, target + '.devices', (*required_gates, *((shared.id,) if shared else ())))
             phases.extend(branch)
             evidence[name] = dict(identity='Install in place · ' + ', '.join(row['name'] + ' [' + row['id'] + ']' for row in device_targets[target]),
                 steps=[phase.id for phase in branch if phase.effect == 'deploy'], platforms=required_platforms)
@@ -196,13 +224,7 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
                 steps=[phase.id for phase in branch if phase.effect in EXTERNAL], platforms=required_platforms)
             continue
         target, operation, provider = ('ios', 'Prepare TestFlight', 'testflight') if name == 'testflight' else ('android', 'Prepare Firebase', 'firebase')
-        plan = project.make_plan(operation, target, 'This Mac', revision=revision,
-                                 build_override=build_override, _context=context)
-        retain(plan)
-        preparation = _namespace(plan, target + '.preparation', required_gates)
-        if any(phase.effect in EXTERNAL for phase in preparation):
-            raise ValueError('Tester preparation must stop before upload.')
-        phases.extend(preparation)
+        preparation = preparations[target]
         output = preparation[-1]
         report = Path(output.artifacts[0])
         receipt = report.with_name(report.stem + '-distribution.json')
@@ -210,6 +232,7 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
             '--report', str(report), '--receipt', str(receipt)), output.cwd, timeout=14400,
             dependencies=(*required_gates, *(phase.id for phase in preparation)), environment=dict(output.environment),
             kind='distribution', effect='upload', provider=provider, artifacts=(str(receipt),),
+            label='Upload to ' + ('TestFlight' if name == 'testflight' else 'Firebase'), section='delivery',
             resources={'provider.destination:' + provider + ':Logistics': 1})
         phases.append(upload)
         identity = (str(values['testflight.app_id']) + ' · ' + values['testflight.external_group']

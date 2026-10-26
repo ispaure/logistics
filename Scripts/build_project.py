@@ -548,9 +548,23 @@ class LogisticsProject:
                 for key, flag in [('signing.app_profile', '--profile'), ('signing.inbox_profile', '--inbox-profile')]:
                     if options[key]:
                         arguments += [flag, options[key]]
+            if target == 'ios':
+                state = artifact.with_name(artifact.stem + '-archive.json')
+                archive_args = [arg for arg in arguments if arg != '--prepare-only']
+                command = (options['tools.mobile_python'], '-m', 'Scripts.manager_packages')
+                archive = Phase('build-release-archive', (*command, 'archive', '--state', str(state), *archive_args),
+                    str(snapshot), timeout=14400, environment=dict(env), kind='build', effect='build',
+                    artifacts=(str(state),), label='Build iOS Release archive',
+                    description='Shared compiled archive · device exports use separate provisioning')
+                export = Phase('prepare-verified-artifact', (*command, 'export-testflight', '--state', str(state)),
+                    str(snapshot), timeout=14400, dependencies=(archive.id,), environment=dict(env),
+                    kind='build', effect='build', artifacts=(str(artifact),), label='Export & sign for TestFlight',
+                    description='App Store distribution package · no upload')
+                return Plan('Logistics', operation, source, (archive, export), str(workspace), backend='This Mac', effect='build')
             phase = Phase('prepare-verified-artifact', (options['tools.mobile_python'], '-m',
                 'mobile_build.deployment.' + module, *arguments), str(snapshot), timeout=14400,
-                environment=env, kind='build', artifacts=(str(artifact),))
+                environment=env, kind='build', artifacts=(str(artifact),),
+                label='Build & sign Android Release APK', description='One signed APK can serve Firebase and selected Release devices')
             return Plan('Logistics', operation, source, (phase,), str(workspace), backend='This Mac', effect='build')
         raise ValueError('Local mobile backend is not installed yet; no hosted fallback or passing result is implied.')
 
@@ -583,7 +597,7 @@ def declare_resources(plan, target):
                 requirements['android.device-workspace:'+plan.workspace]=1
             else:
                 requirements['android.sdk-cache']=1
-        if phase.id=='prepare-verified-artifact':requirements['host.signing-keychain']=1
+        if phase.id in {'prepare-verified-artifact', 'build-release-archive'}:requirements['host.signing-keychain']=1
         if phase.effect in {'upload','publish'}:
             requirements['provider.destination:'+phase.provider+':'+plan.project]=1
         phases.append(replace(phase,resources=requirements,stop_grace=5 if target in {'ios','android'} else phase.stop_grace))

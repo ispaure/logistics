@@ -402,7 +402,8 @@
           "windows"
         ],
         "description": "Publishes a channel tag from the clean reviewed checkout; hosted release ZIP is separate from locally signed tester packages.",
-        "category": "Source releases"
+        "category": "Source releases",
+        "source_policy": "clean-checkout"
       },
       "firebase": {
         "label": "Firebase \u00b7 Android testers",
@@ -410,7 +411,9 @@
           "android"
         ],
         "description": "Prepares one verified package, then pauses before upload to the configured group.",
-        "category": "Mobile tester platforms"
+        "category": "Mobile tester platforms",
+        "package": "android-release",
+        "source_policy": "committed"
       },
       "testflight": {
         "label": "TestFlight \u00b7 iOS testers",
@@ -418,7 +421,9 @@
           "ios"
         ],
         "description": "Requires complete iPhone, Duo, iPad and runtime gates; pauses before uploading the prepared archive.",
-        "category": "Mobile tester platforms"
+        "category": "Mobile tester platforms",
+        "package": "testflight-export",
+        "source_policy": "committed"
       },
       "android-devices": {
         "label": "Android test devices",
@@ -426,8 +431,14 @@
           "android"
         ],
         "category": "Mobile dev devices",
-        "description": "Prepare a development app, then review each installation. App data is preserved; signing or version conflicts stop the update.",
-        "recipient_field": "devices.android"
+        "description": "Choose Debug for development or Release to share the tester build. Review each installation; signing/version conflicts stop the update.",
+        "recipient_field": "devices.android",
+        "package_field": "devices.android_variant",
+        "package_default": "debug",
+        "package_variants": {
+          "debug": "android-debug",
+          "release": "android-release"
+        }
       },
       "ios-devices": {
         "label": "iPhone / iPad",
@@ -435,8 +446,14 @@
           "ios"
         ],
         "category": "Mobile dev devices",
-        "description": "Prepare a development app, then review each installation. App data is preserved; signing or version conflicts stop the update.",
-        "recipient_field": "devices.ios"
+        "description": "Choose Debug for development or Release to share the tester build. Review each installation; signing/version conflicts stop the update.",
+        "recipient_field": "devices.ios",
+        "package_field": "devices.ios_variant",
+        "package_default": "debug",
+        "package_variants": {
+          "debug": "ios-debug",
+          "release": "ios-device-export"
+        }
       }
     },
     "selectable_backends": true,
@@ -446,7 +463,65 @@
         "category": "Mobile stores",
         "reason": "Store submission is not implemented by this project. Use tester platforms or development devices."
       }
-    ]
+    ],
+    "packages": {
+      "android-release": {
+        "label": "Build & sign Android Release APK",
+        "description": "Shared signed APK \u00b7 Firebase and Release devices",
+        "stage": "build",
+        "platforms": [
+          "android"
+        ],
+        "source_policy": "committed"
+      },
+      "ios-release": {
+        "label": "Build iOS Release archive",
+        "description": "Shared compiled archive",
+        "stage": "build",
+        "platforms": [
+          "ios"
+        ],
+        "source_policy": "committed"
+      },
+      "testflight-export": {
+        "label": "Export & sign for TestFlight",
+        "description": "App Store distribution provisioning",
+        "stage": "package",
+        "platforms": [
+          "ios"
+        ],
+        "dependencies": [
+          "ios-release"
+        ]
+      },
+      "ios-device-export": {
+        "label": "Export & sign iOS Release for devices",
+        "description": "Existing device provisioning \u00b7 no recompilation",
+        "stage": "package",
+        "platforms": [
+          "ios"
+        ],
+        "dependencies": [
+          "ios-release"
+        ]
+      },
+      "android-debug": {
+        "label": "Build Android Debug APK",
+        "description": "Development variant \u00b7 separate from Release",
+        "stage": "build",
+        "platforms": [
+          "android"
+        ]
+      },
+      "ios-debug": {
+        "label": "Build & sign iOS Debug app",
+        "description": "Development variant \u00b7 separate from Release",
+        "stage": "build",
+        "platforms": [
+          "ios"
+        ]
+      }
+    }
   },
   "run_fields": [
     {
@@ -522,6 +597,34 @@
         "ios-devices"
       ],
       "description": "Select saved devices or enter a paired device ID. No automatic discovery or installation happens here."
+    },
+    {
+      "id": "devices.android_variant",
+      "label": "Android package",
+      "kind": "choice",
+      "default": "debug",
+      "options": {
+        "debug": "Debug \u00b7 development build",
+        "release": "Release \u00b7 reuse tester build"
+      },
+      "destinations": [
+        "android-devices"
+      ],
+      "description": "Release requires committed source and full release gates. Existing signing and app data are preserved; incompatible updates stop."
+    },
+    {
+      "id": "devices.ios_variant",
+      "label": "iPhone / iPad package",
+      "kind": "choice",
+      "default": "debug",
+      "options": {
+        "debug": "Debug \u00b7 development build",
+        "release": "Release \u00b7 reuse tester build"
+      },
+      "destinations": [
+        "ios-devices"
+      ],
+      "description": "Release requires committed source and full release gates. Existing signing and app data are preserved; incompatible updates stop."
     }
   ],
   "dynamic_run_inputs": true

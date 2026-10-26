@@ -112,6 +112,88 @@ class ManagerDeviceTests(unittest.TestCase):
         self.assertEqual((workspace / 'app.apk').read_bytes(), b'build')
         self.assertTrue((workspace / 'prepared.json').exists())
 
+    def test_shared_release_apk_is_copied_exactly_without_build_or_device_discovery(self):
+        from mobile_build.deployment import android_deploy as android
+        workspace = self.root / 'workspace'; workspace.mkdir()
+        shared = self.root / 'release.json'
+        shared.write_text(json.dumps(dict(provider='Firebase', bundle_id=devices.BUNDLE, apk=str(self.package),
+            apk_sha256=file_sha256(self.package), certificate='certificate')))
+        data = dict(self.data, workspace=str(workspace), shared_report=str(shared))
+        with patch.object(android, 'deploy', side_effect=AssertionError('Must not rebuild')), \
+                patch('subprocess.run', side_effect=AssertionError('Must not contact devices')):
+            devices.prepare_shared(data)
+        self.assertEqual(Path(data['package']).read_bytes(), self.package.read_bytes())
+        self.assertEqual(data['variant'], 'release')
+        self.package.write_bytes(b'changed')
+        with self.assertRaisesRegex(ValueError, 'changed'):devices.prepare_shared(data)
+
+    def test_release_device_recipe_has_shared_input_and_preserves_review_per_device(self):
+        from build_manager import Phase
+        project = LogisticsProject(self.root)
+        source = dict(fingerprint='source', dirty=False, effective_settings=dict(values={'tools.mobile_python':sys.executable}))
+        context = PlanningContext(str(project.root), 'HEAD', json.dumps(source))
+        shared = Phase('release', (sys.executable,'-V'), str(self.root), artifacts=(str(self.report),))
+        def snapshot(*args, **kwargs):(project.private / 'snapshots/source/mobile_build').mkdir(parents=True)
+        with patch('Scripts.build_snapshots.materialize', side_effect=snapshot):
+            plan = devices.make_plan(project, 'android', self.data['targets'], context, 'HEAD', shared=shared)
+        recipe = json.loads(Path(plan.phases[0].argv[plan.phases[0].argv.index('--recipe')+1]).read_text())
+        self.assertEqual(recipe['shared_report'], str(self.report))
+        self.assertIn('shared Android Release', plan.phases[0].label)
+        self.assertEqual(plan.phases[1].effect, 'deploy')
+
+    def test_shared_ios_release_exports_existing_archive_without_compiling_or_devices(self):
+        from mobile_build.deployment import device_tools as ios
+        workspace = self.root / 'workspace'; workspace.mkdir()
+        config = self.mobile / '.device.json'
+        data = dict(self.data, platform='ios', workspace=str(workspace), shared_report='archive.json',
+            config=str(config), config_sha256=file_sha256(config), targets=[dict(id='udid-1',name='iPhone')])
+        identity = dict(team_id='ABCDEFGHIJ', bundle_id=devices.BUNDLE)
+        def export(command, **kwargs):
+            output = Path(command[command.index('-exportPath')+1]); output.mkdir(); (output / 'app.ipa').write_bytes(b'ipa')
+        def ditto(command, **kwargs):
+            if '-x' in command:(Path(command[-1]) / 'Payload/Logistics Mobile.app').mkdir(parents=True)
+            else:Path(command[-1]).write_bytes(b'provisioned app')
+        with patch('Scripts.manager_packages.checked_archive', return_value=(dict(workspace=str(self.root/'release')),dict(identity=identity))), \
+                patch.object(ios, 'installed', return_value=[]), patch.object(ios, 'choose', return_value=('/fake/xcode','sdk')), \
+                patch.object(ios, 'run', side_effect=export) as run, patch.object(ios, 'validate_app', return_value=identity), \
+                patch.object(ios, 'device_json', side_effect=AssertionError('No devices')), patch('subprocess.run', side_effect=ditto):
+            devices.prepare_shared(data)
+        self.assertIn('-exportArchive', run.call_args.args[0])
+        self.assertNotIn('archive', run.call_args.args[0]); self.assertNotIn('build', run.call_args.args[0])
+        self.assertNotIn('-allowProvisioningUpdates', run.call_args.args[0])
+        self.assertEqual(Path(data['package']).read_bytes(), b'provisioned app')
+        self.assertFalse((workspace/'exported-app').exists())
+
+    def test_actual_ios_preparation_separates_archive_from_export_and_keeps_one_build_number(self):
+        project = LogisticsProject(self.root)
+        snapshot = self.root / 'snapshot'; (snapshot / 'mobile_build').mkdir(parents=True)
+        options = {'tools.mobile_python':sys.executable, 'tools.xcode':'', 'tools.android_sdk':'',
+                   'tools.java':'', 'signing.app_profile':'', 'signing.inbox_profile':''}
+        plan = project.mobile_plan('Prepare TestFlight', 'ios', {'dirty':False}, snapshot,
+                                  self.root / 'workspace', options, {}, '', '42', False)
+        archive, export = plan.phases
+        self.assertEqual(archive.id, 'build-release-archive')
+        self.assertEqual(export.dependencies, (archive.id,))
+        self.assertIn('--build-number', archive.argv); self.assertIn('42', archive.argv)
+        state = archive.argv[archive.argv.index('--state')+1]
+        self.assertEqual(export.argv[export.argv.index('--state')+1], state)
+        self.assertIn('export-testflight', export.argv)
+        self.assertTrue(all(p.effect == 'build' for p in plan.phases))
+        self.assertNotIn('upload', archive.argv); self.assertNotIn('upload', export.argv)
+
+    def test_shared_archive_integrity_is_checked_before_either_export(self):
+        from Scripts import manager_packages as packages
+        from mobile_build.deployment import testflight_tools as tools
+        release = self.root / 'release.json'; release.write_text('{"identity":{}}')
+        state = self.root / 'state.json'; state.write_text(json.dumps(dict(workspace=str(self.root),
+            release_sha256=file_sha256(release), archive_sha256='archive-hash')))
+        with patch.object(tools,'archive_fingerprint',return_value='archive-hash'):
+            packages.checked_archive(state)
+            release.write_text('{"identity":{"changed":true}}')
+            with self.assertRaisesRegex(ValueError,'archive changed'):packages.checked_archive(state)
+        with patch.object(tools,'archive_fingerprint',return_value='different'):
+            with self.assertRaises(ValueError):packages.checked_archive(state)
+
     def test_ios_installs_extracted_reviewed_app_on_only_selected_udid_and_cleans_extraction(self):
         from mobile_build.deployment import device_tools as ios
         identity = dict(bundle_id=devices.BUNDLE, team_id='ABCDEFGHIJ')

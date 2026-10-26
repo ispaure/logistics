@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import plistlib
 import re
 from pathlib import Path
 import shutil
@@ -63,7 +64,7 @@ def selected_devices(root, platform, overrides):
     return [known.get(key, dict(id=key, name=key, connection=key)) for key in ids]
 
 
-def make_plan(project, platform, targets, context, revision):
+def make_plan(project, platform, targets, context, revision, *, shared=None):
     from Scripts.build_snapshots import materialize, PRIVATE_RUNTIME_NAMES
     source = context.source(project, revision)
     snapshot = project.private / 'snapshots' / source['fingerprint']
@@ -76,6 +77,8 @@ def make_plan(project, platform, targets, context, revision):
     workspace = project.private / 'workspaces' / 'devices' / platform / uuid4().hex
     workspace.mkdir(parents=True, exist_ok=True)
     recipe = dict(schema=1, platform=platform, source=source, root=str(snapshot), workspace=str(workspace), targets=targets)
+    if shared is not None:
+        recipe['shared_report'] = shared.artifacts[0]
     if platform == 'ios':
         config = project.mobile / '.device.json'
         data = read_json(config)
@@ -93,7 +96,10 @@ def make_plan(project, platform, targets, context, revision):
     command = (options['tools.mobile_python'], '-m', 'Scripts.manager_devices')
     prepare = Phase('prepare-device-app', (*command, 'prepare', '--recipe', str(path), '--sha256', file_sha256(path)),
         str(snapshot), timeout=14400, environment=env, effect='build', kind='build',
-        artifacts=(str(report), str(package)), resources={'host.mobile-build': 1, 'host.signing-keychain': 1})
+        artifacts=(str(report), str(package)), resources={'host.mobile-build': 1, 'host.signing-keychain': 1},
+        label=('Use shared Android Release APK' if platform == 'android' else 'Export & sign iOS Release for devices') if shared else
+              ('Build Android Debug APK' if platform == 'android' else 'Build & sign iOS Debug app'),
+        description='Reuse the selected Release build; no compilation' if shared else 'Development variant · separate from Release')
     phases = [prepare]
     for index, target in enumerate(targets):
         receipt = workspace / ('device-' + str(index) + '.json')
@@ -121,7 +127,10 @@ def prepare(path, digest):
         raise ValueError('Device preparation recipe changed; review a new plan.')
     data = read_json(path); check_source(data)
     workspace = Path(data['workspace']); platform = data['platform']
-    if platform == 'android':
+    if data.get('shared_report'):
+        prepare_shared(data)
+        package = Path(data['package'])
+    elif platform == 'android':
         from mobile_build.deployment import android_deploy as android
         # No device queries or wireless connections while building.
         android.deploy(build_only=True, devices=[], discover=False)
@@ -148,6 +157,59 @@ def prepare(path, digest):
     data.update(package=str(package), package_sha256=file_sha256(package), bundle_id=BUNDLE)
     check_source(data); save_json(workspace / 'prepared.json', data)
     return data
+
+
+def prepare_shared(data):
+    """Consume project-declared Release output without compiling or contacting devices."""
+    workspace = Path(data['workspace'])
+    if data['platform'] == 'android':
+        report = read_json(data['shared_report'])
+        if report.get('provider') != 'Firebase' or report.get('bundle_id') != BUNDLE:
+            raise ValueError('Expected the shared verified Firebase APK.')
+        apk = Path(report['apk'])
+        if file_sha256(apk) != report['apk_sha256']:raise ValueError('Shared Release APK changed.')
+        package = workspace / 'app.apk'
+        shutil.copy2(apk, package)
+        data['identity'] = dict(bundle_id=BUNDLE, certificate=report['certificate'])
+    else:
+        from Scripts.manager_packages import checked_archive
+        from mobile_build.deployment import device_tools as ios
+        state, record = checked_archive(data['shared_report'])
+        config = read_json(data['config'])
+        if file_sha256(data['config']) != data['config_sha256']:
+            raise ValueError('Device signing configuration changed; review a new plan.')
+        if record['identity']['team_id'] != config['team_id']:
+            raise ValueError('Release and device signing teams differ.')
+        options = workspace / 'DeviceExportOptions.plist'
+        options.write_bytes(plistlib.dumps(dict(method='debugging', signingStyle='automatic',
+            teamID=config['team_id'], destination='export', manageAppVersionAndBuildNumber=False)))
+        developer, _ = ios.choose(ios.installed()); env = dict(os.environ, DEVELOPER_DIR=developer)
+        exported = workspace / 'device-export'
+        ios.run(['xcodebuild', '-exportArchive', '-archivePath', str(Path(state['workspace']) / 'Logistics.xcarchive'),
+            '-exportOptionsPlist', str(options), '-exportPath', str(exported)], env=env,
+            log=workspace / 'logs/device-export.log')
+        ipas = list(exported.glob('*.ipa'))
+        if len(ipas) != 1:raise ValueError('Expected one provisioned device export.')
+        extracted = workspace / 'exported-app'; extracted.mkdir()
+        try:
+            subprocess.run(['/usr/bin/ditto', '-x', '-k', str(ipas[0]), str(extracted)], check=True)
+            apps = list((extracted / 'Payload').glob('*.app'))
+            if len(apps) != 1:raise ValueError('Unexpected device IPA layout.')
+            identities = [ios.validate_app(apps[0], config['team_id'], target['id']) for target in data['targets']]
+            if config.get('signing_identity') and any(row != config['signing_identity'] for row in identities):
+                raise ValueError('Existing device signing identity differs.')
+            # Extensions must also provision every selected device.
+            for extension in apps[0].glob('PlugIns/*.appex'):
+                profile_path = extension / 'embedded.mobileprovision'
+                profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(profile_path)]))
+                if profile.get('TeamIdentifier') != [config['team_id']] or any(
+                        target['id'] not in profile.get('ProvisionedDevices', []) for target in data['targets']):
+                    raise ValueError('Extension profile does not authorize the selected devices.')
+            data['identity'] = identities[0]
+            package = workspace / 'app.zip'
+            subprocess.run(['/usr/bin/ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(apps[0]), str(package)], check=True)
+        finally:shutil.rmtree(extracted)
+    data.update(package=str(package), variant='release')
 
 
 def install(report, device, receipt):
