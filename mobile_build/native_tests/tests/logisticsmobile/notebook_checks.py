@@ -47,8 +47,8 @@ async def exercise_notebooks(app, *, return_to_home=True):
     sizes = json.loads(await panel.web.evaluate_javascript("JSON.stringify({body:document.body.clientHeight,page:document.getElementById('viewport').clientHeight,overflow:document.body.scrollWidth>innerWidth,targets:[...document.querySelectorAll('.mobile-tools button')].every(b=>b.getBoundingClientRect().width>=44&&b.getBoundingClientRect().height>=44)})"))
     assert sizes['page'] >= sizes['body'] * .95 and not sizes['overflow'] and sizes['targets'], sizes
     await panel.web.evaluate_javascript("document.getElementById('brushToggle').click()")
-    choices = json.loads(await panel.web.evaluate_javascript("JSON.stringify({open:!document.getElementById('mobileSheet').hidden,brushes:document.querySelectorAll('.brush-card').length,focus:document.activeElement.getAttribute('aria-label')})"))
-    assert choices == dict(open=True, brushes=properties['tools'], focus='Close panel'), choices
+    choices = json.loads(await panel.web.evaluate_javascript("JSON.stringify({open:!document.getElementById('mobileSheet').hidden,brushes:document.querySelectorAll('.brush-card').length,selected_focused:document.activeElement.matches('.brush-card[aria-pressed=true]')})"))
+    assert choices == dict(open=True, brushes=properties['tools'], selected_focused=True), choices
     await panel.web.evaluate_javascript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
     assert await panel.web.evaluate_javascript("document.getElementById('mobileSheet').hidden")
     await panel.web.evaluate_javascript("document.querySelector('header button[aria-label=\"Notebook actions\"]').click();document.getElementById('hideTools').click()")
@@ -59,11 +59,19 @@ async def exercise_notebooks(app, *, return_to_home=True):
     pointer_report = await exercise_pointer_input(panel)
     app._notebook_pointer_report = pointer_report
     # Measure work on a populated page: pointer motion must not replay old ink.
-    metrics = json.loads(await panel.web.evaluate_javascript(r"""(()=>{
+    await panel.web.evaluate_javascript(r"""(()=>{
         const saved=state.strokes, capture=canvas.setPointerCapture;
+        const tool=$('tool').value;
         const clear=ctx.clearRect.bind(ctx),stroke=ctx.stroke.bind(ctx);
         let clears=0,segments=0;
+        window.notebookMoveMetrics=null;
+        const restore=()=>{
+            state.strokes=saved;canvas.setPointerCapture=capture;
+            ctx.clearRect=clear;ctx.stroke=stroke;
+            $('tool').value=tool;$('tool').onchange();draw();
+        };
         try {
+            $('tool').value='17';$('tool').onchange();
             state.strokes=Array.from({length:2000},(_,id)=>({id,layer:state.layers[0][0],tool:12,color:0,scale:1,points:[[20,20,1,2],[25,25,1,2]]}));
             draw();canvas.setPointerCapture=()=>{};
             ctx.clearRect=(...args)=>{clears++;clear(...args)};
@@ -73,14 +81,28 @@ async def exercise_notebooks(app, *, return_to_home=True):
             canvas.onpointerdown(event(0));
             for(let i=1;i<=400;i++)canvas.onpointermove(event(i));
             const moving={clears,segments,samples:points.length};
-            canvas.onpointercancel(event(400));
-            return JSON.stringify({...moving,cancelled:active===null&&points.length===0,cancelClears:clears});
-        } finally {
-            state.strokes=saved;canvas.setPointerCapture=capture;
-            ctx.clearRect=clear;ctx.stroke=stroke;draw();
-        }
-    })()"""))
-    assert metrics == dict(clears=0, segments=400, samples=401, cancelled=True, cancelClears=1), metrics
+            requestAnimationFrame(()=>{
+                try {
+                    const afterFrame=segments;
+                    canvas.onpointercancel(event(400));
+                    window.notebookMoveMetrics={...moving,afterFrame,batched:frameBatchedInk,
+                        cancelled:active===null&&points.length===0,cancelClears:clears};
+                } catch(error){window.notebookMoveMetrics={error:String(error)}}
+                finally{restore()}
+            });
+        } catch(error){restore();throw error}
+        return true;
+    })()""")
+    for _ in range(200):
+        metrics = json.loads(await panel.web.evaluate_javascript('JSON.stringify(window.notebookMoveMetrics)'))
+        if metrics is not None:
+            break
+        await asyncio.sleep(.05)
+    assert metrics is not None and 'error' not in metrics, metrics
+    expected = dict(clears=0, segments=0 if metrics['batched'] else 400, samples=401,
+                    afterFrame=1 if metrics['batched'] else 400, batched=metrics['batched'],
+                    cancelled=True, cancelClears=1)
+    assert metrics == expected, metrics
     await panel.web.evaluate_javascript("send({op:'stroke',points:[[100,100,.2],[120,130,.8]],tool:12,color:6,width:3})")
     for _ in range(100):
         if panel.editor.notebook.page(0).strokes:

@@ -49,7 +49,6 @@ class JourneyAdapterTests(unittest.TestCase):
         self.root = Path(self.temporary.name).resolve()
         descriptor = json.loads((ROOT / 'build-project.json').read_text())
         (self.root / 'build-project.json').write_text(json.dumps(descriptor))
-        self.project = FixtureProject(self.root)
         self.values = {'tools.desktop_python': sys.executable, 'tools.mobile_python': sys.executable,
                        'auth.github_reference': 'GH_TOKEN', 'vm.linux_scope': 'both', 'github.repository': 'fixture/repo',
                        'testflight.app_id': 'fixture-ios', 'testflight.external_group': 'Fixture testers',
@@ -63,6 +62,9 @@ class JourneyAdapterTests(unittest.TestCase):
                 ('Scripts.build_project.manager_settings.app_version', {'return_value': '1.2.3'}),
                 ('Scripts.build_project.sys.platform', {'new': 'darwin'})):
             patcher = patch(target, **options); patcher.start(); self.addCleanup(patcher.stop)
+        # Resolve capability defaults under the same declared host used below.
+        # Constructing first captured Linux/Windows backends on those CI hosts.
+        self.project = FixtureProject(self.root)
 
     def make(self, goal='deliver', platforms=None, destinations=None, **options):
         return self.project.make_journey(goal, platforms or ['android', 'ios'],
