@@ -3,6 +3,7 @@ import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
+from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -80,6 +81,28 @@ class EditorPickerTests(unittest.TestCase):
         self.assertEqual(picker.save_as_data, b'Keep this draft')
         self.assertIs(picker._listed_provider, provider)
         self.assertGreater(form.style.height, 0)
+
+    def test_apple_keyboard_uses_visible_height_without_moving_the_focused_input(self):
+        picker = self.app.editor_picker()
+        name, parent = picker.save_as_name, picker.save_as_name.parent
+        name.value = 'Retained.md'
+        original_size = self.app.main_window.size
+        self.app.main_window.size = type(original_size)(874, 402)
+        backend = type('IOSApp', (), {'__module__': 'toga_iOS.app'})()
+        adapter = SimpleNamespace(keyboard_inset=236)
+        try:
+            with patch.object(self.app, '_impl', backend), patch.object(self.app.native_host, 'adapter', adapter):
+                picker.fit_keyboard(True)
+                self.assertEqual(picker.panel.style.direction, 'row')
+                self.assertIs(name.parent, parent)
+                self.assertEqual(name.value, 'Retained.md')
+                adapter.keyboard_inset = 0
+                picker.fit_keyboard(False)
+                self.assertEqual(picker.panel.style.direction, 'column')
+                self.assertIs(name.parent, parent)
+                self.assertEqual(name.value, 'Retained.md')
+        finally:
+            self.app.main_window.size = original_size
 
     def test_late_listing_and_error_do_not_publish_after_invalidation(self):
         app, picker = self.app, self.app.editor_picker()

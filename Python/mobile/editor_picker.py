@@ -385,10 +385,15 @@ class EditorPicker:
             controls = self._browse_controls if compact else reversed(self._browse_controls)
             for control in controls:
                 _tuck_control(control, compact)
-            # A landscape Android IME can leave only ~100 logical pixels.
+            # A landscape keyboard can leave only ~100 logical pixels.
             # Put full-size completion buttons beside the scrollable form;
             # stacking both areas would squash the native buttons to a sliver.
-            tight = compact and self.app.main_window.size.height < 220
+            visible_height = self.app.main_window.size.height
+            # UIKit keeps the outer window size and reserves the keyboard in
+            # safe-area insets. Android already reports its resized viewport.
+            if compact and type(self.app._impl).__module__.startswith('toga_iOS.'):
+                visible_height -= self.app.native_host.adapter.keyboard_inset
+            tight = compact and visible_height < 220
             changes = ((self.panel, 'direction', ROW if tight else COLUMN),
                        (self.picker_actions, 'direction', COLUMN if tight else ROW),
                        (self.picker_actions, 'width', 112 if tight else NONE),
