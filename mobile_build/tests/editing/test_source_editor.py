@@ -117,7 +117,8 @@ class SourceEditorTests(unittest.TestCase):
         events = []
         def clear_dom(script, **kwargs):
             self.assertEqual(events, ['stop'])
-            self.assertIn('document.open()', script)
+            self.assertIn('replaceChildren(body)', script)
+            self.assertNotIn('document.open(', script)
             self.assertIn('Document closed.', script)
             events.append('dom')
         native = SimpleNamespace(navigationDelegate=object(), UIDelegate=object(),
