@@ -209,11 +209,40 @@ def exercise_sampled_apple_decode(app):
     assert (image.width, image.height) == (64, 96), (image.width, image.height)
 
 
+def _ios_webview_state(native):
+    from commonUtils.ui.native.keyboard import native_value
+    from rubicon.objc import ObjCClass
+    window = native_value(native.window)
+    application = ObjCClass('UIApplication').sharedApplication
+    return dict(url=str(native.URL), loading=bool(native_value(native.isLoading)),
+        progress=float(native_value(native.estimatedProgress)),
+        width=float(native.bounds.size.width), height=float(native.bounds.size.height),
+        attached=window is not None, hidden=bool(native_value(native.isHidden)),
+        key_window=None if window is None else bool(native_value(window.isKeyWindow)),
+        application_state=int(native_value(application.applicationState)))
+
+
+def _log_ios_webview(phase, native, error=None):
+    # Diagnostics cannot replace or change the toolkit's navigation decision.
+    try:
+        state = _ios_webview_state(native)
+        state.update(phase=phase, error=None if error is None else str(error))
+        print('LOGISTICS_EPUB_NATIVE=' + json.dumps(state), flush=True)
+    except Exception as failure:
+        print('LOGISTICS_EPUB_NATIVE_DIAGNOSTIC_ERROR=' + str(failure), flush=True)
+
+
 async def exercise_library(app, fixtures, epub, comic, passed):
-    """Retain native load-policy evidence without changing navigation decisions."""
+    """Retain actual native load events; preserve the original failure deadline."""
+    from contextlib import ExitStack
     from features.books.mobile.presentation import ChapterBridge
     from unittest.mock import patch
     original = ChapterBridge.navigation
+    initialize = ChapterBridge.__init__
+    bridges = []
+    def created(bridge, *args, **kwargs):
+        initialize(bridge, *args, **kwargs)
+        bridges.append(bridge)
     def navigation(bridge, widget, url, **kwargs):
         decision = original(bridge, widget, url, **kwargs)
         print('LOGISTICS_EPUB_NAVIGATION=' + json.dumps(dict(
@@ -221,8 +250,47 @@ async def exercise_library(app, fixtures, epub, comic, passed):
             ready=bridge.ready, decision=decision,
             allowed_url=getattr(bridge.view._impl, '_allowed_url', None))), flush=True)
         return decision
-    with patch.object(ChapterBridge, 'navigation', navigation):
-        return await _exercise_library(app, fixtures, epub, comic, passed)
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(ChapterBridge, 'navigation', navigation))
+        stack.enter_context(patch.object(ChapterBridge, '__init__', created))
+        if get_os() is OS.IOS:
+            from rubicon.objc import objc_method, py_from_ns
+            from toga_iOS.widgets import webview
+            original_native = webview.TogaWebView
+            class LogisticsDiagnosticWebView(original_native):
+                @objc_method
+                def webView_didStartProvisionalNavigation_(self, webview, navigation) -> None:
+                    _log_ios_webview('start', self)
+                @objc_method
+                def webView_didCommitNavigation_(self, webview, navigation) -> None:
+                    _log_ios_webview('commit', self)
+                @objc_method
+                def webView_didFailProvisionalNavigation_withError_(self, webview, navigation, error) -> None:
+                    _log_ios_webview('provisional-error', self, py_from_ns(error))
+                @objc_method
+                def webView_didFailNavigation_withError_(self, webview, navigation, error) -> None:
+                    _log_ios_webview('load-error', self, py_from_ns(error))
+                @objc_method
+                def webViewWebContentProcessDidTerminate_(self, webview) -> None:
+                    _log_ios_webview('web-process-terminated', self)
+            stack.enter_context(patch.object(webview, 'TogaWebView', LogisticsDiagnosticWebView))
+        try:
+            return await _exercise_library(app, fixtures, epub, comic, passed)
+        except Exception:
+            if get_os() is OS.IOS and bridges:
+                bridge = bridges[-1]
+                _log_ios_webview('original-failure', bridge.view._impl.native)
+                # This probe never counts as passing acceptance. Always re-raise
+                # the original failure, even if the document arrives later.
+                await asyncio.sleep(60)
+                _log_ios_webview('late-probe', bridge.view._impl.native)
+                try:
+                    value = await asyncio.wait_for(bridge.view.evaluate_javascript(
+                        'String(document.body ? document.body.textContent || "" : "")'), 5)
+                    print('LOGISTICS_EPUB_LATE_BODY=' + json.dumps(value[:200]), flush=True)
+                except Exception as failure:
+                    print('LOGISTICS_EPUB_LATE_ERROR=' + str(failure), flush=True)
+            raise
 
 
 async def _exercise_library(app, fixtures, epub, comic, passed):
