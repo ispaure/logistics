@@ -7,6 +7,22 @@ from Scripts.architecture import ROOT, check, feature_edges, portable_sources, r
 
 
 class ArchitectureTests(unittest.TestCase):
+    def test_packaged_asset_names_do_not_hide_real_module_references(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / 'features/example'
+            (folder / 'assets').mkdir(parents=True)
+            (folder / 'assets/desktop.js').write_text('/* packaged presentation */')
+            path = folder / 'canvas.py'
+            path.write_text("from .assets import asset as load_asset\n"
+                            "SCRIPT = load_asset('desktop.js')\n"
+                            "FACTORY = 'desktop.dialogs:prompt'\n"
+                            "MISSING = load_asset('mobile.module')\n")
+            found = references(path, root)
+            self.assertNotIn('desktop.js', found)
+            self.assertIn('desktop.dialogs', found)
+            self.assertIn('mobile.module', found)
+
     def test_current_tree_obeys_reviewed_boundaries(self):
         self.assertEqual(check(ROOT), 0)
 

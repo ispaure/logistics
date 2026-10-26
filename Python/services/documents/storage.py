@@ -174,6 +174,23 @@ class DocumentResource:
         return save_resource_and_reopen(provider, path, data, reopen=reopen,
             expected_revision=expected_revision, cancelled=lambda: cancelled() or not alive())
 
+    def delete(self, *, cancelled=lambda: False):
+        """Delete an admitted file revision, honoring every wrapper's policy."""
+        if not self.policy.writable:
+            raise PermissionError('This document is read-only.')
+        for source in document_sources(self.provider):
+            capabilities = getattr(source, 'capabilities', None)
+            if capabilities is not None and not capabilities.delete:
+                raise PermissionError('This storage does not support document deletion.')
+        if self.revision is None:
+            raise ValueError('Read the document before deleting it.')
+        with document_operation(self.provider, cancelled):
+            check_cancelled(cancelled)
+            row = self.check()
+            if row['directory'] or row['revision'] != self.revision:
+                raise ValueError('File changed; reopen it before deleting.')
+            self.provider.remove_empty(self.path, self.revision)
+
     def close(self):
         if not self.closed:
             self.closed = True

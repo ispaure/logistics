@@ -183,3 +183,29 @@ The check imports no feature or GUI toolkit. It is a static architectural guard,
 not a Python sandbox: constructed module names, arbitrary reflection, third-party
 writers and dataflow beyond the supported alias forms still require source review.
 Runtime storage/privacy regressions remain necessary.
+
+
+## Notebook host actions and deletion
+
+Mobile notebook chrome, Show in Folder and Delete Document decisions are composed
+by `services/documents/mobile_notebooks.py`. The canvas delegates these actions
+without importing application navigation, resource-history owners or another
+editor's dialog. No notebook-to-host or notebook-to-text-editor dependency
+exceptions are needed.
+
+`DocumentResource.delete` requires an admitted file revision, writable wrapper
+policy and declared deletion capability. It checks cancellation and active access
+inside the provider operation; the provider checks the expected revision again
+when removing the file. Directories are not document deletion targets. The
+notebook document coordinates this with its ordinary recovery repository, which
+owns identity-validated, serialized and idempotent cleanup. Private notebooks have
+no ordinary recovery directory.
+
+Confirmation snapshots the document/session and checks the active host and
+single-window restriction before and after the decision. Failed source deletion
+keeps recovery, history and the editable draft. If source deletion succeeds but
+recovery cleanup fails, the draft stays open with an explicit partial-success
+error. Retrying finishes recovery cleanup without deleting a new file at the old
+path. History/session cleanup follows successful document cleanup, and closing
+uses the host's existing discard path. Focused deletion tests cover cancellation,
+replacement, credential revocation, wrappers/capabilities and cleanup retries.

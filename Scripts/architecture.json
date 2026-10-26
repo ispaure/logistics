@@ -405,55 +405,55 @@
       "reason": "Ordinary reader resume/bookmark state; shared persistence policy excludes private and remote documents."
     },
     {
-      "module": "features.notebooks.workspace",
+      "module": "features.notebooks.recovery",
       "scope": "Repository.create",
       "operation": "raw-call:commonUtils.persistence.atomic.atomic_write_bytes",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
-      "module": "features.notebooks.workspace",
+      "module": "features.notebooks.recovery",
       "scope": "Repository.list",
       "operation": "raw-method:read_text",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
-      "module": "features.notebooks.workspace",
+      "module": "features.notebooks.recovery",
       "scope": "Repository.open",
       "operation": "raw-method:read_bytes",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
-      "module": "features.notebooks.workspace",
+      "module": "features.notebooks.recovery",
       "scope": "Repository.open",
       "operation": "raw-method:read_text",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
-      "module": "features.notebooks.workspace",
+      "module": "features.notebooks.recovery",
       "scope": "Repository.save",
       "operation": "raw-call:commonUtils.persistence.atomic.atomic_write_bytes",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
-      "module": "features.notebooks.workspace",
+      "module": "features.notebooks.recovery",
       "scope": "Repository.save",
       "operation": "raw-call:commonUtils.persistence.atomic_write_json",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
-      "module": "features.notebooks.workspace",
+      "module": "features.notebooks.recovery",
       "scope": "Repository.save",
       "operation": "raw-method:read_bytes",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
-      "module": "features.notebooks.workspace",
+      "module": "features.notebooks.recovery",
       "scope": "Repository.save",
       "operation": "raw-method:read_text",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
-      "module": "features.notebooks.workspace",
+      "module": "features.notebooks.recovery",
       "scope": "Repository.save",
       "operation": "raw-method:unlink",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
@@ -493,6 +493,18 @@
       "scope": "SyntaxSettings.reset_preferences",
       "operation": "raw-method:unlink",
       "reason": "Reset user syntax preferences, not document content."
+    },
+    {
+      "module": "features.notebooks.assets",
+      "scope": "asset",
+      "operation": "raw-method:read_text",
+      "reason": "Read-only packaged offline HTML/CSS/JS assets; never document content or a provider path."
+    },
+    {
+      "module": "features.notebooks.recovery",
+      "scope": "Repository.delete",
+      "operation": "raw-call:shutil.rmtree",
+      "reason": "Validated ordinary recovery identity cleanup after document deletion; private resources have no recovery repository."
     }
   ]
 }

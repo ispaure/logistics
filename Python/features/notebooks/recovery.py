@@ -13,6 +13,16 @@ from .ink import InkPage
 
 
 class Repository:
+    @serialize_mutation
+    def delete(self, key):
+        """Remove this ordinary recovery identity after source deletion."""
+        import shutil
+        try:
+            shutil.rmtree(self.root / identifier(key))
+        except FileNotFoundError:
+            if (self.root / identifier(key)).exists():
+                raise
+
     def __init__(self, root):
         self.revisions = WeakKeyDictionary()
         self.root = Path(root)

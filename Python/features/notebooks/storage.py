@@ -9,6 +9,7 @@ class NotebookDocument:
         self.book, self.resource, self.recovery = book, resource, recovery
         self.key = key or (recovery.create(book) if recovery else uuid4().hex)
         self.dirty = False
+        self.source_deleted = False
         self.changed = changed
 
     @property
@@ -33,6 +34,21 @@ class NotebookDocument:
             self.recovery.save(self.key, self.book)
         self.dirty = False
         self.changed(self)
+
+    def delete(self):
+        if not self.writable:
+            raise ValueError('This notebook is read-only.')
+        if self.resource is not None and not self.source_deleted:
+            self.resource.delete()
+            self.source_deleted = True
+        if self.recovery is not None:
+            try:
+                self.recovery.delete(self.key)
+            except OSError as error:
+                if self.source_deleted:
+                    raise OSError('Notebook file deleted, but recovery cleanup failed. '
+                                  'Your draft is still open; retry Delete or use Save As.') from error
+                raise
 
     def close(self):
         if self.resource is not None:

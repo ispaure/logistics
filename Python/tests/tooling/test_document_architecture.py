@@ -35,6 +35,12 @@ class DocumentArchitectureTests(unittest.TestCase):
         self.write(source)
         self.assertTrue(any(expected in error for error in self.errors()), self.errors())
 
+    def test_notebook_host_actions_have_no_dependency_waivers(self):
+        policy = json.loads((ROOT / 'Scripts/architecture.json').read_text())
+        self.assertFalse(any(source.startswith('Python/features/notebooks/') and target.startswith('mobile.')
+                             for source, target in policy['host_adapters']))
+        self.assertNotIn(['notebooks', 'text_editor'], policy['feature_dependencies'])
+
     def test_backend_imports_relative_lazy_and_dynamic_factories_are_rejected(self):
         for source in (
             'from features.rclone.localcrypt import copies as storage',

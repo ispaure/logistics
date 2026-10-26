@@ -201,6 +201,47 @@ class DocumentStorageProbe(LogisticsMobile):
             await asyncio.sleep(.2)
             report['cases'].append(('localcrypt' if provider.private else 'local') + '-pdf-read-only')
 
+    async def verify_notebook_deletion(self, location, report):
+        """Real canvas/provider deletion with controlled confirmation responses."""
+        from features.notebooks.notebook import Notebook, MAX_ARCHIVE
+        from services.documents.storage import DocumentResource
+        panel = await self.create_notebook(location, 'Storage deletion acceptance')
+        await self.command(panel, dict(op='stroke', points=[[20,30,.5],[40,50,.5]], tool=12, width=2))
+        document, session = panel.document, panel.session
+        resource = document.resource
+        physical = resource.provider._physical(resource.path)
+        original_dialog = self.main_window.dialog
+        answer = 'cancel'
+        async def decision(dialog):
+            assert dialog.choices[0][1] == 'delete'
+            report['dialogs'].append(dict(title=dialog.title, response=answer, controlled=True))
+            return answer
+        self.main_window.dialog = decision
+        label = 'localcrypt' if not resource.policy.persistent else 'local'
+        try:
+            assert await panel.delete_document() is False
+            assert physical.exists() and document.dirty and not panel.closed and not panel.busy
+            report['cases'].append(label + '-notebook-delete-cancel')
+            DocumentResource.publish(resource.provider, resource.path, Notebook.new('External').to_bytes(),
+                max_bytes=MAX_ARCHIVE, expected_revision=resource.revision)
+            answer = 'delete'
+            try:
+                await panel.delete_document()
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('Delete accepted a changed source')
+            assert physical.exists() and not document.source_deleted and document.dirty
+            report['cases'].append(label + '-notebook-delete-stale-revision')
+            resource.read()
+            assert await panel.delete_document()
+            assert not physical.exists() and panel.closed and session.id not in self.workspace.sessions
+            if document.recovery is not None:
+                assert not (document.recovery.root / document.key).exists()
+            report['cases'].append(label + '-notebook-delete-source-recovery-session')
+        finally:
+            self.main_window.dialog = original_dialog
+
     async def verify_storage(self):
         report = dict(success=False, backend=type(self._impl).__module__, cases=[], dialogs=[])
         try:
@@ -219,6 +260,8 @@ class DocumentStorageProbe(LogisticsMobile):
             self.cloud_crypt_remotes = {remote}
             await asyncio.sleep(.3)
             await self.verify_formats(remote, fixture, report)
+            for location in ('Local', 'LocalCrypt: ' + remote):
+                await self.verify_notebook_deletion(location, report)
             for location in ('Local', 'LocalCrypt: ' + remote):
                 panel = await self.create_notebook(location, 'Storage acceptance')
                 if location.startswith('LocalCrypt'):

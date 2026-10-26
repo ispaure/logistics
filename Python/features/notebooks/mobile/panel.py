@@ -28,14 +28,8 @@ class NotebookPanel:
         self.busy = False
         self.closed = False
         self.view = toga.Box(style=Pack(direction=COLUMN, flex=1))
-        if type(self.view._impl).__module__.startswith('toga_iOS.'):
-            from mobile.control_icons import icon_button
-            async def close(widget=None, **kwargs):
-                if self.web is not None:
-                    await self.web.evaluate_javascript("send({op:'library'})")
-            self.view._reader_close_button = icon_button('close', 'Close document', on_press=close)
-            self.view._native_reader_toolbar = toga.Box()
-            self.view._native_reader_buttons = lambda: []
+        from services.documents.mobile_notebooks import install_notebook_controls
+        install_notebook_controls(self)
         if library:
             self.library()
         else:
@@ -184,8 +178,8 @@ class NotebookPanel:
                 await canvas.wait(web.evaluate_javascript(update_script(self.state(), '')))
             if op == 'show-in-folder':
                 self.busy = True
-                from mobile.document_sources import show_in_folder
-                await canvas.wait(show_in_folder(self.app, self.session, self))
+                from services.documents.mobile_notebooks import show_notebook_in_folder
+                await canvas.wait(show_notebook_in_folder(self))
             if op == 'delete-file':
                 self.busy = True
                 await canvas.wait(self.delete_document())
@@ -269,41 +263,8 @@ class NotebookPanel:
                         self.status.text = 'Notebook saved. Reopen it to resume: ' + str(failure)
 
     async def delete_document(self):
-        from features.text_editor.mobile.document_dialogs import DocumentDialog
-        document = self.document
-        if document is None or not document.writable:
-            raise ValueError('This notebook cannot be deleted.')
-        if len(self.app.scene_manager.owners.hosts) > 1:
-            raise ValueError('Close other app windows before deleting a document.')
-        resource = document.resource
-        warning = ('Permanently delete this notebook and its recovery draft? '
-                   'Unsaved changes will also be removed.')
-        if resource is not None:
-            warning += ' The file will be deleted from its folder.'
-        choice = await self.app.main_window.dialog(DocumentDialog(
-            'Delete ' + document.book.name + '?', warning, delete=True))
-        if choice != 'delete' or self.closed or self.document is not document or not self.app.active_host:
-            return
-        if len(self.app.scene_manager.owners.hosts) > 1:
-            raise ValueError('Close other app windows before deleting a document.')
-        def remove():
-            if resource is not None:
-                if resource.check()['revision'] != resource.revision:
-                    raise ValueError('File changed; reopen it before deleting.')
-                resource.provider.remove_empty(resource.path, resource.revision)
-            if document.recovery is not None:
-                import shutil
-                from ..notebook import identifier
-                shutil.rmtree(document.recovery.root / identifier(document.key))
-        await asyncio.to_thread(remove)
-        self.app.recent_documents.forget('notebook', self.session.resource)
-        from mobile.resource_imports import ResourceImports
-        imports = getattr(self.app, 'resource_imports', None) or ResourceImports(self.app.private_root)
-        imports.forget('notebook', self.session.resource)
-        self.busy = False
-        self.app.__dict__.setdefault('_reader_returns', {})[self.session.id] = ('home', None, False)
-        self.app.__dict__.setdefault('_reader_closing', set()).add(self.session.id)
-        self.app.close_session(self.session.id, choice='discard')
+        from services.documents.mobile_notebooks import delete_notebook
+        return await delete_notebook(self)
 
     async def confirm_export(self):
         from services.documents.mobile_storage import confirm_export

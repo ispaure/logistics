@@ -243,3 +243,65 @@ def prepare_notebook_lock(app, *, discard=False):
     for panel in private:
         close_notebook(app, panel.session.id, 'discard')
     return True
+
+
+def install_notebook_controls(panel):
+    """Native reader chrome is host composition, independent of the canvas."""
+    if not type(panel.view._impl).__module__.startswith('toga_iOS.'):
+        return
+    import toga
+    from mobile.control_icons import icon_button
+    async def close(widget=None, **kwargs):
+        if panel.web is not None:
+            await panel.web.evaluate_javascript("send({op:'library'})")
+    panel.view._reader_close_button = icon_button('close', 'Close document', on_press=close)
+    panel.view._native_reader_toolbar = toga.Box()
+    panel.view._native_reader_buttons = lambda: []
+
+
+async def show_notebook_in_folder(panel):
+    from mobile.document_sources import show_in_folder
+    if not panel.closed and panel.app.active_host:
+        return await show_in_folder(panel.app, panel.session, panel)
+    return False
+
+
+async def delete_notebook(panel):
+    """Confirm and retire one document through its storage/recovery owners."""
+    import asyncio
+    from features.text_editor.mobile.document_dialogs import DocumentDialog
+    from mobile.resource_imports import ResourceImports
+    app, document, session = panel.app, panel.document, panel.session
+    if panel.closed or not app.active_host:
+        return False
+    if document is None or not document.writable:
+        raise ValueError('This notebook cannot be deleted.')
+    def single_window():
+        if len(app.scene_manager.owners.hosts) > 1:
+            raise ValueError('Close other app windows before deleting a document.')
+    single_window()
+    warning = ('Permanently delete this notebook and its recovery draft? '
+               'Unsaved changes will also be removed.')
+    if document.resource is not None:
+        warning += (' The file was already deleted; retry recovery cleanup.' if document.source_deleted
+                    else ' The file will be deleted from its folder.')
+    was_busy, panel.busy = panel.busy, True
+    try:
+        choice = await app.main_window.dialog(DocumentDialog(
+            'Delete ' + document.book.name + '?', warning, delete=True))
+        if (choice != 'delete' or panel.closed or panel.document is not document
+                or panel.session is not session or not app.active_host):
+            return False
+        single_window()
+        await asyncio.to_thread(document.delete)
+        if panel.closed or panel.document is not document or panel.session is not session:
+            return False
+        app.recent_documents.forget('notebook', session.resource)
+        imports = getattr(app, 'resource_imports', None) or ResourceImports(app.private_root)
+        imports.forget('notebook', session.resource)
+        panel.busy = False
+        app.__dict__.setdefault('_reader_returns', {})[session.id] = ('home', None, False)
+        app.__dict__.setdefault('_reader_closing', set()).add(session.id)
+        return app.close_session(session.id, choice='discard')
+    finally:
+        panel.busy = False if panel.closed else was_busy

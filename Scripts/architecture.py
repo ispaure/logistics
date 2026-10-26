@@ -14,6 +14,17 @@ def references(path, source_root):
     relative = path.relative_to(source_root).with_suffix('')
     package = '.'.join(relative.parts[:-1])
     tree = ast.parse(path.read_text(encoding='utf-8'))
+    # Packaged web assets can have module-shaped names such as desktop.js.
+    # Exclude arguments to the explicitly imported owner-relative asset loader,
+    # while retaining literal module references everywhere else.
+    asset_loaders = {alias.asname or alias.name for node in ast.walk(tree)
+                     if isinstance(node, ast.ImportFrom) and node.module == 'assets'
+                     and node.level == 1 for alias in node.names if alias.name == 'asset'}
+    asset_literals = {id(argument) for node in ast.walk(tree)
+                      if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                      and node.func.id in asset_loaders for argument in node.args
+                      if isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+                      and (path.parent / 'assets' / argument.value).is_file()}
     result = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -25,6 +36,8 @@ def references(path, source_root):
             result.add(module)
             result.update(module + '.' + alias.name for alias in node.names if alias.name != '*')
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if id(node) in asset_literals:
+                continue
             module, separator, attribute = node.value.partition(':')
             if separator and not re.fullmatch(r'[A-Za-z_]\w*(\.[A-Za-z_]\w*)*', attribute):
                 continue
