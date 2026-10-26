@@ -17,6 +17,26 @@ spec.loader.exec_module(ui_tools)
 
 
 class NativeReportTests(unittest.TestCase):
+    def test_direct_owned_cleanup_bootstraps_real_manager_without_pythonpath(self):
+        import sys, shutil
+        import build_manager
+        code = '''
+import runpy, sys
+from pathlib import Path
+sys.path = [p for p in sys.path if not ((Path(p)/'build_manager').is_dir() or (Path(p)/'commonUtils').is_dir())]
+sys.path.insert(0, sys.argv[1])
+sys.argv = [sys.argv[2], 'ios-cleanup']
+runpy.run_path(sys.argv[0], run_name='__main__')
+'''
+        with TemporaryDirectory() as directory:
+            manager = Path(directory) / 'manager'
+            shutil.copytree(Path(build_manager.__file__).parent, manager / 'build_manager',
+                            ignore=shutil.ignore_patterns('__pycache__'))
+            result = subprocess.run([sys.executable, '-I', '-X', 'utf8', '-c', code,
+                str(manager), str(REPO / 'mobile_build/validation/ui_tools.py')],
+                cwd=directory, capture_output=True, text=True, encoding='utf-8', timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_owned_simulator_matches_sdk_and_cleanup_uses_its_saved_identity(self):
         old = dict(udid='old', name='iPhone', state='Booted', isAvailable=True,
                    deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro')

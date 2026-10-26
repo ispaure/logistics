@@ -17,6 +17,9 @@ from threading import Event, Thread
 
 PREFIX = 'LOGISTICS_NATIVE_UI_RESULT='
 REPO = Path(__file__).resolve().parents[2]
+# Direct CI script execution does not inherit the application's source path.
+# The pinned external manager imports commonUtils from its consumer checkout.
+sys.path.insert(0, str(REPO / 'Python'))
 spec = importlib.util.spec_from_file_location('native_ui_contract',
     Path(__file__).resolve().parents[1] / 'native_tests/tests/logisticsmobile/__init__.py')
 contract = importlib.util.module_from_spec(spec)
