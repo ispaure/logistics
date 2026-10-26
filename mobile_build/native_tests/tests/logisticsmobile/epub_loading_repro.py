@@ -7,7 +7,6 @@ from pathlib import Path
 import platform
 import time
 import traceback
-from uuid import uuid4
 from unittest.mock import patch
 
 import toga
@@ -97,18 +96,32 @@ async def observation(view, kind, mode, label):
     expected = 'Synthetic chapter ' + label
     started = time.monotonic()
     event('request', view._impl.native)
-    if kind == 'plain':
-        view.set_content('https://logistics.invalid/' + uuid4().hex + '/', html(expected))
-    else:
-        chapter_view(html(expected), view)
     result = dict(label=label, kind=kind, mode=mode, deadline_seconds=30,
                   deadline_met=False, late_rendered=False)
     try:
+        previous = getattr(view, '_chapter_bridge', None)
+        if kind == 'bridge-awaited' and previous is not None:
+            pending = []
+            original_evaluate = view.evaluate_javascript
+            def capture(script):
+                result = original_evaluate(script)
+                pending.append(result)
+                return result
+            event('dispose-request', view._impl.native)
+            with patch.object(view, 'evaluate_javascript', side_effect=capture):
+                previous.dispose()
+            if len(pending) != 1:
+                raise RuntimeError('Expected exactly one production disposal evaluation.')
+            await asyncio.wait_for(pending[0], 5)
+            event('dispose-complete', view._impl.native)
+        # Both variants use the production chapter_view. The awaited variant
+        # has completed the previous bridge's real cleanup before replacing HTML.
+        chapter_view(html(expected), view)
+        remaining = max(.001, 30-(time.monotonic()-started))
         if mode == 'poll':
-            # Exact frozen acceptance helper and its existing deadline.
-            await wait_for_text(view, expected, timeout=30)
+            await wait_for_text(view, expected, timeout=remaining)
         else:
-            await passive_text(view, expected, 30, seen)
+            await passive_text(view, expected, remaining, seen)
         result['deadline_met'] = True
     except Exception as error:
         result['error'] = str(error)[:400]
@@ -133,7 +146,8 @@ async def exercise(app):
     observations = []
     report = dict(schema=1, suite='epub-loading-reproduction', diagnostic_only=True,
         canonical_native_acceptance=False, original_timeout_seconds=30,
-        planned_observations=16, observations=observations,
+        planned_observations=32, observations=observations,
+        experiment='production-immediate-vs-awaited-disposal; crossed-with-poll-vs-native-event',
         packages={name:version(name) for name in ['toga-core','toga-iOS','rubicon-objc']},
         python=platform.python_version(), machine=platform.machine())
     import mobile
@@ -160,12 +174,12 @@ async def exercise(app):
     def bridge_loaded(bridge, widget, **kwargs):
         original_loaded(bridge, widget, **kwargs)
         loaded(widget)
-    sequence = [('plain','poll'),('plain','passive'),('bridge','poll'),('bridge','passive')]
-    deadline = time.monotonic()+12*60
+    sequence = [('bridge','poll'),('bridge-awaited','poll'),('bridge','passive'),('bridge-awaited','passive')]
+    deadline = time.monotonic()+16*60
     try:
         with patch.object(webview, 'TogaWebView', ReproWebView), \
                 patch.object(ChapterBridge, 'loaded', bridge_loaded):
-            for round_number, pairs in enumerate([sequence, list(reversed(sequence))], 1):
+            for round_number, pairs in enumerate([sequence, list(reversed(sequence)), sequence, list(reversed(sequence))], 1):
                 for kind, mode in pairs:
                     if time.monotonic()+90 > deadline:
                         report['budget_exhausted'] = True
