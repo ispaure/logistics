@@ -523,6 +523,14 @@ def _install_android_appearance(app):
     WebView.set_content = web_content
 
 
+def native_theme_configuration(app):
+    """Only Android configuration values which change the native palette."""
+    if type(app._impl).__module__.startswith('toga_android.'):
+        configuration = app._impl.native.getResources().getConfiguration()
+        return int(configuration.uiMode)
+    return None
+
+
 def refresh_appearance(app):
     """Recolour live chrome without replacing editors or transfer owners."""
     from .page_animation import sync_preferences

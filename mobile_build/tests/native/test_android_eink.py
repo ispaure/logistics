@@ -13,6 +13,35 @@ from mobile.app import LogisticsMobile
 
 
 class AndroidEInkTests(unittest.TestCase):
+    def test_rotation_keeps_palette_but_night_mode_and_explicit_refresh_repaint(self):
+        configuration = SimpleNamespace(uiMode=0x11, orientation=1)
+        android = type('Android', (), {'__module__': 'toga_android.app'})()
+        android.native = SimpleNamespace(getResources=lambda: SimpleNamespace(
+            getConfiguration=lambda: configuration))
+        editor = SimpleNamespace(highlighting=True, changed=Mock())
+        app = SimpleNamespace(_impl=android, active_host=True,
+            preferences=SimpleNamespace(values={}), text_views={'draft': SimpleNamespace(editor=editor)})
+        app.refresh_native_theme = lambda: LogisticsMobile.refresh_native_theme(app)
+        with patch('mobile.appearance.refresh_appearance') as repaint:
+            app.refresh_native_theme()
+            repaint.reset_mock()
+            editor.changed.reset_mock()
+            for orientation in (2, 1, 2, 1):
+                configuration.orientation = orientation
+                LogisticsMobile.native_configuration_changed(app)
+            repaint.assert_not_called()
+            editor.changed.assert_not_called()
+            configuration.uiMode = 0x21
+            LogisticsMobile.native_configuration_changed(app)
+            repaint.assert_called_once_with(app)
+            editor.changed.assert_called_once_with(notify=False)
+            LogisticsMobile.native_configuration_changed(app)
+            self.assertEqual(repaint.call_count, 1)
+            app.preferences.values['android_eink'] = 'true'
+            app.refresh_native_theme()
+            self.assertEqual(repaint.call_count, 2)
+            self.assertFalse(editor.highlighting)
+
     def tearDown(self):
         palette.set_eink_enabled(False)
 

@@ -521,7 +521,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self.loop.call_soon(notify_layout, self)
 
     def refresh_native_theme(self):
-        from .appearance import refresh_appearance
+        from .appearance import refresh_appearance, native_theme_configuration
         refresh_appearance(self)
         enabled = self.preferences.values.get('android_eink') != 'true'
         editors = [owner.editor for owner in self.text_views.values()]
@@ -532,6 +532,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             if hasattr(editor, 'highlighting'):
                 editor.highlighting = enabled
                 editor.changed(notify=False)
+        self._native_theme_configuration = native_theme_configuration(self)
 
     def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False):
         target = destination or self.native_host.state.destination
@@ -906,6 +907,14 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     def native_configuration_changed(self):
         if self.active_host:
+            from .appearance import native_theme_configuration
+            configuration = native_theme_configuration(self)
+            # Android sends this callback for rotation as well as theme changes.
+            # Layout has its own native notifications; avoid repainting every
+            # retained control and editor when the palette is unchanged.
+            if (configuration is not None
+                    and configuration == getattr(self, '_native_theme_configuration', None)):
+                return
             self.refresh_native_theme()
 
     def release_disposable_resources(self):
