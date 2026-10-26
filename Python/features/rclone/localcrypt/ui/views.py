@@ -122,11 +122,6 @@ class CryptBrowserView(qt.QMainWindow):
         from commonUtils.runtime.operations import check_cancelled
         path = self.provider.root / relative
         suffix = path.suffix.lower()
-        from features.images.document import IMAGE_EXTENSIONS
-        if suffix in IMAGE_EXTENSIONS:
-            from features.images.ui.viewer import open_image_choice
-            from commonUtils.runtime.resources.selection import ResourceChoice
-            return open_image_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)
         check_cancelled(cancelled)
         if suffix in {'.cbz', '.zip'}:
             from features.comics.library import ComicDocument
@@ -286,6 +281,11 @@ class CryptBrowserView(qt.QMainWindow):
             return
         path = Path(path)
         suffix = path.suffix.lower()
+        from features.images.document import IMAGE_EXTENSIONS
+        if suffix in IMAGE_EXTENSIONS:
+            from features.images.ui.viewer import open_image_choice
+            from commonUtils.runtime.resources.selection import ResourceChoice
+            return open_image_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)
         if suffix == '.rmdoc':
             from services.documents.ui.notebooks import open_notebook_choice
             from commonUtils.runtime.resources.selection import ResourceChoice

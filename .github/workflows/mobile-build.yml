@@ -201,11 +201,13 @@ jobs:
           device=$(python validation/ui_tools.py "$selector" --owned)
           # Capture launch decisions live: retrospective simulator logs can
           # contain only UUID compose failures after a WebKit startup stall.
-          # Limit this synthetic-test stream to 25 MiB on the macOS runner.
-          (ulimit -f 25600; exec xcrun simctl spawn "$device" log stream \
+          # Bound the host-side writer: simctl's remote logger does not inherit
+          # a host shell's file-size limit. Owned simulator cleanup also stops
+          # the remote logger when the bounded pipe closes.
+          xcrun simctl spawn "$device" log stream \
             --style compact --level debug --predicate \
-            'subsystem BEGINSWITH "com.apple.WebKit" OR subsystem BEGINSWITH "com.apple.browserEngineKit" OR process == "runningboardd"') \
-            > logs/ios-webkit-live.log 2>&1 &
+            'subsystem BEGINSWITH "com.apple.WebKit" OR subsystem BEGINSWITH "com.apple.browserEngineKit" OR subsystem BEGINSWITH "com.apple.extensionkit" OR subsystem BEGINSWITH "com.apple.extensionfoundation" OR process == "runningboardd"' \
+            2>&1 | head -c 26214400 > logs/ios-webkit-live.log &
           webkit_log_pid=$!
           trap 'kill "$webkit_log_pid" 2>/dev/null || true; kill -KILL "$webkit_log_pid" 2>/dev/null || true; wait "$webkit_log_pid" 2>/dev/null || true' EXIT
           python validation/ui_tools.py run ios --device "$device" --no-update "${flags[@]}"

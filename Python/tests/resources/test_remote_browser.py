@@ -290,11 +290,21 @@ class RemoteBrowserTests(QtTestCase):
                     for name in ('large.txt', 'broken.png', 'broken.cbz', 'broken.epub', 'missing.txt'):
                         info.reset_mock()
                         warning.reset_mock()
-                        view.open_document(view.provider.root / name)
-                        self.wait_until(lambda: not view.operation.busy, timeout=15)
+                        opened = view.open_document(view.provider.root / name)
+                        operation = opened.operation if name == 'broken.png' else view.operation
+                        self.wait_until(lambda: not operation.busy, timeout=15)
                         dialog = warning if warning.called else info
                         self.assertTrue(dialog.called, name)
-                        self.assertIn(LOCAL_COPY_MESSAGE, dialog.call_args.args[2], name)
+                        if name == 'broken.png':
+                            from features.images.ui.viewer import ImageWindow
+                            self.assertIsInstance(opened, ImageWindow)
+                            self.assertTrue(opened.document_read_only)
+                            self.assertIs(opened.choice.provider, view.provider)
+                            self.assertTrue(dialog.call_args.args[2])
+                            opened.close()
+                            qt.QApplication.instance().processEvents()
+                        else:
+                            self.assertIn(LOCAL_COPY_MESSAGE, dialog.call_args.args[2], name)
                 view.open_document(view.provider.root / 'note.txt')
                 self.wait_until(lambda: not view.operation.busy, timeout=15)
                 text = next(widget for widget in qt.QApplication.topLevelWidgets()

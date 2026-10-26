@@ -4,7 +4,7 @@ import math
 from datetime import datetime
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.styling import styling
-from commonUtils.ui.markdown.presentation import ACCENT, MarkdownBrowser, style_document, monospace_family, code_point_size, blend
+from commonUtils.ui.markdown.presentation import ACCENT, MarkdownBrowser, style_document, monospace_family, blend
 from .image_view import ScreenshotView
 from .changes import EditedFilesCard
 from .icons import action_button, chat_icon
@@ -53,7 +53,7 @@ class MessageBrowser(MarkdownBrowser):
 
     def refresh_font(self):
         font = styling().font('reading')
-        appearance = (font.key(), monospace_family(), code_point_size(), qt.QApplication.palette().cacheKey())
+        appearance = (font.key(), monospace_family(), qt.QApplication.palette().cacheKey())
         if appearance == self._appearance:
             return
         self._appearance = appearance

@@ -41,9 +41,11 @@ class LMAppearanceTests(QtTestCase):
         page.composer.setPlainText('Short again')
         self.wait_until(lambda: page.composer.height() == short_height and
                         not page.composer.verticalScrollBar().isVisible())
-        # Wrapping a single paragraph must grow the draft too.
+        # Wrapping a single paragraph must grow the draft too. Keep this
+        # fixture below the half-height cap with the current reading font;
+        # overflow at the cap is exercised by the 100-line draft above.
         page.resize(1000, 800)
-        page.composer.setPlainText('wrapped words ' * 30)
+        page.composer.setPlainText('wrapped words ' * 20)
         for _ in range(5):
             self.app.processEvents()
         wide_height = page.composer.height()
@@ -184,11 +186,12 @@ class LMAppearanceTests(QtTestCase):
             controller.values['browser_font_size_int'] += 1
             controller.changed.emit()
             render.assert_not_called()
-            # Code typography is independent of the reading font signature.
+            # Rendered Markdown code now follows the reading font size, while
+            # the code-editor size setting remains independent of chat prose.
             controller.values['code_font_size_int'] += 1
             controller.changed.emit()
             controller.changed.emit()
-            self.assertEqual(render.call_count, 1)
+            render.assert_not_called()
             render.reset_mock()
             controller.values['reading_font_size_int'] += 1
             controller.changed.emit()
