@@ -10,11 +10,9 @@ from ._vendor.rmscene import scene_stream as ss, scene_items as si
 from ._vendor.rmscene.crdt_sequence import CrdtSequenceItem
 from ._vendor.rmscene.tagged_block_common import CrdtId, LwwValue, HEADER_V6
 from ._vendor.rmscene.scene_tree import SceneTree
+from .brushes import TOOLS, COLORS, WIDTHS, native_color, stroke_points
 
 WIDTH, HEIGHT = 1404, 1872
-TOOLS = {'Fineliner': 17, 'Ballpoint': 15, 'Pencil': 14, 'Mechanical pencil': 13,
-         'Marker': 16, 'Paintbrush': 12, 'Calligraphy': 21, 'Highlighter': 18}
-COLORS = {'Black': 0, 'Gray': 1, 'White': 2, 'Yellow': 3, 'Green': 4, 'Pink': 5, 'Blue': 6, 'Red': 7}
 MAX_POINTS = 100_000
 MAX_PAGE_POINTS = 1_000_000
 
@@ -49,10 +47,11 @@ class Stroke:
     color: int
     points: list  # [x, y, pressure, width]; page coordinates, top-left origin
     scale: float = 1.0
+    color_rgba: tuple | None = None
 
     def payload(self):
         return dict(id=self.id, layer=self.layer, tool=self.tool, color=self.color,
-                    points=self.points, scale=self.scale)
+                    points=self.points, scale=self.scale, color_rgba=self.color_rgba)
 
 
 @dataclass
@@ -100,6 +99,8 @@ class InkPage:
                         block = mapping[id(child)]
                         if block.item.deleted_length:
                             continue
+                        if child.tool in (si.Pen.ERASER, si.Pen.ERASER_AREA):
+                            raise ValueError('Native eraser objects are preserved but cannot yet be rendered or edited.')
                         total += len(child.points)
                         if total > MAX_PAGE_POINTS:
                             raise ValueError('Too many ink points.')
@@ -109,7 +110,7 @@ class InkPage:
                         if any(not all(math.isfinite(v) for v in p) for p in points):
                             raise ValueError('Non-finite ink coordinates.')
                         page.strokes.append(Stroke(f'{block.item.item_id.part1}:{block.item.item_id.part2}', key,
-                            int(child.tool), int(child.color), points, child.thickness_scale))
+                            int(child.tool), int(child.color), points, child.thickness_scale, child.color_rgba))
             visit(tree.root)
             page._baseline = {s.id: deepcopy(s.payload()) for s in page.strokes}
             page._original_layers = list(page.layers)
@@ -133,8 +134,9 @@ class InkPage:
     def add(self, points, tool=17, color=0, width=2, layer=None):
         if self.warning:
             raise ValueError(self.warning)
-        if tool not in TOOLS.values() or color not in COLORS.values() or not 0.25 <= width <= 32:
+        if type(width) not in (int, float) or width not in WIDTHS.values():
             raise ValueError('Unsupported brush, color or width.')
+        native, rgba = native_color(tool, color)
         if not isinstance(points, list) or not 1 <= len(points) <= MAX_POINTS:
             raise ValueError('Invalid stroke length.')
         clean = []
@@ -144,13 +146,13 @@ class InkPage:
             x, y, pressure = point
             if not 0 <= x <= WIDTH or not 0 <= y <= HEIGHT or not 0 <= pressure <= 1:
                 raise ValueError('Stroke is outside the page.')
-            dynamic = tool in (12, 14, 15, 21)
-            clean.append([x, y, pressure, width * (0.3 + 0.7 * pressure if dynamic else 1)])
+            clean.append([x, y, pressure])
+        clean = stroke_points(clean, tool, int(width))
         visible = [key for key, name, shown in self.layers if shown]
         layer = layer or (visible[-1] if visible else None)
         if layer not in visible:
             raise ValueError('Choose a visible ink layer.')
-        stroke = Stroke(uuid4().hex, layer, tool, color, clean)
+        stroke = Stroke(uuid4().hex, layer, tool, native, clean, width, rgba)
         self.strokes.append(stroke)
         return stroke
 
@@ -225,7 +227,7 @@ class InkPage:
             identity = CrdtId(author, index + 1)
             line = si.Line(si.PenColor(stroke.color), si.Pen(stroke.tool),
                 [si.Point(x - WIDTH / 2, y, 0, 0, max(1, min(65535, round(w * 4))), round(p * 255))
-                 for x, y, p, w in stroke.points], stroke.scale, 0)
+                 for x, y, p, w in stroke.points], stroke.scale, 0, color_rgba=stroke.color_rgba)
             additions.append(ss.SceneLineItemBlock(parent, CrdtSequenceItem(identity,
                 tails.get(parent, CrdtId(0, 0)), CrdtId(0, 0), 0, line)))
             tails[parent] = identity

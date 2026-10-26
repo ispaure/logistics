@@ -14,7 +14,8 @@ from features.notebooks._vendor.rmscene import scene_stream as ss
 from features.notebooks._vendor.rmscene.tagged_block_common import HEADER_V6
 from features.notebooks._vendor.rmscene.scene_tree import SceneTree
 from features.notebooks.notebook import Notebook, read_archive
-from features.notebooks.ink import InkPage, TOOLS, COLORS
+from features.notebooks.ink import InkPage, TOOLS
+from features.notebooks.brushes import BRUSHES, WIDTHS, native_color
 from features.notebooks.workspace import Repository, Editor
 from features.notebooks.bridge import Bridge
 
@@ -86,11 +87,116 @@ class NotebookTests(unittest.TestCase):
 
     def test_all_declared_brushes_and_colors_encode_as_native_ink(self):
         for tool in TOOLS.values():
-            for color in COLORS.values():
-                self.book.page(0).add([[10,20,.25],[30,40,.9]],tool,color)
+            for color in BRUSHES[tool]['colors']:
+                for width in WIDTHS.values():
+                    self.book.page(0).add([[10,20,.25],[30,40,.9]],tool,color,width)
         ink = InkPage.read(self.book.page(0).to_bytes())
         self.assertFalse(ink.warning)
-        self.assertEqual(len(ink.strokes), len(TOOLS)*len(COLORS))
+        self.assertEqual(len(ink.strokes), sum(len(b['colors']) * 3 for b in BRUSHES.values()))
+        index = 0
+        for tool in TOOLS.values():
+            for color in BRUSHES[tool]['colors']:
+                for width in WIDTHS.values():
+                    stroke = ink.strokes[index]
+                    self.assertEqual((stroke.tool, stroke.color, stroke.color_rgba, stroke.scale),
+                                     (tool, *native_color(tool, color), width))
+                    index += 1
+
+    def test_brush_restrictions_reject_commands_without_changing_recovery(self):
+        self.draw()
+        before = self.book.page(0).to_bytes()
+        for tool, color, width in [(17, 5, 2), (17, -1, 2), (18, 0, 2), (18, 12, 2),
+                                   (17, 0, .25), (17, 0, 4), (17, 0, True),
+                                   (True, 0, 2), (23, False, 2)]:
+            with self.subTest(tool=tool, color=color, width=width), self.assertRaises(ValueError):
+                self.editor.apply(dict(op='stroke', points=[[20, 30, .5]], tool=tool, color=color, width=width))
+            self.assertEqual(self.book.page(0).to_bytes(), before)
+            self.assertEqual(self.repo.open(self.key).page(0).to_bytes(), before)
+
+    def test_native_rgba_and_widths_survive_move_copy_undo_and_recovery(self):
+        self.editor.apply(dict(op='stroke', points=[[20, 30, .5], [50, 60, .8]], tool=18, color=-1, width=3))
+        original = self.book.page(0).strokes[0]
+        self.assertEqual(original.color, 9)
+        self.assertEqual(original.color_rgba, (255, 195, 140, 255))
+        self.assertEqual([p[3] for p in original.points], [60, 60])
+        self.editor.apply(dict(op='transform', ids=[original.id], dx=4, dy=5))
+        moved = self.repo.open(self.key).page(0).strokes[0]
+        self.assertEqual(moved.color_rgba, original.color_rgba)
+        self.assertEqual(moved.points[0], [24, 35, 128 / 255, 60])
+        self.editor.apply(dict(op='undo'))
+        self.assertEqual(self.book.page(0).strokes[0].points, original.points)
+        target = Notebook.new('Copy')
+        target.copy_page(self.book, 0)
+        copied = Notebook.read(target.to_bytes()).page(1).strokes[0]
+        self.assertEqual(copied.color_rgba, original.color_rgba)
+        self.assertEqual(copied.points, original.points)
+
+    def test_native_width_dynamics_are_tool_specific(self):
+        from features.notebooks.brushes import stroke_points
+        samples = [[20, 30, .1], [60, 30, .9], [60, 70, .9]]
+        fine = stroke_points(samples, 17, 2)
+        mechanical = stroke_points(samples, 13, 2)
+        self.assertEqual({p[3] for p in fine}, {2})
+        self.assertEqual({p[3] for p in mechanical}, {1.5})
+        for tool in (12, 14, 15, 16, 23):
+            widths = [p[3] for p in stroke_points(samples, tool, 2)]
+            self.assertLess(widths[0], widths[1])
+        diagonal = [[20, 20, .6], [40, 40, .6], [60, 20, .6]]
+        calligraphy = stroke_points(diagonal, 21, 2)
+        self.assertLess(calligraphy[1][3], calligraphy[2][3])
+
+    def test_shader_uses_its_native_palette_and_color_specific_alpha(self):
+        # Independent native ARGB values from the color definitions, not
+        # derived from the application's palette or native_color helper.
+        native = {1: 0x40211E1C, 6: 0x4D304AE0, 7: 0x66C23132,
+                  10: 0x8091DA71, 13: 0x73FAE719, 11: 0x6674D2E8,
+                  12: 0x80C07FD2, -1: 0x73FEB200}
+        self.assertEqual(set(BRUSHES[23]['colors']), set(native))
+        for choice, argb in native.items():
+            self.book.page(0).add([[20, 30, .5]], tool=23, color=choice)
+            stroke = InkPage.read(self.book.page(0).to_bytes()).strokes[-1]
+            self.assertEqual(stroke.color, 9)
+            self.assertEqual(stroke.color_rgba,
+                             ((argb >> 16) & 255, (argb >> 8) & 255, argb & 255, argb >> 24))
+        for choice in (0, 2, 5):
+            with self.assertRaises(ValueError):
+                self.book.page(0).add([[20, 30, .5]], tool=23, color=choice)
+
+    def test_imported_native_erasers_are_not_painted_as_black_fineliner_ink(self):
+        from features.notebooks.ink import encode
+        from features.notebooks._vendor.rmscene import scene_items as si
+        ink = InkPage.blank()
+        ink.add([[20, 30, .5], [50, 60, .8]])
+        blocks = list(ss.read_blocks(BytesIO(ink.to_bytes())))
+        line = next(b.item.value for b in blocks if isinstance(b, ss.SceneLineItemBlock))
+        for tool in (si.Pen.ERASER, si.Pen.ERASER_AREA):
+            line.tool = tool
+            raw = encode(blocks)
+            imported = InkPage.read(raw)
+            self.assertIn('eraser objects', imported.warning)
+            self.assertFalse(imported.strokes)
+            self.assertEqual(imported.to_bytes(), raw)
+
+    def test_imported_custom_rgba_and_widths_are_preserved_outside_creation_palette(self):
+        from features.notebooks.ink import encode
+        ink = InkPage.blank()
+        ink.add([[20, 30, .5], [50, 60, .8]])
+        blocks = list(ss.read_blocks(BytesIO(ink.to_bytes())))
+        line = next(b.item.value for b in blocks if isinstance(b, ss.SceneLineItemBlock))
+        line.color_rgba = (12, 34, 56, 117)
+        line.thickness_scale = 2.5
+        for point in line.points:
+            point.width = 37
+        raw = encode(blocks)
+        imported = InkPage.read(raw)
+        self.assertEqual(imported.to_bytes(), raw)
+        stroke = imported.strokes[0]
+        self.assertEqual(stroke.payload()['color_rgba'], (12, 34, 56, 117))
+        stroke.points = [[x + 4, y + 5, p, w] for x, y, p, w in stroke.points]
+        moved = InkPage.read(imported.to_bytes()).strokes[0]
+        self.assertEqual(moved.color_rgba, (12, 34, 56, 117))
+        self.assertEqual(moved.scale, 2.5)
+        self.assertEqual([p[3] for p in moved.points], [9.25, 9.25])
 
     def test_save_reopen_erase_undo_redo_transform(self):
         self.draw()

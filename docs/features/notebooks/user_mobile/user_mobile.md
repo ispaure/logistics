@@ -15,7 +15,11 @@ workspace entries. Exporting or saving private content to ordinary storage asks
 before creating a decrypted copy. Save or explicitly discard unsaved private
 edits before closing or locking credentials. Cloud locations remain read-only.
 
-Choose a brush, color, width and visible layer. Write with a stylus or enable
+Choose one of nine brushes including Shader, a supported Paper Pro / Move color,
+Thin / Medium / Thick width and a visible layer. **Grayscale preview** changes
+only the view; export keeps the native colors. The
+[Paper Pro / Move brush settings](../user/user.md#paper-pro--move-brush-settings)
+list the palettes and rendering limits. Write with a stylus or enable
 **Draw with finger**. With finger drawing disabled, touch drags pan the page.
 Pointer cancellation discards the unfinished stroke. Resize and zoom change the
 view while stored points retain page coordinates. Pressure depends on what the

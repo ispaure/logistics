@@ -10,6 +10,7 @@ from commonUtils.persistence.publication import serialize_mutation
 from commonUtils.persistence.atomic import atomic_write_bytes
 from .notebook import Notebook, Page, MAX_ARCHIVE, identifier
 from .ink import InkPage, WIDTH, HEIGHT, TOOLS, COLORS
+from .brushes import BRUSHES, PALETTE, HIGHLIGHTS, SHADERS, WIDTHS
 
 
 class Repository:
@@ -236,6 +237,7 @@ class Editor:
         ink = self.notebook.page(self.index)
         return dict(name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH, height=HEIGHT, tools=TOOLS, colors=COLORS,
+                    brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS, shaders=SHADERS, widths=WIDTHS,
                     strokes=[s.payload() for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=self.notebook.pages[self.index].template,
                     undo=bool(self.undo), redo=bool(self.redo))

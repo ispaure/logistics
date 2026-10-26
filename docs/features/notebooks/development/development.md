@@ -43,7 +43,8 @@ text is preserved. Cross-notebook copies of unsupported objects are refused.
 
 The model uses 1404 × 1872 page units with centered v6 X coordinates. Pressure is
 normalized to 0–1 in the editor and written to the v6 0–255 field. Width is written
-in quarter-units. Pressure-sensitive brush previews are approximate. Layer IDs,
+in quarter-units. Imported v6 point widths are rendered directly without multiplying by thickness
+scale or reapplying pressure. New-stroke brush dynamics are approximate. Layer IDs,
 visibility and supported brushes remain native scene data. Tablet rendering is
 an independent acceptance gate.
 
@@ -53,6 +54,71 @@ portable `packaging` runtime. Vendoring avoids rmscene's obsolete packaging<24
 metadata conflicting with Briefcase's packaging>=24.2 build requirement.
 See [rmscene upstream](https://github.com/ricklupton/rmscene) and the
 [archive schema reference](https://github.com/go-go-golems/remarquee/blob/main/pkg/rmdoc/content.go).
+
+## Paper Pro / Move brush settings
+
+`brushes.py` owns the nine native tool IDs, per-tool color choices, three width
+labels, nominal widths and pressure/direction parameters. `drawing.py` consumes
+this catalog in both desktop and touch presentations. Unsupported new
+brush/color/width commands are rejected before saving; imported ink is not
+restricted to the creation palette. The standard writing palette has nine colors;
+Highlighter has yellow/green/pink/blue/orange/gray. Shader has gray and seven
+hues (blue/red/green/yellow/cyan/magenta/orange), with no black or white choice.
+Native green/yellow use IDs 10/13, distinct from legacy 4/3.
+Orange uses editor choice -1, resolved before storage to native color 9 with an
+RGBA override. Highlighter and Shader both use native color 9 plus RGBA.
+Shader uses its own eight native RGB/alpha definitions, not the writing palette
+with one uniform transparency. Reading, moving, copying,
+undo and recovery preserve imported RGBA fields and original scene frames.
+
+Thin/Medium/Thick select thickness scales 1/2/3. Nominal rendered widths are
+tool-specific approximations, not measured firmware parity. New point widths are
+computed once in page units, quantized to quarter-units and written to native
+points. JavaScript preview and Python creation use the same catalog and equivalent
+rules; the WebEngine probe compares them at all three widths. Imported v6 widths
+already encode their dynamics and are never recomputed.
+
+Pencil tools use deterministic grain; paintbrush has softer edges; calligraphy
+uses stroke travel direction; highlighter uses darken blending; Shader uses
+multiply blending and per-stroke alpha. Translucent/textured and calligraphy
+previews incrementally accumulate opaque geometry in a separate mask. Only the
+new segment bounds are recolored with texture/alpha, preventing dark seams and
+work that grows with active-stroke length. Highlighter interior joins are filled
+without changing its butt end caps. Fineliner and ballpoint paint incrementally
+on the saved-scene canvas. No full saved-scene redraw occurs during ordinary
+pen movement. Pending completed ink survives redraws until save acknowledgement.
+Physical latency validation is still required. Tilt and exact speed-dependent
+tablet textures are not simulated.
+
+Grayscale converts resolved RGB (including RGBA overrides) to luminance in the
+renderer. It never sends an editing command or changes the notebook.
+It approximates readability, not firmware-specific dithering or compatibility.
+Existing 1404 × 1872 page geometry remains unchanged.
+
+Sources: the manufacturer's [writing tools](https://support.remarkable.com/s/article/Writing-tools)
+explains tool behavior and the base palette; its
+[OS 3.15 notes](https://remarkable.com/blog/remarkable-os-3-15-whats-new)
+confirm Shader on reMarkable 2 and additional highlighter colors. Community
+[Paper Pro field measurements](https://cable729.github.io/inkterop/docs/formats/remarkable/)
+and [native RGBA examples](https://github.com/Scratchydisk/remarkable-rm#rgba-colour-discovery)
+provide point-width and highlight-color evidence. The native
+[Shader color definitions](https://github.com/ingatellent/xovi-qmd-extensions#changegreencolorqmd)
+provide all eight per-color RGB/alpha values. These inform the implementation;
+they do not certify Logistics exports on physical tablets.
+
+`Python/tests/notebooks/brush_canvas_probe.py` runs the shared HTML at desktop and phone dimensions in
+real Qt WebEngine, checking palette controls, three widths, model/preview width
+equality, nine distinct raster results, direct native widths, grayscale isolation,
+RGBA precedence, Shader overlap, live/completed pixel agreement and bounded
+preview work after 2,000 samples. It saves contact sheets and concise results
+under ignored `test-results/`. Run it with the desktop runtime and
+`PYTHONPATH=Python:.`, passing `--output test-results/notebook-brushes/rendering`.
+The model suite tests all offered brush/color/width combinations and RGBA through
+move, undo, cross-notebook copy and recovery. Imported native eraser objects
+are preserved read-only rather than drawn with
+a fallback pen. Imported varying/zero point widths are respected even for
+constant-width tool families. Exact size/texture calibration,
+physical mobile stylus behavior and older-firmware import remain acceptance gates.
 
 ## Editing and recovery
 

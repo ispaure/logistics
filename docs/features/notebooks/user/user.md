@@ -21,7 +21,8 @@ Saving or exporting private content to ordinary storage asks before writing a
 decrypted copy. Cloud notebook opening and editing remain unavailable.
 
 Choose Fineliner, Ballpoint, Pencil, Mechanical pencil, Marker, Paintbrush,
-Calligraphy or Highlighter, plus an ink color and width. Drag on the page to draw.
+Calligraphy, Highlighter or Shader, plus a supported ink color and
+Thin / Medium / Thick width. Drag on the page to draw.
 These tools write native stroke types; their on-screen appearance approximates
 reMarkable brushes. Pressure is recorded when the input device and browser
 provide it; mouse input uses constant pressure.
@@ -38,12 +39,34 @@ Import or create the target notebook first. Page copying retains the source;
 verify the destination before deleting the source page if you want to move it.
 At least one page must remain. Copied pages receive fresh page identities.
 
+## Paper Pro / Move brush settings
+
+The writing pens, pencils and paintbrush offer black, gray, white, blue, red,
+green, yellow, cyan and magenta. Highlighter offers yellow, green, pink, blue,
+orange and gray. Shader offers gray, blue, red, green, yellow, cyan, magenta
+and orange, each with its own native transparency; it has no black or white
+choice.
+
+Each brush has **Thin**, **Medium** and **Thick** widths; these labels are not
+fixed physical measurements. Fineliner and mechanical pencil keep an even width.
+Pressure varies the other drawing tools, and calligraphy also responds to stroke
+direction. Pencil tools have a grain texture, paintbrush has softer edges,
+highlighter darkens the content beneath it, and separate Shader strokes build
+color when they overlap. Textures and nominal widths remain approximations
+pending comparison with strokes made on the tablet.
+
+**Grayscale preview** approximates monochrome readability using luminance. It
+does not emulate a particular screen or firmware, or certify older-device import.
+Saved/exported ink keeps its native color IDs and RGBA overrides, including
+orange highlights and translucent Shader ink.
+
 ## Current compatibility limits
 
 This is experimental format support. It edits ordinary v6 native ink in notebook
 archives with legacy page lists or modern `cPages` metadata. It preserves opaque
 archive members and untouched scene frames. Typed text, text-anchored ink, image
-objects, nested ink groups, invalid scene geometry, unknown scene types and older
+objects, native eraser objects, nested ink groups, invalid scene geometry,
+unknown scene types and older
 ink versions show a preservation warning
 and disable ink editing on that page. Cross-notebook copying of unsupported pages
 is disabled because their resource dependencies cannot yet be guaranteed.

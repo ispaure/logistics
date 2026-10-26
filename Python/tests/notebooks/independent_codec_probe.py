@@ -22,7 +22,7 @@ def main(output, go):
                    GOPATH=str(workspace/'go'),GOTOOLCHAIN='local',GOFLAGS='-mod=mod -modcacherw')
         book=Notebook.new('Synthetic native brush proof')
         for tool in TOOLS.values():
-            book.page(0).add([[120,160,.2],[180,210,.5],[240,160,.8]],tool=tool,color=6,width=4)
+            book.page(0).add([[120,160,.2],[180,210,.5],[240,160,.8]],tool=tool,color=6,width=3)
         book.add_page()
         book.page(1).add([[100,100,.6],[400,100,.6]],tool=17,width=2)
         archive=workspace/'proof.rmdoc';archive.write_bytes(book.to_bytes())
@@ -31,8 +31,8 @@ def main(output, go):
         if first.returncode:
             raise RuntimeError(first.stderr[-4000:])
         created=json.loads(first.stdout)
-        assert created['stroke_counts']==[8,1],created['stroke_counts']
-        assert [s['Tool'] for s in created['strokes'][:8]]==list(TOOLS.values())
+        assert created['stroke_counts']==[len(TOOLS),1],created['stroke_counts']
+        assert [s['Tool'] for s in created['strokes'][:len(TOOLS)]]==list(TOOLS.values())
         book=Notebook.read(archive.read_bytes())
         editor=Editor(book)
         editor.apply(dict(op='erase',ids=[book.page(0).strokes[0].id]))
@@ -41,7 +41,7 @@ def main(output, go):
         if second.returncode:
             raise RuntimeError(second.stderr[-4000:])
         edited=json.loads(second.stdout)
-        assert edited['stroke_counts']==[7,1],edited['stroke_counts']
+        assert edited['stroke_counts']==[len(TOOLS)-1,1],edited['stroke_counts']
         output.write_text(json.dumps(dict(status='passed',created=created,erased=edited),indent=2)+'\n')
         print('Independent native scene reader accepted multi-page brush exports and erased-stroke tombstones.')
 
