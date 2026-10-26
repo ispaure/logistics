@@ -190,6 +190,8 @@ jobs:
           BRIEFCASE_HOME: ${{ runner.temp }}/briefcase
         run: |
           mkdir -p "$BRIEFCASE_HOME"
+          # This disposable runner validates software-keyboard geometry.
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
           case "$IOS_DEVICE" in
             iphone) selector=ios-device; flags=() ;;
             duo) selector=ios-duo; flags=(--require-duo) ;;

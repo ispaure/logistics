@@ -121,12 +121,24 @@ async def exercise_destination_edges(app):
     for orientation in ('portrait', 'landscape-left', 'portrait'):
         await rotate(app, orientation)
         picker.save_as_name.focus()
+        if type(app._impl).__module__.startswith('toga_iOS.'):
+            native = picker.save_as_name._impl.native
+            for _ in range(100):
+                if native.window is not None:
+                    native.becomeFirstResponder()
+                if app.native_host.adapter.keyboard_visible:
+                    break
+                await asyncio.sleep(.05)
         if type(app._impl).__module__.startswith('toga_android.'):
             from java import jclass
             native = picker.save_as_name._impl.native
             native.requestFocus()
             manager = app._impl.native.getSystemService(jclass('android.content.Context').INPUT_METHOD_SERVICE)
-            manager.showSoftInput(native, 1)
+            # WindowInsetsController defers the request until window focus is
+            # ready after rotation; a direct showSoftInput can be discarded.
+            jclass('androidx.core.view.WindowCompat').getInsetsController(
+                app._impl.native.getWindow(), native).show(
+                    jclass('androidx.core.view.WindowInsetsCompat$Type').ime())
             # A fresh emulator may start its IME service asynchronously. Wait
             # for actual visibility instead of sampling during its animation.
             for _ in range(100):
@@ -161,6 +173,9 @@ async def exercise_destination_edges(app):
             sample['name_bounds'] = [int(point[0]), int(point[1]), int(native.getWidth()), int(native.getHeight())]
             sample['keyboard_visible'] = bool(insets and insets.isVisible(ime))
             sample['fullscreen_ime'] = bool(manager.isFullscreenMode())
+            sample['window_focused'] = bool(native.hasWindowFocus())
+            sample['input_focused'] = bool(native.hasFocus())
+            sample['input_active'] = bool(manager.isActive(native))
             assert not sample['fullscreen_ime'], sample
             if sample['keyboard_visible']:
                 bounds = app._impl.native.getWindowManager().getCurrentWindowMetrics().getBounds()

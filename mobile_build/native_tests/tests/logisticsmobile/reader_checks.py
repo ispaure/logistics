@@ -202,12 +202,16 @@ def exercise_sampled_apple_decode(app):
 
 
 async def exercise_library(app, fixtures, epub, comic, passed):
+    from .navigation_checks import wait_for_transitions
+    await wait_for_transitions(app)
     exercise_sampled_apple_decode(app)
     app.show_library()
+    await wait_for_transitions(app)
     record = await asyncio.to_thread(app.reader_manager().catalog.library_store.import_book, LocalDocuments(), epub)
     app.refresh_library()
     await app.open_book(record['id'])
     assert app.reader_manager().active.book_reader is not None, app.reader_manager().active.book_status.text
+    await wait_for_transitions(app)
     await wait_for_text(app.reader_manager().active.book_content.children[0], 'Native EPUB first')
     original_reader = app.reader_manager().active.book_content.children[0]
     deadline = asyncio.get_running_loop().time() + 15
