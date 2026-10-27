@@ -10,6 +10,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+from types import SimpleNamespace
 
 REPO = Path(__file__).resolve().parents[3]
 
@@ -49,11 +50,33 @@ class ParallelIOSWorkflowTests(unittest.TestCase):
         self.assertIn('name: logistics-native-ios-${{ matrix.device }}', workflow['ios-ui'])
         self.assertIn('if: always()', workflow['ios-ui'])
         release = jobs(REPO / '.github/workflows/release.yml')
-        self.assertIn('needs: [validate, mobile-build, mobile-runtime]', release['package'])
+        self.assertIn('needs: [evidence, validate, mobile-build, mobile-runtime]', release['package'])
         self.assertIn('needs: package', release['publish'])
         self.assertIn('needs: [ios-build, ios-ui, android]', workflow['native-gate'])
         self.assertIn('if: always()', workflow['native-gate'])
         self.assertNotIn('continue-on-error', ''.join(workflow.values()))
+
+    def test_release_package_accepts_only_fresh_success_or_verified_skips(self):
+        package = jobs(REPO / '.github/workflows/release.yml')['package']
+        expression = package.split('    if: >-\n', 1)[1].split('    runs-on:', 1)[0].strip()
+        expression = expression.replace('&&', ' and ').replace('||', ' or ').replace('!cancelled()', 'not cancelled()')
+        expression = compile(' '.join(expression.splitlines()), '<actual GitHub package condition>', 'eval')
+        class Needs(dict):
+            __getattr__ = dict.__getitem__
+        states = ('success', 'failure', 'cancelled', 'skipped')
+        for evidence_status, cancelled in itertools.product(states, (False, True)):
+            for results in itertools.product(states, repeat=3):
+                for proofs in itertools.product((False, True), repeat=3):
+                    names = ('validate', 'mobile-build', 'mobile-runtime')
+                    outputs = {name: 'true' if proof else 'false' for name, proof in zip(names, proofs)}
+                    needs = Needs({name: SimpleNamespace(result=result) for name, result in zip(names, results)})
+                    needs['evidence'] = SimpleNamespace(result=evidence_status, outputs=Needs(outputs))
+                    expected = (not cancelled and evidence_status == 'success' and all(
+                        result == 'success' or (result == 'skipped' and proof)
+                        for result, proof in zip(results, proofs)))
+                    actual = eval(expression, {'__builtins__': {}},
+                                  dict(needs=needs, always=lambda: True, cancelled=lambda: cancelled))
+                    self.assertEqual(actual, expected, (evidence_status, cancelled, results, proofs))
 
     @unittest.skipUnless(shutil.which('bash'), 'Workflow shell needs bash')
     def test_gate_rejects_each_failed_cancelled_or_required_skipped_result(self):

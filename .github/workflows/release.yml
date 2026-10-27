@@ -61,9 +61,9 @@ jobs:
     needs: [evidence, validate, mobile-build, mobile-runtime]
     if: >-
       always() && !cancelled() && needs.evidence.result == 'success' &&
-      (needs.validate.result == 'success' || needs.evidence.outputs.validate == 'true') &&
-      (needs['mobile-build'].result == 'success' || needs.evidence.outputs['mobile-build'] == 'true') &&
-      (needs['mobile-runtime'].result == 'success' || needs.evidence.outputs['mobile-runtime'] == 'true')
+      (needs.validate.result == 'success' || (needs.validate.result == 'skipped' && needs.evidence.outputs.validate == 'true')) &&
+      (needs['mobile-build'].result == 'success' || (needs['mobile-build'].result == 'skipped' && needs.evidence.outputs['mobile-build'] == 'true')) &&
+      (needs['mobile-runtime'].result == 'success' || (needs['mobile-runtime'].result == 'skipped' && needs.evidence.outputs['mobile-runtime'] == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
