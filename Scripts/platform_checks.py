@@ -16,6 +16,20 @@ def run_check(name, argv, *, root, results, environment, timeout):
                 (phase,),
                 str(execution/'workspace'), effect='test')
     plan = with_reuse(plan)
+    import os
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        from Scripts.release_test_evidence import matched_proof
+        proof = matched_proof(root, plan.phases[0])
+        if proof:
+            import json
+            execution.mkdir(parents=True, exist_ok=True)
+            results.mkdir(parents=True, exist_ok=True)
+            (results / (name + '.log')).write_text(
+                'Reused verified signed local test evidence: ' + json.dumps(proof, sort_keys=True) + '\n')
+            row = dict(name=name, exit_code=0, seconds=0, status='passed', reused=True,
+                       evidence=proof, execution=str(execution))
+            (execution / 'signed-reuse.json').write_text(json.dumps(row, indent=2) + '\n')
+            return row
     def progress(event):
         if event.get('type') == 'output':
             print(event['text'], end='', flush=True)

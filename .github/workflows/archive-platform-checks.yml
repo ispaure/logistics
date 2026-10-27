@@ -98,6 +98,8 @@ jobs:
           submodules: recursive
           fetch-depth: 0
           persist-credentials: false
+      - name: Fetch optional signed local test evidence
+        run: python Scripts/release_test_evidence.py fetch
       - name: Fetch the historical public submodule for parity tests
         run: git -C Python/commonUtils fetch --no-tags origin d5c42ffd4306c010d9625b8a9bae57cdf097a567
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -149,10 +151,12 @@ jobs:
           submodules: recursive
           fetch-depth: 0
           persist-credentials: false
+      - name: Fetch optional signed local test evidence
+        run: python Scripts/release_test_evidence.py fetch
       - name: Fetch the historical public submodule for parity tests
         run: git -C Python/commonUtils fetch --no-tags origin d5c42ffd4306c010d9625b8a9bae57cdf097a567
       - name: Run all checks inside Fedora 43
-        run: docker run --rm -v "$PWD:/workspace" -w /workspace fedora:43 bash Python/tests/platform/fedora43.sh
+        run: docker run --rm -e GITHUB_ACTIONS -e GITHUB_REPOSITORY -e GITHUB_SHA -v "$PWD:/workspace" -w /workspace fedora:43 bash Python/tests/platform/fedora43.sh
       - name: Return container reports to the runner account
         if: always()
         run: |

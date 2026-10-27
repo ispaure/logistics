@@ -615,6 +615,8 @@ def main():
     parser.add_argument('--operation-receipt', type=Path)
     parser.add_argument('--workflow')
     parser.add_argument('--tag')
+    parser.add_argument('--test-evidence-request', type=Path)
+    parser.add_argument('--test-evidence-sha256')
     args = parser.parse_args()
     if args.command == 'verify':
         values, sources = manager_settings.settings(args.root / 'mobile_build')
@@ -652,6 +654,20 @@ def main():
         result = client.wait(run, args.commit, timeout=13800, cancelled=cancelled,
                              progress=lambda value: print(json.dumps(value), flush=True))
         return int(result.get('status') != 'completed')
+    if git(args.root, 'status', '--porcelain') or git(args.root, 'rev-parse', 'HEAD') != args.commit:
+        raise ValueError('Commit intended source before requesting a release.')
+    if args.test_evidence_request:
+        from Scripts.release_test_evidence import prepare_export, publish_note
+        try:
+            proof = prepare_export(args.root, client.repository, args.test_evidence_request,
+                                   args.test_evidence_sha256)
+            if proof:
+                publish_note(args.root, proof, args.test_evidence_request.with_name('published-evidence.json'))
+                print('Signed local test evidence published; hosted suites independently check equivalence.', flush=True)
+            else:
+                print('No eligible local receipts; hosted checks will run fresh.', flush=True)
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RuntimeError):
+            print('Local evidence export unavailable or rejected; hosted checks independently verify any existing proof.', flush=True)
     return release_source(args.root, client, args.tag, args.commit, cancelled)
 
 

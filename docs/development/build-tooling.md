@@ -115,3 +115,43 @@ so moving a file does not rely on another test directory being on sys.path. The
 EPUB and transcript DOM drivers stay beside their Python contracts. Use the
 existing isolated-module runner for a full suite; no compatibility forwarding
 test modules or generated test registries are needed.
+
+
+## Signed local coverage in hosted releases
+
+Combined journeys with GitHub publication capture an immutable export request
+for eligible input-bound host test phases. The reviewed publication command
+checks the clean exact source and authenticated local receipts, signs only recent
+passed coverage and publishes a Git note at `refs/notes/build-manager-tests`
+before pushing the release tag. Existing notes are never replaced. If exporting
+or publishing proof fails, ordinary release gates remain enabled; no failed or
+missing test becomes a pass. A standalone release without local tests exports no
+proof. Packaging and publication checks still run.
+
+The private Ed25519 signing key lives in the manager's Application Support
+configuration, keyed by repository. One-time enrollment is explicit:
+
+```sh
+.venv/bin/python -m Scripts.release_test_evidence enroll --repository ispaure/logistics
+```
+
+Review and commit only `.github/local-test-signers`. It contains a public key
+restricted to the manager test-evidence signing namespace, without machine/user
+comments. Keep the private key outside Git and CI. Removing a public signer from
+the selected source revokes trust for that source's releases.
+
+Hosted desktop platform checks fetch optional notes read-only. Each host suite
+recomputes its actual source, command, environment and toolchain fingerprint.
+It may reuse only a signed matching suite from the exact source/repository and
+pinned dependencies, using the allowlist read from that Git commit. Both signing
+and original test completion must be less than 24 hours old. A changed working
+allowlist cannot enroll another signer. The report labels the result `reused`
+and retains signer, source and input identity; it does not pretend to execute
+those tests again. Invalid/unavailable proof or any input mismatch runs fresh.
+
+This integration currently covers the input-bound portable host suites executed
+through `Scripts.platform_checks.run_check`. It does not infer equivalence for
+native simulator/emulator/runtime tests, static workflow checks, different
+architectures or different Python/toolchain installations. Such coverage stays
+fresh. In particular, a local Mac and GitHub's Mac image can legitimately have
+different keys. Earlier successful GitHub workflow reuse is a separate check.

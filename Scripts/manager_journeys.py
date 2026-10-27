@@ -262,4 +262,5 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         resource_locks=tuple(sorted(locks)), secret_environment=secrets,
         journey=dict(schema=1, goal=selected['goal'], platforms=gates, destinations=evidence, executions=executions))
     validate_plan(result, selected)
-    return result
+    from Scripts.release_test_evidence import with_export_request
+    return with_export_request(result)
