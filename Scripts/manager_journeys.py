@@ -123,6 +123,8 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         raise ValueError(', '.join(names) + ' requires committed source. Commit the edits you want to deliver, or choose Latest commit to exclude them.'
                          + (' GitHub releases also require a clean current checkout.' if 'github' in destinations else ''))
     values = source['effective_settings']['values']
+    if release_devices - set(targets):
+        raise ValueError('Release device packages require their selected native test platform; use Debug for an explicit deployment without tests.')
     if 'github' in destinations and not release_tag:
         from Scripts.release_naming import suggest_tag, source_version
         release_tag = suggest_tag(project.root, source_version(project.root, source['logistics_commit']))
@@ -193,11 +195,11 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         preparations[target] = preparation
 
     for name in destinations:
-        required_platforms = list(project.journey_capability['destinations'][name]['platforms'])
+        required_platforms = selected['destination_platforms'][name]
         required_gates = tuple(step for target in required_platforms for step in gates[target])
         if name in {'android-devices', 'ios-devices'}:
             from Scripts.manager_devices import make_plan as device_plan
-            target = required_platforms[0]
+            target = 'android' if name == 'android-devices' else 'ios'
             shared = None
             if target in release_devices:
                 shared = next((p for p in preparations[target] if p.id.endswith('.build-release-archive')), preparations[target][-1])
@@ -207,7 +209,8 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
             branch = _namespace(plan, target + '.devices', (*required_gates, *((shared.id,) if shared else ())))
             phases.extend(branch)
             evidence[name] = dict(identity='Install in place · ' + ', '.join(row['name'] + ' [' + row['id'] + ']' for row in device_targets[target]),
-                steps=[phase.id for phase in branch if phase.effect == 'deploy'], platforms=required_platforms)
+                steps=[phase.id for phase in branch if phase.effect == 'deploy'], platforms=required_platforms,
+                testing_optional=bool(project.journey_capability['destinations'][name].get('testing_optional')))
             continue
         if name == 'github':
             plan = project.make_plan('Release', targets[0], 'GitHub', revision=revision,

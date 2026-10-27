@@ -97,6 +97,23 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertNotIn('android.validation.release-acceptance', {phase.id for phase in plan.phases})
         validate_plan(plan)
 
+    def test_explicit_debug_device_only_plan_omits_tests_but_keeps_reviewed_install(self):
+        def device_plan(project, target, recipients, context, revision):
+            build = Phase('prepare-device-app', (sys.executable, '-c', 'pass'), str(self.root), effect='build', kind='build')
+            install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy', dependencies=(build.id,))
+            return Plan('Logistics', 'Device app', context.source(project, revision), (build, install), str(self.root / 'devices'))
+        with patch('Scripts.manager_devices.make_plan', side_effect=device_plan):
+            plan = self.project.make_journey('deliver', [], ['android-devices'], revision='HEAD',
+                run_overrides={'devices.android': '["serial-1"]'})
+        self.assertEqual(self.project.calls, [])
+        self.assertEqual(plan.journey['platforms'], {})
+        self.assertEqual([p.effect for p in plan.phases], ['build', 'deploy'])
+        self.assertEqual(plan.phases[-1].dependencies, ('android.devices.prepare-device-app',))
+        validate_plan(plan)
+        with self.assertRaisesRegex(ValueError, 'native test platform'):
+            self.project.make_journey('deliver', [], ['android-devices'], revision='HEAD',
+                run_overrides={'devices.android': '["serial-1"]', 'devices.android_variant': 'release'})
+
     def test_release_device_reuses_one_preparation_regardless_of_destination_order(self):
         def device_plan(project, target, recipients, context, revision, *, shared):
             prepare = Phase('prepare-device-app', (sys.executable, '-c', 'pass'), str(self.root), effect='build', kind='build')

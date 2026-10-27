@@ -683,3 +683,35 @@ physical device, signing, upload or hosted dispatch is started by these fixtures
 
 Existing inspected/saved plans keep their original dependency graph. Restart the
 manager after updating and inspect a fresh plan to use independent branches.
+
+## Shared primitive consolidation
+
+The local consolidation delegates advisory locks, explicit private atomic writes
+and line-oriented diagnostic filtering to commonUtils through manager adapters.
+Logistics snapshot file hashing and Firebase APK reporting use bounded shared
+SHA-256 reads; source fingerprint bytes and artifact digest formats are unchanged.
+The manager's CPython preparation uses shared verified downloads and bounded
+file/member hashing, retaining its cache paths, pins and corrupt-cache rejection.
+
+Project policy, manager orchestration and platform-specific process ownership stay
+with their current owners. Shared API contracts are documented in commonUtils.
+These changes require coordinated commonUtils and manager dependency updates
+before distribution; working-tree changes alone do not update published pins.
+Portable/offscreen tests cover the consolidation; Windows sharing/locking branches
+use synthetic fixtures and do not establish new native device or Windows acceptance.
+
+## Explicit device-only runs
+
+Android/iOS development-device destinations permit zero selected test platforms
+for Debug build/install. Selecting tests retains their dependency gates. Release
+device packages still require their native target's acceptance. The private saved
+`Boox Deployment (excl. Testing)` preset keeps the same selected hardware, Debug
+variant, existing Beta signing and verified USB/paired Wi-Fi fallback as its
+testing counterpart; device metadata is not checked into Git.
+
+Fresh device plans install on explicitly selected recipients without a separate
+per-install approval prompt. The executor still verifies captured artifact hashes
+and records operation intent, and the adapter checks hardware, package and signing
+compatibility before an in-place update. Unknown attempts are never blindly
+replayed. Older captured plans keep their original approval requirement. Provider
+uploads and GitHub publication retain artifact-specific review.

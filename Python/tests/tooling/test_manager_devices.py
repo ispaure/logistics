@@ -111,6 +111,7 @@ class ManagerDeviceTests(unittest.TestCase):
             self.assertEqual(check.dependencies, ('prepare-device-app',))
             self.assertEqual(install.dependencies, ('prepare-device-app', check.id))
             self.assertFalse(check.resources)
+            self.assertFalse(install.approval_required)
         self.assertIn('--sha256', plan.phases[0].argv)
         self.assertIn('one', plan.phases[1].argv); self.assertNotIn('two', plan.phases[1].argv)
         self.assertEqual(len(plan.phases[0].artifacts), 2)
