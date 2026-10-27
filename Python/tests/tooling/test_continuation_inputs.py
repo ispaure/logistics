@@ -93,3 +93,96 @@ class ContinuationInputsTests(unittest.TestCase):
         self.write('Python/untracked.py', 'APP = 2')
         with self.assertRaisesRegex(ValueError, 'current checkout'):
             verify_current(self.root, self.before, self.before)
+
+
+class NativeApplicabilityTests(unittest.TestCase):
+    """Portable rejection contracts; real toolchain acceptance is separate."""
+    def setUp(self):
+        import hashlib
+        import json
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        self.temp = TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.source = dict(logistics_commit='a'*40, commonUtils_commit='b'*40, dirty=False)
+        for name, text in (('mobile_build/native_tests/tests/logisticsmobile/__init__.py', "CASES = ['rotation']"),
+                           ('Python/mobile/smoke.py', "EXPECTED_TESTS = ['document']")):
+            path = self.root/name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        self.rows, phases = [], []
+        self.data = {}
+        for name in ('iphone', 'duo', 'ipad', 'ios-runtime'):
+            runtime = name.endswith('runtime')
+            data = dict(schema=1, success=True, target='ios', source=self.source,
+                        suite='logistics-mobile-documents' if runtime else 'logistics-native-ui')
+            if runtime:
+                data.update(expected_tests=['document'], tests_run=1, failures=0, errors=0, skipped=0)
+            else:
+                data.update(cases=['rotation'], expected_cases=['rotation'])
+            record = dict(report=data, owned_simulator_removed=True, model='selected-model', runtime='selected-runtime')
+            step = 'ios.validation.'+name
+            phases.append(SimpleNamespace(id=step, argv=('python', '--model', 'selected-model',
+                                                         '--runtime', 'selected-runtime')))
+            path = self.root/(name+'.json')
+            path.write_text(json.dumps(record))
+            self.data[step] = record
+            self.rows.append(dict(id=step, status='passed', artifacts=[dict(path=str(path),
+                sha256=hashlib.sha256(path.read_bytes()).hexdigest())]))
+        build = dict(key=dict(source=self.source, toolchain=dict(xcode='original', sdk='original',
+                     briefcase='original')), app=str(self.root/'absent.app'), bundle_sha256='c'*64)
+        path = self.root/'build.json'
+        path.write_text(json.dumps(build))
+        self.rows.append(dict(id='ios.validation.ios-build', status='passed', artifacts=[dict(
+            path=str(path), sha256=hashlib.sha256(path.read_bytes()).hexdigest())]))
+        phases.append(SimpleNamespace(id='ios.validation.ios-build', argv=('python',), environment={}))
+        plan = SimpleNamespace(identity='reviewed-plan', source=self.source, phases=phases)
+        self.patches = [patch('build_manager.history.load_run', return_value=(plan, dict(phases=self.rows))),
+                        patch('Scripts.continuation_inputs.verify_current', return_value=dict(previous_commit='a'*40)),
+                        patch('subprocess.check_output', return_value='changed toolchain')]
+        for item in self.patches:
+            item.start()
+            self.addCleanup(item.stop)
+
+    def check(self):
+        from Scripts.continuation_inputs import verify_native_applicability
+        return verify_native_applicability(self.root, self.root, 'reviewed-plan', 'd'*40)
+
+    def change(self, **values):
+        import hashlib
+        import json
+        row = self.rows[0]
+        data = self.data[row['id']]
+        data.update(values)
+        path = Path(row['artifacts'][0]['path'])
+        path.write_text(json.dumps(data))
+        row['artifacts'][0]['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+
+    def test_failed_original_native_row_is_not_accepted(self):
+        self.rows[0]['status'] = 'failed'
+        with self.assertRaisesRegex(ValueError, 'did not pass'):
+            self.check()
+
+    def test_missing_cleanup_or_partial_rotation_inventory_is_not_accepted(self):
+        self.change(owned_simulator_removed=False)
+        with self.assertRaisesRegex(ValueError, 'cleanup is unverified'):
+            self.check()
+        self.change(owned_simulator_removed=True, report=dict(self.data[self.rows[0]['id']]['report'], cases=[]))
+        with self.assertRaisesRegex(ValueError, 'inventory or cleanup'):
+            self.check()
+
+    def test_different_native_source_is_not_accepted(self):
+        data = dict(self.data[self.rows[0]['id']]['report'], source=dict(self.source, logistics_commit='e'*40))
+        self.change(report=data)
+        with self.assertRaisesRegex(ValueError, 'source, complete inventory'):
+            self.check()
+
+    def test_changed_toolchain_rejects_otherwise_complete_ios_inventories(self):
+        with self.assertRaisesRegex(ValueError, 'toolchain changed: ios'):
+            self.check()
+
+    def test_other_simulator_cannot_stand_in_for_selected_target(self):
+        self.change(model='different-model')
+        with self.assertRaisesRegex(ValueError, 'simulator identity differs'):
+            self.check()

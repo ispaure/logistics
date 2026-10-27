@@ -103,6 +103,16 @@ The returned identity can be bound with `--expect-identity` on subsequent checks
 This verifies source applicability only: changed desktop fixtures still require
 fresh validation, and the receipt never authorizes source reuse by itself.
 
+Add `--native-output <retained-run> --native-plan-identity <SHA>` to verify the
+complete original iPhone/Duo/iPad and Android native/runtime inventories, selected
+simulator identities, cleanup and acceptance outcomes, and matching current build
+toolchains. Original source must match the explicitly selected previous commit.
+The review identity binds those records and the current source applicability.
+Binary availability is reported separately: an absent QA APK cannot be deployed.
+This prerequisite still needs the generic original-check/log/artifact verifier,
+engine review and current desktop coverage before release continuation. It never
+changes original outcomes or triggers installations, builds or uploads.
+
 If Windows setup fails before tests start and leaves an incomplete attempt,
 `python -m Scripts.guest_attempts reconcile-windows-setup --directory <result-root>
 --manager-checkout <exact-pinned-manager>` can reconcile it without signing in.
