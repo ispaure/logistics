@@ -109,13 +109,13 @@ class TestFlightWorkflowTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 build_number(invalid)
 
-    def test_unsigned_or_dirty_local_archive_cannot_export_or_upload(self):
+    def test_unsigned_archive_cannot_export_or_upload(self):
         import json
         from pathlib import Path
         from tempfile import TemporaryDirectory
         with TemporaryDirectory() as directory, patch('mobile_build.deployment.testflight_tools.run') as run:
             workspace = Path(directory)
-            for dirty, signed in ((True, True), (False, False), (True, False)):
+            for dirty, signed in ((False, False), (True, False)):
                 (workspace / 'release.json').write_text(json.dumps({'source': {'dirty': dirty}, 'build': {'signed': signed}}))
                 for upload in (False, True):
                     with self.assertRaises(ValueError):
@@ -138,7 +138,7 @@ class TestFlightWorkflowTests(unittest.TestCase):
             (workspace / 'export').mkdir()
             ipa = workspace / 'export/Logistics.ipa'
             ipa.write_bytes(b'reviewed ipa')
-            record = dict(identity=self.identity, source={'dirty': False},
+            record = dict(identity=self.identity, source={'dirty': True},
                           build={'signed': True, 'build_number': '202610144'}, profile_uuid=None)
             (workspace / 'release.json').write_text(json.dumps(record))
             verified = dict(archive_sha256=archive_fingerprint(app),

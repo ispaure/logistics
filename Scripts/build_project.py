@@ -521,8 +521,6 @@ class LogisticsProject:
             expected = 'ios' if operation == 'Prepare TestFlight' else 'android'
             if target != expected:
                 raise ValueError('Choose ' + expected + ' for ' + operation + '.')
-            if source['dirty']:
-                raise ValueError('Commit the reviewed source before preparing a signed tester artifact.')
             if build_override and not build_override.isdigit():
                 raise ValueError('Mobile build override must be numeric.')
             # Link existing protected inputs, never copy keys into source or a

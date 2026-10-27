@@ -100,7 +100,7 @@ the private directory backup; do not reset them when pruning generated builds.
 
 ## TestFlight delivery
 
-Select TestFlight in the manager. The adapter prepares the committed source, archives, exports and verifies the signed IPA, then pauses for upload review. Apple processing and beta review can delay tester availability. See [TestFlight setup and diagnostics](mobile-testflight.md).
+Select TestFlight in the manager. The adapter captures the selected source (including current edits), archives, exports and verifies the signed IPA, then pauses for upload review. Apple processing and beta review can delay tester availability. See [TestFlight setup and diagnostics](mobile-testflight.md).
 
 ## Prepare a native build
 

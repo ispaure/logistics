@@ -119,9 +119,9 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
         print('Build retention incomplete: ' + str(error), flush=True)
     context = capture(project, revision, run_overrides)
     source = context.source(project, revision)
-    if delivery and source['dirty'] and (any(name in destinations for name in ('github', 'firebase', 'testflight')) or release_devices):
+    if delivery and source['dirty'] and 'github' in destinations:
         names = [project.journey_capability['destinations'][name]['label'].split(' · ')[0]
-                 for name in destinations if name in {'github', 'firebase', 'testflight'} or name.split('-')[0] in release_devices]
+                 for name in destinations if name == 'github']
         raise ValueError(', '.join(names) + ' requires committed source. Commit the edits you want to deliver, or choose Latest commit to exclude them.'
                          + (' GitHub releases also require a clean current checkout.' if 'github' in destinations else ''))
     values = source['effective_settings']['values']

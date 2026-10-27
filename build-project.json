@@ -413,7 +413,7 @@
         "description": "Prepares one verified package, then pauses before upload to the configured group.",
         "category": "Mobile tester platforms",
         "package": "android-release",
-        "source_policy": "committed"
+        "source_policy": "captured"
       },
       "testflight": {
         "label": "TestFlight \u00b7 iOS testers",
@@ -423,7 +423,7 @@
         "description": "Requires complete iPhone, Duo, iPad and runtime gates; pauses before uploading the prepared archive.",
         "category": "Mobile tester platforms",
         "package": "testflight-export",
-        "source_policy": "committed"
+        "source_policy": "captured"
       },
       "android-devices": {
         "label": "Android test devices",
@@ -476,7 +476,7 @@
         "platforms": [
           "android"
         ],
-        "source_policy": "committed"
+        "source_policy": "captured"
       },
       "ios-release": {
         "label": "Build iOS Release archive",
@@ -485,7 +485,7 @@
         "platforms": [
           "ios"
         ],
-        "source_policy": "committed"
+        "source_policy": "captured"
       },
       "testflight-export": {
         "label": "Export & sign for TestFlight",
@@ -649,7 +649,7 @@
       "destinations": [
         "android-devices"
       ],
-      "description": "Release requires committed source and full release gates. Existing signing and app data are preserved; incompatible updates stop."
+      "description": "Release uses captured current files and requires full release gates. Existing signing and app data are preserved; incompatible updates stop."
     },
     {
       "id": "devices.ios_variant",
@@ -663,7 +663,7 @@
       "destinations": [
         "ios-devices"
       ],
-      "description": "Release requires committed source and full release gates. Existing signing and app data are preserved; incompatible updates stop."
+      "description": "Release uses captured current files and requires full release gates. Existing signing and app data are preserved; incompatible updates stop."
     }
   ],
   "dynamic_run_inputs": true

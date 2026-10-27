@@ -195,7 +195,19 @@ def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, doc
                                      'add its module to the owning mobile source manifest before building.')
 
 
+def captured_source_fingerprint(repo):
+    metadata = Path(repo) / '.manager-source.json'
+    if not metadata.is_file():
+        return None
+    from Scripts.build_snapshots import identity
+    captured = json.loads(metadata.read_text())
+    if identity(repo)['fingerprint'] != captured['snapshot_fingerprint']:
+        raise ValueError('Captured source changed before mobile staging; prepare a fresh plan.')
+    return captured['source']['fingerprint']
+
+
 def stage(repo, destination, *, testbed=False, allow_dirty=False):
+    captured_fingerprint = captured_source_fingerprint(repo)
     repo, destination = Path(repo).resolve(), Path(destination).resolve()
     app_modules, document_modules = load_source_modules(repo)
     if destination.exists():
@@ -277,6 +289,10 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
                 digest.update((prefix + path.relative_to(root).as_posix()).encode() + b'\0')
                 digest.update(path.read_bytes())
     manifest['source_sha256'] = digest.hexdigest()
+    if captured_source_fingerprint(repo) != captured_fingerprint:
+        raise ValueError('Captured source changed during mobile staging; prepare a fresh plan.')
+    if captured_fingerprint is not None:
+        manifest['manager_source_fingerprint'] = captured_fingerprint
     for path in (destination / 'source.json', destination / 'mobile/source.json'):
         path.write_text(json.dumps(manifest, indent=2) + '\n')
     return manifest

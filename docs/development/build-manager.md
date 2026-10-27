@@ -96,7 +96,9 @@ development snapshots copy tracked/nonignored edits and deletions and record a
 content fingerprint. Ignored credentials, device configuration and external
 feature links are excluded. Cached snapshots must still match their recorded
 content fingerprint. A dirty shared library must be committed first. Signed
-tester preparation requires committed source; protected inputs are linked from
+tester preparation accepts captured current files; native/runtime evidence must
+match the exact capture fingerprint when source is dirty. Staging verifies the
+snapshot bytes before embedding that fingerprint. Protected inputs are linked from
 their existing locations only for that selected build, never copied into Git.
 
 ## Validation and local outputs

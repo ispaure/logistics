@@ -53,7 +53,11 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(self.git(destination, 'show', 'HEAD:source.py'), 'VERSION = 1')
         self.assertEqual(json.loads((destination / '.manager-source.json').read_text())['source'], selected)
         self.assertEqual(materialize(self.root, destination), selected)
+        from mobile_build.tools import captured_source_fingerprint
+        self.assertEqual(captured_source_fingerprint(destination), selected['fingerprint'])
         (destination / 'source.py').write_text('unexpected modification')
+        with self.assertRaisesRegex(ValueError, 'Captured source changed'):
+            captured_source_fingerprint(destination)
         with self.assertRaisesRegex(ValueError, 'different source'):
             materialize(self.root, destination)
         committed = self.directory / 'committed'

@@ -154,7 +154,7 @@ def archive_release(args, workspace, identity, env):
     workspace.mkdir(parents=True)
     shutil.copyfile(ROOT / 'pyproject.toml', workspace / 'pyproject.toml')
     try:
-        manifest = stage(ROOT.parent, workspace / 'payload', allow_dirty=args.unsigned_check)
+        manifest = stage(ROOT.parent, workspace / 'payload', allow_dirty=True)
         cloud_build.licenses(workspace / 'payload/mobile/native-licenses')
         run([sys.executable, '-m', 'briefcase', 'create', 'iOS', '--no-input'], workspace, env, workspace / 'logs/create.log')
         project = workspace / 'build/logisticsmobile/ios/xcode'
@@ -214,8 +214,8 @@ def archive_release(args, workspace, identity, env):
 def export_release(workspace, env, *, upload=False):
     external = None
     record = json.loads((workspace / 'release.json').read_text())
-    if record['source']['dirty'] or not record['build']['signed']:
-        raise ValueError('Unsigned/local archives cannot be exported or uploaded. Archive committed, clean sources with approved signing first.')
+    if not record['build']['signed']:
+        raise ValueError('Unsigned archives cannot be exported or uploaded. Archive with approved signing first.')
     identity = release_identity(record['identity']['team_id'], record['identity']['application_identifier'])
     if identity != record['identity']:
         raise ValueError('Saved release identity differs from the current baseline.')
@@ -300,7 +300,7 @@ def main():
                                   workspace=str(workspace), upload_enabled=False,
                                   export_options=export_options(identity['team_id']),
                                   prerequisites=['Approved enrollment', 'App Store Connect app record using the existing bundle ID',
-                                                 'Distribution signing assets', 'Clean committed source', 'Encryption compliance answers']), indent=2))
+                                                 'Distribution signing assets', 'Captured source identity', 'Encryption compliance answers']), indent=2))
             return
         developer, _ = choose(installed())
         os.environ['DEVELOPER_DIR'] = developer

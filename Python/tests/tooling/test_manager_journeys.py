@@ -141,11 +141,16 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertIn('ios.preparation.build-release-archive', ancestors(plan, 'ios.devices.install-phone'))
         self.assertFalse(any(p.effect == 'upload' or p.id.endswith('prepare-verified-artifact') for p in plan.phases))
 
-    def test_release_device_requires_committed_source(self):
+    def test_release_device_accepts_captured_current_files(self):
         self.source['dirty'] = True
-        with self.assertRaisesRegex(ValueError, 'committed source'):
-            self.make(platforms=['android'], destinations=['android-devices'], run_overrides={
+        with patch('Scripts.manager_devices.make_plan') as device:
+            device.return_value = Plan('Logistics', 'Device', self.source,
+                (Phase('install', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy'),), str(self.root/'devices'))
+            plan = self.make(platforms=['android'], destinations=['android-devices'], run_overrides={
                 'devices.android':'["phone"]', 'devices.android_variant':'release'})
+        self.assertTrue(plan.source['dirty'])
+        self.assertIn('android.validation.release-acceptance', {p.id for p in plan.phases})
+
 
     def test_shared_tester_message_maps_to_both_owned_service_fields(self):
         from Scripts.manager_journeys import run_values
@@ -319,8 +324,11 @@ class JourneyAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'complete project suites'):
             self.make(pattern='test_example.py')
         with patch('Scripts.build_project.identity', return_value=dict(self.source, dirty=True)):
+            plan = self.make()
+            self.assertTrue(plan.source['dirty'])
+            self.assertEqual(set(plan.journey['destinations']), {'firebase', 'testflight'})
             with self.assertRaisesRegex(ValueError, 'committed source'):
-                self.make()
+                self.make(platforms=['macos', 'linux', 'windows'], destinations=['github'])
         with patch('Scripts.release_naming.suggest_tag', return_value='v1.2.3-alpha.7'), patch('Scripts.build_snapshots.git', side_effect=['','a'*40]):
             automatic = self.make(platforms=['macos', 'linux', 'windows'], destinations=['github'])
             self.assertIn('v1.2.3-alpha.7',automatic.journey['destinations']['github']['identity'])

@@ -36,8 +36,8 @@ App Store Connect configuration and distribution signing are separate steps:
    this workflow deliberately does not declare `ITSAppUsesNonExemptEncryption=false`.
    Use Apple's [beta export-compliance guide](https://developer.apple.com/help/app-store-connect/test-a-beta-version/provide-export-compliance-information-for-beta-builds)
    to determine the required declaration/documents. This is not an exemption assessment.
-5. Commit the intended mobile sources and required commonUtils changes. Signed
-   release staging rejects dirty/uncommitted mobile sources. Pick a unique,
+5. Capture the intended mobile sources in the manager; current uncommitted mobile
+   files are supported. The pinned commonUtils source must still be committed. Pick a unique,
    increasing positive build number (at most nine digits) for every uploaded build.
 
 Apple describes [distribution preparation](https://developer.apple.com/documentation/xcode/preparing-your-app-for-distribution)
@@ -372,5 +372,5 @@ installed. A local keychain check found two Apple Development identities and no
 Apple Distribution identity. Enrollment approval is confirmed, but distribution
 signing/export and upload were unverified at that earlier preparation checkpoint.
 The later build `202610145` records above supersede that historical limit. New
-mobile changes must still be committed before signed release staging. This
+mobile changes can now be captured without committing before signed release staging. This
 documentation audit did not install or upload an app.

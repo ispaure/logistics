@@ -76,7 +76,7 @@ class PreparedDistributionTests(unittest.TestCase):
     def test_interrupted_attempt_is_not_blindly_repeated(self):
         with TemporaryDirectory() as directory:
             root=Path(directory);report=root/'prepared.json';receipt=root/'receipt.json'
-            data=dict(provider='TestFlight',workspace=str(root),release=dict(source=dict(dirty=False),build=dict(build_number='7')),destination={'group':'synthetic'})
+            data=dict(provider='TestFlight',workspace=str(root),release=dict(source=dict(dirty=True),build=dict(build_number='7')),destination={'group':'synthetic'})
             report.write_text(json.dumps(data))
             approval=[dict(original_path=str(report.resolve()),sha256=hashlib.sha256(report.read_bytes()).hexdigest())]
             env=dict(BUILD_MANAGER_APPROVED_PLAN='synthetic-plan',BUILD_MANAGER_APPROVED_ARTIFACTS=json.dumps(approval))

@@ -102,6 +102,28 @@ class ManagerAdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             project.github_plan('Test', 'ios', dict(source, dirty=True), root, {}, 'working-tree', '')
 
+    def test_signed_tester_preparation_accepts_captured_current_files(self):
+        root = Path(__file__).resolve().parents[3]
+        project = LogisticsProject(root)
+        from build_manager.proposed_workflow import propose
+        proposal = propose(capability=project.journey_capability, goal='deliver', revision='working-tree',
+            platforms=['ios', 'android'], destinations=['testflight', 'firebase'], backends={})
+        self.assertNotIn('source', {b.id for b in proposal.blockers})
+        source = dict(logistics_commit='a'*40, commonUtils_commit='b'*40, dirty=True, fingerprint='c'*64)
+        values = manager_settings.defaults(project.mobile)
+        with TemporaryDirectory() as directory:
+            snapshot = Path(directory)
+            (snapshot/'mobile_build').mkdir()
+            with patch('Scripts.build_project.sys.platform', 'darwin'), \
+                    patch('Scripts.build_project.identity', return_value=source), \
+                    patch('Scripts.build_project.materialize', side_effect=lambda root, dest, *a, **kw: (dest/'mobile_build').mkdir(parents=True, exist_ok=True)), \
+                    patch('Scripts.build_project.manager_settings.settings', return_value=(values, {})), \
+                    patch('Scripts.build_project.manager_settings.app_version', return_value='1.2.3'):
+                for operation, target in (('Prepare Firebase','android'), ('Prepare TestFlight','ios')):
+                    plan = project.make_plan(operation, target, 'This Mac')
+                    self.assertTrue(plan.source['dirty'])
+                    self.assertFalse(any(p.effect in {'upload','publish','dispatch'} for p in plan.phases))
+
     def test_macos_local_plan_has_environment_gate_and_exact_desktop_commands(self):
         from Scripts.validation_plans import desktop_checks
         root = Path(__file__).resolve().parents[3]

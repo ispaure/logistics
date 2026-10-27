@@ -94,13 +94,19 @@ def with_reports(plan, target):
 
 
 def same_source(actual, expected):
-    return all(actual.get(key) == expected.get(key) for key in ('logistics_commit', 'commonUtils_commit')) and actual.get('dirty') is False
+    if not all(actual.get(key) == expected.get(key) for key in ('logistics_commit', 'commonUtils_commit')):
+        return False
+    # Dirty snapshots must prove the exact manager capture, not just its base
+    # commits. Staging verifies the snapshot bytes before recording this identity.
+    if expected.get('dirty'):
+        fingerprint = expected.get('fingerprint', '')
+        return (len(fingerprint) == 64 and actual.get('manager_source_fingerprint') == fingerprint
+                and len(actual.get('source_sha256', '')) == 64)
+    return actual.get('dirty') is False
 
 
 def release_evidence(root, target, native, runtime, require_ipad=False):
     source = json.loads((Path(root) / '.manager-source.json').read_text())['source']
-    if source.get('dirty'):
-        raise ValueError('Release acceptance requires committed source.')
     if not native:
         raise ValueError('Required native UI evidence is missing.')
     if target == 'ios':

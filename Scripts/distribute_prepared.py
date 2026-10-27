@@ -29,7 +29,6 @@ def distribute(report,receipt):
     provider=data['provider']
     if provider=='TestFlight':
         workspace=Path(data['workspace'])
-        if data['release']['source']['dirty']:raise ValueError('Signed tester artifacts require committed source.')
         # Existing helper verifies archive, IPA checksum, identity, signature and
         # the captured profile's destination immediately before the upload.
         if (workspace/'upload-result.json').exists():raise ValueError('Existing uploaded build requires read-only reconciliation.')

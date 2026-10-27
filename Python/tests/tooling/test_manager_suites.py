@@ -133,6 +133,39 @@ class ManagerSuiteTests(unittest.TestCase):
                 suites.release_evidence(root, 'android', [a], b)
             self.assertTrue(all(case['seconds'] is None for case in suites.native_cases(native, root, 'android')))
 
+    def test_captured_dirty_release_evidence_requires_exact_snapshot_fingerprint(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            a, b, native, runtime = self.fixtures(root)
+            source = dict(logistics_commit='a', commonUtils_commit='b', dirty=True, fingerprint='c'*64)
+            (root/'.manager-source.json').write_text(json.dumps({'source':source}))
+            staged = dict(source, manager_source_fingerprint='c'*64, source_sha256='d'*64)
+            native['source'] = staged
+            runtime['source'] = staged
+            a.write_text(json.dumps(native)); b.write_text(json.dumps(runtime))
+            self.assertEqual(suites.release_evidence(root, 'android', [a], b)['status'], 'passed')
+            for bad in (dict(staged, manager_source_fingerprint='e'*64),
+                        dict(staged, manager_source_fingerprint=''),
+                        dict(staged, source_sha256=''),
+                        dict(staged, logistics_commit='wrong')):
+                runtime['source'] = bad
+                b.write_text(json.dumps(runtime))
+                with self.assertRaisesRegex(ValueError, 'Runtime source'):
+                    suites.release_evidence(root, 'android', [a], b)
+
+    def test_staging_binds_only_unchanged_manager_snapshot(self):
+        from mobile_build.tools import captured_source_fingerprint
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertIsNone(captured_source_fingerprint(root))
+            (root/'.manager-source.json').write_text(json.dumps(dict(
+                source={'fingerprint':'a'*64}, snapshot_fingerprint='b'*64)))
+            with patch('Scripts.build_snapshots.identity', return_value={'fingerprint':'b'*64}):
+                self.assertEqual(captured_source_fingerprint(root), 'a'*64)
+            with patch('Scripts.build_snapshots.identity', return_value={'fingerprint':'c'*64}):
+                with self.assertRaisesRegex(ValueError, 'Captured source changed'):
+                    captured_source_fingerprint(root)
+
     def test_ios_acceptance_requires_all_device_families_cleanup_and_actual_runtime(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

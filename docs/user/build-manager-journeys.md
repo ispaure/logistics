@@ -19,7 +19,8 @@ itself trust or change registrations.
    requires all three desktop platforms before the existing full hosted gates.
 3. Choose the source under Advanced options. Working-tree validation follows
    existing snapshot policy, including refusing uncommitted commonUtils edits.
-   Delivery requires committed source. GitHub publication additionally requires
+   Local builds and Firebase/TestFlight delivery accept captured current files.
+   GitHub-hosted execution requires committed source; GitHub publication requires
    the current clean checkout at that exact commit and an explicit unused channel
    tag such as `v1.2.3-alpha.1`. Existing edits are never committed or discarded
    by planning. Use a committed revision for validation when that is your intent.
@@ -92,8 +93,8 @@ receipt after confirmed success. Interrupted/uncertain outcomes require explicit
 reconciliation before retry; other successful recipients remain recorded. Owned
 build workspaces and the existing device deployment lock prevent competing writers.
 Runtime credential/signing inputs remain protected references outside source.
-Device-only runs may use captured current files; selecting tester services or
-GitHub retains committed-source/release-acceptance policy. Device preparation and
+Device and tester-service runs may use captured current files. Release test gates
+still apply; GitHub-hosted execution retains its committed-source requirement. Device preparation and
 local native validation currently require the configured Mac environment.
 
 Portable coverage uses mocked ADB/Xcode commands and harmless process graphs.
@@ -181,16 +182,16 @@ used for TestFlight. An iOS Release device-only run omits the TestFlight export
 and upload. Debug and Release remain separate builds, and simulator validation
 remains distinct from physical-device packaging.
 
-Release devices require committed source, full native/runtime release gates and
+Release devices use captured source, full native/runtime release gates and
 the existing tester build/signing configuration. iOS device exports use already
 available signing assets and validate every selected UDID, including extension
 profiles; they do not register devices or enable provisioning updates. All
 installs still require review of exact bytes and recipients. Signing/version
 conflicts stop the install without clearing data or changing identity.
 
-GitHub publication, Firebase, TestFlight and Release device packages require
-committed source. Debug device delivery and local validation can capture current
-files. Latest commit excludes local edits without committing them; GitHub
+Firebase, TestFlight, Debug and Release device packages and local validation can
+capture current files. GitHub-hosted execution and GitHub source publication
+require committed source. Latest commit excludes local edits without committing them; GitHub
 publication additionally requires the current checkout to be clean and to match
 the selected commit. Requirements appear in the overview before preparation.
 
