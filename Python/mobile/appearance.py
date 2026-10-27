@@ -512,6 +512,7 @@ def _install_android_appearance(app):
     from .android_markdown_font import install_font_responses
     install_font_responses()
     original_content = WebView.set_content
+    from .android_inline_html import load_inline_html
     def web_content(impl, root_url, content):
         from .palette import eink_html
         from .android_markdown_font import style_markdown
@@ -519,7 +520,7 @@ def _install_android_appearance(app):
         content = eink_html(style_markdown(content, impl=impl))
         if getattr(impl.interface, 'private_configured', False) and len(content.encode('utf-8')) > 2 * 1024 * 1024:
             raise ValueError('Private HTML exceeds the memory-only limit after appearance styling.')
-        original_content(impl, root_url, content)
+        load_inline_html(impl, root_url, content, fallback=original_content)
     WebView.set_content = web_content
 
 

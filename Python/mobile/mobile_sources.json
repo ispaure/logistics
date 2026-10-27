@@ -10,6 +10,7 @@
     "android/io/github/ispaure/logisticsmobile/DestinationRailView.java",
     "android/io/github/ispaure/logisticsmobile/ReceiveActivity.java",
     "android/io/github/ispaure/logisticsmobile/SnowView.java",
+    "android_inline_html.py",
     "android_markdown_font.py",
     "android_reader_chrome.py",
     "app.py",
