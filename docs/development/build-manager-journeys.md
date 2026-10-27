@@ -95,3 +95,13 @@ guest orchestration paths. Unknown scripts and native harness changes invalidate
 that equality. This read-only assessment cannot import results, authorize reuse,
 change a plan or pass a release gate. Original outcomes, cleanup, artifacts,
 platform/toolchain identity and execution-engine changes still need verification.
+
+If Windows setup fails before tests start and leaves an incomplete attempt,
+`python -m Scripts.guest_attempts reconcile-windows-setup --directory <result-root>
+--manager-checkout <exact-pinned-manager>` can reconcile it without signing in.
+The command verifies the manager pin and recorded VM ownership, then performs a
+fixed read-only query of that attempt's exact guest namespace. Only a confirmed
+absent namespace permits a fresh attempt. An existing namespace, changed source,
+changed preparation record or foreign receipt remains blocked. The reconciliation
+is appended beside the preparation record; original failure reports and timings
+are preserved. This command neither runs tests as SYSTEM nor deletes guest files.

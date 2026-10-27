@@ -91,4 +91,64 @@ class GuestAttemptTests(unittest.TestCase):
             with result_attempt(self.root,self.source,self.backend):self.fail('unknown setup replay')
 
 
+    def failed_setup(self):
+        with self.assertRaises(RuntimeError):
+            with result_attempt(self.root, self.source, self.backend) as attempt:
+                attempt.mkdir()
+                (attempt/'prepared.json').write_text(json.dumps(dict(
+                    status='failed', tests_run=False, token='a'*32, vm='owned-vm')))
+                raise RuntimeError('no interactive session')
+        return attempt
+
+    def test_absent_workspace_receipt_allows_new_attempt_without_rewriting_failure(self):
+        from Scripts.guest_attempts import reconcile_setup
+        attempt = self.failed_setup()
+        before = (self.root/'result.json').read_bytes()
+        preparation = (attempt/'prepared.json').read_bytes()
+        calls = []
+        def inspect(vm, token):
+            calls.append((vm, token))
+            return dict(vm=vm, token=token, exists=False)
+        receipt = reconcile_setup(self.root, inspect)
+        self.assertEqual(reconcile_setup(self.root, inspect), receipt)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual((self.root/'result.json').read_bytes(), before)
+        self.assertEqual((attempt/'prepared.json').read_bytes(), preparation)
+        with result_attempt(self.root, self.source, self.backend) as retry:
+            self.assertNotEqual(attempt, retry)
+            self.finish(retry, status='passed')
+        self.assertEqual(next((self.root/'attempts').glob('retained-*.json')).read_bytes(), before)
+        self.assertTrue(receipt.is_file())
+
+    def test_present_or_foreign_namespace_never_authorizes_retry(self):
+        from Scripts.guest_attempts import reconcile_setup
+        self.failed_setup()
+        before = (self.root/'result.json').read_bytes()
+        for proof in (dict(vm='owned-vm', token='a'*32, exists=True),
+                      dict(vm='foreign-vm', token='a'*32, exists=False),
+                      dict(vm='owned-vm', token='b'*32, exists=False)):
+            with self.subTest(proof=proof), self.assertRaises(ValueError):
+                reconcile_setup(self.root, lambda *_: proof)
+        self.assertEqual((self.root/'result.json').read_bytes(), before)
+        self.assertEqual(list(self.root.rglob('setup-reconciliation.json')), [])
+
+    def test_changed_preparation_invalidates_prior_reconciliation(self):
+        from Scripts.guest_attempts import reconcile_setup
+        attempt = self.failed_setup()
+        reconcile_setup(self.root, lambda vm, token: dict(vm=vm, token=token, exists=False))
+        data=json.loads((attempt/'prepared.json').read_text());data['error']='changed'
+        (attempt/'prepared.json').write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, 'reconciliation'):
+            with result_attempt(self.root, self.source, self.backend):
+                self.fail('changed evidence was replayed')
+
+    def test_non_setup_failure_cannot_be_reconciled_as_absent(self):
+        from Scripts.guest_attempts import reconcile_setup
+        attempt = self.failed_setup()
+        data=json.loads((attempt/'prepared.json').read_text());data['tests_run']=True
+        (attempt/'prepared.json').write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, 'pre-test'):
+            reconcile_setup(self.root, lambda *_: self.fail('inspection must not run'))
+
+
 if __name__ == '__main__':unittest.main()
