@@ -12,7 +12,7 @@ class ValidationPlanTests(unittest.TestCase):
         self.assertEqual([p[0] for p in posix], ['commonutils', 'logistics', 'compression-parity', 'manager-contracts'])
         self.assertEqual([p[2] for p in posix], [600, 900, 600, 120])
         self.assertEqual([row[:2] for row in windows[1:]], [row[:2] for row in posix])
-        self.assertEqual([row[2] for row in windows[1:]], [1800,1800,600,120])
+        self.assertEqual([row[2] for row in windows[1:]], [1800,1800,600,600])
         self.assertEqual(windows[0], ('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))
         self.assertIn('--isolate-modules', posix[0][1])
         self.assertIn('--isolate-modules', posix[1][1])
