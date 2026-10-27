@@ -33,19 +33,43 @@ def phase_toolchain(phase):
 
 def inputs(root, scopes):
     root = Path(root)
-    result = subprocess.run(['git', '-C', str(root), 'ls-files', '-z', '--recurse-submodules', '--', *scopes],
-                            capture_output=True, check=True, timeout=30)
-    extra = subprocess.run(['git', '-C', str(root), 'ls-files', '-z', '--others', '--exclude-standard', '--', *scopes],
-                           capture_output=True, check=True, timeout=30)
-    names = sorted(set((result.stdout + extra.stdout).decode().split('\0')) - {''})
+    def reject_link(name):
+        relative = Path(name)
+        if any((root / part).is_symlink() for part in (relative, *relative.parents[:-1])):
+            raise ValueError('A symlink cannot prove complete test inputs: ' + str(name))
+
+    def inventory(checkout, selected):
+        result = subprocess.run(['git', '-C', str(checkout), 'ls-files', '--stage', '-z', '--', *selected],
+                                capture_output=True, check=True, timeout=30)
+        extra = subprocess.run(['git', '-C', str(checkout), 'ls-files', '-z', '--others', '--exclude-standard', '--', *selected],
+                               capture_output=True, check=True, timeout=30)
+        names = set(os.fsdecode(name) for name in extra.stdout.split(b'\0') if name)
+        for entry in result.stdout.split(b'\0'):
+            if not entry:
+                continue
+            metadata, encoded = entry.split(b'\t', 1)
+            name = os.fsdecode(encoded)
+            if metadata.split()[0] != b'160000':
+                names.add(name)
+                continue
+            # Snapshots clone the pinned dependency in place without registering
+            # it as an active submodule. Git's recursive listing then emits the
+            # gitlink directory itself. Enumerate its own index explicitly.
+            shared = checkout / name
+            reject_link(shared.relative_to(root))
+            if not (shared / '.git').exists():
+                raise ValueError('Test input submodule is not initialized: ' + name)
+            names.update((Path(name) / child).as_posix() for child in inventory(shared, []))
+        return names
+
+    names = sorted(inventory(root, scopes))
     if not names:
         raise ValueError('Test input inventory is empty.')
     digest = hashlib.sha256()
     for name in names:
         path = root / name
         # Never follow a tracked link into another checkout or private directory.
-        if path.is_symlink():
-            raise ValueError('A symlink cannot prove complete test inputs: ' + name)
+        reject_link(name)
         if not path.is_file():
             raise ValueError('Test input is missing: ' + name)
         digest.update(name.encode() + b'\0')

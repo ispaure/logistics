@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from build_manager import Phase
-from Scripts.test_evidence import key_for
+from Scripts.test_evidence import inputs, key_for
 
 
 class InputIdentityTests(unittest.TestCase):
@@ -74,3 +74,55 @@ class InputIdentityTests(unittest.TestCase):
             self.assertEqual(third['status'], 'passed')
             self.assertNotIn('reused', third['phases'][0])
             self.assertEqual(count.read_text(), 'xx')
+
+
+class SnapshotInputIdentityTests(unittest.TestCase):
+    def test_materialized_submodule_inputs_are_complete_and_match_active_checkout(self):
+        from Scripts.build_snapshots import materialize
+        from tests.tooling.test_build_snapshots import SnapshotTests
+        fixture = SnapshotTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        # Match real registered checkouts, then let materialize clone the shared
+        # dependency independently into its isolated snapshot.
+        (fixture.root / '.gitmodules').write_text(
+            '[submodule "Python/commonUtils"]\n'
+            '    path = Python/commonUtils\n'
+            '    url = https://example.invalid/commonUtils.git\n')
+        fixture.git(fixture.root, 'config', 'submodule.Python/commonUtils.active', 'true')
+        fixture.commit(fixture.root)
+        snapshot = fixture.directory / 'snapshot'
+        materialize(fixture.root, snapshot)
+        scopes = ['Python/commonUtils']
+        original = inputs(fixture.root, scopes)
+        self.assertEqual(inputs(snapshot, scopes), original)
+        shared = snapshot / 'Python/commonUtils'
+        (shared / 'library.py').write_text('VERSION = 2\n')
+        self.assertNotEqual(inputs(snapshot, scopes), original)
+        (shared / 'library.py').write_text('VERSION = 1\n')
+        self.assertEqual(inputs(snapshot, scopes), original)
+        (shared / 'new_test.py').write_text('new test\n')
+        self.assertNotEqual(inputs(snapshot, scopes), original)
+        (shared / 'new_test.py').unlink()
+        (shared / '.gitignore').write_text('ignored.txt\n')
+        baseline = inputs(snapshot, scopes)
+        (shared / 'ignored.txt').write_text('private fixture\n')
+        self.assertEqual(inputs(snapshot, scopes), baseline)
+        (shared / 'library.py').unlink()
+        with self.assertRaisesRegex(ValueError, 'Test input is missing'):
+            inputs(snapshot, scopes)
+
+    def test_uninitialized_or_linked_submodule_cannot_prove_inputs(self):
+        import shutil
+        from tests.tooling.test_build_snapshots import SnapshotTests
+        fixture = SnapshotTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        shutil.rmtree(fixture.shared)
+        fixture.shared.mkdir()
+        with self.assertRaisesRegex(ValueError, 'submodule is not initialized'):
+            inputs(fixture.root, ['Python/commonUtils'])
+        fixture.shared.rmdir()
+        fixture.shared.symlink_to(fixture.directory, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            inputs(fixture.root, ['Python/commonUtils'])
