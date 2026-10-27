@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
-from Scripts.continuation_inputs import assess, inventory
+from Scripts.continuation_inputs import assess, inventory, verify_current
 
 
 class ContinuationInputsTests(unittest.TestCase):
@@ -67,3 +67,29 @@ class ContinuationInputsTests(unittest.TestCase):
         self.assertEqual(report['changed_desktop_fixtures'],[name])
         self.assertIn('fresh validation for every changed desktop fixture',report['remaining_checks'])
         self.assertFalse(report['authorizes_reuse'])
+
+    def test_current_equivalence_is_bound_to_clean_checkout_and_review(self):
+        self.write('Scripts/guest_manager.py', 'ORCHESTRATION = 2')
+        current = self.commit()
+        report = verify_current(self.root, self.before, current)
+        self.assertTrue(report['current_checkout_verified'])
+        self.assertFalse(report['authorizes_reuse'])
+        self.assertEqual(report, verify_current(self.root, self.before, current,
+                                               expect_identity=report['identity']))
+        with self.assertRaisesRegex(ValueError, 'review changed'):
+            verify_current(self.root, self.before, current, expect_identity='0'*64)
+        with self.assertRaisesRegex(ValueError, 'current checkout'):
+            verify_current(self.root, self.before, self.before)
+        self.write('Python/app.py', 'DIRTY = True')
+        with self.assertRaisesRegex(ValueError, 'current checkout'):
+            verify_current(self.root, self.before, current)
+
+    def test_changed_committed_application_inputs_block_continuation(self):
+        self.write('Python/app.py', 'APP = 2')
+        with self.assertRaisesRegex(ValueError, 'inputs changed'):
+            verify_current(self.root, self.before, self.commit())
+
+    def test_untracked_source_cannot_be_certified(self):
+        self.write('Python/untracked.py', 'APP = 2')
+        with self.assertRaisesRegex(ValueError, 'current checkout'):
+            verify_current(self.root, self.before, self.before)

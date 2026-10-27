@@ -96,6 +96,13 @@ that equality. This read-only assessment cannot import results, authorize reuse,
 change a plan or pass a release gate. Original outcomes, cleanup, artifacts,
 platform/toolchain identity and execution-engine changes still need verification.
 
+For an executable source prerequisite, add `--require-current-equivalent`. This
+requires the exact current HEAD, a clean checkout (including untracked files),
+and equal application/native inputs. It exits unsuccessfully on a mismatch.
+The returned identity can be bound with `--expect-identity` on subsequent checks.
+This verifies source applicability only: changed desktop fixtures still require
+fresh validation, and the receipt never authorizes source reuse by itself.
+
 If Windows setup fails before tests start and leaves an incomplete attempt,
 `python -m Scripts.guest_attempts reconcile-windows-setup --directory <result-root>
 --manager-checkout <exact-pinned-manager>` can reconcile it without signing in.

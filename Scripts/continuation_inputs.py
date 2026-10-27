@@ -66,6 +66,29 @@ def assess(root, previous, current):
                                   'fresh validation for every changed desktop fixture'])
 
 
+def verify_current(root, previous, current, *, expect_identity=None):
+    """Bind an applicability check to the clean current checkout, not a past SHA.
+
+    This is one continuation prerequisite. Desktop fixture validation, engine
+    review and retained native evidence remain independently required.
+    """
+    # Validate exact revisions before using them in any command or comparison.
+    report = assess(root, previous, current)
+    head = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'],
+                                   text=True, timeout=30).strip()
+    dirty = subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain'],
+                                    text=True, timeout=30)
+    if head != current or dirty:
+        raise ValueError('Continuation requires the exact clean current checkout.')
+    if not report['application_inputs_equal']:
+        raise ValueError('Application/native inputs changed; retained coverage is inapplicable.')
+    report['current_checkout_verified'] = True
+    report['identity'] = hashlib.sha256(json.dumps(report, sort_keys=True).encode()).hexdigest()
+    if expect_identity is not None and report['identity'] != expect_identity:
+        raise ValueError('Continuation input review changed; inspect the new identity.')
+    return report
+
+
 if __name__ == '__main__':
     import argparse
     from pathlib import Path
@@ -73,5 +96,11 @@ if __name__ == '__main__':
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--previous', required=True)
     parser.add_argument('--current', required=True)
+    parser.add_argument('--require-current-equivalent', action='store_true')
+    parser.add_argument('--expect-identity')
     args = parser.parse_args()
-    print(json.dumps(assess(args.root, args.previous, args.current), indent=2))
+    if args.expect_identity and not args.require_current_equivalent:
+        parser.error('--expect-identity requires --require-current-equivalent')
+    report = (verify_current(args.root, args.previous, args.current, expect_identity=args.expect_identity)
+              if args.require_current_equivalent else assess(args.root, args.previous, args.current))
+    print(json.dumps(report, indent=2))
