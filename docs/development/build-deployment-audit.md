@@ -1,5 +1,9 @@
 # Build and deployment ownership audit
 
+## Subsequent operator-entry cleanup
+
+At the owner’s request, the six `mobile_build/deploy_*.command` shortcuts and their dedicated `deploy_ui.py`/`deploy_all.py` entry points were retired in favor of the standalone manager. The adapter does not invoke these files; it retains the underlying device, signing, packaging and provider helpers. The historical keep-launcher recommendations below are superseded by this decision. Existing `Scripts/` entry points remain preserved.
+
 Audit date: October 26, 2026. This is a source audit and migration recommendation,
 not authorization to delete scripts or evidence. No builds, device operations,
 uploads or cleanup were run.
@@ -106,7 +110,7 @@ the directory name considerably overstates the amount of reusable build tooling.
 The Firebase allocation step below is now implemented: preview and reservation
 delegate to the pinned manager. A manager-format reservation record sits beside
 the preserved legacy counter, which is atomically updated under the existing
-Firebase lock. See [Firebase counter compatibility](mobile-launchers.md#double-click-android-firebase-distribution)
+Firebase lock. See [Firebase counter compatibility](mobile-launchers.md#firebase-setup-and-counter-compatibility)
 for storage and recovery behavior. Focused portable checks cover history,
 overrides, limits, lock exclusion and interrupted compatibility writes; no native
 build, device operation or provider upload was required for this change.

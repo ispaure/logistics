@@ -9,7 +9,6 @@ import unittest
 from unittest.mock import patch
 
 from mobile_build.deployment import firebase_deploy as beta
-from mobile_build.deployment import deploy_all as all_deploy
 
 
 class FirebaseDeployTests(unittest.TestCase):
@@ -184,14 +183,3 @@ class FirebaseDeployTests(unittest.TestCase):
                 finally:
                     process.communicate('\n', timeout=10)
                 self.assertEqual(process.returncode, 0)
-
-    def test_all_deployments_stop_or_continue_after_failure(self):
-        result = type('Result', (), {'returncode': 1})()
-        with patch.object(all_deploy.subprocess, 'run', return_value=result) as run:
-            self.assertEqual(all_deploy.deploy_all(ask=lambda _: 'n'), 1)
-            self.assertEqual(run.call_count, 1)
-        with patch.object(all_deploy.subprocess, 'run', return_value=result) as run:
-            self.assertEqual(all_deploy.deploy_all(ask=lambda _: 'y'), 1)
-            self.assertEqual(run.call_count, 4)
-            self.assertEqual([call.args[0] for call in run.call_args_list],
-                             [[str(all_deploy.ROOT / launcher)] for _, launcher in all_deploy.STEPS])

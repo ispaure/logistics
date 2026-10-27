@@ -1,12 +1,8 @@
 # Using the Logistics build manager
 
-Open `mobile_build/deployment/deploy_ui.py` with the desktop environment, or use the existing
-`mobile_build/deploy_test_devices.command` launcher. The window has a plan tab
-and the existing device/tester tab. Passing a test never starts deployment.
-Select an operation, platform, backend and source; inspect the ordered plan,
-then run the reviewed plan. GitHub, deployment and upload effects require an
-explicit confirmation. Existing tester buttons still ask for the final upload
-decision after a verified build is ready.
+Open the standalone Build Deployment Manager (on macOS, use its `LaunchBuildManager_MAC.command`), add or select the Logistics checkout, and use the guided workflow. Select checks and delivery destinations, inspect the plan, then run it. Passing tests never starts delivery. Review prepared artifacts and destinations before approving uploads.
+
+The six legacy `mobile_build/deploy_*.command` shortcuts and their dedicated deployment window/sequencer have been retired. Device, signing and provider helpers remain in Logistics because the manager adapter uses them.
 
 ## Combined validation and delivery
 

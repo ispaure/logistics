@@ -123,9 +123,9 @@ Use your **existing** Apple development team ID and the paired phone's identifie
 (UDID) from Xcode. Replace the example values below; do not enter them literally:
 
 ```sh
-mobile_build/deploy_ios.command configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
-mobile_build/deploy_ios.command status
-mobile_build/deploy_ios.command build
+mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
+mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools status
+mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools build
 ```
 
 These commands run from the repository root. `configure` saves local choices,
@@ -133,14 +133,14 @@ These commands run from the repository root. `configure` saves local choices,
 To install and launch wirelessly, unlock the phone, unplug USB, then run:
 
 ```sh
-mobile_build/deploy_ios.command
+mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools
 ```
 
-You can also double-click `mobile_build/deploy_ios.command` in Finder. For an explicitly
-wired initial installation use `mobile_build/deploy_ios.command deploy --allow-wired`.
+For normal installation, select the device in the Build Deployment Manager. For an explicitly
+wired diagnostic installation use `mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools deploy --allow-wired`.
 After a first-launch trust prompt, trust the developer in the iPhone's
 **Settings → General → VPN & Device Management**, then run
-`mobile_build/deploy_ios.command launch` to retry without rebuilding.
+`mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools launch` to retry without rebuilding.
 
 Keep the bundle ID **`io.github.ispaure.logisticsmobile`**, existing team and
 Keychain identity. Signing errors need their underlying account/profile problem
@@ -289,7 +289,7 @@ excluded from public mobile builds. It is not part of a Logistics clone.
 | Edited source does not appear | Restage, update Briefcase, rerun the platform bridge helper and rebuild |
 | App opens tests instead of Home | Normal `briefcase update iOS` and `build iOS`; reconfigure signing for direct device use |
 | Signing/profile/team mismatch | Check saved identity, Xcode account, membership and profile; retain bundle ID and existing data |
-| Wireless install fails | Check `deploy_ios.command status`, initial pairing, same Wi-Fi and unlocked phone |
+| Wireless install fails | Check `mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools status`, initial pairing, same Wi-Fi and unlocked phone |
 | TestFlight says processing/review pending | Check App Store Connect; use `distribute` after prerequisites are resolved |
 | Apple rejects an uploaded binary | Read Apple's specific error; repair source/packaging and use a new build number |
 
@@ -299,9 +299,10 @@ and host tests are described in [docs/development/mobile-launchers.md](mobile-la
 passing them does not replace simulator and physical-device testing.
 
 
-## Android tester distribution and combined launcher
+## Android tester distribution helpers
 
-`mobile_build/deploy_android_firebase.command` wraps `firebase_deploy.py`. It uses
+Use Firebase delivery in the [Build Deployment Manager](../user/build-manager.md).
+Its retained `firebase_deploy.py` helper uses
 interactive Firebase CLI Google sign-in, verifies project access and the registered
 Android package, and resolves the configured tester group by alias or display
 name without assuming capitalization. Authentication/setup failures stop before
@@ -323,14 +324,11 @@ Builds/logs are under `mobile_build/build/firebase/<number>/`. No device is inst
 or uninstalled by the beta builder. Upload requires an explicit confirmation.
 Firebase handles invitations and notifications; testers approve APK installation.
 
-`mobile_build/deploy_all.command` invokes the two device launchers followed by the two
-distribution launchers sequentially. Distribution prompts are retained. On failure,
-the user can stop or continue; any failed step produces a nonzero final status.
-See [the mobile launcher guide](mobile-launchers.md#double-click-android-firebase-distribution).
+Use the standalone [Build Deployment Manager](../user/build-manager.md) to combine checks and delivery. The legacy sequential deployment launcher has been removed. Direct helper commands are setup/diagnostic paths.
 
-## Android deploy launcher
+## Android device helper
 
-For a normal Android app, `mobile_build/deploy_android.command` stages current Logistics
+For a normal Android app, `mobile_build/.venv/bin/python -m mobile_build.deployment.android_deploy` stages current Logistics
 and commonUtils sources and refreshes Briefcase before each build. It rebuilds
 both bridge ABIs, resolves the SDK and cached JDK, then installs the debug APK with
 `adb install -r` and launches the normal activity. The normal Briefcase build
@@ -338,7 +336,7 @@ restores its app entry point even if the generated project last ran native tests
 An unauthorized/missing device or failed upgrade stops the workflow; it never
 uninstalls or clears app data. Multiple ready devices require a selection or
 `--device SERIAL`. Use `--build-only` to stop after creating the APK. See
-[the launcher instructions](mobile-launchers.md#double-click-android-deployment)
+[the helper reference](mobile-launchers.md#android-device-helper)
 for prerequisites and log locations.
 
 ## Duo rotation and fold verification

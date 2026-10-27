@@ -13,7 +13,7 @@ to do; application features stay in `Python/`.
 | Regenerate canonical navigation and folder artwork | `mobile_build/build_support/generate_navigation_icons.py`, `generate_folder_icons.py` |
 | Device install, deployment policy, Firebase and TestFlight | `mobile_build/deployment/`; reusable command controls and sequencing in external `build_manager.deployment_commands*` |
 | App Store Connect signing/HTTP/polling and Firebase CLI transport | External `build_manager.app_store_connect` and `build_manager.firebase`; app/destination policy remains in `mobile_build/deployment/` |
-| User-facing deployment commands | Existing `mobile_build/*.command` launchers |
+| Operator builds and delivery | Standalone Build Deployment Manager with the Logistics adapter |
 | Native report verification, lifecycle drivers and synthetic fixture generators | `mobile_build/validation/` |
 | Host regression contracts | `mobile_build/tests/` |
 | On-device checks and synthetic fixtures | `mobile_build/native_tests/` |
@@ -28,20 +28,7 @@ workspace ownership, interactive Windows account checks, archive hashes and
 collect-before-cleanup behavior; it does not replace dedicated-machine creation
 or silently select a different Python architecture.
 
-The legacy `deploy_ui.py` entry point now composes `ManagerPanel` and the external
-manager's `CommandPanel`. `LogisticsDeployment` supplies device inventory parsing,
-module arguments, destination labels, interpreter/profile/toolchain settings and
-log locations. The manager owns target retention, asynchronous process output,
-explicit GUI confirmation and busy controls. The shell prevents closing during
-either a manager run or a direct deployment; the two paths cannot start together.
-
-`deploy_all.py` retains the ordered iOS-device, Android-device, TestFlight and
-Firebase launcher policy and its failure prompt. It delegates ordered execution
-to `build_manager.deployment_commands.run_sequence`. These interactive commands
-inherit terminal input; they do not produce release-acceptance evidence or retry
-effects. An earlier failure remains a failure after continuing. The existing
-`deployment_confirmation.py` wrapper preserves `LOGISTICS_UPLOAD_CONFIRM:` while
-delegating framing/input to the manager. All six `.command` paths remain intact.
+Operator builds and delivery start in the standalone manager. The six legacy mobile deployment shortcuts, `deploy_ui.py` and `deploy_all.py` have been removed. Logistics retains the device, signing, Firebase and TestFlight helpers consumed by its adapter. `deployment_confirmation.py` retains the low-level interactive upload protocol; it does not establish manager release acceptance. See the [operator guide](../user/build-manager.md).
 
 `testflight_external.py` retains credential-reference selection, the Logistics
 bundle/app and external-group checks, audience/expiry restrictions, localization
@@ -77,15 +64,14 @@ mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools --help
 mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_tools --help
 ```
 
-The existing `.command` files work from any directory and select that import
-context themselves. Deployment child workers and the Qt deployment window use
-the same module commands. No deployment module catches an arbitrary ImportError
-to guess whether it was loaded as a script.
+Run diagnostic module commands from the repository root. Manager adapter phases
+set their working directory and interpreter explicitly. No deployment module
+catches an arbitrary ImportError to guess whether it was loaded as a script.
 
 `deployment_paths` still separates canonical settings/signing files from generated
 platform workspaces. Moving Python owners does not move `.device.json`,
 `.android-beta`, `.tools`, `.testflight-auth.json`, `build/` or `.deploy-workspaces/`.
-The launcher UI keeps its existing confirmation protocol before tester uploads.
+The manager reviews prepared artifacts and destinations before tester uploads.
 
 ## Validation commands
 

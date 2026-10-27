@@ -45,16 +45,9 @@ and [build upload requirements](https://developer.apple.com/help/app-store-conne
 Check that the selected Xcode/SDK is currently accepted for App Store Connect
 before the first upload. The local selector requires SDK 27.1 or newer.
 
-## Double-click launcher
+## Manager workflow
 
-`mobile_build/deploy_ios_testflight.command` uses the existing local environment and
-`testflight_deploy.py` to run plan, archive and export in order. It chooses a build
-number above existing local release workspaces, then asks for an explicit `y`
-before invoking upload with the existing opt-in flag. Failed steps stop the flow;
-an empty answer keeps the verified export. All identity, clean-source, signature
-and distribution checks remain owned by `testflight_tools.py`. An explicit build
-number can be supplied with `--build-number`. Processing and beta review still
-happen through Apple after upload.
+Use TestFlight delivery in the standalone [Build Deployment Manager](../user/build-manager.md). It runs required validation and prepares the signed archive/export before pausing for artifact and destination review. Configure existing protected app/Inbox provisioning-profile references in project settings. The former double-click launcher has been removed. The commands below remain for developer diagnostics and recovery; direct helper invocation does not certify manager release gates.
 
 ## Local commands
 
@@ -113,13 +106,13 @@ the account lacks cloud-managed certificate permission. If the configured Mac
 already has valid manual profiles and their distribution certificate, select both:
 
 ```sh
-mobile_build/deploy_ios_testflight.command \
+mobile_build/.venv/bin/python -m mobile_build.deployment.testflight_deploy \
   --profile /absolute/path/Logistics-App.mobileprovision \
   --inbox-profile /absolute/path/Logistics-Inbox.mobileprovision
 ```
 
 These are placeholders for existing protected files. Preserve bundle/team identity;
-do not remove the extension or App Group to make export succeed. The launcher
+do not remove the extension or App Group to make export succeed. The diagnostic helper
 forwards these arguments to archive preparation. A new archive attempt needs a new
 build number. Once upload succeeds, use `distribute` for that uploaded build if
 processing/group assignment needs another attempt; do not upload it again.
@@ -154,7 +147,7 @@ behavior, not the app's full privacy answers or an encryption exemption.
 **Friends** group for App Store Connect app `6822787800`. The helper verifies the
 app's bundle ID and requires one exact external group name match. It never creates
 a group or enables a public link. Set `enabled` to `false` for an upload that should
-remain unassigned. Direct `deploy_ios.command` installs are separate and do not
+remain unassigned. Direct `mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools` installs are separate and do not
 upload or distribute a TestFlight build.
 
 The project helper keeps app/group checks, credential-reference configuration,

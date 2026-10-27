@@ -18,83 +18,16 @@ Qt application or install its dependency list.
 See the [user guide](../user_mobile/user_mobile.md) and
 [architecture and validation guide](mobile-preparation.md).
 
-## Simple deployment window
+## Build Deployment Manager
 
-Double-click `mobile_build/deploy_test_devices.command` for the small PySide window.
-It uses the root `.venv` for PySide6 and `mobile_build/.venv` for build tools. Existing
-SDK, Go, signing, device and tester-group settings are reused.
+Use the standalone [Build Deployment Manager](../user/build-manager.md) for builds, validation and delivery. Add or select Logistics, choose platforms and destinations, review the plan and run it. For local installs, choose Delivery → Dev devices and the saved Android or iPhone / iPad recipients. For tester distribution, choose Firebase or TestFlight; each upload requires review of the prepared artifact and destination.
 
-- **Deploy test devices** checks availability first, builds Android once, updates
-  each authorized Android device and deploys to the available saved physical
-  iPhones/iPads in `.device.json`. Android and iOS run at the same time, with
-  devices within each platform updated one at a time. Offline devices are skipped; failed updates
-  are reported while remaining devices are attempted. Discovery failures make
-  the operation report failure even if other available devices were updated.
-  Choose **All available devices** or one named device in **Deploy to** before
-  clicking. A single-device selection updates only that device. If it becomes
-  unavailable, deployment stops before building and never falls back to another
-  device. Refresh preserves the selected device. This selection affects only
-  local installation; Firebase and TestFlight still use their configured groups.
-- **Firebase → Friends** builds/signs with the current Firebase parameters.
-- **TestFlight → Friends** archives/exports with the current TestFlight parameters;
-  it retains the existing requirement for committed, clean release sources.
-- **Refresh** rediscovers paired wireless Android devices, including macOS Bonjour
-  services missed by ADB. It resolves current ports and prefers reachable numeric
-  IPv4 endpoints before link-local IPv6. When a reachable service is blocked by
-  a stale ADB daemon and no Android device is ready, it restarts that daemon once.
-- **Repair Android** explicitly restarts ADB and refreshes paired connections.
-  Use it when a wireless device stays offline while other devices are connected;
-  active ADB sessions briefly disconnect. It keeps pairing keys and app data.
-- **Open logs** opens the deployment logs. The isolated
-  workspaces contain test-device logs; `mobile_build/logs` contains tester-operation logs;
-  distribution output also identifies its build-specific log directory.
+The six legacy deployment `.command` shortcuts and their separate window and sequencer were retired. The following sections describe retained project helpers and low-level setup/diagnostics. Calling a helper directly does not establish the manager’s validation gates.
 
-Tester buttons ask once in the window after the build is prepared and verified,
-before upload and notification. Declining keeps the prepared build on disk.
-Firebase sign-in, if expired or missing, must first be completed using
-`mobile_build/deploy_android_firebase.command --login`; the window reports this rather
-than waiting for a hidden terminal answer. Apple processing/review can delay
-TestFlight availability. Button labels reflect the current Friends configuration;
-the underlying distribution configuration remains authoritative.
-
-Android devices are remembered automatically in ignored
-`mobile_build/.tools/test-devices.json`, using hardware serials to combine USB and
-wireless connections to the same device. New authorized Android connections are
-included automatically. iOS membership stays in `.device.json`. Connect the
-Galaxy S8+ by USB, enable USB debugging and accept the computer authorization
-prompt, then Refresh. Direct APK installation does not require the Play Store.
-Older Android wireless ADB requires initial USB setup; modern TLS pairing
-discovery does not provide that setup.
-
-The window remains responsive while subprocesses build and deploy. Deployment
-buttons are disabled during an operation, and a second launcher window is
-prevented. Wait for completion before closing. Existing identity checks and
-in-place installation remain in force; deployment never uninstalls the app or
-clears its data. The S8+ is not considered validated until it has actually been
-connected, installed and tested.
-
-The window and sequential launcher share reusable command controls from the
-pinned build manager. Logistics still chooses the commands, destinations,
-device identities and toolchain settings. Direct device/tester commands retain
-their development behavior and upload prompts; they do not imply that the
-manager's complete release-validation gates have run.
-
-Test-device deployments use separate persistent workspaces under ignored
-`mobile_build/.deploy-workspaces/android/` and `mobile_build/.deploy-workspaces/ios/`. Each
-owns its staged payload, Briefcase project/cache, generated native libraries,
-build products and logs. The first run creates new projects; later runs reuse
-them. Canonical sources, SDK settings and the saved iOS signing/device identity
-still come from `mobile_build/`; credentials are not copied into these workspaces.
-`logs/deployment.log` under each workspace captures that platform's full worker
-output; the window prefixes progress with `[Android]` or `[iOS]`. A failed
-platform does not cancel the other, and the batch waits for both before reporting
-success or failure. A file lock prevents simultaneous batches from changing the
-same workspace. The older standalone launchers retain their existing paths.
-
-## Double-click Android deployment
+## Android device helper
 
 Connect and authorize an Android device with USB debugging, or start an emulator,
-then double-click `deploy_android.command`. It stages the current local Logistics
+then use Android test devices in the manager. Its retained helper stages the current local Logistics
 and tracked commonUtils sources (including uncommitted edits), updates the normal
 Briefcase project, rebuilds the native bridge and APK, installs in place and opens
 the app. If several devices are connected it asks which one to update.
@@ -115,10 +48,10 @@ before installation; the helper never replaces keys or uninstalls the app.
 The first launch may take up to 90 seconds on slower devices; a startup timeout
 is reported without undoing a successful installation.
 
-Optional Terminal usage: `mobile_build/deploy_android.command --device SERIAL` or
-`mobile_build/deploy_android.command --build-only`. Build/install logs are under
+Optional Terminal usage: `mobile_build/.venv/bin/python -m mobile_build.deployment.android_deploy --device SERIAL` or
+`mobile_build/.venv/bin/python -m mobile_build.deployment.android_deploy --build-only`. Build/install logs are under
 `mobile_build/logs/android-*.log`. It builds local sources; it does not pull from GitHub.
-The launcher remembers the configured local SDK/cache paths and attempts to
+The helper remembers the configured local SDK/cache paths and attempts to
 reconnect advertised wireless ADB devices using existing pairing keys. Pair once
 through Android Wireless debugging. Wake the tablet and enable that setting if
 the firmware switches it off; the app's **Settings → Developer settings…** opens
@@ -126,18 +59,19 @@ the native developer screen. Discovery cannot enable debugging on the tablet.
 Several connected devices still require a selection.
 New Logistics modules still need registration in the mobile source manifest.
 
-## Double-click Android Firebase distribution
+## Firebase setup and counter compatibility
 
-Double-click `deploy_android_firebase.command` to send a signed Android APK to
-the configured Firebase App Distribution group. On first use it downloads the
+Use Firebase delivery in the manager to prepare and review a signed APK for
+the configured Firebase App Distribution group. The retained Firebase helper
+provides the following authentication and packaging mechanics. On first use it downloads the
 official standalone Firebase CLI into ignored `.tools/`, opens Google sign-in,
 and checks that the Firebase app has the existing Android package identity.
 It resolves the configured **Friends** display name to its actual group alias.
 Use the Google account that owns the Firebase project. The CLI stores sign-in
 credentials in its own user configuration; never commit or share them.
 
-For sign-in without building, run `mobile_build/deploy_android_firebase.command --login`.
-`--check` verifies access and group configuration. After setup, double-clicking
+For sign-in without building, run `mobile_build/.venv/bin/python -m mobile_build.deployment.firebase_deploy --login`.
+`--check` verifies access and group configuration. Direct helper execution
 stages current local sources (including uncommitted edits), builds a release APK,
 assigns an increasing version code, aligns/signs/verifies it, then asks before
 uploading and notifying testers. `--build-only` saves the signed APK without upload.
@@ -150,7 +84,7 @@ updates to previously distributed builds. Missing signing files stop deployment;
 they are never silently replaced. APKs and logs live in `mobile_build/build/firebase/`.
 Firebase CLI diagnostic logs stay in ignored `.tools/`.
 Release-signed betas cannot update a debug-signed device installation in place;
-this launcher never uninstalls an app or deletes its data.
+this helper never uninstalls an app or deletes its data.
 
 Firebase preview and reservation use the pinned manager's `build_manager.versions`
 allocator. Logistics supplies the UTC date floor, Android version-code maximum,
@@ -164,23 +98,9 @@ Both records contribute to the next number, so an older writer advancing
 allocator reuse a number. Preview writes neither record. Keep both records in
 the private directory backup; do not reset them when pruning generated builds.
 
-## Double-click all deployments
+## TestFlight delivery
 
-`deploy_all.command` runs the saved iOS device installs, Android device install,
-TestFlight distribution and Firebase distribution, in that order, sequentially.
-Have your devices available. Each distribution keeps its upload confirmation.
-After a failed step it asks whether to continue; the combined run still reports
-failure. Canceling an upload leaves its prepared build on disk.
-
-## Double-click TestFlight deployment
-
-On the configured Mac, double-click `deploy_ios_testflight.command` beside
-`deploy_ios.command`. It chooses a new build number, archives the committed
-sources and exports/verifies the signed IPA. When prompted, type `y` and Return
-to upload it and start the configured Friends distribution workflow. Press Return
-to keep the prepared build without uploading. Apple processing and beta review
-can delay tester availability. The launcher preserves the existing signing identity
-and does not install anything on your iPhone. Commit source changes before running.
+Select TestFlight in the manager. The adapter prepares the committed source, archives, exports and verifies the signed IPA, then pauses for upload review. Apple processing and beta review can delay tester availability. See [TestFlight setup and diagnostics](mobile-testflight.md).
 
 ## Prepare a native build
 
@@ -287,9 +207,9 @@ The helper also supports paired iPads. To add one alongside your existing iPhone
 3. On the iPad, enable **Settings → Privacy & Security → Developer Mode**, restart
    and confirm when prompted. Wait for Xcode's device preparation to finish.
 4. Copy the iPad's Identifier/UDID from Xcode. For an initial USB deployment, run
-   `mobile_build/deploy_ios.command deploy --device YOUR_IPAD_UDID --allow-wired`.
+   `mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools deploy --device YOUR_IPAD_UDID --allow-wired`.
 5. For subsequent wireless deployments, put both devices on the same Wi-Fi,
-   unplug USB and run `mobile_build/deploy_ios.command deploy --device YOUR_IPAD_UDID`.
+   unplug USB and run `mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools deploy --device YOUR_IPAD_UDID`.
 
 `--device` also works with `status`, `build` and `launch`, and accepts an exact
 device name when unambiguous. It selects a target for that command without
@@ -298,29 +218,21 @@ the saved device. Builds provision and verify the selected iPhone or iPad before
 installation. If configuring a Mac for the first time with several devices
 connected, pass `--device` to `configure` explicitly.
 
-On a configured Mac, double-click `mobile_build/deploy_ios.command` in Finder, or run
-it from any directory. With no arguments it runs `deploy-all --allow-wired`:
-build, verify, install and launch on every UDID listed in the ignored
-`mobile_build/.device.json` `device_ids` array, using USB or Wi-Fi. Without that optional
-array, it deploys only to the original `device_id`. Keep personal UDIDs in that
-local configuration, not in the launcher. Each target runs the normal deployment;
-a failed target is reported while the remaining targets are still attempted.
-The batch exits unsuccessfully if any device fails. Successful per-device reports
-are retained as `mobile_build/logs/device-deployment-<UDID>.json`.
+For normal installation, select iPhone / iPad delivery and recipients in the manager. For low-level diagnostics, run the `device_tools` module from the repository root with an explicit subcommand. `deploy-all --allow-wired` uses the saved `device_ids` list (or original `device_id`) and permits USB. Personal UDIDs remain in ignored `.device.json`.
 
 Explicit `deploy --device YOUR_UDID` selects one device; `deploy-all` uses the
-saved list. Add `--allow-wired` to explicit commands to permit USB. The launcher
+saved list. Add `--allow-wired` to explicit commands to permit USB. The helper
 also accepts `build`, `status` and `launch` (launch without rebuilding).
 
-The launcher uses `mobile_build/.venv` and an optional local Go installation at
+The helper uses `mobile_build/.venv` and an optional local Go installation at
 `mobile_build/.tools/go`. To prepare another Mac:
 
 ```sh
 python3.12 -m venv mobile_build/.venv
 mobile_build/.venv/bin/python -m pip install briefcase==0.4.5
 # Install Go 1.26.9 on PATH, or extract it into mobile_build/.tools/go.
-mobile_build/deploy_ios.command configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
-mobile_build/deploy_ios.command
+mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools configure --team YOUR_TEAM_ID --device YOUR_IPHONE_UDID
+mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools status
 ```
 
 Use the Python 3.12 environment containing Briefcase 0.4.5, with Go 1.26.9
@@ -364,7 +276,7 @@ deployment details in `mobile_build/logs/device-deployment.json`.
 
 For the first Personal Team launch, iOS may require trusting the developer in
 Settings → General → VPN & Device Management. After trusting, run
-`mobile_build/deploy_ios.command launch`; a rebuild or uninstall is unnecessary.
+`mobile_build/.venv/bin/python -m mobile_build.deployment.device_tools launch`; a rebuild or uninstall is unnecessary.
 If another launch error appears, inspect the device error instead of treating
 every security error as a trust problem.
 

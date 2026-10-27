@@ -26,7 +26,7 @@ when Android asks. New build notifications lead to updates that you approve on
 the device. Keep the existing beta installation to retain its data. A separately
 debug-signed developer build has a different signing identity and cannot be
 replaced by the beta in place. See the
-[distribution launcher guide](../development/mobile-launchers.md#double-click-android-firebase-distribution).
+[Build Deployment Manager guide](../user/build-manager.md).
 
 ## Direct remote reading
 

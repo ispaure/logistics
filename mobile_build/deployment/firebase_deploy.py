@@ -56,7 +56,7 @@ def firebase_json(cli, *args):
     try:
         return FirebaseCLI(cli, ROOT / '.tools').query(*args)
     except FirebaseError:
-        raise ValueError('Firebase access failed. Run deploy_android_firebase.command --login '
+        raise ValueError('Firebase access failed. Run mobile_build/.venv/bin/python -m mobile_build.deployment.firebase_deploy --login '
                          'and use the Google account that owns the Firebase project. '
                          'Also check App Distribution is enabled in the console.') from None
 
@@ -87,7 +87,7 @@ def preflight(cli, *, login=False, allow_login=True):
         accounts = firebase_json(cli, 'login:list')
         if not accounts:
             if not allow_login:
-                raise ValueError('Firebase sign-in is needed. Run mobile_build/deploy_android_firebase.command --login once, then retry.')
+                raise ValueError('Firebase sign-in is needed. Run mobile_build/.venv/bin/python -m mobile_build.deployment.firebase_deploy --login once, then retry.')
             print('Sign in with the Google account that owns your Firebase project.', flush=True)
             FirebaseCLI(cli, ROOT / '.tools').login()
     projects = firebase_json(cli, 'projects:list')

@@ -15,20 +15,7 @@ manager adapter selects `.tools/release-wheels`; use the same cache for standalo
 helpers. An existing `.tools/python-wheels` cache also works when explicitly set
 through `PIP_FIND_LINKS`, but the manager does not select that older name.
 
-For the combined PySide test-device and tester-distribution window, use
-`mobile_build/deploy_test_devices.command`; see the
-[window guide](mobile-launchers.md#simple-deployment-window). It reuses the iOS
-configuration below and remembers discovered Android devices locally.
-The window runs iOS alongside Android in separate ignored platform workspaces;
-the saved iOS devices remain sequential. Its iOS build and deployment logs live
-under `mobile_build/.deploy-workspaces/ios/logs/`. Standalone `device_tools.py` keeps
-the paths described below.
-
-`mobile_build/deployment/device_tools.py` owns the local physical-device workflow; the executable
-`mobile_build/deploy_ios.command` anchors paths to its own directory and uses the
-ignored `mobile_build/.venv` and optional `mobile_build/.tools/go` installation. See the
-[operator guide](mobile-launchers.md#build-and-deploy-to-a-paired-iphone-over-wi-fi)
-for setup and commands. This workflow does not automate TestFlight.
+Use the standalone [Build Deployment Manager](../user/build-manager.md) for device delivery: choose Delivery → Dev devices, select iPhone / iPad and the saved recipients, then inspect and run the plan. The adapter uses `mobile_build/deployment/device_tools.py` for physical-device operations. The low-level setup commands below are developer diagnostics; normal builds and installs go through the manager.
 
 Routine validation uses the iOS simulator and Android emulator on the computer,
 including tablet checks when navigation/layout changes. A paired iPhone can

@@ -2,8 +2,6 @@
 import fcntl
 import json
 import os
-import shlex
-import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -46,36 +44,6 @@ class ParallelDeploymentTests(unittest.TestCase):
                 self.assertIn(platform + ' finished', (workspace / 'logs/deployment.log').read_text())
                 self.assertEqual(json.loads((workspace / 'targets.json').read_text())[0]['platform'], platform)
             self.assertFalse((root / 'payload').exists())
-
-    def test_double_click_launchers_keep_names_and_run_modules_from_any_directory(self):
-        repo = Path(__file__).resolve().parents[3]
-        launchers = {
-            'deploy_ios': 'device_tools', 'deploy_android': 'android_deploy',
-            'deploy_test_devices': 'deploy_ui', 'deploy_all': 'deploy_all',
-            'deploy_ios_testflight': 'testflight_deploy',
-            'deploy_android_firebase': 'firebase_deploy',
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            mobile = root / 'mobile_build'
-            mobile.mkdir()
-            record = root / 'record.py'
-            record.write_text("import json, os, sys; print(json.dumps([os.getcwd(), sys.argv[1:]]))")
-            for environment in (root / '.venv', mobile / '.venv'):
-                interpreter = environment / 'bin/python'
-                interpreter.parent.mkdir(parents=True)
-                interpreter.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' '
-                                       + shlex.quote(str(record)) + ' "$@"\n')
-                interpreter.chmod(0o755)
-            for launcher, module in launchers.items():
-                with self.subTest(launcher=launcher):
-                    path = mobile / (launcher + '.command')
-                    shutil.copyfile(repo / 'mobile_build' / path.name, path)
-                    result = subprocess.run(['sh', str(path), '--help'], cwd=root.parent,
-                                            capture_output=True, text=True, check=True)
-                    working_directory, arguments = json.loads(result.stdout)
-                    self.assertEqual(Path(working_directory).resolve(), root.resolve())
-                    self.assertEqual(arguments, ['-m', 'mobile_build.deployment.' + module, '--help'])
 
     def test_platform_failure_waits_for_other_worker_and_reports_failure(self):
         completed = []
