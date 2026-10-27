@@ -90,7 +90,7 @@ def run(args):
         environment['LOGISTICS_REUSE_TEST_RESULTS'] = 'off'
     result = dict(schema=1, status='running', source=args.source_identity, backend='Parallels Windows', original_state=selected['status'],
                   started_at=datetime.now(timezone.utc).isoformat(), guest_architecture=prepared['guestArchitecture'],
-                  runtime=prepared['runtime'], workspace=prepared['workspace'], operation=operation)
+                  runtime=prepared['runtime'], workspace=prepared['workspace'], workspace_token=prepared['token'], operation=operation)
     lifecycle = GuestResultLifecycle(result, args.results, 'Parallels Windows', 'test_workspace')
     manager = 'manager-' + operation
     try:

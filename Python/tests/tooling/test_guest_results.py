@@ -9,6 +9,18 @@ from Scripts.guest_results import GuestResultLifecycle
 
 
 class GuestResultTests(unittest.TestCase):
+    def test_interrupted_wrapper_retains_ownership_before_guest_work(self):
+        with TemporaryDirectory() as folder:
+            result = dict(source={'commit': 'fixed'}, status='running', vm='owned-vm',
+                          workspace='/var/tmp/owned-token', workspace_token='owned-token',
+                          operation='exact-worker')
+            GuestResultLifecycle(result, folder, 'fixture', 'guest_workspace')
+            # Simulate abrupt wrapper termination: neither collect nor finish runs.
+            saved = json.loads((Path(folder) / 'result.json').read_text())
+            self.assertEqual(saved, result)
+            self.assertEqual(saved['status'], 'running')
+            self.assertNotIn('guest_workspace_removed', saved)
+
     def test_collection_failure_preserves_remote_workspace(self):
         with TemporaryDirectory() as folder:
             result = dict(source={'commit': 'fixed'}, status='passed')

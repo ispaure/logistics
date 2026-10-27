@@ -52,7 +52,7 @@ def run(args):
     token = uuid4().hex
     workspace = '/var/tmp/' + token
     result = dict(schema=1, vm=vm, original_state=original['status'], environment=info,
-                  workspace=workspace, source=args.source_identity, status='running', phases=[])
+                  workspace=workspace, workspace_token=token, source=args.source_identity, status='running', phases=[])
     args.results.mkdir(parents=True, exist_ok=False)
     lifecycle = GuestResultLifecycle(result, args.results, 'Parallels ' + args.distribution, 'guest_workspace')
     staged = False

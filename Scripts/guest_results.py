@@ -4,6 +4,8 @@ from pathlib import Path
 import subprocess
 import time
 
+from build_manager.profiles import save_json
+
 
 class GuestResultLifecycle:
     def __init__(self, result, directory, backend, workspace_key):
@@ -11,6 +13,9 @@ class GuestResultLifecycle:
         self.backend, self.workspace_key = backend, workspace_key
         self.started = time.monotonic()
         self.collected = False
+        # Persist ownership before any transfer/worker can outlive this wrapper.
+        # An interrupted running record is recovery evidence, never a test pass.
+        save_json(self.directory / 'result.json', self.result)
 
     def collect(self, collect, evidence, cleanup):
         """Collect before cleanup; preserve remote evidence if transfer fails.
@@ -46,7 +51,7 @@ class GuestResultLifecycle:
 
     def finish(self):
         self.result['seconds'] = time.monotonic() - self.started
-        (self.directory / 'result.json').write_text(json.dumps(self.result, indent=2) + '\n')
+        save_json(self.directory / 'result.json', self.result)
         print(json.dumps(self.result), flush=True)
 
 
