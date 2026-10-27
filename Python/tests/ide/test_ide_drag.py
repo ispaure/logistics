@@ -14,7 +14,9 @@ class IDEDragTests(QtTestCase):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         self.directory = self.temporary_directory()
         self.root = Path(self.directory.name).resolve()
-        self.view = ProjectWorkspace(Project('drag', str(self.root)))
+        # These gestures assert an unsaved buffer; background autosave must not
+        # clear its modified flag simply because a slower host crosses the timer.
+        self.view = ProjectWorkspace(Project('drag', str(self.root), autosave='off'))
         self.view.resize(1200, 700); self.view.show(); self.view.activateWindow()
         self.addCleanup(self.close_view)
         for name in ('left.py', 'right.py'):
@@ -95,6 +97,7 @@ class IDEDragTests(QtTestCase):
                             self.assertEqual(self.left.textCursor().position(), cursor)
                             self.assertTrue(document.isModified())
                             self.assertFalse(moving.isWindow())
+        self.assertEqual(self.left.path.read_text(), 'left.py\n')
         self.left.undo()
         self.assertEqual(self.left.toPlainText(), 'left.py\n')
 
