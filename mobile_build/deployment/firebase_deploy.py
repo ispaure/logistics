@@ -13,6 +13,8 @@ import tempfile
 import tomllib
 from urllib.request import urlopen
 
+from commonUtils.runtime.streams import file_sha256
+
 from build_manager.firebase import FirebaseCLI, FirebaseError
 
 from . import android_deploy as android
@@ -220,7 +222,7 @@ def build(version_code=None):
             source = json.loads((ROOT / 'payload/source.json').read_text())
             record_prepared_artifact(dict(provider='Firebase', bundle_id=android.BUNDLE,
                 version=config['version'], build=number, source=source, apk=str(apk),
-                apk_sha256=__import__('hashlib').sha256(apk.read_bytes()).hexdigest(),
+                apk_sha256=file_sha256(apk),
                 destination=preflight_destination(),
                 certificate=android.apk_certificate(apk, tools, env)))
         notes = output / 'release-notes.txt'

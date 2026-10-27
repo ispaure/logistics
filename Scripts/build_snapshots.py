@@ -8,6 +8,8 @@ import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 
+from commonUtils.runtime.streams import file_sha256
+
 from build_manager.locking import workspace_lock
 
 
@@ -56,7 +58,7 @@ def identity(root, revision='working-tree'):
                 digest.update(b'link:' + os.fsencode(link))
             elif path.is_file():
                 digest.update(b'executable:' if path.stat().st_mode & stat.S_IXUSR else b'file:')
-                digest.update(hashlib.sha256(path.read_bytes()).digest())
+                digest.update(bytes.fromhex(file_sha256(path)))
             elif not path.exists():
                 digest.update(b'deleted')
             else:
