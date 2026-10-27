@@ -16,9 +16,11 @@ REQUIRED = {
 }
 
 
-def select(request, repository, commit, *, now=None, max_age=timedelta(hours=24)):
+def select(request, repository, commit, *, now=None, max_age=timedelta(hours=24), reuse_allowed=True):
     if not re.fullmatch(r'[0-9a-f]{40}', commit):
         raise ValueError('Evidence must identify an exact source commit.')
+    if not reuse_allowed:
+        return {}
     now = now or datetime.now(timezone.utc)
     result = {}
     runs = request('/actions/runs?head_sha=' + commit + '&status=success&per_page=100')['workflow_runs']
@@ -67,7 +69,10 @@ def main():
             raise ValueError('Evidence response exceeds the inspection budget.')
         return json.loads(raw)
     try:
-        evidence = select(request, repository, commit)
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+        from Scripts.release_test_evidence import reuse_disabled
+        evidence = select(request, repository, commit, reuse_allowed=not reuse_disabled(Path.cwd()))
     except (OSError, ValueError, KeyError, TypeError):
         # An unavailable or malformed proof cannot skip tests.
         evidence = {}

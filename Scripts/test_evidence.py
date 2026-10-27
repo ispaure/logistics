@@ -157,6 +157,11 @@ def with_reuse(plan):
     from dataclasses import asdict, replace
     from uuid import uuid4
     from build_manager.profiles import save_json
+    from Scripts.release_test_evidence import reuse_disabled
+    disabled = plan.source.get('run_overrides', {}).get('testing.reuse_verified_results', 'on') == 'off'
+    if disabled or any(p.environment.get('LOGISTICS_REUSE_TEST_RESULTS') == 'off' for p in plan.phases) or reuse_disabled(plan.phases[0].cwd):
+        return replace(plan, phases=tuple(replace(phase, reuse_key='', reuse_probe=(),
+            environment=dict(phase.environment, LOGISTICS_REUSE_TEST_RESULTS='off')) for phase in plan.phases))
     phases = []
     for phase in plan.phases:
         if phase.id.rsplit('.', 1)[-1] not in HOST_SUITES or phase.kind != 'test' or phase.always:

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import hashlib
 import io
 import json
+import os
 from pathlib import Path, PureWindowsPath
 import signal
 import subprocess
@@ -85,6 +86,8 @@ def run(args):
                        PYTHONUTF8='1', QT_QPA_PLATFORM='offscreen',
                        UV_PYTHON_INSTALL_DIR=str(root / 'python'), UV_CACHE_DIR=str(root / 'cache'),
                        UV_PYTHON_ARCH='x86_64', BROWSER_TEST_ARTIFACTS=str(root / reports / 'browser-diagnostics'))
+    if os.environ.get('LOGISTICS_REUSE_TEST_RESULTS') == 'off':
+        environment['LOGISTICS_REUSE_TEST_RESULTS'] = 'off'
     result = dict(schema=1, status='running', source=args.source_identity, backend='Parallels Windows', original_state=selected['status'],
                   started_at=datetime.now(timezone.utc).isoformat(), guest_architecture=prepared['guestArchitecture'],
                   runtime=prepared['runtime'], workspace=prepared['workspace'], operation=operation)

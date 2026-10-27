@@ -41,6 +41,29 @@ def bindings(root, repository):
                 source=source, dependencies=dict(commonUtils=shared, manager=manager))
 
 
+
+def reuse_disabled(root):
+    """A debug preset propagates off locally and in the immutable release tag."""
+    if os.environ.get('LOGISTICS_REUSE_TEST_RESULTS', 'on') != 'on':
+        return True
+    ref = os.environ.get('GITHUB_REF', '')
+    if not ref.startswith('refs/tags/'):
+        return False
+    if not re.fullmatch(r'refs/tags/[A-Za-z0-9_./-]{1,200}', ref):
+        return True
+    try:
+        kind = git(root, 'cat-file', '-t', ref).stdout.strip()
+        if kind == b'commit':  # Legacy lightweight release tags retain default-on.
+            return False
+        if kind != b'tag':
+            return True
+        raw = git(root, 'cat-file', '-p', ref).stdout.partition(b'\n\n')[2]
+        policies = [line.split(':', 1)[1].strip() for line in raw.decode().splitlines()
+                    if line.startswith('Build-Manager-Reuse:')]
+        return any(policy != 'on' for policy in policies)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return True  # Unreadable release policy never authorizes reuse.
+
 def signing_key(repository):
     from build_manager.registry import config_directory
     identity = hashlib.sha256(repository.encode()).hexdigest()
@@ -196,6 +219,8 @@ def main():
     args = parser.parse_args()
     if args.command == 'enroll':
         print('Review and commit the public signer allowlist:', enroll(args.root, args.repository))
+    elif reuse_disabled(args.root):
+        print('Verified test reuse disabled; hosted checks will execute fresh.')
     else:
         print('Local evidence notes fetched.' if fetch_note(args.root) else
               'Local evidence unavailable; fresh hosted checks remain required.')

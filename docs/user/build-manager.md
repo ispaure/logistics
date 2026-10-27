@@ -189,3 +189,16 @@ subtask to inspect the resource capacity and other steps using the same resource
 A resource wait is different from a failed prerequisite; unrelated work continues.
 After updating the manager and Logistics adapter, restart the app and inspect a
 fresh plan. Previously inspected or saved plans preserve their original order.
+
+## Reuse verified tests per preset
+
+In the workflow's **Tests** settings, use **Reuse verified test results**:
+
+- **On** (default): run identical host suites once and reuse verified exact matches.
+- **Off · fresh executions (debug)**: execute selected tests afresh locally, in guests and in the hosted release. Neither local receipts nor previous GitHub passes can skip them.
+
+Save the preset to keep that choice. Older presets default to On; loading another
+preset does not inherit a previous preset's debug Off setting. The selected test
+coverage, separate OS/native checks and rotation checks stay unchanged.
+For an explicit CLI journey, the corresponding run choice is
+`--run-value testing.reuse_verified_results=off`.

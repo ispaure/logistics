@@ -1,6 +1,7 @@
 """Logistics Linux VM policy over the reusable existing-guest transport."""
 import argparse
 import json
+import os
 from pathlib import Path
 import signal
 import subprocess
@@ -66,6 +67,8 @@ def run(args):
         env = dict(QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1', PYTHONUTF8='1',
                    UV_PYTHON_INSTALL_DIR=workspace + '/python', UV_CACHE_DIR=workspace + '/cache',
                    PYTHONPATH=workspace + '/source:' + workspace + '/source/Python')
+        if os.environ.get('LOGISTICS_REUSE_TEST_RESULTS') == 'off':
+            env['LOGISTICS_REUSE_TEST_RESULTS'] = 'off'
         def execute(argv, environment, timeout):
             return client.run_owned(vm, workspace, token, account['uid'],
                 container.run(workspace, ['env', *(key+'='+value for key,value in environment.items()), *argv]) if container else argv,

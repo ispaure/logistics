@@ -126,3 +126,25 @@ class SnapshotInputIdentityTests(unittest.TestCase):
         fixture.shared.symlink_to(fixture.directory, target_is_directory=True)
         with self.assertRaisesRegex(ValueError, 'symlink'):
             inputs(fixture.root, ['Python/commonUtils'])
+
+
+class ReuseSwitchTests(unittest.TestCase):
+    def test_off_preserves_all_work_but_removes_keys_and_propagates_guest_policy(self):
+        from dataclasses import replace
+        from unittest.mock import patch
+        from build_manager import Plan
+        from Scripts.test_evidence import with_reuse
+        with TemporaryDirectory() as folder:
+            phase = Phase('commonutils', ('python', 'tests.py'), folder, effect='test',
+                          reuse_key='a' * 64, reuse_probe=('python', 'probe.py'))
+            native = Phase('android-native', ('python', 'native.py'), folder, effect='test')
+            plan = Plan('Fixture', 'Validation', {'run_overrides': {'testing.reuse_verified_results': 'off'}},
+                        (phase, native), str(Path(folder) / 'workspace'))
+            with patch('Scripts.test_evidence.key_for', side_effect=AssertionError('Off must not inspect or certify cache keys')):
+                fresh = with_reuse(plan)
+            self.assertEqual([p.argv for p in fresh.phases], [p.argv for p in plan.phases])
+            self.assertTrue(all(not p.reuse_key and not p.reuse_probe for p in fresh.phases))
+            self.assertTrue(all(p.environment['LOGISTICS_REUSE_TEST_RESULTS'] == 'off' for p in fresh.phases))
+            # The same flag reaches a separate guest process, without changing its suite list.
+            guest_plan = replace(plan, source={}, phases=fresh.phases)
+            self.assertTrue(all(not p.reuse_key for p in with_reuse(guest_plan).phases))

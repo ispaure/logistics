@@ -38,3 +38,10 @@ class ReleaseEvidenceTests(unittest.TestCase):
             self.run.update(changes)
             self.assertEqual(self.inspect(), {})
             self.run = saved
+
+
+    def test_debug_off_forces_fresh_without_consulting_previous_hosted_passes(self):
+        from unittest.mock import Mock
+        request = Mock(side_effect=AssertionError('Fresh debug policy must not reuse prior runs'))
+        self.assertEqual(select(request, 'fixture/repo', self.sha, now=self.now, reuse_allowed=False), {})
+        request.assert_not_called()

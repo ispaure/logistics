@@ -317,6 +317,8 @@ class LogisticsProject:
                 raise ValueError('Choose an explicit release channel/tag, separate from app version and mobile build numbers.')
             command = (str(self.interpreter), '-m', 'Scripts.build_project', 'release', '--tag', release_tag,
                        '--commit', source['logistics_commit'], '--root', str(self.root))
+            if source.get('run_overrides', {}).get('testing.reuse_verified_results') == 'off':
+                command += ('--no-test-reuse',)
             return Plan('Logistics', operation, dict(source, release_tag=release_tag),
                         (Phase('release-source-and-gates', command, str(self.root), timeout=14400),),
                         str(workspace), backend='GitHub', effect='publish')
@@ -332,6 +334,8 @@ class LogisticsProject:
             receipt = workspace / 'remote' / (uuid4().hex + '.json')
             command = (str(self.interpreter), '-m', 'Scripts.build_project', 'github', '--operation-receipt', str(receipt), '--platform', target,
                        '--workflow', workflow, '--ref', ref, '--commit', source['logistics_commit'], '--root', str(self.root))
+            if source.get('run_overrides', {}).get('testing.reuse_verified_results') == 'off':
+                command += ('--no-test-reuse',)
             phases.append(Phase('github-' + name, command, str(self.root), timeout=14400, artifacts=(str(receipt),),effect='dispatch',kind='validation-dispatch'))
         return Plan('Logistics', operation, source, tuple(phases),
                     str(workspace), backend='GitHub', effect='dispatch')
@@ -617,6 +621,7 @@ def main():
     parser.add_argument('--tag')
     parser.add_argument('--test-evidence-request', type=Path)
     parser.add_argument('--test-evidence-sha256')
+    parser.add_argument('--no-test-reuse', action='store_true')
     args = parser.parse_args()
     if args.command == 'verify':
         values, sources = manager_settings.settings(args.root / 'mobile_build')
@@ -643,6 +648,8 @@ def main():
         signal.signal(name, lambda *_: cancelled.set())
     if args.command == 'github':
         inputs = {'target': args.platform}
+        if args.no_test_reuse and args.workflow == 'archive-platform-checks.yml':
+            inputs['reuse_test_results'] = 'off'
         run = client.dispatch(args.workflow, args.ref, args.commit, inputs, confirmed=True)
         receipt = dict(schema=1, provider='github', run_id=run, repository=values['github.repository'],
                        expected_commit=args.commit, workflow=args.workflow, status='queued',
@@ -656,7 +663,7 @@ def main():
         return int(result.get('status') != 'completed')
     if git(args.root, 'status', '--porcelain') or git(args.root, 'rev-parse', 'HEAD') != args.commit:
         raise ValueError('Commit intended source before requesting a release.')
-    if args.test_evidence_request:
+    if args.test_evidence_request and not args.no_test_reuse:
         from Scripts.release_test_evidence import prepare_export, publish_note
         try:
             proof = prepare_export(args.root, client.repository, args.test_evidence_request,
@@ -668,7 +675,7 @@ def main():
                 print('No eligible local receipts; hosted checks will run fresh.', flush=True)
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RuntimeError):
             print('Local evidence export unavailable or rejected; hosted checks independently verify any existing proof.', flush=True)
-    return release_source(args.root, client, args.tag, args.commit, cancelled)
+    return release_source(args.root, client, args.tag, args.commit, cancelled, reuse_test_results=not args.no_test_reuse)
 
 
 def github_client(values, root):
@@ -680,7 +687,7 @@ def github_client(values, root):
     return GitHub(values['github.repository'],token)
 
 
-def release_source(root, client, tag, commit, cancelled):
+def release_source(root, client, tag, commit, cancelled, *, reuse_test_results=True):
     if not re.fullmatch(r'v\d+\.\d+\.\d+-(?:alpha\.\d+|beta\.\d+|main\.\d+)', tag or ''):
         raise ValueError('Select an explicit supported release tag.')
     if git(root, 'status', '--porcelain') or git(root, 'rev-parse', 'HEAD') != commit:
@@ -697,7 +704,9 @@ def release_source(root, client, tag, commit, cancelled):
     subprocess.run(['git', 'push', 'origin', branch], cwd=shared, check=True, timeout=120)
     channel = tag.split('-')[1].split('.')[0]
     subprocess.run(['git', 'push', 'origin', commit + ':refs/heads/' + channel], cwd=root, check=True, timeout=120)
-    subprocess.run(['git', 'tag', tag, commit], cwd=root, check=True, timeout=30)
+    tag_command = ['git', 'tag', tag, commit] if reuse_test_results else [
+        'git', 'tag', '-a', tag, commit, '-m', 'Logistics source release\n\nBuild-Manager-Reuse: off']
+    subprocess.run(tag_command, cwd=root, check=True, timeout=30)
     subprocess.run(['git', 'push', 'origin', 'refs/tags/' + tag], cwd=root, check=True, timeout=120)
     # Tag pushes start the gated publication workflow. Dispatching another run
     # would duplicate the matrix and a manual run does not publish an asset.

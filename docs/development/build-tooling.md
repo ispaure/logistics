@@ -162,3 +162,13 @@ including receipt reconciliation on a lost Windows transport result. These
 messages identify a headless wait; they do not assert guest activity, test counts
 or a successful result. They add no VM polling. Collected reports and bound
 worker receipts remain authoritative.
+
+The workflow-wide choice `testing.reuse_verified_results` is saved per preset,
+with On as the legacy/default choice. Off strips local reuse keys and propagates
+`LOGISTICS_REUSE_TEST_RESULTS=off` into owned guest commands. It also suppresses
+signed export. A new release created with Off has an annotated tag containing
+`Build-Manager-Reuse: off`; the release evidence selector and hosted suite
+wrapper both read that immutable release policy and require fresh checks.
+Existing tags are never changed. Direct desktop GitHub validation dispatches
+carry the same choice as the workflow's `reuse_test_results` input. The choice
+changes execution reuse only, never the selected suite or native inventory.

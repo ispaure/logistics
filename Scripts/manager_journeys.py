@@ -24,14 +24,16 @@ class PlanningContext:
         return json.loads(self.captured)
 
 
-RUN_FIELDS={'devices.android_signing','devices.android_connections','devices.android_variant','devices.ios_variant','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
+RUN_FIELDS={'testing.reuse_verified_results','devices.android_signing','devices.android_connections','devices.android_variant','devices.ios_variant','devices.android','devices.ios','testers.message','testflight.what_to_test','firebase.release_notes','testflight.external_group','firebase.group'}
 
 
 def run_values(values):
     reject_secrets(values)
     if not isinstance(values,dict) or set(values)-RUN_FIELDS or any(not isinstance(v,str) or len(v)>20000 for v in values.values()):
-        raise ValueError('Only tester notes and recipient groups can be changed for one run.')
+        raise ValueError('Only declared non-secret run choices can be changed for one run.')
     result = dict(values)
+    if result.get('testing.reuse_verified_results', 'on') not in {'on', 'off'}:
+        raise ValueError('Choose On or Off for verified test reuse.')
     if result.get('devices.android_signing', 'debug') not in {'debug', 'beta'}:
         raise ValueError('Choose Debug or the existing Beta key for Android device signing.')
     if 'testers.message' in result:
@@ -59,7 +61,7 @@ def capture(project, revision, run_overrides=None):
     source.update(host=owner.platform.platform(), architecture=owner.platform.machine())
     source['app_version'] = owner.manager_settings.app_version(project.mobile,
         revision=None if revision == 'working-tree' else source['logistics_commit'])
-    values, origins = (owner.manager_settings.settings(project.mobile, overrides={key: value for key, value in run_values(run_overrides).items() if not key.startswith('devices.')})
+    values, origins = (owner.manager_settings.settings(project.mobile, overrides={key: value for key, value in run_values(run_overrides).items() if not key.startswith(('devices.', 'testing.'))})
                        if run_overrides else owner.manager_settings.settings(project.mobile))
     if run_overrides:
         source['run_overrides'] = run_values(run_overrides)

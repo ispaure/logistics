@@ -149,3 +149,56 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
         for error in (OSError('unavailable'), subprocess.TimeoutExpired(['git'], 60)):
             with self.subTest(error=type(error).__name__), patch.object(evidence, 'git', side_effect=error):
                 self.assertFalse(evidence.fetch_note(self.root))
+
+
+    def test_debug_policy_disables_hosted_reuse_through_the_release_tag(self):
+        tag = 'v0.1.0-alpha.1'
+        self.git('tag', '-a', tag, '-m', 'Logistics release\n\nBuild-Manager-Reuse: off')
+        with patch.dict('os.environ', {'GITHUB_REF': 'refs/tags/' + tag, 'LOGISTICS_REUSE_TEST_RESULTS': 'on'}):
+            self.assertTrue(evidence.reuse_disabled(self.root))
+        with patch.dict('os.environ', {'GITHUB_REF': 'refs/heads/alpha', 'LOGISTICS_REUSE_TEST_RESULTS': 'off'}):
+            self.assertTrue(evidence.reuse_disabled(self.root))
+        self.git('tag', 'v0.1.0-alpha.2')
+        with patch.dict('os.environ', {'GITHUB_REF': 'refs/tags/v0.1.0-alpha.2', 'LOGISTICS_REUSE_TEST_RESULTS': 'on'}):
+            self.assertFalse(evidence.reuse_disabled(self.root))
+        with patch.dict('os.environ', {'GITHUB_REF': 'refs/tags/unavailable', 'LOGISTICS_REUSE_TEST_RESULTS': 'on'}):
+            self.assertTrue(evidence.reuse_disabled(self.root))
+
+
+    def test_release_plan_carries_the_explicit_fresh_execution_choice(self):
+        import sys
+        from Scripts.build_project import LogisticsProject
+        project = object.__new__(LogisticsProject)
+        project.root, project.interpreter = self.root, Path(sys.executable)
+        source = dict(dirty=False, logistics_commit=self.git('rev-parse', 'HEAD'),
+                      run_overrides={'testing.reuse_verified_results': 'off'})
+        plan = project.github_plan('Release', 'macos', source, self.base / 'release-work', {},
+                                   'HEAD', 'v0.1.0-alpha.1')
+        self.assertIn('--no-test-reuse', plan.phases[0].argv)
+        source['run_overrides'] = {}
+        plan = project.github_plan('Release', 'macos', source, self.base / 'release-work', {},
+                                   'HEAD', 'v0.1.0-alpha.1')
+        self.assertNotIn('--no-test-reuse', plan.phases[0].argv)
+
+    def test_off_release_creates_a_new_annotated_policy_tag_without_moving_a_tag(self):
+        from Scripts.build_project import release_source
+        from threading import Event
+        commit = self.git('rev-parse', 'HEAD')
+        commands = []
+        def read(root, *arguments):
+            if arguments == ('status', '--porcelain'):
+                return ''
+            return commit if arguments == ('rev-parse', 'HEAD') else 'main'
+        def run(command, **kwargs):
+            commands.append(command)
+            if command[:2] == ['git', 'tag']:
+                raise RuntimeError('Fixture stops before tag push')
+        with patch('Scripts.build_project.git', side_effect=read), \
+             patch('Scripts.build_project.subprocess.check_output', return_value=''), \
+             patch('Scripts.build_project.subprocess.run', side_effect=run):
+            with self.assertRaisesRegex(RuntimeError, 'Fixture stops'):
+                release_source(self.root, None, 'v0.1.0-alpha.1', commit, Event(), reuse_test_results=False)
+        tag = next(command for command in commands if command[:2] == ['git', 'tag'])
+        self.assertIn('-a', tag)
+        self.assertIn('Build-Manager-Reuse: off', tag[-1])
+        self.assertNotIn('-f', tag)

@@ -529,6 +529,18 @@
   },
   "run_fields": [
     {
+      "id": "testing.reuse_verified_results",
+      "label": "Reuse verified test results",
+      "kind": "choice",
+      "default": "on",
+      "options": {
+        "on": "On \u00b7 run identical host suites once",
+        "off": "Off \u00b7 fresh executions (debug)"
+      },
+      "workflow_option": true,
+      "description": "Saved with this preset. Exact source/environment/toolchain matches only; different OS/native coverage stays separate. Off forces fresh local and hosted release tests."
+    },
+    {
       "id": "devices.android_signing",
       "label": "Android Debug package signing",
       "kind": "choice",
