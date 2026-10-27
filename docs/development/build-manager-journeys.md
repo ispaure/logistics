@@ -105,3 +105,22 @@ absent namespace permits a fresh attempt. An existing namespace, changed source,
 changed preparation record or foreign receipt remains blocked. The reconciliation
 is appended beside the preparation record; original failure reports and timings
 are preserved. This command neither runs tests as SYSTEM nor deletes guest files.
+
+
+Completed manager-only guest diagnostics can be reviewed with
+`python -m Scripts.guest_results --directory <completed-attempt> --source-plan
+<original-plan> --backend <declared-backend> --manager-commit <exact-pin>`.
+The verifier requires the complete `test*.py` manager discovery command, every
+required step passed, a clean exact manager/shared checkout, matching captured
+source and backend, intact collected logs/results, and confirmed guest cleanup.
+For legacy Linux reports missing a backend field, it verifies that identity from
+the independently bound guest plan. It returns a review identity;
+`--expect-identity <reviewed-identity>` rejects changed evidence, and `--output`
+saves a new receipt. Neither operation changes the original failed wrapper or
+claims a fresh execution or an application-platform pass. This local review
+receipt is not the authenticated local-to-GitHub evidence handoff.
+
+Application-input comparisons also enumerate changed desktop fixtures. Such
+changes require fresh validation of those fixtures before retained desktop
+coverage can be accepted; they do not automatically invalidate unchanged native
+application inputs. The source comparison alone still authorizes no reuse.

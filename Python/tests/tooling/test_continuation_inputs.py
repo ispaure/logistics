@@ -57,3 +57,13 @@ class ContinuationInputsTests(unittest.TestCase):
         for revision in ('HEAD', '--help', '0' * 39):
             with self.assertRaises(ValueError):
                 inventory(self.root, revision)
+
+
+    def test_desktop_fixture_changes_require_fresh_validation_without_changing_native_inputs(self):
+        name='Python/tests/ide/test_ide_drag.py'
+        self.write(name,'# changed fixture')
+        report=assess(self.root,self.before,self.commit())
+        self.assertTrue(report['application_inputs_equal'])
+        self.assertEqual(report['changed_desktop_fixtures'],[name])
+        self.assertIn('fresh validation for every changed desktop fixture',report['remaining_checks'])
+        self.assertFalse(report['authorizes_reuse'])
