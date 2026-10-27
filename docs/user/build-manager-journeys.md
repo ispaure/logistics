@@ -75,8 +75,10 @@ or signing conflicts stop the target with an error. Installing does not launch o
 force-stop the app. Offline targets never cause another device to be substituted.
 
 Before installation, a separate connection check retries the selected device
-indefinitely at 30-second intervals. Android reconnects only its captured ADB
-transport; iOS checks the selected paired device. It never substitutes another
+indefinitely at 30-second intervals. Android tries the captured transport, the selected hardware’s USB serial and
+saved Wi-Fi fallback, then paired Wi-Fi services advertised for that same hardware
+serial. It verifies the hardware ID before installation. iOS checks the selected
+paired device. It never substitutes another
 recipient or pairs a new device. The GUI shows Waiting to reconnect; Stop cancels
 the wait. Offline recipients do not block other validation, builds, delivery
 review or recipients. Continue the retained run to reuse tests and packages.
@@ -144,8 +146,8 @@ exact package and recipient; running tests alone never authorizes installation.
 The optional `devices.android_connections` JSON object selects a transport for
 this run without changing saved metadata. For USB, the ADB serial is usually the
 hardware ID. Only selected hardware IDs may appear in the mapping. A wireless
-serial still requires matching `ro.serialno` before installation. No automatic
-transport substitution, pairing, downgrade, uninstall or data clearing occurs.
+serial still requires matching `ro.serialno` before installation. USB/Wi-Fi fallback remains limited to the same verified hardware ID. No new
+pairing, device substitution, downgrade, uninstall or data clearing occurs.
 Validation includes required host contracts, native UI and Android runtime suites,
 with owned emulator cleanup. Device installation updates the main app in place.
 After Boox testing, verify its Logistics packages and remove temporary QA/probe

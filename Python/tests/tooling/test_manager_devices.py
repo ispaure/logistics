@@ -58,6 +58,8 @@ class ManagerDeviceTests(unittest.TestCase):
                   'devices.android_connections':'{"hardware-1":"hardware-1"}'}
         run_values(values)
         self.assertEqual(devices.selected_devices(self.root, 'android', values)[0]['connection'], 'hardware-1')
+        target = devices.selected_devices(self.root, 'android', values)[0]
+        self.assertEqual(target['fallback_connections'], ['usb-1'])
         self.assertEqual(devices.saved_devices(self.root)['android']['hardware-1']['connection'], 'usb-1')
         for invalid in ('[]', '{"other":"usb-2"}', '{"hardware-1":12}', '{"hardware-1":""}'):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
@@ -78,8 +80,8 @@ class ManagerDeviceTests(unittest.TestCase):
     def test_offline_and_changed_identity_do_not_install_or_mark_attempt(self):
         from mobile_build.deployment import android_deploy as android
         with patch.dict(os.environ, self.env), patch.object(android, 'tools_environment', return_value=({},'/fake/adb')):
-            for responses in (['offline'], ['device','wrong-hardware']):
-                with patch.object(android, 'run', side_effect=responses) as run:
+            for responses in (['offline', 'offline'], ['device','wrong-hardware']):
+                with patch.object(android, 'run', side_effect=responses) as run, patch('mobile_build.deployment.wireless_adb.device_endpoints', return_value=[]):
                     with self.assertRaises(ValueError):devices.install(self.report, 'hardware-1', self.receipt)
                     self.assertFalse(any('install' in call.args[0] for call in run.call_args_list))
                     self.assertFalse(self.receipt.with_suffix('.attempt.json').exists())
@@ -125,7 +127,8 @@ class ManagerDeviceTests(unittest.TestCase):
         data['targets'] = [dict(id='hardware-1', connection='192.0.2.1:12345', name='Tablet')]
         recipe.write_text(json.dumps(data))
         with patch.object(android, 'tools_environment', return_value=({}, '/fake/adb')), \
-                patch.object(android, 'run', side_effect=['connected', 'offline']) as run:
+                patch.object(android, 'run', side_effect=['connected', 'offline', 'offline']) as run, \
+                patch('mobile_build.deployment.wireless_adb.device_endpoints', return_value=[]):
             with self.assertRaises(DeviceUnavailable):
                 devices.ready(recipe, file_sha256(recipe), 'hardware-1')
         self.assertEqual(run.call_args_list[0].args[0], ['/fake/adb', 'connect', '192.0.2.1:12345'])
@@ -135,6 +138,27 @@ class ManagerDeviceTests(unittest.TestCase):
                 patch.object(android, 'run', side_effect=['connected', 'device', 'wrong-device']):
             with self.assertRaisesRegex(ValueError, 'identity changed'):
                 devices.ready(recipe, file_sha256(recipe), 'hardware-1')
+
+    def test_selected_hardware_uses_usb_or_saved_wifi_without_changing_inventory(self):
+        from mobile_build.deployment import android_deploy as android
+        target = dict(id='hardware-1', connection='hardware-1', fallback_connections=['192.0.2.1:12345'])
+        with patch.object(android, 'run', side_effect=['offline', 'connected', 'device', 'hardware-1']) as run:
+            self.assertEqual(devices.android_connection(target, '/fake/adb', {}), '192.0.2.1:12345')
+        self.assertFalse(any('install' in call.args[0] or 'pair' in call.args[0] for call in run.call_args_list))
+        with patch.object(android, 'run', side_effect=['device', 'hardware-1']) as run:
+            self.assertEqual(devices.android_connection(target, '/fake/adb', {}), 'hardware-1')
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(target['connection'], 'hardware-1')
+
+    def test_wifi_discovery_filters_advertised_hardware_before_connecting(self):
+        from mobile_build.deployment import wireless_adb as wifi
+        output = ('adb-hardware-1-code _adb-tls-connect._tcp 192.0.2.1:12345\n'
+                  'adb-other-device-code _adb-tls-connect._tcp 192.0.2.2:12345\n')
+        with patch.object(wifi.platform, 'system', return_value='Linux'), \
+                patch.object(wifi, '_numeric_endpoints', side_effect=lambda host, port:[f'{host}:{port}']):
+            run = Mock(return_value=output)
+            self.assertEqual(wifi.device_endpoints('/fake/adb', {}, run, 'hardware-1'), ['192.0.2.1:12345'])
+        self.assertEqual(run.call_args.args[0], ['/fake/adb', 'mdns', 'services'])
 
     def test_ios_readiness_retries_absent_or_disconnected_selected_device_only(self):
         from mobile_build.deployment import device_tools as ios

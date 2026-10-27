@@ -61,10 +61,12 @@ def _resolve(service):
     return _numeric_endpoints(match[1], int(match[2])) if match else []
 
 
-def bonjour_endpoints():
+def bonjour_endpoints(device=None):
     output = _dns('-B', SERVICE, 'local.')
     names = list(dict.fromkeys(re.findall(
         r'\bAdd\s+\d+\s+\d+\s+local\.\s+_adb-tls-connect\._tcp\.\s+(.+)', output)))[:8]
+    if device is not None:
+        names = [name for name in names if name.startswith('adb-' + device + '-')]
     if not names:
         return []
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -127,3 +129,22 @@ def discover(adb, env, run):
                     run([str(adb), 'connect', endpoint], env, timeout=3)
                 except (OSError, subprocess.SubprocessError):
                     continue
+
+
+def device_endpoints(adb, env, run, device):
+    """Discover only services advertised for the selected hardware serial."""
+    candidates = []
+    try:
+        output = run([str(adb), 'mdns', 'services'], env)
+    except (OSError, subprocess.SubprocessError):
+        output = ''
+    for line in output.splitlines():
+        fields = line.rsplit(None, 2)
+        if (len(fields) == 3 and fields[0].startswith('adb-' + device + '-')
+                and fields[1].rstrip('.') == SERVICE):
+            parsed = _endpoint(fields[2])
+            if parsed:
+                candidates.extend(_numeric_endpoints(*parsed))
+    if platform.system() == 'Darwin':
+        candidates.extend(bonjour_endpoints(device))
+    return list(dict.fromkeys(candidates))[:16]

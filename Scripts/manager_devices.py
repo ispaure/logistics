@@ -68,7 +68,10 @@ def selected_devices(root, platform, overrides):
         if set(connections) - set(ids):
             raise ValueError('Android connection overrides must name selected device IDs.')
         for target in targets:
-            target['connection'] = connections.get(target['id'], target['connection'])
+            original = target['connection']
+            target['connection'] = connections.get(target['id'], original)
+            if original != target['connection']:
+                target['fallback_connections'] = [original]
     return targets
 
 
@@ -293,6 +296,35 @@ class DeviceUnavailable(ValueError):
     """A pre-install availability check may be retried without an uncertain effect."""
 
 
+def android_connection(target, adb, env):
+    """Use an available transport for this exact hardware ID; never change pairing."""
+    from mobile_build.deployment import android_deploy as android
+    tried = set()
+    def check(serial):
+        if serial in tried:
+            return None
+        tried.add(serial)
+        try:
+            if ':' in serial:
+                android.run([str(adb), 'connect', serial], env, timeout=3)
+            if android.run([str(adb), '-s', serial, 'get-state'], env).strip() != 'device':
+                return None
+            actual = android.run([str(adb), '-s', serial, 'shell', 'getprop', 'ro.serialno'], env).strip()
+        except (subprocess.SubprocessError, RuntimeError):
+            return None
+        if actual != target['id']:
+            raise ValueError('Selected Android device identity changed; reload saved devices.')
+        return serial
+    for serial in (target['connection'], target['id'], *target.get('fallback_connections', ())):
+        if connected := check(serial):
+            return connected
+    from mobile_build.deployment.wireless_adb import device_endpoints
+    for serial in device_endpoints(adb, env, android.run, target['id']):
+        if connected := check(serial):
+            return connected
+    raise DeviceUnavailable('Waiting for selected Android device over USB or paired Wi-Fi: ' + target['id'])
+
+
 def ready(recipe, digest, device):
     if file_sha256(recipe) != digest:
         raise ValueError('Device recipe changed; prepare a fresh plan.')
@@ -304,25 +336,8 @@ def ready(recipe, digest, device):
     if data['platform'] == 'android':
         from mobile_build.deployment import android_deploy as android
         env, adb = android.tools_environment(android.deployment_environment())
-        serial = target['connection']
-        # Reconnect only this captured transport; never discover or substitute peers.
-        if ':' in serial:
-            try:
-                android.run([str(adb), 'connect', serial], env)
-            except (subprocess.SubprocessError, RuntimeError):
-                pass
-        try:
-            state = android.run([str(adb), '-s', serial, 'get-state'], env).strip()
-        except (subprocess.SubprocessError, RuntimeError) as error:
-            raise DeviceUnavailable('Waiting for selected Android device: ' + device) from error
-        if state != 'device':
-            raise DeviceUnavailable('Selected Android device is offline or unauthorized: ' + device)
-        try:
-            actual = android.run([str(adb), '-s', serial, 'shell', 'getprop', 'ro.serialno'], env).strip()
-        except (subprocess.SubprocessError, RuntimeError) as error:
-            raise DeviceUnavailable('Selected Android device disconnected during identity check: ' + device) from error
-        if actual != device:
-            raise ValueError('Selected Android device identity changed; reload saved devices.')
+        serial = android_connection(target, adb, env)
+        print('Verified selected Android transport: ' + serial, flush=True)
     elif data['platform'] == 'ios':
         from mobile_build.deployment import device_tools as ios
         developer, _ = ios.choose(ios.installed())
@@ -359,11 +374,8 @@ def install(report, device, receipt):
     if data['platform'] == 'android':
         from mobile_build.deployment import android_deploy as android
         env, adb = android.tools_environment(android.deployment_environment())
-        serial = target['connection']
-        if android.run([str(adb), '-s', serial, 'get-state'], env).strip() != 'device':
-            raise ValueError('Selected Android device is offline or unauthorized.')
-        if serial != target['id'] and android.run([str(adb), '-s', serial, 'shell', 'getprop', 'ro.serialno'], env).strip() != target['id']:
-            raise ValueError('Selected Android device identity changed; reload saved devices.')
+        serial = android_connection(target, adb, env)
+        target = dict(target, connection=serial)
         android_signature_preflight(data, target, adb, env)
         # Exact reviewed bytes, no compatibility re-sign, downgrade or uninstall.
         command = [str(adb), '-s', serial, 'install', '-r', str(package)]
