@@ -1,0 +1,59 @@
+"""Source applicability must fail closed for application, shared and mode changes."""
+from pathlib import Path
+import subprocess
+from tempfile import TemporaryDirectory
+import unittest
+from Scripts.continuation_inputs import assess, inventory
+
+
+class ContinuationInputsTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.git('init', '--quiet')
+        self.write('Python/app.py', 'APP = 1')
+        self.write('Scripts/guest_manager.py', 'ORCHESTRATION = 1')
+        self.write('build-manager-dependency.json', 'pin1')
+        self.before = self.commit()
+
+    def git(self, *args):
+        return subprocess.check_output(['git', '-C', str(self.root), *args], stderr=subprocess.PIPE, text=True).strip()
+
+    def write(self, name, value):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(value)
+
+    def commit(self):
+        self.git('add', '.')
+        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'fixture')
+        return self.git('rev-parse', 'HEAD')
+
+    def test_only_explicit_orchestration_changes_match_without_authorizing_reuse(self):
+        self.write('Scripts/guest_manager.py', 'ORCHESTRATION = 2')
+        self.write('build-manager-dependency.json', 'pin2')
+        self.write('docs/development/example.md', '# Documentation')
+        report = assess(self.root, self.before, self.commit())
+        self.assertTrue(report['application_inputs_equal'])
+        self.assertFalse(report['authorizes_reuse'])
+        self.assertNotEqual(report['previous_manager_pin'], report['current_manager_pin'])
+        self.assertEqual(report['changed_application_paths'], [])
+        self.assertIn('platform and toolchain identity', report['remaining_checks'])
+
+    def test_application_harness_shared_and_unknown_script_changes_invalidate(self):
+        for name in ('Python/app.py', 'mobile_build/native_tests/harness.py',
+                     'Python/commonUtils/settings.py', 'Scripts/unknown.py'):
+            with self.subTest(name=name):
+                self.write(name, 'CHANGED = True')
+                report = assess(self.root, self.before, self.commit())
+                self.assertFalse(report['application_inputs_equal'])
+                self.assertIn(name, report['changed_application_paths'])
+
+    def test_mode_changes_and_inexact_revision_cannot_claim_equality(self):
+        self.git('update-index', '--chmod=+x', 'Python/app.py')
+        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'mode')
+        self.assertFalse(assess(self.root, self.before, self.git('rev-parse', 'HEAD'))['application_inputs_equal'])
+        for revision in ('HEAD', '--help', '0' * 39):
+            with self.assertRaises(ValueError):
+                inventory(self.root, revision)

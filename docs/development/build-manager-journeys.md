@@ -86,3 +86,12 @@ pattern) through the existing Test pattern field. Both guest backends run those
 contracts from the exact installed, project-pinned manager checkout. `shared:`
 and ordinary Logistics patterns keep their existing routing. A diagnostic pass
 does not replace the complete platform release gate.
+
+For a retained-run source review, `python -m Scripts.continuation_inputs --root .
+--previous <exact-commit> --current <exact-commit>` compares committed Git object
+inventories, including file modes and submodule pins. It reports application
+input equality separately from the manager pin and the explicitly enumerated
+guest orchestration paths. Unknown scripts and native harness changes invalidate
+that equality. This read-only assessment cannot import results, authorize reuse,
+change a plan or pass a release gate. Original outcomes, cleanup, artifacts,
+platform/toolchain identity and execution-engine changes still need verification.
