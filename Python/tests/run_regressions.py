@@ -14,7 +14,7 @@ from time import monotonic
 import unittest
 from unittest.mock import patch
 
-from regression_timing import TimedResult, TimingReport, default_report, timestamp
+from regression_timing import TimedResult, TimingReport, default_report, timestamp, emit_progress
 
 
 def run_isolated(directory, pattern, interval, include_patterns=(), report=None):
@@ -28,14 +28,16 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None)
     for path in modules:
         started_at = timestamp()
         started = monotonic()
-        print(f'Running isolated test file: {path.relative_to(directory)}', flush=True)
+        relative_file = str(path.relative_to(directory))
+        print(f'Running isolated test file: {relative_file}', flush=True)
+        emit_progress('file_started', name=relative_file)
         command = [sys.executable, str(Path(__file__).resolve()), str(path.parent),
                    '--pattern', path.name, '--single-file', '--traceback-after', str(interval)]
         with TemporaryDirectory(prefix='logistics-test-timing-') as temporary:
             child_report = Path(temporary) / 'timing.json'
             command.extend(['--report', str(child_report), '--timing-child'])
             try:
-                code = subprocess.run(command, timeout=300).returncode
+                code = subprocess.run(command, timeout=300, env=dict(os.environ, BUILD_MANAGER_TEST_FILE=relative_file)).returncode
                 outcome = 'passed' if code == 0 else 'failed'
                 if code < 0:
                     outcome = 'crashed'
@@ -58,6 +60,8 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None)
                     'test_report_complete': child_complete,
                 })
                 report.save()
+        elapsed = report.data['modules'][-1]['duration_seconds'] if report is not None else monotonic() - started
+        emit_progress('file_finished', name=relative_file, status=outcome, seconds=elapsed)
         if code:
             failed.append(str(path.relative_to(directory)))
             print(f'{path.name}: FAIL ({code})', file=sys.stderr, flush=True)

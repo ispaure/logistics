@@ -127,8 +127,13 @@ def make_plan(project, platform, targets, context, revision, *, shared=None):
     for index, target in enumerate(targets):
         receipt = workspace / ('device-' + str(index) + '.json')
         label = re.sub(r'[^A-Za-z0-9]+', '-', target['name']).strip('-')[:40] or 'device'
+        ready_id = 'ready-' + str(index + 1) + '-' + label
+        phases.append(Phase(ready_id, (*command, 'ready', '--recipe', str(path), '--sha256', file_sha256(path),
+            '--device', target['id']), str(snapshot), dependencies=(prepare.id,), environment=env,
+            effect='inspect', kind='connection', timeout=120, retry_exit_codes=(75,), retry_delay=30,
+            label='Connect to ' + target['name'], description='Retries until available; other deliveries continue.'))
         phases.append(Phase('install-' + str(index + 1) + '-' + label, (*command, 'install', '--report', str(report),
-            '--device', target['id'], '--receipt', str(receipt)), str(snapshot), dependencies=(prepare.id,),
+            '--device', target['id'], '--receipt', str(receipt)), str(snapshot), dependencies=(prepare.id, ready_id),
             environment=env, effect='deploy', kind='distribution', timeout=600, artifacts=(str(receipt),),
             resources={'device:' + platform + ':' + target['id']: 1, 'host.device-install': 1}))
     return Plan('Logistics', 'Prepare and install device app', source, tuple(phases), str(workspace),
@@ -284,6 +289,61 @@ def prepare_shared(data):
     data.update(package=str(package), variant='release')
 
 
+class DeviceUnavailable(ValueError):
+    """A pre-install availability check may be retried without an uncertain effect."""
+
+
+def ready(recipe, digest, device):
+    if file_sha256(recipe) != digest:
+        raise ValueError('Device recipe changed; prepare a fresh plan.')
+    data = read_json(recipe)
+    targets = [row for row in data['targets'] if row['id'] == device]
+    if len(targets) != 1:
+        raise ValueError('Device is not a selected recipient.')
+    target = targets[0]
+    if data['platform'] == 'android':
+        from mobile_build.deployment import android_deploy as android
+        env, adb = android.tools_environment(android.deployment_environment())
+        serial = target['connection']
+        # Reconnect only this captured transport; never discover or substitute peers.
+        if ':' in serial:
+            try:
+                android.run([str(adb), 'connect', serial], env)
+            except (subprocess.SubprocessError, RuntimeError):
+                pass
+        try:
+            state = android.run([str(adb), '-s', serial, 'get-state'], env).strip()
+        except (subprocess.SubprocessError, RuntimeError) as error:
+            raise DeviceUnavailable('Waiting for selected Android device: ' + device) from error
+        if state != 'device':
+            raise DeviceUnavailable('Selected Android device is offline or unauthorized: ' + device)
+        try:
+            actual = android.run([str(adb), '-s', serial, 'shell', 'getprop', 'ro.serialno'], env).strip()
+        except (subprocess.SubprocessError, RuntimeError) as error:
+            raise DeviceUnavailable('Selected Android device disconnected during identity check: ' + device) from error
+        if actual != device:
+            raise ValueError('Selected Android device identity changed; reload saved devices.')
+    elif data['platform'] == 'ios':
+        from mobile_build.deployment import device_tools as ios
+        developer, _ = ios.choose(ios.installed())
+        env = dict(os.environ, DEVELOPER_DIR=developer)
+        try:
+            devices = ios.device_json(['list', 'devices'], env)['devices']
+        except (subprocess.SubprocessError, RuntimeError) as error:
+            raise DeviceUnavailable('Waiting for iOS connection service: ' + device) from error
+        matches = [row for row in devices if device in (row.get('identifier'), ios.properties(row)[0].get('udid'))]
+        if not matches:
+            raise DeviceUnavailable('Waiting for selected paired iOS device: ' + device)
+        _, udid, connection = ios.select_device(matches, device)
+        if udid != device:
+            raise ValueError('Selected iOS device identity changed.')
+        if connection.get('tunnelState') not in ('connected', None):
+            raise DeviceUnavailable('Waiting for selected iOS device connection: ' + device)
+    else:
+        raise ValueError('Unsupported device platform.')
+    print('Selected device is available: ' + device, flush=True)
+
+
 def install(report, device, receipt):
     from Scripts.distribute_prepared import reviewed
     data = reviewed(report)
@@ -340,13 +400,16 @@ def install(report, device, receipt):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['prepare', 'install'])
+    parser.add_argument('action', choices=['prepare', 'ready', 'install'])
     for name in ('recipe', 'report', 'receipt'):parser.add_argument('--' + name, type=Path)
     parser.add_argument('--sha256'); parser.add_argument('--device')
     args = parser.parse_args()
     if args.action == 'prepare':
         if not args.recipe or not args.sha256:parser.error('Preparation needs a recipe and its hash.')
         prepare(args.recipe, args.sha256)
+    elif args.action == 'ready':
+        if not args.recipe or not args.sha256 or not args.device:parser.error('Connection needs a recipe, hash and selected device.')
+        ready(args.recipe, args.sha256, args.device)
     else:
         if not args.report or not args.device or not args.receipt:parser.error('Installation needs a report, device and receipt.')
         install(args.report, args.device, args.receipt)
@@ -355,6 +418,8 @@ def main():
 
 if __name__ == '__main__':
     try:raise SystemExit(main())
+    except DeviceUnavailable as error:
+        print(str(error), file=sys.stderr); raise SystemExit(75)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         from build_manager.redaction import Redactor
         print(Redactor()(str(error)), file=sys.stderr); raise SystemExit(1)

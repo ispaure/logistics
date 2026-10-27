@@ -101,8 +101,14 @@ class ManagerDeviceTests(unittest.TestCase):
             (project.private / 'snapshots/source/mobile_build').mkdir(parents=True)
         with patch('Scripts.build_snapshots.materialize', side_effect=snapshot):
             plan = devices.make_plan(project, 'android', [dict(id='one',name='Phone',connection='one'), dict(id='two',name='Tablet',connection='two')], context,'working-tree')
-        self.assertEqual([row.effect for row in plan.phases], ['build','deploy','deploy'])
-        self.assertEqual([row.dependencies for row in plan.phases[1:]], [('prepare-device-app',)]*2)
+        self.assertEqual([row.effect for row in plan.phases], ['build','inspect','deploy','inspect','deploy'])
+        ready = [row for row in plan.phases if row.effect == 'inspect']
+        installs = [row for row in plan.phases if row.effect == 'deploy']
+        self.assertEqual([row.retry_exit_codes for row in ready], [(75,), (75,)])
+        for check, install in zip(ready, installs):
+            self.assertEqual(check.dependencies, ('prepare-device-app',))
+            self.assertEqual(install.dependencies, ('prepare-device-app', check.id))
+            self.assertFalse(check.resources)
         self.assertIn('--sha256', plan.phases[0].argv)
         self.assertIn('one', plan.phases[1].argv); self.assertNotIn('two', plan.phases[1].argv)
         self.assertEqual(len(plan.phases[0].artifacts), 2)
@@ -110,6 +116,43 @@ class ManagerDeviceTests(unittest.TestCase):
                          str(project.mobile / '.tools/go/bin'))
         self.assertEqual(plan.phases[0].environment['PIP_FIND_LINKS'],
                          str(project.mobile / '.tools/release-wheels'))
+
+    def test_offline_readiness_reconnects_only_selected_transport_without_installing(self):
+        from Scripts.manager_devices import DeviceUnavailable
+        from mobile_build.deployment import android_deploy as android
+        recipe = self.root / 'recipe.json'
+        data = dict(self.data)
+        data['targets'] = [dict(id='hardware-1', connection='192.0.2.1:12345', name='Tablet')]
+        recipe.write_text(json.dumps(data))
+        with patch.object(android, 'tools_environment', return_value=({}, '/fake/adb')), \
+                patch.object(android, 'run', side_effect=['connected', 'offline']) as run:
+            with self.assertRaises(DeviceUnavailable):
+                devices.ready(recipe, file_sha256(recipe), 'hardware-1')
+        self.assertEqual(run.call_args_list[0].args[0], ['/fake/adb', 'connect', '192.0.2.1:12345'])
+        self.assertFalse(any('install' in call.args[0] for call in run.call_args_list))
+        self.assertFalse(self.receipt.with_suffix('.attempt.json').exists())
+        with patch.object(android, 'tools_environment', return_value=({}, '/fake/adb')), \
+                patch.object(android, 'run', side_effect=['connected', 'device', 'wrong-device']):
+            with self.assertRaisesRegex(ValueError, 'identity changed'):
+                devices.ready(recipe, file_sha256(recipe), 'hardware-1')
+
+    def test_ios_readiness_retries_absent_or_disconnected_selected_device_only(self):
+        from mobile_build.deployment import device_tools as ios
+        recipe = self.root / 'recipe.json'
+        data = dict(self.data, platform='ios', targets=[dict(id='udid-1', name='Phone')])
+        recipe.write_text(json.dumps(data))
+        selected = dict(identifier='identifier-1', hardwareProperties=dict(udid='udid-1', reality='physical', deviceType='iPhone'),
+                        connectionProperties=dict(pairingState='paired', tunnelState='disconnected'))
+        with patch.object(ios, 'installed', return_value=[]), patch.object(ios, 'choose', return_value=('/fake/xcode', 'sdk')):
+            for rows in ([], [selected]):
+                with patch.object(ios, 'device_json', return_value={'devices': rows}) as native:
+                    with self.assertRaises(devices.DeviceUnavailable):
+                        devices.ready(recipe, file_sha256(recipe), 'udid-1')
+                    self.assertEqual(native.call_args.args[0], ['list', 'devices'])
+            selected['connectionProperties']['tunnelState'] = 'connected'
+            with patch.object(ios, 'device_json', return_value={'devices': [selected]}):
+                devices.ready(recipe, file_sha256(recipe), 'udid-1')
+        self.assertFalse(self.receipt.exists())
 
     def test_source_or_recipe_change_blocks_preparation_before_any_tools(self):
         recipe = self.root / 'recipe.json'; recipe.write_text('{}')
@@ -190,7 +233,8 @@ class ManagerDeviceTests(unittest.TestCase):
         recipe = json.loads(Path(plan.phases[0].argv[plan.phases[0].argv.index('--recipe')+1]).read_text())
         self.assertEqual(recipe['shared_report'], str(self.report))
         self.assertIn('shared Android Release', plan.phases[0].label)
-        self.assertEqual(plan.phases[1].effect, 'deploy')
+        self.assertEqual(plan.phases[1].effect, 'inspect')
+        self.assertEqual(plan.phases[2].effect, 'deploy')
 
     def test_shared_ios_release_exports_existing_archive_without_compiling_or_devices(self):
         from mobile_build.deployment import device_tools as ios

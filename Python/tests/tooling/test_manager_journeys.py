@@ -136,6 +136,17 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertEqual(run_values({'testers.message': ''}),
             {'firebase.release_notes': '', 'testflight.what_to_test': ''})
 
+    def test_blank_saved_shared_message_preserves_distinct_service_notes(self):
+        from Scripts.manager_journeys import run_values
+        saved = {'testers.message': '', 'testflight.what_to_test': 'Check received files',
+                 'firebase.release_notes': 'Check Android navigation'}
+        expected = {key: value for key, value in saved.items() if key != 'testers.message'}
+        self.assertEqual(run_values(saved), expected)
+        saved['testers.message'] = 'Check both platforms'
+        self.assertEqual(run_values(saved), {
+            'testflight.what_to_test': 'Check both platforms',
+            'firebase.release_notes': 'Check both platforms'})
+
     def test_shared_capture_and_destination_platform_gates_precede_their_delivery(self):
         plan = self.make()
         validate_plan(plan)

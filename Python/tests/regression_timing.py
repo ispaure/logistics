@@ -9,6 +9,18 @@ from time import monotonic, perf_counter
 import unittest
 
 
+def emit_progress(kind, **fields):
+    """Optional manager progress; ordinary standalone test runs stay independent."""
+    if os.environ.get('BUILD_MANAGER_TEST_PROGRESS') != '1':
+        return
+    try:
+        from build_manager.test_progress import emit_test_progress
+    except ImportError:
+        return
+    fields.setdefault('file', os.environ.get('BUILD_MANAGER_TEST_FILE', ''))
+    emit_test_progress(kind, **fields)
+
+
 def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
@@ -76,9 +88,16 @@ class TimedResult(unittest.TextTestResult):
         self._timing = {'id': test.id(), 'started_at': timestamp(), 'outcome': 'incomplete'}
         self._started = perf_counter()
         self.status.update(test=test.id(), started=monotonic())
+        classname, _, name = test.id().rpartition('.')
+        emit_progress('test_started', name=name, classname=classname)
         super().startTest(test)
 
     def stopTest(self, test):
+        classname, _, name = test.id().rpartition('.')
+        outcomes = {'expected_failure': 'skipped', 'unexpected_success': 'failed', 'incomplete': 'error'}
+        emit_progress('test_finished', name=name, classname=classname,
+                      status=outcomes.get(self._timing['outcome'], self._timing['outcome']),
+                      seconds=perf_counter() - self._started, message=self._timing.get('message', '')[:8000])
         self.report.data['tests'].append(dict(
             self._timing, duration_seconds=perf_counter() - self._started,
             finished_at=timestamp()))

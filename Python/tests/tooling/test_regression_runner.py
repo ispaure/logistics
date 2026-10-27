@@ -14,6 +14,24 @@ RUNNER = Path(__file__).parents[1] / 'run_regressions.py'
 
 
 class RegressionRunnerTests(unittest.TestCase):
+    def test_current_test_events_stream_from_the_isolated_child(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'test_live.py').write_text(
+                'import unittest\nclass Live(unittest.TestCase):\n'
+                ' def test_current(self): pass\n')
+            with patch.dict(os.environ, BUILD_MANAGER_TEST_PROGRESS='1'):
+                result = self.run_modules(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            prefix = '@@BUILD_MANAGER_TEST@@'
+            events = [json.loads(line[len(prefix):]) for line in result.stdout.splitlines() if line.startswith(prefix)]
+            self.assertEqual([event['kind'] for event in events],
+                             ['file_started', 'test_started', 'test_finished', 'file_finished'])
+            self.assertEqual(events[1]['name'], 'test_current')
+            self.assertEqual(events[1]['file'], 'test_live.py')
+            self.assertEqual(events[2]['status'], 'passed')
+            self.assertGreaterEqual(events[2]['seconds'], 0)
+
     def test_file_timeout_retains_elapsed_time_and_failure_without_child_report(self):
         with patch.object(sys, 'path', [str(RUNNER.parent), *sys.path]):
             spec = importlib.util.spec_from_file_location('timing_runner_probe', RUNNER)

@@ -2,6 +2,7 @@
 import argparse
 import ast
 from dataclasses import replace
+from fnmatch import fnmatchcase
 import json
 from pathlib import Path
 import subprocess
@@ -79,7 +80,14 @@ def with_reports(plan, target):
                 mode += ['--runtime']
             argv = [argv[0], '-m', 'Scripts.manager_suites', *mode, '--junit', str(report),
                     '--name', phase.id, '--', *argv[1:]]
-        phases.append(replace(phase, argv=tuple(argv), artifacts=(*phase.artifacts, str(report)),
+        inventory = phase.test_files
+        if argv[1:2] == ['Python/tests/run_regressions.py']:
+            test_root = Path(phase.cwd) / argv[2]
+            pattern = argv[argv.index('--pattern') + 1] if '--pattern' in argv else 'test*.py'
+            includes = [argv[index + 1] for index, arg in enumerate(argv) if arg == '--include-pattern']
+            inventory = tuple(str(path.relative_to(test_root)) for path in sorted(test_root.rglob(pattern))
+                              if path.is_file() and all(fnmatchcase(path.name, extra) for extra in includes))
+        phases.append(replace(phase, test_files=inventory, argv=tuple(argv), artifacts=(*phase.artifacts, str(report)),
                               artifact_types=dict(phase.artifact_types, **{str(report): 'junit'})))
     return replace(plan, phases=tuple(phases))
 

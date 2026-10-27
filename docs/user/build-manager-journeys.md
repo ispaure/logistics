@@ -74,6 +74,16 @@ never uninstalls, clears storage, downgrades or re-signs on failure. Build/versi
 or signing conflicts stop the target with an error. Installing does not launch or
 force-stop the app. Offline targets never cause another device to be substituted.
 
+Before installation, a separate connection check retries the selected device
+indefinitely at 30-second intervals. Android reconnects only its captured ADB
+transport; iOS checks the selected paired device. It never substitutes another
+recipient or pairs a new device. The GUI shows Waiting to reconnect; Stop cancels
+the wait. Offline recipients do not block other validation, builds, delivery
+review or recipients. Continue the retained run to reuse tests and packages.
+Identity/signature failures are explicit errors; an interrupted install is never
+automatically resent without reconciliation. Connection checks do not install or
+launch the app and do not replace the per-recipient artifact approval.
+
 Each installation records an attempt before its first mutating command and a
 receipt after confirmed success. Interrupted/uncertain outcomes require explicit
 reconciliation before retry; other successful recipients remain recorded. Owned

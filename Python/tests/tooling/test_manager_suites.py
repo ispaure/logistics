@@ -17,6 +17,20 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class ManagerSuiteTests(unittest.TestCase):
+    def test_host_report_plan_declares_files_without_running_discovery(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            suite = root / 'suite'
+            (suite / 'nested').mkdir(parents=True)
+            (suite / 'test_live_one.py').write_text('raise AssertionError("inventory must not import tests")')
+            (suite / 'nested/test_live_two.py').write_text('raise AssertionError("inventory must not import tests")')
+            (suite / 'test_other.py').write_text('')
+            phase = Phase('shared', (sys.executable, 'Python/tests/run_regressions.py', 'suite',
+                '--isolate-modules', '--include-pattern', 'test_live*'), str(root))
+            plan = Plan('Fixture', 'Test', {}, (phase,), str(root))
+            planned = suites.with_reports(plan, 'android')
+            self.assertEqual(planned.phases[0].test_files, ('nested/test_live_two.py', 'test_live_one.py'))
+
     def test_catalog_selection_rejects_unknown_inapplicable_and_remote_suites(self):
         suites.selection(ROOT, 'portable.contracts', 'Test', 'macos', 'This Mac', 'test_manager*.py')
         for suite, operation, target, backend, pattern in (

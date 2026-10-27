@@ -36,7 +36,10 @@ def run_values(values):
         raise ValueError('Choose Debug or the existing Beta key for Android device signing.')
     if 'testers.message' in result:
         message = result.pop('testers.message')
-        result.update({'testflight.what_to_test': message, 'firebase.release_notes': message})
+        # Saved forms use an empty shared field when the service notes differ.
+        # Preserve those explicit notes; a nonempty shared edit still overrides both.
+        if message or not any(key in result for key in ('testflight.what_to_test', 'firebase.release_notes')):
+            result.update({'testflight.what_to_test': message, 'firebase.release_notes': message})
     from build_manager.run_fields import selection_ids
     if 'devices.android_connections' in result:
         from Scripts.manager_devices import android_connections
