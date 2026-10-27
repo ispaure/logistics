@@ -70,3 +70,13 @@ commit; no sibling checkout or dependency installation is inferred.
 The manager wiki’s test-manifest contract documents the complete schema.
 New checkouts must contain this manifest in the source revision selected for a
 run; old revisions that predate it must use their matching adapter version.
+
+## Retried guest validation
+
+Windows and Linux guest backends retain each execution under a distinct attempt
+directory and atomically publish its latest result at the plan's declared result
+path. Previous reports and logs remain intact. A completed matching source/backend
+record with confirmed guest cleanup may be retried. Running, uncleaned, mismatched
+or unrecognized work requires reconciliation first; retry never deletes it.
+The retry wrapper holds the result-directory lock and each backend retains its
+normal VM operation lock, ownership checks and tool-cache policy.

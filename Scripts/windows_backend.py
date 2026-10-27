@@ -62,6 +62,15 @@ def source_zip(snapshot):
 
 
 def run(args):
+    from copy import copy
+    from Scripts.guest_attempts import result_attempt
+    with result_attempt(args.results, args.source_identity, 'Parallels Windows') as directory:
+        attempt = copy(args)
+        attempt.results = directory
+        return _run_attempt(attempt)
+
+
+def _run_attempt(args):
     client = Parallels()
     cancelled = Event()
     for sig in (signal.SIGINT, signal.SIGTERM):

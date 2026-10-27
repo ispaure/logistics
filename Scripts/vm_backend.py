@@ -27,6 +27,15 @@ BOOTSTRAP = LINUX_BOOTSTRAP
 
 
 def run(args):
+    from copy import copy
+    from Scripts.guest_attempts import result_attempt
+    with result_attempt(args.results, args.source_identity, 'Parallels ' + args.distribution) as directory:
+        attempt = copy(args)
+        attempt.results = directory
+        return _run_attempt(attempt)
+
+
+def _run_attempt(args):
     cancelled = Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: cancelled.set())
