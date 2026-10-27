@@ -58,3 +58,19 @@ class GuestResultTests(unittest.TestCase):
                 lifecycle.collect(Mock(), evidence, Mock())
                 self.assertEqual(result['status'], 'failed')
                 self.assertIn('retrieval_error', result)
+
+
+    def test_headless_wait_labels_advisory_state_without_inventing_test_results(self):
+        from contextlib import redirect_stdout
+        import io
+        from Scripts.guest_results import waiting_progress
+        output = io.StringIO()
+        with redirect_stdout(output):
+            progress = waiting_progress('Windows', 'selected checks')
+            progress(dict(state='waiting', seconds=30))
+            progress(dict(state='reconciling', seconds=31))
+        text = output.getvalue()
+        self.assertIn('waiting for worker result', text)
+        self.assertIn('reconciling worker receipt', text)
+        self.assertIn('30s (headless)', text)
+        self.assertNotIn('passed', text)

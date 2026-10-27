@@ -13,7 +13,7 @@ from build_manager import Phase, Plan
 from build_manager.parallels import Parallels
 from build_manager.guest_tools import LINUX_BOOTSTRAP, linux_parameters
 from Scripts.build_snapshots import source_members
-from Scripts.guest_results import GuestResultLifecycle
+from Scripts.guest_results import GuestResultLifecycle, waiting_progress
 
 
 INSPECT = '''import json,os,pathlib,platform,pwd
@@ -69,7 +69,8 @@ def run(args):
         def execute(argv, environment, timeout):
             return client.run_owned(vm, workspace, token, account['uid'],
                 container.run(workspace, ['env', *(key+'='+value for key,value in environment.items()), *argv]) if container else argv,
-                container.environment if container else environment, cancelled, timeout=timeout)
+                container.environment if container else environment, cancelled, timeout=timeout,
+                progress=waiting_progress('Fedora', 'guest command'))
         if args.container_image:
             from build_manager.containers import RootlessContainer
             container = RootlessContainer('/var/tmp/build-manager-fedora-cache-'+str(account['uid']), account['uid'],

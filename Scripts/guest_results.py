@@ -48,3 +48,12 @@ class GuestResultLifecycle:
         self.result['seconds'] = time.monotonic() - self.started
         (self.directory / 'result.json').write_text(json.dumps(self.result, indent=2) + '\n')
         print(json.dumps(self.result), flush=True)
+
+
+
+def waiting_progress(backend, stage):
+    """Describe a headless wait without claiming observed guest test progress."""
+    def present(event):
+        state = 'reconciling worker receipt' if event['state'] == 'reconciling' else 'waiting for worker result'
+        print(f"{backend} · {stage} · {state} · {event['seconds']:.0f}s (headless)", flush=True)
+    return present

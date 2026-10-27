@@ -17,7 +17,7 @@ from build_manager.parallels import Parallels
 from build_manager.windows_guest import WindowsGuest
 from build_manager.guest_tools import WINDOWS_PREPARE, windows_parameters
 from Scripts.build_snapshots import source_members
-from Scripts.guest_results import GuestResultLifecycle
+from Scripts.guest_results import GuestResultLifecycle, waiting_progress
 
 
 PREPARE = WINDOWS_PREPARE
@@ -121,7 +121,8 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
         else:
             setup_command = ['Scripts/install_build_manager.py','--from-pin',manager_path]
         environment['LOGISTICS_MANAGER_CHECKOUT'] = manager_path
-        setup = guest.run(python, setup_command, source, reports, environment, cancelled, timeout=600)
+        setup = guest.run(python, setup_command, source, reports, environment, cancelled, timeout=600,
+                          progress=waiting_progress('Windows', 'manager setup'))
         if setup:
             raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
         install = (python, 'Python/tests/run_platform_checks.py', '--install', '--results-dir', report_dir)
@@ -149,7 +150,8 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
         guest.write(plan_name, json.dumps(plan.data(), indent=2).encode())
         argv = ['-m', 'build_manager', str(root / plan_name), '--output', str(root / reports / 'manager'),
                 '--cancel-file', str(root / ('cancel-' + operation))]
-        code = guest.run(python, argv, source, reports, environment, cancelled, timeout=6000)
+        code = guest.run(python, argv, source, reports, environment, cancelled, timeout=6000,
+                         progress=waiting_progress('Windows', 'selected checks'))
         result['status'] = 'cancelled' if cancelled.is_set() else 'passed' if code == 0 else 'failed'
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         result.update(status='failed', error=str(error))

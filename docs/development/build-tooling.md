@@ -155,3 +155,10 @@ native simulator/emulator/runtime tests, static workflow checks, different
 architectures or different Python/toolchain installations. Such coverage stays
 fresh. In particular, a local Mac and GitHub's Mac image can legitimately have
 different keys. Earlier successful GitHub workflow reuse is a separate check.
+
+
+Guest setup and checks now emit a throttled host-side elapsed waiting message,
+including receipt reconciliation on a lost Windows transport result. These
+messages identify a headless wait; they do not assert guest activity, test counts
+or a successful result. They add no VM polling. Collected reports and bound
+worker receipts remain authoritative.
