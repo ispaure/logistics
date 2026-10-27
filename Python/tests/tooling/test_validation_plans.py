@@ -17,6 +17,24 @@ class ValidationPlanTests(unittest.TestCase):
         self.assertIn('--isolate-modules', posix[0][1])
         self.assertIn('--isolate-modules', posix[1][1])
 
+    def test_compression_retries_get_fresh_attempts_and_preserve_previous_evidence(self):
+        import importlib.util
+        from tempfile import TemporaryDirectory
+        path = Path(__file__).parents[1] / 'parity_workspace.py'
+        spec = importlib.util.spec_from_file_location('parity_workspace_fixture', path)
+        helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            first = helper.comparison_workspace(root)
+            (first / 'comparison.json').write_text('previous evidence')
+            (first / 'before').mkdir()
+            second = helper.comparison_workspace(root)
+            self.assertNotEqual(first, second)
+            self.assertEqual(first.parent, root)
+            self.assertEqual(second.parent, root)
+            self.assertFalse(any(second.iterdir()))
+            self.assertEqual((first / 'comparison.json').read_text(), 'previous evidence')
+
     def test_inventory_matches_actual_recursive_test_discovery(self):
         root = Path(__file__).resolve().parents[3]
         rows = {r['name']: r for r in inventory(root)['suites']}

@@ -6,21 +6,20 @@ from pathlib import Path
 import subprocess
 import sys
 import tarfile
-from tempfile import mkdtemp
+from parity_workspace import comparison_workspace
 
 import argparse
 import platform
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--output-dir', type=Path, help='New directory for disposable fixtures, traces and comparison.json')
+parser.add_argument('--output-dir', type=Path, help='Parent directory for isolated retained attempts, traces and comparison.json')
 parser.add_argument('--baseline-ref', default='51b610ed3f0d55e94bd9b179621545fe867ccb38',
                     help='Logistics commit to compare (including its pinned commonUtils)')
 parser.add_argument('--encrypted-baseline', action='store_true',
                     help='Also compare full AES compression when supported by the baseline')
 args = parser.parse_args()
 REPO = Path(__file__).resolve().parents[2]
-ROOT = args.output_dir.resolve() if args.output_dir else Path(mkdtemp(prefix='logistics-zip-version-parity-'))
-ROOT.mkdir(parents=True, exist_ok=True)
+ROOT = comparison_workspace(args.output_dir)
 OLD = ROOT / 'before'
 OLD.mkdir()
 ref = args.baseline_ref

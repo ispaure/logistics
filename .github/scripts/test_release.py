@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -32,9 +33,15 @@ class PackageTests(unittest.TestCase):
                 '.android-beta/signing.json', '.deploy-workspaces/ios/pyproject.toml'))
         public = ['mobile_build/pyproject.toml', 'mobile_build/resources/logistics.png',
                   'Python/mobile/mobile_sources.json', 'Python/desktop/main_window.py']
-        result = subprocess.run(['git', 'check-ignore', '--no-index', '-z', '--stdin'],
-                                cwd=root, input=os.fsencode('\0'.join(private + public) + '\0'),
-                                capture_output=True)
+        # Test tracked ignore policy independently of private runtime symlinks
+        # in captured manager checkouts. Git refuses pathspecs below symlinks.
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory)
+            subprocess.run(['git', 'init', '-q', str(fixture)], check=True, capture_output=True)
+            shutil.copyfile(root / '.gitignore', fixture / '.gitignore')
+            result = subprocess.run(['git', 'check-ignore', '--no-index', '-z', '--stdin'],
+                                    cwd=fixture, input=os.fsencode('\0'.join(private + public) + '\0'),
+                                    capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr.decode(errors='replace'))
         self.assertEqual({os.fsdecode(name) for name in result.stdout.split(b'\0') if name},
                          set(private))
