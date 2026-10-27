@@ -83,3 +83,21 @@ class GuestManagerTests(unittest.TestCase):
             self.assertEqual(data.read('public.py'),b'PUBLIC = True')
         self.assertEqual(self.command(self.manager,'rev-parse','HEAD'),later)
         self.assertEqual((self.manager/'public.py').read_text(),'LATER = True')
+
+
+class FocusedGuestCommandTests(unittest.TestCase):
+    def test_manager_focus_uses_explicit_pinned_checkout_not_project_tests(self):
+        from Scripts.guest_manager import focused_command
+        command = focused_command('guest-python', 'manager:test_ui.py', 'C:/owned/manager')
+        self.assertEqual(command, ('guest-python', '-m', 'unittest', 'discover', '-s',
+                                  'C:/owned/manager/Python/tests', '-p', 'test_ui.py', '-v'))
+        for invalid in ('manager:', 'manager:../test_ui.py', 'manager:folder/test_ui.py', 'manager:folder\\test_ui.py'):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                focused_command('python', invalid, '/owned/manager')
+
+    def test_existing_shared_and_desktop_patterns_keep_routing(self):
+        from Scripts.guest_manager import focused_command
+        for pattern, suite, selected in (('shared:test_styling.py', 'shared', 'test_styling.py'),
+                                         ('test_documents.py', 'desktop', 'test_documents.py')):
+            self.assertEqual(focused_command('python', pattern, '/owned/manager'),
+                             ('python', 'dev.py', 'test', suite, selected, '--python', 'python'))

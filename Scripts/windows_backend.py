@@ -139,9 +139,10 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
             raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
         install = (python, 'Python/tests/run_platform_checks.py', '--install', '--results-dir', report_dir)
         if args.pattern:
-            suite, pattern = ('shared', args.pattern[7:]) if args.pattern.startswith('shared:') else ('desktop', args.pattern)
+            from Scripts.guest_manager import focused_command
+            command = focused_command(python, args.pattern, manager_path)
             phases = (Phase('environment', (*install, '--prepare-only'), target, timeout=600, environment=environment, kind='setup'),
-                      Phase('focused', (python, 'dev.py', 'test', suite, pattern, '--python', python), target,
+                      Phase('focused', command, target,
                             timeout=1200, environment=dict(environment, LOGISTICS_REQUIRE_LOCALCRYPT_TESTS='1'), dependencies=('environment',)))
         else:
             phases = (Phase('platform', install, target, timeout=5400, environment=environment),

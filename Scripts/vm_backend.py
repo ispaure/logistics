@@ -140,10 +140,11 @@ subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed
             raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
         reports = workspace + '/reports'
         if args.pattern:
-            suite, pattern = ('shared', args.pattern[7:]) if args.pattern.startswith('shared:') else ('desktop', args.pattern)
+            from Scripts.guest_manager import focused_command
+            command = focused_command(guest_python, args.pattern, workspace + '/manager')
             phases = (Phase('environment', (guest_python, 'Python/tests/run_platform_checks.py', '--install', '--prepare-only', '--results-dir', reports),
                             workspace + '/source', timeout=600, environment=env, kind='setup'),
-                      Phase('focused', (guest_python, 'dev.py', 'test', suite, pattern, '--python', guest_python),
+                      Phase('focused', command,
                             workspace + '/source', timeout=900, environment=dict(env, LOGISTICS_REQUIRE_LOCALCRYPT_TESTS='1'), dependencies=('environment',)))
         else:
             phases = (Phase('platform', (guest_python, 'Python/tests/run_platform_checks.py', '--install', '--results-dir', reports),

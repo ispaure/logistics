@@ -10,6 +10,19 @@ import tarfile
 import zipfile
 
 
+def focused_command(python, pattern, manager):
+    """Route explicit diagnostic patterns; complete platform gates stay unchanged."""
+    if pattern.startswith('manager:'):
+        selected = pattern.removeprefix('manager:')
+        if not selected or any(value in selected for value in ('/', '\\', '..')):
+            raise ValueError('Manager focus requires a test filename pattern.')
+        # Use the exact project-pinned checkout already installed in this guest.
+        return (python, '-m', 'unittest', 'discover', '-s',
+                str(manager).rstrip('/\\') + '/Python/tests', '-p', selected, '-v')
+    suite, selected = ('shared', pattern[7:]) if pattern.startswith('shared:') else ('desktop', pattern)
+    return (python, 'dev.py', 'test', suite, selected, '--python', python)
+
+
 def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args], text=True, timeout=60).strip()
 

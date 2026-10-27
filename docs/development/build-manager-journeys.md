@@ -80,3 +80,9 @@ record with confirmed guest cleanup may be retried. Running, uncleaned, mismatch
 or unrecognized work requires reconciliation first; retry never deletes it.
 The retry wrapper holds the result-directory lock and each backend retains its
 normal VM operation lock, ownership checks and tool-cache policy.
+
+Focused guest diagnostics accept `manager:test_ui.py` (or another test filename
+pattern) through the existing Test pattern field. Both guest backends run those
+contracts from the exact installed, project-pinned manager checkout. `shared:`
+and ordinary Logistics patterns keep their existing routing. A diagnostic pass
+does not replace the complete platform release gate.
