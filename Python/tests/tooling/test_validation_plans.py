@@ -10,7 +10,7 @@ class ValidationPlanTests(unittest.TestCase):
         posix = desktop_checks('Darwin', Path('reports'))
         windows = desktop_checks('Windows', Path('reports'))
         self.assertEqual([p[0] for p in posix], ['commonutils', 'logistics', 'compression-parity', 'manager-contracts'])
-        self.assertEqual([p[2] for p in posix], [600, 900, 600, 120])
+        self.assertEqual([p[2] for p in posix], [600, 900, 600, 600])
         self.assertEqual([row[:2] for row in windows[1:]], [row[:2] for row in posix])
         self.assertEqual([row[2] for row in windows[1:]], [1800,1800,600,600])
         self.assertEqual(windows[0], ('windows-native-ui', ['Python/tests/native_ui_smoke.py'], 60))

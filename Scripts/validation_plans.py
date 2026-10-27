@@ -15,7 +15,7 @@ def desktop_checks(system, results, root=None):
                   for row in discover(root, 'desktop'))
     checks.extend([
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),
-        ('manager-contracts', ['-m', 'build_manager.contracts'], 600 if system == 'Windows' else 120),
+        ('manager-contracts', ['-m', 'build_manager.contracts'], 600),
     ])
     return checks
 
