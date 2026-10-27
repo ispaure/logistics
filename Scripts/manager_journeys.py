@@ -36,9 +36,9 @@ def run_values(values):
         raise ValueError('Choose Debug or the existing Beta key for Android device signing.')
     if 'testers.message' in result:
         message = result.pop('testers.message')
-        # Saved forms use an empty shared field when the service notes differ.
-        # Preserve those explicit notes; a nonempty shared edit still overrides both.
-        if message or not any(key in result for key in ('testflight.what_to_test', 'firebase.release_notes')):
+        # Empty shared messages mean use each service's saved notes, including
+        # when the manager restores a blank remembered choice without service fields.
+        if message.strip():
             result.update({'testflight.what_to_test': message, 'firebase.release_notes': message})
     from build_manager.run_fields import selection_ids
     if 'devices.android_connections' in result:
@@ -211,6 +211,15 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
             evidence[name] = dict(identity='Install in place · ' + ', '.join(row['name'] + ' [' + row['id'] + ']' for row in device_targets[target]),
                 steps=[phase.id for phase in branch if phase.effect == 'deploy'], platforms=required_platforms,
                 testing_optional=bool(project.journey_capability['destinations'][name].get('testing_optional')))
+            recipients = {}
+            for device in device_targets[target]:
+                steps = [phase.id for phase in branch if '--device' in phase.argv
+                         and phase.argv[phase.argv.index('--device') + 1] == device['id']]
+                if steps:
+                    recipients[device['id']] = dict(label=device['name'], steps=steps)
+            actions = set(evidence[name]['steps'])
+            if recipients and actions.issubset({step for row in recipients.values() for step in row['steps']}):
+                evidence[name]['recipients'] = recipients
             continue
         if name == 'github':
             plan = project.make_plan('Release', targets[0], 'GitHub', revision=revision,

@@ -8,9 +8,14 @@ from build_manager import Executor, Phase, Plan
 def run_check(name, argv, *, root, results, environment, timeout):
     results = Path(results)
     execution = results/'checks'/name/uuid4().hex
+    from Scripts.test_evidence import with_reuse
+    outputs = tuple(str(argv[index + 1]) for index, value in enumerate(argv[:-1]) if value in {'--junit', '--report'})
+    phase = Phase(name, tuple(argv), str(root), timeout=timeout, environment=environment, effect='test',
+                  artifacts=outputs, artifact_types={path: 'junit' if path.endswith('.xml') else 'json' for path in outputs})
     plan = Plan('Logistics', 'Native platform check: '+name, {'check': name},
-                (Phase(name, tuple(argv), str(root), timeout=timeout, environment=environment),),
+                (phase,),
                 str(execution/'workspace'), effect='test')
+    plan = with_reuse(plan)
     def progress(event):
         if event.get('type') == 'output':
             print(event['text'], end='', flush=True)

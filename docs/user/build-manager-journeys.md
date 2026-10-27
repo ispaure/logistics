@@ -52,8 +52,9 @@ scans, reconnects, installs on or otherwise touches personal devices.
 
 Delivery configuration offers one per-run tester message for Firebase and
 TestFlight. The adapter maps it to each service’s existing notes field. Leaving
-it untouched preserves different saved defaults; editing it applies the same
-text to both selected tester services. Recipient groups remain service-specific.
+it blank (including a remembered blank choice) preserves each service’s saved
+default. Entering a nonempty message applies the same text to both selected tester
+services. Recipient groups remain service-specific.
 These overrides are captured for review and do not update saved settings.
 
 Development-device delivery is now integrated under Delivery → Dev devices.

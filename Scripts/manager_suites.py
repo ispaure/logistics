@@ -87,8 +87,9 @@ def with_reports(plan, target):
             includes = [argv[index + 1] for index, arg in enumerate(argv) if arg == '--include-pattern']
             inventory = tuple(path.relative_to(test_root).as_posix() for path in sorted(test_root.rglob(pattern))
                               if path.is_file() and all(fnmatchcase(path.name, extra) for extra in includes))
-        phases.append(replace(phase, test_files=inventory, argv=tuple(argv), artifacts=(*phase.artifacts, str(report)),
-                              artifact_types=dict(phase.artifact_types, **{str(report): 'junit'})))
+        reported = replace(phase, test_files=inventory, argv=tuple(argv), artifacts=(*phase.artifacts, str(report)),
+                           artifact_types=dict(phase.artifact_types, **{str(report): 'junit'}))
+        phases.append(reported)
     return replace(plan, phases=tuple(phases))
 
 

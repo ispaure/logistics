@@ -151,8 +151,20 @@ class JourneyAdapterTests(unittest.TestCase):
         from Scripts.manager_journeys import run_values
         self.assertEqual(run_values({'testers.message': 'Try search'}),
             {'firebase.release_notes': 'Try search', 'testflight.what_to_test': 'Try search'})
-        self.assertEqual(run_values({'testers.message': ''}),
-            {'firebase.release_notes': '', 'testflight.what_to_test': ''})
+        for message in ('', '  \n '):
+            with self.subTest(message=message):
+                self.assertEqual(run_values({'testers.message': message}), {})
+
+    def test_restored_blank_shared_message_preserves_captured_service_defaults(self):
+        self.values.update({'testflight.what_to_test': 'Check received files',
+                            'firebase.release_notes': 'Check Android navigation'})
+        for message in ('', '  \n '):
+            with self.subTest(message=message):
+                plan = self.make(run_overrides={'testers.message': message})
+                captured = plan.source['effective_settings']['values']
+                self.assertEqual(captured['testflight.what_to_test'], 'Check received files')
+                self.assertEqual(captured['firebase.release_notes'], 'Check Android navigation')
+                self.assertEqual(plan.source['run_overrides'], {})
 
     def test_blank_saved_shared_message_preserves_distinct_service_notes(self):
         from Scripts.manager_journeys import run_values

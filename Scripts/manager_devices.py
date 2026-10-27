@@ -138,7 +138,8 @@ def make_plan(project, platform, targets, context, revision, *, shared=None):
         phases.append(Phase('install-' + str(index + 1) + '-' + label, (*command, 'install', '--report', str(report),
             '--device', target['id'], '--receipt', str(receipt)), str(snapshot), dependencies=(prepare.id, ready_id),
             environment=env, effect='deploy', kind='distribution', approval_required=False, timeout=600, artifacts=(str(receipt),),
-            resources={'device:' + platform + ':' + target['id']: 1, 'host.device-install': 1}))
+            resources={'device:' + platform + ':' + target['id']: 1, 'host.device-install': 1},
+            label='Install on ' + target['name'], description='Install the prepared app on this selected device.'))
     return Plan('Logistics', 'Prepare and install device app', source, tuple(phases), str(workspace),
         backend='This Mac', resource_locks=(str(project.mobile / '.deploy-workspaces/deploy.lock'),))
 

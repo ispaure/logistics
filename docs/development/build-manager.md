@@ -715,3 +715,22 @@ and records operation intent, and the adapter checks hardware, package and signi
 compatibility before an in-place update. Unknown attempts are never blindly
 replayed. Older captured plans keep their original approval requirement. Provider
 uploads and GitHub publication retain artifact-specific review.
+
+Host-suite reuse fingerprints the captured tracked inputs, selected command, final
+settings/environment and the actual test interpreter's OS, architecture, executable
+digest and installed package versions. Input probes run before receipt lookup;
+changed or unavailable input evidence causes fresh execution without certifying the
+old key. Reused XML/JSON evidence is retained with its original run provenance.
+The commonUtils, portable, desktop-UI and mobile-host phases on the same configured
+Mac use one complete host environment so identical checks can share results. Native
+platform/device acceptance is not classified as a portable host-suite equivalent.
+
+## Hosted release evidence
+
+The source-release workflow checks authenticated GitHub Actions records for
+complete successful platform/native/runtime workflow families at the exact source
+commit. Evidence must come from this repository's push or dispatch, include every
+required job, and be at most 24 hours old. Missing, skipped, failed, stale or
+unavailable proof runs that family afresh. The retained evidence artifact links
+the accepted run IDs and source. Packaging/reproducibility checks and publication
+remain required. The selector consumes completed GitHub workflow records.

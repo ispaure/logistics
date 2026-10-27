@@ -7,27 +7,62 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      validate: ${{ steps.select.outputs.validate }}
+      mobile-build: ${{ steps.select.outputs['mobile-build'] }}
+      mobile-runtime: ${{ steps.select.outputs['mobile-runtime'] }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - id: select
+        name: Verify recent exact-source workflow evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python .github/scripts/select_release_evidence.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-validation-evidence
+          path: release-evidence.json
+          if-no-files-found: error
+          retention-days: 14
+
   validate:
+    needs: evidence
+    if: needs.evidence.outputs.validate != 'true'
     uses: ./.github/workflows/archive-platform-checks.yml
 
   mobile-build:
+    needs: evidence
+    if: needs.evidence.outputs['mobile-build'] != 'true'
     uses: ./.github/workflows/mobile-build.yml
     with:
       target: both
 
   mobile-runtime:
+    needs: evidence
+    if: needs.evidence.outputs['mobile-runtime'] != 'true'
     uses: ./.github/workflows/mobile-runtime.yml
     with:
       target: both
 
   package:
-    needs: [validate, mobile-build, mobile-runtime]
+    needs: [evidence, validate, mobile-build, mobile-runtime]
+    if: >-
+      always() && !cancelled() && needs.evidence.result == 'success' &&
+      (needs.validate.result == 'success' || needs.evidence.outputs.validate == 'true') &&
+      (needs['mobile-build'].result == 'success' || needs.evidence.outputs['mobile-build'] == 'true') &&
+      (needs['mobile-runtime'].result == 'success' || needs.evidence.outputs['mobile-runtime'] == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

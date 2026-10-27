@@ -238,8 +238,10 @@ class LogisticsProject:
             {'app':values.get('testflight.app_id'),'group':values.get('testflight.external_group')} if operation=='Prepare TestFlight' else
             {'app':values.get('firebase.app_id'),'group':values.get('firebase.group')} if operation=='Prepare Firebase' else
             'local '+target+' workspace')
-        return replace(plan, phases=phases, secret_environment=secrets, resource_locks=(*plan.resource_locks,*resources),
+        plan = replace(plan, phases=phases, secret_environment=secrets, resource_locks=(*plan.resource_locks,*resources),
                        source=dict(plan.source,destination=destination,plan_preparation_seconds=time.monotonic()-started))
+        from Scripts.test_evidence import with_reuse
+        return with_reuse(plan)
 
     def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag='', suite='', _context=None):
         if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target, operation):

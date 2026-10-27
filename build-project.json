@@ -439,7 +439,8 @@
           "debug": "android-debug",
           "release": "android-release"
         },
-        "testing_optional": true
+        "testing_optional": true,
+        "approval_required": false
       },
       "ios-devices": {
         "label": "iPhone / iPad",
@@ -455,7 +456,8 @@
           "debug": "ios-debug",
           "release": "ios-device-export"
         },
-        "testing_optional": true
+        "testing_optional": true,
+        "approval_required": false
       }
     },
     "selectable_backends": true,
@@ -557,7 +559,7 @@
         "firebase",
         "testflight"
       ],
-      "description": "One message for both tester services. Leave untouched to keep each saved service default."
+      "description": "One message for both tester services. Leave blank to keep each saved service default."
     },
     {
       "id": "testflight.what_to_test",
