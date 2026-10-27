@@ -124,8 +124,8 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
                          + (' GitHub releases also require a clean current checkout.' if 'github' in destinations else ''))
     values = source['effective_settings']['values']
     if 'github' in destinations and not release_tag:
-        from Scripts.release_naming import suggest_tag
-        release_tag = suggest_tag(project.root, source['app_version'])
+        from Scripts.release_naming import suggest_tag, source_version
+        release_tag = suggest_tag(project.root, source_version(project.root, source['logistics_commit']))
     for name,target in (('testflight','ios'),('firebase','android')):
         if name in destinations and locations.get(target,project.journey_capability['platforms'][target]['backend']) == 'GitHub':
             raise ValueError(name+' preparation needs local native validation and matching receipts. Choose the local host for '+target+' or remove this delivery destination; GitHub validation is available for checks-only runs.')

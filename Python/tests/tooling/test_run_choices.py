@@ -52,3 +52,13 @@ class RunRequestTests(unittest.TestCase):
         with patch('Scripts.release_naming.subprocess.check_output',return_value='v1.2.3-alpha.2\nv1.2.3-alpha.9\n') as read:
             self.assertEqual(release_naming.suggest_tag(self.root,'1.2.3'),'v1.2.3-alpha.10')
         self.assertEqual(read.call_args.args[0][:3],['git','tag','--list'])
+
+
+class SourceReleaseVersionTests(unittest.TestCase):
+    def test_source_release_uses_metadata_at_exact_commit_independently_of_mobile_version(self):
+        commit = 'a' * 40
+        with patch('Scripts.release_naming.subprocess.check_output', return_value='[project]\nversion="0.1.15"\n') as read:
+            self.assertEqual(release_naming.source_version(Path('.'), commit), '0.1.15')
+        self.assertEqual(read.call_args.args[0], ['git', 'show', commit + ':Python/pyproject.toml'])
+        with self.assertRaisesRegex(ValueError, 'resolved source commit'):
+            release_naming.source_version(Path('.'), 'working-tree')

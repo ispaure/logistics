@@ -164,8 +164,9 @@ and group are editable on the run configuration page. The adapter captures these
 values in immutable per-run effective settings and review evidence, without writing
 them back to the saved profile. Unknown overrides and credential material fail.
 
-A blank release identifier uses the captured app version and next available local
-alpha suffix. It creates no tag; publication checks remote availability again.
+A blank GitHub release identifier uses the source project version from the selected
+commit and the next available local alpha suffix. Mobile marketing versions and
+build numbers remain independent. It creates no tag; publication checks remote availability again.
 Custom identifiers remain available under Advanced options.
 
 Cached source snapshots exclude only the known private mobile runtime references

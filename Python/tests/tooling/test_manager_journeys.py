@@ -71,6 +71,7 @@ class JourneyAdapterTests(unittest.TestCase):
                 ('Scripts.build_project.manager_settings.settings', {'side_effect': lambda *_, **kwargs: (dict(self.values, **kwargs.get('overrides', {})), {})}),
                 ('Scripts.build_project.manager_settings.defaults', {'side_effect': lambda *_: dict(self.values)}),
                 ('Scripts.build_project.manager_settings.app_version', {'return_value': '1.2.3'}),
+                ('Scripts.release_naming.source_version', {'return_value': '1.2.3'}),
                 ('Scripts.build_project.sys.platform', {'new': 'darwin'})):
             patcher = patch(target, **options); patcher.start(); self.addCleanup(patcher.stop)
         # Resolve capability defaults under the same declared host used below.

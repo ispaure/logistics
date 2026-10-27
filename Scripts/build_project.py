@@ -309,8 +309,8 @@ class LogisticsProject:
             raise ValueError('GitHub cannot run uncommitted source. Select an explicitly published revision.')
         if operation == 'Release':
             if not release_tag:
-                from Scripts.release_naming import suggest_tag
-                release_tag = suggest_tag(self.root,source['app_version'])
+                from Scripts.release_naming import suggest_tag, source_version
+                release_tag = suggest_tag(self.root, source_version(self.root, source['logistics_commit']))
             if not re.fullmatch(r'v\d+\.\d+\.\d+-(?:alpha\.\d+|beta\.\d+|main\.\d+)', release_tag):
                 raise ValueError('Choose an explicit release channel/tag, separate from app version and mobile build numbers.')
             command = (str(self.interpreter), '-m', 'Scripts.build_project', 'release', '--tag', release_tag,
