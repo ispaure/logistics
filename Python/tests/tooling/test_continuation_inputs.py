@@ -123,7 +123,7 @@ class NativeApplicabilityTests(unittest.TestCase):
                 data.update(cases=['rotation'], expected_cases=['rotation'])
             record = dict(report=data, owned_simulator_removed=True, model='selected-model', runtime='selected-runtime')
             step = 'ios.validation.'+name
-            phases.append(SimpleNamespace(id=step, argv=('python', '--model', 'selected-model',
+            phases.append(SimpleNamespace(id=step, argv=('python', '--runtime', '--', 'python', '--model', 'selected-model',
                                                          '--runtime', 'selected-runtime')))
             path = self.root/(name+'.json')
             path.write_text(json.dumps(record))

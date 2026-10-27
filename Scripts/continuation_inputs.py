@@ -135,6 +135,8 @@ def verify_native_applicability(root, output, plan_identity, current, *, expect_
                 raise ValueError('Native source, complete inventory or cleanup is unverified: '+step)
             if target == 'ios':
                 command = phases[step].argv
+                if '--' in command:
+                    command = command[command.index('--')+1:]
                 for flag, field in (('--model', 'model'), ('--runtime', 'runtime')):
                     if flag not in command or data.get(field) != command[command.index(flag)+1]:
                         raise ValueError('Native simulator identity differs from the selected plan: '+step)
