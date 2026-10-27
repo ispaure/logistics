@@ -25,7 +25,7 @@ class PlatformCheckTests(unittest.TestCase):
             parent = 'import subprocess,sys,time;subprocess.Popen([sys.executable,"-c",'+repr(child)+']);print("started",flush=True);time.sleep(30)'
             row = run_check('timeout',[sys.executable,'-c',parent],root=root,results=root,
                             environment={},timeout=.3)
-            self.assertEqual(row['status'],'timeout')
+            self.assertEqual(row['status'],'timeout', (row, (root/'timeout.log').read_text()))
             self.assertEqual(row['exit_code'],124)
             time.sleep(2.1)
             self.assertFalse(late.exists())

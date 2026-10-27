@@ -186,7 +186,8 @@ class SpreadTests(QtTestCase):
         reader = self.reader(first)
         self.assertFalse(reader.previous_file_button.isEnabled())
         self.assertTrue(reader.next_file_button.isEnabled())
-        with patch('features.comics.ui.reader.time.monotonic', side_effect=[10.0, 10.5, 10.7]):
+        with patch('features.comics.ui.reader.time') as clock:
+            clock.monotonic.side_effect = [10.0, 10.5, 10.7]
             reader.step(1)
             self.assertEqual(reader.pages.path, first)
             reader.step(1)

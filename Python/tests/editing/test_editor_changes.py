@@ -249,8 +249,9 @@ class AutoSaveTests(QtTestCase):
         self.assertFalse(self.doc.buffer.autosave.busy)
         self.view.set_autosave('focus_change')
         self.doc.buffer.autosave.focus_changed(self.doc, self.view.browser)
-        self.until(lambda: not self.doc.buffer.autosave.busy)
+        self.until(lambda: not self.doc.buffer.autosave.busy and not self.doc.document().isModified())
         self.assertFalse(self.doc.document().isModified())
+        self.assertEqual(self.path.read_bytes(), b'edit original\r\n')
 
     def test_modal_close_does_not_focus_autosave_and_stale_markers_are_rejected(self):
         from concurrent.futures import Future

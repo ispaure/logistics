@@ -36,6 +36,9 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
         # A missing worktree gitlink looks dirty; export needs the pinned index,
         # while this fixture only models its identity rather than a real library.
         self.git('update-index', '--assume-unchanged', 'Python/commonUtils')
+        environment = patch.dict('os.environ', {'GITHUB_SHA': self.git('rev-parse', 'HEAD')})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.now = datetime.now(timezone.utc)
         self.phase = Phase('macos.validation.commonutils', ('python', 'tests.py'), str(self.root),
                            effect='test', reuse_key='a' * 64)
@@ -89,6 +92,11 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
         self.git('add', '.github/local-test-signers')
         self.git('commit', '-qm', 'Changed trust source')
         self.assertIsNone(self.match(proof))
+
+    def test_other_hosted_source_never_accepts_fixture_proof(self):
+        proof = self.export()
+        with patch.dict('os.environ', {'GITHUB_SHA': 'e' * 40}):
+            self.assertIsNone(self.match(proof))
 
     def test_changed_reviewed_recipe_dirty_source_and_old_receipts_are_not_exported(self):
         self.assertIsNone(self.export(now=self.now + timedelta(days=2)))

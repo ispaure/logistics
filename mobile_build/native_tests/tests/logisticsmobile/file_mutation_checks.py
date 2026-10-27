@@ -140,14 +140,15 @@ async def exercise_destination_edges(app):
             controller = jclass('androidx.core.view.WindowCompat').getInsetsController(
                 app._impl.native.getWindow(), native)
             ime = jclass('androidx.core.view.WindowInsetsCompat$Type').ime()
-            for _ in range(20):
+            from .keyboard_wait import settled_keyboard
+            def request_keyboard():
                 native.requestFocus()
                 controller.show(ime)
                 manager.showSoftInput(native, 0)
-                await asyncio.sleep(.25)
+            def keyboard_visible():
                 insets = jclass('androidx.core.view.ViewCompat').getRootWindowInsets(native)
-                if insets is not None and insets.isVisible(ime):
-                    break
+                return bool(insets is not None and insets.isVisible(ime))
+            keyboard_settled = await settled_keyboard(request_keyboard, keyboard_visible)
         await asyncio.sleep(.6)
         assert_visible_controls(app)
         sample = dict(orientation=orientation, width=app.main_window.size.width,
@@ -174,6 +175,8 @@ async def exercise_destination_edges(app):
             ime = jclass('androidx.core.view.WindowInsetsCompat$Type').ime()
             sample['name_bounds'] = [int(point[0]), int(point[1]), int(native.getWidth()), int(native.getHeight())]
             sample['keyboard_visible'] = bool(insets and insets.isVisible(ime))
+            sample['keyboard_settled'] = keyboard_settled
+            assert keyboard_settled, sample
             sample['fullscreen_ime'] = bool(manager.isFullscreenMode())
             sample['window_focused'] = bool(native.hasWindowFocus())
             sample['input_focused'] = bool(native.hasFocus())

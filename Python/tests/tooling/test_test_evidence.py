@@ -118,7 +118,7 @@ class SnapshotInputIdentityTests(unittest.TestCase):
         fixture = SnapshotTests()
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
-        shutil.rmtree(fixture.shared)
+        fixture.shared.rename(fixture.directory / 'retained-git-fixture')
         fixture.shared.mkdir()
         with self.assertRaisesRegex(ValueError, 'submodule is not initialized'):
             inputs(fixture.root, ['Python/commonUtils'])

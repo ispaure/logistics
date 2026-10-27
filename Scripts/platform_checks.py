@@ -38,4 +38,5 @@ def run_check(name, argv, *, root, results, environment, timeout):
     shutil.copy2(execution/'result'/row['log'], results/(name+'.log'))
     code = 0 if row['status']=='passed' else 124 if row['status']=='timeout' else row.get('exit_code') or 1
     return dict(name=name, exit_code=code, seconds=round(row['seconds'],2), status=row['status'],
-                execution=str(execution/'result'))
+                execution=str(execution/'result'),
+                **{key: row[key] for key in ('error', 'cleanup_error') if row.get(key)})
