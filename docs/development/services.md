@@ -4,6 +4,7 @@ Application policies and orchestration live here. Reusable mechanisms and their 
 
 | Owner | Responsibility |
 | --- | --- |
+| `services/{access_policy,protection,session_auth}.py` | Pure permission questions, explicit process/window protection and portable resume challenges; see [access and privacy](access-privacy.md) |
 | `services/documents/` | Provider readers, archive access, document limits, ZIP password policy and portable preparation |
 | `services/documents/ui/` | Desktop document pickers, window handoffs, privacy guards and password dialogs |
 | `services/folders/` | Folder entries, source aggregation, visibility and destructive-operation safety |

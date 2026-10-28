@@ -124,3 +124,46 @@ A failed native video disposal retains its protection contribution until disposa
 succeeds; setting `closed` denies new commands but cannot make retained pixels or
 buffers public. Provider grants and encrypted checkpoints retain their existing
 validation. Memory pressure and Save/Discard/Cancel vetoes stay with their owners.
+
+## Adding a protected surface
+
+1. Reuse its provider's declared `session_only` policy and retained grant. Do not
+   derive either from a filename, UI title, saved preference or a different account.
+2. At host composition, register a synchronous gate supplier with
+   `app.protection.register(owner, owner.privacy_gates)`. Store the returned release
+   handle. Managers may supply the gates of their own live documents; native
+   surfaces bound to the same owner do not need duplicate password challenges.
+3. Publish the owner's gate before mounting sensitive content, then call
+   `app.protection.changed()`. A content-only restriction can use the optional
+   `protected` supplier without inventing a password gate. Playback receives the
+   process scope through the existing audio owner; features do not import mobile
+   composition to discover it.
+4. Ask the small named policy functions with current facts. Keep grant checks at
+   read/write boundaries. Use `resume_locked` for resume state; `saved_content`
+   is only the lock form's presentation bookkeeping.
+5. Report environment facts through the existing screen/audio adapters. A capture
+   transition shields first and pauses/conceals afterward. Backgrounding locks
+   eligible challenges and starts the narrow Wi-Fi resume request. Its successful
+   result authorizes only the matching lifecycle challenge, never external output.
+6. Clear native pixels, private labels and buffers before releasing the protection
+   handle. If disposal fails, retain protection and deny new commands. Host
+   replacement disposes its complete window scope without touching another host.
+
+For example, a loaded session credential protects an ordinary video too. Connecting
+an unapproved car output pauses protected audio and asks for approval; approval
+still needs Play. Removing that credential while a protected draft remains keeps
+cast refusal and Bluetooth consent active. Once the last retained owner is
+successfully disposed, ordinary audio bypasses approvals again, but nothing
+silently restarts. Read-aloud timer expiry changes none of those lifetimes.
+
+## Validation scope
+
+Focused migration checks cover audio consent/reentrancy/failure fanout, explicit
+scope lifetime, multiple passwords, Wi-Fi races/preferences, lock shielding,
+notebooks/pickers/readers, video transport and staged imports. Architecture and
+lint checks enforce the feature/host boundary. These tests use synthetic content
+and dummy/native-adapter doubles; they do not certify physical car routing,
+iPhone Mirroring or zero buffered output leakage. Full manager native/runtime,
+desktop and hosted release gates remain required for release delivery. Rebuild
+native adapters before the focused fullscreen/video probe; restaging Python into
+an older native player is insufficient.

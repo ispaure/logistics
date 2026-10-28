@@ -40,10 +40,14 @@ cryptographic hardware attestation.
 
 `services/audio_output.py` is toolkit-free consent state and preference validation.
 `mobile/audio_output.py` owns the route generation, explicit Play latch, native
-lifetime, coalesced approval prompts and cross-scene revocation. A pending dialog
+lifetime, coalesced approval prompts and cross-scene revocation. It consumes the
+explicit process protection scope; it does not discover privacy through UI
+observers or player internals. See [access and privacy](access-privacy.md) for
+registration, challenge provenance and effect ordering. A pending dialog
 cannot approve a route after a route, lifecycle, credential or Settings change.
-Approval never clears the Play latch. Native callbacks and passive permission
-checks never grant playback.
+Approval never grants the Play latch. Native callbacks and passive permission
+checks never grant playback. Passive checks do not refresh native routes or
+produce pause/dialog effects; native monitors and explicit commands observe them.
 
 `mobile/audio_output_native.py` and the Android `AudioOutputs.java` class query
 outputs and report transitions; they do not decide consent. The mobile host injects
