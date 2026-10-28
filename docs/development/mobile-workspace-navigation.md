@@ -134,6 +134,13 @@ deployment (local artifact `test-results/mobile-evidence/2026-10-20-rounded-file
 
 ## iOS Workspaces folder ancestry
 
+The native Workspaces columns apply only to browsing. A document, including its
+loading screen and child tools, hides the workspace sidebar and expands the
+retained navigation controller across the available content area. This does not
+enable reader fullscreen mode. Returning to the folder restores the retained
+sidebar and browser columns. Focused host coverage is in
+`test_ios_workspace_columns.py`; it does not establish native Duo pose behavior.
+
 Wide `WorkspaceFrame` layouts use a 16-unit gutter unless an active UIKit
 reserved division supplies the actual fold and its interaction margins.
 `fold_layout` queries regions in each view's coordinates, without assuming a

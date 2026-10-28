@@ -116,6 +116,12 @@ class WorkspaceColumns:
         height = float(bounds.size.height)
         if width <= 0 or height <= 0:
             return
+        from .reader_lifecycle import session_route
+        # Readers share the folder navigation stack, but not its browser column.
+        # Include loading and reader child routes so opening tools never brings
+        # the workspace sidebar back over an active document.
+        document = any(session_route(route) for route, _, _ in self.app.routes.screens['files'])
+        self.sidebar.controller.view.hidden = document
         # Fold queries use the full owning container, before allocating panes.
         impl = type('ColumnsImpl', (), {'__module__': 'toga_iOS.container'})()
         impl.native = native
@@ -134,6 +140,8 @@ class WorkspaceColumns:
             frames = (CGRect((safe.left, 0), (width, allocation.leading)),
                       CGRect((safe.left, allocation.leading + allocation.gap),
                              (width, allocation.trailing)))
+        if document:
+            frames = (frames[0], CGRect((safe.left, 0), (width, height)))
         targets = tuple((float(frame.origin.x), float(frame.origin.y),
                          float(frame.size.width), float(frame.size.height)) for frame in frames)
         if targets == getattr(self, '_layout_targets', None):
@@ -154,7 +162,8 @@ class WorkspaceColumns:
         def apply():
             for child, frame in zip(children, frames):
                 child.view.frame = frame
-            self.layout_sidebar(self.sidebar)
+            if not document:
+                self.layout_sidebar(self.sidebar)
             # Toga commits constraints, so lay out descendants in this same
             # animation transaction rather than reading stale native frames.
             for child in children:

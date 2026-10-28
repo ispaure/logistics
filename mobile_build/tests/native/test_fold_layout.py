@@ -75,16 +75,35 @@ class FoldLayoutTests(unittest.TestCase):
             self.assertEqual(pixels.getpixel((center, pixels.height // 2)),
                              (255, 0, 0, 255) if rtl else (0, 0, 255, 255))
 
-    def test_wide_image_remains_one_page_and_fits_inside_a_fold_region(self):
+    def test_wide_image_remains_one_page_and_fits_the_landscape_view(self):
         pages = [image_bytes(b'\xff\x00\x00\xff', w, h)
                  for w, h in ((100, 200), (300, 200), (100, 200), (100, 200))]
         nav = ComicNavigation(lambda i: (pages[i], 'image'), len(pages))
         self.assertEqual(nav.load(0, viewport=(1000, 700), mode='double')[0], (0,))
         self.assertEqual(nav.load(1, viewport=(1000, 700), mode='double')[0], (1,))
         self.assertEqual(nav.load(2, viewport=(1000, 700), mode='double')[0], (2, 3))
-        size, rects = spread_geometry([(300, 200)], viewport=(1000, 700), seam=.5)
-        self.assertEqual(size, (1000, 700))
-        self.assertLessEqual(rects[0][0] + rects[0][2], 500)
+        for seam in (.48, .5, .53):
+            for anchor_right in (False, True):
+                size, rects = spread_geometry([(300, 200)], viewport=(1000, 700),
+                                             seam=seam, single_right=anchor_right, seam_gap=30)
+                self.assertEqual(size, (300, 200))
+                self.assertEqual(rects, [(0, 0, 300, 200)])
+
+    def test_wide_page_pixels_span_the_fold_in_both_reading_directions(self):
+        from features.comics.mobile.composite import compose_spread
+        page = image_bytes(b'\xff\x00\x00\xff', 300, 200)
+        for rtl in (False, True):
+            image = compose_spread([page], right_to_left=rtl, anchor_right=True,
+                                   viewport=(1000, 700), seam=.5, seam_gap=30)
+            pixels = image._impl.native.raw
+            self.assertEqual(pixels.size, (300, 200))
+            for x in (0, 149, 150, 299):
+                self.assertEqual(pixels.getpixel((x, 100)), (255, 0, 0, 255))
+        size, rects = spread_geometry([(300, 200)], viewport=(700, 1000),
+                                     seam=.5, single_right=True, seam_gap=30)
+        self.assertEqual(size, (700, 1000))
+        self.assertGreaterEqual(rects[0][0], 365)
+        self.assertLessEqual(rects[0][0] + rects[0][2], 700)
 
 
 if __name__ == '__main__':

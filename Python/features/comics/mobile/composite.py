@@ -10,6 +10,12 @@ def spread_geometry(sizes, viewport=None, *, seam=None, single_right=False, seam
     from features.comics.reading import SPREAD_GAP
     if not 1 <= len(sizes) <= 2 or any(w <= 0 or h <= 0 for w, h in sizes):
         raise ValueError('A spread requires one or two nonempty pages.')
+    # A landscape page is already a complete spread. In a landscape view let
+    # the native canvas fit it across both Duo halves, rather than anchoring
+    # it inside one page slot. Portrait views retain their existing policy.
+    if (seam is not None and len(sizes) == 1 and sizes[0][0] > sizes[0][1]
+            and viewport and viewport[0] > viewport[1] > 1):
+        seam = None
     if seam is not None and viewport:
         width, height = viewport
         scale = min(1, MAX_SIDE / width, MAX_SIDE / height, sqrt(MAX_PIXELS / (width * height)))

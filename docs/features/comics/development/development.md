@@ -89,6 +89,12 @@ right-to-left manga. A strict landscape source in a strict portrait viewport is
 eligible, independently of Single/Automatic/Two-page layout. Square viewports and
 landscape windows keep the whole image.
 
+On Duo, a single wide source page in a landscape reading viewport fits across
+the full view, including the fold. `mobile/composite.py` bypasses the half-width
+seam slots for that case. Portrait viewports and paired portrait pages retain
+their fold placement. `mobile_build/tests/native/test_fold_layout.py` checks
+geometry and composed pixels in both reading directions with the dummy backend.
+
 Horizontal source bounds are `[0, .54]` and `[.46, 1]`, with 8% source-width
 overlap. `mobile/composite.py` draws the source at an offset into a bounded, RAM-only
 native bitmap; archive bytes and page counts are unchanged. Android, iOS and the

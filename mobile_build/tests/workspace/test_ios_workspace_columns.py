@@ -82,7 +82,8 @@ class WorkspaceColumnsTests(TestCase):
                 self.bounds = value
         native = Native()
         columns = object.__new__(WorkspaceColumns)
-        columns.app = Mock()
+        columns.app = NS(routes=NS(screens={'files': []}))
+        columns.sidebar = NS(controller=NS(view=NS(hidden=False)))
         columns.controller = NS(view=native)
         columns._layout_targets = ((62, 0, 367, 402), (445, 0, 367, 402))
         def rect(origin, size):
@@ -93,6 +94,44 @@ class WorkspaceColumnsTests(TestCase):
             columns.layout()
         self.assertIs(native.frame, bounds)
         self.assertEqual(native.bounds.size.height, 402)
+
+    def test_documents_and_their_tools_use_whole_column_container_then_restore_browser(self):
+        def rect(origin, size):
+            return NS(origin=NS(x=origin[0], y=origin[1]), size=NS(width=size[0], height=size[1]))
+        columns = object.__new__(WorkspaceColumns)
+        screens = [('folder:books', None, '')]
+        columns.app = NS(routes=NS(screens={'files': screens}))
+        native = NS(superview=None, bounds=rect((0, 0), (900, 600)),
+                    safeAreaInsets=NS(left=20, right=10), window=None)
+        columns.controller = NS(view=native)
+        columns.sidebar = NS(controller=NS(view=NS(hidden=False, layoutIfNeeded=Mock())))
+        columns.navigation = NS(view=NS(layoutIfNeeded=Mock()))
+        columns.layout_sidebar = Mock()
+        with patch.dict('sys.modules', {'rubicon.objc': NS(CGRect=rect)}), \
+                patch('mobile.fold_layout.division', return_value=None), \
+                patch('mobile.fold_layout.has_fold', return_value=False), \
+                patch('ctypes.CDLL'):
+            columns.layout()
+            browser_frame = columns.navigation.view.frame
+            self.assertGreater(browser_frame.origin.x, 20)
+            for route in ('file-loading:comic', 'reader:comic', 'editor', 'private:pdf', 'notebook:notes'):
+                with self.subTest(route=route):
+                    screens[:] = [('folder:books', None, ''), (route, None, ''), ('reader-tools', None, '')]
+                    for width, height in ((900, 600), (650, 980)):
+                        native.bounds = rect((0, 0), (width, height))
+                        columns.layout()
+                        frame = columns.navigation.view.frame
+                        self.assertTrue(columns.sidebar.controller.view.hidden)
+                        self.assertEqual((frame.origin.x, frame.origin.y), (20, 0))
+                        self.assertEqual((frame.size.width, frame.size.height), (width - 30, height))
+            screens[:] = [('folder:books', None, '')]
+            native.bounds = rect((0, 0), (900, 600))
+            columns.layout()
+        self.assertFalse(columns.sidebar.controller.view.hidden)
+        restored = columns.navigation.view.frame
+        self.assertEqual((restored.origin.x, restored.size.width),
+                         (browser_frame.origin.x, browser_frame.size.width))
+        self.assertEqual(columns.layout_sidebar.call_count, 2)
 
     def test_active_fold_retains_native_columns_below_flat_breakpoint(self):
         view = toga.Box()
