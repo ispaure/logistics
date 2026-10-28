@@ -103,6 +103,10 @@ command own that effect. Audio's passive permission query does not poll native
 routes or pause players. Native monitors and explicit Play observe routes.
 Malformed approval data grants no Bluetooth permission under protection; ordinary
 playback bypasses the list entirely. Protective pauses reject reentrant Play.
+Credential metadata publication invalidates stale approval decisions, but pauses
+audio only while protection is active. A queued startup/persistent metadata update
+must not cancel a later ordinary Play. Entering/leaving protection still pauses
+through the scope transition, and revoked content retires through its own grant.
 
 Lock-form `saved_content` now belongs only to presentation. Consumers use resume
 challenge state rather than checking whether a widget root was replaced. Device
@@ -167,3 +171,11 @@ iPhone Mirroring or zero buffered output leakage. Full manager native/runtime,
 desktop and hosted release gates remain required for release delivery. Rebuild
 native adapters before the focused fullscreen/video probe; restaging Python into
 an older native player is insufficient.
+
+The October 28 migration acceptance passed 48 Android and 42 iOS native privacy
+cases using synthetic local, LocalCrypt, saved remote and session-only remote
+content. It exercised real decoders and app switching, Android emulator calls and
+screen-off/resume, plus explicitly injected output/SSID and iOS lock events.
+Both owned QA devices were removed. These focused results supplement the full
+release gates; they do not establish physical Bluetooth, casting, Mirroring,
+Continuity calls or acoustic zero-leakage guarantees.
