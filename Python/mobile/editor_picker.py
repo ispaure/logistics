@@ -136,9 +136,6 @@ class EditorPicker:
         self.fit_keyboard(False)
         self._epoch += 1
         self.cancel()
-        self.operation = PickerOperation()
-        from .protection import for_app
-        for_app(self.app).changed()
         self.panel = self._restore_when_idle = None
         pending = getattr(self, '_storage_refresh', None)
         if pending is not None and not pending.done():
@@ -159,6 +156,11 @@ class EditorPicker:
             self.new_folder_name.value = ''
             self.save_as_storage.items = []
             self.save_as_status.value = ''
+
+        # Drop the retained private source only after its displayed labels clear.
+        self.operation = PickerOperation()
+        from .protection import for_app
+        for_app(self.app).changed()
 
     def _begin_work(self):
         client = getattr(self.app, 'cloud_client', None)

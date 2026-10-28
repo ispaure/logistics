@@ -24,6 +24,20 @@ class NotebookPanelTests(unittest.TestCase):
         self.addCleanup(self.app.loop.close)
         self.addCleanup(self.app.main_window.close)
 
+    def test_failed_canvas_retirement_keeps_private_protection_until_success(self):
+        from unittest.mock import patch
+        from services.session_auth import ResumePassword
+        self.app.loop.run_until_complete(open_notebook(self.app))
+        panel = self.app.notebook_panel
+        gate = panel.privacy_gate = ResumePassword('synthetic')
+        self.app.protection.changed()
+        with patch.object(panel, 'retire_canvas', side_effect=RuntimeError('retirement failed')):
+            with self.assertRaisesRegex(RuntimeError, 'retirement failed'):
+                panel.dispose()
+        self.assertIn(gate, self.app.protection.retained_gates())
+        panel.dispose()
+        self.assertNotIn(gate, self.app.protection.retained_gates())
+
     def test_reopen_uses_document_recovery_owner_and_can_checkpoint_afterward(self):
         app = self.app
         app.loop.run_until_complete(open_notebook(app))

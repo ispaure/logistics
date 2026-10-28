@@ -41,7 +41,7 @@ class NotebookPanel:
             self.view.add(self.status)
 
     def privacy_gates(self):
-        return (self.privacy_gate,) if not self.closed else ()
+        return (self.privacy_gate,)
 
     @property
     def repository(self):
@@ -377,9 +377,9 @@ class NotebookPanel:
 
     def dispose(self):
         self.closed = True
-        self._release_protection()
         self.retire_canvas()
         if self.document is not None:
             self.document.close()
             self.document = None
         self.editor = None
+        self._release_protection()
