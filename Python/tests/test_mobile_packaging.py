@@ -29,6 +29,11 @@ class MobilePackagingTests(unittest.TestCase):
 import sys
 from features.rclone.mobile.cloud import CloudClient
 assert CloudClient.__module__ == 'features.rclone.mobile.cloud'
+state = CloudClient.credential_state
+state.publish('import', dict(package_name='Synthetic.zip', password='synthetic', session_only=True),
+              dict(epoch=1, packages=[dict(package_name='Synthetic.zip', saved=False, remotes=['Test'])]))
+assert state.session_privacy.verify('synthetic')
+assert not state.session_privacy.locked
 assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name in sys.modules)
 '''
             result = subprocess.run([sys.executable, '-c', code], cwd=root,

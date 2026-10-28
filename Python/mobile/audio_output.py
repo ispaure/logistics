@@ -86,11 +86,17 @@ class AudioOutput:
         if self.pausing:
             return
         self.pausing = True
+        failure = None
         try:
             for pause in tuple(self.players.values()):
-                pause()  # Explicit pause, never toggle or resume.
+                try:
+                    pause()  # Explicit pause, never toggle or resume.
+                except Exception as error:
+                    failure = failure or error
         finally:
             self.pausing = False
+        if failure is not None:
+            raise failure
 
     def interrupt(self, active):
         self.interrupted = bool(active)

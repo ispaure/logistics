@@ -36,7 +36,7 @@ def sync(app, view, destination):
     controls = getattr(view, '_native_reader_buttons', None)
     privacy = getattr(app, 'screen_privacy', None)
     if (getattr(app, '_reset_scheduled', False)
-            or (privacy is not None and privacy.saved_content is not None)):
+            or (privacy is not None and privacy.resume_locked)):
         controls = None
     if controls is None:
         adapter._reader_action_bar_keep_keyboard = False

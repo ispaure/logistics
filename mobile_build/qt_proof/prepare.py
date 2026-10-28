@@ -23,7 +23,8 @@ def stage(destination):
         target = destination / 'commonUtils' / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, target)
-    for relative in ('features/__init__.py', 'features/rclone/__init__.py',
+    for relative in ('services/__init__.py', 'services/session_auth.py',
+                     'features/__init__.py', 'features/rclone/__init__.py',
                      'features/rclone/mobile/__init__.py', 'features/rclone/mobile/cloud.py',
                      'features/rclone/mobile/bridge_protocol.py',
                      'features/rclone/mobile/credential_state.py',

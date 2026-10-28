@@ -15,6 +15,8 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
     def player(self, *, restricted=True):
         from features.video.mobile.player import MobileVideo
         app = SimpleNamespace(audio_output=Mock(), active_host=True, private_root=Path('/unused'), loop=asyncio.get_running_loop())
+        from mobile.protection import for_app
+        app.protection = for_app(app)
         content = SimpleNamespace(provider=SimpleNamespace(storage_id='test', private=False),
             source=SimpleNamespace(expected=(1,), check_access=Mock()), path='movie.mkv',
             restricted=restricted, check_access=Mock(), require_external=Mock(), close=Mock())
@@ -109,6 +111,18 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         with patch('features.video.mobile.player.VideoContent') as content:
             self.assertFalse(await open_video(app, Mock(), 'movie.mp4'))
             content.assert_not_called()
+
+    async def test_failed_native_retirement_keeps_protection_until_disposal_succeeds(self):
+        owner = self.player()
+        owner.native.dispose.side_effect = RuntimeError('native disposal failed')
+        with self.assertRaisesRegex(RuntimeError, 'native disposal failed'):
+            owner.retire()
+        self.assertTrue(owner.closed)
+        self.assertTrue(owner.protection.process.protected())
+        owner.content.close.assert_not_called()
+        owner.native.dispose.side_effect = None
+        owner.retire()
+        self.assertFalse(owner.protection.process.protected())
 
 
 class VideoBuildTests(unittest.TestCase):

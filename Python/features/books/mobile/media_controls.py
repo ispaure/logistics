@@ -15,8 +15,7 @@ class SpeechPlayback:
         self.timer_text = ''
         _owners.add(self)
         self.audio_output = audio_output
-        from mobile.protection import for_app
-        self.scope = for_app(app).process
+        self.scope = audio_output.scope if audio_output is not None else app
         if audio_output is not None:
             audio_output.register(self, self.pause_audio)
 
@@ -166,8 +165,8 @@ def current_panel(app):
 
 
 def settings_changed(app):
-    from mobile.protection import for_app
-    scope = for_app(app).process
+    output = getattr(app, 'audio_output', None)
+    scope = output.scope if output is not None else app
     for owner in tuple(_owners):
         if owner.scope is scope:
             if owner.app is not app:

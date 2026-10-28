@@ -324,6 +324,17 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         await self.prompt_done()
         self.assertFalse(self.owner.permitted())
 
+    async def test_failing_player_pause_still_pauses_other_players(self):
+        self.assertTrue(self.owner.request_play())
+        self.owner.register('broken', Mock(side_effect=RuntimeError('pause failed')))
+        later = Mock()
+        self.owner.register('later', later)
+        with self.assertRaisesRegex(RuntimeError, 'pause failed'):
+            self.owner.pause()
+        later.assert_called_once()
+        self.assertFalse(self.owner.permitted())
+        self.owner.unregister('broken')
+
 
 class SpeechResumeGateTests(unittest.TestCase):
     def test_native_paused_utterance_cannot_bypass_output_revocation(self):

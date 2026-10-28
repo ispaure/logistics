@@ -963,6 +963,11 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             self.private_sessions = PrivateSessions(self)
         return self.private_sessions
 
+    @property
+    def protection(self):
+        from .protection import for_app
+        return for_app(self)
+
     async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, destination=None, privacy_gate=None, edit=False, **kwargs):
         copies = copies or self.crypt_copies
         key = key if key is not None else self.crypt_labels.get(self.crypt_selector.value)

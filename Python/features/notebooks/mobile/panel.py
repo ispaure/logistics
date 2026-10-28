@@ -33,8 +33,7 @@ class NotebookPanel:
         self.view = toga.Box(style=Pack(direction=COLUMN, flex=1))
         from services.documents.mobile_notebooks import install_notebook_controls
         install_notebook_controls(self)
-        from mobile.protection import for_app
-        self._release_protection = for_app(app).register(self, self.privacy_gates)
+        self._release_protection = app.protection.register(self, self.privacy_gates)
         if library:
             self.library()
         else:

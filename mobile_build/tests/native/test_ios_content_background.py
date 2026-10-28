@@ -38,10 +38,10 @@ class ContentBackgroundTests(unittest.TestCase):
         backend = type('Backend', (), {'__module__': 'toga_iOS.app'})
         app = NS(_impl=backend(), native_host=NS(adapter=NS(navigation=[])),
                  screen_privacy=NS(inactive=False), _reader_chrome_hidden=False)
-        for field in ('inactive', 'saved_content', 'shield', 'fullscreen', 'reduce-transparency'):
+        for field in ('inactive', 'resume_locked', 'shield', 'fullscreen', 'reduce-transparency'):
             with self.subTest(field=field):
                 app.screen_privacy = NS(inactive=field == 'inactive',
-                    saved_content=object() if field == 'saved_content' else None,
+                    resume_locked=field == 'resume_locked',
                     shield=object() if field == 'shield' else None)
                 app._reader_chrome_hidden = field == 'fullscreen'
                 picture = NS(image=object())

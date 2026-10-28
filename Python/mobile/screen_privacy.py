@@ -15,6 +15,8 @@ def native_value(owner, name):
 class ScreenPrivacy:
     def __init__(self, app):
         self.app = app
+        from threading import get_ident
+        self.ui_thread = get_ident()
         self.disposed = False
         self.inactive = False
         self.captured = False
@@ -59,6 +61,9 @@ class ScreenPrivacy:
 
     def protection_changed(self, active):
         if not self.disposed and not self.app.loop.is_closed():
+            from threading import get_ident
+            if get_ident() == self.ui_thread:
+                self.prepare_native_protection()
             self.app.loop.call_soon_threadsafe(self.refresh)
 
     def artwork_accessibility_changed(self):
@@ -117,30 +122,12 @@ class ScreenPrivacy:
             self.app.loop.call_soon_threadsafe(self.retire_stale)
 
     def retire_stale(self):
-        output = getattr(self.app, 'audio_output', None)
-        if output is not None:
-            output.invalidate()
         if self.disposed or not self.app.active_host:
             return
-        video = getattr(self.app, 'video_player', None)
-        if video is not None:
-            video.retire_stale()
-        from features.notebooks.mobile.documents import retire_stale_notebooks
-        retire_stale_notebooks(self.app)
-        self.app.credential_document_lists.refresh()
-        self.app.retire_private_comic_batch(stale_only=True)
-        private = getattr(self.app, 'private_sessions', None)
-        if private is not None:
-            private.revoke_stale()
-        if hasattr(self.app, 'cloud_view'):
-            self.app.clear_private_catalog()
-            self.app.cloud_rows = {}
-            self.app.cloud_entries.items = []
-            self.app.cloud_open_remote = None
-            self.app.cloud_location.value = self.app.cloud_path = ''
-        self.app.refresh_folder_actions()
-        from features.books.mobile.media_controls import enforce_privacy
-        enforce_privacy(self.app)
+        # Cover capture/native snapshots before feature retirement can reenter UI.
+        self.refresh()
+        from .privacy_effects import retire_stale_content
+        retire_stale_content(self.app)
         self.refresh()
 
     def gates(self):
@@ -151,11 +138,17 @@ class ScreenPrivacy:
         from .protection import for_app
         return for_app(self.app).process.credentials()
 
+    @property
+    def resume_locked(self):
+        return any(gate.locked for gate in self.gates())
+
     def sensitive(self):
         from .protection import for_app
         return for_app(self.app).process.protected()
 
     def conceal(self):
+        self.inactive = True  # Deny reentrant playback before native/UI effects.
+        self.prepare_native_protection()
         output = getattr(self.app, 'audio_output', None)
         if output is not None:
             output.invalidate(pause=False)  # Reject dialogs without stopping permitted background speech.
@@ -164,7 +157,6 @@ class ScreenPrivacy:
             video.conceal()
         from .comic_feedback import clear as clear_comic_feedback
         clear_comic_feedback(self.app)
-        self.inactive = True
         self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
         from .page_animation import cancel_visible_slides
         cancel_visible_slides(self.app)
@@ -252,78 +244,78 @@ class ScreenPrivacy:
             if session is not None and self.app.visible_reader() == session.id:
                 owner.resume_suspended_page()
 
-    def refresh(self):
-        from .protection import for_app
-        for_app(self.app).changed()
-        gates = self.gates()
+    def prepare_native_protection(self, *, transitioning=False):
+        """Apply native concealment before callbacks can mutate presentation."""
         protected = self.sensitive()
-        video = getattr(self.app, 'video_player', None)
-        if video is not None and gates and (self.inactive or any(gate.locked for gate in gates)):
-            video.conceal()
-        # A credential import can finish while the application is inactive.
-        if self.inactive:
-            for gate in gates:
-                if not gate.locked:
-                    gate.lock(reason='challenge')
-        elif self.lock_gates:
-            # A late import/read must not replace the locked session with a
-            # fresh unlocked gate while the resume screen is being displayed.
-            for gate in gates:
-                if gate not in self.lock_gates and not gate.locked:
-                    gate.lock(reason='challenge')
-        self.sync_lock_view(gates)
         if self.backend.startswith('toga_iOS.'):
-            from rubicon.objc import ObjCClass
             window = self.app.main_window._impl.native
             captured = bool(native_value(window.screen, 'isCaptured'))
             traits = window.traitCollection
             if traits.respondsToSelector('sceneCaptureState'):
                 captured = captured or native_value(traits, 'sceneCaptureState') == 1
             self.captured = captured
-            output = getattr(self.app, 'audio_output', None)
-            if output is not None:
-                output.capture_changed(protected and captured)
-            if video is not None and protected and captured:
-                video.conceal()
             scene = window.windowScene
             scene_inactive = scene is not None and native_value(scene, 'activationState') != 0
-            # Lifecycle state alone is not private content. In particular, a
-            # window can still be inactive while the app is starting up.
             hidden = protected and (self.inactive or scene_inactive or captured)
-            if not hidden and video is not None:
-                video.reveal()  # Stopping capture restores authorized controls, never playback.
-            if hidden:
-                from .ios_content_background import clear
-                clear(self.app)
-                window.endEditing(True)
-                if self.shield is None:
-                    self.shield = ObjCClass('UIView').alloc().initWithFrame(window.bounds)
-                    self.shield.backgroundColor = native_value(ObjCClass('UIColor'), 'blackColor')
-                    self.shield.opaque = True
-                    self.shield.autoresizingMask = 18  # flexible width and height
-                    self.shield.userInteractionEnabled = True
-                    self.shield.accessibilityLabel = 'Private content hidden'
-                    self.shield.accessibilityViewIsModal = True
-                self.shield.frame = window.bounds
-                # UIKit can detach overlays while replacing its root hierarchy.
-                # Reattach on every conceal/trait/lifecycle notification.
-                window.addSubview(self.shield)
-            elif self.shield is not None:
-                self.shield.removeFromSuperview()
-                self.shield = None
-        elif self.backend.startswith('toga_android.'):
+            self.set_ios_shield(hidden or (transitioning and protected and self.resume_locked))
+            return hidden
+        if self.backend.startswith('toga_android.'):
             window = self.app._impl.native.getWindow()
-            # Android's supported secure-window flag covers screenshots,
-            # recording, nonsecure displays and recent-task snapshots.
-            if self.sensitive():
-                window.addFlags(0x00002000)  # FLAG_SECURE
+            if protected:
+                window.addFlags(0x00002000)  # Supported FLAG_SECURE.
             else:
                 window.clearFlags(0x00002000)
+        return False
+
+    def set_ios_shield(self, hidden):
+        window = self.app.main_window._impl.native
+        if hidden:
+            from rubicon.objc import ObjCClass
+            if self.shield is None:
+                self.shield = ObjCClass('UIView').alloc().initWithFrame(window.bounds)
+                self.shield.backgroundColor = native_value(ObjCClass('UIColor'), 'blackColor')
+                self.shield.opaque = True
+                self.shield.autoresizingMask = 18
+                self.shield.userInteractionEnabled = True
+                self.shield.accessibilityLabel = 'Private content hidden'
+                self.shield.accessibilityViewIsModal = True
+            self.shield.frame = window.bounds
+            window.addSubview(self.shield)  # Reattach after native root replacement.
+            window.endEditing(True)
+        elif self.shield is not None:
+            self.shield.removeFromSuperview()
+            self.shield = None
+
+    def refresh(self):
+        from .protection import for_app
+        scope = for_app(self.app)
+        gates = self.gates()
+        # Late imports cannot inherit an earlier window's authentication.
+        for gate in gates:
+            if not gate.locked and (self.inactive or (self.lock_gates and gate not in self.lock_gates)):
+                gate.lock(reason='challenge')
+        hidden = self.prepare_native_protection(transitioning=True)
+        scope.changed()
+        self.sync_lock_view(gates)
+        output = getattr(self.app, 'audio_output', None)
+        if output is not None:
+            output.capture_changed(self.sensitive() and self.captured)
+        video = getattr(self.app, 'video_player', None)
+        if video is not None:
+            if self.sensitive() and (self.inactive or self.captured or self.resume_locked):
+                video.conceal()
+            elif not hidden:
+                video.reveal()  # Restore controls, never playback.
+        if hidden:
+            from .ios_content_background import clear
+            clear(self.app)
         from .browser_ui import sync_browser_population
         sync_browser_population(self.app)
-
         from .external_display import sync as sync_external
         sync_external(self.app)
+        # Reveal only after all required protection effects completed.
+        if self.backend.startswith('toga_iOS.'):
+            self.set_ios_shield(hidden)
 
     def sync_lock_view(self, gates):
         """Replace the entire navigation root; routes may update safely behind it."""

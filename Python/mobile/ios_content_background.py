@@ -68,7 +68,7 @@ def preview_edge(app, container):
     privacy = getattr(app, 'screen_privacy', None)
     if (getattr(app, '_hinge_status', 0) == 2 or reduce_transparency() or
             (privacy is not None and (privacy.inactive or
-             getattr(privacy, 'saved_content', None) is not None or
+             getattr(privacy, 'resume_locked', False) or
              getattr(privacy, 'shield', None) is not None))):
         return 0
     from .ios_toolbar import vertical_edge
@@ -107,7 +107,7 @@ def sync(app, *, settled=False):
     if (adapter is None or not hasattr(adapter, 'navigation') or
             getattr(app, '_reader_chrome_hidden', False) or
             (privacy is not None and (privacy.inactive or
-                getattr(privacy, 'saved_content', None) is not None or
+                getattr(privacy, 'resume_locked', False) or
                 getattr(privacy, 'shield', None) is not None)) or reduce_transparency()):
         clear(app)
         return

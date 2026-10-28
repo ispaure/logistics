@@ -3,6 +3,7 @@
   "modules": [
     "__init__.py",
     "protection.py",
+    "privacy_effects.py",
     "__main__.py",
     "action_menu.py",
     "adaptive_workspace.py",

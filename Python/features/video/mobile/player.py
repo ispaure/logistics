@@ -21,11 +21,10 @@ class MobileVideo:
         self.task = None
         self.audio_output = app.audio_output
         self.audio_output.register(self, self.pause_audio)
-        from mobile.protection import for_app
-        self.protection = for_app(app)
+        self.protection = app.protection
         self._release_protection = self.protection.register(self,
-            lambda: (getattr(self.content, 'gate', None),) if not self.closed else (),
-            protected=lambda: not self.closed and self.content.restricted)
+            lambda: (getattr(self.content, 'gate', None),),
+            protected=lambda: self.content.restricted)
 
     def pause_audio(self):
         if self.native is not None:
@@ -186,13 +185,13 @@ class MobileVideo:
             if self.native is not None:
                 position, completed = self.native.position()
                 self.native.dispose()
+                self.native = None
                 try:
                     await asyncio.to_thread(self.progress.save, position, completed=completed)
                 except (OSError, ValueError, PermissionError):
                     pass
         finally:
             await asyncio.to_thread(self.transport.close)
-            self.native = None
             self.retire()
 
 

@@ -153,12 +153,12 @@ class AndroidReaderChromeTests(unittest.TestCase):
 
     def test_locked_window_cannot_republish_reader_title_or_controls(self):
         sync(self.app, self.view, 'documents')
-        self.app.screen_privacy = NS(saved_content=object())
+        self.app.screen_privacy = NS(resume_locked=True)
         sync(self.app, self.view, 'documents')
         self.assertFalse(self.adapter._reader_action_bar_active)
         self.assertIsNone(self.action._impl.native.parent)
         self.adapter._reader_action_bar_title.setText.assert_called_with('')
-        self.app.screen_privacy.saved_content = None
+        self.app.screen_privacy.resume_locked = False
         sync(self.app, self.view, 'documents')
         self.assertTrue(self.adapter._reader_action_bar_active)
 

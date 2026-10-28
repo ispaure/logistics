@@ -4,6 +4,7 @@ Sources report existing challenges; they do not validate grants or perform I/O.
 The host disposes its window scope. No UI observer inventory defines privacy.
 """
 from weakref import WeakSet
+from threading import RLock
 
 
 def unique_gates(gates):
@@ -12,6 +13,7 @@ def unique_gates(gates):
 
 class ProtectionScope:
     def __init__(self, credentials):
+        self._lock = RLock()
         self.credentials = credentials
         self.windows = WeakSet()
         self.listeners = WeakSet()
@@ -26,12 +28,22 @@ class ProtectionScope:
         return bool(self.credentials()) or any(window.retained_protected() for window in tuple(self.windows))
 
     def changed(self):
-        active = self.protected()
-        if active == self.active:
-            return
-        self.active = active  # Publish denial before any reentrant effects.
-        for listener in tuple(self.listeners):
-            listener.protection_changed(active)
+        # Credential publication can originate on a worker; UI effects run after
+        # the snapshot lock is released. Callbacks always consult current facts.
+        with self._lock:
+            active = self.protected()
+            if active == self.active:
+                return
+            self.active = active
+            listeners = tuple(self.listeners)
+        failure = None
+        for listener in listeners:
+            try:
+                listener.protection_changed(active)
+            except Exception as error:
+                failure = failure or error
+        if failure is not None:
+            raise failure
 
 
 class WindowProtection:

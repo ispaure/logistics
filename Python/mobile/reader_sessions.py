@@ -86,7 +86,7 @@ class ReaderController(ReaderHost, ReaderUI):
     def _can_resume_visible_reader(self):
         session = self.session
         privacy = self.app.screen_privacy
-        return (self.app.active_host and not privacy.inactive and privacy.saved_content is None
+        return (self.app.active_host and not privacy.inactive
                 and not any(gate.locked for gate in privacy.gates())
                 and session is not None and session.id in self.app.workspace.sessions
                 and self.manager.controllers.get(session.id) is self

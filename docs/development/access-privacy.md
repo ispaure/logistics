@@ -108,3 +108,19 @@ Lock-form `saved_content` now belongs only to presentation. Consumers use resume
 challenge state rather than checking whether a widget root was replaced. Device
 sleep/capture/call safeguards remain in the native adapters; the listening timer
 remains in commonUtils. No native adapter interfaces or OS guarantees change.
+
+## Effect order and failure boundaries
+
+`ScreenPrivacy.prepare_native_protection` covers an iOS window or applies Android
+secure-window protection before lock presentation or feature callbacks. An iOS
+transition shield stays installed if a required callback fails; successful lock
+presentation can expose the password form while captured/inactive content stays
+covered. State denial precedes reentrant effects. `mobile.privacy_effects` contains
+the direct feature-retirement sequence, separate from native shielding and policy.
+No command/effect interpreter or plugin registry is involved.
+
+Pause fanout attempts every player even if one fails, then reports the failure.
+A failed native video disposal retains its protection contribution until disposal
+succeeds; setting `closed` denies new commands but cannot make retained pixels or
+buffers public. Provider grants and encrypted checkpoints retain their existing
+validation. Memory pressure and Save/Discard/Cancel vetoes stay with their owners.
