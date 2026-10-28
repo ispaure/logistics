@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from mobile.screen_privacy import ScreenPrivacy
-from features.rclone.mobile.session_privacy import ResumePassword
+from services.session_auth import ResumePassword
 
 
 class ScreenPrivacyTests(unittest.TestCase):
@@ -19,6 +19,7 @@ class ScreenPrivacyTests(unittest.TestCase):
         privacy.app, privacy.backend = app, backend
         privacy.inactive, privacy.disposed, privacy.shield = False, False, None
         privacy.lock_view = privacy.saved_content = None
+        privacy.lock_gates = ()
         privacy.sync_lock_view = Mock()
         from mobile.protection import for_app
         scope = for_app(app)
@@ -477,3 +478,19 @@ class ResumeLockTests(unittest.TestCase):
                         self.assertTrue(self.gate.locked)
                         self.assertIs(self.app.main_window.content, self.privacy.lock_view)
                 self.privacy.backend = 'toga_dummy.app'
+
+    def test_network_settings_change_during_lookup_rejects_waiver(self):
+        import asyncio
+        self.app.preferences.save(session_trusted_wifi='true', trusted_wifi_networks='["Home"]')
+        self.privacy.wifi_revision = 10
+        ready = self.app.loop.create_future()
+        async def read(app):
+            return await ready
+        with patch('mobile.trusted_wifi.read_ssid', side_effect=read), \
+                patch.object(self.privacy, 'finish_reveal') as finish:
+            task = self.app.loop.create_task(self.privacy.resume_on_wifi(10))
+            self.app.loop.run_until_complete(asyncio.sleep(0))
+            self.app.preferences.save(trusted_wifi_networks='["Home", "Other"]')
+            ready.set_result('Home')
+            self.app.loop.run_until_complete(task)
+            finish.assert_called_once_with(None)

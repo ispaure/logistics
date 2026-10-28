@@ -29,7 +29,7 @@ class TVProbe(LogisticsMobile):
             await asyncio.sleep(1)
             from commonUtils.runtime.resources.documents import LocalDocuments
             from features.rclone.mobile.cloud import CloudClient
-            from features.rclone.mobile.session_privacy import ResumePassword
+            from services.session_auth import ResumePassword
             from mobile.external_display import sync, comic_canvas
             assert self.preferences.values['comic_layout'] == 'auto'
             assert self.preferences.values['comic_split_wide'] == 'true'

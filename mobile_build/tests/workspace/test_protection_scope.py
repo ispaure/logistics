@@ -46,3 +46,31 @@ class ProtectionScopeTests(unittest.TestCase):
             first.register(owner, lambda: (new,))
         second.dispose()
         self.assertFalse(scope.protected())
+
+
+class AuthenticationTests(unittest.TestCase):
+    def test_manual_lock_and_failed_wifi_cannot_be_revived_by_late_success(self):
+        from services.session_auth import ResumePassword
+        gate = ResumePassword('secret')
+        gate.lock(reason='lifecycle')
+        revision = gate.revision
+        gate.deny_wifi(revision)
+        gate.lock(reason='lifecycle')  # A duplicate notification is not a new waiver.
+        self.assertFalse(gate.waive_lifecycle(revision))
+        gate.lock()
+        self.assertFalse(gate.waive_lifecycle(gate.revision))
+        self.assertFalse(gate.authorize(revision))
+        self.assertTrue(gate.authorize(gate.revision))
+
+    def test_credential_observers_can_read_from_another_thread(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from features.rclone.mobile.credential_state import NativeCredentialState
+        state = NativeCredentialState()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            class Observer:
+                def credentials_changed(self):
+                    self.gates = pool.submit(state.privacy_gates).result(timeout=2)
+            observer = Observer()
+            state.observers.add(observer)
+            state.publish('clear', {}, {'epoch': 1})
+            self.assertEqual(observer.gates, ())

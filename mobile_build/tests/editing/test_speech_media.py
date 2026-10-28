@@ -7,7 +7,7 @@ import unittest
 
 from features.books.mobile.media_controls import SpeechPlayback, enforce_privacy, current_panel, settings_changed
 from features.books.mobile.speech import SpeechSession
-from features.rclone.mobile.session_privacy import ResumePassword
+from services.session_auth import ResumePassword
 from mobile.preferences import Preferences
 
 

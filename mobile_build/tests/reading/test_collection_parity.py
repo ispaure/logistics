@@ -8,7 +8,7 @@ from mobile.app import LogisticsMobile
 from features.comics.comicinfo import ComicInfoXML
 from features.comics.mobile.metadata import batch_form
 from features.comics.mobile.private_batch import PrivateCollectionBatch
-from features.rclone.mobile.session_privacy import ResumePassword
+from services.session_auth import ResumePassword
 
 
 class CollectionPrivacyUITests(unittest.TestCase):

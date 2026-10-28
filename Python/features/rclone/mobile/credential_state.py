@@ -61,7 +61,7 @@ class NativeCredentialState:
         label = values.get('package_name') or ('Session network shares' if values.get('session_only') else 'Network shares')
         gate = None
         if action in {'import', 'add_smb'} and values.get('session_only'):
-            from .session_privacy import ResumePassword
+            from services.session_auth import ResumePassword
             gate = ResumePassword(values.get('password', ''), credential_name=label)
         with self.lock:
             epoch = info.get('epoch') if isinstance(info, dict) else None
@@ -84,12 +84,13 @@ class NativeCredentialState:
                     self.package_privacy = {name: gate for name, gate in self.package_privacy.items() if name in labels}
             self.session_privacy = next(iter(self.package_privacy.values()), None)
             self.generation += 1
-            failure = None
-            for observer in (*tuple(self.observers), *tuple(self.document_observers)):
-                try:
-                    observer.credentials_changed()
-                except Exception as error:
-                    if failure is None:
-                        failure = error
-            if failure is not None:
-                raise failure
+            observers = (*tuple(self.observers), *tuple(self.document_observers))
+        failure = None
+        for observer in observers:
+            try:
+                observer.credentials_changed()
+            except Exception as error:
+                if failure is None:
+                    failure = error
+        if failure is not None:
+            raise failure

@@ -175,7 +175,7 @@ class ScreenPrivacy:
         gates = self.gates()
         self.wifi_resume.capture(gates, self.credential_gates())
         for gate in gates:
-            gate.lock()
+            gate.lock(reason='lifecycle')
         picker = getattr(self.app, '_editor_picker', None)
         if picker is not None:
             picker.cancel()
@@ -208,11 +208,16 @@ class ScreenPrivacy:
 
     async def resume_on_wifi(self, revision):
         from .trusted_wifi import read_ssid
+        preferences = self.app.preferences.values
+        settings = (preferences.get('session_trusted_wifi'), preferences.get('trusted_wifi_networks'))
         try:
             ssid = await read_ssid(self.app)
         except Exception:
             ssid = None  # A failed native lookup must fall back to password authentication.
         if not self.disposed and self.wifi_revision == revision:
+            current = self.app.preferences.values
+            if settings != (current.get('session_trusted_wifi'), current.get('trusted_wifi_networks')):
+                ssid = None
             self.finish_reveal(ssid)
 
     def finish_reveal(self, ssid):
@@ -249,13 +254,13 @@ class ScreenPrivacy:
         if self.inactive:
             for gate in gates:
                 if not gate.locked:
-                    gate.lock()
-        elif self.saved_content is not None:
+                    gate.lock(reason='challenge')
+        elif self.lock_gates:
             # A late import/read must not replace the locked session with a
             # fresh unlocked gate while the resume screen is being displayed.
             for gate in gates:
                 if gate not in self.lock_gates and not gate.locked:
-                    gate.lock()
+                    gate.lock(reason='challenge')
         self.sync_lock_view(gates)
         if self.backend.startswith('toga_iOS.'):
             from rubicon.objc import ObjCClass
@@ -431,9 +436,9 @@ class ScreenPrivacy:
                 if not self.disposed:
                     self.refresh()
                 return
-            for gate, valid in zip(gates, accepted):
+            for gate, valid, revision in zip(gates, accepted, revisions):
                 if valid:
-                    gate.locked = False
+                    gate.authorize(revision)
             if any(gate.locked for gate in gates):
                 self.lock_status.text = ('Enter the password for the remaining private session.' if any(accepted)
                                          else 'Incorrect password. Session remains locked.')

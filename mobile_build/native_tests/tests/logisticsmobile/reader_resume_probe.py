@@ -9,7 +9,7 @@ from commonUtils.runtime.resources.documents import LocalDocuments
 from commonUtils.runtime.resources.local import LocalFiles
 from features.pdf.mobile.copies import PDFCopies
 from features.text_editor.resources import LocalTextCopies
-from features.rclone.mobile.session_privacy import ResumePassword
+from services.session_auth import ResumePassword
 from mobile.app import LogisticsMobile
 from .fixtures import make_books, capture_window, png_page
 

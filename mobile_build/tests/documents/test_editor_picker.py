@@ -411,7 +411,7 @@ class EditorPickerTests(unittest.TestCase):
         self.assertEqual(picker.save_as_data, b'draft')
 
     def test_locked_source_cannot_publish_save_as(self):
-        from features.rclone.mobile.session_privacy import ResumePassword
+        from services.session_auth import ResumePassword
         gate = ResumePassword('fixture-password')
         self.app.loop.run_until_complete(self.app.show_text_destination('locked.md', b'Private draft', privacy_gate=gate))
         self.app.screen_privacy.conceal()

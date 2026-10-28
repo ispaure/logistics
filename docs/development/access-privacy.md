@@ -68,3 +68,20 @@ attributes. Suppliers are synchronous snapshots with no I/O. Notebook disposal
 releases its registration; host disposal clears all window sources. A retained
 draft keeps its gate after credential removal; duplicate contributions share one
 challenge. Providers still validate the original grant independently.
+
+## Resume challenges and asynchronous callbacks
+
+`services.session_auth.ResumePassword` is platform-neutral. It records setup,
+explicit and lifecycle challenge reasons separately from provider revocation.
+A repeated lifecycle callback neither overwrites a manual lock nor restores a
+failed Wi-Fi waiver. `authorize(revision)` accepts a verified result only for
+that challenge; `waive_lifecycle(revision)` additionally requires a still-eligible
+lifecycle lock. Wi-Fi holds only the pending request snapshot, not another global
+lock-provenance dictionary. Network preference changes while a read is pending
+reject its waiver. Multiple passwords remain separate challenges.
+
+Credential publication snapshots observers under the credential lock and calls
+them after releasing it. UI callbacks return to their scene loop. Native screen
+shielding stays synchronous; asynchronous verification cannot reveal content
+after rebackgrounding or credential replacement. These callbacks never revive a
+revoked I/O grant.

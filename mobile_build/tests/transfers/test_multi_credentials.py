@@ -99,7 +99,8 @@ class MultiCredentialUITests(unittest.TestCase):
 
 class PackagePrivacyTests(unittest.TestCase):
     def test_remote_gate_uses_owner_and_saved_accounts_do_not_inherit_another_password(self):
-        from features.rclone.mobile.session_privacy import ResumePassword, remote_privacy_gate
+        from services.session_auth import ResumePassword
+        from features.rclone.mobile.session_privacy import remote_privacy_gate
         state = NativeCredentialState()
         first, second = ResumePassword('first'), ResumePassword('second')
         state.package_privacy = {'First.zip': first, 'Second.zip': second}
@@ -125,7 +126,7 @@ class PackagePrivacyTests(unittest.TestCase):
         from features.rclone.mobile.remote_resources import NativeRemoteResources
         from features.rclone.remote_access import NativeRemoteLocation
         from features.rclone.mobile.remote_readers import RemoteReaders
-        from features.rclone.mobile.session_privacy import ResumePassword
+        from services.session_auth import ResumePassword
         state = NativeCredentialState()
         first, second = ResumePassword('first'), ResumePassword('second')
         state.session_privacy = first
@@ -145,7 +146,7 @@ class PackagePrivacyTests(unittest.TestCase):
         provider.close()
 
     def test_localcrypt_gate_selection_uses_each_copy_mapping(self):
-        from features.rclone.mobile.session_privacy import ResumePassword
+        from services.session_auth import ResumePassword
         from features.rclone.localcrypt.mobile.content import CryptContentProvider
         from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
         state = NativeCredentialState()

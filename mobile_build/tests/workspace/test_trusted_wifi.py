@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock, patch, AsyncMock
 
-from features.rclone.mobile.session_privacy import ResumePassword
+from services.session_auth import ResumePassword
 from mobile.trusted_wifi import WifiResume, network_names, trusted, current_ssid
 from mobile.preferences import Preferences
 
@@ -22,7 +22,7 @@ class WifiResumeTests(unittest.TestCase):
         gates = gates or (self.gate,)
         self.resume.capture(gates, credentials or (self.gate,))
         for gate in gates:
-            gate.lock()
+            gate.lock(reason='lifecycle')
 
     def test_trusted_networks_allow_moving_between_listed_networks(self):
         for name in ('Home', 'Other home'):
@@ -73,7 +73,7 @@ class WifiResumeTests(unittest.TestCase):
         other = WifiResume()
         self.background()
         other.capture((self.gate,), (self.gate,))
-        self.gate.lock()
+        self.gate.lock(reason='lifecycle')
         self.resume.resume(self.app, (self.gate,), (self.gate,), 'Home')
         self.assertFalse(self.gate.locked)
         other.resume(self.app, (self.gate,), (self.gate,), 'Home')
@@ -83,7 +83,7 @@ class WifiResumeTests(unittest.TestCase):
         other = WifiResume()
         self.background()
         other.capture((self.gate,), (self.gate,))
-        self.gate.lock()
+        self.gate.lock(reason='lifecycle')
         self.resume.resume(self.app, (self.gate,), (self.gate,), 'Public')
         other.resume(self.app, (self.gate,), (self.gate,), 'Home')
         self.assertTrue(self.gate.locked)

@@ -170,7 +170,7 @@ class SessionResumeProof:
     def __init__(self, package):
         from hashlib import sha256
         from zipfile import ZipFile
-        from .mobile.session_privacy import ResumePassword
+        from services.session_auth import ResumePassword
         self.package = package
         self.digest = None
         if package is not None and package.stat().st_size <= 1024 * 1024:

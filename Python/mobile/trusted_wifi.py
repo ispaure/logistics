@@ -1,6 +1,5 @@
 """Foreground-only Wi-Fi identity reads; unavailable information never grants access."""
 import json
-from weakref import WeakKeyDictionary
 
 
 def network_names(value):
@@ -148,31 +147,23 @@ async def request_access(app):
 
 
 class WifiResume:
-    """Window-local transitions with process-wide credential lock provenance."""
-    _lifecycle_revisions = WeakKeyDictionary()
+    """A window's pending Wi-Fi read, tied to explicit shared lifecycle challenges."""
     def __init__(self):
         self.pending = ()
 
     def capture(self, gates, credentials):
         eligible = set(credentials)
-        previous = self._lifecycle_revisions
-        # App and scene callbacks, including other windows, share credentials.
-        # Preserve only known lifecycle locks; another revision is a revocation.
-        self.pending = tuple((gate, gate.revision + 1) for gate in gates
-                             if gate in eligible and gate.proof is not None
-                             and (not gate.locked or previous.get(gate) == gate.revision))
-        previous.update(self.pending)
+        self.pending = tuple((gate, gate.revision if gate.locked else gate.revision + 1)
+            for gate in gates if gate in eligible and gate.proof is not None
+            and (not gate.locked or (gate.reason == 'lifecycle' and gate.wifi_eligible)))
 
     def resume(self, app, gates, credentials, ssid):
         pending, self.pending = self.pending, ()
         if not trusted(app, ssid):
-            # Another scene must not bypass this outstanding challenge using a
-            # slower Wi-Fi callback from the same background transition.
-            for gate, _ in pending:
-                self._lifecycle_revisions.pop(gate, None)
+            for gate, revision in pending:
+                gate.deny_wifi(revision)
             return
         eligible = set(credentials) & set(gates)
-        for gate, _ in pending:
-            if (gate in eligible and gate.locked
-                    and self._lifecycle_revisions.get(gate) == gate.revision):
-                gate.locked = False
+        for gate, revision in pending:
+            if gate in eligible and gate.locked:
+                gate.waive_lifecycle(revision)

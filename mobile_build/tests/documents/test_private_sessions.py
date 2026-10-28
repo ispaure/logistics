@@ -65,7 +65,7 @@ class PrivateSessionTests(unittest.TestCase):
         import io
         import json
         from zipfile import ZipFile
-        from features.rclone.mobile.session_privacy import ResumePassword
+        from services.session_auth import ResumePassword
         fixture = json.loads((Path(__file__).parents[2] / 'native_tests/tests/logisticsmobile/comic_fixture.json').read_text())
         data = io.BytesIO()
         with ZipFile(data, 'w') as archive:
@@ -187,7 +187,7 @@ class PrivateSessionTests(unittest.TestCase):
                                      for widget in widgets(root)))
 
     def test_save_as_retains_source_privacy_until_exported_draft_closes(self):
-        from features.rclone.mobile.session_privacy import ResumePassword
+        from services.session_auth import ResumePassword
         gate = ResumePassword('session-password')
         source = self.open('private-source.md')
         source.privacy_gate = gate

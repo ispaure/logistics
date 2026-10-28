@@ -369,7 +369,7 @@ class PrivateSessions:
             password = self.app.document_password.value
             self.app.document_password.value = ''
             if password:
-                from features.rclone.mobile.session_privacy import ResumePassword
+                from services.session_auth import ResumePassword
                 owner.privacy_gate = ResumePassword(password)
             opened = await owner.provider_document().opening.open(
                 copies=copies, key=key, password=password, prepared=prepared, edit=edit)
