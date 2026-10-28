@@ -38,8 +38,10 @@ class VideoProbeRestagingTests(unittest.TestCase):
                 (destination / 'source.json').write_text('{"fingerprint": "current"}')
 
             with patch('mobile_build.validation.video_probe_tools.stage', side_effect=stage), patch(
-                    'mobile_build.validation.video_probe_tools.cloud_fixtures', return_value=fixture):
-                unsigned = prepare(original, workspace, cloud=True)
+                    'mobile_build.validation.video_probe_tools.cloud_fixtures', return_value=fixture) as publish:
+                tool = workspace / 'reviewed-rclone'
+                unsigned = prepare(original, workspace, cloud=True, rclone=tool)
+                publish.assert_called_once_with(workspace, rclone=tool)
             with ZipFile(unsigned) as apk:
                 self.assertEqual(apk.read('lib/arm64-v8a/libvlc.so'), b'unchanged native decoder')
                 raw = apk.read('assets/chaquopy/app.imy')

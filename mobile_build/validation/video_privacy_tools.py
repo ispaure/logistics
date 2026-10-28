@@ -63,7 +63,7 @@ def rewrite_apk(source, destination, context):
                 )
 
 
-def run(platform, binary, output, *, context="all"):
+def run(platform, binary, output, *, context="all", rclone=None):
     output.mkdir(parents=True, exist_ok=False)
     events = []
     recording = None
@@ -80,7 +80,7 @@ def run(platform, binary, output, *, context="all"):
             if platform == "android":
                 env, _ = tools_environment(deployment_environment())
                 tools = build_tools(env)
-                unsigned = prepare(binary, workspace, cloud=True)
+                unsigned = prepare(binary, workspace, cloud=True, rclone=rclone)
                 rewritten = workspace / "privacy-unsigned.apk"
                 rewrite_apk(unsigned, rewritten, context)
                 key = workspace / "debug.jks"
@@ -237,7 +237,7 @@ def run(platform, binary, output, *, context="all"):
                 ):
                     p.unlink()
                 shutil.copytree(
-                    cloud_fixtures(workspace),
+                    cloud_fixtures(workspace, rclone=rclone),
                     app / "app/tests/logisticsmobile/video-cloud-fixtures",
                 )
                 for name in ("PlugIns", "Extensions"):
@@ -397,6 +397,9 @@ def run(platform, binary, output, *, context="all"):
                 write("video-privacy-action-done.json", result)
             raise TimeoutError("Native privacy probe timed out")
         finally:
+            provenance = workspace / "video-cloud-fixtures/fixture-tool.json"
+            if provenance.is_file():
+                shutil.copy2(provenance, output / "fixture-tool.json")
             (output / "external-actions.json").write_text(json.dumps(events, indent=2))
             if recording is not None:
                 recording.send_signal(signal.SIGINT)
@@ -444,6 +447,7 @@ if __name__ == "__main__":
     parser.add_argument("platform", choices=("android", "iPhone", "iPad"))
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--rclone", type=Path, help="Pinned host rclone for synthetic fixtures when absent from a frozen source snapshot")
     parser.add_argument(
         "--context", choices=("all", "remote", "crypt", "localcrypt"), default="all"
     )
@@ -453,4 +457,5 @@ if __name__ == "__main__":
         args.binary.resolve(),
         args.output.resolve(),
         context=args.context,
+        rclone=args.rclone,
     )

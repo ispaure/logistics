@@ -20,8 +20,11 @@ ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = 'io.github.ispaure.logisticsmobile'
 
 
-def cloud_fixtures(workspace):
-    from features.rclone import executable, session
+def cloud_fixtures(workspace, *, rclone=None):
+    from features.rclone import executable
+    tool = Path(rclone or executable.get_rclone_path()).resolve()
+    if not tool.is_file():
+        raise FileNotFoundError('Cloud fixtures require the pinned rclone tool; supply --rclone when running a source snapshot.')
     root = workspace / 'video-cloud-fixtures'
     fixtures = codec_matrix(root / 'remote/plain')
     for _, _, _, path in fixtures:
@@ -38,8 +41,11 @@ def cloud_fixtures(workspace):
     config = workspace / 'synthetic-video.conf'
     config.write_text('[Secret]\ntype=crypt\nremote=' + str(root / 'remote/encrypted') + '\n'
         'password=E7Tt68UUDf297fEq6fQq6vjnnyj003Lrpf5FuniO2qlBJqGXXm5tIg\n')
-    subprocess.run([str(executable.get_rclone_path()), '--config', str(config), 'copy',
+    subprocess.run([str(tool), '--config', str(config), 'copy',
         str(root / 'remote/plain'), 'Secret:'], check=True, capture_output=True, timeout=90)
+    (root / 'fixture-tool.json').write_text(json.dumps(dict(
+        name='rclone', sha256=sha256(tool.read_bytes()).hexdigest(),
+        scope='Synthetic fixture encryption only; not application playback'), indent=2))
     tls = root / 'tls'
     tls.mkdir()
     from cryptography import x509
@@ -68,9 +74,9 @@ def cloud_fixtures(workspace):
     return root
 
 
-def prepare(apk, workspace, *, cloud=False):
+def prepare(apk, workspace, *, cloud=False, rclone=None):
     fixtures = codec_matrix(workspace / 'fixtures', duration=12) if not cloud else []
-    fixture_root = cloud_fixtures(workspace) if cloud else None
+    fixture_root = cloud_fixtures(workspace, rclone=rclone) if cloud else None
     with ZipFile(apk) as archive:
         if not any(b'Lio/github/ispaure/logistics/video/VideoPlayer$Listener;' in archive.read(name)
                    for name in archive.namelist() if name.startswith('classes') and name.endswith('.dex')):

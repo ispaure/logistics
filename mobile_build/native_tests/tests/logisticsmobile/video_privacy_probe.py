@@ -83,10 +83,34 @@ async def exercise(app):
             else:
                 native.togglePlay(None)
 
+        def playback_state(owner):
+            """Report permission and decoder facts without capability URLs or paths."""
+            audio = owner.audio_output
+            state = dict(hidden=owner.hidden, allowed=owner.allowed(),
+                         position=owner.native.position(), playing=playing(owner),
+                         audio_available=audio.available(), audio_permitted=audio.permitted(),
+                         manual_play=audio.policy.manual_play, protected=audio.protected(),
+                         interrupted=audio.interrupted, captured=audio.captured,
+                         transport_suspended=owner.transport.paused.is_set())
+            if android:
+                native = owner.native.native
+                state['native'] = {name: bool(field(native, name).getBoolean(native))
+                                   for name in ('focusHeld', 'manualResumeRequired',
+                                                'pausePending', 'lockHidden', 'audioSuppressed')}
+                state['decoder_state'] = int(actual(owner).getPlayerState())
+            return state
+
         async def start(owner):
             if not playing(owner):
                 user_play(owner)
-            await until(lambda: playing(owner), timeout=30)
+            report['startup_states'] = [playback_state(owner)]
+            def ready():
+                state = playback_state(owner)
+                if state != report['startup_states'][-1]:
+                    report['startup_states'].append(state)
+                    report['startup_states'] = report['startup_states'][-20:]
+                return state['playing']
+            await until(ready, timeout=30)
             await asyncio.sleep(0.12)
 
         async def quiet(owner, seconds=0.4, hidden=False):
@@ -449,11 +473,7 @@ async def exercise(app):
         owner = getattr(app, "video_player", None)
         if owner is not None:
             if owner.native is not None:
-                report["last_state"] = dict(
-                    hidden=owner.hidden,
-                    allowed=owner.allowed(),
-                    position=owner.native.position(),
-                )
+                report["last_state"] = playback_state(owner)
             await owner.close()
         if server is not None:
             await asyncio.to_thread(server.close)

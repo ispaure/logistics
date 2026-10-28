@@ -226,6 +226,21 @@ command was found not to produce lock lifecycle events on the current toolchain;
 it is not counted as sleep acceptance. iOS protected-data handler injection plus
 app switching is labelled separately from physical sleep.
 
+Run the privacy probe against a managed video-enabled artifact with the mobile
+test interpreter. Frozen source snapshots do not contain downloaded host tools;
+`--rclone` supplies the pinned host binary for synthetic fixture encryption. Its
+checksum is retained in the run's fixture provenance. It does not replace the
+application's native rclone service.
+
+```sh
+PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.video_privacy_tools android --binary /absolute/path/app-debug.apk --rclone /absolute/path/pinned/rclone --output test-results/video-privacy/android
+```
+
+Use `iPhone` or `iPad` with a simulator `.app` for iOS. Failures retain the last
+permission, audio-focus, transport and decoder states without private paths or
+capability URLs. Startup checks issue one Play action; they do not retry Play to
+hide a lost permission or unsolicited pause.
+
 `video_hardware_probe.py` is an interactive isolated-app probe for explicitly
 authorized iOS hardware. It uses synthetic local/LocalCrypt content, records
 lifecycle/player state and reports any content or unmuted playback observed before
