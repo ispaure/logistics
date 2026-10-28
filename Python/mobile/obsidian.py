@@ -9,6 +9,15 @@ class VaultBrowser(_VaultBrowser):
     def __init__(self, app, provider, root, destination):
         from .composition.presentation import notes_host
         super().__init__(notes_host(app), provider, root, destination)
+        from .layout_participants import participants
+        self._layout_subscription = participants(app).register('notes-library', self,
+            lambda owner, frame: owner.reflow(frame.content_width(owner.destination, margin=0)), order=50)
+
+    def dispose(self):
+        subscription = getattr(self, '_layout_subscription', None)
+        if subscription is not None:
+            subscription.dispose()
+        return super().dispose()
 
 
 async def open_vault(app, provider, root, destination=None, *, title='', rows=None):

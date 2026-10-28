@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from commonUtils.ui import pyside as qt
 from PySide6.QtTest import QTest
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 from features.notebooks.notebook import Notebook, MAX_ARCHIVE
 from features.notebooks.ui.workspace import open_workspace
 from features.rclone import executable

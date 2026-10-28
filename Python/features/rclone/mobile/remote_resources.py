@@ -23,6 +23,8 @@ class NativeRemoteResources:
         self.check()
         if location.identity is not None and location.identity != self.identity:
             raise ValueError('The remote connection changed. Reopen it.')
+        from .session_privacy import remote_privacy_gate
+        self._privacy_gate = remote_privacy_gate(client, self.remote, self.identity)
         self.location = NativeRemoteLocation(self.remote, self.identity, self.generation)
         self.root = Path('/remote') / str(self.generation) / self.remote
 
@@ -61,7 +63,7 @@ class NativeRemoteResources:
 
     @property
     def privacy_gate(self):
-        return getattr(self.client, 'session_privacy', None)
+        return self._privacy_gate
 
     def close(self):
         self._access.close()

@@ -112,12 +112,14 @@ the same step. See [icon maintenance](mobile-preparation.md#launcher-artwork).
 
 Use a separate Python 3.12 environment with `briefcase==0.4.5`. Toga backends are
 pinned to 0.5.7 in `pyproject.toml`. Install Go 1.26.9 for the native rclone
-bridge; Android uses NDK 27.2.12479018 (installed by the build helper if needed). From the repository root, after committing
-source changes:
+bridge; Android uses NDK 27.2.12479018 (installed by the build helper if needed).
+From the repository root, the direct staging command below selects committed
+source. For a local development payload, add `--allow-dirty`; for a captured mobile
+release with full gates, use the [manager workflow](../user/build-manager-journeys.md).
 
 ```sh
 python mobile_build/tools.py stage mobile_build/payload
-cd Mobile
+cd mobile_build
 python cloud_build.py licenses
 briefcase create android --no-input
 python cloud_build.py android
@@ -186,7 +188,7 @@ captured before test-mode rebuilds and contain no test entry point.
 After running native UI tests, restore the normal app launcher before using Xcode:
 
 ```sh
-cd Mobile
+cd mobile_build
 briefcase update iOS --no-input
 briefcase build iOS --no-input
 briefcase open iOS

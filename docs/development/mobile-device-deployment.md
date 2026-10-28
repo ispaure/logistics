@@ -215,7 +215,9 @@ feature workflow on the physical devices.
 
 ## Wireless Android discovery and recovery
 
-The deployment window and Android CLI share `deployment/wireless_adb.py`.
+The project deployment helpers use `mobile_build/deployment/wireless_adb.py`.
+The old deployment window is retired; normal reviewed installs use the standalone
+[manager workflow](../user/build-manager-journeys.md).
 Discovery first checks ADB's TLS connect advertisements. On macOS, bounded
 Bonjour browse/resolve snapshots supplement an empty or incomplete ADB list,
 including renamed duplicate service instances after the tablet changes its port.
@@ -226,8 +228,8 @@ advertisements never trigger automatic pairing.
 A stale daemon can return “No route to host” even when the discovery process can
 open the advertised TCP port. With no ready Android devices, discovery restarts
 ADB once and reconnects reachable advertisements. It leaves a daemon serving a
-ready device running; the window's **Repair Android** action supplies explicit
-recovery in that case. Repairs run outside deployments, briefly interrupt ADB
+ready device running. Explicit recovery of a daemon serving a ready device is a
+separate diagnostic action, not automatic repair during installation. Repairs run outside deployments, briefly interrupt ADB
 sessions, and never uninstall apps, clear storage or erase pairing keys.
 
 Focused `test_wireless_adb.py` contracts cover partial Bonjour snapshots, changed
@@ -239,6 +241,6 @@ instances, remain valid discovery targets.
 
 If USB hardware is visible but absent from the deployment list, another ADB
 server can own its interface. Check the server used by other Android tools;
-`ADB_SERVER_SOCKET=tcp:localhost:<port>` lets the CLI and deployment window use
+`ADB_SERVER_SOCKET=tcp:localhost:<port>` lets the deployment helpers use
 that existing server. Restarting the default server cannot release an interface
 owned by a different server.

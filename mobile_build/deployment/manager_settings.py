@@ -44,6 +44,7 @@ def defaults(root):
         'auth.key_reference': auth.get('key_path', ''),
         'auth.github_reference': '', 'auth.github_kind': 'auto',
         'signing.app_profile': '', 'signing.inbox_profile': '',
+        'signing.widget_profile': '', 'signing.widget_actions_profile': '',
         'github.repository': 'ispaure/logistics', 'github.token_environment': 'GH_TOKEN',
         'github.authentication': 'existing git credential helper',
         'github.workflow': 'release.yml',

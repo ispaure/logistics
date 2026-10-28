@@ -106,6 +106,7 @@ class DesktopCredentials:
                 path.unlink(missing_ok=True)
                 if path.suffix == '.session':
                     desktop_catalog.forget(path)
+                session.forget_package_path(path)
                 if existed:
                     removed.append(path)
             except Exception as error:

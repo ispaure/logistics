@@ -40,6 +40,21 @@ entry opens `docs/user_mobile/user_mobile.md` with the Logistics tree. Feature l
 feature guide offline without changing the sidebar scope. Source files mentioned by developer pages are not included in
 this documentation mirror.
 
+## Writing for a first-time reader
+
+Give each page a clear audience and purpose. A task guide should state what the
+reader needs, where to run commands, what to do, what success looks like and how
+to recover from likely failures. Define project terms before using them. Keep
+short learning examples separate from exhaustive API and validation reference;
+link to the owning contract instead of copying it.
+
+Use concrete subjects and verbs, and prefer a disposable worked example over a
+list of internal module names without context. Date historical assessments and
+explain their scope so they cannot be mistaken for current guarantees. This
+approach follows [Diátaxis](https://www.diataxis.fr/start-here/),
+[Write the Docs](https://www.writethedocs.org/guide/writing/beginners-guide-to-docs/)
+and [Google's clear-sentence guidance](https://developers.google.com/tech-writing/one/clear-sentences).
+
 ## Validation
 
 Run `Python/tests/tooling/test_documentation_layout.py` for H1s, landing-page ownership,

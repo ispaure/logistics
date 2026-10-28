@@ -4,6 +4,7 @@ Debug UI contributions exposed by Media.
 
 from features.contributions import DebugActionContribution, Feature, WorkflowContribution
 
+
 def _open_rename_mka(data=None, parent=None):
     from features.media.ui.dialogs import RenameMkaDialog
 

@@ -149,12 +149,17 @@ class PageFooter:
         surface(self.spacer, background='transparent', foreground='text')
         surface(self.badge, radius=14, background='alternate')
         self.widget = toga.Box(style=Pack(direction=COLUMN if vertical else ROW, width=56 if vertical else toga.style.pack.NONE, align_items='center', margin_left=4, margin_right=4))
+        self.widget._horizontal_reader_progress = not vertical
         from .reader_progress import style_slider
         style_slider(self.slider)
         self.sync(comic=False, count=0, index=0)
 
     def sync(self, *, comic, count, index, right_to_left=False):
         self.count, self.index, self.rtl = count, index, comic and right_to_left
+        if getattr(self.slider, '_reading_reverse_fill', False) != self.rtl:
+            self.slider._reading_reverse_fill = self.rtl
+            from .reader_progress import style_slider
+            style_slider(self.slider)
         from .appearance import surface
         for button, icon, label in ((self.previous, 'forward' if self.rtl else 'back', 'Previous page'),
                                     (self.following, 'back' if self.rtl else 'forward', 'Next page')):

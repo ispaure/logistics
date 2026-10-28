@@ -1,12 +1,14 @@
 """Tracked test input scopes invalidate affected evidence, not unrelated edits."""
 from dataclasses import replace
+import os
+from unittest.mock import patch
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 
 from build_manager import Phase
-from Scripts.test_evidence import inputs, key_for
+from logistics_build.test_evidence import inputs, key_for
 
 
 class InputIdentityTests(unittest.TestCase):
@@ -34,17 +36,38 @@ class InputIdentityTests(unittest.TestCase):
             (source.parent / 'test_new.py').write_text('new test\n')
             self.assertNotEqual(key_for(phase, runtime=runtime), original)
 
+    def test_tracked_removal_runs_fresh_instead_of_reusing_or_blocking_planning(self):
+        import sys
+        from build_manager import Plan
+        from logistics_build.test_evidence import with_reuse
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(['git', 'init', '-q', str(root)], check=True)
+            source = root / 'Python/commonUtils/runtime.py'
+            source.parent.mkdir(parents=True)
+            source.write_text('value = 1\n')
+            subprocess.run(['git', '-C', str(root), 'add', 'Python'], check=True)
+            source.unlink()
+            phase = Phase('commonutils', (sys.executable, '-c', 'pass'), str(root), effect='test')
+            self.assertEqual(key_for(phase, runtime={}), '')
+            with patch.dict(os.environ, {'LOGISTICS_REUSE_TEST_RESULTS': 'on', 'GITHUB_REF': ''}):
+                plan = with_reuse(Plan('Fixture', 'removed source', {}, (phase,), str(root/'workspace')))
+            self.assertEqual(plan.phases[0].argv, phase.argv)
+            self.assertEqual(plan.phases[0].reuse_key, '')
+            self.assertEqual(plan.phases[0].reuse_probe, ())
+
     def test_native_or_external_phases_never_receive_portable_test_keys(self):
         phase = Phase('android-native', ('python', 'test.py'), '.', effect='test')
         self.assertEqual(key_for(phase), '')
         self.assertEqual(key_for(replace(phase, id='commonutils', effect='deploy')), '')
 
+    @patch.dict(os.environ, {'LOGISTICS_REUSE_TEST_RESULTS': 'on', 'GITHUB_REF': ''})
     def test_real_execution_probe_reuses_same_inputs_then_runs_changed_source(self):
         import json
         import os
         import sys
         from build_manager import Plan, Executor
-        from Scripts.test_evidence import with_reuse
+        from logistics_build.test_evidence import with_reuse
         from dataclasses import replace
         actual = Path(__file__).resolve().parents[3]
         with TemporaryDirectory() as directory:
@@ -78,7 +101,7 @@ class InputIdentityTests(unittest.TestCase):
 
 class SnapshotInputIdentityTests(unittest.TestCase):
     def test_materialized_submodule_inputs_are_complete_and_match_active_checkout(self):
-        from Scripts.build_snapshots import materialize
+        from logistics_build.build_snapshots import materialize
         from tests.tooling.test_build_snapshots import SnapshotTests
         fixture = SnapshotTests()
         fixture.setUp()
@@ -133,14 +156,14 @@ class ReuseSwitchTests(unittest.TestCase):
         from dataclasses import replace
         from unittest.mock import patch
         from build_manager import Plan
-        from Scripts.test_evidence import with_reuse
+        from logistics_build.test_evidence import with_reuse
         with TemporaryDirectory() as folder:
             phase = Phase('commonutils', ('python', 'tests.py'), folder, effect='test',
                           reuse_key='a' * 64, reuse_probe=('python', 'probe.py'))
             native = Phase('android-native', ('python', 'native.py'), folder, effect='test')
             plan = Plan('Fixture', 'Validation', {'run_overrides': {'testing.reuse_verified_results': 'off'}},
                         (phase, native), str(Path(folder) / 'workspace'))
-            with patch('Scripts.test_evidence.key_for', side_effect=AssertionError('Off must not inspect or certify cache keys')):
+            with patch('logistics_build.test_evidence.key_for', side_effect=AssertionError('Off must not inspect or certify cache keys')):
                 fresh = with_reuse(plan)
             self.assertEqual([p.argv for p in fresh.phases], [p.argv for p in plan.phases])
             self.assertTrue(all(not p.reuse_key and not p.reuse_probe for p in fresh.phases))

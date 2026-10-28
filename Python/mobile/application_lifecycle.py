@@ -39,7 +39,13 @@ class HostLifecycle:
             return
         self.prepare_replacement()
         host = self.host
+        layout = getattr(host, '_layout_participants', None)
+        if layout is not None:
+            layout.dispose()
         from .markdown_speech import stop_markdown_speech
+        video = getattr(host, 'video_player', None)
+        if video is not None:
+            video.retire()
         from features.books.mobile.media_controls import stop_media
         stop_markdown_speech(host)
         stop_media(host)
@@ -123,6 +129,9 @@ class HostLifecycle:
                 host.active_host = False
                 background.cancel()
             from .markdown_speech import stop_markdown_speech
+            video = getattr(host, 'video_player', None)
+            if video is not None:
+                video.retire()
             stop_markdown_speech(host)
             from features.books.mobile.media_controls import stop_media
             stop_media(host)
@@ -142,6 +151,9 @@ class HostLifecycle:
             host.screen_privacy.dispose()
             host.seasonal_snow.dispose()
         if saved:
+            layout = getattr(host, '_layout_participants', None)
+            if layout is not None:
+                layout.dispose()
             self.stop_local_searches()
             self.exited = True
         return saved

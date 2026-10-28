@@ -6,7 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 from features.notebooks.notebook import Notebook
 from features.notebooks.ink import TOOLS
 from features.notebooks.editor import Editor

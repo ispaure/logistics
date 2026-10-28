@@ -139,7 +139,7 @@ class ManagerSettingsTests(unittest.TestCase):
             self.assertEqual(settings.app_version(mobile,revision=commit),'1.2.3')
 
     def test_settings_identify_unused_shared_folder_fields_and_clearable_avd(self):
-        from Scripts.build_project import LogisticsProject
+        from logistics_build.build_project import LogisticsProject
         project=LogisticsProject(self.root.parent)
         project.mobile=self.root
         rows=project.settings_view()

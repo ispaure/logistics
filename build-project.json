@@ -8,7 +8,7 @@
     "linux": ".venv/bin/python",
     "win32": ".venv/Scripts/python.exe"
   },
-  "bridge": "Scripts/manager_bridge.py",
+  "bridge": "logistics_build/manager_bridge.py",
   "results": "test-results/build-manager",
   "capabilities": {
     "platforms": [
@@ -142,6 +142,9 @@
             "This Mac \u2014 iOS Simulators",
             "GitHub"
           ],
+          "Build": [
+            "This Mac"
+          ],
           "Prepare TestFlight": [
             "This Mac",
             "GitHub"
@@ -192,6 +195,7 @@
       ],
       "ios": [
         "Test",
+        "Build",
         "Prepare TestFlight",
         "Reviewed TestFlight workflow",
         "Release"

@@ -122,6 +122,26 @@ class ToolbarTests(TestCase):
         status._toolbar_group = 'transfer-status'
         self.assertEqual(action_groups([status, find, save, close]), [[status], [find], [save], [close]])
 
+    def test_unchanged_layout_keeps_menu_groups_but_reclaims_changed_controller(self):
+        find, more = Button('find', 'Search'), Button('more', 'Actions')
+        more._impl.native.menu = NS(children=['current'])
+        mount_actions(self.controller, self.owner, [find, more])
+        nav = self.controller.navigationItem
+        original_groups, original_provider = nav.trailingItemGroups, nav.additionalOverflowItems
+        mount_actions(self.controller, self.owner, [find, more])
+        self.assertIs(nav.trailingItemGroups, original_groups)
+        self.assertIs(nav.additionalOverflowItems, original_provider)
+        other = NS()
+        mount_actions(self.controller, other, [Button('find', 'Other document')])
+        mount_actions(self.controller, self.owner, [find, more])
+        self.assertEqual(nav.trailingItemGroups[0].barButtonItems, [find._ios_action_item])
+        self.assertIsNot(nav.additionalOverflowItems, original_provider)
+        previous = nav.trailingItemGroups
+        self.controller.traitCollection.verticalBarEdge = 0
+        mount_actions(self.controller, self.owner, [find, more])
+        self.assertIsNot(nav.trailingItemGroups, previous)
+        self.assertIsNone(nav.additionalOverflowItems)
+
 
 class FormToolbarTests(TestCase):
     def test_explicit_form_actions_preserve_callbacks_and_body_actions(self):

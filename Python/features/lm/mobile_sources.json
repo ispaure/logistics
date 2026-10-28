@@ -8,6 +8,8 @@
     "generation.py",
     "mobile/__init__.py",
     "mobile/controller.py",
+    "mobile/ios/FoundationChat.swift",
+    "mobile/on_device.py",
     "mobile/presentation.py",
     "mobile/storage.py",
     "mobile/transport.py",

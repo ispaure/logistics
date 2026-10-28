@@ -11,7 +11,7 @@ from features.notebooks.ui.workspace import NotebookWorkspace, NotebookWindow
 from features.notebooks.ui.menus import NotebookMenus
 from features.notebooks.protocol import update_script
 from unittest.mock import patch
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 
 
 def main(output):

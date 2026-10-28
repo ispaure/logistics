@@ -9,6 +9,7 @@ in narrow windows; wider windows show the tree and article together.
 - [Documents and readers](documents/documents.md)
 - [Remote and offline files](documents/remote.md)
 - [Using documentation](documentation/documentation.md)
+- [Home Screen values from Shortcuts](shortcut-widgets.md)
 
 Mobile action buttons use the file browser’s filled surfaces: near-white in light
 mode and the same raised dark surface in dark mode. Ordinary actions have no
@@ -99,7 +100,7 @@ See [Books and comics on mobile](../features/books/user_mobile/library.md#books-
 
 ## LM chat
 
-See [Chat on mobile](../features/lm/user_mobile/conversations.md#lm-chat).
+See [Chat on mobile](../features/lm/user_mobile/conversations.md#lm-server-chat).
 
 ## Remote files and credential ZIPs
 

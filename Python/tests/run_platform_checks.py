@@ -34,7 +34,7 @@ def main():
             subprocess.run([sys.executable, '-m', 'uv', 'pip', 'sync', '--python', sys.executable,
                             str(requirements)], check=True)
     if args.install and os.environ.get('LOGISTICS_MANAGER_CHECKOUT'):
-        subprocess.run([sys.executable, '-m', 'Scripts.guest_manager', '--checkout', os.environ['LOGISTICS_MANAGER_CHECKOUT'],
+        subprocess.run([sys.executable, '-m', 'logistics_build.guest_manager', '--checkout', os.environ['LOGISTICS_MANAGER_CHECKOUT'],
                         '--project', str(REPO)], cwd=REPO, check=True, timeout=180)
     results = args.results_dir.resolve()
     results.mkdir(parents=True, exist_ok=True)
@@ -52,7 +52,7 @@ def main():
             [sys.executable, '-c', 'import certifi; print(certifi.where())'],
             text=True).strip())
         # Clean runners must exercise real crypt operations, not skip their fixtures.
-        subprocess.run([sys.executable, '-m', 'Scripts.local_desktop'],
+        subprocess.run([sys.executable, '-m', 'logistics_build.local_desktop'],
                        cwd=REPO, env=env, check=True, timeout=180)
         env['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] = '1'
     if args.prepare_only:
@@ -62,11 +62,11 @@ def main():
     # test discovery remains with the existing isolated regression runner.
     sys.path.insert(0, str(REPO))
     sys.path.insert(0, str(REPO / 'Python'))
-    from Scripts.validation_plans import desktop_checks
+    from logistics_build.validation_plans import desktop_checks
     checks = desktop_checks(platform.system(), results)
     for name, command, timeout in checks:
         print(f'Running {name} on {platform.system()}…', flush=True)
-        from Scripts.platform_checks import run_check
+        from logistics_build.platform_checks import run_check
         check_env = dict(env, QT_QPA_PLATFORM='windows') if name == 'windows-native-ui' else env
         row = run_check(name, [sys.executable, *command], root=REPO, results=results,
                         environment=check_env, timeout=timeout)

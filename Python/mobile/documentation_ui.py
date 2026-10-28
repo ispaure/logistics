@@ -46,6 +46,9 @@ class DocumentationReader(MarkdownWikiView):
         self.view._native_reader_title = lambda: self.title.text
         self.view._native_reader_hidden = [self.title]
         self.refresh_reader_actions()
+        from .layout_participants import participants
+        participants(app).register('documentation', self,
+            lambda owner, frame: owner.reflow(frame.content_width('settings', margin=0)), order=40)
 
     def back_action(self):
         """Close compact browsing before retracing documentation links."""

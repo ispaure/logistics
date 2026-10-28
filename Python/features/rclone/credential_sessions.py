@@ -79,6 +79,11 @@ class CredentialSessions:
         _notify(callbacks)
         return removed
 
+    def forget_package_path(self, config_path):
+        """Explicit Forget removes metadata; ordinary Lock keeps the ZIP shortcut."""
+        with self._lock:
+            self._known_packages.pop(Path(config_path), None)
+
     def revocation_check(self, config_path):
         """Capture a generation; forgetting/reloading it permanently cancels its work."""
         path = Path(config_path)

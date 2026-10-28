@@ -83,8 +83,32 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 'mobile.workspace_navigation.sync_reader_toolbar'
             ) as toolbar:
                 self.navigation.render()
-                mount.assert_called_once_with(self.app, menu, 'documents')
+                mount.assert_not_called()
                 toolbar.assert_called_once_with(self.app, owner.library_view, 'documents')
+
+    def test_reader_frame_does_not_overwrite_cached_close_and_browse_group(self):
+        import sys
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock
+        from mobile.workspace_navigation import WorkspaceFrame
+        frame = object.__new__(WorkspaceFrame)
+        nav = NS(leftBarButtonItem='retained-close-and-browse')
+        controller = NS(navigationItem=nav)
+        app = NS(routes=NS(apple=True), main_window=object(),
+                 native_host=NS(adapter=NS(content_controller=Mock(return_value=controller))))
+        frame.navigation = NS(app=app, menu_open={'documents': False})
+        frame.destination = 'documents'
+        frame.header, frame.menu, frame.compact_toolbar = object(), NS(), None
+        frame.view = lambda: NS(children=[], _native_reader_buttons=lambda: [])
+        with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=Mock(), SEL=lambda name: name)}), \
+                patch('mobile.appearance.accessible_name') as label, \
+                patch('mobile.workspace_navigation.mount_native_menu') as mount:
+            for opened in (False, True, False):
+                frame.navigation.menu_open['documents'] = opened
+                frame.sync_native_header()
+                self.assertEqual(nav.leftBarButtonItem, 'retained-close-and-browse')
+            mount.assert_not_called()
+            label.assert_called_with(frame.menu, 'Browse files')
 
     def test_incoming_workspace_toolbar_uses_destination_before_tab_commit(self):
         app = self.app
@@ -307,25 +331,25 @@ class WorkspaceNavigationTests(unittest.TestCase):
                 self.assertFalse(app.loop.run_until_complete(drawer.open_file({'path': 'comic.cbz'})))
         self.assertIn('archive is damaged', drawer.status.text)
 
-    def test_home_heading_does_not_reserve_an_extra_native_bar(self):
+    def test_home_uses_the_native_destination_title(self):
         import toga
         from types import SimpleNamespace
         from unittest.mock import Mock
         self.assertNotIn(toga.Command.ABOUT, self.app.commands)
         original = self.app.native_host.adapter
         bars = [Mock() for _ in self.app.native_host.destinations]
-        bars[0].isNavigationBarHidden.return_value = False
+        bars[0].isNavigationBarHidden.return_value = True
         self.app.native_host.adapter = SimpleNamespace(navigation=bars)
         try:
             with patch.object(self.navigation, 'render'):
                 self.navigation.install()
             self.assertEqual(bars[0].topViewController.navigationItem.title, 'Home')
-            bars[0].setNavigationBarHidden.assert_called_once_with(True, animated=False)
+            bars[0].setNavigationBarHidden.assert_called_once_with(False, animated=False)
             self.assertEqual(self.app.native_host.labels[0], 'Home')
         finally:
             self.app.native_host.adapter = original
 
-    def test_home_child_routes_keep_back_bar_and_root_hides_it_again(self):
+    def test_home_child_routes_and_root_keep_the_native_bar(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
         original = self.app.native_host.adapter
@@ -341,7 +365,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
             bars[0].setNavigationBarHidden.reset_mock()
             bars[0].isNavigationBarHidden.return_value = False
             self.navigation.sync_home_bar()
-            bars[0].setNavigationBarHidden.assert_called_once_with(True, animated=False)
+            bars[0].setNavigationBarHidden.assert_not_called()
         finally:
             screens.clear()
             self.app.native_host.adapter = original

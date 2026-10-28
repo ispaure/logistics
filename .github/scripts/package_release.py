@@ -15,9 +15,10 @@ EXCLUDED_DIRS = {
     'mobile-evidence',
 }
 REQUIRED = {
-    'Scripts/install_build_manager.py', 'build-manager-dependency.json',
-    'Scripts/build_project.py', 'Scripts/build_snapshots.py', 'Scripts/mobile_processes.py',
-    'Scripts/mobile_runtime_tools.json', 'Scripts/build_manager_tools.json',
+    'logistics_build/install_build_manager.py', 'build-manager-dependency.json',
+    'logistics_build/__init__.py', 'logistics_build/source_layout.py',
+    'logistics_build/build_project.py', 'logistics_build/build_snapshots.py',
+    'logistics_build/mobile_runtime_tools.json', 'logistics_build/build_manager_tools.json',
     'README.md', 'LICENSE.md', 'docs/docs.md', 'docs/user/user.md', 'docs/user/configuration.md', 'launch_config.ini',
     'LaunchLogistics_MAC.command', 'LaunchLogistics_WIN.bat',
     'LaunchLogistics_LINUX_UV.sh', 'Python/launch.py',

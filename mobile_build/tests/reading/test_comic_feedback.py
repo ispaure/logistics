@@ -91,3 +91,11 @@ class ComicFeedbackTests(unittest.TestCase):
                 for path in ('Comics/01.cbz', 'Comics/03.ZIP', 'Other/00.cbz', 'Comics/notes.md')]
         self.assertEqual(folder_comics(rows, 'Comics/02.cbz'),
                          [('Comics/01.cbz', '01.cbz'), ('Comics/03.ZIP', '03.ZIP')])
+
+    def test_lone_pages_ignore_spread_slots_in_both_reading_directions(self):
+        for page in ((300, 600), (1200, 600)):
+            expected = spread_geometry([page])
+            for right in (False, True):
+                for viewport in ((1200, 800), (400, 800)):
+                    self.assertEqual(spread_geometry([page], viewport=viewport,
+                        seam=.48, seam_gap=24, single_right=right), expected)

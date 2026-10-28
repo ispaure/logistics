@@ -396,7 +396,8 @@ class PrivateSessions:
         owner = PrivateController(self, session)
         capture = getattr(copies, 'capture_access', None)
         owner.document_access = capture(key) if capture is not None else lambda: None
-        owner.privacy_gate = getattr(copies, 'privacy_gate', None)
+        gate_for = getattr(copies, 'privacy_gate_for', None)
+        owner.privacy_gate = gate_for(key) if gate_for is not None else getattr(copies, 'privacy_gate', None)
         if privacy_gate is not None:
             owner.privacy_gate = privacy_gate
         owner.credential_client = self.app.cloud_client

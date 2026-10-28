@@ -15,7 +15,7 @@ def run(project, snapshot, workspace, output, python, sdk, java, runtime_cache=N
     device=workspace/'device'
     env=dict(PYTHONPATH=os.pathsep.join((str(project),str(project/'Python'))),ANDROID_HOME=str(sdk),
              ANDROID_SDK_ROOT=str(sdk),JAVA_HOME=str(java),PYTHONUNBUFFERED='1')
-    base=(str(python),'-m','Scripts.android_backend')
+    base=(str(python),'-m','logistics_build.android_backend')
     common=('--root',str(snapshot),'--workspace',str(device))
     phases=(Phase('ready',(*base,'ready',*common,'--result',str(workspace/'ready.json')),str(project),timeout=360,environment=env),
             Phase('native',(*base,'native',*common,'--result',str(workspace/'native.json')),str(project),timeout=180,environment=env,dependencies=('ready',)),

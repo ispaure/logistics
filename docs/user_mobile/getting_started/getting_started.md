@@ -19,6 +19,20 @@ view; closing a saved book does not delete its retained copy.
 Workspaces brings configured folders and remote connections together. Start with
 a local file to try the readers before configuring a remote connection.
 
+## Try a document before configuring a connection
+
+Use a disposable text or Markdown file for your first exploration. Open it from
+a local source or share a copy from another app, then find its open view in
+Documents. Switch to another destination and return to the document. Its open
+view should remain available until you close it.
+
+If you edit it, save and reopen it to check the result. A file received from
+another app is a copy; saving it does not write back to that app's original.
+For creating a document and choosing its destination, follow
+[document workflows](../documents/workflows.md). For remote, offline or encrypted
+copies, read [remote and offline files](../documents/remote.md) before transferring
+or exporting private content.
+
 ## Make the app comfortable
 
 Documents always uses compact rows without text-preview cards. Under Settings →

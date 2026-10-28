@@ -169,7 +169,11 @@ page. The top title uses the package name, followed by **Locked**, **Persistent
 save** or **Session-Only** status, its password field and **Unlock**. **Loaded
 remotes** lists only that package's active remotes. Tap a remote to browse it.
 **Forget this credential package**, below the remotes, confirms removal of the
-whole package and every remote it supplies. Other packages and local files remain.
+whole package and every remote it supplies. Other packages and local files remain. If removal fails because saved credentials
+cannot be accessed, Logistics attempts to lock all active packages and still
+cleans up independent retained ZIP/list caches. The error requires retrying
+removal; saved credentials may remain. If session locking cannot be confirmed,
+restart Logistics before retrying.
 
 The first page retains **Session → Lock session** and its explanation. Locking
 keeps retained ZIPs and persistent credentials and also locks SMB sessions.
@@ -239,3 +243,11 @@ shows the credential ZIP filename whose password is required. If several
 credentials are locked, enter their passwords in turn; unlocked filenames
 disappear from the list. A passwordless connection asks you to create a temporary
 session password. These labels and password checks stay in memory.
+
+
+The optional **Settings → Workspaces → Skip session password on trusted Wi-Fi**
+setting can skip this repeat foreground-resume check for already-unlocked
+session-only credentials on explicitly listed networks. It is off by default,
+never saves a password and does not bypass app restart or manual session locking.
+See [trusted Wi-Fi session resume](../../../user_mobile/settings/settings.md#trusted-wi-fi-session-resume)
+for setup, permissions and limitations.

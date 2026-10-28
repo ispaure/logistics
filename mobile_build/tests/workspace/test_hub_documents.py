@@ -355,7 +355,7 @@ class HubDocumentTests(unittest.TestCase):
         app.workspace.active = None
         view = app.build_home()
         labels = [child.text for child in view.content.children if isinstance(child, toga.Label)]
-        self.assertEqual(labels[0], 'Your workspace')
+        self.assertEqual(labels[0], 'Home')
         self.assertEqual(view.content.style.margin_top, 8)
         self.assertEqual(view.content.children[0].style.margin_top, 0)
         self.assertNotIn('Read. Write. Organize.', labels)
@@ -576,7 +576,7 @@ class HubDocumentTests(unittest.TestCase):
         app.editor.value = '# A retained draft'
         app.show_home()
         content = app.body.children[0].content
-        self.assertEqual(content.children[0].text, 'Your workspace')
+        self.assertEqual(content.children[0].text, 'Home')
         self.assertIsNone(app.home_continue)
         self.assertIn('Focus.md', [getattr(widget, 'text', '') for widget in widgets(content)])
         self.assertNotIn('Markdown', labels(content))

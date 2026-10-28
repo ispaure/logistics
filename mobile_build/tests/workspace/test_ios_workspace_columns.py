@@ -85,7 +85,7 @@ class WorkspaceColumnsTests(TestCase):
         columns.app = NS(routes=NS(screens={'files': []}))
         columns.sidebar = NS(controller=NS(view=NS(hidden=False)))
         columns.controller = NS(view=native)
-        columns._layout_targets = ((62, 0, 367, 402), (445, 0, 367, 402))
+        columns._layout_targets = ((62, 0, 367, 402), (445, 0, 429, 402))
         def rect(origin, size):
             return NS(origin=NS(x=origin[0], y=origin[1]), size=NS(width=size[0], height=size[1]))
         with patch.dict('sys.modules', {'rubicon.objc': NS(CGRect=rect)}), \
@@ -114,6 +114,7 @@ class WorkspaceColumnsTests(TestCase):
             columns.layout()
             browser_frame = columns.navigation.view.frame
             self.assertGreater(browser_frame.origin.x, 20)
+            self.assertEqual(browser_frame.origin.x + browser_frame.size.width, 900)
             for route in ('file-loading:comic', 'reader:comic', 'editor', 'private:pdf', 'notebook:notes'):
                 with self.subTest(route=route):
                     screens[:] = [('folder:books', None, ''), (route, None, ''), ('reader-tools', None, '')]
@@ -122,8 +123,8 @@ class WorkspaceColumnsTests(TestCase):
                         columns.layout()
                         frame = columns.navigation.view.frame
                         self.assertTrue(columns.sidebar.controller.view.hidden)
-                        self.assertEqual((frame.origin.x, frame.origin.y), (20, 0))
-                        self.assertEqual((frame.size.width, frame.size.height), (width - 30, height))
+                        self.assertEqual((frame.origin.x, frame.origin.y), (0, 0))
+                        self.assertEqual((frame.size.width, frame.size.height), (width, height))
             screens[:] = [('folder:books', None, '')]
             native.bounds = rect((0, 0), (900, 600))
             columns.layout()

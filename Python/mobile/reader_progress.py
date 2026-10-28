@@ -19,7 +19,8 @@ def style_slider(slider):
         slider.paint_track()
         return
     # Manga reverses values explicitly; do not also reverse the native track.
-    native_style_slider(slider, apple_color=apple_color, palette=android_palette, force_ltr=True)
+    native_style_slider(slider, apple_color=apple_color, palette=android_palette, force_ltr=True,
+                        reverse_fill=getattr(slider, '_reading_reverse_fill', False))
 
 
 class VerticalPageSlider(toga.Canvas):
@@ -33,6 +34,16 @@ class VerticalPageSlider(toga.Canvas):
                          on_drag=self.drag_track, on_release=self.release_track, **kwargs)
         _sliders.add(self)
         self.paint_track()
+
+    @property
+    def enabled(self):
+        # Toga Canvas is always enabled. Keep the slider contract explicitly
+        # so its event handlers and PageFooter can reject disabled scrubs.
+        return getattr(self, '_reading_enabled', True)
+
+    @enabled.setter
+    def enabled(self, value):
+        self._reading_enabled = bool(value)
 
     @property
     def value(self):

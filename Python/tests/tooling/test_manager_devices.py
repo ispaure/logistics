@@ -9,9 +9,9 @@ import unittest
 from unittest.mock import patch, Mock
 
 from commonUtils.runtime.streams import file_sha256
-from Scripts import manager_devices as devices
-from Scripts.build_project import LogisticsProject
-from Scripts.manager_journeys import PlanningContext
+from logistics_build import manager_devices as devices
+from logistics_build.build_project import LogisticsProject
+from logistics_build.manager_journeys import PlanningContext
 
 
 class ManagerDeviceTests(unittest.TestCase):
@@ -53,7 +53,7 @@ class ManagerDeviceTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_connection_override_is_explicit_scoped_and_does_not_change_saved_metadata(self):
-        from Scripts.manager_journeys import run_values
+        from logistics_build.manager_journeys import run_values
         values = {'devices.android':'["hardware-1"]',
                   'devices.android_connections':'{"hardware-1":"hardware-1"}'}
         run_values(values)
@@ -101,7 +101,7 @@ class ManagerDeviceTests(unittest.TestCase):
         context = PlanningContext(str(project.root), 'working-tree', json.dumps(source))
         def snapshot(*args, **kwargs):
             (project.private / 'snapshots/source/mobile_build').mkdir(parents=True)
-        with patch('Scripts.build_snapshots.materialize', side_effect=snapshot):
+        with patch('logistics_build.build_snapshots.materialize', side_effect=snapshot):
             plan = devices.make_plan(project, 'android', [dict(id='one',name='Phone',connection='one'), dict(id='two',name='Tablet',connection='two')], context,'working-tree')
         self.assertEqual([row.effect for row in plan.phases], ['build','inspect','deploy','inspect','deploy'])
         ready = [row for row in plan.phases if row.effect == 'inspect']
@@ -121,7 +121,7 @@ class ManagerDeviceTests(unittest.TestCase):
                          str(project.mobile / '.tools/release-wheels'))
 
     def test_offline_readiness_reconnects_only_selected_transport_without_installing(self):
-        from Scripts.manager_devices import DeviceUnavailable
+        from logistics_build.manager_devices import DeviceUnavailable
         from mobile_build.deployment import android_deploy as android
         recipe = self.root / 'recipe.json'
         data = dict(self.data)
@@ -253,7 +253,7 @@ class ManagerDeviceTests(unittest.TestCase):
         context = PlanningContext(str(project.root), 'HEAD', json.dumps(source))
         shared = Phase('release', (sys.executable,'-V'), str(self.root), artifacts=(str(self.report),))
         def snapshot(*args, **kwargs):(project.private / 'snapshots/source/mobile_build').mkdir(parents=True)
-        with patch('Scripts.build_snapshots.materialize', side_effect=snapshot):
+        with patch('logistics_build.build_snapshots.materialize', side_effect=snapshot):
             plan = devices.make_plan(project, 'android', self.data['targets'], context, 'HEAD', shared=shared)
         recipe = json.loads(Path(plan.phases[0].argv[plan.phases[0].argv.index('--recipe')+1]).read_text())
         self.assertEqual(recipe['shared_report'], str(self.report))
@@ -273,7 +273,7 @@ class ManagerDeviceTests(unittest.TestCase):
         def ditto(command, **kwargs):
             if '-x' in command:(Path(command[-1]) / 'Payload/Logistics Mobile.app').mkdir(parents=True)
             else:Path(command[-1]).write_bytes(b'provisioned app')
-        with patch('Scripts.manager_packages.checked_archive', return_value=(dict(workspace=str(self.root/'release')),dict(identity=identity))), \
+        with patch('logistics_build.manager_packages.checked_archive', return_value=(dict(workspace=str(self.root/'release')),dict(identity=identity))), \
                 patch.object(ios, 'installed', return_value=[]), patch.object(ios, 'choose', return_value=('/fake/xcode','sdk')), \
                 patch.object(ios, 'run', side_effect=export) as run, patch.object(ios, 'validate_app', return_value=identity), \
                 patch.object(ios, 'device_json', side_effect=AssertionError('No devices')), patch('subprocess.run', side_effect=ditto):
@@ -302,7 +302,7 @@ class ManagerDeviceTests(unittest.TestCase):
         self.assertNotIn('upload', archive.argv); self.assertNotIn('upload', export.argv)
 
     def test_shared_archive_integrity_is_checked_before_either_export(self):
-        from Scripts import manager_packages as packages
+        from logistics_build import manager_packages as packages
         from mobile_build.deployment import testflight_tools as tools
         release = self.root / 'release.json'; release.write_text('{"identity":{}}')
         state = self.root / 'state.json'; state.write_text(json.dumps(dict(workspace=str(self.root),

@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from Scripts.ios_backend import bundle_digest
+from logistics_build.ios_backend import bundle_digest
 
 
 class BundleIdentityTests(unittest.TestCase):
@@ -28,7 +28,7 @@ class BundleIdentityTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root=Path(directory);pid=root/'child.pid'
             child='import os,signal,time;from pathlib import Path;signal.signal(signal.SIGTERM,signal.SIG_IGN);Path('+repr(str(pid))+').write_text(str(os.getpid()));time.sleep(90)'
-            code='import signal,sys;from Scripts.ios_backend import command,interrupt;signal.signal(signal.SIGTERM,interrupt);command([sys.executable,"-c",'+repr(child)+'],'+repr(str(root))+',30)'
+            code='import signal,sys;from logistics_build.ios_backend import command,interrupt;signal.signal(signal.SIGTERM,interrupt);command([sys.executable,"-c",'+repr(child)+'],'+repr(str(root))+',30)'
             parent=subprocess.Popen([sys.executable,'-c',code],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             child_pid=None
             try:
@@ -50,13 +50,13 @@ class RuntimeWheelCacheTests(unittest.TestCase):
     def test_runtime_install_uses_only_verified_prepared_wheels(self):
         import hashlib
         from unittest.mock import patch
-        from Scripts.mobile_runtime import runtime_wheels
+        from logistics_build.mobile_runtime import runtime_wheels
         with TemporaryDirectory() as directory:
             root=Path(directory)
             folder=root/'manager-wheels';folder.mkdir()
             wheel=folder/'fixture.whl';wheel.write_bytes(b'public synthetic wheel')
             pins={'runtime_wheels':[dict(filename=wheel.name,sha256=hashlib.sha256(wheel.read_bytes()).hexdigest())]}
-            with patch('Scripts.mobile_runtime.json.loads',return_value=pins), patch('build_manager.cpython_mobile.provision',side_effect=AssertionError('test must not use network')):
+            with patch('logistics_build.mobile_runtime.json.loads',return_value=pins), patch('build_manager.cpython_mobile.provision',side_effect=AssertionError('test must not use network')):
                 self.assertEqual(runtime_wheels(root),folder)
                 wheel.write_bytes(b'changed cache')
                 with self.assertRaisesRegex(ValueError,'Prepare'):

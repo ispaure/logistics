@@ -7,7 +7,7 @@ import platform
 
 from commonUtils.ui import pyside as qt
 from commonUtils.runtime.resources.local import LocalFiles
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 from services.documents.storage import DocumentResource
 from features.notebooks.notebook import Notebook, MAX_ARCHIVE
 from features.notebooks.storage import NotebookDocument

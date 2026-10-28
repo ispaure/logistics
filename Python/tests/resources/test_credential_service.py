@@ -75,6 +75,7 @@ class CredentialServiceTests(unittest.TestCase):
         self.assertEqual(self.service.forget(config), [config])
         self.assertFalse(config.exists())
         self.assertIsNone(session.credentials(config))
+        self.assertIsNone(session.package_path(config))
         self.assertEqual(package.read_bytes(), b'original encrypted ZIP')
         self.assertEqual(values, {})
         with self.assertRaises(ValueError):
@@ -98,6 +99,17 @@ class CredentialServiceTests(unittest.TestCase):
         with patch.object(configuration, 'get_rclone_config_dir', return_value=self.root):
             self.assertEqual(self.service.forget(), [config])
         self.assertEqual(session.names(self.key), ['Files'])
+
+    def test_lock_retains_zip_shortcut_but_explicit_forget_erases_it(self):
+        from features.rclone import desktop_catalog
+        package = self.root / 'Account.zip'
+        session.remember(self.key, {'Files': {'type': 'local'}}, package_path=package)
+        desktop_catalog.remember(self.key, package, ['Files'])
+        self.service.lock(self.key)
+        self.assertEqual(session.package_path(self.key), package)
+        self.service.forget(self.key)
+        self.assertIsNone(session.package_path(self.key))
+        self.assertIsNone(desktop_catalog.read(self.key))
 
     def test_forget_rejects_original_zip(self):
         package = self.root / 'Account.zip'

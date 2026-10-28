@@ -118,7 +118,21 @@ async def exercise_destination_edges(app):
     await picker.create_picker_folder()
     assert picker.picker_folder.value == 'Nested résumé'
     geometry = []
-    for orientation in ('portrait', 'landscape-left', 'portrait'):
+    orientations = ('portrait', 'landscape-left', 'portrait')
+    ios = type(app._impl).__module__.startswith('toga_iOS.')
+    if ios:
+        from rubicon.objc import CGRectMake, ObjCClass
+        # The intermittent failure had 32pt more keyboard chrome. Exercise
+        # that native viewport explicitly rather than depending on prediction
+        # bar state on a newly-created simulator.
+        native_name = picker.save_as_name._impl.native
+        original_accessory = native_name.inputAccessoryView
+        accessory = ObjCClass('UIView').alloc().initWithFrame(CGRectMake(0, 0, 100, 32))
+        orientations *= 3
+    for pose, orientation in enumerate(orientations):
+        if ios and pose % 3 == 0:
+            native_name.inputAccessoryView = accessory if pose // 3 != 1 else original_accessory
+            native_name.reloadInputViews()
         await rotate(app, orientation)
         picker.save_as_name.focus()
         if type(app._impl).__module__.startswith('toga_iOS.'):
@@ -165,6 +179,11 @@ async def exercise_destination_edges(app):
             if adapter.keyboard_visible and adapter.keyboard_frame is not None:
                 keyboard = window.convertRect(adapter.keyboard_frame, fromCoordinateSpace=window.screen.coordinateSpace)
                 sample['keyboard_top'] = float(keyboard.origin.y)
+                scroll = picker.picker_form._impl.native
+                sample['form_height'] = float(scroll.bounds.size.height)
+                sample['form_offset'] = float(scroll.contentOffset.y)
+                sample['first_responder'] = bool(native.isFirstResponder)
+                sample['accessory_height'] = 32 if pose // 3 != 1 else 0
                 assert rect.origin.y + rect.size.height <= keyboard.origin.y + 1, sample
         else:
             from java import jarray, jint, jclass
@@ -195,7 +214,10 @@ async def exercise_destination_edges(app):
                 assert int(action.getHeight()) >= 44 * density, sample
         assert sample['keyboard_visible'], sample
         geometry.append(sample)
-        await capture_window(app, Path(app.paths.cache) / ('destination-' + orientation + '.png'))
+        await capture_window(app, Path(app.paths.cache) / ('destination-' + str(pose) + '-' + orientation + '.png'))
+    if ios:
+        native_name.inputAccessoryView = original_accessory
+        native_name.reloadInputViews()
     before = (app.navigation_generation, picker._epoch, app.cloud_busy)
     await picker.confirm_editor_file()
     owner = app.private_sessions.active

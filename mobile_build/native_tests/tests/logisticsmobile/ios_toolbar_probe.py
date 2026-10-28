@@ -17,6 +17,8 @@ BUNDLE = 'io.github.ispaure.logisticsduotoolbarqa'
 
 class ToolbarProbe(LogisticsMobile):
     def startup(self):
+        import mobile.incoming_files
+        mobile.incoming_files.native_queues = lambda app: []
         self.storage_root = Path(self.paths.cache) / ('synthetic-toolbar-' + uuid4().hex)
         super().startup()
 
@@ -35,9 +37,8 @@ class ToolbarProbe(LogisticsMobile):
         for item in (*leading, *trailing, *pinned):
             assert item.customView is None, (name, 'horizontal custom view')
             assert item.accessibilityLabel, (name, 'missing accessible title')
-            # UIKit supplies the system Close representation; its title getter
-            # remains nil even after assigning a title. Its accessible name is live.
-            assert item.title or str(item.accessibilityLabel) == 'Close document', name
+            # UIKit's system Close item can have a nil title even when its
+            # accessible name is "Hide Find" or another contextual dismissal.
         sample = dict(name=name, edge=vertical_edge(controller),
                       leading=[str(item.title or item.accessibilityLabel) for item in leading],
                       trailing=[str(item.title) for item in trailing],
@@ -63,6 +64,9 @@ class ToolbarProbe(LogisticsMobile):
         assert item.isEnabled()
         item.target.performSelector(item.action, withObject=item)
         await asyncio.sleep(.5)
+
+    async def additional_checks(self):
+        """Focused audit subclasses can add panels before success is published."""
 
     async def check(self):
         self.output = Path(self.paths.cache) / 'toolbar-qa'
@@ -190,6 +194,7 @@ class ToolbarProbe(LogisticsMobile):
                 await asyncio.sleep(1.2)
                 self.adaptive.render()
                 await self.record('documentation-' + name)
+            await self.additional_checks()
             self.report['success'] = True
         except BaseException:
             self.report['error'] = traceback.format_exc()

@@ -1,7 +1,7 @@
 """Shared scrubbing semantics for comic pages, PDF pages and EPUB chapters."""
 import asyncio
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import toga
 from mobile.reader_controls import PageFooter, page_buttons
@@ -46,6 +46,41 @@ class ReaderProgressTests(unittest.TestCase):
         footer.slider.value = 0
         asyncio.run(footer.release(footer.slider))
         move.assert_awaited_once_with(81)
+
+    def test_manga_fill_direction_survives_theme_refresh_and_mode_changes(self):
+        from mobile.reader_progress import style_slider
+        footer, _ = self.footer()
+        with patch('mobile.reader_progress.native_style_slider') as paint:
+            for rtl in (True, False, True):
+                footer.sync(comic=True, count=5, index=1, right_to_left=rtl)
+                style_slider(footer.slider)
+                self.assertEqual(footer.slider.value, 3 if rtl else 1)
+                self.assertEqual(paint.call_args.kwargs['reverse_fill'], rtl)
+                self.assertTrue(paint.call_args.kwargs['force_ltr'])
+
+    def test_both_axes_share_disabled_failed_and_successful_release_semantics(self):
+        for vertical in (False, True):
+            with self.subTest(vertical=vertical):
+                footer, move = self.footer(vertical=vertical)
+                footer.sync(comic=False, count=1, index=0)
+                asyncio.run(footer.release(footer.slider))
+                move.assert_not_called()
+                if vertical:
+                    footer.slider.drag_track(footer.slider, 22, 80)
+                    asyncio.run(footer.slider.release_track(footer.slider, 22, 80))
+                    self.assertEqual(footer.slider.value, 0)
+                    move.assert_not_called()
+                footer.sync(comic=False, count=8, index=2)
+                footer.slider.value = 4.6
+                move.side_effect = OSError('Unavailable')
+                with self.assertRaises(OSError):
+                    asyncio.run(footer.release(footer.slider))
+                self.assertEqual(footer.slider.value, 2)
+                move.side_effect = None
+                footer.slider.value = 4.6
+                asyncio.run(footer.release(footer.slider))
+                move.assert_awaited_with(5)
+                self.assertEqual(footer.slider.value, 2)
 
     def test_chapter_badge_keeps_detailed_accessibility_label(self):
         footer, _ = self.footer(unit='chapter')

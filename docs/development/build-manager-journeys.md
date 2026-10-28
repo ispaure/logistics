@@ -1,9 +1,11 @@
 # Combined validation and delivery
 
 Logistics now declares the manager's journey schema 1 in `build-project.json`.
-The standalone manager and the plan panel in the existing deployment window use
-`Scripts.manager_journeys` through `LogisticsProject.make_journey`. The isolated
-`Scripts.manager_bridge.py` exposes the same `journey_plan` action.
+The standalone manager uses `logistics_build.manager_journeys` through
+`LogisticsProject.make_journey`. The isolated script
+`logistics_build/manager_bridge.py` exposes the same `journey_plan` action.
+The old dedicated deployment window is retired; project device/signing/provider
+helpers remain adapter implementation details.
 
 For the operator workflow, see [validating and delivering Logistics](../user/build-manager-journeys.md).
 
@@ -87,7 +89,7 @@ contracts from the exact installed, project-pinned manager checkout. `shared:`
 and ordinary Logistics patterns keep their existing routing. A diagnostic pass
 does not replace the complete platform release gate.
 
-For a retained-run source review, `python -m Scripts.continuation_inputs --root .
+For a retained-run source review, `python -m logistics_build.continuation_inputs --root .
 --previous <exact-commit> --current <exact-commit>` compares committed Git object
 inventories, including file modes and submodule pins. It reports application
 input equality separately from the manager pin and the explicitly enumerated
@@ -114,7 +116,7 @@ engine review and current desktop coverage before release continuation. It never
 changes original outcomes or triggers installations, builds or uploads.
 
 If Windows setup fails before tests start and leaves an incomplete attempt,
-`python -m Scripts.guest_attempts reconcile-windows-setup --directory <result-root>
+`python -m logistics_build.guest_attempts reconcile-windows-setup --directory <result-root>
 --manager-checkout <exact-pinned-manager>` can reconcile it without signing in.
 The command verifies the manager pin and recorded VM ownership, then performs a
 fixed read-only query of that attempt's exact guest namespace. Only a confirmed
@@ -125,7 +127,7 @@ are preserved. This command neither runs tests as SYSTEM nor deletes guest files
 
 
 Completed manager-only guest diagnostics can be reviewed with
-`python -m Scripts.guest_results --directory <completed-attempt> --source-plan
+`python -m logistics_build.guest_results --directory <completed-attempt> --source-plan
 <original-plan> --backend <declared-backend> --manager-commit <exact-pin>`.
 The verifier requires the complete `test*.py` manager discovery command, every
 required step passed, a clean exact manager/shared checkout, matching captured

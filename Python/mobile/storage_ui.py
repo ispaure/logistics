@@ -72,6 +72,8 @@ class StorageUI:
         from .settings.forms import SettingsLabel, fit_section
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         self.collection_storage_page = box
+        from .layout_participants import participants, reflow_settings_section
+        participants(self.app).register('collection_storage_page', box, reflow_settings_section)
         box.add(SettingsLabel('Collection storage', style=Pack(font_size=22)))
         try:
             base = collection_base(self.private_root)
@@ -221,6 +223,8 @@ class StorageUI:
                                       on_press=self.show_collection_storage, style=Pack(height=48, margin_top=24))
             progress_box.add(self.collection_storage_status, progress_bar, details, current_file, done_button)
             self.collection_storage_page = progress_box
+            from .layout_participants import participants, reflow_settings_section
+            participants(self.app).register('collection_storage_page', progress_box, reflow_settings_section)
             fit_section(progress_box, width)
             self.collection_storage_progress_view = toga.ScrollContainer(horizontal=False, content=progress_box, style=Pack(flex=1))
             self.show_view(self.collection_storage_progress_view,

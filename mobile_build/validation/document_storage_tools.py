@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import time
 
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 from mobile_build.tools import stage
 from mobile_build.deployment import manager_settings
 from mobile_build.cloud_build import ios, android
@@ -20,9 +20,10 @@ REPO = Path(__file__).resolve().parents[2]
 SOURCE = REPO
 BUNDLE = 'io.github.ispaure.logisticsstorageqa'
 QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
-              'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa'}
+              'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
+              'io.github.ispaure.logisticsreaderspaceqa'}
 NATIVE_DIAGNOSTICS = ('logistics-native-ui-timings.json', 'logistics-native-ui-error.txt',
-                      'logistics-native-ui-fault.log')
+                      'logistics-native-ui-fault.log', 'reader-space.png')
 
 
 def command(args, output, *, cwd=None, env=None, timeout=1200):
@@ -350,7 +351,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('storage', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('storage', 'reader-space', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'native-suite', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPad'), default='iPhone')
     parser.add_argument('--increase-contrast', action='store_true')
@@ -382,6 +383,9 @@ def main():
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
+        if args.probe == 'reader-space':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsreaderspaceqa',
+                entry_point='tests.logisticsmobile.reader_space_probe', result_name='reader-space-result.json')
         if args.probe == 'features':
             creation_profile = dict(bundle='io.github.ispaure.logisticsfeaturesqa',
                 entry_point='tests.logisticsmobile.features_probe', result_name='features-result.json')

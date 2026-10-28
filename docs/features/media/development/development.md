@@ -9,12 +9,13 @@ Provides media-specific file operations for Logistics.
 
 ## Responsibilities
 
-- Handle audio/video media workflows that do not belong to a more specific feature.
+- Own CSV-based audio chapter renaming.
 - Provide reusable validation and execution logic for media maintenance tools.
 
 ## Structure
 
 - `mka.py` contains Matroska Audio (`.mka`) operations.
+- Playback belongs to the separate [Video Player feature](../../video/development/development.md).
 
 ## MKA Chapter Rename
 
@@ -45,3 +46,5 @@ Only after the complete rename plan passes validation are files renamed. The sha
 `plan_named_renames` / `apply_renames` engine revalidates source stamps and destinations
 before execution, stages the batch, and rolls it back if publication fails. Any
 unresolved recovery paths are reported rather than overwritten.
+
+The [earlier video brief](video-player.md) redirects to the Video Player owner.

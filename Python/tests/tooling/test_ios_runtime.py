@@ -6,8 +6,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from Scripts import ios_runtime, ios_testbed
-from Scripts.ios_backend import bundle_digest
+from logistics_build import ios_runtime, ios_testbed
+from logistics_build.ios_backend import bundle_digest
 
 
 class SceneAdapterTests(unittest.TestCase):

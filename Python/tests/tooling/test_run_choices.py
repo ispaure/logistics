@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 from build_manager import Phase,Plan
 from build_manager.journeys import validate_plan
-from Scripts import manager_journeys,release_naming
+from logistics_build import manager_journeys,release_naming
 import test_manager_journeys as fixtures
 
 
@@ -16,7 +16,7 @@ class RunRequestTests(unittest.TestCase):
     def test_run_notes_and_groups_are_captured_without_changing_defaults(self):
         self.values['testflight.what_to_test']='Saved notes'
         overrides={'testflight.what_to_test':'Try the new editor café','testflight.external_group':'Internal QA'}
-        with patch('Scripts.build_project.manager_settings.settings',side_effect=lambda root,overrides=None:(dict(self.values,**(overrides or {})),{})):
+        with patch('logistics_build.build_project.manager_settings.settings',side_effect=lambda root,overrides=None:(dict(self.values,**(overrides or {})),{})):
             plan=self.make(platforms=['ios'],destinations=['testflight'],run_overrides=overrides)
         self.assertEqual(self.values['testflight.what_to_test'],'Saved notes')
         self.assertEqual(plan.source['run_overrides'],overrides)
@@ -49,7 +49,7 @@ class RunRequestTests(unittest.TestCase):
             self.make(platforms=['ios'],destinations=['testflight'],backends={'ios':'GitHub'})
 
     def test_automatic_tag_uses_project_version_and_never_creates_a_tag(self):
-        with patch('Scripts.release_naming.subprocess.check_output',return_value='v1.2.3-alpha.2\nv1.2.3-alpha.9\n') as read:
+        with patch('logistics_build.release_naming.subprocess.check_output',return_value='v1.2.3-alpha.2\nv1.2.3-alpha.9\n') as read:
             self.assertEqual(release_naming.suggest_tag(self.root,'1.2.3'),'v1.2.3-alpha.10')
         self.assertEqual(read.call_args.args[0][:3],['git','tag','--list'])
 
@@ -57,7 +57,7 @@ class RunRequestTests(unittest.TestCase):
 class SourceReleaseVersionTests(unittest.TestCase):
     def test_source_release_uses_metadata_at_exact_commit_independently_of_mobile_version(self):
         commit = 'a' * 40
-        with patch('Scripts.release_naming.subprocess.check_output', return_value='[project]\nversion="0.1.15"\n') as read:
+        with patch('logistics_build.release_naming.subprocess.check_output', return_value='[project]\nversion="0.1.15"\n') as read:
             self.assertEqual(release_naming.source_version(Path('.'), commit), '0.1.15')
         self.assertEqual(read.call_args.args[0], ['git', 'show', commit + ':Python/pyproject.toml'])
         with self.assertRaisesRegex(ValueError, 'resolved source commit'):

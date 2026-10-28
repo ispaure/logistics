@@ -337,3 +337,8 @@ class ManagedDocumentWorkflows:
         finally:
             origin.export_button.enabled = True
 
+
+
+def reflow_text_views(host, frame):
+    for owner in tuple(host.text_views.values()):
+        owner.apply_split(frame.width)

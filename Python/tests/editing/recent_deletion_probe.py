@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 import traceback
 
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 
 
 def main():

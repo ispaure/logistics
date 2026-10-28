@@ -115,7 +115,9 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
                 git(repo, 'show', '-s', '--format=%cI', 'HEAD').stdout.decode().strip())
             self.assertTrue((payload / 'services/build_version.py').is_file())
             self.assertTrue((payload / 'mobile/settings/navigation.py').is_file())
-            self.assertEqual(manifest['features'], ['text', 'markdown', 'epub', 'comics', 'lm', 'rclone', 'notebooks'])
+            self.assertEqual(manifest['features'], ['text', 'markdown', 'epub', 'comics', 'lm', 'rclone', 'notebooks', 'video'])
+            self.assertTrue((payload / 'features/video/mobile/ios/VideoPlayer.m').is_file())
+            self.assertTrue((payload / 'services/documents/video_progress.py').is_file())
             self.assertTrue((payload / 'features/notebooks/mobile/android/io/github/ispaure/logistics/notebooks/BooxRefresh.java').is_file())
             assets = REPO / 'Python/features/notebooks/assets'
             for asset in assets.iterdir():

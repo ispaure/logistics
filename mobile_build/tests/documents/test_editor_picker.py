@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from commonUtils.runtime.resources.local import LocalFiles
 from mobile.app import LogisticsMobile
@@ -48,6 +48,62 @@ class EditorPickerTests(unittest.TestCase):
         self.assertIsNone(picker.save_as_data)
         self.assertIsNone(picker.save_as_source_document)
 
+    def test_new_text_destination_drops_previous_operation_owners(self):
+        from mobile.editor_picker import PickerOperation
+        picker = self.app.editor_picker()
+        previous = PickerOperation(data=b'private', source_document=object(),
+            privacy_gate=object(), binary_owner=object(), destination_action=object())
+        picker.operation = previous
+        self.app.loop.run_until_complete(picker.show_text_destination('new.txt', b'new'))
+        self.assertIsNot(picker.operation, previous)
+        self.assertEqual(picker.operation.data, b'new')
+        self.assertIsNone(picker.operation.binary_owner)
+        self.assertIsNone(picker.operation.source_document)
+        self.assertIsNone(picker.operation.privacy_gate)
+        self.assertIsNone(picker.operation.destination_action)
+
+    def test_worker_captures_draft_and_rejects_replaced_presentation(self):
+        from dataclasses import replace
+        picker = self.app.editor_picker()
+        picker.save_as_data = b'original'
+        work = picker._begin_work()
+        try:
+            picker.save_as_data = b'later'
+            self.assertEqual(work.presentation.data, b'original')
+            picker.operation = replace(picker.operation)
+            self.assertFalse(picker._accepts(work))
+        finally:
+            picker._finish_work(work)
+
+    def test_retired_notebook_serialization_cannot_replace_new_picker(self):
+        picker = self.app.editor_picker()
+        started, release = Event(), Event()
+        def serialize():
+            started.set()
+            release.wait(5)
+            return b'notebook'
+        panel = SimpleNamespace(session=None, privacy_gate=None,
+            editor=SimpleNamespace(notebook=SimpleNamespace(name='Old', to_bytes=serialize)))
+        async def exercise():
+            for replacement in ('picker', 'navigation'):
+                started.clear()
+                release.clear()
+                task = asyncio.create_task(picker.show_notebook_destination(panel))
+                try:
+                    await self.wait_for_worker(started)
+                    if replacement == 'picker':
+                        await picker.show_editor_open()
+                    else:
+                        self.app.navigation_generation += 1
+                    selected = picker.operation
+                finally:
+                    release.set()
+                await task
+                self.assertIs(picker.operation, selected)
+                self.assertEqual(picker.operation.mode, 'open')
+                self.assertIsNone(picker.operation.binary_owner)
+        self.app.loop.run_until_complete(exercise())
+
     def test_keyboard_naming_layout_retains_focus_tree_draft_and_browsing_state(self):
         picker = self.app.editor_picker()
         panel, form, name = picker.panel, picker.picker_form, picker.save_as_name
@@ -88,7 +144,7 @@ class EditorPickerTests(unittest.TestCase):
         name.value = 'Retained.md'
         original_size = self.app.main_window.size
         self.app.main_window.size = type(original_size)(874, 402)
-        backend = type('IOSApp', (), {'__module__': 'toga_iOS.app'})()
+        backend = type('IOSApp', (), {'__module__': 'toga_iOS.app', 'loop': self.app.loop})()
         adapter = SimpleNamespace(keyboard_inset=236)
         try:
             with patch.object(self.app, '_impl', backend), patch.object(self.app.native_host, 'adapter', adapter):
@@ -103,6 +159,56 @@ class EditorPickerTests(unittest.TestCase):
                 self.assertEqual(name.value, 'Retained.md')
         finally:
             self.app.main_window.size = original_size
+
+    def test_apple_keyboard_reveal_coalesces_and_cancels_with_picker(self):
+        picker = self.app.editor_picker()
+        backend = type('IOSApp', (), {'__module__': 'toga_iOS.app', 'loop': self.app.loop})()
+        adapter = SimpleNamespace(keyboard_inset=236)
+        with patch.object(self.app, '_impl', backend), patch.object(self.app.native_host, 'adapter', adapter), \
+                patch('mobile.keyboard.reveal_picker_input') as reveal:
+            picker.fit_keyboard(True)
+            first = picker._keyboard_reveal
+            picker.fit_keyboard(True)
+            self.assertTrue(first.cancelled())
+            self.app.loop.run_until_complete(asyncio.sleep(0))
+            reveal.assert_called_once_with(picker)
+            reveal.reset_mock()
+            picker.fit_keyboard(True)
+            picker.fit_keyboard(False)
+            self.app.loop.run_until_complete(asyncio.sleep(0))
+            reveal.assert_not_called()
+            picker.fit_keyboard(True)
+            picker.clear()
+            self.app.loop.run_until_complete(asyncio.sleep(0))
+            reveal.assert_not_called()
+
+    def test_apple_keyboard_reveal_uses_current_first_responder_after_layout(self):
+        from mobile.keyboard import reveal_picker_input
+        events = []
+        scroll = Mock()
+        name, folder = Mock(), Mock()
+        name.isFirstResponder = False
+        folder.isFirstResponder = True
+        folder.isDescendantOfView.return_value = True
+        folder.convertRect.side_effect = lambda *a, **k: events.append('convert') or 'current rect'
+        window = Mock()
+        window.layoutIfNeeded.side_effect = lambda: events.append('layout')
+        view = Mock()
+        view.refresh.side_effect = lambda: events.append('content')
+        scroll.scrollRectToVisible.side_effect = lambda *a, **k: events.append('reveal')
+        picker = SimpleNamespace(picker_form=SimpleNamespace(_impl=SimpleNamespace(native=scroll)),
+            save_as_name=SimpleNamespace(_impl=SimpleNamespace(native=name)),
+            new_folder_name=SimpleNamespace(_impl=SimpleNamespace(native=folder)),
+            save_as_view=view, app=SimpleNamespace(main_window=SimpleNamespace(_impl=SimpleNamespace(native=window))))
+        reveal_picker_input(picker)
+        self.assertEqual(events, ['layout', 'content', 'convert', 'reveal'])
+        folder.convertRect.assert_called_once_with(folder.bounds, toView=scroll)
+        scroll.scrollRectToVisible.assert_called_once_with('current rect', animated=False)
+        name.convertRect.assert_not_called()
+        events.clear()
+        folder.isDescendantOfView.return_value = False
+        reveal_picker_input(picker)
+        self.assertEqual(events, [])
 
     def test_late_listing_and_error_do_not_publish_after_invalidation(self):
         app, picker = self.app, self.app.editor_picker()

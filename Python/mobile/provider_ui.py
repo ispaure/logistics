@@ -342,8 +342,7 @@ class ProviderUI(FilesUI):
                                      retired=(old_epub,) if old_epub is not None else ()):
                 return
         if kind == 'pdf-spread':
-            view.crypt_reader.pdf_navigation.indices = pdf_indices
-            view.crypt_reader.pdf_navigation.viewport = pdf_viewport
+            view.crypt_reader.pdf_navigation.commit(pdf_indices, pdf_viewport)
         if kind == 'spread':
             view.provider_spread = prepared_spread
             view.crypt_reader.comic_navigation.commit(indices)

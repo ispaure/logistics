@@ -281,6 +281,10 @@ class CryptBrowserView(qt.QMainWindow):
             return
         path = Path(path)
         suffix = path.suffix.lower()
+        if suffix in {'.mp4', '.mkv'}:
+            from features.video.ui.player import open_video_choice
+            from commonUtils.runtime.resources.selection import ResourceChoice
+            return open_video_choice(ResourceChoice(self.provider, self.provider.relative(path), self.provider.acquire()), self)
         from features.images.document import IMAGE_EXTENSIONS
         if suffix in IMAGE_EXTENSIONS:
             from features.images.ui.viewer import open_image_choice

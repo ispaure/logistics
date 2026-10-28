@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from build_manager.guest_tools import LINUX_BOOTSTRAP, WINDOWS_PREPARE, linux_parameters
-from Scripts import vm_backend, windows_backend
+from logistics_build import vm_backend, windows_backend
 
 
 class GuestToolPreparationTests(unittest.TestCase):

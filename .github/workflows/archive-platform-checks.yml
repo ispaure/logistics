@@ -10,6 +10,7 @@ on:
       - 'LaunchLogistics_*'
       - 'launch_config.ini'
       - 'Scripts/**'
+      - 'logistics_build/**'
   push:
     branches: [main, alpha]
   workflow_dispatch:
@@ -55,10 +56,10 @@ jobs:
         with:
           python-version: '3.12.2'
       - name: Install explicitly pinned external manager
-        run: python Scripts/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
+        run: python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
       - run: python -m pip install ruff==0.14.0
       - run: python -m pip install --require-hashes -r mobile_build/requirements-host.txt
-      - run: ruff check --config Python/pyproject.toml dev.py Python mobile_build Scripts .github/scripts
+      - run: ruff check --config Python/pyproject.toml dev.py Python mobile_build Scripts logistics_build .github/scripts
       - name: Check developer lint scope and shared matrix selection
         env:
           PYTHONPATH: .:Python
@@ -110,14 +111,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Fetch optional signed local test evidence
-        run: python Scripts/release_test_evidence.py fetch
+        run: python logistics_build/release_test_evidence.py fetch
       - name: Fetch the historical public submodule for parity tests
         run: git -C Python/commonUtils fetch --no-tags origin d5c42ffd4306c010d9625b8a9bae57cdf097a567
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12.2'
       - name: Install explicitly pinned external manager
-        run: python Scripts/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
+        run: python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
       - name: Test packaged Windows launcher and release tooling
         if: runner.os == 'Windows'
         run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
@@ -163,7 +164,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Fetch optional signed local test evidence
-        run: python Scripts/release_test_evidence.py fetch
+        run: python logistics_build/release_test_evidence.py fetch
       - name: Fetch the historical public submodule for parity tests
         run: git -C Python/commonUtils fetch --no-tags origin d5c42ffd4306c010d9625b8a9bae57cdf097a567
       - name: Run all checks inside Fedora 43

@@ -220,12 +220,21 @@ class ChatStore:
     @staticmethod
     def validate_profile(data):
         if (not isinstance(data, dict) or data.get('schema') != 1
-                or set(data) != {'schema', 'base_url', 'model', 'settings'}
+                or set(data) - {'schema', 'base_url', 'model', 'settings', 'provider'}
+                or not {'schema', 'base_url', 'model', 'settings'} <= set(data)
+                or not isinstance(data.get('provider', 'server'), str)
+                or data.get('provider', 'server') not in {'server', 'apple', 'nano'}
                 or not isinstance(data['base_url'], str) or not isinstance(data['model'], str)
                 or len(data['model']) > 200 or any(ord(c) < 32 for c in data['model'])):
             raise ValueError('Invalid mobile chat profile; original was preserved.')
         url = mobile_api_url(data['base_url']) if data['base_url'] else ''
-        return dict(schema=1, base_url=url, model=data['model'], settings=validate_settings(data['settings']))
+        result = dict(schema=1, base_url=url, model=data['model'], settings=validate_settings(data['settings']))
+        if data.get('provider', 'server') != 'server':
+            from features.lm.mobile.on_device import MODELS
+            if data['model'] and data['model'] != MODELS[data['provider']]:
+                raise ValueError('Invalid on-device model selection.')
+            result['provider'] = data['provider']
+        return result
 
     def save_profile(self, data, original):
         data = self.validate_profile(data)

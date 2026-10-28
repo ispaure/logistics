@@ -6,7 +6,7 @@ import traceback
 from unittest.mock import patch
 
 from commonUtils.ui import pyside as qt
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 from features.notebooks.notebook import Notebook
 from features.notebooks.ui.workspace import NotebookWindow
 from features.pdf.ui.reader import open_pdf

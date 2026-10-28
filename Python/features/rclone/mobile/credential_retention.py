@@ -59,14 +59,26 @@ def forget(client, request):
         from .document_lists import forget_cache
         keys = [record['document_cache_id'] for record in getattr(client, 'package_records', ())
                 if record['package_name'] == request.package_name and record.get('document_cache_id')]
-        client.forget_package(request.package_name)
+        failure = None
+        try:
+            client.forget_package(request.package_name)
+        except Exception as error:
+            failure = error
+            # Forget must revoke live access even when a damaged/inaccessible
+            # saved vault prevents package erasure. The native lock scope is all
+            # packages; preserve the original failure so saved leftovers remain
+            # visible to the caller and can be retried without losing user data.
+            try:
+                client.lock()
+            except Exception:
+                failure = OSError('Credential removal failed and session locking could not be confirmed. '
+                                  'Restart Logistics before retrying Forget; saved material may remain.')
         def forget_package():
             store = request.packages()
             if store is not None:
                 if store.client is not client:
                     raise ValueError('This package store belongs to another credential client.')
                 store.forget_package(request.package_name)
-        failure = None
         operations = [forget_package, *(lambda key=key: forget_cache(request.document_cache_root, key) for key in keys)]
         for operation in operations:
             try:

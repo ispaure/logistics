@@ -52,10 +52,11 @@ height changes otherwise leave the mounted panes attached, preserving UIKit's
 search first responder. `test_workspace_navigation.py` checks pane attachment
 through keyboard-sized height changes and stacked-pane height reallocation.
 
-On iOS, the Home root hides its native navigation bar because the page supplies
-the **Your workspace** heading. Home child routes restore the bar for Back;
-returning to the root hides it again. The native safe area still reserves the
-status bar.
+On iOS, Home uses the native **Home** title bar, matching Documents and Settings.
+These roots omit duplicate content headings. Home child routes retain the bar for Back.
+Android's compact shell hides its native activity bar, so these pages retain one
+content heading, using **Home** instead of **Your workspace**. The Home unlock
+button shares the introductory row rather than reserving a separate title row.
 
 Destination artwork is projected again after the tab controller attaches to its
 window and whenever UIKit changes its vertical-bar edge. This deferred,
@@ -256,6 +257,11 @@ interactive folder transitions belong to the detail pane. Returning to compact
 width restores the original tab controller and overview widgets without changing
 folder routes. Reserved fold divisions override the ordinary pane allocation;
 resize animation respects Reduce Motion and keeps the same widget owners.
+The navigation controller reaches the outside bar edge; its leaf content applies
+safe insets. Document and reader-tool routes expand that controller to the full
+wrapper bounds, so a wide Workspaces wrapper cannot make its document bar an
+interior horizontal bar. See the [Duo panel audit](iphone-duo-ui-brief.md#october-28-implementation-results)
+for current validation and remaining acceptance.
 Android search adds its input beneath the existing folder title/status header.
 Its header chevron dispatches the same transient-state and folder-history policy
 as system Back. Focused coverage lives in `test_ios_workspace_columns.py`,
@@ -267,7 +273,7 @@ establish physical fold-pose behavior or live provider operation.
 ## Home and Documents hub sections
 
 `hub_ui.HubSections` retains the existing controls and moves Recent between the
-compact page and a second scroll container. Home keeps its heading and Open/New
+compact page and a second scroll container. Home keeps its introduction and Open/New
 actions together, with five recent entries and a Documents link in the trailing
 section. Documents keeps search and All open together; the trailing section holds
 closed Recent entries, other saved text documents and library access. Open entries
@@ -542,6 +548,15 @@ thumbnails are disabled. Thumbnail loading retains its revision-aware RAM bounds
 a window-local recognizer delegate ends editing outside editable text controls;
 Android browser views dismiss a focused search field on outside touch-down.
 Text-field touches keep normal cursor and selection behavior.
+The Save As picker keeps its filename and folder fields in the same scroll form
+when the keyboard or orientation changes. After UIKit and Toga resize that form,
+`keyboard.reveal_picker_input` refreshes its content geometry and reveals the
+current first responder without animation or a focus change. The queued reveal
+is coalesced and cancelled when the picker closes or leaves compact keyboard
+layout. Native destination checks repeat portrait/landscape transitions with
+both the standard keyboard and a test-only 32-point native accessory row. This
+reproduces the taller keyboard viewport that exposed the overlap. They keep the
+field-above-keyboard assertion and do not retry a failed overlap check.
 
 `workspace_navigation.py` owns feature-level layout inside the existing
 commonUtils native tab and navigation stacks. The host retains native Back,
@@ -1422,12 +1437,19 @@ completion action cannot be mistaken for Download. Reader titles use UIKit's nor
 allocation instead of reserving horizontal space for actions that may be vertical.
 Transfer status keeps its meaningful text and its own group and higher priority.
 
+Reader Close and Browse have one writer: the reader projection. Workspace
+headers detach their old content controls without assigning a standalone native
+menu over that leading group. This preserves Close through subsequent renders,
+including readers opened from Documents or Workspaces. Native trailing groups
+and overflow providers also remain mounted through unchanged layout callbacks;
+reuse verifies the actual navigation-item groups as well as action state.
+
 Duo-specific overflow selection reads the owning controller's
 `traitCollection.verticalBarEdge`, guarded for older systems. A preferred vertical
 edge moves the existing More menu's live children into `additionalOverflowItems`.
 The uncached provider retains the original menu dispatch, privacy and busy guards.
 Horizontal contexts retain the native More button. Native viewport wakeups refresh
-folder and reader bars after allocation/inset changes. No model-name, screen-size
+folder and reader bars after allocation/inset or preferred-edge changes. No model-name, screen-size
 or hinge-status check decides toolbar placement. UIKit chooses the physical edge,
 container eligibility, item axis and overflow geometry.
 

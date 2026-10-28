@@ -21,6 +21,7 @@ PBX = PROJECT / 'Logistics Mobile.xcodeproj/project.pbxproj'
 INFO = PROJECT / 'LogisticsMobile/LogisticsMobile-Info.plist'
 CONFIG = ROOT / '.device.json'
 BUNDLE = 'io.github.ispaure.logisticsmobile'
+EXTENSION_SUFFIXES = ('.inbox', '.widgets', '.widget-actions')
 DERIVED = output_root(ROOT) / 'build/physical-device'
 APP = DERIVED / 'Build/Products/Debug-iphoneos/Logistics Mobile.app'
 
@@ -75,7 +76,8 @@ def signing_settings(data, team):
                and 'PRODUCT_BUNDLE_IDENTIFIER' in o.get('buildSettings', {})]
     from collections import Counter
     identities = Counter(s['PRODUCT_BUNDLE_IDENTIFIER'] for s in targets)
-    if identities not in (Counter({BUNDLE: 2}), Counter({BUNDLE: 2, BUNDLE + '.inbox': 2})):
+    allowed = {BUNDLE, *(BUNDLE + suffix for suffix in EXTENSION_SUFFIXES)}
+    if identities[BUNDLE] != 2 or not set(identities) <= allowed or any(count != 2 for count in identities.values()):
         raise RuntimeError('Unexpected app identity/configurations; refusing to change them.')
     for settings in targets:
         existing = settings.get('DEVELOPMENT_TEAM')
@@ -111,9 +113,16 @@ def prepare_project(team):
     info.update(configured)
     for obj in data['objects'].values():
         settings = obj.get('buildSettings', {})
-        if settings.get('PRODUCT_BUNDLE_IDENTIFIER') == BUNDLE + '.inbox':
+        if settings.get('PRODUCT_BUNDLE_IDENTIFIER') in {BUNDLE + suffix for suffix in EXTENSION_SUFFIXES}:
             settings.update(CURRENT_PROJECT_VERSION=configured['CFBundleVersion'],
                             MARKETING_VERSION=configured['CFBundleShortVersionString'])
+    for folder in ('IncomingShare', 'LogisticsWidget', 'LogisticsWidgetActions'):
+        extension_info = PROJECT / folder / 'Info.plist'
+        if extension_info.exists():
+            extension_metadata = plistlib.loads(extension_info.read_bytes())
+            extension_metadata.update(CFBundleVersion=configured['CFBundleVersion'],
+                                      CFBundleShortVersionString=configured['CFBundleShortVersionString'])
+            extension_info.write_bytes(plistlib.dumps(extension_metadata))
     PBX.write_bytes(plistlib.dumps(data, sort_keys=False))
     INFO.write_bytes(plistlib.dumps(normal_launcher(info)))
 
@@ -163,6 +172,12 @@ def refresh_sources(env):
     run(command, env=env,
         log=workspace / 'logs/device-update.log')
     run([sys.executable, str(ROOT / 'cloud_build.py'), 'ios'], env=env, log=workspace / 'logs/device-bridge.log')
+
+
+def provisioning_auth_args():
+    """Reuse the project's reviewed API-key reference; never copy credential material."""
+    from .testflight_tools import auth_args
+    return auth_args()
 
 
 def saved_config():
@@ -231,6 +246,8 @@ def main():
     parser.add_argument('--team', help='Existing Apple development team ID (configure only)')
     parser.add_argument('--device', help='Paired iPhone/iPad UDID/name; defaults to the saved device')
     parser.add_argument('--allow-wired', action='store_true', help='Allow a USB-connected deployment')
+    parser.add_argument('--xcode-account', action='store_true',
+                        help='Use the signed-in Xcode account instead of the configured API key for provisioning')
     args = parser.parse_args()
     if args.command != 'configure' and args.team:
         parser.error('The signing team is pinned by configure, not overridden on deployment.')
@@ -275,7 +292,8 @@ def main():
     run(['xcodebuild', '-project', str(PBX.parent), '-scheme', 'Logistics Mobile',
          '-configuration', 'Debug', '-sdk', 'iphoneos', '-destination', f"id={config['device_id']}",
          '-derivedDataPath', str(DERIVED), '-allowProvisioningUpdates',
-         '-allowProvisioningDeviceRegistration', 'build'], env=env, log=output_root(ROOT) / 'logs/device-build.log')
+         '-allowProvisioningDeviceRegistration', *([] if args.xcode_account else provisioning_auth_args()), 'build'],
+        env=env, log=output_root(ROOT) / 'logs/device-build.log')
     identity = validate_app(APP, config['team_id'], config['device_id'])
     if config.get('signing_identity') and config['signing_identity'] != identity:
         raise RuntimeError('Previously built signing/keychain identity differs; refusing deployment.')
@@ -290,5 +308,5 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (RuntimeError, subprocess.CalledProcessError) as error:
+    except (RuntimeError, ValueError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))

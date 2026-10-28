@@ -2,7 +2,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from Scripts.mobile_payload import stage_payload
+from logistics_build.mobile_payload import stage_payload
 
 
 class MobilePayloadTests(unittest.TestCase):

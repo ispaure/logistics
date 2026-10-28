@@ -26,16 +26,19 @@ FEATURES = (
     MobileFeature('books', 'Books & Comics', 'Read EPUB books and comic archives and browse their libraries.', ('books', 'comics')),
     MobileFeature('pdf', 'PDF Reader', 'Read PDF documents.'),
     MobileFeature('images', 'Image Tools', 'View images and use Burst camera on supported devices.'),
+    MobileFeature('video', 'Video Player', 'Play Local, LocalCrypt and remote/crypt MP4/MKV video.'),
     MobileFeature('lm', 'LM Chat', 'Conversations with your configured language-model server.'),
     MobileFeature('rclone', 'rclone', 'Cloud connections, network shares, encrypted storage and transfers. Local files remain available.'),
 )
 BY_NAME = {name: feature for feature in FEATURES for name in feature.names}
 KIND_FEATURES = {'text': 'text_editor', 'markdown': 'text_editor', 'epub': 'books',
-                 'comic': 'comics', 'pdf': 'pdf', 'notebook': 'notebooks', 'image': 'images'}
+                 'comic': 'comics', 'pdf': 'pdf', 'notebook': 'notebooks', 'image': 'images', 'video': 'video'}
 
 
 def disabled_features(value):
     names = json.loads(value)
+    if isinstance(names, list):
+        names = ['video' if name == 'media' else name for name in names]
     if (not isinstance(names, list) or any(not isinstance(name, str) or name not in BY_NAME for name in names)
             or len(names) != len(set(names))):
         raise ValueError('Invalid mobile feature selection.')
@@ -59,6 +62,8 @@ def group_enabled(preferences, name):
 
 def document_feature(name='', kind=None):
     suffix = PurePosixPath(str(name)).suffix.lower()
+    if suffix in ('.mp4', '.mkv'):
+        return 'video'
     if suffix == '.rmdoc':
         return 'notebooks'
     if suffix == '.epub':

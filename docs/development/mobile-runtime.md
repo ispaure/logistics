@@ -71,7 +71,7 @@ Its high-contrast group outline encloses the populated portion of short lists
 or the viewport for long lists, painted after children so selected fills cannot
 cover it. Folder icons and accessibility descriptions identify folders without
 Android disclosure chevrons; iOS keeps its native disclosure and selection.
-The Android scrollbar reserves its own width outside the rows, with a 4dp gap;
+The Android scrollbar reserves its own width outside the rows, with a 2dp gap;
 the group outline follows the inset row bounds so it stays clear of the thumb.
 Scroll offsets include spacing between rows, with no extra trailing divider height.
 Workspace folder surfaces opt into the existing E Ink outline role, which paints
@@ -526,11 +526,31 @@ commits a page; EPUB release commits a chapter, while its badge retains the
 current chapter percentage. Status/error labels remain available to native
 header diagnostics. `reader_progress.py` supplies the palette, reading direction and refresh registry;
 commonUtils owns native slider painting.
+PDF's vertical rail and the horizontal controls share `PageFooter` range,
+rounding, release-only navigation, disabled-state and failed-seek restoration
+logic. The vertical canvas owns only axis-specific drawing and touch mapping;
+it explicitly retains enabled state because Toga Canvas ignores that property.
+Manga reverses both the horizontal value mapping and the filled track, preserving
+the accent thumb and direction through theme refresh and mode changes.
 The progress-footer native check (local artifact `test-results/mobile-evidence/2026-10-20-reader-progress.json`)
 verifies all three formats on iPhone, iPad and BOOX, including scrubbing.
 Imported and provider comic canvases, PDFs and images use zero
 outer frame margin. UIKit reader titles use the pane width between controls
-without a fixed 320-point cap. The reader-space native check (local artifact `test-results/mobile-evidence/2026-10-20-reader-space.json`)
+without a fixed 320-point cap. File storage icons and captions share the native
+title area beneath the filename on iOS/iPadOS and Android. UIKit uses the same
+centered, horizontally scrollable subtitle as folder headers (12-point icons,
+caption text at 75% of the title size), including when UIKit narrows the title
+beside a vertical bar. Native mounting removes the content row from fullscreen
+restoration so it cannot return as a duplicate.
+Horizontal iOS reader footers share 16 points of their lower touch padding with
+the home-gesture inset, keeping the track above the indicator and recovering
+reading height. Both the container inset and floating-bar fallback use that
+reservation; keyboard/tab-bar insets and vertical PDF controls retain their full
+clearance. Android retains its existing system-navigation clearance.
+The reusable `reader_space_probe.py` checks title/subtitle mounting, a single
+48-point footer, the iOS bottom gap and fullscreen restoration; run it with the
+owning validation helpers' `--reader-space` or `--probe reader-space` options.
+The reader-space native check (local artifact `test-results/mobile-evidence/2026-10-20-reader-space.json`)
 verifies the single-row footer on iPhone, iPad and BOOX, plus full-title fit on iPad.
 `reader_close_icon_probe.py` additionally checks native X artwork/labels, closing
 comics, and cancel/save/discard/conflict behavior for edited documents. The
@@ -1398,3 +1418,23 @@ process-wide installation guards and the existing backend hooks.
   before background model loading; `retire_for_replacement` retires callbacks,
   invalidates sessions and disposes resources once. A veto leaves the document
   and controls usable. Shared worker cancellation alone does not prove retirement.
+
+## Picker and layout composition
+
+`EditorPicker.operation` groups the source draft, document, privacy gate, origin
+and operation-specific owners. A worker captures a detached presentation record
+while retaining the current operation identity for cancellation/stale-result
+checks. Existing app-facing picker fields remain projections through the owned
+state. Opening a new presentation or clearing the picker replaces that record;
+notebook serialization cannot reopen a retired picker. Publication remains in
+`services.documents.destinations`, while the picker keeps dialogs and route handoff.
+
+`mobile.layout_participants` owns weak reflow subscriptions registered by hubs,
+settings/connection pages, documentation, notes libraries and text composition.
+Callbacks receive the owner and current width context. Stable ordering preserves
+settings, hub, reader and text layout after adaptive rendering; replacements and
+disposal cannot remove a newer registration with the same key. Host replacement
+and accepted exit retire the registry. Keyboard/reset guards and the final
+coalesced reader wakeup remain in `resize_workspace`. Preference switch save
+failures share the settings form transaction helper, retaining caller-owned
+side effects/status messages and restoring handlers without firing a retry.

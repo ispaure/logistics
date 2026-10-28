@@ -1,5 +1,10 @@
 # Developing Logistics
 
+If this is your first contribution, follow [the contributor walkthrough](getting-started.md).
+It covers setup, a safe local exploration, choosing a code/test owner and checking
+one change. Use this index afterward to look up the contract for your task.
+
+
 Start with [setup and your first change](testing.md). It covers running the app,
 choosing a code owner, running focused checks and updating the right guide.
 The [worked LM attachment contribution](testing.md#worked-contribution-desktop-lm-attachments)
@@ -25,6 +30,7 @@ python3 dev.py lint
 | Mobile navigation, storage or document lifetime | `Python/mobile/` | [Mobile host owners](mobile-runtime.md) |
 | Settings, registration or a new feature | Owning feature's `__init__.py` and `config.ini` | [Feature conventions](features.md), [extension points](extension-points.md) |
 | A shared Logistics policy | `Python/services/` | [Service owners](services.md) |
+| Project build plans, snapshots, suites and release policy | `logistics_build/` | [Manager/project ownership](build-deployment-audit.md), [adapter contracts](build-manager.md) |
 | Mobile build tooling ownership | `mobile_build/` | [Build tooling map](build-tooling.md) |
 | Mobile builds, deployment or native bridges | `mobile_build/`; application source stays under `Python/` | [Mobile handbook](mobile-handbook.md) |
 | Tests for any of these | `Python/tests/` or `mobile_build/tests/` | [Test selection and commands](testing.md#find-the-tests-for-your-change) |
@@ -49,6 +55,8 @@ Read only the contracts relevant to your change. Feature-specific implementation
 | Documentation locations and compatibility links | [Documentation hierarchy](documentation-hierarchy.md) |
 | Mobile payload manifests and portable imports | [Mobile preparation](mobile-preparation.md) |
 | Mobile file/conversation drawers and paired panes | [Workspace navigation](mobile-workspace-navigation.md) |
+| iPhone Duo button placement and panel acceptance plan | [iPhone Duo UI brief](iphone-duo-ui-brief.md) |
+| Native Home Screen widgets and Shortcuts actions | [Shortcut value widgets](shortcut-widgets.md) |
 | Mobile build/deployment reference | [Mobile launchers](mobile-launchers.md) |
 | Unified plans, profiles and reusable orchestration | [Build manager](build-manager.md) |
 | Combined platform validation and reviewed tester/release delivery | [Combined journey contracts](build-manager-journeys.md) |
@@ -81,10 +89,10 @@ validate a new change.
 
 ## Plans and historical assessments
 
-See the [October 26 build and deployment ownership audit](build-deployment-audit.md)
-for the keep/extract/retire inventory after the external manager extraction.
+See the [current build and deployment ownership map](build-deployment-audit.md)
+for the manager/project boundary and the `logistics_build/` migration.
 
-Start with the [October 25 ecosystem refactoring audit](ecosystem-audit.md) for
+Start with the [ecosystem refactoring assessment](ecosystem-audit.md) for
 current cross-repository priorities and the documentation review. It separates
 remaining ownership seams from the completed work below.
 
@@ -116,8 +124,7 @@ root audience branches. Update the root README for setup or major capabilities.
 Package READMEs and `user_docs/index.md` remain short compatibility links.
 Shared commonUtils APIs and external feature internals stay in their own wikis.
 Follow the [hierarchy rules](documentation-hierarchy.md) and verify consequential
-claims against source/tests. The [older getting-started URL](getting-started.md)
-remains a compatibility entry to this guide.
+claims against source/tests. The [getting-started walkthrough](getting-started.md) provides the shorter first-contribution path.
 
 ## Refactored owner contracts
 

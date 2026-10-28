@@ -1,53 +1,68 @@
 # Validating and delivering Logistics
 
 Use the build manager to review validation, tester delivery and device installation.
-For setup and saved settings, see the [build manager user guide](../development/build-manager.md).
+For setup and saved settings, see the [build manager user guide](build-manager.md).
+A plan captures source, settings and commands. A preset stores choices for making
+a fresh plan; a retained run stores work already attempted and its evidence.
 
 ## Use the guided flow
 
-Restart the manager to load the changed code. In the standalone manager, select
-Logistics and use Project → Review and trust adapter when prompted: changing the
-descriptor intentionally invalidates its previous trust. The code does not grant
-itself trust or change registrations.
+Open the standalone manager and add or select a trusted Logistics checkout.
+Adding it authorizes its adapter. If its interpreter is missing, repair the
+Logistics environment using [contributor setup](../development/getting-started.md)
+and the [manager integration guide](../development/build-manager.md).
 
-1. Choose Validate, then select any supported combination of macOS, Linux,
-   Windows, iOS and Android. This runs complete project suites with no hosted
-   dispatch, release, tester upload or physical-device installation.
-2. For delivery, choose Validate and deliver and select destinations independently:
+Choose the intent before selecting destinations:
+
+| Intent | What to select | Expected outcome |
+| --- | --- | --- |
+| Check a change | Run checks, platforms and execution hosts | Test evidence; no selected release destination |
+| Compile an artifact | Build only and a supported mobile platform/host | Build output without tests, upload or installation |
+| Release to testers or devices | Prepare and deliver, then explicit destinations/recipients | Required checks/builds followed by the plan's reviewed effects |
+
+A GitHub execution host launches hosted work even when no release destination is
+selected. Choose local hosts for a local-only check.
+
+1. Choose **Run checks**, then select supported macOS, Linux, Windows, iOS
+   and Android combinations and their execution hosts. Local hosts run local
+   suites; a selected GitHub host declares a hosted dispatch in Review plan.
+2. For delivery, choose **Prepare and deliver** and select destinations independently:
    GitHub source release, Firebase Android testers and/or TestFlight iOS testers.
    Firebase requires Android; TestFlight requires iOS. The GitHub source release
    requires all three desktop platforms before the existing full hosted gates.
-3. Choose the source under Advanced options. Working-tree validation follows
-   existing snapshot policy, including refusing uncommitted commonUtils edits.
-   Local builds and Firebase/TestFlight delivery accept captured current files.
+3. Choose the source in **Source**. **Current files** follows
+   snapshot policy: local validation, Debug builds, Firebase/TestFlight and Release
+   device packages capture current Logistics and commonUtils files without
+   committing or pushing either repository. Full mobile release checks bind
+   tester and Release device packages to the exact source fingerprint.
    GitHub-hosted execution requires committed source; GitHub publication requires
    the current clean checkout at that exact commit and an explicit unused channel
    tag such as `v1.2.3-alpha.1`. Existing edits are never committed or discarded
    by planning. Use a committed revision for validation when that is your intent.
 4. Check readiness and review plan. Inspect exact source, native hosts, required
    gates, recipient app/group identities, release tag and the dependency board.
-5. Start validation and preparation only when ready. Each destination waits for its own declared platforms:
+5. Start only after reading the authorization scope. A fresh GUI Start authorizes
+   selected Firebase/TestFlight uploads and GitHub actions after their gates pass;
+   it is not a preparation-only button. Each destination waits for its declared platforms:
    Firebase waits for Android, TestFlight for iOS, and GitHub for the three desktop
    platforms. A failed unrelated platform does not block successful delivery branches.
    Native/runtime evidence and owned cleanup remain required; iOS delivery also
    requires the complete iPhone, Duo and iPad inventory. Linux delivery from the
    configured Mac VM backend requires both declared distributions.
-6. When preparation finishes, Review and continue delivery presents retained
-   artifact evidence. Select each ready action to approve. Eligible GitHub,
-   Firebase and TestFlight branches can overlap within the declared resource
-   limits. Declining keeps the prepared run; successful preparation is reused
-   only after checksum verification. Unknown external outcomes require provider
-   reconciliation and are never blindly repeated.
+6. Actions that still require separate approval, including device installs, pause
+   for review of exact artifacts and destinations. CLI and older saved plans retain
+   their declared approval requirements. Ready branches can overlap within declared
+   resource limits. Resume reuses successful preparation only after checksum
+   verification. Unknown external outcomes require reconciliation before retry.
 
 The GitHub branch uses the existing publication policy: it publishes shared and
 application source/channel/tag, waits for hosted release gates, and verifies the
 source ZIP. This is a separate artifact from the locally prepared tester packages;
 those packages are not silently attached to the GitHub release.
 
-Physical-device installs remain in the existing device deployment tab. Its
-commands discover devices and build/install together; they are not misrepresented
-as artifact-only effects in this reviewed tester workflow. Combined planning never
-scans, reconnects, installs on or otherwise touches personal devices.
+Physical-device installs are part of the Development delivery choices described
+below. Planning reads saved recipient metadata and does not install anything;
+execution has separate connection, preparation and per-device installation steps.
 
 ## Tester messages and development devices
 
@@ -58,14 +73,14 @@ default. Entering a nonempty message applies the same text to both selected test
 services. Recipient groups remain service-specific.
 These overrides are captured for review and do not update saved settings.
 
-Development-device delivery is now integrated under Delivery → Dev devices.
+Development-device delivery is under **Delivery → Development**.
 Choose explicit Android devices or iPhone/iPad UDIDs from saved metadata, or enter
 an already connected paired ID. Reload only reads `.tools/test-devices.json` and
 `.device.json`; it performs no discovery, connection or device mutation. No target
 is selected by default. The project captures IDs, labels and connection mappings
 in a hash-bound preparation recipe. Per-device review names the actual recipient.
 
-`Scripts.manager_devices` builds from the same isolated captured source as the
+`logistics_build.manager_devices` builds from the same isolated captured source as the
 validation branch, prepares an APK or zipped development-signed iOS app, then
 requires manager approval of the exact retained report and package before each
 installation. The iOS development profile must already cover all selected UDIDs;
@@ -93,15 +108,42 @@ receipt after confirmed success. Interrupted/uncertain outcomes require explicit
 reconciliation before retry; other successful recipients remain recorded. Owned
 build workspaces and the existing device deployment lock prevent competing writers.
 Runtime credential/signing inputs remain protected references outside source.
-Device and tester-service runs may use captured current files. Release test gates
+Debug, tester-service and Release device runs may use captured current files
+in both repositories. Full release test gates and exact snapshot fingerprints
 still apply; GitHub-hosted execution retains its committed-source requirement. Device preparation and
 local native validation currently require the configured Mac environment.
 
-Portable coverage uses mocked ADB/Xcode commands and harmless process graphs.
-No physical device was queried, installed, launched or otherwise changed, and no
-native signing/build or provider acceptance was performed for this implementation.
+Portable tests use mocked ADB/Xcode commands and harmless process graphs.
+Those fixtures verify planning and recovery contracts; they do not establish
+native signing, provider delivery or physical-device acceptance. A real run needs
+its own recorded outcomes and receipts.
+
+## Mobile release preset without GitHub
+
+**Full Testing, Release & Build (Mobile, excl. GitHub)** is a locally saved preset,
+not a preset guaranteed to exist in every fresh registration. If available, inspect
+its restored choices before preparing: iOS/Android checks, local execution hosts,
+Current files and explicit tester/device destinations. It excludes GitHub source
+publication and hosted gates. Device lists are saved choices, not live connectivity
+checks; adjust recipients for your intended run.
+
+Current files captures uncommitted Logistics and commonUtils bytes with an exact
+source fingerprint. This does not create a Git commit or change Apple/Android
+signing identity. Full required mobile release gates still apply. GitHub source
+publication retains its clean committed-source requirement.
+
+The preset was configured to run tests fresh. Reuse settings are still visible
+choices: inspect them rather than assuming that all presets share this policy.
+A preset contains no execution approval. Fresh GUI Start has the authorization
+scope above; CLI `plan` lets you inspect before running.
 
 ## CLI: local Android validation and Boox deployment
+
+Run the following commands from the **manager checkout**, using its `.venv`.
+Paths such as `test-results/build-manager/boox-plan.json` below are relative to that
+working directory; the registered project still points at Logistics. Replace
+hardware IDs, plan/review identities and output paths with your own values.
+These are real installation commands, not a harmless tutorial.
 
 For repeat runs, save a project preset once in the manager and use:
 
@@ -189,9 +231,10 @@ profiles; they do not register devices or enable provisioning updates. All
 installs still require review of exact bytes and recipients. Signing/version
 conflicts stop the install without clearing data or changing identity.
 
-Firebase, TestFlight, Debug and Release device packages and local validation can
-capture current files. GitHub-hosted execution and GitHub source publication
-require committed source. Latest commit excludes local edits without committing them; GitHub
+Debug device packages, local validation, Firebase, TestFlight and Release device
+packages can capture current files from both repositories. GitHub-hosted execution
+and GitHub source publication require committed source. Latest commit excludes
+local edits in both repositories without committing them; GitHub
 publication additionally requires the current checkout to be clean and to match
 the selected commit. Requirements appear in the overview before preparation.
 

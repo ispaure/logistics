@@ -5,9 +5,32 @@ navigation bar. Eligible controls move to the side on iPhone Duo; extra actions
 join the system overflow menu. Send/Stop stays beside the message field, and the
 conversation sidebar keeps its own settings control.
 
-## LM chat
+## On-device models
 
-Choose **Chat** in the bottom navigation. Open **••• → Server & model settings**, enter your
+Open **Chat → ••• → Model & server settings** and choose a **Chat provider**.
+On iOS, choose **Apple Intelligence (on device)** and tap **Check on-device
+availability**. This uses Apple's Foundation Models framework on iOS 26 or later
+with Apple Intelligence enabled and its model ready. Supported iPhones start with
+iPhone 15 Pro/Pro Max; regular iPhone 15/15 Plus are unsupported. Compatible iPads
+can also use the model. Availability depends on the device, language and region.
+
+On Android, choose **Gemini Nano (on device)** and tap **Prepare Gemini Nano
+(may download)**. Supported devices use Android's AICore through ML Kit. If the
+system reports downloadable model assets, this explicit action downloads them;
+opening Chat or sending a message does not start a model download. Unsupported
+or unready devices show a status message and cannot select the built-in model.
+
+Once the model is ready, tap **Save & return to chat**. Neither provider needs a
+server address or API key. Inference stays on the device with no cloud fallback.
+Apple replies stream; Gemini Nano currently displays the completed reply.
+Both use the same private conversation history and Stop control as server chat.
+On-device context estimates are capped at 4096 tokens for Apple and 3072 for Nano,
+with replies capped at 1024 tokens. Older complete turns are omitted as needed;
+the system model still enforces its actual context, language and usage limits.
+
+## LM server chat
+
+Choose **Chat** in the bottom navigation. Open **••• → Model & server settings**, enter your
 existing server's address (for example `http://192.168.1.10:1234`) and optional
 session API key. A plain address automatically uses `/v1`; an explicit API path
 is preserved. Tap **Connect & load models** to contact the server and fill the

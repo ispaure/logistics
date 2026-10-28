@@ -353,3 +353,113 @@ class ResumeLockTests(unittest.TestCase):
         self.app.private_sessions.controllers.clear()
         self.privacy.refresh()
         self.assertFalse(self.privacy.sensitive())
+
+    def test_trusted_wifi_skips_only_credential_resume_and_preserves_manual_lock(self):
+        self.app.preferences.save(session_trusted_wifi='true', trusted_wifi_networks='["Home", "Cottage"]')
+        with patch('mobile.trusted_wifi.current_ssid', return_value='Home'):
+            self.privacy.conceal()
+            self.assertTrue(self.gate.locked)
+            self.assertIs(self.app.main_window.content, self.privacy.lock_view)
+            self.privacy.reveal()
+            self.assertFalse(self.gate.locked)
+            self.assertIs(self.app.main_window.content, self.original)
+        with patch('mobile.trusted_wifi.current_ssid', return_value='Cottage'):
+            self.privacy.conceal()
+            self.privacy.reveal()
+            self.assertFalse(self.gate.locked)
+        with patch('mobile.trusted_wifi.current_ssid', return_value='Public'):
+            self.privacy.conceal()
+            self.privacy.reveal()
+            self.assertTrue(self.gate.locked)
+        # Returning to a trusted network cannot bypass the outstanding challenge.
+        with patch('mobile.trusted_wifi.current_ssid', return_value='Home'):
+            self.privacy.conceal()
+            self.privacy.reveal()
+            self.assertTrue(self.gate.locked)
+            self.unlock('session-password')
+            self.privacy.conceal()
+            self.privacy.reveal()
+            self.assertFalse(self.gate.locked)
+            self.gate.lock()  # A lock outside the lifecycle must remain locked.
+            self.privacy.conceal()
+            self.privacy.reveal()
+            self.assertTrue(self.gate.locked)
+
+    def test_wifi_is_not_read_when_setting_is_off(self):
+        with patch('mobile.trusted_wifi.current_ssid') as read:
+            self.privacy.conceal()
+            self.privacy.reveal()
+            read.assert_not_called()
+            self.assertTrue(self.gate.locked)
+
+    def test_stale_ios_wifi_result_cannot_reveal_after_another_background_transition(self):
+        import asyncio
+        self.app.preferences.save(session_trusted_wifi='true', trusted_wifi_networks='["Home"]')
+        self.privacy.conceal()
+        revision = self.privacy.wifi_revision
+        ready = self.app.loop.create_future()
+        async def read(app):
+            return await ready
+        with patch('mobile.trusted_wifi.read_ssid', side_effect=read):
+            task = self.app.loop.create_task(self.privacy.resume_on_wifi(revision))
+            self.app.loop.run_until_complete(asyncio.sleep(0))
+            self.privacy.conceal()
+            ready.set_result('Home')
+            self.app.loop.run_until_complete(task)
+        self.assertTrue(self.gate.locked)
+        self.assertTrue(self.privacy.inactive)
+        self.assertIs(self.app.main_window.content, self.privacy.lock_view)
+
+    def test_duplicate_background_notifications_preserve_wifi_resume(self):
+        self.app.preferences.save(session_trusted_wifi='true', trusted_wifi_networks='["Home"]')
+        with patch('mobile.trusted_wifi.current_ssid', return_value='Home'):
+            self.privacy.conceal()  # app notification
+            self.privacy.conceal()  # scene notification for the same backgrounding
+            self.assertTrue(self.gate.locked)
+            self.privacy.reveal()
+            self.assertFalse(self.gate.locked)
+            self.assertIs(self.app.main_window.content, self.original)
+
+    def test_ios_document_stays_hidden_until_wifi_verification_finishes(self):
+        import asyncio
+        self.app.preferences.save(session_trusted_wifi='true', trusted_wifi_networks='["Home"]')
+        original_refresh = self.privacy.refresh
+        def refresh_without_uikit():
+            # Exercise the real lock-root policy on the dummy host while the
+            # iOS resume path waits on its asynchronous native SSID result.
+            self.privacy.backend = 'toga_dummy.app'
+            try:
+                original_refresh()
+            finally:
+                self.privacy.backend = 'toga_iOS.app'
+        for ssid in ('Home', 'Public', None):
+            with self.subTest(ssid=ssid):
+                self.privacy.backend = 'toga_dummy.app'
+                self.gate.locked = False  # Already authenticated before leaving.
+                self.privacy.refresh()
+                self.privacy.conceal()
+                self.privacy.backend = 'toga_iOS.app'
+                ready = self.app.loop.create_future()
+                async def read(app):
+                    return await ready
+                with patch('mobile.trusted_wifi.read_ssid', side_effect=read), \
+                        patch.object(self.privacy, 'refresh', side_effect=refresh_without_uikit), \
+                        patch.object(self.privacy, 'resume_reader') as resume_reader:
+                    self.privacy.reveal()
+                    self.app.loop.run_until_complete(asyncio.sleep(0))
+                    self.assertTrue(self.privacy.inactive)
+                    self.assertTrue(self.gate.locked)
+                    self.assertIs(self.app.main_window.content, self.privacy.lock_view)
+                    resume_reader.assert_not_called()
+                    ready.set_result(ssid)
+                    pending = [task for task in asyncio.all_tasks(self.app.loop)
+                               if task.get_coro().__name__ == 'resume_on_wifi']
+                    self.app.loop.run_until_complete(asyncio.gather(*pending))
+                    self.assertFalse(self.privacy.inactive)
+                    if ssid == 'Home':
+                        self.assertFalse(self.gate.locked)
+                        self.assertIs(self.app.main_window.content, self.original)
+                    else:
+                        self.assertTrue(self.gate.locked)
+                        self.assertIs(self.app.main_window.content, self.privacy.lock_view)
+                self.privacy.backend = 'toga_dummy.app'

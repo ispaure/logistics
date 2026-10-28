@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
-from Scripts.continuation_inputs import assess, inventory, verify_current
+from logistics_build.continuation_inputs import assess, inventory, verify_current
 
 
 class ContinuationInputsTests(unittest.TestCase):
@@ -13,7 +13,7 @@ class ContinuationInputsTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.git('init', '--quiet')
         self.write('Python/app.py', 'APP = 1')
-        self.write('Scripts/guest_manager.py', 'ORCHESTRATION = 1')
+        self.write('logistics_build/guest_manager.py', 'ORCHESTRATION = 1')
         self.write('build-manager-dependency.json', 'pin1')
         self.before = self.commit()
 
@@ -31,7 +31,7 @@ class ContinuationInputsTests(unittest.TestCase):
         return self.git('rev-parse', 'HEAD')
 
     def test_only_explicit_orchestration_changes_match_without_authorizing_reuse(self):
-        self.write('Scripts/guest_manager.py', 'ORCHESTRATION = 2')
+        self.write('logistics_build/guest_manager.py', 'ORCHESTRATION = 2')
         self.write('build-manager-dependency.json', 'pin2')
         self.write('docs/development/example.md', '# Documentation')
         report = assess(self.root, self.before, self.commit())
@@ -69,7 +69,7 @@ class ContinuationInputsTests(unittest.TestCase):
         self.assertFalse(report['authorizes_reuse'])
 
     def test_current_equivalence_is_bound_to_clean_checkout_and_review(self):
-        self.write('Scripts/guest_manager.py', 'ORCHESTRATION = 2')
+        self.write('logistics_build/guest_manager.py', 'ORCHESTRATION = 2')
         current = self.commit()
         report = verify_current(self.root, self.before, current)
         self.assertTrue(report['current_checkout_verified'])
@@ -139,14 +139,14 @@ class NativeApplicabilityTests(unittest.TestCase):
         phases.append(SimpleNamespace(id='ios.validation.ios-build', argv=('python',), environment={}))
         plan = SimpleNamespace(identity='reviewed-plan', source=self.source, phases=phases)
         self.patches = [patch('build_manager.history.load_run', return_value=(plan, dict(phases=self.rows))),
-                        patch('Scripts.continuation_inputs.verify_current', return_value=dict(previous_commit='a'*40)),
+                        patch('logistics_build.continuation_inputs.verify_current', return_value=dict(previous_commit='a'*40)),
                         patch('subprocess.check_output', return_value='changed toolchain')]
         for item in self.patches:
             item.start()
             self.addCleanup(item.stop)
 
     def check(self):
-        from Scripts.continuation_inputs import verify_native_applicability
+        from logistics_build.continuation_inputs import verify_native_applicability
         return verify_native_applicability(self.root, self.root, 'reviewed-plan', 'd'*40)
 
     def change(self, **values):

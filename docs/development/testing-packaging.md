@@ -2,7 +2,7 @@
 
 `python dev.py test-map` prints the project-owned suite inventory, owners,
 platforms, entry points and recursively discovered test files. Functional tests
-stay with their feature owners. `Scripts/validation_plans.py` owns the platform
+stay with their feature owners. `logistics_build/validation_plans.py` owns the platform
 composition used by `Python/tests/run_platform_checks.py` and the local manager;
 the reusable execution machinery must not own these Logistics policies.
 

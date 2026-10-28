@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 from build_manager import Phase, Plan
 from build_manager.test_results import read_junit
-from Scripts import manager_suites as suites
-from Scripts.build_project import LogisticsProject
+from logistics_build import manager_suites as suites
+from logistics_build.build_project import LogisticsProject
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -53,7 +53,7 @@ class ManagerSuiteTests(unittest.TestCase):
                 Phase('ios-runtime', (sys.executable, '-c', 'pass'), str(root), dependencies=('ios-runtime-tools','iphone-cleanup'), artifacts=(str(root/'core.json'),)),
                 Phase('ios-runtime-cleanup', (sys.executable, '-c', 'pass'), str(root), dependencies=('ios-runtime',), always=True, kind='cleanup'))
             full = Plan('Logistics', 'Test', {}, phases, str(root))
-            with patch.object(project, '_make_plan', return_value=full), patch('Scripts.build_retention.clean'):
+            with patch.object(project, '_make_plan', return_value=full), patch('logistics_build.build_retention.clean'):
                 core = project.make_plan('Test', 'ios', 'This Mac — iOS Simulators', suite='ios.runtime')
                 native = project.make_plan('Test', 'ios', 'This Mac — iOS Simulators', suite='ios.native')
             self.assertEqual([p.id for p in core.phases], ['ios-runtime-tools','ios-runtime','ios-runtime-cleanup'])
@@ -71,11 +71,11 @@ class ManagerSuiteTests(unittest.TestCase):
         values = defaults(project.mobile)
         values['tools.desktop_python'] = sys.executable
         identity = dict(logistics_commit='a', commonUtils_commit='b', fingerprint='fixture', dirty=False)
-        with patch('Scripts.build_project.sys.platform', 'darwin'), patch('Scripts.build_retention.clean'), patch('Scripts.build_project.identity', return_value=identity), \
-                patch('Scripts.build_project.materialize'), patch('Scripts.build_project.manager_settings.settings', return_value=(values, {})), \
-                patch('Scripts.build_project.manager_settings.app_version', return_value='1.0.0'), \
+        with patch('logistics_build.build_project.sys.platform', 'darwin'), patch('logistics_build.build_retention.clean'), patch('logistics_build.build_project.identity', return_value=identity), \
+                patch('logistics_build.build_project.materialize'), patch('logistics_build.build_project.manager_settings.settings', return_value=(values, {})), \
+                patch('logistics_build.build_project.manager_settings.app_version', return_value='1.0.0'), \
                 patch('build_manager.local.inspect_python', return_value={'system': 'Darwin'}), \
-                patch('Scripts.build_project.platform.system', return_value='Darwin'):
+                patch('logistics_build.build_project.platform.system', return_value='Darwin'):
             plan = project.make_plan('Test', 'macos', 'This Mac', suite='portable.contracts', pattern='test_manager*.py')
         phase = plan.phases[-1]
         self.assertEqual([row.id for row in plan.phases], ['environment', 'portable.contracts'])
@@ -160,9 +160,9 @@ class ManagerSuiteTests(unittest.TestCase):
             self.assertIsNone(captured_source_fingerprint(root))
             (root/'.manager-source.json').write_text(json.dumps(dict(
                 source={'fingerprint':'a'*64}, snapshot_fingerprint='b'*64)))
-            with patch('Scripts.build_snapshots.identity', return_value={'fingerprint':'b'*64}):
+            with patch('logistics_build.build_snapshots.identity', return_value={'fingerprint':'b'*64}):
                 self.assertEqual(captured_source_fingerprint(root), 'a'*64)
-            with patch('Scripts.build_snapshots.identity', return_value={'fingerprint':'c'*64}):
+            with patch('logistics_build.build_snapshots.identity', return_value={'fingerprint':'c'*64}):
                 with self.assertRaisesRegex(ValueError, 'Captured source changed'):
                     captured_source_fingerprint(root)
 
@@ -195,7 +195,7 @@ class ManagerSuiteTests(unittest.TestCase):
             runtime = Phase('android-runtime', (sys.executable, '-c', 'pass'), str(root), artifacts=(str(root/'runtime.json'),))
             prepared = Plan('Logistics', 'Prepare Firebase', source, (build,), str(root/'workspace'), effect='build')
             tests = Plan('Logistics', 'Test', source, (native, runtime), str(root/'workspace'))
-            with patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group)), patch('Scripts.build_retention.clean'), patch.object(project, '_make_plan', side_effect=[prepared, tests]):
+            with patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group)), patch('logistics_build.build_retention.clean'), patch.object(project, '_make_plan', side_effect=[prepared, tests]):
                 plan = project.make_plan('Reviewed Firebase workflow', 'android', 'This Mac')
             rows = {phase.id: phase for phase in plan.phases}
             self.assertEqual(rows['release-acceptance'].dependencies, ('commonutils','portable-contracts','desktop-ui','mobile-host','android-native','android-runtime'))
@@ -224,14 +224,14 @@ class ManagerSuiteTests(unittest.TestCase):
             phases = tuple(Phase(kind,(sys.executable,'-c','pass'),str(root),artifacts=(str(root/(kind+'.json')),)) for kind in ('iphone','duo','ipad'))
             prepared = Plan('Logistics','Prepare TestFlight',source,(build,),str(root/'workspace'),effect='build')
             native = Plan('Logistics','Test',source,phases,str(root/'workspace'))
-            with patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group)), patch('Scripts.build_retention.clean'), patch.object(project,'_make_plan',side_effect=[prepared,native]) as make:
+            with patch('build_manager.test_manifest.discover', side_effect=lambda root, group: _discover(Path(__file__).resolve().parents[3], group)), patch('logistics_build.build_retention.clean'), patch.object(project,'_make_plan',side_effect=[prepared,native]) as make:
                 plan = project.make_plan('Reviewed TestFlight workflow','ios','This Mac',include_ipad=False)
             self.assertTrue(make.call_args_list[1].kwargs['include_ipad'])
             gate = next(phase for phase in plan.phases if phase.id=='release-acceptance')
             self.assertIn('--require-ipad',gate.argv)
 
     def test_ios_backend_can_retry_into_retained_result_directory_with_fresh_owned_devices(self):
-        from Scripts import ios_backend
+        from logistics_build import ios_backend
         with TemporaryDirectory() as directory:
             root = Path(directory);(root/'mobile_build').mkdir()
             (root/'.manager-source.json').write_text(json.dumps({'source':{'commit':'fixed'}}))
@@ -247,7 +247,7 @@ class ManagerSuiteTests(unittest.TestCase):
                 self.assertEqual(clients.return_value.remove.call_count,2)
 
     def test_ios_retry_retires_existing_lease_or_stops_without_overwriting_it(self):
-        from Scripts import ios_backend
+        from logistics_build import ios_backend
         for blocked in (False, True):
             with self.subTest(cleanup_blocked=blocked), TemporaryDirectory() as directory:
                 root=Path(directory);(root/'mobile_build').mkdir()

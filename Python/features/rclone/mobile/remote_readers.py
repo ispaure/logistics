@@ -153,7 +153,7 @@ class RemoteReaders:
 
     @property
     def privacy_gate(self):
-        return getattr(self.client, 'session_privacy', None)
+        return self.resource.privacy_gate
 
     def __init__(self, client, remote, *, progress=lambda message: None, resource=None, identity=None):
         from features.rclone.remote_access import NativeRemoteLocation

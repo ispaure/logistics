@@ -1,6 +1,11 @@
-# Rename MKA chapters from a CSV
+# Media tools
 
 Enable **Media Tools** under **Settings → Features** to use these tools.
+
+- [Video Player](video-player.md) is now a separate feature for local and cloud playback.
+- [Mobile video controls and validation status](../user_mobile/user_mobile.md).
+
+## Rename MKA chapters from a CSV
 
 Rename chapter audio files in one folder using their chapter titles from a CSV.
 

@@ -63,7 +63,7 @@ class HomeUnlockTests(unittest.TestCase):
             app.show_legacy_session = False
             app.show_home()
             header = app.home_content.children[0]
-            self.assertEqual(header.children[0].text, 'Your workspace')
+            self.assertEqual(header.children[0].text, 'Open a file or start a new document.')
             unlock = header.children[1]
             self.assertEqual(unlock.control_icon, 'storage_crypt')
             self.assertEqual(unlock.accessible_name, 'Unlock credentials')

@@ -16,16 +16,21 @@ def mount(header, controller, title):
         return
     header.use_native_title()
     mount_actions(header, controller)
-    from rubicon.objc import ObjCClass, CGRect, CGSize
+    width = max(44, min(220, float(header.window._impl.native.bounds.size.width) - 216))
+    header.status.style.font_size = 17 * .75
+    identity = next(child for child in header.storage_identity.children if hasattr(child, 'text'))
+    controller.navigationItem.titleView = storage_title(title, identity.text, header._storage_kinds, width)
+    header._native_title_mounted = True
+    header.refresh_status()
+
+
+def storage_title(title, text, kinds, width):
+    """One centered title/subtitle proportion for folders and open documents."""
+    from rubicon.objc import ObjCClass, CGRect
     from .appearance import apple_color
     from .hub_icons import icon
-    # Leave symmetric room for Back and both 48-point actions on a narrow phone.
-    # A newly pushed controller may still have zero bounds before its first
-    # layout. The owning window already has the actual phone/iPad viewport.
-    width = max(44, min(220, float(header.window._impl.native.bounds.size.width) - 216))
     title_size = 17
     subtitle_size = title_size * .75
-    header.status.style.font_size = subtitle_size
     view = ObjCClass('UIView').alloc().initWithFrame(CGRect((0, 0), (width, 37)))
     label = ObjCClass('UILabel').alloc().initWithFrame(CGRect((0, 0), (width, 21)))
     label.text = title
@@ -44,7 +49,7 @@ def mount(header, controller, title):
     row.axis, row.alignment, row.spacing = 0, 1, 4
     leading, trailing = [ObjCClass('UIView').alloc().init() for _ in range(2)]
     row.addArrangedSubview(leading)
-    for name, _ in header._storage_kinds:
+    for name, _ in kinds:
         image = icon(name)._impl.native.imageWithRenderingMode(2)
         indicator = ObjCClass('UIImageView').alloc().initWithImage(image)
         indicator.contentMode = 1
@@ -52,25 +57,26 @@ def mount(header, controller, title):
         indicator.widthAnchor.constraintEqualToConstant(12).active = True
         indicator.heightAnchor.constraintEqualToConstant(12).active = True
         row.addArrangedSubview(indicator)
-    identity = next(child for child in header.storage_identity.children if hasattr(child, 'text'))
     subtitle = ObjCClass('UILabel').alloc().init()
-    subtitle.text = identity.text
+    subtitle.text = text
     subtitle.font = ObjCClass('UIFont').systemFontOfSize(subtitle_size)
     subtitle.textColor = apple_color('muted')
     subtitle.numberOfLines = 1
-    subtitle.accessibilityLabel = identity.text
+    subtitle.accessibilityLabel = text
     row.addArrangedSubview(subtitle)
     row.addArrangedSubview(trailing)
     leading.widthAnchor.constraintEqualToAnchor(trailing.widthAnchor).active = True
-    # Give the description its full measured width so a horizontal swipe can
-    # reveal every word while short descriptions remain centered.
-    text_width = float(subtitle.sizeThatFits(CGSize(100000, 15)).width)
-    content_width = max(width, text_width + 16 * len(header._storage_kinds) + 8)
-    row.frame = CGRect((0, 0), (content_width, 15))
-    scroll.contentSize = CGSize(content_width, 15)
-    scroll.accessibilityLabel = identity.text
+    scroll.accessibilityLabel = text
     scroll.addSubview(row)
+    # UIKit can shrink a title view after mounting (notably beside Duo's side
+    # bar). Track that actual width, with equal gutters for short captions and
+    # scrollable intrinsic width for long storage/privacy descriptions.
+    row.translatesAutoresizingMaskIntoConstraints = False
+    for edge in ('leading', 'trailing', 'top', 'bottom'):
+        getattr(row, edge + 'Anchor').constraintEqualToAnchor(
+            getattr(scroll.contentLayoutGuide, edge + 'Anchor')).active = True
+    row.widthAnchor.constraintGreaterThanOrEqualToAnchor(scroll.frameLayoutGuide.widthAnchor).active = True
+    row.heightAnchor.constraintEqualToConstant(15).active = True
+    subtitle.setContentCompressionResistancePriority(1000, forAxis=0)
     view.addSubview(scroll)
-    controller.navigationItem.titleView = view
-    header._native_title_mounted = True
-    header.refresh_status()
+    return view

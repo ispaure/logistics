@@ -37,7 +37,15 @@ func TestNativeEngineAndAuthenticatedCredentialPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = f
-	_ = rows
+	foundFixture := false
+	for _, row := range rows {
+		if row.Path == "logistics-native-check" && row.Directory {
+			foundFixture = true
+		}
+	}
+	if !foundFixture {
+		t.Fatalf("native offline fixture missing after credential import: %#v", rows)
+	}
 
 	for _, action := range []string{"read", "crypt_read", "crypt_fetch"} {
 		if !strings.Contains(dispatch(action, "{}"), `"ok":false`) {

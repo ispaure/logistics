@@ -204,7 +204,8 @@
       "guide": "docs/features/media/development/development.md",
       "tests": {
         "desktop": [
-          "test_feature_registry.py"
+          "test_mka_renames.py",
+          "test_integration_workers.py"
         ]
       }
     },
@@ -463,6 +464,44 @@
           "test_mobile_packaging.py"
         ]
       }
+    },
+    "build-adapter": {
+      "sources": [
+        "logistics_build",
+        "build-project.json",
+        "build-tests.json",
+        "build-manager-dependency.json"
+      ],
+      "guide": "docs/development/build-manager.md",
+      "tests": {
+        "desktop": [
+          "test_build_*.py",
+          "test_manager_*.py",
+          "test_guest_*.py",
+          "test_ios_runtime.py",
+          "test_android_runtime_prepare.py",
+          "test_continuation_inputs.py",
+          "test_test_evidence.py",
+          "test_release_test_evidence.py",
+          "test_mobile_build_cache.py"
+        ]
+      }
+    },
+    "video": {
+      "sources": [
+        "Python/features/video"
+      ],
+      "guide": "docs/features/video/development/development.md",
+      "tests": {
+        "desktop": [
+          "test_feature_registry.py",
+          "test_video*.py"
+        ],
+        "mobile": [
+          "test_video_player.py"
+        ]
+      },
+      "mobile_manifest": "Python/features/video/mobile_sources.json"
     }
   }
 }

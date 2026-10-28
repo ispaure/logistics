@@ -40,6 +40,20 @@ def fullscreen(window, *, images=False):
         '_comic_chrome_hidden' if images else '_reader_chrome_hidden', False))
 
 
+def progress_bottom_inset(root, bottom, home_bottom):
+    """Let the footer's empty lower hit padding share 16pt of the home inset.
+
+    The track stays above the home indicator. Never consume a keyboard, toolbar
+    or tab-bar inset, and leave vertical PDF controls and fullscreen unchanged.
+    """
+    def horizontal(widget):
+        return (getattr(widget, '_horizontal_reader_progress', False)
+                or any(horizontal(child) for child in getattr(widget, 'children', ())))
+    if home_bottom > 0 and bottom <= home_bottom + .5 and horizontal(root):
+        return max(0, bottom - min(16, home_bottom))
+    return bottom
+
+
 def install():
     global _installed
     if _installed:
@@ -83,6 +97,14 @@ def install():
             else:
                 from .ios_content_background import expand_preview
                 changed = expand_preview(container)
+                if container.content is not None:
+                    window = container.native.window
+                    window = window() if callable(window) else window
+                    if window is not None:
+                        bottom = progress_bottom_inset(container.content.interface,
+                            container.bottom_inset, float(window.safeAreaInsets.bottom))
+                        changed = changed or bottom != container.bottom_inset
+                        container.bottom_inset = bottom
             if changed and container.content is not None:
                 container.content.interface.refresh()
             # Observe effective geometry, not the intermediate safe layout.
@@ -128,8 +150,10 @@ def notify_viewport(container):
     app = root.app
     if app is None or not getattr(app, 'active_host', False):
         return
+    from .ios_toolbar import vertical_edge
     geometry = (float(container.width), float(container.height),
-                container.top_inset, container.bottom_inset, container.left_inset, container.right_inset)
+                container.top_inset, container.bottom_inset, container.left_inset, container.right_inset,
+                vertical_edge(getattr(container, 'controller', None)))
     if geometry == getattr(container, '_logistics_viewport', None):
         return
     container._logistics_viewport = geometry

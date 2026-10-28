@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock
 
-from Scripts.guest_results import GuestResultLifecycle
+from logistics_build.guest_results import GuestResultLifecycle
 
 
 class GuestResultTests(unittest.TestCase):
@@ -75,7 +75,7 @@ class GuestResultTests(unittest.TestCase):
     def test_headless_wait_labels_advisory_state_without_inventing_test_results(self):
         from contextlib import redirect_stdout
         import io
-        from Scripts.guest_results import waiting_progress
+        from logistics_build.guest_results import waiting_progress
         output = io.StringIO()
         with redirect_stdout(output):
             progress = waiting_progress('Windows', 'selected checks')
@@ -116,7 +116,7 @@ class CompletedManagerEvidenceTests(unittest.TestCase):
         (self.root/'result.json').write_text(json.dumps(self.result))
 
     def verify(self):
-        from Scripts.guest_results import verified_manager_completion
+        from logistics_build.guest_results import verified_manager_completion
         return verified_manager_completion(self.root,self.source,self.backend,self.manager)
 
     def test_legacy_backend_is_verified_from_guest_plan_without_changing_records(self):
@@ -154,7 +154,7 @@ class CompletedManagerEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'complete declared'):self.verify()
 
     def test_real_lifecycle_and_attempt_owner_agree_on_backend(self):
-        from Scripts.guest_attempts import result_attempt
+        from logistics_build.guest_attempts import result_attempt
         from contextlib import redirect_stdout
         import io
         root=self.root/'new-attempts'
@@ -169,12 +169,12 @@ class CompletedManagerEvidenceTests(unittest.TestCase):
 
 
     def test_source_annotations_cannot_substitute_a_different_guest_capture(self):
-        from Scripts.guest_results import retained_guest_source
+        from logistics_build.guest_results import retained_guest_source
         from build_manager.models import Plan, Phase
         source=dict(self.source,dirty=False,fingerprint='e'*64)
         root=self.root/'declared-results'
         attempt=root/'attempts'/('f'*32)
-        command=('python','-m','Scripts.vm_backend','--source-identity',json.dumps(source),'--results',str(root))
+        command=('python','-m','logistics_build.vm_backend','--source-identity',json.dumps(source),'--results',str(root))
         plan=Plan('Logistics','Focused',dict(source,destination='display-only'),
                   (Phase('guest',command,str(self.root)),),str(self.root/'workspace'))
         self.assertEqual(retained_guest_source(plan,self.backend,attempt),source)

@@ -12,8 +12,8 @@ from build_manager import Executor, Phase, Plan
 from build_manager.test_manifest import discover as _discover
 from build_manager.journeys import for_host, validate_plan
 from build_manager.workflows import ancestors, approve
-from Scripts.build_project import LogisticsProject
-from Scripts.manager_journeys import PlanningContext
+from logistics_build.build_project import LogisticsProject
+from logistics_build.manager_journeys import PlanningContext
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -66,13 +66,13 @@ class JourneyAdapterTests(unittest.TestCase):
         for target, options in (
                 ('build_manager.identity.runtime_identity', {'return_value': engine}),
                 ('build_manager.test_manifest.discover', {'side_effect': lambda root, group: _discover(ROOT, group)}),
-                ('Scripts.build_retention.clean', {'return_value': []}),
-                ('Scripts.build_project.identity', {'return_value': self.source}),
-                ('Scripts.build_project.manager_settings.settings', {'side_effect': lambda *_, **kwargs: (dict(self.values, **kwargs.get('overrides', {})), {})}),
-                ('Scripts.build_project.manager_settings.defaults', {'side_effect': lambda *_: dict(self.values)}),
-                ('Scripts.build_project.manager_settings.app_version', {'return_value': '1.2.3'}),
-                ('Scripts.release_naming.source_version', {'return_value': '1.2.3'}),
-                ('Scripts.build_project.sys.platform', {'new': 'darwin'})):
+                ('logistics_build.build_retention.clean', {'return_value': []}),
+                ('logistics_build.build_project.identity', {'return_value': self.source}),
+                ('logistics_build.build_project.manager_settings.settings', {'side_effect': lambda *_, **kwargs: (dict(self.values, **kwargs.get('overrides', {})), {})}),
+                ('logistics_build.build_project.manager_settings.defaults', {'side_effect': lambda *_: dict(self.values)}),
+                ('logistics_build.build_project.manager_settings.app_version', {'return_value': '1.2.3'}),
+                ('logistics_build.release_naming.source_version', {'return_value': '1.2.3'}),
+                ('logistics_build.build_project.sys.platform', {'new': 'darwin'})):
             patcher = patch(target, **options); patcher.start(); self.addCleanup(patcher.stop)
         # Resolve capability defaults under the same declared host used below.
         # Constructing first captured Linux/Windows backends on those CI hosts.
@@ -88,7 +88,7 @@ class JourneyAdapterTests(unittest.TestCase):
             build = Phase('prepare-device-app', (sys.executable, '-c', 'pass'), str(self.root), effect='build', kind='build')
             install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy', dependencies=(build.id,))
             return Plan('Logistics', 'Device app', context.source(project, revision), (build, install), str(self.root / 'devices'))
-        with patch('Scripts.manager_devices.make_plan', side_effect=device_plan) as make:
+        with patch('logistics_build.manager_devices.make_plan', side_effect=device_plan) as make:
             plan = self.make(platforms=['android'], destinations=['android-devices'], run_overrides={'devices.android':'["serial-1"]'})
         self.assertIn('android.validated', ancestors(plan, 'android.devices.install-phone'))
         self.assertEqual(plan.journey['destinations']['android-devices']['platforms'], ['android'])
@@ -102,7 +102,7 @@ class JourneyAdapterTests(unittest.TestCase):
             build = Phase('prepare-device-app', (sys.executable, '-c', 'pass'), str(self.root), effect='build', kind='build')
             install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy', dependencies=(build.id,))
             return Plan('Logistics', 'Device app', context.source(project, revision), (build, install), str(self.root / 'devices'))
-        with patch('Scripts.manager_devices.make_plan', side_effect=device_plan):
+        with patch('logistics_build.manager_devices.make_plan', side_effect=device_plan):
             plan = self.project.make_journey('deliver', [], ['android-devices'], revision='HEAD',
                 run_overrides={'devices.android': '["serial-1"]'})
         self.assertEqual(self.project.calls, [])
@@ -121,7 +121,7 @@ class JourneyAdapterTests(unittest.TestCase):
             return Plan('Logistics', 'Release device', context.source(project, revision), (prepare, install), str(self.root / 'devices'))
         for target, service in (('android','firebase'), ('ios','testflight')):
             self.project.calls.clear()
-            with patch('Scripts.manager_devices.make_plan', side_effect=device_plan) as make:
+            with patch('logistics_build.manager_devices.make_plan', side_effect=device_plan) as make:
                 plan = self.make(platforms=[target], destinations=[target+'-devices', service], run_overrides={
                     'devices.'+target:'["phone"]', 'devices.'+target+'_variant':'release'})
             shared = make.call_args.kwargs['shared']
@@ -135,25 +135,25 @@ class JourneyAdapterTests(unittest.TestCase):
         def device_plan(project, target, recipients, context, revision, *, shared):
             install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy')
             return Plan('Logistics', 'Release device', context.source(project, revision), (install,), str(self.root / 'devices'))
-        with patch('Scripts.manager_devices.make_plan', side_effect=device_plan):
+        with patch('logistics_build.manager_devices.make_plan', side_effect=device_plan):
             plan = self.make(platforms=['ios'], destinations=['ios-devices'], run_overrides={
                 'devices.ios':'["phone"]', 'devices.ios_variant':'release'})
         self.assertIn('ios.preparation.build-release-archive', ancestors(plan, 'ios.devices.install-phone'))
         self.assertFalse(any(p.effect == 'upload' or p.id.endswith('prepare-verified-artifact') for p in plan.phases))
 
-    def test_release_device_accepts_captured_current_files(self):
+    def test_release_device_accepts_captured_working_source(self):
         self.source['dirty'] = True
-        with patch('Scripts.manager_devices.make_plan') as device:
+        with patch('logistics_build.manager_devices.make_plan') as device:
             device.return_value = Plan('Logistics', 'Device', self.source,
                 (Phase('install', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy'),), str(self.root/'devices'))
             plan = self.make(platforms=['android'], destinations=['android-devices'], run_overrides={
                 'devices.android':'["phone"]', 'devices.android_variant':'release'})
-        self.assertTrue(plan.source['dirty'])
-        self.assertIn('android.validation.release-acceptance', {p.id for p in plan.phases})
+            self.assertTrue(plan.source['dirty'])
+            self.assertIn('android.validated', ancestors(plan, 'android.devices.install'))
 
 
     def test_shared_tester_message_maps_to_both_owned_service_fields(self):
-        from Scripts.manager_journeys import run_values
+        from logistics_build.manager_journeys import run_values
         self.assertEqual(run_values({'testers.message': 'Try search'}),
             {'firebase.release_notes': 'Try search', 'testflight.what_to_test': 'Try search'})
         for message in ('', '  \n '):
@@ -172,7 +172,7 @@ class JourneyAdapterTests(unittest.TestCase):
                 self.assertEqual(plan.source['run_overrides'], {})
 
     def test_blank_saved_shared_message_preserves_distinct_service_notes(self):
-        from Scripts.manager_journeys import run_values
+        from logistics_build.manager_journeys import run_values
         saved = {'testers.message': '', 'testflight.what_to_test': 'Check received files',
                  'firebase.release_notes': 'Check Android navigation'}
         expected = {key: value for key, value in saved.items() if key != 'testers.message'}
@@ -306,7 +306,7 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertEqual(next(row['status'] for row in final['phases'] if row['id'] == 'testflight.upload'), 'passed')
 
     def test_github_publication_requires_desktop_platforms_and_has_exact_tag(self):
-        with patch('Scripts.build_snapshots.git', side_effect=lambda _, *args: '' if args[0] == 'status' else self.source['logistics_commit']):
+        with patch('logistics_build.build_snapshots.git', side_effect=lambda _, *args: '' if args[0] == 'status' else self.source['logistics_commit']):
             plan = self.make(platforms=['macos', 'linux', 'windows', 'android', 'ios'],
                 destinations=['github', 'firebase', 'testflight'], release_tag='v1.2.3-alpha.1')
         self.assertEqual(set(plan.journey['destinations']), {'github', 'firebase', 'testflight'})
@@ -323,16 +323,16 @@ class JourneyAdapterTests(unittest.TestCase):
             self.make(platforms=['ios'], destinations=['firebase'])
         with self.assertRaisesRegex(ValueError, 'complete project suites'):
             self.make(pattern='test_example.py')
-        with patch('Scripts.build_project.identity', return_value=dict(self.source, dirty=True)):
+        with patch('logistics_build.build_project.identity', return_value=dict(self.source, dirty=True)):
             plan = self.make()
             self.assertTrue(plan.source['dirty'])
             self.assertEqual(set(plan.journey['destinations']), {'firebase', 'testflight'})
             with self.assertRaisesRegex(ValueError, 'committed source'):
                 self.make(platforms=['macos', 'linux', 'windows'], destinations=['github'])
-        with patch('Scripts.release_naming.suggest_tag', return_value='v1.2.3-alpha.7'), patch('Scripts.build_snapshots.git', side_effect=['','a'*40]):
+        with patch('logistics_build.release_naming.suggest_tag', return_value='v1.2.3-alpha.7'), patch('logistics_build.build_snapshots.git', side_effect=['','a'*40]):
             automatic = self.make(platforms=['macos', 'linux', 'windows'], destinations=['github'])
             self.assertIn('v1.2.3-alpha.7',automatic.journey['destinations']['github']['identity'])
-        with patch('Scripts.manager_journeys.capture') as captured:
+        with patch('logistics_build.manager_journeys.capture') as captured:
             baseline = dict(self.source, app_version='1.2.3', effective_settings=dict(values=self.values, origins={}))
             changed = dict(baseline, app_version='2.0.0')
             captured.side_effect = [PlanningContext(str(self.root), 'HEAD', json.dumps(value)) for value in (baseline, changed)]
@@ -344,7 +344,7 @@ class JourneyAdapterTests(unittest.TestCase):
         linux = for_host(descriptor['journey'], 'linux')
         self.assertEqual(linux['platforms']['linux']['backend'], 'This Linux host')
         self.assertEqual(linux['platforms']['windows']['backend'], 'Local Parallels VM')
-        with patch('Scripts.build_project.sys.platform', 'linux'):
+        with patch('logistics_build.build_project.sys.platform', 'linux'):
             project = LogisticsProject(self.root)
             with self.assertRaisesRegex(ValueError, 'unavailable'):
                 project.make_journey('validate', ['windows'], [], revision='HEAD')
@@ -363,9 +363,9 @@ class JourneyAdapterTests(unittest.TestCase):
         context = PlanningContext(str(self.root), 'HEAD', json.dumps(source))
         expected = Plan('Logistics', 'Test', source,
             (Phase('fixture', (sys.executable, '-c', 'pass'), str(self.root)),), str(self.root / 'workspace'))
-        with patch('Scripts.build_project.identity', side_effect=AssertionError('must use shared context')), \
-                patch('Scripts.build_project.manager_settings.settings', side_effect=AssertionError('must use frozen settings')), \
-                patch('Scripts.build_project.materialize') as materialize, \
+        with patch('logistics_build.build_project.identity', side_effect=AssertionError('must use shared context')), \
+                patch('logistics_build.build_project.manager_settings.settings', side_effect=AssertionError('must use frozen settings')), \
+                patch('logistics_build.build_project.materialize') as materialize, \
                 patch.object(project, 'mobile_plan', return_value=expected) as mobile:
             result = project._make_plan('Test', 'android', 'This Mac — Android Emulator', revision='HEAD', _context=context)
         self.assertEqual(result.source['fingerprint'], source['fingerprint'])
@@ -382,8 +382,8 @@ sys.path[:0]=[str(Path.cwd()),str(Path.cwd()/'Python/tests/tooling')]
 from test_manager_journeys import JourneyAdapterTests
 case=JourneyAdapterTests();case.setUp()
 try:
- with patch('Scripts.build_project.LogisticsProject',return_value=case.project):
-  runpy.run_path(str(Path.cwd()/'Scripts/manager_bridge.py'),run_name='__main__')
+ with patch('logistics_build.build_project.LogisticsProject',return_value=case.project):
+  runpy.run_path(str(Path.cwd()/'logistics_build/manager_bridge.py'),run_name='__main__')
 finally:
  case.doCleanups()
 '''

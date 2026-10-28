@@ -1,17 +1,18 @@
-# Mobile build tooling owners
+# Logistics build tooling owners
 
-The Briefcase project, generated output paths, native bridge and installed app
-identities remain unchanged. Organize tooling by the work a contributor needs
+Project build and release adapters live in `logistics_build/`. Generic execution
+and operator UI live in the standalone Build Deployment Manager. The Briefcase
+project, generated output paths, native bridge and installed app identities remain unchanged. Organize tooling by the work a contributor needs
 to do; application features stay in `Python/`.
 
 | Work | Owner |
 | --- | --- |
 | Curate the public Python payload and verify its source identity | `mobile_build/tools.py` |
-| Validate collected guest evidence, report outcomes and clean only after collection | `Scripts/guest_results.py`; platform setup/transport stays in the Linux/Windows backends |
+| Validate collected guest evidence, report outcomes and clean only after collection | `logistics_build/guest_results.py`; platform setup/transport stays in the Linux/Windows backends |
 | Build and link the native bridge; compose generated-project adapters | `mobile_build/cloud_build.py` |
 | Configure camera, scenes, privacy manifests and app artwork | `mobile_build/build_support/` |
 | Regenerate canonical navigation and folder artwork | `mobile_build/build_support/generate_navigation_icons.py`, `generate_folder_icons.py` |
-| Device install, deployment policy, Firebase and TestFlight | `mobile_build/deployment/`; reusable command controls and sequencing in external `build_manager.deployment_commands*` |
+| Device install, deployment policy, Firebase and TestFlight | `mobile_build/deployment/`; operator review and sequencing in the standalone manager |
 | App Store Connect signing/HTTP/polling and Firebase CLI transport | External `build_manager.app_store_connect` and `build_manager.firebase`; app/destination policy remains in `mobile_build/deployment/` |
 | Operator builds and delivery | Standalone Build Deployment Manager with the Logistics adapter |
 | Native report verification, lifecycle drivers and synthetic fixture generators | `mobile_build/validation/` |
@@ -19,9 +20,9 @@ to do; application features stay in `Python/`.
 | On-device checks and synthetic fixtures | `mobile_build/native_tests/` |
 
 Linux bootstrap and Windows portable-tool preparation execute the external
-manager's `build_manager.guest_tools` programs. `Scripts/build_manager_tools.json`
+manager's `build_manager.guest_tools` programs. `logistics_build/build_manager_tools.json`
 retains Logistics' uv/Git archives, interpreter selectors and architecture choices.
-`Scripts/vm_backend.py` and `Scripts/windows_backend.py` keep their entry points,
+`logistics_build/vm_backend.py` and `logistics_build/windows_backend.py` keep their entry points,
 suite routing, selected-guest policy and preparation/evidence receipts. Tool
 preparation does not imply a passed suite. The extraction preserves existing
 workspace ownership, interactive Windows account checks, archive hashes and
@@ -41,7 +42,7 @@ the manager does not load it or read project credentials.
 Firebase CLI installation/location, authentication permission, app/package/group
 checks, signing, counters and explicit upload approval remain here. The external
 Firebase client owns CLI invocation and response parsing, including direct
-console delivery and captured operation receipts. `Scripts/distribute_prepared.py`
+console delivery and captured operation receipts. `logistics_build/distribute_prepared.py`
 still checks the reviewed artifact/destination and writes its attempt marker
 before a provider write. Missing/ambiguous receipts keep that marker and prevent
 blind replay. Neither reusable client automatically retries writes or signs in.
@@ -132,7 +133,7 @@ The private Ed25519 signing key lives in the manager's Application Support
 configuration, keyed by repository. One-time enrollment is explicit:
 
 ```sh
-.venv/bin/python -m Scripts.release_test_evidence enroll --repository ispaure/logistics
+.venv/bin/python -m logistics_build.release_test_evidence enroll --repository ispaure/logistics
 ```
 
 Review and commit only `.github/local-test-signers`. It contains a public key
@@ -150,7 +151,7 @@ and retains signer, source and input identity; it does not pretend to execute
 those tests again. Invalid/unavailable proof or any input mismatch runs fresh.
 
 This integration currently covers the input-bound portable host suites executed
-through `Scripts.platform_checks.run_check`. It does not infer equivalence for
+through `logistics_build.platform_checks.run_check`. It does not infer equivalence for
 native simulator/emulator/runtime tests, static workflow checks, different
 architectures or different Python/toolchain installations. Such coverage stays
 fresh. In particular, a local Mac and GitHub's Mac image can legitimately have
@@ -172,3 +173,10 @@ wrapper both read that immutable release policy and require fresh checks.
 Existing tags are never changed. Direct desktop GitHub validation dispatches
 carry the same choice as the workflow's `reuse_test_results` input. The choice
 changes execution reuse only, never the selected suite or native inventory.
+
+## New projects and shared mechanisms
+
+Use the [current ownership map](build-deployment-audit.md) to decide whether a
+change is manager infrastructure, a commonUtils mechanism or application policy.
+There is no second Logistics build/deployment UI. Root `Scripts/` keeps the
+machine-used `.bat` files and contributor inspection/setup tools.

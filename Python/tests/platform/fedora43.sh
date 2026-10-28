@@ -13,6 +13,6 @@ uv venv --python 3.12.2 --seed /tmp/logistics-platform-venv
 git config --global --add safe.directory /workspace
 git config --global --add safe.directory /workspace/Python/commonUtils
 export LOGISTICS_MANAGER_CHECKOUT=/tmp/logistics-build-deployment-manager
-/tmp/logistics-platform-venv/bin/python Scripts/install_build_manager.py --from-pin "$LOGISTICS_MANAGER_CHECKOUT"
+/tmp/logistics-platform-venv/bin/python logistics_build/install_build_manager.py --from-pin "$LOGISTICS_MANAGER_CHECKOUT"
 /tmp/logistics-platform-venv/bin/python Python/tests/run_platform_checks.py --install
 /tmp/logistics-platform-venv/bin/python -m unittest discover -s .github/scripts -p 'test_*.py' -v

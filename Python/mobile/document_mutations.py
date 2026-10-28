@@ -192,7 +192,10 @@ class DocumentMutation:
             # Keep an existing session-only privacy gate across plaintext moves.
             # New encrypted locations adopt their current credential gate too.
             if private:
-                owner.privacy_gate = owner.privacy_gate or getattr(app.cloud_client, 'session_privacy', None)
+                if owner.privacy_gate is None:
+                    gate_for = getattr(copies, 'privacy_gate_for', None)
+                    owner.privacy_gate = (gate_for(reader.key) if gate_for is not None
+                                          else getattr(copies, 'privacy_gate', None))
             session.history_source = None
             for name in ('cache_id', 'cache_source'):
                 session.__dict__.pop(name, None)

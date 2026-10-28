@@ -486,7 +486,7 @@ class RemoteReaderTests(unittest.TestCase):
                 self.assertFalse(any(action == 'list' for action, _ in client.calls))
                 with patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog:
                     self.assertFalse(app.loop.run_until_complete(app.open_remote_document(
-                        dict(path='movie.mp4', directory=False, size=200))))
+                        dict(path='movie.unsupported', directory=False, size=200))))
                     dialog.assert_awaited_once()
                 self.assertEqual(client.calls, [])
                 self.assertTrue(app.loop.run_until_complete(app.open_remote_document(

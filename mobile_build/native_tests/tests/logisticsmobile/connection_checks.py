@@ -15,6 +15,9 @@ async def exercise_connections(app, fixtures, background_comic, passed):
     assert 'offline read check passed' in app.cloud_status.value, app.cloud_status.value
     credentials = fixtures / 'credentials.zip'
     credentials.write_bytes(base64.b64decode(AES_CREDENTIALS))
+    # This first client intentionally has no persistent vault. Select Session-Only
+    # explicitly so its imported credentials receive the required resume gate.
+    app.cloud_remember.value = False
     assert app.cloud_import.text == 'Unlock' and not app.cloud_import.enabled
     with patch('mobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), credentials))):
         await app.choose_cloud_package()
@@ -24,8 +27,9 @@ async def exercise_connections(app, fixtures, background_comic, passed):
     assert app.cloud_password.value == ''
     assert app.cloud_pending_zip is None and 'Browse folder' in app.cloud_import_message.text.replace('\n', ' ')
     assert app.cloud_remote.value == 'Fixture' and len(app.cloud_remote.items) == 1, app.cloud_status.value
-    await app.browse_cloud()
-    row = next(row for row in app.cloud_rows.values() if row['path'] == 'logistics-native-check')
+    assert await app.browse_cloud(), app.cloud_status.value
+    row = next((row for row in app.cloud_rows.values() if row['path'] == 'logistics-native-check'), None)
+    assert row is not None, f'Native fixture folder missing: {list(app.cloud_rows.values())!r}; {app.cloud_status.value}'
     assert await app.browser_cloud_folder(row)
     row = next(row for row in app.cloud_rows.values() if row['path'].endswith('fixture.txt'))
     assert await app.open_remote_document(row), app.cloud_status.value

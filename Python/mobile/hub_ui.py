@@ -209,6 +209,16 @@ def _home_state(hub, recent):
 
 
 class HubUI:
+    def reflow_layout(self, frame):
+        if hasattr(self, 'home_sections') and self.main_window.content is self.app.native_host.root:
+            self.reflow_home()
+        if hasattr(self, 'documents_sections'):
+            self.reflow_documents_hub()
+        if hasattr(self, 'document_launchers'):
+            self.document_launchers.reflow(frame.width)
+        for grid in getattr(self, 'document_grids', ()):
+            grid.reflow(frame.width)
+
     def session_visible(self, session):
         from services.mobile_features import session_enabled
         if not session_enabled(self.app.preferences, session):
@@ -314,18 +324,20 @@ class HubUI:
         self._home_content_state = _home_state(self, recent)
         self._home_recent_buttons = []
         box = toga.Box(style=Pack(direction=COLUMN, margin=(8, 16, 16, 16)))
-        title = toga.Label('Your workspace', style=Pack(font_size=22, font_weight='bold', margin_bottom=16))
+        from .navigation import native_destination_titles
+        if not native_destination_titles(self.app):
+            box.add(toga.Label('Home', style=Pack(font_size=22, font_weight='bold', margin_bottom=12)))
+        intro = toga.Label('Open a file or start a new document.', style=Pack(flex=1))
         if self._home_content_state[1]:
-            title.style.flex = 1
             unlock = surface(icon_button('storage_crypt', 'Unlock credentials',
                 on_press=self.app.show_home_unlock), foreground='text')
             unlock.style.margin_left = 8
-            box.add(toga.Box(children=[title, unlock],
-                style=Pack(direction=ROW, align_items=CENTER)))
+            box.add(toga.Box(children=[intro, unlock],
+                style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12)))
         else:
-            box.add(title)
+            intro.style.margin_bottom = 12
+            box.add(intro)
         self.home_continue = None
-        box.add(toga.Label('Open a file or start a new document.', style=Pack(margin_bottom=12)))
         self.home_actions = toga.Box(children=[
             toga.Button('Open file…', on_press=self.open_hub_file, style=Pack(height=48, flex=1, margin_right=8)),
             toga.Button('New document', on_press=self.new_hub_document, style=Pack(height=48, flex=1))],
@@ -375,7 +387,9 @@ class HubUI:
 
     def build_documents_hub(self):
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        box.add(toga.Label('Documents', style=Pack(font_size=22, font_weight='bold', margin_bottom=12)))
+        from .navigation import native_destination_titles
+        if not native_destination_titles(self.app):
+            box.add(toga.Label('Documents', style=Pack(font_size=22, font_weight='bold', margin_bottom=12)))
         self.document_search = toga.TextInput(placeholder='Search documents',
             value=getattr(self, 'documents_query', ''), on_change=self.search_documents,
             style=Pack(height=48, margin_bottom=8))

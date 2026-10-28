@@ -520,9 +520,13 @@ class CloudUI(LocalCryptUI):
             if resource is None:
                 resource = native_service(self.cloud_client).remotes.open(NativeRemoteLocation(self.cloud_open_remote))
             async with self.remote_activity(opening) as progress:
-                opened = await self.open_crypt(
-                    copies=resource.readers(progress=progress),
-                    key=row['path'])
+                if direct_kind(row['path'], row.get('size', -1)) == 'video':
+                    from services.documents.mobile_storage import open_provider_document
+                    opened = await open_provider_document(self.app, resource, row['path'])
+                else:
+                    opened = await self.open_crypt(
+                        copies=resource.readers(progress=progress),
+                        key=row['path'])
         except Exception as error:
             # Session setup can fail before the provider reader's error handler.
             self.cloud_status.value = 'Remote opening failed: ' + str(error)[:300]

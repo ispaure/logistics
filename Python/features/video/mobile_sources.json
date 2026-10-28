@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "modules": [
+    "__init__.py",
+    "playback.py",
+    "transport.py",
+    "mobile/__init__.py",
+    "mobile/player.py",
+    "mobile/android.py",
+    "mobile/ios.py",
+    "mobile/android/io/github/ispaure/logistics/video/VideoPlayer.java",
+    "mobile/ios/VideoPlayer.m"
+  ]
+}

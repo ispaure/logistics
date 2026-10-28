@@ -158,6 +158,8 @@ class SettingsCategories:
         box.add(switch_row(app, 'Show Legacy', app.show_legacy_choice,
             'Show Legacy- folders in Workspaces, file browsers and library shortcuts, '
             'and credential choices whose names start with Legacy. This choice lasts only until the app closes.'))
+        from .trusted_wifi import controls as trusted_wifi_controls
+        trusted_wifi_controls(app, box)
         box.add(toga.Button('rclone connections…', on_press=app.show_cloud_connections, style=Pack(height=48)))
         box.add(toga.Button('SMB shares…', on_press=app.show_smb_connection, style=Pack(height=48)))
         return box

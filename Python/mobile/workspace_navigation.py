@@ -125,8 +125,9 @@ def sync_reader_toolbar(app, view, destination=None):
     text = str(title() if callable(title) else title or controller.navigationItem.title or '').replace('\n', ' ')
     # UIKit sizes the title inside the actual container, including vertical bars
     # and split panes; don't reserve horizontal gutters for now-vertical actions.
-    controller.navigationItem.titleView = None
     controller.navigationItem.title = text
+    from .document_location import mount_apple_title
+    mount_apple_title(view, controller, text)
     app._reader_title_controller = controller
     close = getattr(view, '_reader_close_button', None)
     if close is not None:
@@ -179,10 +180,9 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         if adapter is None or not hasattr(adapter, 'navigation'):
             return
         home = adapter.navigation[self.app.native_host.destinations.index('home')]
-        # Home owns its heading. Nested routes still need UIKit's Back button.
-        hidden = not bool(self.app.routes.screens['home'])
-        if bool(home.isNavigationBarHidden()) != hidden:
-            home.setNavigationBarHidden(hidden, animated=False)
+        # Keep the same native title and Back container as other destinations.
+        if bool(home.isNavigationBarHidden()):
+            home.setNavigationBarHidden(False, animated=False)
 
     def uninstall(self):
         columns = getattr(self, 'file_columns', None)
@@ -406,7 +406,7 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 frame.sync_native_header()
             elif view is not None and self.app.routes.apple:
                 menu = getattr(view, '_workspace_menu_button', None)
-                if menu is not None:
+                if menu is not None and not hasattr(view, '_native_reader_buttons'):
                     mount_native_menu(self.app, menu, destination or self.app.native_host.state.destination)
             from .reader_chrome import sync_comic_chrome
             sync_comic_chrome(self.app, body, destination=destination)
@@ -501,6 +501,14 @@ class WorkspaceFrame:
             detach(self.menu)
             if hasattr(self, 'pair'):
                 detach(self.pair)
+        if hasattr(self.view(), '_native_reader_buttons'):
+            # Reader projection owns Close and Browse as one leading group.
+            # Assigning a standalone leftBarButtonItem here removes Close;
+            # its unchanged projection cache cannot then restore it.
+            from .appearance import accessible_name
+            accessible_name(self.menu, 'Close file browser' if
+                self.navigation.menu_open[self.destination] else 'Browse files')
+            return
         self.menu.app, self.menu.window = app, app.main_window
         item = controller.navigationItem
         item.leftItemsSupplementBackButton = True

@@ -6,7 +6,7 @@ from threading import Event
 import unittest
 import zipfile
 
-from Scripts.release_verification import verify_asset
+from logistics_build.release_verification import verify_asset
 
 
 class ReleaseVerificationTests(unittest.TestCase):

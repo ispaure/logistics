@@ -35,7 +35,7 @@ class SettingsAndStorageUITests(unittest.TestCase):
             time.sleep(.005)
 
     def test_filtered_delete_all_uses_reviewed_owned_rows_and_refreshes(self):
-        from Scripts.build_retention import storage_inventory, delete_storage
+        from logistics_build.build_retention import storage_inventory, delete_storage
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             for group in ('firebase', 'testflight'):

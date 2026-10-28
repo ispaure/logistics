@@ -19,6 +19,8 @@ def direct_kind(path, size):
     suffix = PurePosixPath(str(path)).suffix.lower()
     if size < 0:
         raise LocalCopyRequired()
+    if suffix in {'.mp4', '.mkv'}:
+        return 'video'
     if suffix in TEXT and size <= TEXT_LIMIT:
         return 'text'
     if suffix in IMAGES and size <= IMAGE_LIMIT:

@@ -2,7 +2,7 @@
 from pathlib import Path
 import unittest
 
-from Scripts.validation_plans import desktop_checks, inventory
+from logistics_build.validation_plans import desktop_checks, inventory
 
 
 class ValidationPlanTests(unittest.TestCase):

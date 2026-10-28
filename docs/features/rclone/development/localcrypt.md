@@ -696,8 +696,9 @@ An explicitly supplied private archive password creates its own resume gate.
 navigation root with a password screen. Routes and worker completions may update
 the retained navigation tree but cannot reveal it through the lock screen. UIKit
 scene/app notifications and Android activity pause/resume callbacks lock before
-returning control to the OS. Foreground activation never unlocks a gate. Resume
-verification runs off the UI thread, checks gate identity and lifecycle revisions,
+returning control to the OS. Foreground activation requires password verification
+unless the explicitly enabled trusted Wi-Fi policy approves a fresh network check.
+Resume verification runs off the UI thread, checks gate identity and lifecycle revisions,
 and restores navigation only after every remaining gate is unlocked. A renewed
 background transition or credential replacement invalidates an in-flight unlock.
 Private drafts stay in RAM. Passwordless sessions require a confirmed temporary
@@ -946,3 +947,81 @@ encoding retains its text-specific limit. Mobile source/configuration text in
 managed crypt folders uses the same verified resource publication boundary.
 See [document storage and action parity](../../../development/document-storage.md)
 and the [notebook owner](../../notebooks/development/development.md).
+
+
+### Trusted Wi-Fi resume policy
+
+`mobile.trusted_wifi.WifiResume` records eligible, already-unlocked credential
+gates and known post-conceal revocation revisions in memory. A weak process-wide
+revision map coordinates duplicate app/scene notifications and shared credentials
+across windows. A failed network check invalidates competing pending resumes.
+Foreground resume
+consumes this snapshot once and unlocks matching active credential gates only if
+the saved opt-in is enabled and the current SSID exactly matches the saved list.
+Other private gates, replaced credentials, outstanding challenges and additional
+revocations remain locked. Existing snapshot shields and capture controls remain
+active. No password, verifier or decoded credential is added to preferences.
+
+Android reads its current Wi-Fi association only after fine-location permission
+and an active Wi-Fi transport check. iOS uses
+`NEHotspotNetwork.fetchCurrentWithCompletionHandler` asynchronously and keeps the
+shield up while checking. This requires the main app's Wi-Fi entitlement and
+foreground location permission. No network scans or background location subscriptions are used.
+Opening the trusted-network panel offers foreground identification permission
+when missing and awaits Toga's native permission result before enabling the
+current-network button. Denial preserves manual SSID entry. Reopening retries
+the offer, with system Settings guidance for permanent denial or reduced iOS
+accuracy. Adding the current network rechecks permission and refreshes the SSID
+internally. Saved rows use a compact red minus control with a native removal label.
+Platform declaration refresh is owned by `cloud_build` and
+`build_support/wifi_build.py`. Host regressions cover resume/revocation, preference
+roundtrips, list controls, native-adapter failures and build declaration migration;
+physical-device SSID permission and sleep/wake acceptance remain separate checks.
+
+
+### Session-only credential audit (October 28, 2026)
+
+The reviewed boundary is credential persistence and generation-bound access,
+not complete secrecy of all application metadata or protection from a compromised
+OS/process. Desktop session publication reads ZIP members in RAM, retains only
+ZIP-path/remote-name catalogue metadata, and supplies child rclone processes with
+private environment variables and a null config. Mobile session credential sets
+have no saved-vault parent, including token updates when persistent packages are
+loaded alongside them. The encrypted document-list cache retains its ZIP password
+in native RAM until explicit session clear or process exit; it never serializes
+that password into the vault or preferences. No secure erasure of Python strings,
+Go strings, child environments, swap or crash dumps is promised.
+
+The audit fixed three lifecycle defects:
+
+- Mobile remote and LocalCrypt views now select their owning package's password
+  gate, including key-specific legacy offline copies. Readers retain that gate
+  rather than adopting the first loaded account's password. Persistent accounts
+  do not inherit an unrelated session's gate; window-wide protection still applies
+  while any session credential or protected view exists.
+- Failed per-package Forget now attempts native session locking before continuing
+  independent retained-ZIP/list-cache erasures. The native lock scope is all
+  packages. A saved-vault failure remains an error requiring cleanup retry; if
+  locking also fails, the error instructs restarting before retrying. No success
+  is reported while saved cleanup is incomplete.
+- Desktop explicit Forget removes the in-memory ZIP shortcut as well as its
+  catalogue record. Ordinary Lock retains the shortcut and original encrypted ZIP.
+
+Important remaining semantics: an older persistent credential copy survives a
+session-only import until explicitly forgotten; desktop sleep/app switching does
+not automatically lock session credentials; mobile background lock conceals and
+authenticates UI without wiping credentials or necessarily stopping transfers.
+Explicit plaintext exports, clipboard contents and Local downloads remain outside
+session-only retention. Session OAuth refresh updates do not rewrite the source
+ZIP, so rotating refresh-token providers can require repackaging credentials.
+Encrypted-ZIP admission on desktop checks encryption but does not require AES;
+legacy ZIP encryption is accepted. Mobile additionally accepts passwordless
+imports but does not retain them for restart unlocking.
+
+Regression scope includes credential preparation/cancellation, mixed persistence,
+revocation and subprocess termination, failed cleanup, package-specific gates,
+protected vault failures, private readers and encrypted history. Native device
+capture, Keychain/Keystore behavior and trusted Wi-Fi acceptance still require
+current-device validation; host mocks do not establish those guarantees.
+The rebuilt host bridge also passed its Go suite and synthetic remote/LocalCrypt
+integration roundtrips during this audit; these do not validate physical devices.

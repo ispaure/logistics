@@ -42,6 +42,11 @@ backend fails planning; the manager never silently substitutes hosted validation
 Hosted desktop selection supplies the requested platform input. Normal release
 calls continue to require the complete desktop matrix.
 
+Local Android and iOS **Build** operations compile development artifacts without
+installing or delivering them. iOS uses the existing simulator build/cache backend.
+This is separate from disabling tests in a delivery journey, which still performs
+the selected build and delivery steps.
+
 ## Reusable boundary
 
 The external manager's `build_manager` package contains generic plan/result
@@ -49,8 +54,8 @@ contracts, subprocess execution, workspace locking, cancellation, output filteri
 profiles, monotonic local
 reservations, the GitHub transport and optional Qt presentation. It imports no
 Logistics application, feature tree, app identity or personal configuration.
-`Scripts/build_project.py`, `Scripts/build_snapshots.py`,
-`Scripts/validation_plans.py` and `mobile_build/deployment/manager_settings.py`
+`logistics_build/build_project.py`, `logistics_build/build_snapshots.py`,
+`logistics_build/validation_plans.py` and `mobile_build/deployment/manager_settings.py`
 supply Logistics source layout, suites, provider policy and settings.
 
 A project adapter supplies `description`, `operations`, `platforms`,
@@ -91,13 +96,22 @@ stops current processes and prevents the next phase from starting. POSIX process
 groups are terminated; Windows uses child-tree termination and requires its
 backend's real guest acceptance before claiming equivalent cleanup.
 
-Source snapshots contain local Git history and the exact shared pin. Working
-development snapshots copy tracked/nonignored edits and deletions and record a
-content fingerprint. Ignored credentials, device configuration and external
-feature links are excluded. Cached snapshots must still match their recorded
-content fingerprint. A dirty shared library must be committed first. Signed
-tester preparation accepts captured current files; native/runtime evidence must
-match the exact capture fingerprint when source is dirty. Staging verifies the
+Source snapshots contain local Git history and the selected shared base revision.
+Working development snapshots copy tracked/nonignored edits, additions, deletions,
+executable modes and internal relative links from both Logistics and commonUtils.
+The source identity records commonUtils' base commit, dirty state and content
+fingerprint as well as the combined fingerprint. Neither checkout needs a commit
+or push for local validation and Debug development builds. Ignored credentials,
+device configuration and external feature links are excluded. Source changes
+during capture or mismatched copied bytes reject preparation; later source edits
+cannot mutate an existing snapshot. Cached snapshots must still match their recorded
+content fingerprint, including the shared tree. Signed tester and Release-device
+preparation also use these captured current files, with full native/runtime release
+gates bound to the exact snapshot fingerprint. GitHub publication still requires
+committed source and a clean checkout. Selecting a committed
+revision excludes both repositories' local edits and uses the recorded shared pin.
+Native/runtime development evidence must match the exact capture fingerprint.
+Staging verifies the
 snapshot bytes before embedding that fingerprint. Protected inputs are linked from
 their existing locations only for that selected build, never copied into Git.
 
@@ -185,7 +199,7 @@ incomplete; installed guest tools or a passing Ubuntu run do not prove Fedora.
 
 Select an existing normal-user Windows test guest explicitly. The adapter uses
 owned source copies and portable, hash-verified Git/uv archives from
-`Scripts/build_manager_tools.json`; it never changes global PATH, login policy,
+`logistics_build/build_manager_tools.json`; it never changes global PATH, login policy,
 Developer Mode or signing settings. `vm.windows_prepared_reference` may point to
 an ignored preparation report to reuse that guest's public tools/interpreter.
 Preparation alone is not validation. The current catalog targets Windows ARM64
@@ -321,83 +335,21 @@ skipped remaining work and removed only the owned emulator. The reusable focused
 driver is `mobile_build/validation/local_manager_probe.py`; its output is explicitly
 cancellation evidence, never full-suite acceptance.
 
-## Reuse boundary after extraction
+## Project policy after manager extraction
 
-The external `build_manager` package owns serializable `Phase`/`Plan`
-contracts, execution and locks, provider transports, owned simulator/container
-lifetimes, profiles, number reservations and optional Qt presentation. It imports
-no Logistics application, test catalog, release naming or account configuration.
-Provider conventions remain provider-owned; a project supplies its repository,
-workflow names, credential references, device models and image selections.
+Use the [current ownership map](build-deployment-audit.md) when adding a backend,
+provider or project. Logistics build adapters live in `logistics_build/`;
+`Scripts/` retains machine `.bat` files and contributor tools. Generic execution,
+review/results, transports, artifact handling and retention mechanisms have one
+implementation in the external manager. Project builders retain their application
+payload, source/privacy rules, signing and acceptance inventory.
 
-The Qt adapter contract supplies `description`, `platforms`, `operations`,
-`interpreter`, `runner_directory`, `results_directory`, `backend_options` and
-`make_plan`. Optional `run_options` maps boolean option names to label/default
-entries; values are passed back to `make_plan` rather than interpreted by the UI.
-Logistics owns the `include_ipad` option. Settings, connection verification and
-tracked version editing remain adapter methods. `secret_environment` identifies
-additional inherited secrets for presentation redaction; each executable plan
-also declares its redaction names. The UI can open the actual result directory,
-including immutable captured reports and phase logs.
-
-`Scripts/build_project.py` owns Logistics suites, local/hosted selection, app
-identity, release channels and distribution handoffs. `Scripts/build_snapshots.py`
-owns source selection and the transfer allowlist shared by Linux and Windows.
-Snapshots preserve internal symbolic links without dereferencing private external
-content, reject links escaping the checkout and fingerprint executable bits.
-Deleted files and file-to-directory changes are overlaid before copying children;
-a per-snapshot lock protects concurrent preparation. Cached source is verified
-again before reuse. A Git checkout with local history and the pinned shared
-repository is required; a Gitless downloaded source ZIP cannot silently stand in
-for that history-dependent workflow.
-
-`Scripts/mobile_processes.py` owns native command teardown for both mobile
-adapters; neither Android nor its runtime helper imports the iOS policy module.
-Owned POSIX groups receive final termination even when their immediate parent
-has exited. Simulator cleanup verifies the same UUID/name again if shutdown races
-with cancellation; persistent shutdown failures remain failures. Linux command
-data travels over stdin rather than consuming the Parallels guest command line.
-Private profiles validate value types and use unique atomic temporary files;
-invalid number history produces an actionable error instead of implicit coercion.
-Plan preparation timing is recorded consistently for all backends.
-
-Prepared Android runtime tests install their two pinned, SHA-256 verified public
-wheels with `--no-index`; wheel download belongs to preparation. This removes
-package-index access from that test phase. SDK/Gradle/dependency preparation can
-still need network: this is not a claim that every cold backend setup is air-gapped.
-The legacy mobile payload code fingerprint has its established narrower scope;
-the manager additionally records the whole selected source snapshot and complete
-native artifact digest. Those identities must not be presented as interchangeable.
-
-Release source ZIPs include the manager installer, project adapter and pinned tool
-metadata, while excluding Git metadata, private profiles, credentials, caches and evidence.
-The install manifest records the pinned commonUtils commit. Release completion
-requires downloading the public ZIP, matching its published SHA-256, checking the
-embedded app/source/dependency identities and verifying every declared member hash.
-Checking only that GitHub advertised a digest is insufficient.
-
-The manager and its harmless second-project tests now live in the external
-repository. Project test discovery, native suites, source policy and
-release/distribution rules remain here. `Scripts.mobile_processes` delegates
-owned process-group retirement to the pinned manager's `stop_process`, including
-after parent exit, timeout or interruption. It keeps the preparation command and
-failure policy local; the manager bounds the final wait after termination.
-The full Windows plan requires normal-user file/directory symbolic-link creation. Missing capability
-remains a failed test setup, and focused Windows adapter checks cannot replace
-complete required acceptance.
-
-
-## Plan preparation and result integrity
-
-Plan inspection prepares source and prerequisites in a worker while the Qt event
-loop remains responsive; only plain project data crosses that boundary. Project
-adapter planning methods must not access Qt widgets. A selection changed during
-preparation invalidates the returned plan. Existing tool and snapshot waits remain
-bounded. Unreadable/malformed results, missing captured evidence and disagreement
-between a passing report and a failing process exit are shown as verification
-failures. Required cleanup failures take precedence over a cancellation status.
-Published ZIP verification also checks its embedded release tag, in addition to
-source/dependency identity and hashes.
+Native build/runtime commands use `build_manager.native_commands`. Exact pinned
+manager/dependency transfer uses `build_manager.dependency_sources`, with the
+Logistics pin and `build_retention.scratch()` supplied by `guest_manager.py`.
+Source snapshots, project artifact reports and main-app identity/data protection
+remain project policy. Generic manager API details belong in its own developer
+wiki; do not reintroduce those implementations or parallel operator guides here.
 
 ## Automatic storage retention
 
@@ -418,7 +370,7 @@ inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
 - Shared SDKs, signing keys, profiles, monotonic counters, existing simulators,
   deployment workspaces and unclassified evidence are outside this sweep.
 
-Run `python -m Scripts.build_retention` from the repository root for a JSON preview;
+Run `python -m logistics_build.build_retention` from the repository root for a JSON preview;
 add `--apply` to remove expired owned outputs. Pruning respects active build locks,
 skips symbolic links and reports filesystem errors. Old saved plans can refer to
 expired snapshots: prepare a fresh plan before running them. Retention preserves
@@ -430,9 +382,9 @@ its contents and save useful reports, recordings, source backups and recovery
 material under `test-results/`. Then explicitly enroll only disposable output:
 
 ```sh
-python -m Scripts.build_retention --enroll-output old-disposable-probe
-python -m Scripts.build_retention
-python -m Scripts.build_retention --apply
+python -m logistics_build.build_retention --enroll-output old-disposable-probe
+python -m logistics_build.build_retention
+python -m logistics_build.build_retention --apply
 ```
 
 Enrollment writes `.manager-build-output` and starts a seven-day review window;
@@ -443,11 +395,11 @@ must hold `build_manager.retention.lease(path)` for the whole operation; the lea
 refreshes its age. Use `.keep` for retained recovery material. SDKs, deployment
 workspaces, logs, credentials and general test evidence remain outside this policy.
 
-For a one-off probe, use `Scripts.build_retention.scratch(root)` as a context
+For a one-off probe, use `logistics_build.build_retention.scratch(root)` as a context
 manager, or run a command in a disposable working directory:
 
 ```sh
-python -m Scripts.build_retention --scratch /absolute/path/to/python /absolute/path/to/probe.py --output '{workspace}'
+python -m logistics_build.build_retention --scratch /absolute/path/to/python /absolute/path/to/probe.py --output '{workspace}'
 ```
 
 Scratch work stays under ignored `test-results/build-scratch/` and is removed on
@@ -503,11 +455,11 @@ attachment, loading and ancestor visibility state; these diagnostics do not retr
 the render or change its acceptance deadline.
 
 CPython runtime preparation delegates through the preserved
-`Scripts/mobile_runtime.py`, `Scripts/ios_runtime.py` and `Scripts/ios_testbed.py`
+`logistics_build/mobile_runtime.py`, `logistics_build/ios_runtime.py` and `logistics_build/ios_testbed.py`
 entry points to the pinned manager's `cpython_mobile` and `cpython_testbed`.
 Logistics selects the CPython revision/archive digest, wheel pins, OpenSSL
 configure arguments, Android library and iOS framework paths, native ARM host
-requirement and iOS 15 minimum in `Scripts/mobile_runtime_tools.json` and its
+requirement and iOS 15 minimum in `logistics_build/mobile_runtime_tools.json` and its
 adapters. Payload assembly, dependency requirements, `mobile.smoke` arguments,
 manifest/case/platform verification and owned simulator cleanup remain here.
 The manager performs verified downloads, upstream-source checks, compiler setup,
@@ -523,7 +475,7 @@ preparation, corrupt downloads/caches, compiler cancellation/environment
 restoration, testbed adaptation and owned cleanup. This extraction was not a
 new native Android/iOS runtime acceptance run.
 
-`Scripts/ios_testbed.py` adapts only the generated upstream test app: it adds a
+`logistics_build/ios_testbed.py` adapts only the generated upstream test app: it adds a
 real window-scene delegate and configuration, and raises the fixture's deployment
 minimum to iOS 15 for current Xcode SDKs. The pinned CPython source, interpreter
 and XCTest/core test inventory are preserved. The same adapter runs in the hosted
@@ -653,7 +605,7 @@ installation performed only before sync does not satisfy this requirement.
 
 Android device journeys accept the declared per-run field
 `devices.android_connections`, a JSON object mapping selected hardware IDs to
-explicit ADB serials. `Scripts.manager_devices` validates and captures the mapping
+explicit ADB serials. `logistics_build.manager_devices` validates and captures the mapping
 in the hash-bound recipe without changing saved metadata or discovering devices.
 Installation retains the existing hardware-identity check for mapped transports.
 This supports USB deployment when a saved wireless endpoint has expired. Portable
@@ -717,6 +669,11 @@ and records operation intent, and the adapter checks hardware, package and signi
 compatibility before an in-place update. Unknown attempts are never blindly
 replayed. Older captured plans keep their original approval requirement. Provider
 uploads and GitHub publication retain artifact-specific review.
+
+iOS and Android runtime preparation and tests share the project runtime resource,
+matching their common `mobile-runtime.lock`. Combined runs queue these phases
+instead of failing with workspace contention; native UI tests retain their own
+platform resources.
 
 Host-suite reuse fingerprints the captured tracked inputs, selected command, final
 settings/environment and the actual test interpreter's OS, architecture, executable

@@ -135,13 +135,17 @@ class WorkspaceColumns:
         if allocation.axis == 'row':
             frames = (CGRect((safe.left, 0), (allocation.leading, height)),
                       CGRect((safe.left + allocation.leading + allocation.gap, 0),
-                             (allocation.trailing, height)))
+                             (allocation.trailing + safe.right, height)))
         else:
             frames = (CGRect((safe.left, 0), (width, allocation.leading)),
-                      CGRect((safe.left, allocation.leading + allocation.gap),
-                             (width, allocation.trailing)))
+                      CGRect((0, allocation.leading + allocation.gap),
+                             (bounds.size.width, allocation.trailing)))
         if document:
-            frames = (frames[0], CGRect((safe.left, 0), (width, height)))
+            frames = (frames[0], CGRect((0, 0), (bounds.size.width, height)))
+        # Native navigation must reach the window edge to participate in Duo's
+        # vertical bar. Its content container applies safe areas afterward;
+        # insetting the navigation controller itself turns it into an interior
+        # pane and can strand its actions across the top.
         targets = tuple((float(frame.origin.x), float(frame.origin.y),
                          float(frame.size.width), float(frame.size.height)) for frame in frames)
         if targets == getattr(self, '_layout_targets', None):

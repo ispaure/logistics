@@ -16,6 +16,25 @@ from mobile_build.deployment.device_tools import BUNDLE, normal_launcher, select
 
 
 class DeviceDeploymentTests(unittest.TestCase):
+    def test_explicit_xcode_account_does_not_read_or_pass_api_credentials(self):
+        identity = {'application_identifier': 'ABCDEFGHIJ.' + BUNDLE}
+        config = dict(bundle_id=BUNDLE, team_id='ABCDEFGHIJ', device_id='phone', signing_identity=identity)
+        with (patch.object(device_tools, 'CONFIG'),
+              patch.object(device_tools, 'saved_config', return_value=config),
+              patch.object(device_tools, 'prepare_workspace'),
+              patch.object(device_tools, 'installed', return_value=[]),
+              patch.object(device_tools, 'choose', return_value=('/Xcode', '27.1')),
+              patch.object(device_tools, 'refresh_sources'),
+              patch.object(device_tools, 'prepare_project'),
+              patch.object(device_tools, 'provisioning_auth_args') as auth,
+              patch.object(device_tools, 'run') as run,
+              patch.object(device_tools, 'validate_app', return_value=identity),
+              patch('sys.argv', ['device_tools.py', 'build', '--xcode-account'])):
+            device_tools.main()
+            auth.assert_not_called()
+            self.assertNotIn('-authenticationKeyID', run.call_args.args[0])
+            self.assertIn('-allowProvisioningUpdates', run.call_args.args[0])
+
     def test_refresh_updates_dependencies_in_existing_projects(self):
         for existing in (False, True):
             with self.subTest(existing=existing), tempfile.TemporaryDirectory() as directory:
@@ -47,7 +66,11 @@ class DeviceDeploymentTests(unittest.TestCase):
             pbx, info = root / 'project.pbxproj', root / 'Info.plist'
             info.write_bytes(plistlib.dumps({'CFBundleIdentifier': BUNDLE, 'MainModule': 'tests.logisticsmobile',
                                             'CFBundleShortVersionString': '0.1.8', 'CFBundleVersion': '202610239'}))
+            extension_info = root / 'LogisticsWidget/Info.plist'
+            extension_info.parent.mkdir()
+            extension_info.write_bytes(plistlib.dumps({'CFBundleVersion': 'old', 'CFBundleShortVersionString': 'old'}))
             with (patch.object(device_tools, 'ROOT', root), patch.object(device_tools, 'PBX', pbx),
+                  patch.object(device_tools, 'PROJECT', root),
                   patch.object(device_tools, 'INFO', info),
                   patch('subprocess.check_output', return_value=json.dumps(self.project()).encode())):
                 device_tools.prepare_project('ABCDEFGHIJ')
@@ -60,6 +83,8 @@ class DeviceDeploymentTests(unittest.TestCase):
                 self.assertEqual(result['MainModule'], 'logisticsmobile')
                 self.assertEqual(result['CFBundleShortVersionString'], '0.1.9')
                 self.assertEqual(result['CFBundleVersion'], '202610242')
+                self.assertEqual(plistlib.loads(extension_info.read_bytes()),
+                                 {'CFBundleVersion': '202610242', 'CFBundleShortVersionString': '0.1.9'})
                 device_tools.prepare_project('ABCDEFGHIJ')
                 self.assertEqual(plistlib.loads(info.read_bytes()), result)
 
@@ -196,12 +221,14 @@ class DeviceDeploymentTests(unittest.TestCase):
                   patch.object(device_tools, 'device_json', return_value={'devices': [ipad]}),
                   patch.object(device_tools, 'refresh_sources'),
                   patch.object(device_tools, 'prepare_project'),
+                  patch.object(device_tools, 'provisioning_auth_args', return_value=['-authenticationKeyID', 'existing-key']),
                   patch.object(device_tools, 'run') as run,
                   patch.object(device_tools, 'validate_app', return_value=identity) as validate,
                   patch('sys.argv', ['device_tools.py', 'build', '--device', 'tablet'])):
                 device_tools.main()
                 command = run.call_args.args[0]
                 self.assertEqual(command[command.index('-destination') + 1], 'id=tablet-udid')
+                self.assertIn('-authenticationKeyID', command)
                 validate.assert_called_once_with(device_tools.APP, 'ABCDEFGHIJ', 'tablet-udid')
                 self.assertEqual(json.loads(config_path.read_text()), config)
 

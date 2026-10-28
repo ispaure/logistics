@@ -173,6 +173,38 @@ short source revision and commit time when available, plus the platform and
 packaged source snapshot. Local modified builds are identified. This information
 is available offline; the About heading keeps its normal appearance.
 
+### Trusted Wi-Fi session resume
+
+In **Settings → Workspaces**, **Skip session password on trusted Wi-Fi** is off
+by default. Enable it to reveal **Trusted Wi-Fi networks…**. Add the current
+network or enter its exact name (SSID), including case and spaces. Remove a row
+to stop trusting that name. The setting and list are saved on this device.
+
+After a session-only credential package is unlocked, returning from sleep or
+another app skips the repeat password prompt on any listed network. Public or
+unlisted Wi-Fi, cellular, disconnected Wi-Fi and unavailable network information
+keep the normal prompt. An outstanding password challenge remains required even
+if you subsequently return to trusted Wi-Fi. App restart and manual **Lock
+session** still require authentication. Passwords are never saved; unrelated
+private sessions keep their own password checks. Background content stays hidden.
+
+Opening **Trusted Wi-Fi networks…** asks to allow Wi-Fi identification if access
+is missing. You can accept or decline; entering an SSID with **Add network name**
+always remains available. **Add current network** is enabled only after precise
+foreground location access is granted and reads the current network again when
+tapped. There is no separate refresh button. Remove a saved network with the red
+**−** beside its name.
+
+If you decline, reopening the panel offers another chance. When the system no
+longer allows a permission prompt, the panel explains that you can enable precise
+location access for Logistics in system Settings, then reopen the panel.
+Android may also need system location services enabled. iOS builds require the Wi-Fi information entitlement in their
+signing profile. Denied permission or an unavailable entitlement keeps the normal
+password prompt. Logistics requests no background location access or location
+updates. Network names can be duplicated, so this is a convenience feature rather
+than proof of a network's identity. The app checks the current association on
+return; it cannot establish whether the network changed while it was suspended.
+
 ## Preferences and storage
 
 The launcher icon includes light and dark artwork. On supported iOS versions it

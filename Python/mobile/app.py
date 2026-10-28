@@ -255,6 +255,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     def _prepare_startup_editor(self):
         self.text_views = {}
+        from .layout_participants import participants
+        from .managed_documents import reflow_text_views
+        participants(self).register('text-readers', self, reflow_text_views, order=60)
         self.current = None
         self.loading = True
         self.labels = {}
@@ -497,29 +500,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         sync_epub_geometry(self)
         if self.native_host.state.destination == 'settings' and hasattr(self, 'settings_navigation'):
             self.settings_navigation.reflow()
-        for name in ('collection_storage_page', 'reset_page'):
-            page = getattr(self, name, None)
-            if page is not None:
-                fit_section(page, max(280, self.adaptive.content_width('settings')))
-        for name in ('cloud_connections_view', 'cloud_import_view', 'smb_view'):
-            page = getattr(self, name, None)
-            if page is not None:
-                page.reflow()
-        if hasattr(self, 'home_sections') and self.main_window.content is self.native_host.root:
-            self.reflow_home()
-        if hasattr(self, 'documents_sections'):
-            self.reflow_documents_hub()
-        if hasattr(self, 'document_launchers'):
-            self.document_launchers.reflow(self.main_window.size.width)
-        for grid in getattr(self, 'document_grids', []):
-            grid.reflow(self.main_window.size.width)
-        if hasattr(self, 'documentation'):
-            self.documentation.reflow(self.adaptive.content_width('settings', margin=0))
-        if hasattr(self, 'vault_browser'):
-            owner = self.vault_browser
-            owner.reflow(self.adaptive.content_width(owner.destination, margin=0))
-        for owner in self.text_views.values():
-            owner.apply_split(self.main_window.size.width)
+        from .layout_participants import LayoutFrame, participants
+        participants(self).reflow(LayoutFrame(self.main_window.size.width, self.adaptive.content_width))
         from .layout_events import notify_layout
         self.loop.call_soon(notify_layout, self)
 
@@ -791,25 +773,15 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         root.add(view)
 
     def change_seasonal_snow(self, widget, **kwargs):
-        try:
-            self.preferences.save(seasonal_snow='true' if widget.value else 'false')
-        except (OSError, ValueError) as error:
-            widget.on_change = None
-            widget.value = self.preferences.values['seasonal_snow'] == 'true'
-            widget.on_change = self.change_seasonal_snow
-            self.settings_status.text = str(error)
+        from .settings.forms import save_boolean_switch
+        if not save_boolean_switch(self.preferences, widget, 'seasonal_snow', self.change_seasonal_snow, self.settings_status):
             return
         self.seasonal_snow.refresh()
         self.settings_status.text = 'Seasonal snow saved on this device.'
 
     def change_android_eink(self, widget, **kwargs):
-        try:
-            self.preferences.save(android_eink='true' if widget.value else 'false')
-        except (OSError, ValueError) as error:
-            widget.on_change = None
-            widget.value = self.preferences.values['android_eink'] == 'true'
-            widget.on_change = self.change_android_eink
-            self.settings_status.text = str(error)
+        from .settings.forms import save_boolean_switch
+        if not save_boolean_switch(self.preferences, widget, 'android_eink', self.change_android_eink, self.settings_status):
             return
         from .appearance import configure_android_eink
         configure_android_eink(self)
@@ -818,13 +790,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self.settings_status.text = 'High contrast / E Ink saved on this device.'
 
     def change_session_speech(self, widget, **kwargs):
-        try:
-            self.preferences.save(session_speech_when_locked='true' if widget.value else 'false')
-        except (OSError, ValueError) as error:
-            widget.on_change = None
-            widget.value = self.preferences.values['session_speech_when_locked'] == 'true'
-            widget.on_change = self.change_session_speech
-            self.settings_status.text = str(error)
+        from .settings.forms import save_boolean_switch
+        if not save_boolean_switch(self.preferences, widget, 'session_speech_when_locked', self.change_session_speech, self.settings_status):
             return
         from features.books.mobile.media_controls import settings_changed
         settings_changed(self)

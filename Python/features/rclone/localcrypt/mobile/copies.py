@@ -18,6 +18,13 @@ class LocalCryptCopies:
     def privacy_gate(self):
         return getattr(self.client, 'session_privacy', None)
 
+    def privacy_gate_for(self, key):
+        from features.rclone.mobile.session_privacy import remote_privacy_gate
+        if getattr(self.client, 'credential_state', None) is None:
+            return remote_privacy_gate(self.client, None)  # Single-account compatibility clients.
+        record = self.record(key)
+        return remote_privacy_gate(self.client, record['remote'], record['identity'], cipher=True)
+
     def __init__(self, root, client):
         self.root, self.client = Path(root), client
         self._write_lock = mutation_lock

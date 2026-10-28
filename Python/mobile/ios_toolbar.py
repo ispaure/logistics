@@ -105,11 +105,23 @@ def mount_actions(controller, owner, buttons, *, overflow=True):
     from rubicon.objc import ObjCClass, Block, ObjCBlock, objc_id, ns_from_py, SEL
     nav = controller.navigationItem
     buttons = list(buttons)
-    use_overflow = overflow and bool(vertical_edge(controller))
+    edge = vertical_edge(controller)
+    use_overflow = overflow and bool(edge)
+    grouped = bool(nav.respondsToSelector(SEL('setTrailingItemGroups:')))
+    pointer = getattr(controller, 'ptr', None)
+    signature = (pointer.value if pointer is not None else id(controller),
+                 action_state(buttons), edge, overflow)
+    mounted = getattr(owner, '_ios_toolbar_mount', None)
+    if grouped and mounted is not None and mounted[0] == signature:
+        _, groups, pinned, additional = mounted
+        # Layout callbacks must not replace an open menu's native groups. Check
+        # actual ownership too: another screen can have reused this controller.
+        if (list(nav.trailingItemGroups) == groups and nav.pinnedTrailingGroup == pinned
+                and nav.additionalOverflowItems == additional):
+            return owner._ios_toolbar_items
     menus = [button for button in buttons if getattr(button, 'control_icon', None) in ('more', 'overflow')
              and button._impl.native.menu is not None] if use_overflow else []
     actions = [button for button in buttons if button not in menus]
-    grouped = bool(nav.respondsToSelector(SEL('setTrailingItemGroups:')))
     groups, pinned, ordinary = [], [], []
     for group in action_groups(actions):
         items = []
@@ -144,6 +156,8 @@ def mount_actions(controller, owner, buttons, *, overflow=True):
         nav.additionalOverflowItems = None
         owner._ios_overflow_provider = None
     owner._ios_toolbar_items = [button._ios_action_item for button in actions]
+    if grouped:
+        owner._ios_toolbar_mount = (signature, groups, nav.pinnedTrailingGroup, nav.additionalOverflowItems)
     return owner._ios_toolbar_items
 
 

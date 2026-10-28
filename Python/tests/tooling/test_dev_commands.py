@@ -73,7 +73,7 @@ class DeveloperCommandTests(unittest.TestCase):
             self.assertEqual(dev.main(['lint']), 0)
             command = run.call_args.args[0]
             self.assertEqual(command[1:5], ['-m', 'ruff', 'check', '--config'])
-            self.assertEqual(command[-5:], ['dev.py', 'Python', 'mobile_build', 'Scripts', '.github/scripts'])
+            self.assertEqual(command[-6:], ['dev.py', 'Python', 'mobile_build', 'Scripts', 'logistics_build', '.github/scripts'])
 
 
 class SetupCommandTests(unittest.TestCase):
@@ -192,7 +192,7 @@ class LintScopeTests(unittest.TestCase):
             root = Path(directory).resolve()
             owned = ('dev.py', 'Python/new_module.py', 'mobile_build/tools.py',
                      'mobile_build/build_support/new_adapter.py',
-                     'mobile_build/native_tests/tests/probe.py', 'Scripts/check.py', '.github/scripts/check.py')
+                     'mobile_build/native_tests/tests/probe.py', 'Scripts/check.py', 'logistics_build/check.py', '.github/scripts/check.py')
             for name in owned:
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -200,7 +200,7 @@ class LintScopeTests(unittest.TestCase):
             config = root / 'Python/pyproject.toml'
             shutil.copyfile(ROOT / 'Python/pyproject.toml', config)
             command = [sys.executable, '-m', 'ruff', 'check', '--config', str(config),
-                       'dev.py', 'Python', 'mobile_build', 'Scripts', '.github/scripts']
+                       'dev.py', 'Python', 'mobile_build', 'Scripts', 'logistics_build', '.github/scripts']
 
             def selected():
                 result = subprocess.run([*command, '--show-files'], cwd=root,

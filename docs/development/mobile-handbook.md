@@ -1,8 +1,10 @@
 # Build and release Logistics Mobile yourself
 
-Start here if you have never developed for iOS or Android. This guide describes
-this repository's existing tools; you can run them in macOS Terminal without an
-AI assistant. The [technical mobile README](mobile-launchers.md) and
+Start here to understand the mobile toolchain. For everyday checks and delivery,
+use the [Build Deployment Manager workflow](../user/build-manager-journeys.md).
+The manual commands below are lower-level build and diagnostic procedures; some
+install on a device or upload a build. Read each section's prerequisites and
+expected effect before running it. The [technical mobile README](mobile-launchers.md) and
 [TestFlight reference](mobile-testflight.md) explain the implementation in depth.
 
 ## Understand the pieces
@@ -77,7 +79,7 @@ or upload anything. From the repository root in the prepared Terminal:
 
 ```sh
 python mobile_build/tools.py stage mobile_build/payload --allow-dirty
-cd Mobile
+cd mobile_build
 python cloud_build.py licenses
 python -m briefcase create iOS --no-input
 python cloud_build.py ios
@@ -90,8 +92,10 @@ location (for example `mobile_build/build/payload-before-edit-1`, creating `buil
 needed). Staging requires a new destination and will not overwrite one. Repeat
 staging and licenses, then use **`update` instead of `create`**, followed by
 `cloud_build.py ios`, `build` and `open`. `--allow-dirty` is for local development;
-release staging requires committed sources. All `cloud_build.py` commands above
-run from `mobile_build`, not from the repository root.
+direct staging without that flag requires committed sources. Manager-controlled
+mobile release plans can capture current files and bind full release evidence to
+the snapshot fingerprint. That policy is separate from the direct staging CLI.
+All `cloud_build.py` commands above run from `mobile_build`, not the repository root.
 
 In Xcode:
 
@@ -163,10 +167,12 @@ explains that process.
    save an App Store Connect team API key reference on this Mac. Install the
    requirements from the Mac setup above. `python -m mobile_build.deployment.testflight_external check`
    verifies account/app/group access without uploading.
-2. Make sure the intended source and commonUtils revision are committed and
-   pushed. A local commit alone is not a GitHub backup. Review `git status` and
-   `git -C Python/commonUtils status`; generated files and private keys stay out
-   of commits. Do not use an unsigned rehearsal for an upload.
+2. Review the intended Logistics and commonUtils source with `git status` and
+   `git -C Python/commonUtils status`. A local mobile release does not require a
+   commit or push: use the manager's captured-source workflow and full release
+   gates for that path. These low-level commands do not replace the manager's
+   complete test/evidence plan. Generated files and private keys stay outside
+   source publication. An unsigned rehearsal cannot be uploaded.
 3. Check App Store Connect's TestFlight tab for the latest build number. Choose
    a new increasing number, at most nine digits, unused both there and under
    `mobile_build/build/testflight`. The number below is illustrative: replace it.

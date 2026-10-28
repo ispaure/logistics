@@ -3,10 +3,51 @@ import asyncio
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
-from mobile.ios_reader_chrome import notify_viewport
+from mobile.ios_reader_chrome import notify_viewport, progress_bottom_inset
 
 
 class ViewportTests(unittest.TestCase):
+    def test_progress_uses_only_home_gesture_padding(self):
+        import toga
+        from mobile.reader_controls import PageFooter, page_buttons
+        footer = PageFooter(*page_buttons(None, None), Mock())
+        root = toga.Box(children=[footer.widget])
+        self.assertEqual(progress_bottom_inset(root, 34, 34), 18)
+        self.assertEqual(progress_bottom_inset(root, 20, 20), 4)
+        self.assertEqual(progress_bottom_inset(root, 0, 0), 0)
+        # Bottom bars and keyboards own their full inset.
+        self.assertEqual(progress_bottom_inset(root, 83, 34), 83)
+        self.assertEqual(progress_bottom_inset(root, 300, 34), 300)
+        root.remove(footer.widget)
+        self.assertEqual(progress_bottom_inset(root, 34, 34), 34)
+        vertical = PageFooter(*page_buttons(None, None), Mock(), vertical=True)
+        root.add(vertical.widget)
+        self.assertEqual(progress_bottom_inset(root, 34, 34), 34)
+
+    def test_bar_edge_change_refreshes_actions_without_a_size_change(self):
+        from unittest.mock import patch
+        loop = asyncio.new_event_loop()
+        self.addCleanup(loop.close)
+        app = SimpleNamespace(active_host=True, loop=loop, resize_workspace=Mock())
+        controller = object()
+        container = SimpleNamespace(content=SimpleNamespace(interface=SimpleNamespace(app=app)),
+            width=600, height=600, top_inset=0, bottom_inset=0, left_inset=0, right_inset=0,
+            controller=controller)
+        async def exercise():
+            with patch('mobile.ios_toolbar.vertical_edge', return_value=2) as edge:
+                notify_viewport(container)
+                await asyncio.sleep(0)
+                notify_viewport(container)
+                await asyncio.sleep(0)
+                self.assertEqual(app.resize_workspace.call_count, 1)
+                for value in (1, 0, 2):
+                    edge.return_value = value
+                    notify_viewport(container)
+                    await asyncio.sleep(0)
+                self.assertEqual(app.resize_workspace.call_count, 4)
+                edge.assert_called_with(controller)
+        loop.run_until_complete(exercise())
+
     def test_size_and_inset_changes_coalesce_and_wake_on_portrait_return(self):
         loop = asyncio.new_event_loop()
         self.addCleanup(loop.close)

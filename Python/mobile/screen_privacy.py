@@ -25,6 +25,8 @@ class ScreenPrivacy:
         self.saved_lock_layout = None
         self.lock_gates = ()
         self.unlock_busy = False
+        from .trusted_wifi import WifiResume
+        self.wifi_resume = WifiResume()
         self.activity_listener = self.application = None
         self.trait_registration = self.trait_block = None
         self.backend = type(app._impl).__module__
@@ -35,6 +37,7 @@ class ScreenPrivacy:
             self.center = ObjCClass('NSNotificationCenter').defaultCenter
             for name, callback in (
                 ('UIApplicationWillResignActiveNotification', self.conceal),
+                ('UIApplicationProtectedDataWillBecomeUnavailable', self.conceal),
                 ('UIApplicationDidBecomeActiveNotification', self.reveal),
                 ('UIScreenCapturedDidChangeNotification', self.refresh),
                 ('UIAccessibilityReduceTransparencyStatusDidChangeNotification', self.artwork_accessibility_changed),
@@ -109,6 +112,9 @@ class ScreenPrivacy:
     def retire_stale(self):
         if self.disposed or not self.app.active_host:
             return
+        video = getattr(self.app, 'video_player', None)
+        if video is not None:
+            video.retire_stale()
         from features.notebooks.mobile.documents import retire_stale_notebooks
         retire_stale_notebooks(self.app)
         self.app.credential_document_lists.refresh()
@@ -142,13 +148,24 @@ class ScreenPrivacy:
                           for panel in getattr(self.app, '_notebook_views', {}).values())
         return tuple(dict.fromkeys(gate for gate in candidates if gate is not None))
 
+    def credential_gates(self):
+        from features.rclone.mobile.cloud import CloudClient
+        state = CloudClient.credential_state
+        client = getattr(self.app, 'cloud_client', None)
+        return tuple(gate for gate in (*state.package_privacy.values(), state.session_privacy,
+                     getattr(client, 'session_privacy', None)) if gate is not None)
+
     def sensitive(self):
         return bool(self.gates())
 
     def conceal(self):
+        video = getattr(self.app, 'video_player', None)
+        if video is not None:
+            video.conceal()
         from .comic_feedback import clear as clear_comic_feedback
         clear_comic_feedback(self.app)
         self.inactive = True
+        self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
         from .page_animation import cancel_visible_slides
         cancel_visible_slides(self.app)
         from .ios_content_background import clear
@@ -159,7 +176,12 @@ class ScreenPrivacy:
         enforce_privacy(self.app)
         if self.lock_view is not None:
             self.lock_password.value = self.lock_confirmation.value = ''
-        for gate in self.gates():
+        from .trusted_wifi import WifiResume
+        if not hasattr(self, 'wifi_resume'):
+            self.wifi_resume = WifiResume()
+        gates = self.gates()
+        self.wifi_resume.capture(gates, self.credential_gates())
+        for gate in gates:
             gate.lock()
         picker = getattr(self.app, '_editor_picker', None)
         if picker is not None:
@@ -177,6 +199,32 @@ class ScreenPrivacy:
                 observer.app.loop.call_soon_threadsafe(observer.refresh)
 
     def reveal(self):
+        values = getattr(getattr(self.app, 'preferences', None), 'values', {})
+        self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
+        if (self.backend.startswith(('toga_iOS.', 'toga_android.')) and hasattr(self, 'wifi_resume')
+                and self.wifi_resume.pending and values.get('session_trusted_wifi') == 'true'):
+            # Privacy boundary: never restore document content speculatively.
+            # Keep the shield and lock root until a fresh Wi-Fi result authorizes
+            # resume. Capture protection is independent of this password waiver.
+            # A later lifecycle transition invalidates this callback.
+            self.app.loop.create_task(self.resume_on_wifi(self.wifi_revision))
+            return
+        from .trusted_wifi import current_ssid
+        ssid = current_ssid(self.app) if values.get('session_trusted_wifi') == 'true' else None
+        self.finish_reveal(ssid)
+
+    async def resume_on_wifi(self, revision):
+        from .trusted_wifi import read_ssid
+        try:
+            ssid = await read_ssid(self.app)
+        except Exception:
+            ssid = None  # A failed native lookup must fall back to password authentication.
+        if not self.disposed and self.wifi_revision == revision:
+            self.finish_reveal(ssid)
+
+    def finish_reveal(self, ssid):
+        if hasattr(self, 'wifi_resume'):
+            self.wifi_resume.resume(self.app, self.gates(), self.credential_gates(), ssid)
         self.inactive = False
         self.refresh()
         self.resume_reader()
@@ -189,6 +237,9 @@ class ScreenPrivacy:
         """Memory pressure can retire the visible page while the lock is up."""
         if self.inactive or self.saved_content is not None or any(gate.locked for gate in self.gates()):
             return
+        video = getattr(self.app, 'video_player', None)
+        if video is not None:
+            video.reveal()
         for name in ('private_sessions', 'readers'):
             manager = getattr(self.app, name, None)
             owner = getattr(manager, 'active', None)
@@ -198,6 +249,9 @@ class ScreenPrivacy:
 
     def refresh(self):
         gates = self.gates()
+        video = getattr(self.app, 'video_player', None)
+        if video is not None and gates and (self.inactive or any(gate.locked for gate in gates)):
+            video.conceal()
         # A credential import can finish while the application is inactive.
         if self.inactive:
             for gate in gates:

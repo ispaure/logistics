@@ -2,6 +2,33 @@
 
 [Developer index](development.md)
 
+## The application in one picture
+
+There are two application shells: desktop uses Qt/PySide6 and mobile uses Toga
+with native controls. Both compose feature behavior and Logistics services around
+shared commonUtils mechanisms. A mobile app is built from an explicit source
+manifest, not by copying every desktop module onto a phone.
+
+| Layer | Owns | Example question |
+| --- | --- | --- |
+| Application shell | Navigation, composition and retained views | Which document tab is active? |
+| Feature | Domain behavior and feature-specific presentation | How does a comic reader turn a page? |
+| Logistics service | Policy shared across app features | Where may this private document save? |
+| commonUtils | Reusable operations and components | How is a file written atomically? |
+| Build/deployment tooling | Project snapshots, suites, packaging and release policy | Which checks must this tester build pass? |
+
+Keep portable behavior independent of Qt and Toga presentation. The standalone
+Build Deployment Manager supervises declared work; Logistics supplies its adapter
+and release rules in `logistics_build/`. A build-tooling change belongs outside
+the app's runtime navigation code. See the [code map](code-map.md) for exact owners.
+
+A **host** is the application composing a reusable component. A **provider** gives
+access to a kind of storage or external service. A **session** retains state for
+an operation or open document. Closing a view does not necessarily finish its
+session or worker; the owning lifecycle determines when resources can be released.
+
+## Feature and shell boundaries
+
 Feature-specific UI belongs to the feature that owns the behavior.
 
 Typical structure:

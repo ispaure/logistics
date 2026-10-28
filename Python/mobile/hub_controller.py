@@ -43,6 +43,8 @@ class HubController(HubUI):
 
     def __init__(self, app):
         self.app = app
+        from .layout_participants import participants
+        participants(app).register('document-hubs', self, HubUI.reflow_layout, order=20)
 
     adaptive = HostAttribute("adaptive")
     checkpoint = HostService("checkpoint")

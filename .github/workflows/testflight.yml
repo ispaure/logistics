@@ -48,7 +48,7 @@ jobs:
         with:
           python-version: '3.12.2'
       - name: Install explicitly pinned external manager
-        run: python Scripts/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
+        run: python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version: '1.26.9'

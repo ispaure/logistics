@@ -9,6 +9,8 @@ need another application installed.
 
 Mobile Settings includes bundled offline documentation with nested folder browsing
 and file/title or page-text search.
+On iOS, a lightweight Home Screen widget can display numbers or short text supplied
+by Shortcuts; see the [widget setup guide](docs/user_mobile/shortcut-widgets.md).
 
 ## Get started
 
@@ -79,8 +81,9 @@ storage choices, format limits and validation status.
 
 For local builds, paired-device installation, Firebase and TestFlight distribution,
 start with the [mobile build and release handbook](docs/development/mobile-handbook.md).
-The existing deployment launcher also exposes reviewed test/build plans and local
-profiles in the [build manager](docs/development/build-manager.md).
+Use the standalone [Build Deployment Manager](docs/user/build-manager.md) for
+checks, build-only artifacts and delivery. Logistics provides its project adapter
+in `logistics_build/`; there is no separate deployment launcher.
 The guided flow supports [combined platform validation and reviewed GitHub/Firebase/TestFlight delivery](docs/development/build-manager-journeys.md).
 
 | Tool | Use it to… |
@@ -90,7 +93,7 @@ The guided flow supports [combined platform validation and reviewed GitHub/Fireb
 | [Bulk Rename](docs/features/bulk_rename/user/user.md) | Preview and apply changes to many filenames at once |
 | [Text Editor](docs/features/text_editor/user/user.md) | Edit text and code in tabs, search/replace, see Git change markers, and preserve file encodings |
 | [IDE](docs/features/ide/user/user.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, search project files, and autosave with Git change markers |
-| [LM Chat](docs/features/lm/user/user.md) | Chat with an existing LM server, paste screenshots, read and optionally edit IDE project files with saved change previews, and save conversations locally |
+| [LM Chat](docs/features/lm/user/user.md) | Chat with an existing LM server or [supported on-device mobile models](docs/features/lm/user_mobile/conversations.md#on-device-models), paste screenshots, read and optionally edit IDE project files with saved change previews, and save conversations locally |
 | [Books](docs/features/books/user/user.md) and [Comics](docs/features/comics/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
 | [Notebooks](docs/features/notebooks/user/user.md) | Create Notebook documents from New document, open/edit .rmdoc files and export native ink copies (experimental) |
 | [PDF Reader](docs/features/pdf/user/user.md) | Read and search PDFs on desktop and mobile, jump to pages, swipe vertically, and duplicate a PDF as an annotatable .rmdoc beside it |
@@ -111,6 +114,7 @@ The guided flow supports [combined platform validation and reviewed GitHub/Fireb
 | [Aviation Tools](docs/features/aviation_tools/user/user.md) | Flight calculators and aircraft/airport reference data |
 | [Flight Simulator](docs/features/flight_sim/user/user.md) | Manage X-Plane settings and window presets |
 | [Media](docs/features/media/user/user.md) | Rename audio chapters from a CSV |
+| [Video Player](docs/features/video/video.md) | Local/LocalCrypt MP4 and MKV playback, best-effort remote/crypt cloud streaming, subtitles and audio tracks |
 | [File Tools](docs/features/file_tools/user/user.md) | Check filenames and remove Python bytecode files |
 | [System Tools](docs/features/system_tools/user/user.md) | Run platform-specific maintenance tools |
 
@@ -120,23 +124,25 @@ Additional emulator tools are available on request through ispaure’s **ally-to
 
 Application source lives under `Python/`: `desktop/` hosts the desktop app,
 `mobile/` hosts the mobile app, and `features/` contains the tools they use.
-Mobile packaging and deployment scripts live in `mobile_build/`. See the
+Project build policy and manager adapters live in `logistics_build/`; native
+packaging and deployment helpers live in `mobile_build/`. See the
 [code map](docs/development/code-map.md) for ownership and native compatibility.
 
-For contributors, start with [developer setup](docs/development/testing.md).
+For contributors, start with [your first contribution](docs/development/getting-started.md).
 `python3 dev.py doctor` checks the local environment; `dev.py setup desktop` and
 `dev.py setup mobile` prepare separate host environments. Use `py` on Windows.
 
 Start at the [documentation wiki](docs/docs.md) for the user, mobile user and
-development hierarchies. Feature manuals live in each owner’s `docs/` folder.
+development hierarchies. Feature manuals live under `docs/features/<owner>/`.
 
 - [User guide](docs/user/user.md): using the app and its tools.
 - [Configuration](docs/user/configuration.md): paths, settings and optional integrations.
 - [Development](docs/development/development.md): project structure, extension guides and testing.
 - [Publishing releases](docs/development/releasing.md): package checks and release troubleshooting.
 
-For contributions, start with [Developing Logistics](docs/development/development.md)
-for setup, code ownership and focused checks through `python3 dev.py --help` (`py dev.py --help` on Windows).
+Use the [developer index](docs/development/development.md) to find contracts and
+code owners after the first-contribution walkthrough. `python3 dev.py --help`
+(`py dev.py --help` on Windows) lists the local check helpers.
 Feature changes should include updates to their user guides. The application uses
 Python 3.12.2 and pinned dependencies; normal launchers manage that environment.
 Git and optional external tools are installed/configured separately.

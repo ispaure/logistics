@@ -14,10 +14,10 @@ class PlatformEntrypointTests(unittest.TestCase):
         code = '''
 import runpy, sys, types
 assert sys.flags.isolated and sys.flags.utf8_mode
-inventory = types.ModuleType('Scripts.validation_plans')
+inventory = types.ModuleType('logistics_build.validation_plans')
 inventory.desktop_checks = lambda system, results: [('shared-import',
     ['-c', 'from commonUtils.runtime.streams import file_sha256; print("shared import passed")'], 30)]
-sys.modules['Scripts.validation_plans'] = inventory
+sys.modules['logistics_build.validation_plans'] = inventory
 sys.argv = [sys.argv[1], '--results-dir', sys.argv[2]]
 runpy.run_path(sys.argv[0], run_name='__main__')
 '''

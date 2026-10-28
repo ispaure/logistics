@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from Scripts.guest_attempts import result_attempt
+from logistics_build.guest_attempts import result_attempt
 
 
 class GuestAttemptTests(unittest.TestCase):
@@ -63,7 +63,7 @@ class GuestAttemptTests(unittest.TestCase):
     def test_both_backend_entry_points_publish_new_attempts_without_mutating_request(self):
         from types import SimpleNamespace
         from unittest.mock import patch
-        from Scripts import windows_backend, vm_backend
+        from logistics_build import windows_backend, vm_backend
         for module, backend in [(windows_backend, 'Parallels Windows'), (vm_backend, 'Parallels fedora')]:
             with self.subTest(backend=backend), TemporaryDirectory() as tmp:
                 self.backend = backend
@@ -101,7 +101,7 @@ class GuestAttemptTests(unittest.TestCase):
         return attempt
 
     def test_absent_workspace_receipt_allows_new_attempt_without_rewriting_failure(self):
-        from Scripts.guest_attempts import reconcile_setup
+        from logistics_build.guest_attempts import reconcile_setup
         attempt = self.failed_setup()
         before = (self.root/'result.json').read_bytes()
         preparation = (attempt/'prepared.json').read_bytes()
@@ -121,7 +121,7 @@ class GuestAttemptTests(unittest.TestCase):
         self.assertTrue(receipt.is_file())
 
     def test_present_or_foreign_namespace_never_authorizes_retry(self):
-        from Scripts.guest_attempts import reconcile_setup
+        from logistics_build.guest_attempts import reconcile_setup
         self.failed_setup()
         before = (self.root/'result.json').read_bytes()
         for proof in (dict(vm='owned-vm', token='a'*32, exists=True),
@@ -133,7 +133,7 @@ class GuestAttemptTests(unittest.TestCase):
         self.assertEqual(list(self.root.rglob('setup-reconciliation.json')), [])
 
     def test_changed_preparation_invalidates_prior_reconciliation(self):
-        from Scripts.guest_attempts import reconcile_setup
+        from logistics_build.guest_attempts import reconcile_setup
         attempt = self.failed_setup()
         reconcile_setup(self.root, lambda vm, token: dict(vm=vm, token=token, exists=False))
         data=json.loads((attempt/'prepared.json').read_text());data['error']='changed'
@@ -143,7 +143,7 @@ class GuestAttemptTests(unittest.TestCase):
                 self.fail('changed evidence was replayed')
 
     def test_non_setup_failure_cannot_be_reconciled_as_absent(self):
-        from Scripts.guest_attempts import reconcile_setup
+        from logistics_build.guest_attempts import reconcile_setup
         attempt = self.failed_setup()
         data=json.loads((attempt/'prepared.json').read_text());data['tests_run']=True
         (attempt/'prepared.json').write_text(json.dumps(data))

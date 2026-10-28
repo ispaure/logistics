@@ -46,14 +46,35 @@ class PDFNavigation:
         self.indices = (0,)
         self.viewport = (1, 1)
         self.sizes = {}
+        self._spread_starts = {}
+        self._stops = {}
+        self._layout = None
+
+    def commit(self, indices, viewport):
+        """Remember published boundaries so Back retraces the visible spreads."""
+        self._use_layout(viewport)
+        self.indices, self.viewport = indices, viewport
+        # A direct jump can repartition a previously visited pair. Retire
+        # overlapping history so Back cannot reuse an obsolete pair boundary.
+        for end, start in list(self._spread_starts.items()):
+            if start <= indices[-1] and end > indices[0]:
+                del self._spread_starts[end]
+        self._spread_starts[indices[-1] + 1] = indices[0]
+
+    def _use_layout(self, viewport):
+        if self._layout != viewport:
+            self._spread_starts.clear()
+            self._stops.clear()
+            self._layout = viewport
 
     def load(self, index, viewport):
         from features.images.validation import image_dimensions
+        self._use_layout(viewport)
         first = self.document.page(index)
         self.sizes[index] = image_dimensions(first)
         indices, data = (index,), [first]
         width, height = viewport
-        if index + 1 < self.document.count:
+        if index + 1 < self._stops.get(index, self.document.count):
             second = self.document.page(index + 1)
             self.sizes[index + 1] = image_dimensions(second)
             ratios = [w / h for w, h in (self.sizes[index], self.sizes[index + 1])]
@@ -66,13 +87,19 @@ class PDFNavigation:
         return target if target < self.document.count else None
 
     def previous(self):
+        self._use_layout(self.viewport)
         index = self.indices[0]
         if index == 0:
             return None
+        if index in self._spread_starts:
+            return self._spread_starts[index]
         if index >= 2:
             indices, _ = self.load(index - 2, self.viewport)
             if len(indices) == 2:
                 return index - 2
+        # After a direct jump, the preceding page may otherwise pair with the
+        # current page. Keep this boundary on subsequent layout refreshes too.
+        self._stops[index - 1] = index
         return index - 1
 
 

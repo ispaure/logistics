@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import sys
 
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 from mobile_build.native_tests.tests.logisticsmobile.notebook_acceptance_checks import exercise_storage
 
 

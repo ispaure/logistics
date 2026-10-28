@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from Scripts.build_retention import clean, enroll_output, scratch, storage_inventory
+from logistics_build.build_retention import clean, enroll_output, scratch, storage_inventory
 from build_manager.retention import lease
 
 

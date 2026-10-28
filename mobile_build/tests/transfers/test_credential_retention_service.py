@@ -32,6 +32,25 @@ class RetentionTests(unittest.TestCase):
             client.forget_package.assert_called_once_with('Fixture.zip')
             self.assertFalse(cache.exists())
 
+    def test_package_forget_vault_failure_still_revokes_live_access_and_erases_caches(self):
+        with TemporaryDirectory() as directory:
+            client = Client()
+            client.package_records = (dict(package_name='Fixture.zip', document_cache_id='a' * 64),)
+            client.forget_package = Mock(side_effect=OSError('Saved vault key unavailable'))
+            store = SimpleNamespace(client=client, forget_package=Mock())
+            root = Path(directory)
+            cache = root / ('a' * 64)
+            cache.mkdir()
+            (cache / ('b' * 64 + '.zip')).write_bytes(b'encrypted cache')
+            service = native_service(client).credentials
+            grant = service.capture('Fixture.zip')
+            with self.assertRaisesRegex(OSError, 'Saved vault key unavailable'):
+                service.forget(NativeCredentialForget(lambda: store, root, 'Fixture.zip'))
+            with self.assertRaises(ValueError):
+                grant.check()
+            store.forget_package.assert_called_once_with('Fixture.zip')
+            self.assertFalse(cache.exists())
+
     def test_retain_resolves_alias_identity_and_rejects_stale_or_foreign_store(self):
         client = Client()
         client.connection_identity = Mock(return_value='a' * 64)
@@ -127,3 +146,14 @@ class RetentionTests(unittest.TestCase):
             second.forget()
             self.assertEqual(first.items, {})
             self.assertFalse(first.path(key).exists())
+
+    def test_failed_emergency_lock_reports_uncertain_access_and_attempts_remaining_cleanup(self):
+        with TemporaryDirectory() as directory:
+            client = Client()
+            client.forget_package = Mock(side_effect=OSError('Vault unavailable'))
+            client.lock = Mock(side_effect=OSError('Bridge unavailable'))
+            store = SimpleNamespace(client=client, forget_package=Mock())
+            with self.assertRaisesRegex(OSError, 'session locking could not be confirmed'):
+                native_service(client).credentials.forget(
+                    NativeCredentialForget(lambda: store, Path(directory), 'Fixture.zip'))
+            store.forget_package.assert_called_once_with('Fixture.zip')

@@ -70,6 +70,8 @@ def main():
     parser.add_argument('--prepare-only', action='store_true', help='Prepare and verify without any upload prompt')
     parser.add_argument('--profile', type=Path, help='Existing manual app provisioning profile')
     parser.add_argument('--inbox-profile', type=Path, help='Existing manual Inbox provisioning profile')
+    parser.add_argument('--widget-profile', type=Path, help='Existing manual widget provisioning profile')
+    parser.add_argument('--widget-actions-profile', type=Path, help='Existing manual widget actions provisioning profile')
     parser.add_argument('--gui', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
@@ -79,6 +81,10 @@ def main():
             arguments += ['--profile', str(args.profile)]
         if args.inbox_profile:
             arguments += ['--inbox-profile', str(args.inbox_profile)]
+        if args.widget_profile:
+            arguments += ['--widget-profile', str(args.widget_profile)]
+        if args.widget_actions_profile:
+            arguments += ['--widget-actions-profile', str(args.widget_actions_profile)]
         if args.gui:
             deploy(number, ask=gui_input, prepare_only=args.prepare_only, archive_arguments=arguments)
         else:

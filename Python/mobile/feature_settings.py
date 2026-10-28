@@ -15,6 +15,11 @@ def set_enabled(app, name, value, *, refresh=True):
     members = BY_NAME[name].names
     if not value:
         for host in hosts(app):
+            video = getattr(host, 'video_player', None)
+            if video is not None and not video.closed:
+                from services.documents.storage import DocumentPolicy
+                if name == 'video' or (name == 'rclone' and not DocumentPolicy.for_provider(video.content.provider).persistent):
+                    raise ValueError('Close the video player before turning this feature off.')
             for session in host.workspace.sessions.values():
                 feature = document_feature(session.title, session.kind)
                 from .document_sources import session_source

@@ -1,7 +1,7 @@
 """Actual retained-editor and conversation drawer checks, using window bounds."""
 import asyncio
 from commonUtils.runtime.platform import get_os, OS
-from .fixtures import capture_window
+from .fixtures import capture_window, ios_toolbar_items
 
 
 async def exercise_workspace(app):
@@ -72,11 +72,14 @@ async def exercise_workspace(app):
         assert width(frame.row) <= navigation.width(), 'Drawer must not widen its viewport'
     if get_os() is OS.IOS:
         assert frame.header not in frame.view().children, 'Menu belongs in the native bar'
-        assert frame.native_menu.customView is None, 'UIKit must own menu hit testing'
+        menu_item = frame.menu._ios_action_item
+        controller = app.native_host.adapter.content_controller('documents')
+        assert menu_item in ios_toolbar_items(controller, leading=True), 'Browse must remain in the native leading toolbar'
+        assert menu_item.customView is None, 'UIKit must own menu hit testing'
         parent = frame.menu._impl.native.superview
         parent = parent() if callable(parent) else parent
         assert parent is None, 'Detached Toga target must not intercept touches'
-        assert frame.native_menu.target == frame.menu._impl.native
+        assert menu_item.target == frame.menu._impl.native
     frame.menu.on_press()
     assert first.editor.value == '# Left\n\nAn independent draft.'
     assert second.editor.value == '# Right\n\nAnother independent draft.'

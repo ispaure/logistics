@@ -1,4 +1,201 @@
-# Ecosystem refactoring audit — October 25, 2026
+# Ecosystem refactoring assessment
+
+## Current assessment — October 28, 2026
+
+Use the Logistics commonUtils **working tree**, including uncommitted changes,
+as the design baseline. This assessment inspects Logistics `69933ade`, shared
+`22b962f`, manager `d9baf99`, Ally `502f1f6` and Blue Hole `388da80`, plus visible
+working-tree edits. Blue Hole remains on `blender-5.2.2/alpha`; its shared library
+is a subtree, not a submodule. No commits, pushes, branch changes or dependency
+pin updates were made for this assessment.
+
+### Recommendation
+
+Continue with bounded ownership changes rather than another package-wide move.
+The useful next work is consumer compatibility coverage, manager results-view
+composition, then Logistics picker state and layout coordination. Shared index
+scan context is a later, higher-risk internal cleanup. File length alone is not
+a reason to move code. Existing media, privacy, navigation and build work in the
+working tree must be preserved and validated by its owners.
+
+### Shared baseline and all consumers
+
+| Consumer | Actual shared source | Alignment finding |
+| --- | --- | --- |
+| Logistics | Real `Python/commonUtils` submodule at `22b962f`, with local edits | Authoritative working baseline for this review |
+| Ally Tools | The Logistics host's commonUtils namespace and checkout | Moves with Logistics; validate the private consumer before shared API changes |
+| Build manager | Independent real `Python/commonUtils` submodule at `22b962f` | Clean shared checkout; differs from Logistics only in the five uncommitted shared files |
+| Blue Hole | Namespaced `Lib/commonUtils` subtree; recorded revision `efabc66` | Exact match to its recorded source; six shared commits behind Logistics HEAD |
+
+The five local shared changes concern native recycled lists and their tests/guide.
+There is no evidence of a newer independent manager or Blue Hole shared change
+that should replace Logistics as the baseline. Blue Hole's older copy lacks later
+shared locking, private publication, line redaction, layered-settings invalidation
+and inline-content-origin changes. Its absence of upstream `.github/` files is
+intentional, not drift. Compare subtree membership and bytes against its recorded
+revision before calling missing files a defect; that comparison passed here.
+
+Keep each consumer's source identity and import model. Do not turn the subtree
+into a submodule, redirect the manager to a sibling checkout, or collapse Blue
+Hole's namespaced registries into the standalone namespace. Once shared changes
+are ready and committing is authorized, validate the commonUtils change, its
+Logistics/Ally consumers, the manager's independent environment and Blue Hole's
+subtree integration before moving any consumer pin. A working-tree assessment
+cannot give uncommitted code a reproducible Git revision.
+
+Ally's manifest already includes all 14 Logistics runtime requirements at the
+same exact versions, the same Python 3.12.2 requirement, pycryptodomex constraint
+and development Ruff pin, plus its emulator requirements. Both `uv.lock` root
+package records agree with those manifests. The existing private dependency-parity
+regression passes; no dependency rewrite or lock regeneration is needed.
+
+### Implemented assessment follow-up
+
+The bounded follow-up is implemented in the current uncommitted trees:
+
+- The manager's `consumer_acceptance` prepares ordinary before/checks/after plans
+  with explicit sources, interpreters, branches and trusted test commands. Blue
+  Hole's fixture hook can inspect the Logistics shared working tree under the
+  add-on namespace without changing its subtree or recorded revision. Ally's
+  parity check now includes Python/dev policy and lock root requirements.
+- Manager `RunInspectorView` and `RunOutputView` own selected-phase rendering,
+  stable details and scoped/bounded output. `RunView` retains timers, facts,
+  selection and subtest coordination. The dormant nested browser stays untouched.
+- The picker owns a captured operation/presentation record. The app reflow service
+  has weak owner subscriptions and explicit replacement/retirement; settings
+  switches share save/restore mechanics within Logistics.
+- Shared scan validation now receives `IndexWriterContext` and an explicit
+  folder-identity function, as reconciliation already did. The existing
+  `DirectoryCache` entry points, instrumentation, writer/checkpoint lifecycle and
+  database schema remain. This deliberately bounds the higher-risk index work;
+  it does not claim all remaining scan helpers have been redesigned.
+- Logistics build adapters moved from `Scripts/` into `logistics_build/`. Native
+  process supervision and exact pinned-source transfer moved to manager owners;
+  their duplicate project implementation/tests were removed. Imports, bridge
+  registration, CI, package requirements, evidence/lint scopes and guides use
+  the current paths. Machine `.bat` files remain byte-for-byte unchanged.
+
+The [current build ownership map](build-deployment-audit.md) replaces the old
+keep-launcher inventory. Project builders, source/privacy rules, test/release
+gates, signing/package compatibility, destination policy and retention policy
+remain in Logistics. Dependency bootstrap remains project-owned because it must
+work before the external manager can be imported. No real repository commits,
+pushes, branch changes, pin changes, subtree refreshes or physical installs are
+part of this pass. Consumer pins can be updated together after the shared/manager
+changes are reviewed and committing is authorized.
+
+Verification for the implementation includes all 551 manager contracts, the
+Logistics tooling selection, shared index contracts, picker/publication cases,
+layout subscriptions, the 289-case dummy-host workspace selection, payload/release
+packaging checks, architecture/wiki checks, and source lint. An explicit eleven-
+check cross-consumer plan passes both its before/after identity gates, including
+Ally parity and Blue Hole's pinned and candidate-library namespace/index checks.
+The two macOS watcher modules and the dummy-host localhost fixture needed their
+actual event/socket access; their initial restricted failures remain recorded.
+No assertions were weakened to make restricted runs pass. Full platform builds,
+physical devices, Blender and emulator execution are not newly certified.
+
+The numbered discussion below records the assessed seams and acceptance criteria,
+rather than an instruction to repeat the completed extraction.
+
+### Assessed seams, in recommended order
+
+1. **Make the cross-consumer acceptance selection explicit.** Existing checks
+   are distributed between Logistics architecture/import suites, commonUtils
+   contracts, Ally shared-health/dependency tests, manager contracts and Blue
+   Hole shared-import/copy tests. Record the exact shared working identity and
+   run these owners together before changing a shared API. Reuse the existing
+   project adapters and suite manifests; do not add another build hierarchy.
+   Keep Blue Hole's Blender 5.2.2 alpha packaging and exact subtree-copy check.
+   Acceptance must distinguish portable import/signature coverage from real Qt,
+   Toga, Blender and emulator behavior.
+
+2. **Split manager result presentation by responsibility.** `RunView` in
+   `run_ui.py` currently owns live timing/facts, workflow selection, subtest
+   projection, output filtering and inspector rebuilding; `tick()` drives both
+   card facts and inspector refresh. Extract an inspector view accepting a
+   selected phase and captured facts, then an output view accepting selected
+   log scope. Preserve `RunSession`, coalesced updates, retained-result loading,
+   redaction and process ownership. Avoid another mixin with unrestricted panel
+   access. Validate stale selections, close during log reads, review/resume,
+   device retry and keyboard navigation. The dormant nested workflow browser
+   and its map/grouping code remain reserved and must stay disconnected.
+
+3. **Finish picker presentation state, keeping publication where it is.**
+   `EditorPicker` already uses `DestinationRequest` and
+   `DestinationPublication`; do not redo the completed storage extraction.
+   It still separately tracks creation/type, binary owner, source document,
+   privacy gate, origin and save payload alongside `PickerWork`. Capture the
+   operation-specific presentation state together, preserving `PickerOrigin`
+   and the existing cancellation/epoch/credential/location guards. Keep
+   dialogs and route/editor handoff in Logistics. Validate text/notebook
+   create and Save As, destination changes during confirmation, credential
+   replacement, failed reopen and cancellation through the existing
+   `test_editor_picker.py` and `test_destination_workflows.py` owners.
+
+4. **Reduce application layout knowledge.** `LogisticsMobile.resize_workspace`
+   names connection pages, document grids, documentation, vaults and text
+   owners directly. Its settings handlers also repeat save/restore/status
+   plumbing. First capture app-owned layout participants with explicit
+   reflow/disposal contracts; retain `native_resize_changed`, adaptive render
+   ordering, keyboard fitting and the final coalesced reader wakeup. Follow
+   with the small settings transaction repetition only if it reduces coupling.
+   These are Logistics composition policies, not commonUtils APIs. Native
+   acceptance must include startup/reset, rotation, split panes, keyboard
+   transitions, private surfaces and reader close while resizing.
+
+5. **Consider explicit scan context only after the above.** commonUtils already
+   has `WriterSession`, operation state, scan composition and a reconciliation
+   writer context. Some scan helpers in `filesystem/index/store.py` still obtain
+   mutable state through `self._scan_state`, including dirty totals, exclusion
+   repair and checkpoints. Passing one explicit scan context could make those
+   prerequisites clearer, without altering `DirectoryCache`, database schema,
+   snapshots or persisted checkpoints. Require cancellation/resume, rollback,
+   old-reader visibility, exclusions and metrics parity, then check Logistics
+   and Blue Hole index consumers. This is an internal candidate, not evidence
+   of a current failing index or a reason to reopen completed reconciliation.
+
+No source evidence warrants moving emulator schemas, Blender operations,
+application privacy/routing, release gates or dependency installation policy
+into commonUtils. Keep those policies in their current consumers.
+
+### Build-only follow-up implemented
+
+Both mobile build executors already existed in Logistics. The manager now has a
+visible **Build only** goal using the project's existing single-platform `Build`
+operation, platform and execution-host controls. It ignores remembered test-suite
+and delivery selections, can be saved/restored in presets, and labels the final
+action **Start build**. Review requires at least one build step and permits only
+build/inspection effects; tests, installs, uploads, publication and hosted dispatch
+are rejected. This does not add a new journey schema or manufacture desktop
+build support.
+
+The descriptor now exposes the existing local iOS Build operation on macOS.
+Android build plans report their build host instead of an emulator-testing host.
+The executors retain the project's snapshots, retention and artifact reporting.
+Build-only produces the existing Android test APK or iOS simulator app; it does not imply a
+store-ready signed package or passing native acceptance.
+
+### Initial assessment validation and limits
+
+- Ally: all 48 fixture tests passed, including dependency parity and shared health.
+- Manager: 50 focused build-only, workflow, goal/layout, preset, workflow-option
+  and proposal checks passed; the earlier guided UI selection also passed.
+- Logistics: all 14 build-adapter contracts and 13 architecture checks passed
+  (zero architecture violations), including the descriptor follow-up.
+- commonUtils: 24 index operation-state/reconciliation fixtures passed against
+  the Logistics working tree.
+- Blue Hole: two shared import/signature/global-binding checks and two subtree
+  directory-index fixtures passed on `blender-5.2.2/alpha`.
+
+These checks use the consumers' own interpreters. Raw logs remain in ignored
+`test-results/`; public documentation does not depend on them. No physical
+installation, full APK/iOS compilation, native Blender session, real emulator,
+controller, VM, hosted dispatch or release was run for this change. Compatibility
+checks against Blue Hole's recorded subtree do not certify a future subtree
+refresh to uncommitted Logistics source.
+
+## Historical October 25 assessment
 
 This review covers Logistics `bd263369` on `alpha`, its commonUtils checkout
 `b105857d` on `main`, and build-deployment-manager `6b727bc8` on `main`. It includes
@@ -17,7 +214,7 @@ manager pin; those commits have not been pushed.
 `services.documents.destinations` captures filename, bytes, format and provider
 before worker I/O, resolves conflicts and returns unchanged, published or
 published-but-not-reopened outcomes. The picker retains dialogs, epochs,
-credential/navigation guards and editor/route handoff. `Scripts.guest_results`
+credential/navigation guards and editor/route handoff. `logistics_build.guest_results`
 owns evidence validation, collection state, conditional remote cleanup and final
 reports for both guest backends. Platform preparation and transport remain in
 their original owners.
@@ -107,7 +304,7 @@ system pickers or physical SD-card behavior.
 The manager's `executor.py` hashes captured artifacts with `read_bytes()`;
 `workflows.verify_artifacts` reads both retained and original files completely.
 `ManagerPanel.resume_workflow` invokes recovery/checks synchronously. Logistics'
-[`distribute_prepared.py`](../../Scripts/distribute_prepared.py) and
+[`distribute_prepared.py`](../../logistics_build/distribute_prepared.py) and
 [`testflight_tools.py`](../../mobile_build/deployment/testflight_tools.py) also
 contain whole-file digest reads.
 
@@ -126,8 +323,8 @@ needed. Detailed library and manager findings belong in their own developer wiki
 
 ## Priority 2: consolidate guest result lifecycle without merging platform policy
 
-[`Scripts/vm_backend.py`](../../Scripts/vm_backend.py) and
-[`Scripts/windows_backend.py`](../../Scripts/windows_backend.py) both coordinate
+[`logistics_build/vm_backend.py`](../../logistics_build/vm_backend.py) and
+[`logistics_build/windows_backend.py`](../../logistics_build/windows_backend.py) both coordinate
 staging, setup, plan execution, report collection, conditional cleanup and a final
 result envelope. Their `run` methods span 164 and 117 lines respectively. Windows
 uses durable invocation receipts; Linux includes optional rootless Fedora setup.

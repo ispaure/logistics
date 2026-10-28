@@ -11,6 +11,23 @@ def prepare_picker_input(control):
                              | EditorInfo.IME_FLAG_NO_FULLSCREEN)
 
 
+
+def reveal_picker_input(picker):
+    """Keep the current UIKit first responder inside the resized picker viewport."""
+    scroll = picker.picker_form._impl.native
+    focused = next((control._impl.native for control in (picker.save_as_name, picker.new_folder_name)
+                    if control._impl.native.isFirstResponder
+                    and control._impl.native.isDescendantOfView(scroll)), None)
+    if focused is None:
+        return
+    picker.app.main_window._impl.native.layoutIfNeeded()
+    # Toga refreshes scroll content on a deferred native callback. Refresh now
+    # before scrolling, so its content size cannot clamp away the needed offset.
+    picker.save_as_view.refresh()
+    scroll.layoutIfNeeded()
+    scroll.scrollRectToVisible(focused.convertRect(focused.bounds, toView=scroll), animated=False)
+
+
 def picker_keyboard_visible(app, adapter):
     visible = bool(getattr(adapter, 'keyboard_visible', False)
                    or getattr(adapter, 'keyboard_chrome', None) is not None)

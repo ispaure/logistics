@@ -1,18 +1,39 @@
 # Using the Logistics build manager
 
-Open the standalone Build Deployment Manager (on macOS, use its `LaunchBuildManager_MAC.command`), add or select the Logistics checkout, and use the guided workflow. Select checks and delivery destinations, inspect the plan, then run it. Passing tests never starts delivery. Review prepared artifacts and destinations before approving uploads.
+Use the standalone Build Deployment Manager to run Logistics checks, prepare
+artifacts and deliver reviewed builds. Logistics owns its suites and release
+policy; the manager owns execution and retained evidence.
+
+Open the manager's platform launcher, add or select the trusted Logistics checkout,
+then follow [validating and delivering Logistics](build-manager-journeys.md).
+Adding a checkout authorizes its adapter; there is no separate trust step.
+Start with local checks and no delivery destination while learning the workflow.
+
+For a fresh GUI plan, Start authorizes its selected Firebase/TestFlight uploads
+and GitHub actions to run after the required checks and preparation succeed.
+Device installs still require review of the prepared package and recipient.
+CLI and retained plans use their declared approval requirements. Inspect the
+actual plan before starting; a passing test alone is not authorization.
 
 The six legacy `mobile_build/deploy_*.command` shortcuts and their dedicated deployment window/sequencer have been retired. Device, signing and provider helpers remain in Logistics because the manager adapter uses them.
 
 ## Combined validation and delivery
 
-The guided plan panel supports selecting several platforms together, then
-independently reviewing delivery to GitHub, Firebase and TestFlight. See
+The guided flow supports selecting several platforms together and choosing
+GitHub, Firebase and TestFlight destinations independently. See
 [combined validation and delivery](build-manager-journeys.md) for source
 requirements, explicit approvals, local manager setup and validation scope.
+Mobile tester and Release-device builds can capture uncommitted Logistics and
+commonUtils files using **Current files**. They retain full release gates and exact
+source fingerprints; GitHub source publication still requires a clean committed
+checkout. Exclude the GitHub destination for a local mobile release.
 Development-device installs are also available in combined journeys; the
 [CLI Boox workflow](build-manager-journeys.md#cli-local-android-validation-and-boox-deployment)
 shows local emulator validation followed by reviewed installation.
+
+The local **Build** action on Android and iOS compiles a development artifact
+without installing or delivering it. Turning testing off in a delivery workflow
+skips checks while retaining the selected build and delivery steps.
 
 ## Settings and identity
 
@@ -24,8 +45,8 @@ with **Automatic** representing no override.
 
 Settings show each effective value's origin: repository defaults, ignored local
 profile, environment or one-run override. Save changes the local profile;
-changing the app version explicitly edits tracked `pyproject.toml` and requires a
-commit. A historical source selection reads its version from that selected commit,
+changing the app version explicitly edits tracked `mobile_build/pyproject.toml`.
+That tracked edit is separate from saving a local profile. A historical source selection reads its version from that selected commit,
 not from the current checkout. Build numbers are separate from app version and release tags.
 
 | Section | Supported fields |
@@ -36,7 +57,7 @@ not from the current checkout. Build numbers are separate from app version and r
 | Local targets | iPhone/Duo/iPad template selectors, disposable Android image/model, Linux/Fedora/Windows guest selectors, Linux distro scope/Fedora mode and shutdown preference; availability is validated before execution |
 | Legacy reserved targets | `vm.shared_host` and `vm.shared_guest` are shown read-only for compatibility; `android.avd` remains editable to clear a legacy value, and must be empty. Local backends do not attach existing AVDs or mount shared folders |
 | Authentication | Existing TestFlight credential JSON and `.p8` references, with Browse/Locate; GitHub repository, credential-helper strategy and token environment name; existing Firebase CLI account storage |
-| Signing | Existing manual app and Inbox provisioning-profile file references; pinned team shown read-only |
+| Signing | Optional manual app, Inbox, widget and widget-action profile references; all extensions are required for manual signing. Leave all references empty for automatic signing with the pinned team |
 | Versions | Read-only app version and next iOS/Android build previews; one-run explicit build override; intentional tracked app-version edit; explicit independent release tag |
 
 The local profile is `mobile_build/.tools/build-manager/profile.json` (schema 1,
@@ -82,7 +103,7 @@ run off the UI thread; cleanup is unavailable while this manager runs an operati
 
 The generic UI consumes optional `storage_inventory()` and
 `delete_storage(selections)` adapter methods. Logistics defines owned roots in
-`Scripts.build_retention`; reusable manual deletion and lease protection remain
+`logistics_build.build_retention`; reusable manual deletion and lease protection remain
 in `build_manager.retention`. The settings navigation factory is optional for
 other projects; field metadata supports section, label, description, kind and
 integer minimum/maximum/suffix without importing Logistics into the generic UI.
@@ -90,14 +111,14 @@ integer minimum/maximum/suffix without importing Logistics into the generic UI.
 ## External manager installation (adapter API 1)
 
 Generic execution, transports, profiles and retention mechanisms now belong to
-`build-deployment-manager`. Logistics retains `Scripts/build_project.py`, snapshots,
+`build-deployment-manager`. Logistics retains `logistics_build/build_project.py`, snapshots,
 suite declarations, distribution helpers and storage policy. No sibling checkout
 is discovered automatically. Install a reviewed Git checkout explicitly in each
 interpreter used for Logistics tooling:
 
 ```sh
-.venv/bin/python -m Scripts.install_build_manager /path/to/build-deployment-manager
-mobile_build/.venv/bin/python -m Scripts.install_build_manager /path/to/build-deployment-manager
+.venv/bin/python -m logistics_build.install_build_manager /path/to/build-deployment-manager
+mobile_build/.venv/bin/python -m logistics_build.install_build_manager /path/to/build-deployment-manager
 ```
 
 The manager requires adapter API 1. Missing/incompatible installations stop with a
@@ -113,7 +134,7 @@ Local source archives carry the installer and integration, not a stale second
 copy of the engine. Re-run the explicit install after recreating an environment.
 
 Hosted setup reads `build-manager-dependency.json` and explicitly installs that
-immutable revision using `Scripts/install_build_manager.py --from-pin DESTINATION`.
+immutable revision using `logistics_build/install_build_manager.py --from-pin DESTINATION`.
 It refuses an existing destination rather than pulling or resetting it. The owner
 must make both manager and commonUtils commits remotely available before hosted
 setup can succeed. No publication of those commits was performed here.
@@ -121,10 +142,10 @@ setup can succeed. No publication of those commits was performed here.
 ## Registered workflows and fixed settings
 
 The standalone manager registers the tracked `build-project.json` and invokes
-`Scripts/manager_bridge.py` in Logistics' own interpreter after explicit trust.
+`logistics_build/manager_bridge.py` in Logistics' own interpreter after explicit trust.
 Named TestFlight/Firebase workflows prepare a signed artifact and pause for exact
 artifact/destination review before reusing the existing distribution helpers.
-`Scripts/distribute_prepared.py` never rebuilds for upload. It records intent before
+`logistics_build/distribute_prepared.py` never rebuilds for upload. It records intent before
 the provider request and refuses to repeat an interrupted attempt without
 reconciliation. Passing tests never approves distribution automatically.
 
@@ -202,3 +223,12 @@ preset does not inherit a previous preset's debug Off setting. The selected test
 coverage, separate OS/native checks and rotation checks stay unchanged.
 For an explicit CLI journey, the corresponding run choice is
 `--run-value testing.reuse_verified_results=off`.
+
+## Build without tests or delivery
+
+In a manager checkout with the Build only goal, choose **Build only**, select
+**iOS → This Mac** or **Android → the local host**, review the plan and choose
+**Start build**. This produces the existing iOS simulator app or Android test APK.
+It captures the selected source, retains its build report and stops before tests
+or installation. Desktop Build is not implemented. Store/tester preparation
+continues to use its existing project operation.

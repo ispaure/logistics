@@ -33,6 +33,8 @@ HELP = {
     'auth.reference_status': 'Whether the configured authentication reference file exists. This does not verify server access.',
     'signing.app_profile': 'Existing provisioning profile file for the main Apple app; must match the pinned identity.',
     'signing.inbox_profile': 'Existing provisioning profile file for the Apple inbox extension.',
+    'signing.widget_profile': 'Existing App Store provisioning profile for the Apple widget extension. Manual signing requires profiles for all extensions; leave all profile references empty for automatic signing.',
+    'signing.widget_actions_profile': 'Existing App Store provisioning profile for the widget actions extension. Manual signing requires profiles for all extensions; leave all profile references empty for automatic signing.',
     'signing.team': 'Pinned Apple developer team from the existing device/signing configuration. Read only.',
     'testflight.app_id': 'App Store Connect application identifier. Identity is guarded and cannot be changed here.',
     'testflight.bundle_id': 'Apple application bundle identifier. Identity is guarded and cannot be changed here.',

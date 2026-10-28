@@ -4,7 +4,7 @@ from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
 import asyncio
 from pathlib import Path
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import toga
 from toga.style import Pack
@@ -14,7 +14,7 @@ from commonUtils.runtime.resources.selection import ResourceSelection
 from commonUtils.runtime.resources.paths import resource_name
 from commonUtils.runtime.resources.provider import capabilities
 from .control_icons import icon_button
-from services.workflow_host import HostService
+from services.workflow_host import HostService, StateAttribute
 
 
 class PickerMessage(toga.Box):
@@ -47,6 +47,24 @@ class PickerOrigin:
 
 
 @dataclass
+class PickerOperation:
+    """One presentation's source, draft, origin and operation-specific owners.
+
+    Native probe compatibility fields point here. Workers capture a detached
+    copy before I/O; replacing a presentation invalidates its operation identity.
+    """
+    data: bytes | None = None
+    source_document: object = None
+    privacy_gate: object = None
+    origin: PickerOrigin | None = None
+    creation: tuple | None = None
+    binary_owner: object = None
+    destination_action: object = None
+    filename: str = ''
+    mode: str = ''
+
+
+@dataclass
 class PickerWork:
     cancel: threading.Event
     epoch: int
@@ -56,6 +74,8 @@ class PickerWork:
     gate: object
     gate_revision: object
     location: tuple
+    operation: PickerOperation
+    presentation: PickerOperation
 
 
 class EditorPicker:
@@ -77,24 +97,28 @@ class EditorPicker:
     open_crypt = HostService('open_crypt')
     resume_crypt = HostService('resume_crypt')
 
+    save_as_data = StateAttribute('operation', 'data')
+    save_as_source_document = StateAttribute('operation', 'source_document')
+    save_as_privacy_gate = StateAttribute('operation', 'privacy_gate')
+    origin = StateAttribute('operation', 'origin')
+    creation = StateAttribute('operation', 'creation')
+    binary_owner = StateAttribute('operation', 'binary_owner')
+    destination_action = StateAttribute('operation', 'destination_action')
+    source_filename = StateAttribute('operation', 'filename')
+    editor_picker_mode = StateAttribute('operation', 'mode')
+
     def __init__(self, app):
         self.app = app
-        self.save_as_data = None
-        self.save_as_source_document = None
-        self.save_as_privacy_gate = None
+        self.operation = PickerOperation()
         self.editor_picker_rows = {}
         self.editor_picker_location = None
         self.editor_storage_roots = {}
         self.editor_linked_roots = {}
         self._work = None
         self._epoch = 0
-        self.origin = None
         self.panel = None
         self._restore_when_idle = None
-        self.creation = None
         self.creation_type = None
-        self.binary_owner = None
-        self.destination_action = None
         self._listed_provider = None
         self._listed_credentials = None
 
@@ -107,17 +131,14 @@ class EditorPicker:
         self.fit_keyboard(False)
         self._epoch += 1
         self.cancel()
-        self.origin = self.panel = self._restore_when_idle = None
+        self.operation = PickerOperation()
+        self.panel = self._restore_when_idle = None
         pending = getattr(self, '_storage_refresh', None)
         if pending is not None and not pending.done():
             pending.cancel()
         self._storage_refresh = None
-        self.creation = None
-        self.binary_owner = None
-        self.destination_action = None
         self._listed_provider = None
         self._listed_credentials = None
-        self.save_as_data = self.save_as_source_document = self.save_as_privacy_gate = None
         self.editor_picker_rows = {}
         self.editor_picker_location = None
         self.editor_storage_roots = {}
@@ -134,11 +155,11 @@ class EditorPicker:
 
     def _begin_work(self):
         client = getattr(self.app, 'cloud_client', None)
-        gate = self.save_as_privacy_gate
+        gate = self.operation.privacy_gate
         work = PickerWork(threading.Event(), self._epoch, client,
                           getattr(client, 'generation', None), self.app.navigation_generation,
                           gate, getattr(gate, 'revision', None),
-                          (self.save_as_storage.value, self.picker_folder.value))
+                          (self.save_as_storage.value, self.picker_folder.value), self.operation, replace(self.operation))
         if gate is not None and gate.locked:
             work.cancel.set()
         self._work = work
@@ -151,7 +172,7 @@ class EditorPicker:
 
     def _accepts(self, work):
         client = getattr(self.app, 'cloud_client', None)
-        return (self._work is work and work.epoch == self._epoch and self.active_host
+        return (self._work is work and work.operation is self.operation and work.epoch == self._epoch and self.active_host
                 and not work.cancel.is_set() and client is work.client
                 and getattr(client, 'generation', None) == work.credential_generation
                 and self.app.navigation_generation == work.navigation
@@ -205,10 +226,9 @@ class EditorPicker:
             return
         if self.cloud_busy or owner is None or owner.crypt_reader is None or not owner.crypt_reader.editable:
             return
-        self.origin = self._capture_origin(owner, managed=False)
-        self.save_as_source_document = None
+        operation = PickerOperation(origin=self._capture_origin(owner, managed=False))
         await self.show_text_destination(owner.crypt_reader.name, owner.crypt_reader.text_snapshot.encode(owner.crypt_text.value),
-                                         privacy_gate=getattr(owner, 'privacy_gate', None))
+            privacy_gate=getattr(owner, 'privacy_gate', None), operation=operation)
 
     async def show_document_save_as(self, widget=None, **kwargs):
         if self.current is None:
@@ -222,57 +242,50 @@ class EditorPicker:
             return
         if self.current is not source_document or origin is None or not self.app.workspace.accepts(origin.token):
             return
-        self.origin = origin
-        self.save_as_source_document = source_document
-        await self.show_text_destination(name, data)
+        await self.show_text_destination(name, data,
+            operation=PickerOperation(origin=origin, source_document=source_document))
 
     async def show_editor_open(self, widget=None, **kwargs):
         if self.cloud_busy:
             return
         await self.show_editor_browser('open')
 
-    async def show_text_destination(self, name, data, *, privacy_gate=None):
-        self.save_as_privacy_gate = privacy_gate
-        await self.show_editor_browser('save', name, data)
+    async def show_text_destination(self, name, data, *, privacy_gate=None, operation=None):
+        operation = replace(operation or PickerOperation(), privacy_gate=privacy_gate)
+        await self.show_editor_browser('save', name, data, operation=operation)
 
     async def show_notebook_destination(self, panel):
-        self.origin = self._capture_origin(panel, managed=False)
-        self.save_as_source_document = None
-        self.binary_owner = panel
-        self.save_as_privacy_gate = panel.privacy_gate
+        epoch, navigation = self._epoch, self.app.navigation_generation
+        operation = PickerOperation(origin=self._capture_origin(panel, managed=False),
+                                    binary_owner=panel, privacy_gate=panel.privacy_gate)
+        name = panel.editor.notebook.name + '.rmdoc'
         data = await asyncio.to_thread(panel.editor.notebook.to_bytes)
-        await self.show_editor_browser('save', panel.editor.notebook.name + '.rmdoc', data)
+        if epoch != self._epoch or navigation != self.app.navigation_generation or not self.active_host:
+            return
+        await self.show_editor_browser('save', name, data, operation=operation)
 
     async def show_document_creation(self, name, origin, *, data=None):
         from .document_choices import available_choices
         if not available_choices(self.app):
             self.app.require_feature('text_editor')
             return
-        self.binary_owner = None
-        self.origin = self.save_as_source_document = self.save_as_privacy_gate = None
         await self.show_editor_browser('save', name, data if data is not None else b'', creation=origin)
 
     async def show_destination(self, name, action):
-        self.origin = self.save_as_source_document = self.save_as_privacy_gate = None
         await self.show_editor_browser('destination', name, destination_action=action)
 
-    async def show_editor_browser(self, mode, name='', data=None, *, creation=None, destination_action=None):
+    async def show_editor_browser(self, mode, name='', data=None, *, creation=None, destination_action=None, operation=None):
         if self.cloud_busy or not self.active_host:
             return
         self._epoch += 1
+        epoch = self._epoch
+        operation = replace(operation or PickerOperation(), mode=mode, filename=name,
+                            data=data, creation=creation, destination_action=destination_action)
         if hasattr(self, 'editor_browser'):
             await self.editor_browser.close()
-        if not self.active_host:
+        if not self.active_host or epoch != self._epoch:
             return
-        self.editor_picker_mode = mode
-        self.creation = creation
-        self.destination_action = destination_action
-        self.save_as_data = data
-        self.source_filename = name
-        if mode == 'open':
-            self.origin = None
-            self.save_as_source_document = None
-            self.save_as_privacy_gate = None
+        self.operation = operation
         ordinary = self.app.ordinary_file_roots()
         self.editor_storage_roots = ({'All files': ordinary['Shared files'], 'Local': None,
             'Received Files': ordinary['Received Files']} if creation is not None else {'Local files': None})
@@ -281,17 +294,17 @@ class EditorPicker:
         self.editor_storage_roots.update(self.existing_crypt_locations() if self.app.feature_enabled('rclone') else {})
         self.editor_linked_roots = self.linked_crypt_locations() if self.app.feature_enabled('rclone') else {}
         self.editor_storage_roots.update(self.editor_linked_roots)
-        source_store = getattr(getattr(self.origin, 'owner', None), '_crypt_reader_store', None)
+        source_store = getattr(getattr(self.operation.origin, 'owner', None), '_crypt_reader_store', None)
         source_provider = getattr(source_store, 'provider', None)
-        source_reader = getattr(getattr(self.origin, 'owner', None), 'crypt_reader', None)
-        if self.binary_owner is not None and self.binary_owner.document is not None:
-            source_provider = getattr(self.binary_owner.document.resource, 'provider', None)
+        source_reader = getattr(getattr(self.operation.origin, 'owner', None), 'crypt_reader', None)
+        if self.operation.binary_owner is not None and self.operation.binary_owner.document is not None:
+            source_provider = getattr(self.operation.binary_owner.document.resource, 'provider', None)
         source_folder = ''
         source_label = None
         if mode == 'save' and creation is None and source_provider is not None and not getattr(source_provider, 'remote_storage', False):
             source_label = 'Source location'
             self.editor_storage_roots[source_label] = source_provider
-            source_folder = (self.binary_owner.document.resource.path if self.binary_owner is not None
+            source_folder = (self.operation.binary_owner.document.resource.path if self.operation.binary_owner is not None
                              else getattr(source_reader, 'key', '') or '').rpartition('/')[0]
         roots = list(self.editor_storage_roots)
         self.editor_picker_rows = {}
@@ -314,7 +327,7 @@ class EditorPicker:
             self.creation_type.value = next((label for label, extension in CHOICES
                 if extension == ('md' if suffix == 'markdown' else suffix)), CHOICES[0][0])
             self.creation_type.on_change = self.change_creation_type
-            self.source_filename = 'Untitled.' + dict(CHOICES)[self.creation_type.value]
+            self.operation.filename = 'Untitled.' + dict(CHOICES)[self.creation_type.value]
         self.effective_name = self.editor_browser.status_label('')
         self.effective_name.style.flex = 0
         self.save_as_name.on_change = self.update_effective_name
@@ -412,9 +425,23 @@ class EditorPicker:
                 self.picker_form.style.height = height
         finally:
             self._fitting_keyboard = False
+        pending = getattr(self, '_keyboard_reveal', None)
+        if pending is not None:
+            pending.cancel()
+            self._keyboard_reveal = None
+        if compact and type(self.app._impl).__module__.startswith('toga_iOS.'):
+            # UIKit and Toga resize the scroll viewport after the keyboard/rotation
+            # callback. Reveal the existing first responder in that final layout.
+            panel = self.panel
+            def reveal():
+                self._keyboard_reveal = None
+                if self.panel is panel and self._compact_keyboard and self.active_host and self.visible():
+                    from .keyboard import reveal_picker_input
+                    reveal_picker_input(self)
+            self._keyboard_reveal = self.app.loop.call_soon(reveal)
 
     def update_effective_name(self, widget=None, **kwargs):
-        if self.editor_picker_mode != 'save':
+        if self.operation.mode != 'save':
             self.effective_name.text = ''
             return
         try:
@@ -423,37 +450,37 @@ class EditorPicker:
         except ValueError as error:
             self._creation_name_valid = False
             self.effective_name.text = str(error) if self.save_as_name.value else 'Enter a file name.'
-        if self.creation is not None and self.save_as_name.parent is not None and self.visible():
+        if self.operation.creation is not None and self.save_as_name.parent is not None and self.visible():
             self.update_picker_actions()
 
     def destination_filename(self):
-        if self.creation is not None:
+        if self.operation.creation is not None:
             from .document_choices import creation_filename
             return creation_filename(self.save_as_name.value, dict(self.creation_choices)[self.creation_type.value])
         from .destination_names import save_filename
-        return save_filename(self.save_as_name.value, self.source_filename, extensions=self.picker_extensions())
+        return save_filename(self.save_as_name.value, self.operation.filename, extensions=self.picker_extensions())
 
     def change_creation_type(self, widget=None, **kwargs):
         from .document_choices import change_creation_suffix
         extension = dict(self.creation_choices)[self.creation_type.value]
-        self.source_filename = 'Untitled.' + extension
+        self.operation.filename = 'Untitled.' + extension
         self.save_as_name.value = change_creation_suffix(self.save_as_name.value, extension)
         self.update_effective_name()
 
     def creating_notebook(self):
-        return (self.creation is not None or self.binary_owner is not None) and Path(self.source_filename).suffix.lower() == '.rmdoc'
+        return (self.operation.creation is not None or self.operation.binary_owner is not None) and Path(self.operation.filename).suffix.lower() == '.rmdoc'
 
     def picker_extensions(self):
-        if self.destination_action is not None:
+        if self.operation.destination_action is not None:
             return ()
         # Creation keeps all supported document types visible while the user
         # switches format; Save As retains its existing format-specific filter.
-        if self.creation is not None:
+        if self.operation.creation is not None:
             return ('.txt', '.md', '.markdown', '.rmdoc')
         return ('.rmdoc',) if self.creating_notebook() else SOURCE_EXTENSIONS
 
     def has_parent_folder(self):
-        return bool(self.picker_folder.value) or (self.creation is not None
+        return bool(self.picker_folder.value) or (self.operation.creation is not None
             and self.save_as_storage.value in ('Local', 'Received Files'))
 
     def update_picker_actions(self):
@@ -471,20 +498,20 @@ class EditorPicker:
         from .local_sources import DeviceFiles
         if isinstance(provider, DeviceFiles) and not self.picker_folder.value:
             writable = False
-        self.picker_new_folder.enabled = (self.editor_picker_mode != 'open' and writable
+        self.picker_new_folder.enabled = (self.operation.mode != 'open' and writable
                                           and capabilities(provider).create)
-        if self.editor_picker_mode != 'open':
+        if self.operation.mode != 'open':
             self.picker_primary.enabled = writable and all(
                 getattr(capabilities(provider), key) for key in ('create', 'rename', 'delete'))
-            if self.creation is not None:
+            if self.operation.creation is not None:
                 self.picker_primary.enabled = self.picker_primary.enabled and self._creation_name_valid
             virtual_root = ready and isinstance(provider, DeviceFiles) and not self.picker_folder.value
-            self.picker_primary.text = ('Choose a folder first' if virtual_root and self.creation is None else
-                'Move here' if self.destination_action is not None else
-                'Create document' if self.creation is not None else 'Save here')
+            self.picker_primary.text = ('Choose a folder first' if virtual_root and self.operation.creation is None else
+                'Move here' if self.operation.destination_action is not None else
+                'Create document' if self.operation.creation is not None else 'Save here')
             if virtual_root:
                 self.save_as_status.value = ('Choose a folder below to save your new document.'
-                    if self.creation is not None else
+                    if self.operation.creation is not None else
                     'Choose Local or Received Files above, then choose or create a folder.')
         self.fit_keyboard(getattr(self, '_compact_keyboard', False))
 
@@ -531,7 +558,7 @@ class EditorPicker:
             name = resource_name(self.save_as_name.value)
             provider = self.editor_provider(self.save_as_storage.value)
             target = '/'.join(p for p in (self.picker_folder.value, name) if p)
-            action = self.destination_action
+            action = self.operation.destination_action
             source = action.provider
             if source.private and not provider.private:
                 confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
@@ -577,7 +604,7 @@ class EditorPicker:
             self.editor_picker_rows[label] = row
             self.browser_editor_selected(None)
         self.picker_entries.value = label
-        if not row['directory'] and self.creation is None and self.destination_action is None:
+        if not row['directory'] and self.operation.creation is None and self.operation.destination_action is None:
             self.save_as_name.value = row['name']
 
     async def browser_editor_file(self, row):
@@ -606,7 +633,7 @@ class EditorPicker:
         if self.cloud_busy:
             return False
         label, folder = location
-        if self.creation is not None and label == 'All files':
+        if self.operation.creation is not None and label == 'All files':
             # Collection roots have their own providers, just as in Workspaces.
             # In particular, iOS protects the shared Local directory itself.
             from services.documents.locations import collection_path
@@ -651,7 +678,7 @@ class EditorPicker:
         work = self._begin_work()
         self.save_as_status.value = 'Loading folder…'
         try:
-            model = ResourceSelection(self.editor_provider(label), mode=self.editor_picker_mode,
+            model = ResourceSelection(self.editor_provider(label), mode=self.operation.mode,
                                       extensions=self.picker_extensions())
             rows = await asyncio.to_thread(model.list, folder, cancelled=work.cancel.is_set)
             if not self._accepts(work):
@@ -693,7 +720,7 @@ class EditorPicker:
 
     async def parent_editor_folder(self, widget=None, **kwargs):
         if not self.cloud_busy:
-            if (not self.picker_folder.value and self.creation is not None
+            if (not self.picker_folder.value and self.operation.creation is not None
                     and self.save_as_storage.value in ('Local', 'Received Files')):
                 return await self.browser_editor_location(('All files', ''))
             self.picker_folder.value = self.picker_folder.value.rpartition('/')[0]
@@ -711,16 +738,16 @@ class EditorPicker:
                 self.picker_folder.value = row['path']
                 await self.refresh_editor_browser()
             else:
-                if self.creation is None:
+                if self.operation.creation is None:
                     self.save_as_name.value = row['name']
 
     async def confirm_editor_file(self, widget=None, **kwargs):
         pending = getattr(self, '_storage_refresh', None)
         if pending is not None:
             await pending
-        if self.destination_action is not None:
+        if self.operation.destination_action is not None:
             return await self.complete_destination()
-        if self.editor_picker_mode == 'save':
+        if self.operation.mode == 'save':
             return await self.save_text_destination()
         if self.cloud_busy:
             return
@@ -745,14 +772,14 @@ class EditorPicker:
         visible = dismissed or self.visible()
         if self._work is not None:
             self.cancel()
-            if self.origin is not None or self.destination_action is not None or self.creation is not None:
+            if self.operation.origin is not None or self.operation.destination_action is not None or self.operation.creation is not None:
                 self._restore_when_idle = (self.app.navigation_generation, dismissed)
             self.save_as_status.value = 'Cancelling the operation. Your draft remains available.'
             return
         if not self.cloud_busy:
-            origin = self.origin
-            creation = self.creation
-            destination_action = self.destination_action
+            origin = self.operation.origin
+            creation = self.operation.creation
+            destination_action = self.operation.destination_action
             self.clear()
             if visible:
                 if destination_action is not None:
@@ -766,14 +793,15 @@ class EditorPicker:
         from services.documents.storage import DocumentResource
         from services.documents.destinations import DestinationRequest
         from .workspace import MAX_SESSIONS
-        if self.cloud_busy or self.save_as_data is None:
+        if self.cloud_busy or self.operation.data is None:
             return
-        target, label, data = self.save_as_name.value, self.save_as_storage.value, self.save_as_data
+        target, label = self.save_as_name.value, self.save_as_storage.value
         folder = self.picker_folder.value
-        creation = self.creation
-        if not self.app.require_document_feature(self.source_filename):
+        if not self.app.require_document_feature(self.operation.filename):
             return
         work = self._begin_work()
+        operation = work.presentation
+        data, creation = operation.data, operation.creation
         try:
             notebook = self.creating_notebook()
             extensions = self.picker_extensions()
@@ -782,15 +810,15 @@ class EditorPicker:
             provider = self.editor_provider(label)
             if (provider.private or getattr(provider, 'remote_storage', False)) and not self.app.require_feature('rclone'):
                 return
-            source_document = self.save_as_source_document
-            privacy_gate = self.save_as_privacy_gate
+            source_document = operation.source_document
+            privacy_gate = operation.privacy_gate
             request = DestinationRequest.capture(provider, folder, target, data, extensions,
                 notebook=notebook, creating=creation is not None,
                 session_count=len(self.app.workspace.sessions), session_limit=MAX_SESSIONS, store=self.store,
                 source_document=source_document)
-            if self.binary_owner is not None:
+            if operation.binary_owner is not None:
                 from services.documents.storage import DocumentPolicy
-                source = self.binary_owner.document.resource
+                source = operation.binary_owner.document.resource
                 if source is not None and source.policy.confirm_plaintext(DocumentPolicy.for_provider(provider)):
                     if not await self.app.main_window.dialog(toga.ConfirmDialog(
                             'Save to unencrypted storage?', 'The destination will contain a decrypted copy. Continue?')) or not self._accepts(work):
@@ -824,9 +852,9 @@ class EditorPicker:
             if notebook:
                 from features.notebooks.mobile.documents import open_notebook
                 resource = DocumentResource(provider, destination, max_bytes=request.max_bytes)
-                if self.binary_owner is not None:
+                if operation.binary_owner is not None:
                     from features.notebooks.mobile.documents import retarget_notebook
-                    opened = await retarget_notebook(self.app, self.binary_owner, resource)
+                    opened = await retarget_notebook(self.app, operation.binary_owner, resource)
                 else:
                     opened = await open_notebook(self.app, resource=resource)
             else:
@@ -835,15 +863,15 @@ class EditorPicker:
             if not self.active_host or epoch != self._epoch:
                 return
             if opened:
-                self.origin = self.panel = None
-                self.binary_owner = None
-                self.creation = None
-                self.save_as_data = None
-                self.save_as_privacy_gate = None
+                self.operation.origin = self.panel = None
+                self.operation.binary_owner = None
+                self.operation.creation = None
+                self.operation.data = None
+                self.operation.privacy_gate = None
                 if source_document is not None and getattr(source_document, 'private', False):
                     source_document.text = source_document.snapshot.text
                     self.app.finish_save_as_source(source_document)
-                self.save_as_source_document = None
+                self.operation.source_document = None
             else:
                 self.save_as_status.value = ('The file was created in the chosen folder, but its editor could not be opened.'
                     if creation is not None else 'The file was saved, but its editor could not be opened. The Save As draft is retained.')

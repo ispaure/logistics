@@ -13,7 +13,7 @@ from features.images.mobile.burst_camera import DEFAULTS as CAMERA_DEFAULTS, val
 DEFAULTS = {'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16', 'markdown_font_size': '16', 'text_font_size': '16', 'epub_font_size': '16', 'restore_last_document': 'true', 'last_document': '',
             'workspace_local_group': 'Others', 'document_card_overview': 'false', 'show_legacy': 'false', 'disabled_features': '[]',
             'markdown_justify': 'false',
-            'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false',
+            'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false', 'session_trusted_wifi': 'false', 'trusted_wifi_networks': '[]',
             'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'comic_split_wide': 'true', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS, **CAMERA_DEFAULTS}
 
 
@@ -68,6 +68,10 @@ class Preferences:
         disabled_features(values['disabled_features'])
         if not isinstance(values['speech_voice'], str) or len(values['speech_voice']) > 1024 or any(c in values['speech_voice'] for c in '\r\n\x00'):
             raise ValueError('Invalid read-aloud voice.')
+        from .trusted_wifi import network_names
+        network_names(values['trusted_wifi_networks'])
+        if values['session_trusted_wifi'] not in {'true', 'false'}:
+            raise ValueError('Invalid trusted Wi-Fi session preference.')
         if values['session_speech_when_locked'] not in {'true', 'false'}:
             raise ValueError('Invalid session speech lock-screen preference.')
         if values['seasonal_snow'] not in {'true', 'false'}:

@@ -71,7 +71,7 @@ def main():
     try:
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-        from Scripts.release_test_evidence import reuse_disabled
+        from logistics_build.release_test_evidence import reuse_disabled
         evidence = select(request, repository, commit, reuse_allowed=not reuse_disabled(Path.cwd()))
     except (OSError, ValueError, KeyError, TypeError):
         # An unavailable or malformed proof cannot skip tests.

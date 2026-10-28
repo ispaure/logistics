@@ -18,7 +18,7 @@ from features.notebooks.mobile.surface import mobile_editor_html
 from features.notebooks.notebook import Notebook
 from features.notebooks.editor import Editor
 from features.notebooks.recovery import Repository
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 from mobile_build.native_tests.tests.logisticsmobile.notebook_pointer_checks import POINTER_CHECKS
 from mobile_build.native_tests.tests.logisticsmobile.notebook_chrome_checks import CHROME_CHECKS
 from mobile_build.native_tests.tests.logisticsmobile.notebook_input_checks import INPUT_CHECKS

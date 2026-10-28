@@ -95,3 +95,71 @@ class MultiCredentialUITests(unittest.TestCase):
             self.assertFalse(self.app.loop.run_until_complete(
                 self.app.require_remote_credentials_async('Main', identity='b' * 64)))
             self.assertEqual(setup.call_count, 2)
+
+
+class PackagePrivacyTests(unittest.TestCase):
+    def test_remote_gate_uses_owner_and_saved_accounts_do_not_inherit_another_password(self):
+        from features.rclone.mobile.session_privacy import ResumePassword, remote_privacy_gate
+        state = NativeCredentialState()
+        first, second = ResumePassword('first'), ResumePassword('second')
+        state.package_privacy = {'First.zip': first, 'Second.zip': second}
+        state.session_privacy = first
+        state.package_records = (
+            dict(package_name='First.zip', saved=False, remotes=['First'], aliases={'First': 'First'},
+                 identities={'First': 'a' * 64}, crypt_identities={'First': 'c' * 64}),
+            dict(package_name='Second.zip', saved=False, remotes=['Second'], aliases={'Second': 'Second'},
+                 identities={'Second': 'b' * 64}, crypt_identities={'Second': 'd' * 64}),
+            dict(package_name='Saved.zip', saved=True, remotes=['Saved'], aliases={'Saved': 'Saved'},
+                 identities={'Saved': 'e' * 64}, crypt_identities={'Saved': 'f' * 64}))
+        client = SimpleNamespace(credential_state=state)
+        self.assertIs(remote_privacy_gate(client, 'Second', 'b' * 64), second)
+        self.assertIs(remote_privacy_gate(client, 'Second', 'd' * 64, cipher=True), second)
+        self.assertIsNone(remote_privacy_gate(client, 'Saved', 'e' * 64))
+        with self.assertRaises(ValueError):
+            remote_privacy_gate(client, 'Second', 'a' * 64)
+        del state.package_privacy['Second.zip']
+        with self.assertRaises(ValueError):
+            remote_privacy_gate(client, 'Second', 'b' * 64)
+
+    def test_remote_provider_keeps_owning_gate_after_other_packages_change(self):
+        from features.rclone.mobile.remote_resources import NativeRemoteResources
+        from features.rclone.remote_access import NativeRemoteLocation
+        from features.rclone.mobile.remote_readers import RemoteReaders
+        from features.rclone.mobile.session_privacy import ResumePassword
+        state = NativeCredentialState()
+        first, second = ResumePassword('first'), ResumePassword('second')
+        state.session_privacy = first
+        state.package_privacy = {'Second.zip': second}
+        state.package_records = (dict(package_name='Second.zip', saved=False, remotes=['Second'],
+            aliases={'Second': 'Second'}, identities={'Second': 'b' * 64}),)
+        client = SimpleNamespace(generation=1, credential_state=state,
+                                 connection_identity=lambda remote: 'b' * 64)
+        provider = NativeRemoteResources(client, NativeRemoteLocation('Second'))
+        self.assertIs(provider.privacy_gate, second)
+        readers = RemoteReaders(client, 'Second', resource=provider)
+        self.assertIs(readers.privacy_gate, second)
+        state.package_privacy = {}
+        state.session_privacy = None
+        self.assertIs(provider.privacy_gate, second)
+        self.assertIs(readers.privacy_gate, second)
+        provider.close()
+
+    def test_localcrypt_gate_selection_uses_each_copy_mapping(self):
+        from features.rclone.mobile.session_privacy import ResumePassword
+        from features.rclone.localcrypt.mobile.content import CryptContentProvider
+        from features.rclone.localcrypt.mobile.copies import LocalCryptCopies
+        state = NativeCredentialState()
+        first, second = ResumePassword('first'), ResumePassword('second')
+        state.session_privacy = first
+        state.package_privacy = {'Second.zip': second}
+        state.package_records = (dict(package_name='Second.zip', saved=False, remotes=['Second'],
+            aliases={'Second': 'Second'}, crypt_identities={'Second': 'd' * 64}),)
+        client = SimpleNamespace(credential_state=state)
+        provider = CryptContentProvider()
+        provider.client, provider.remote, provider.identity = client, 'Second', 'd' * 64
+        self.assertIs(provider.privacy_gate, second)
+        copies = object.__new__(LocalCryptCopies)
+        copies.client = client
+        copies.record = Mock(return_value=dict(remote='Second', identity='d' * 64))
+        self.assertIs(copies.privacy_gate_for('copy-key'), second)
+        copies.record.assert_called_once_with('copy-key')

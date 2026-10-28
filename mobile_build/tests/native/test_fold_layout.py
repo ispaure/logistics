@@ -2,7 +2,7 @@
 from types import SimpleNamespace as NS
 import unittest
 
-from mobile.fold_layout import seam_fraction, comic_mode, page_region
+from mobile.fold_layout import seam_fraction, reading_seam, comic_mode, page_region
 from features.comics.mobile.composite import spread_geometry
 from features.comics.mobile.navigation import ComicNavigation
 from mobile_build.native_tests.tests.logisticsmobile.reader_parity_probe import image_bytes
@@ -57,9 +57,32 @@ class FoldLayoutTests(unittest.TestCase):
             self.assertAlmostEqual(w / h, source[0] / source[1], delta=.003)
             self.assertGreaterEqual(y, 0)
             self.assertLessEqual(y + h, 700)
+        self.assertEqual(left[3], right[3])
         size, rects = spread_geometry([sizes[0]], viewport=(1000, 700), seam=.53, single_right=True)
-        self.assertEqual(rects[0][0], 530)
-        self.assertLessEqual(rects[0][0] + rects[0][2], 1000)
+        self.assertEqual(size, sizes[0])
+        self.assertEqual(rects, [(0, 0, *sizes[0])])
+
+    def test_flat_crease_does_not_anchor_or_resize_workspace_pages(self):
+        from mobile.fold_layout import Division
+        from unittest.mock import patch
+        widget = NS(_impl=NS(native=NS(bounds=NS(size=NS(width=900, height=700)))))
+        inactive = Division(520, 0, 40, 700)
+        def regions(widget, *, include_inactive=False):
+            return (inactive,) if include_inactive else ()
+        with patch('mobile.fold_layout.reserved_divisions', side_effect=regions):
+            self.assertIsNone(reading_seam(None, widget))
+        with patch('mobile.fold_layout.reserved_divisions', return_value=(inactive,)):
+            self.assertEqual(reading_seam(None, widget), .6)
+
+    def test_sidebar_and_page_order_never_give_matching_pages_unequal_heights(self):
+        for sizes in ([(400, 600)] * 2, [(800, 1200), (400, 600)], [(400, 600), (410, 600)]):
+            for seam in (.35, .5, .65):
+                for order in (sizes, list(reversed(sizes))):
+                    _, rects = spread_geometry(order, viewport=(900, 700), seam=seam, seam_gap=24)
+                    self.assertEqual(rects[0][3], rects[1][3])
+                    self.assertEqual(rects[0][1], rects[1][1])
+                    self.assertGreaterEqual(rects[0][0], 0)
+                    self.assertLessEqual(rects[1][0] + rects[1][2], 900)
 
     def test_composed_pixels_have_no_gutter_and_keep_manga_order(self):
         from features.comics.mobile.composite import compose_spread
@@ -101,9 +124,8 @@ class FoldLayoutTests(unittest.TestCase):
                 self.assertEqual(pixels.getpixel((x, 100)), (255, 0, 0, 255))
         size, rects = spread_geometry([(300, 200)], viewport=(700, 1000),
                                      seam=.5, single_right=True, seam_gap=30)
-        self.assertEqual(size, (700, 1000))
-        self.assertGreaterEqual(rects[0][0], 365)
-        self.assertLessEqual(rects[0][0] + rects[0][2], 700)
+        self.assertEqual(size, (300, 200))
+        self.assertEqual(rects, [(0, 0, 300, 200)])
 
 
 if __name__ == '__main__':

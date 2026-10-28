@@ -13,7 +13,7 @@ async def open_local_document(app, path, *, destination=None):
         from services.documents.mobile_notebooks import open_notebook
         return await open_notebook(app, path=selected, destination=destination)
     from features.images.document import IMAGE_EXTENSIONS
-    if selected is not None and selected.suffix.lower() in IMAGE_EXTENSIONS:
+    if selected is not None and selected.suffix.lower() in IMAGE_EXTENSIONS | {'.mp4', '.mkv'}:
         from commonUtils.runtime.resources.local import LocalFiles
         from services.documents.mobile_storage import open_provider_document
         return await open_provider_document(app, LocalFiles(selected.parent), selected.name, destination=destination)

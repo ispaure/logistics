@@ -189,3 +189,46 @@ Direct screenshot pixels still use the original image MIME path.
 Composer and LMPage explicitly accept image/file-URL drag events and route drops
 through the same bounded clipboard decoder. They do not insert file:// text for
 image files. Ordinary text drops retain the editor’s native behavior.
+
+## Mobile on-device providers
+
+`mobile/on_device.py` dispatches explicitly between the existing HTTP adapter,
+Apple Foundation Models and Android ML Kit Prompt API (`genai-prompt:1.0.0-beta4`).
+Native imports are lazy. Legacy profiles default to the server; an optional
+`provider` field selects `apple` or `nano`. The provider control appears for the
+current platform; runtime availability is checked before listing its model and
+again before inference. No cloud fallback or automatic inference occurs.
+Explicit Android preparation may download system model assets through AICore.
+
+`mobile/ios/FoundationChat.swift` exposes an Objective-C bridge for Rubicon, with
+an iOS 26 availability guard. Each request reconstructs a typed Foundation Models
+transcript with separate instruction/user/assistant entries. Swift streams
+cumulative snapshots; the Python worker publishes only new suffixes. Android
+uses Chaquopy and `GenerativeModelFutures`, supplies the selected role-tagged
+history as JSON in a single prompt, and publishes the completed response.
+On-device settings cap approximate context at 4096/3072 tokens (Apple/Nano) and
+maximum replies at 1024. Native context checks remain authoritative.
+
+Both clients use the shared generation coordinator and mobile execution adapter,
+including durable pending-turn publication, partial replies, Stop and retirement.
+Each worker owns and closes its native model/task; cancellation is observed
+between short polls. Preparation/status waits are bounded. Generation metadata
+identifies the local provider with an `on-device://` endpoint, never a server
+fallback. Server addresses can remain in the profile for switching back.
+
+`mobile_build/build_support/lm_build.py` adds the Swift source only to the main
+application, weak-links Foundation Models and embeds Swift runtime libraries
+without raising the app's deployment target. The feature payload manifest includes
+the bridge. Android dependencies are synchronized into reused Gradle projects by
+the existing build owner. The two optional GenAI libraries declare API 26;
+the manifest override preserves the host API 24 minimum, while the native adapter
+checks API 26 before loading either library. Neither library declares startup
+components in its manifest.
+
+Host checks in `test_on_device.py` cover availability, explicit preparation,
+no HTTP fallback, profile compatibility, incremental publication, cancellation,
+error preservation and a saved UI conversation without an address or key.
+`test_lm_build.py` checks repeatable main-target integration and preservation of
+the Android host minimum. Disposable native host builds verified the Swift bridge
+and Android dependency/API compilation plus manifest merging. Native bridge
+compilation is separate from successful inference on eligible physical devices.

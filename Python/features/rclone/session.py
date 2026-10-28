@@ -18,6 +18,7 @@ remember = registry.remember
 names = registry.names
 paths = registry.paths
 forget = registry.forget
+forget_package_path = registry.forget_package_path
 revocation_check = registry.revocation_check
 launch = registry.launch
 credentials = registry.credentials

@@ -172,7 +172,11 @@ backend class imports and the document facade remain available.
 
 PDF uses the existing bounded, RAM-only comic bitmap compositor and resize/zoom
 invalidation loop. Page gestures and buttons advance beyond the displayed spread;
-Back tests whether the previous two pages fit before choosing its anchor. Numeric
+Back retraces committed spread boundaries within the current viewport. After a
+direct jump it tests whether the previous two pages fit; a lone preceding page
+retains a boundary before the page being left, preventing it from appearing again
+inside the preceding spread. Viewport changes discard those layout boundaries.
+Numeric
 jumps, contents and search still target individual pages. Fullscreen hides the
 vertical rail and tools, retaining the shared image canvas and magnifier.
 
@@ -182,3 +186,8 @@ presentation, image publication and process-wide privacy gates; it does not crea
 a second casting service. `reader_flow_probe.py` is the reusable Apple native
 rotation/chrome/progress probe. Host tests cover spread boundaries, dimensions,
 vertical scrubbing, session retirement and external privacy blanking.
+
+`test_pdf_spreads.py` exhaustively traverses all 128 seven-page portrait/landscape
+sequences at three viewport sizes forward, backward and forward again. It checks
+exact page coverage and identical spread boundaries, plus direct-jump Back and
+layout-refresh boundaries. These are host navigation checks without native rendering.

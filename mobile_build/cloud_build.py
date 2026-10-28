@@ -13,10 +13,10 @@ import subprocess
 import tomllib
 
 if __package__:
-    from .build_support import camera_build, icon_build, privacy_build, scene_build, incoming_build
+    from .build_support import camera_build, icon_build, privacy_build, scene_build, incoming_build, video_build, wifi_build, widget_build, lm_build
     from .deployment.deployment_paths import output_root
 else:
-    from build_support import camera_build, icon_build, privacy_build, scene_build, incoming_build
+    from build_support import camera_build, icon_build, privacy_build, scene_build, incoming_build, video_build, wifi_build, widget_build, lm_build
     from deployment.deployment_paths import output_root
 
 ROOT = Path(__file__).resolve().parent
@@ -105,15 +105,21 @@ def configure_android_appearance(project):
     if not any(item.get('{' + namespace + '}name') == permission for item in root.findall('uses-permission')):
         ET.SubElement(root, 'uses-permission', {'{' + namespace + '}name': permission})
     for permission in ('android.permission.FOREGROUND_SERVICE', 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
-                       'android.permission.WAKE_LOCK'):
+                       'android.permission.WAKE_LOCK', 'android.permission.ACCESS_WIFI_STATE',
+                       'android.permission.ACCESS_COARSE_LOCATION', 'android.permission.ACCESS_FINE_LOCATION'):
         if not any(item.get('{' + namespace + '}name') == permission for item in root.findall('uses-permission')):
             ET.SubElement(root, 'uses-permission', {'{' + namespace + '}name': permission})
     application = root.find('application')
     # The Onyx device AAR declares its demo label; retain Logistics' own label.
     tools_namespace = 'http://schemas.android.com/tools'
     ET.register_namespace('tools', tools_namespace)
-    # Refresh control does not use the SDK's Wi-Fi, Bluetooth or dump helpers.
-    for permission in ('ACCESS_WIFI_STATE', 'CHANGE_WIFI_STATE', 'BLUETOOTH', 'DUMP'):
+    # Wi-Fi identity is used by the opt-in session resume policy. Remove any
+    # stale manifest-merger exclusion from an older prepared project.
+    for item in list(root.findall('uses-permission')):
+        if (item.get('{' + namespace + '}name') == 'android.permission.ACCESS_WIFI_STATE'
+                and item.get('{' + tools_namespace + '}node') == 'remove'):
+            del item.attrib['{' + tools_namespace + '}node']
+    for permission in ('CHANGE_WIFI_STATE', 'BLUETOOTH', 'DUMP'):
         name = 'android.permission.' + permission
         if not any(item.get('{' + namespace + '}name') == name for item in root.findall('uses-permission')):
             ET.SubElement(root, 'uses-permission', {
@@ -137,6 +143,8 @@ def configure_android_appearance(project):
         query.append(speech_queries.find('intent'))
     tree.write(manifest, encoding='utf-8', xml_declaration=True)
     incoming_build.configure_android(project)
+    video_build.configure_android(project)
+    lm_build.configure_android(project)
 
 
 def android():
@@ -208,6 +216,10 @@ def ios(project=None):
         raise ValueError('Unexpected Briefcase iOS build configuration; refusing to silently omit the bridge.')
     pbx.write_bytes(plistlib.dumps(data, sort_keys=False))
     incoming_build.configure_ios(project)
+    wifi_build.configure_ios(project)
+    video_build.configure_ios(project)
+    widget_build.configure_ios(project)
+    lm_build.configure_ios(project)
 
 
 def licenses(destination=None):

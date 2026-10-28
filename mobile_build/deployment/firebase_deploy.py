@@ -182,7 +182,7 @@ def build(version_code=None):
     number = reserve_build(version_code)
     output = ROOT / 'build/firebase' / str(number)
     from build_manager.retention import lease
-    from Scripts.build_retention import clean_builds
+    from logistics_build.build_retention import clean_builds
     clean_builds(ROOT)
     with lease(output):
         android.run([sys.executable, 'cloud_build.py', 'android'], env,

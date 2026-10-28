@@ -41,7 +41,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == 'test-map':
         import json
-        from Scripts.validation_plans import inventory
+        from logistics_build.validation_plans import inventory
         print(json.dumps(inventory(ROOT), indent=2))
         return 0
     if args.command == 'hygiene':
@@ -106,7 +106,7 @@ def main(argv=None):
                        str(suite), '--pattern', pattern, '--isolate-modules', *extra]
         else:
             command = [str(interpreter), '-m', 'ruff', 'check', '--config',
-                       'Python/pyproject.toml', 'dev.py', 'Python', 'mobile_build', 'Scripts', '.github/scripts']
+                       'Python/pyproject.toml', 'dev.py', 'Python', 'mobile_build', 'Scripts', 'logistics_build', '.github/scripts']
         checks.append((label, interpreter, command, environment))
     try:
         return run_checks(ROOT, checks, dry_run=args.dry_run)

@@ -10,7 +10,7 @@ import subprocess
 
 SOURCE_OWNERS = (
     'mobile', 'services', 'features/books', 'features/pdf', 'features/comics',
-    'features/notebooks', 'features/images', 'features/lm', 'features/rclone', 'features/text_editor',
+    'features/notebooks', 'features/images', 'features/lm', 'features/rclone', 'features/text_editor', 'features/video',
 )
 BASE_DOCUMENT_MODULES = ('features/__init__.py', 'configFile.ini')
 
@@ -31,7 +31,7 @@ def load_source_modules(repo):
         for name in data['modules']:
             if (not isinstance(name, str) or not name or '\\' in name or ':' in name
                     or PurePosixPath(name).is_absolute() or '..' in PurePosixPath(name).parts
-                    or PurePosixPath(name).as_posix() != name or PurePosixPath(name).suffix not in {'.py', '.java', '.m', '.js', '.css', '.html'}):
+                    or PurePosixPath(name).as_posix() != name or PurePosixPath(name).suffix not in {'.py', '.java', '.m', '.swift', '.js', '.css', '.html'}):
                 raise ValueError('Invalid mobile source path in ' + owner)
             if name in selected:
                 raise ValueError('Duplicate mobile source path in ' + owner)
@@ -50,6 +50,7 @@ APP_MODULES, DOCUMENT_MODULES = load_source_modules(Path(__file__).resolve().par
 # Release staging still requires every member to be committed.
 SHARED_REQUIRED_MODULES = (
     # Filesystem snapshots and local objects.
+    'filesystem/index/validation.py',
     'filesystem/local_access.py',
     'filesystem/objects.py',
     'filesystem/snapshots.py',
@@ -199,7 +200,7 @@ def captured_source_fingerprint(repo):
     metadata = Path(repo) / '.manager-source.json'
     if not metadata.is_file():
         return None
-    from Scripts.build_snapshots import identity
+    from logistics_build.build_snapshots import identity
     captured = json.loads(metadata.read_text())
     if identity(repo)['fingerprint'] != captured['snapshot_fingerprint']:
         raise ValueError('Captured source changed before mobile staging; prepare a fresh plan.')
@@ -275,7 +276,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
     manifest = json.loads((destination / 'source.json').read_text())
     manifest['commonUtils_dirty'] = manifest.get('commonUtils_dirty', False) or new_shared
     manifest.update(logistics_commit=subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip(),
-                    dirty=dirty or manifest.get('commonUtils_dirty', False), features=['text', 'markdown', 'epub', 'comics', 'lm', 'rclone', 'notebooks'])
+                    dirty=dirty or manifest.get('commonUtils_dirty', False), features=['text', 'markdown', 'epub', 'comics', 'lm', 'rclone', 'notebooks', 'video'])
     manifest['logistics_committed_at'] = subprocess.check_output(
         ['git', '-C', str(repo), 'show', '-s', '--format=%cI', 'HEAD'], text=True).strip()
     # Identify the exact local source snapshot independently of commit IDs.
@@ -285,7 +286,7 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
              (repo / 'mobile_build/native_navigation', 'native-navigation/'))
     for root, prefix in roots:
         for path in sorted(root.rglob('*')):
-            if path.is_file() and path.suffix in {'.py', '.go', '.java', '.m', '.json', '.ini', '.mod', '.sum'} and path.name != 'source.json':
+            if path.is_file() and path.suffix in {'.py', '.go', '.java', '.m', '.swift', '.json', '.ini', '.mod', '.sum'} and path.name != 'source.json':
                 digest.update((prefix + path.relative_to(root).as_posix()).encode() + b'\0')
                 digest.update(path.read_bytes())
     manifest['source_sha256'] = digest.hexdigest()

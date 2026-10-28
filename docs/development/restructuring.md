@@ -554,7 +554,7 @@ coexist with ongoing mobile document, transfer and navigation work.
 ### Immediate scope
 
 Reuse the pinned manager's existing process cleanup from
-`Scripts/mobile_processes.py`, retaining Logistics' command arguments, working
+the external manager's `build_manager.native_commands` (the former project helper has been removed), retaining Logistics' command arguments, working
 directory, preparation timeout and failure message. Always retire the owned group,
 including after a successful parent exit or interruption. The shared manager
 already bounds the final wait after termination. Add focused command-lifecycle
@@ -592,4 +592,4 @@ Each later extraction needs focused shared tests and affected consumer checks
 before pins or vendored files change. Portable checks do not establish native
 Windows process containment, Blender integration or mobile acceptance. Build
 retention mechanisms remain manager-owned and Logistics storage policy remains
-in `Scripts.build_retention`.
+in `logistics_build.build_retention`.

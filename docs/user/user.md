@@ -14,6 +14,19 @@ Save settings explicitly; some changes apply to new windows or after a restart.
 A cancelled batch may already have changed some files;
 check the feature's recovery guidance before retrying.
 
+## Try a local file first
+
+1. Open File Browser and choose a folder containing a disposable text or Markdown
+   file. No cloud account or server configuration is needed.
+2. Open it in its reader/editor. Go to Documents to find the retained tab and
+   return to it after browsing another folder.
+3. If you edit the file, save and reopen it to check the result. Closing a document
+   can prompt to save or discard; cancelling keeps it open.
+
+You should now be able to find both the file's folder and its open document view.
+Use [working safely](working-safely.md) before exploring private copies, transfers
+or batch changes. Closing a document and deleting its file are different actions.
+
 ## Feature guides
 
 Open **Settings**, select a feature in the sidebar, then click **User Guide**.

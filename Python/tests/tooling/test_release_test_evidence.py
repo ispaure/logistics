@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from build_manager import Phase, Plan
 from build_manager.evidence import EvidenceCache
-from Scripts import release_test_evidence as evidence
+from logistics_build import release_test_evidence as evidence
 
 
 @unittest.skipUnless(shutil.which('ssh-keygen'), 'SSH signing tool unavailable')
@@ -131,7 +131,7 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
     def test_hosted_wrapper_reuses_verified_proof_and_runs_fresh_on_mismatch(self):
         import sys
         from build_manager import Executor
-        from Scripts.platform_checks import run_check
+        from logistics_build.platform_checks import run_check
         proof = self.export()
         marker = self.base / 'executed'
         command = [sys.executable, '-c', 'from pathlib import Path;Path(' + repr(str(marker)) + ').touch()']
@@ -140,9 +140,9 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
         receiver = evidence.matched_proof
         environment = dict(GITHUB_ACTIONS='true', GITHUB_REPOSITORY='owner/project',
                            GITHUB_SHA=self.git('rev-parse', 'HEAD'))
-        with patch.dict('os.environ', environment), patch('Scripts.test_evidence.with_reuse', side_effect=bound), \
-             patch('Scripts.release_test_evidence.matched_proof', side_effect=lambda root, phase: receiver(root, phase, envelope=proof, repository='owner/project', now=self.now)), \
-             patch('Scripts.platform_checks.Executor', side_effect=lambda **kw: Executor(evidence_directory=self.base/'receiver-cache', **kw)):
+        with patch.dict('os.environ', environment), patch('logistics_build.test_evidence.with_reuse', side_effect=bound), \
+             patch('logistics_build.release_test_evidence.matched_proof', side_effect=lambda root, phase: receiver(root, phase, envelope=proof, repository='owner/project', now=self.now)), \
+             patch('logistics_build.platform_checks.Executor', side_effect=lambda **kw: Executor(evidence_directory=self.base/'receiver-cache', **kw)):
             reused = run_check('commonutils', command, root=self.root, results=self.base/'results', environment={}, timeout=10)
             self.assertTrue(reused['reused'])
             self.assertFalse(marker.exists())
@@ -175,7 +175,7 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
 
     def test_release_plan_carries_the_explicit_fresh_execution_choice(self):
         import sys
-        from Scripts.build_project import LogisticsProject
+        from logistics_build.build_project import LogisticsProject
         project = object.__new__(LogisticsProject)
         project.root, project.interpreter = self.root, Path(sys.executable)
         source = dict(dirty=False, logistics_commit=self.git('rev-parse', 'HEAD'),
@@ -189,7 +189,7 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
         self.assertNotIn('--no-test-reuse', plan.phases[0].argv)
 
     def test_off_release_creates_a_new_annotated_policy_tag_without_moving_a_tag(self):
-        from Scripts.build_project import release_source
+        from logistics_build.build_project import release_source
         from threading import Event
         commit = self.git('rev-parse', 'HEAD')
         commands = []
@@ -201,9 +201,9 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
             commands.append(command)
             if command[:2] == ['git', 'tag']:
                 raise RuntimeError('Fixture stops before tag push')
-        with patch('Scripts.build_project.git', side_effect=read), \
-             patch('Scripts.build_project.subprocess.check_output', return_value=''), \
-             patch('Scripts.build_project.subprocess.run', side_effect=run):
+        with patch('logistics_build.build_project.git', side_effect=read), \
+             patch('logistics_build.build_project.subprocess.check_output', return_value=''), \
+             patch('logistics_build.build_project.subprocess.run', side_effect=run):
             with self.assertRaisesRegex(RuntimeError, 'Fixture stops'):
                 release_source(self.root, None, 'v0.1.0-alpha.1', commit, Event(), reuse_test_results=False)
         tag = next(command for command in commands if command[:2] == ['git', 'tag'])

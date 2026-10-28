@@ -15,7 +15,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceChoice
 from PySide6.QtTest import QTest
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 from features.notebooks.notebook import Notebook
 from features.notebooks.storage import NotebookDocument
 from features.notebooks.ui.workspace import NotebookWorkspace, NotebookWindow

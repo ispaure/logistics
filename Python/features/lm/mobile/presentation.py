@@ -88,7 +88,7 @@ const follow = changed || data.force_latest || nearBottom();
 if (changed) { root.replaceChildren(); state.entries = []; window.scrollTo(0,0); }
 document.body.style.fontSize = data.font_size + 'px';
 document.getElementById('empty').hidden = data.count !== 0;
-document.getElementById('hint').textContent = data.configured ? 'Write a message below.' : 'Use Set up chat above to choose a server and model.';
+document.getElementById('hint').textContent = data.configured ? 'Write a message below.' : 'Use Set up chat above to choose an on-device model or a server.';
 data.entries.forEach((entry, offset) => {
  const index = data.start + offset;
  const previous = state.entries[index];

@@ -73,14 +73,14 @@ experiment; do not create `codex/*` branches automatically.
 
 ## Build and test storage lifecycle
 
-Use the existing build manager (`Scripts/build_project.py`, `build_manager/`) and
+Use the external `build_manager` package through `logistics_build/build_project.py` and
 owning mobile deployment helpers for builds and local workflow validation.
-`Scripts/build_retention.py` owns Logistics retention policy; keep reusable lease
+`logistics_build/build_retention.py` owns Logistics retention policy; keep reusable lease
 and pruning mechanics in `build_manager/retention.py`. Do not create another
 independent build/cache hierarchy to bypass this policy.
 
-For one-off probes, use `Scripts.build_retention.scratch()` or
-`python -m Scripts.build_retention --scratch COMMAND ...`; `{workspace}` in command
+For one-off probes, use `logistics_build.build_retention.scratch()` or
+`python -m logistics_build.build_retention --scratch COMMAND ...`; `{workspace}` in command
 arguments expands to its disposable path. Save concise evidence to ignored
 `test-results/` before the scratch context exits. Use the manager's disposable
 simulator/emulator backends and their owned cleanup. If a task needs an alternate
@@ -92,6 +92,6 @@ one day; source snapshots keep three newest plus those used within seven days.
 A `.keep` file anywhere inside an owned tree pins it. Active leases protect
 running work. Retention never sweeps arbitrary `/tmp` paths, existing personal
 simulators, shared SDKs, credentials or unclassified test evidence. Use
-`python -m Scripts.build_retention` to preview, and `--apply` to prune expired
+`python -m logistics_build.build_retention` to preview, and `--apply` to prune expired
 owned outputs. Preserve build counters, signing material and the main installed
 app/data. Historical prepared artifact paths may expire unless pinned.

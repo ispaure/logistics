@@ -11,7 +11,7 @@ from unittest.mock import patch
 from features.notebooks.recovery import Repository
 from features.notebooks.editor import Editor
 from features.notebooks.notebook import Notebook
-from Scripts.build_retention import scratch
+from logistics_build.build_retention import scratch
 
 
 def digest(book):

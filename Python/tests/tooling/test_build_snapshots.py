@@ -6,7 +6,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 
-from Scripts.build_snapshots import identity, materialize
+from logistics_build.build_snapshots import identity, materialize
 
 
 class SnapshotTests(unittest.TestCase):
@@ -76,11 +76,61 @@ class SnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'different source'):
             materialize(self.root, destination, before['logistics_commit'])
 
-    def test_uncommitted_shared_changes_block_incomplete_snapshot(self):
+    def test_uncommitted_shared_edits_additions_deletions_and_ignored_files_are_isolated(self):
+        (self.shared / '.gitignore').write_text('private/\n')
+        (self.shared / 'removed.py').write_text('old')
+        self.commit(self.shared)
+        self.commit(self.root)
         (self.shared / 'library.py').write_text('VERSION = 2\n')
-        with self.assertRaisesRegex(ValueError, 'commonUtils'):
-            materialize(self.root, self.directory / 'snapshot')
-        self.assertFalse((self.directory / 'snapshot').exists())
+        (self.shared / 'new.py').write_text('new API')
+        (self.shared / 'removed.py').unlink()
+        (self.shared / 'private').mkdir()
+        (self.shared / 'private/secret').write_text('synthetic secret')
+        captured = identity(self.root)
+        self.assertTrue(captured['dirty'])
+        self.assertTrue(captured['commonUtils_dirty'])
+        destination = self.directory / 'snapshot'
+        materialize(self.root, destination, expected=captured)
+        shared = destination / 'Python/commonUtils'
+        self.assertEqual((shared / 'library.py').read_text(), 'VERSION = 2\n')
+        self.assertEqual((shared / 'new.py').read_text(), 'new API')
+        self.assertFalse((shared / 'removed.py').exists())
+        self.assertFalse((shared / 'private').exists())
+        self.assertEqual(materialize(self.root, destination), captured)
+        # Later live edits neither mutate nor relabel the prepared checkout.
+        (self.shared / 'library.py').write_text('VERSION = 3\n')
+        self.assertEqual((shared / 'library.py').read_text(), 'VERSION = 2\n')
+        self.assertNotEqual(identity(self.root)['fingerprint'], captured['fingerprint'])
+        (shared / 'new.py').write_text('tampered')
+        from mobile_build.tools import captured_source_fingerprint
+        with self.assertRaisesRegex(ValueError, 'Captured source changed'):
+            captured_source_fingerprint(destination)
+
+    def test_shared_edits_do_not_enter_committed_selection(self):
+        (self.shared / 'library.py').write_text('VERSION = 2\n')
+        (self.shared / 'new.py').write_text('new API')
+        destination = self.directory / 'snapshot'
+        captured = materialize(self.root, destination, 'HEAD')
+        self.assertFalse(captured['dirty'])
+        self.assertFalse(captured['commonUtils_dirty'])
+        self.assertEqual((destination / 'Python/commonUtils/library.py').read_text(), 'VERSION = 1\n')
+        self.assertFalse((destination / 'Python/commonUtils/new.py').exists())
+
+    def test_shared_source_race_and_escaping_links_are_rejected(self):
+        captured = identity(self.root)
+        (self.shared / 'new.py').write_text('late API')
+        with self.assertRaisesRegex(ValueError, 'shared planning capture'):
+            materialize(self.root, self.directory / 'late', expected=captured)
+        (self.shared / 'escape').symlink_to('../../source.py')
+        with self.assertRaisesRegex(ValueError, 'escapes the checkout'):
+            materialize(self.root, self.directory / 'escaped')
+
+    def test_distribution_guard_rejects_dirty_inputs_but_accepts_committed_selection(self):
+        from logistics_build.build_snapshots import require_committed_source
+        for source in ({'dirty': True}, {'dirty': False, 'commonUtils_dirty': True}):
+            with self.assertRaisesRegex(ValueError, 'requires committed source'):
+                require_committed_source(source, 'Tester build')
+        require_committed_source(identity(self.root, 'HEAD'), 'Tester build')
 
     @unittest.skipIf(os.name == 'nt', 'Windows executable mode is not POSIX')
     def test_executable_change_invalidates_cache_and_is_preserved(self):
@@ -116,7 +166,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual((destination/'source.py/child.py').read_text(), 'new directory content')
 
     def test_private_mobile_references_do_not_break_snapshot_reuse_or_enter_transfer(self):
-        from Scripts.build_snapshots import source_members
+        from logistics_build.build_snapshots import source_members
         destination=self.directory/'mobile-snapshot'
         original=materialize(self.root,destination,'HEAD')
         (destination/'mobile_build').mkdir()
@@ -133,7 +183,7 @@ class SnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'different source'):materialize(self.root,destination,'HEAD')
 
     def test_runtime_reference_excludes_refuse_linked_git_metadata(self):
-        from Scripts.build_snapshots import exclude_private_runtime_references
+        from logistics_build.build_snapshots import exclude_private_runtime_references
         destination=self.directory/'snapshot';materialize(self.root,destination,'HEAD')
         outside=self.directory/'outside-config';outside.write_text('preserve')
         exclude=destination/'.git/info/exclude';exclude.unlink();exclude.symlink_to(outside)

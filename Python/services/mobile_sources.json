@@ -18,6 +18,7 @@
     "documents/provider_documents.py",
     "documents/readers.py",
     "documents/storage.py",
+    "documents/video_progress.py",
     "documents/zip_passwords.py",
     "folders/__init__.py",
     "folders/appearance.py",

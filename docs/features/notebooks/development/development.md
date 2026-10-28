@@ -721,7 +721,7 @@ the current page. Desktop and mobile overviews share bounded `page_previews`
 responses; previews do not change notebook bytes or page order.
 Use the build manager's native Android/iOS plans; preserve its disposable-device
 cleanup and retain evidence only under ignored test results.
-`Scripts/mobile_payload.py` refreshes generated payloads with scratch rollback
+`logistics_build/mobile_payload.py` refreshes generated payloads with scratch rollback
 when the two platforms build the same manager source snapshot. This keeps a
 previous payload recoverable if preparation fails.
 

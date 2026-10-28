@@ -11,6 +11,7 @@ from toga.style.pack import COLUMN, ROW, END
 from features.lm.domain import build_request, conversation, message, validate_settings
 from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
 from features.lm.mobile.transport import ChatClient, ChatCancelled
+from features.lm.mobile.on_device import MODELS, PROVIDERS, configured, platform_provider, client_for
 from features.lm.mobile.presentation import composer_height, transcript_document, transcript_entries, transcript_update
 
 
@@ -89,7 +90,17 @@ class ChatUI:
 
     def _build_chat_configuration(self):
         """Build session-key and generation settings without contacting the server."""
-        contexts = sorted({'2048', '4096', '8192', '16384', '32768', str(self.chat_profile['settings']['context_tokens'])}, key=int)
+        provider = self.chat_profile.get('provider', 'server')
+        choices = ['OpenAI-compatible server']
+        local = platform_provider()
+        if local:
+            choices.append(MODELS[local])
+        if provider in MODELS and MODELS[provider] not in choices:
+            choices.append(MODELS[provider])
+        self._selected_chat_provider = provider
+        self.chat_provider = toga.Selection(items=choices,
+            value=MODELS.get(provider, choices[0]), on_change=self.select_chat_provider, style=Pack(height=48))
+        contexts = sorted({'2048', '3072', '4096', '8192', '16384', '32768', str(self.chat_profile['settings']['context_tokens'])}, key=int)
         replies = sorted({'256', '512', '1024', '2048', '4096', str(self.chat_profile['settings']['max_tokens'])}, key=int)
         self.chat_context = toga.Selection(items=contexts,
             value=str(self.chat_profile['settings']['context_tokens']), style=Pack(flex=1, height=48))
@@ -100,6 +111,8 @@ class ChatUI:
         self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
         self.chat_config_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=[
             toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=48)),
+            toga.Label('Chat provider'), self.chat_provider,
+            toga.Label('On-device models need a supported device and a ready system model.\nNo server or API key is needed. Preparing Gemini Nano may download model assets.', style=Pack(font_size=12)),
             toga.Label('Server API URL'), self.chat_url,
             toga.Label('A plain address uses /v1 automatically.\nFor a computer server, use its LAN address.', style=Pack(font_size=12)),
             toga.Label('API key (optional; session only)'), self.chat_key,
@@ -111,6 +124,8 @@ class ChatUI:
             toga.Box(children=[self.chat_context, self.chat_max_tokens], style=Pack(direction=ROW)),
             toga.Button('Save & return to chat', on_press=self.save_chat_configuration, style=Pack(height=48))],
             style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
+
+        self.select_chat_provider()
 
     def _build_chat_workspace(self):
         """Assemble the retained header, conversation drawer and message workspace."""
@@ -130,7 +145,7 @@ class ChatUI:
         self.chat_actions_button = self.presentation.icon_button('more', 'Conversation actions')
         self.chat_actions = self.presentation.NativeMenu(self.chat_actions_button, [
             ('New conversation', self.new_chat), ('Export conversation…', self.export_chat),
-            ('Server & model settings', self.show_chat_configuration)], invoke=self.invoke_chat_action,
+            ('Model & server settings', self.show_chat_configuration)], invoke=self.invoke_chat_action,
             context=lambda: self._impl.native, fallback=self.show_chat_actions)
         backend = type(self.chat_actions_button._impl).__module__
         if backend.startswith('toga_iOS.'):
@@ -223,14 +238,14 @@ class ChatUI:
         self.resize_chat_composer()
 
     def update_chat_readiness(self):
-        configured = bool(self.chat_profile.get('base_url') and self.chat_profile.get('model'))
-        hide_setup = configured or (self.chat_drawer_open and self.adaptive.width() < 640)
+        ready = configured(self.chat_profile)
+        hide_setup = ready or (self.chat_drawer_open and self.adaptive.width() < 640)
         if hide_setup and self.chat_setup in self.chat_setup_box.children:
             self.chat_setup_box.remove(self.chat_setup)
         elif not hide_setup and self.chat_setup not in self.chat_setup_box.children:
             self.chat_setup_box.add(self.chat_setup)
         generating = self.state.generating
-        self.chat_send.enabled = generating or (configured and not self.state.busy)
+        self.chat_send.enabled = generating or (ready and not self.state.busy)
         self.chat_setup.enabled = not self.state.busy
 
     def sync_chat_navigation(self):
@@ -288,7 +303,7 @@ class ChatUI:
             if label.style.width != title_width:
                 label.style.width = title_width
         for label, text in ((self.chat_title, 'Conversations' if sidebar else title),
-                            (self.chat_model_label, '' if sidebar else self.chat_profile.get('model') or 'Set up a server')):
+                            (self.chat_model_label, '' if sidebar else self.chat_profile.get('model') or 'Set up chat')):
             if label.text != text:
                 label.text = text
 
@@ -340,7 +355,7 @@ class ChatUI:
             toga.Button('Back to conversation', on_press=self.show_chat, style=Pack(height=48)),
             toga.Button('New conversation', on_press=self.new_chat_from_actions, style=Pack(height=48)),
             toga.Button('Export conversation…', on_press=self.export_chat, style=Pack(height=48)),
-            toga.Button('Server & model settings', on_press=self.show_chat_configuration, style=Pack(height=48))],
+            toga.Button('Model & server settings', on_press=self.show_chat_configuration, style=Pack(height=48))],
             style=Pack(direction=COLUMN, margin=12))
         self.show_view(box, destination='chat', route='chat-actions', title='Conversation')
 
@@ -372,9 +387,9 @@ class ChatUI:
             return
         try:
             if not self.chat_model.value.strip():
-                raise ValueError('Connect & load models, then choose a model, or enter its exact ID.')
+                raise ValueError('Check on-device availability first.' if PROVIDERS[self.chat_provider.value] != 'server' else 'Connect & load models, then choose a model, or enter its exact ID.')
             self.chat_fields()
-            self.set_chat_status('Configuration saved. The API key stays in this session only.')
+            self.set_chat_status('Configuration saved.' if self.chat_profile.get('provider', 'server') != 'server' else 'Configuration saved. The API key stays in this session only.')
             self.show_chat()
         except (OSError, ValueError) as error:
             self.set_chat_status(str(error))
@@ -559,7 +574,7 @@ class ChatUI:
                     start += 1
                 script = transcript_update(data['id'], entries[start:],
                     self.preferences.values['font_size'],
-                    configured=bool(self.chat_profile['base_url'] and self.chat_profile['model']),
+                    configured=configured(self.chat_profile),
                     force_latest=force_latest, start=start)
                 ready = await self.chat_transcript.evaluate_javascript(script)
                 if not ready:
@@ -583,7 +598,7 @@ class ChatUI:
     def set_chat_busy(self, busy, *, generating=False):
         self.state.busy = busy
         self.state.generating = busy and generating
-        for control in (self.chat_url, self.chat_key, self.chat_model, self.chat_models, self.chat_selector,
+        for control in (self.chat_provider, self.chat_url, self.chat_key, self.chat_model, self.chat_models, self.chat_selector,
                         self.chat_new, self.chat_header_new, self.chat_refresh, self.chat_export, self.chat_actions_button,
                         self.chat_context, self.chat_max_tokens):
             control.enabled = not busy
@@ -592,6 +607,8 @@ class ChatUI:
         self.presentation.surface(self.chat_send, radius=24, background='chat_primary', foreground='chat_on_primary', outlined=False)
         self.update_chat_readiness()
         self.chat_conversation_list.enabled = not busy
+        if not busy:
+            self.select_chat_provider()
         if not busy and self.state.needs_initial_selection:
             # Initial discovery can finish while Connect owns the controls.
             # Complete selection once idle instead of dropping it when the
@@ -602,10 +619,43 @@ class ChatUI:
         settings = dict(self.chat_profile['settings'], context_tokens=int(self.chat_context.value),
                         max_tokens=int(self.chat_max_tokens.value))
         validate_settings(settings)
-        profile = dict(schema=1, base_url=self.chat_url.value.strip(), model=self.chat_model.value.strip(), settings=settings)
+        provider = PROVIDERS[self.chat_provider.value]
+        if provider != 'server':
+            settings['context_tokens'] = min(settings['context_tokens'], 4096 if provider == 'apple' else 3072)
+            settings['max_tokens'] = min(settings['max_tokens'], 1024)
+        url = self.chat_url.value.strip() if provider == 'server' else self.chat_profile['base_url']
+        profile = dict(schema=1, base_url=url, model=self.chat_model.value.strip(), settings=settings)
+        if provider != 'server':
+            profile['provider'] = provider
+            profile['model'] = self.chat_model.value.strip()
+            if profile['model'] and profile['model'] != MODELS[provider]:
+                raise ValueError('Check on-device availability before saving.')
         self.chat_profile, self.chat_profile_original = self.chat_store.save_profile(profile, self.chat_profile_original)
         self.chat_url.value = self.chat_profile['base_url']
+        self.chat_context.value = str(settings['context_tokens'])
+        self.chat_max_tokens.value = str(settings['max_tokens'])
         return self.chat_profile
+
+    def select_chat_provider(self, widget=None, **kwargs):
+        if not hasattr(self, 'chat_context') or self.state.busy:
+            return
+        provider = PROVIDERS[self.chat_provider.value]
+        server = provider == 'server'
+        for control in (self.chat_url, self.chat_key, self.chat_models, self.chat_model, self.chat_context, self.chat_max_tokens):
+            control.enabled = server
+        self.chat_refresh.text = ('Connect & load models' if server else
+                                  'Prepare Gemini Nano (may download)' if provider == 'nano' else
+                                  'Check on-device availability')
+        changed = provider != self._selected_chat_provider
+        self._selected_chat_provider = provider
+        if changed:
+            self.chat_model.value = ''
+            self.state.loading = True
+            try:
+                self.chat_models.items = []
+            finally:
+                self.state.loading = False
+            self.set_chat_status('Connect to a server or enter a model ID.' if server else 'Check availability to select the built-in model.')
 
     def select_chat_model(self, widget, **kwargs):
         if not self.state.loading and widget.value:
@@ -617,10 +667,11 @@ class ChatUI:
         if self.state.busy:
             return
         self.set_chat_busy(True)
-        self.set_chat_status('Connecting to server…')
+        self.set_chat_status('Connecting to server…' if PROVIDERS[self.chat_provider.value] == 'server' else 'Preparing on-device model…')
         try:
             profile = self.chat_fields()
-            self.state.client = ChatClient(profile['base_url'], self.chat_key.value)
+            self.state.client = (ChatClient(profile['base_url'], self.chat_key.value)
+                                 if profile.get('provider', 'server') == 'server' else client_for(profile))
             models = await asyncio.to_thread(self.state.client.models)
             # Replacing Selection.items can fire on_change for its first item.
             # Retain the configured/manual model if the server still offers it.
@@ -635,9 +686,15 @@ class ChatUI:
             if models:
                 self.chat_model.value = selected
                 self.chat_fields()
-            self.set_chat_status(f'Connected. {len(models)} model(s) available. Save & return to chat.' if models
+            self.set_chat_status('On-device model ready. Save & return to chat.' if profile.get('provider') in MODELS else f'Connected. {len(models)} model(s) available. Save & return to chat.' if models
                                  else 'Connected, but no models were listed. Load a model on the server or enter its exact ID below.')
         except Exception as error:
+            if PROVIDERS[self.chat_provider.value] != 'server':
+                self.chat_model.value = ''
+                try:
+                    self.chat_fields()
+                except (OSError, ValueError):
+                    pass
             self.set_chat_status('Models unavailable: ' + str(error)[:400])
         finally:
             self.state.client = None
@@ -671,12 +728,15 @@ class ChatUI:
             session.attach(data)
             before = session.append_user(prompt, settings=profile['settings'], model=profile['model'],
                                          title_limit=60, retitle=True)
-            self.state.client = ChatClient(profile['base_url'], self.chat_key.value)
+            self.state.client = (ChatClient(profile['base_url'], self.chat_key.value)
+                                 if profile.get('provider', 'server') == 'server' else client_for(profile))
             transport = MobileGenerationTransport(self.state.client, session,
                 current=lambda: self.active_host and self.state.current is data)
             coordinator = GenerationCoordinator(session, transport)
             try:
-                plan = coordinator.prepare(GenerationInputs(profile))
+                request_profile = (dict(profile, base_url='on-device://' + profile['provider'])
+                                   if profile.get('provider') in MODELS else profile)
+                plan = coordinator.prepare(GenerationInputs(request_profile))
             except Exception:
                 session.rollback(before)
                 raise

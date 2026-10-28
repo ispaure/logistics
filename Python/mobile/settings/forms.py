@@ -188,6 +188,9 @@ class ConnectionSettingsPage(toga.ScrollContainer):
         surface(content, radius=0, background='settings_background', outlined=False, eink_outlined=False)
         super().__init__(horizontal=False, content=content, style=Pack(flex=1))
         self.reflow()
+        from ..layout_participants import participants
+        participants(app).register(('connection-page', title), self,
+                                   lambda owner, frame: owner.reflow(), order=10)
 
     def reflow(self):
         fit_section(self.content, self.owner.adaptive.content_width('settings', margin=0))
@@ -249,3 +252,18 @@ class CredentialStorageContent(toga.Box):
         if width > 0 and width != self._fitted_width:
             self._fitted_width = width
             fit_section(self.body, max(24, width - 40))
+
+
+def save_boolean_switch(preferences, widget, key, handler, status):
+    """Save one existing preference and restore its switch without firing a retry."""
+    try:
+        preferences.save(**{key: 'true' if widget.value else 'false'})
+    except (OSError, ValueError) as error:
+        widget.on_change = None
+        try:
+            widget.value = preferences.values[key] == 'true'
+        finally:
+            widget.on_change = handler
+        status.text = str(error)
+        return False
+    return True

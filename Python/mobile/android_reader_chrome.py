@@ -107,6 +107,8 @@ def sync(app, view, destination):
     status.setContentDescription(prompt)
     status.setTextColor(Color.parseColor(android_palette(dark)['text']))
     status.setVisibility(View.VISIBLE if prompt else View.GONE)
+    from .document_location import mount_android_subtitle
+    mount_android_subtitle(view, status, dark=dark)
     detach(view._native_reader_toolbar)
     for control in getattr(view, '_native_reader_hidden', ()):
         detach(control)

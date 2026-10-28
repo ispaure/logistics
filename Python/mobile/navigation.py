@@ -17,6 +17,11 @@ DESTINATION_ITEMS = (
 DESTINATION_ICON_NAMES = {key: 'nav_' + key for key in DESTINATIONS}
 
 
+def native_destination_titles(app):
+    """UIKit owns destination titles; Android's compact shell hides its bar."""
+    return type(app._impl).__module__.startswith('toga_iOS.')
+
+
 def eink_selection_indicator(bar, enabled, original=None):
     """Make monochrome selection visible without changing native geometry."""
     if enabled:

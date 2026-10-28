@@ -15,7 +15,7 @@ import tempfile
 import tomllib
 
 from .. import cloud_build
-from .device_tools import BUNDLE, CONFIG, normal_launcher, signing_settings
+from .device_tools import BUNDLE, CONFIG, EXTENSION_SUFFIXES, normal_launcher, signing_settings
 from ..select_ios_sdk import choose, installed
 from ..tools import stage
 from .testflight_external import prepare as prepare_external, distribute as distribute_external
@@ -54,16 +54,18 @@ def keychain_groups_match(actual, identity):
     return sorted(actual or default) == sorted(identity['keychain_access_groups'] or default)
 
 
-def export_options(team, profile=None, *, upload=False, inbox_profile=None):
-    if inbox_profile and not profile:
-        raise ValueError('An Inbox profile requires the containing app profile too.')
+def export_options(team, profile=None, *, upload=False, inbox_profile=None, widget_profile=None, widget_actions_profile=None):
+    extensions = {'.inbox': inbox_profile, '.widgets': widget_profile, '.widget-actions': widget_actions_profile}
+    if any(extensions.values()) and not profile:
+        raise ValueError('Extension profiles require the containing app profile too.')
     options = dict(method='app-store-connect', destination='upload' if upload else 'export',
                    teamID=team, signingStyle='manual' if profile else 'automatic',
                    manageAppVersionAndBuildNumber=False, uploadSymbols=True)
     if profile:
         options.update(signingCertificate='Apple Distribution', provisioningProfiles={BUNDLE: profile['UUID']})
-        if inbox_profile:
-            options['provisioningProfiles'][BUNDLE + '.inbox'] = inbox_profile['UUID']
+        for suffix, extension_profile in extensions.items():
+            if extension_profile:
+                options['provisioningProfiles'][BUNDLE + suffix] = extension_profile['UUID']
     return options
 
 
@@ -162,29 +164,40 @@ def archive_release(args, workspace, identity, env):
         cloud_build.ios(project)
         pbx = project / 'Logistics Mobile.xcodeproj/project.pbxproj'
         data = signing_settings(json.loads(subprocess.check_output(['plutil', '-convert', 'json', '-o', '-', str(pbx)])), identity['team_id'])
-        profile = inbox_profile = None
+        profile = None
+        extension_profiles = {}
         if args.profile:
             profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(args.profile.resolve())]))
             validate_profile(profile, identity)
-            if not getattr(args, 'inbox_profile', None):
-                raise ValueError('Manual signing requires --inbox-profile for the Inbox extension as well as --profile for the app.')
-            inbox_profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(args.inbox_profile.resolve())]))
-            validate_profile(inbox_profile, dict(identity, bundle_id=BUNDLE + '.inbox',
-                application_identifier=identity['application_identifier'] + '.inbox', keychain_access_groups=[]))
+            for suffix, argument in (('.inbox', 'inbox_profile'), ('.widgets', 'widget_profile'),
+                                     ('.widget-actions', 'widget_actions_profile')):
+                path = getattr(args, argument, None)
+                if not path:
+                    raise ValueError('Manual signing requires --' + argument.replace('_', '-') + ' for the extension.')
+                extension_profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(path.resolve())]))
+                validate_profile(extension_profile, dict(identity, bundle_id=BUNDLE + suffix,
+                    application_identifier=identity['application_identifier'] + suffix, keychain_access_groups=[]))
+                extension_profiles[suffix] = extension_profile
             from ..build_support.incoming_build import GROUP
             if any(GROUP not in p.get('Entitlements', {}).get('com.apple.security.application-groups', [])
-                   for p in (profile, inbox_profile)):
-                raise ValueError('App and Inbox profiles must both authorize the Logistics App Group.')
+                   for p in (profile, *extension_profiles.values())):
+                raise ValueError('App and all extension profiles must authorize the Logistics App Group.')
             for obj in data['objects'].values():
                 settings = obj.get('buildSettings', {})
-                selected_profile = {BUNDLE: profile, BUNDLE + '.inbox': inbox_profile}.get(settings.get('PRODUCT_BUNDLE_IDENTIFIER'))
+                selected_profile = {BUNDLE: profile, **{BUNDLE + suffix: p for suffix, p in extension_profiles.items()}}.get(settings.get('PRODUCT_BUNDLE_IDENTIFIER'))
                 if selected_profile:
                     settings.update(CODE_SIGN_STYLE='Manual', CODE_SIGN_IDENTITY='Apple Distribution',
                                     PROVISIONING_PROFILE_SPECIFIER=selected_profile['UUID'])
         for obj in data['objects'].values():
             settings = obj.get('buildSettings', {})
-            if settings.get('PRODUCT_BUNDLE_IDENTIFIER') == BUNDLE + '.inbox':
+            if settings.get('PRODUCT_BUNDLE_IDENTIFIER') in {BUNDLE + suffix for suffix in EXTENSION_SUFFIXES}:
                 settings['CURRENT_PROJECT_VERSION'] = args.build_number
+        # Extension plists use literal versions, so update them alongside build settings.
+        for folder in ('IncomingShare', 'LogisticsWidget', 'LogisticsWidgetActions'):
+            extension_info = project / folder / 'Info.plist'
+            extension_metadata = plistlib.loads(extension_info.read_bytes())
+            extension_metadata['CFBundleVersion'] = args.build_number
+            extension_info.write_bytes(plistlib.dumps(extension_metadata))
         pbx.write_bytes(plistlib.dumps(data, sort_keys=False))
         info = project / 'LogisticsMobile/LogisticsMobile-Info.plist'
         metadata = normal_launcher(plistlib.loads(info.read_bytes()))
@@ -202,9 +215,12 @@ def archive_release(args, workspace, identity, env):
         report = inspect_app(workspace / 'Logistics.xcarchive/Products/Applications/Logistics Mobile.app', identity,
                              args.build_number, signed=not args.unsigned_check)
         record = dict(identity=identity, build=report, source=manifest, profile_uuid=profile['UUID'] if profile else None,
-                      inbox_profile_uuid=inbox_profile['UUID'] if inbox_profile else None)
+                      inbox_profile_uuid=extension_profiles.get('.inbox', {}).get('UUID'),
+                      extension_profile_uuids={suffix: p['UUID'] for suffix, p in extension_profiles.items()})
         (workspace / 'release.json').write_text(json.dumps(record, indent=2) + '\n')
-        (workspace / 'ExportOptions.plist').write_bytes(plistlib.dumps(export_options(identity['team_id'], profile, inbox_profile=inbox_profile)))
+        (workspace / 'ExportOptions.plist').write_bytes(plistlib.dumps(export_options(identity['team_id'], profile,
+            inbox_profile=extension_profiles.get('.inbox'), widget_profile=extension_profiles.get('.widgets'),
+            widget_actions_profile=extension_profiles.get('.widget-actions'))))
         print('Archive prepared: ' + str(workspace))
     except Exception:
         print('Incomplete workspace and diagnostics retained: ' + str(workspace), file=sys.stderr)
@@ -233,8 +249,14 @@ def export_release(workspace, env, *, upload=False):
             raise ValueError('Uploading is explicit: set TESTFLIGHT_UPLOAD=1 and run upload after reviewing the exported build.')
         external = prepare_external()
     profile = {'UUID': record['profile_uuid']} if record['profile_uuid'] else None
-    inbox_profile = {'UUID': record['inbox_profile_uuid']} if record.get('inbox_profile_uuid') else None
-    options = export_options(identity['team_id'], profile, upload=upload, inbox_profile=inbox_profile)
+    extensions = dict(record.get('extension_profile_uuids', {}))
+    if record.get('inbox_profile_uuid'):
+        extensions.setdefault('.inbox', record['inbox_profile_uuid'])
+    def extension_profile(suffix):
+        return {'UUID': extensions[suffix]} if extensions.get(suffix) else None
+    options = export_options(identity['team_id'], profile, upload=upload,
+        inbox_profile=extension_profile('.inbox'), widget_profile=extension_profile('.widgets'),
+        widget_actions_profile=extension_profile('.widget-actions'))
     destination = workspace / ('UploadOptions.plist' if upload else 'ExportOptions.plist')
     destination.write_bytes(plistlib.dumps(options))
     run(['xcodebuild', '-exportArchive', '-archivePath', str(workspace / 'Logistics.xcarchive'),
@@ -269,10 +291,12 @@ def main():
     parser.add_argument('--expected-app-identifier')
     parser.add_argument('--profile', type=Path, help='Installed App Store profile for manual CI signing')
     parser.add_argument('--inbox-profile', type=Path, help='Matching App Store profile for the Inbox extension')
+    parser.add_argument('--widget-profile', type=Path, help='Matching App Store profile for the widget extension')
+    parser.add_argument('--widget-actions-profile', type=Path, help='Matching App Store profile for the widget actions extension')
     parser.add_argument('--unsigned-check', action='store_true', help='Local archive packaging check only; cannot export/upload')
     args = parser.parse_args()
-    if args.inbox_profile and not args.profile:
-        parser.error('--inbox-profile requires --profile for the containing app.')
+    if any((args.inbox_profile, args.widget_profile, args.widget_actions_profile)) and not args.profile:
+        parser.error('Extension profiles require --profile for the containing app.')
     if args.unsigned_check and args.command not in ('plan', 'archive'):
         parser.error('--unsigned-check applies only to a local archive check.')
     identity = release_identity(args.team, args.expected_app_identifier)
@@ -283,7 +307,7 @@ def main():
     from contextlib import nullcontext
     from build_manager.locking import workspace_lock
     from build_manager.retention import lease
-    from Scripts.build_retention import clean_builds
+    from logistics_build.build_retention import clean_builds
     # Archive creation must own the retention lock before its directory exists.
     # lease() creates that directory, which archive_release correctly rejects.
     protection = (nullcontext() if args.command == 'plan' else

@@ -20,6 +20,7 @@ wiki. Application source and tests retain their existing owners under `Python/`.
 - [Links](links/links.md)
 - [Lm](lm/lm.md)
 - [Media](media/media.md)
+- [Video Player](video/video.md)
 - [Minecraft](minecraft/minecraft.md)
 - [Obsidian](obsidian/obsidian.md)
 - [Pdf](pdf/pdf.md)

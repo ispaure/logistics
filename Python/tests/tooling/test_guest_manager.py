@@ -7,7 +7,7 @@ import tarfile
 from tempfile import TemporaryDirectory
 import unittest
 import zipfile
-from Scripts.guest_manager import archive, verify
+from logistics_build.guest_manager import archive, verify
 
 
 class GuestManagerTests(unittest.TestCase):
@@ -65,10 +65,10 @@ class GuestManagerTests(unittest.TestCase):
     def test_linux_transport_keeps_binary_archive_out_of_guest_stdin_protocol(self):
         import base64
         from unittest.mock import Mock, patch
-        from Scripts.guest_manager import stage_linux
+        from logistics_build.guest_manager import stage_linux
         client = Mock()
         payload = bytes(range(256))
-        with patch('Scripts.guest_manager.archive',return_value=payload):
+        with patch('logistics_build.guest_manager.archive',return_value=payload):
             stage_linux(client,'vm','/var/tmp/owned','owned',1000,1000,self.manager,self.project)
         self.assertEqual(base64.b64decode(client.execute_idempotent.call_args.kwargs['data']),payload)
         self.assertTrue(client.execute_idempotent.call_args.kwargs['data'].isascii())
@@ -87,7 +87,7 @@ class GuestManagerTests(unittest.TestCase):
 
 class FocusedGuestCommandTests(unittest.TestCase):
     def test_manager_focus_uses_explicit_pinned_checkout_not_project_tests(self):
-        from Scripts.guest_manager import focused_command
+        from logistics_build.guest_manager import focused_command
         command = focused_command('guest-python', 'manager:test_ui.py', 'C:/owned/manager')
         self.assertEqual(command, ('guest-python', '-m', 'unittest', 'discover', '-s',
                                   'C:/owned/manager/Python/tests', '-p', 'test_ui.py', '-v'))
@@ -96,7 +96,7 @@ class FocusedGuestCommandTests(unittest.TestCase):
                 focused_command('python', invalid, '/owned/manager')
 
     def test_existing_shared_and_desktop_patterns_keep_routing(self):
-        from Scripts.guest_manager import focused_command
+        from logistics_build.guest_manager import focused_command
         for pattern, suite, selected in (('shared:test_styling.py', 'shared', 'test_styling.py'),
                                          ('test_documents.py', 'desktop', 'test_documents.py')):
             self.assertEqual(focused_command('python', pattern, '/owned/manager'),

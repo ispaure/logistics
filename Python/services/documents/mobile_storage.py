@@ -25,6 +25,9 @@ async def open_provider_document(app, provider, path, *, destination=None, **opt
     if required is not None and not app.require_feature(required):
         return False
     suffix = Path(path).suffix.lower()
+    if suffix in {'.mp4', '.mkv'}:
+        from features.video.mobile.player import open_video
+        return await open_video(app, provider, path)
     if suffix == '.rmdoc':
         from services.documents.mobile_notebooks import open_notebook
         from features.notebooks.notebook import MAX_ARCHIVE

@@ -1,5 +1,19 @@
 # Development and validation
 
+New contributors can use the shorter [first-contribution walkthrough](getting-started.md).
+This page is the detailed command and validation reference. Run commands from the
+repository root unless a section says otherwise.
+
+- [Checkout and environment](#set-up-a-checkout)
+- [Everyday checks](#run-everyday-checks) and [shared-library matrix](#shared-library-test-matrix)
+- [Find tests for your change](#find-the-tests-for-your-change)
+- [CI and release gates](#ci-release-gates-and-advanced-validation)
+- [Dependency updates](#updating-mobile-host-dependencies) and [local/private files](#local-disk-usage-and-private-files)
+- [Worked LM contribution](#worked-contribution-desktop-lm-attachments)
+
+Choose tests by the behavior changed. A host/dummy-backend pass does not certify
+native interactions, provider writes or physical-device installs.
+
 ## Set up a checkout
 
 From a fresh clone:
@@ -77,7 +91,7 @@ Replace `python3` with `py` on Windows. Quote wildcard patterns so the shell doe
 not expand them. Omit the filename/pattern to run the whole selected suite.
 No matching files is an error. Each test file runs in a fresh process; failing
 files or timeouts fail the command. The helper returns the check's exit status.
-Lint covers `dev.py`, `Python`, `mobile_build`, `Scripts` and `.github/scripts`, matching CI's scope.
+Lint covers `dev.py`, `Python`, `mobile_build`, `Scripts`, `logistics_build` and `.github/scripts`, matching CI's scope.
 The Ruff configuration retains its default environment/cache exclusions and
 explicitly excludes mobile build, payload, log, deployment-workspace and downloaded
 toolchain trees, plus the external feature link. New, untracked application and

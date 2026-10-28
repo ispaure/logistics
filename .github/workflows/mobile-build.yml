@@ -40,7 +40,7 @@ jobs:
         with:
           python-version: '3.12.2'
       - name: Install explicitly pinned external manager
-        run: python Scripts/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
+        run: python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version: '1.26.9'
@@ -105,7 +105,7 @@ jobs:
         with:
           python-version: '3.12.2'
       - name: Install explicitly pinned external manager
-        run: python Scripts/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
+        run: python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: temurin
@@ -173,7 +173,7 @@ jobs:
           python-version: '3.12.2'
       - name: Install explicitly pinned external manager
         working-directory: ${{ github.workspace }}
-        run: python Scripts/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
+        run: python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
       - name: Prepare the same SDK and simulator family as the build
         timeout-minutes: 30
         run: python select_ios_sdk.py --github-env "$GITHUB_ENV" --prepare-duo

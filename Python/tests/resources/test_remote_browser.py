@@ -188,7 +188,7 @@ class RemoteBrowserTests(QtTestCase):
                 self.wait_until(lambda: not duplicate.file_browser.busy, timeout=15)
 
     def test_unsupported_and_oversize_files_require_manual_copy(self):
-        for name, size in [('movie.mp4', 30), ('large.txt', 2*1024*1024), ('photo.png', 20*1024*1024)]:
+        for name, size in [('movie.avi', 30), ('large.txt', 2*1024*1024), ('photo.png', 20*1024*1024)]:
             with self.assertRaises(LocalCopyRequired):
                 direct_kind(name, size)
         self.assertEqual(direct_kind('large.cbz', 1024**3), 'archive')

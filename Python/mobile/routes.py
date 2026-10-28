@@ -214,7 +214,9 @@ class MobileRoutes(Routes):
             destination = destination or self.host.state.destination
             # At Home's root, leave the callback disabled so Android owns exit
             # and its back-to-home preview. Tab selection never creates history.
-            self.back_callback.setEnabled(destination != 'home' or bool(self.screens[destination]))
+            video = getattr(self.app, 'video_player', None)
+            self.back_callback.setEnabled((video is not None and not video.closed and not video.hidden)
+                                          or destination != 'home' or bool(self.screens[destination]))
 
     def selection_changed(self):
         super().selection_changed()
@@ -243,6 +245,9 @@ class MobileRoutes(Routes):
         """
         if self.back_task is not None:
             return True
+        video = getattr(self.app, 'video_player', None)
+        if video is not None and not video.closed and not video.hidden:
+            return self.invoke_back(video.close)
         if not self.guard():
             return True
         app, destination = self.app, self.host.state.destination

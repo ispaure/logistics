@@ -2,7 +2,7 @@
 
 [Developer index](development.md)
 
-Start with [setup and validation](testing.md), then use this map to find the
+Start with [your first contribution](getting-started.md), then use this map to find the
 owner of your change. Paths below describe the current checkout, not a proposed
 directory layout. The [feature conventions](features.md#where-new-code-belongs) explain where to
 put new code. The [restructuring record](restructuring.md) retains migration history.
@@ -23,6 +23,7 @@ put new code. The [restructuring record](restructuring.md) retains migration his
 | `Python/tests/` | Desktop regressions plus portable/mobile contracts and packaging checks |
 | `mobile_build/tests/` | Mobile host, workflow and deployment-tool tests |
 | `mobile_build/native_tests/` | Acceptance scenarios and probes packaged for native mobile runtimes |
+| `logistics_build/` | Logistics source/build/test/release policy and adapters for the standalone manager |
 | `.github/workflows/`, `.github/scripts/` | CI, release gates and release packaging |
 | `docs/development/` | Cross-cutting contracts and development guides |
 

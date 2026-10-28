@@ -75,6 +75,16 @@ host reader methods compose those services; format parsing/search/spread rules
 are not duplicated there. commonUtils continues to own generic archive sources,
 atomic publication, native canvases/gestures and toolkit mechanisms.
 
+Comic composition centers every lone page, including a portrait before a wide
+page and an odd final page. Flat foldable readers use the full available pane;
+inactive crease geometry does not anchor the spread. An active vertical crease
+reserves its gap and fits both pages at one common height, limited by the smaller
+available side. This keeps matching page proportions the same displayed size
+when workspace controls leave unequal space around the crease. Imported and
+provider readers use the same geometry and composition. `test_fold_layout.py`
+checks inactive/active geometry, asymmetric panes and equal page heights;
+`test_comic_split.py` covers both reader adapters and reading directions.
+
 `mobile_build/tools.py` explicitly stages every added runtime module. Portable feature
 imports do not load Qt, Toga, Pillow, Rubicon or Java. Platform presentations may
 load Toga; native image decoding remains subject to the mobile bounds.

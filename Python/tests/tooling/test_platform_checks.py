@@ -4,7 +4,7 @@ import sys
 from tempfile import TemporaryDirectory
 import time
 import unittest
-from Scripts.platform_checks import run_check
+from logistics_build.platform_checks import run_check
 
 
 class PlatformCheckTests(unittest.TestCase):

@@ -194,6 +194,10 @@
     ],
     [
       "rclone",
+      "video"
+    ],
+    [
+      "rclone",
       "text_editor"
     ]
   ],
@@ -262,7 +266,8 @@
     "features.books",
     "features.comics",
     "features.pdf",
-    "features.images"
+    "features.images",
+    "features.video"
   ],
   "document_external_packages": {
     "features.notebooks._vendor": "Upstream in-memory rmscene binary codec; not application document I/O."

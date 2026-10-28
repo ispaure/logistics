@@ -63,7 +63,7 @@ for saved_document in (False, True):
     LogisticsMobile.storage_root = root
     app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
     assert app.native_host.state.destination == 'home'
-    assert app.body.children[0].content.children[0].text == 'Your workspace'
+    assert app.body.children[0].content.children[0].text == 'Home'
     from mobile.documentation_ui import show_documentation
     owner = show_documentation(app)
     assert owner.path.name == 'user_mobile.md'

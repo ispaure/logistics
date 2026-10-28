@@ -46,7 +46,8 @@ class CryptContentProvider:
 
     @property
     def privacy_gate(self):
-        return getattr(self.client, 'session_privacy', None)
+        from features.rclone.mobile.session_privacy import remote_privacy_gate
+        return remote_privacy_gate(self.client, self.remote, self.identity, cipher=True)
 
     def _ciphertext_temporary(self, path):
         return self._locate(path).with_name('.save-' + uuid4().hex)

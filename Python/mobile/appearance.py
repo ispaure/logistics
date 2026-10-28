@@ -216,7 +216,9 @@ def reserve_navigation(app, *, view=None):
     window = app.main_window._impl.native
     viewport = container.native.convertRect(container.native.bounds, toView=window)
     bottom = float(viewport.origin.y + viewport.size.height - container.bottom_inset)
-    safe_bottom = float(window.bounds.size.height - window.safeAreaInsets.bottom)
+    from .ios_reader_chrome import progress_bottom_inset
+    home_bottom = float(window.safeAreaInsets.bottom)
+    safe_bottom = float(window.bounds.size.height) - progress_bottom_inset(view, home_bottom, home_bottom)
     extra = max(extra, max(0, bottom - safe_bottom))
     margin = view._navigation_margin + extra
     if view.style.margin_bottom != margin:

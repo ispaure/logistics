@@ -120,13 +120,8 @@ def comic_mode(owner, widget):
 
 
 def reading_seam(owner, widget):
-    """Keep the reading anchor on the same physical side even when flat."""
-    region = division(owner, widget, include_inactive=True)
-    if region is None or not region.vertical:
-        return None
-    width = float(widget._impl.native.bounds.size.width)
-    center = region.x + region.width / 2
-    return center / width if 0 < center < width else None
+    """Reserve an active crease; flat readers fit their whole available pane."""
+    return seam_fraction(owner, widget)
 
 
 def page_region(owner, widget):

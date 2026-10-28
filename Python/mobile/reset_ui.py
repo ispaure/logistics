@@ -17,6 +17,8 @@ class ResetUI:
         ios = is_ios(app)
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
         self.reset_page = box
+        from .layout_participants import participants, reflow_settings_section
+        participants(self.app).register('reset_page', box, reflow_settings_section)
         box.add(SettingsLabel('Erase all app data', style=Pack(font_size=22)))
         box.add(SettingsLabel('Deletes private documents and unsaved drafts, imported books, chat, saved credentials and device keys, settings, transfer mappings, reading progress, metadata and caches.'))
         box.add(SettingsLabel('Also deletes every file in On My iPhone / iPad → Logisticks, including Local and files you added in Files.' if ios

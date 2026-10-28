@@ -32,7 +32,7 @@ class TestFlightWorkflowTests(unittest.TestCase):
                     patch.object(tools, 'installed', return_value=[]), \
                     patch.object(tools, 'choose', return_value=('/Applications/Xcode.app', 'sdk')), \
                     patch.object(tools, 'archive_release', side_effect=archive) as build, \
-                    patch('Scripts.build_retention.clean_builds'), \
+                    patch('logistics_build.build_retention.clean_builds'), \
                     patch.dict('os.environ'), \
                     patch('sys.argv', ['testflight_tools', 'archive', '--build-number', '123']):
                 tools.main()
@@ -68,6 +68,27 @@ class TestFlightWorkflowTests(unittest.TestCase):
         self.assertEqual(paired['provisioningProfiles'], {BUNDLE:'main', BUNDLE + '.inbox':'inbox'})
         with self.assertRaises(ValueError):
             export_options('ABCDEFGHIJ', inbox_profile={'UUID':'inbox'})
+
+    def test_retained_manual_export_keeps_all_extension_profile_mappings(self):
+        import json
+        import plistlib
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from mobile_build.deployment import testflight_tools as tools
+        with TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            extensions = {'.inbox': 'inbox', '.widgets': 'widgets', '.widget-actions': 'actions'}
+            record = dict(identity=self.identity, build={'signed': True, 'build_number': '123'},
+                          profile_uuid='main', extension_profile_uuids=extensions)
+            (workspace / 'release.json').write_text(json.dumps(record))
+            with patch.object(tools, 'release_identity', return_value=self.identity), \
+                    patch.object(tools, 'inspect_app'), patch.object(tools, 'auth_args', return_value=[]), \
+                    patch.object(tools, 'run', side_effect=RuntimeError('stop before external tools')):
+                with self.assertRaisesRegex(RuntimeError, 'stop before external tools'):
+                    tools.export_release(workspace, {})
+            options = plistlib.loads((workspace / 'ExportOptions.plist').read_bytes())
+            self.assertEqual(options['provisioningProfiles'],
+                {BUNDLE: 'main', **{BUNDLE + suffix: uuid for suffix, uuid in extensions.items()}})
 
     def test_baseline_rejects_changed_team_bundle_or_prefix(self):
         baseline = dict(bundle_id=BUNDLE, team_id='ABCDEFGHIJ', signing_identity=self.identity)

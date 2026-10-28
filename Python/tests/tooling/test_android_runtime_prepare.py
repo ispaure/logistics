@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
-from Scripts import mobile_runtime
+from logistics_build import mobile_runtime
 
 
 class AndroidRuntimePrepareTests(unittest.TestCase):
@@ -71,9 +71,8 @@ class AndroidRuntimePolicyTests(unittest.TestCase):
                         tools, 'verify', return_value=report) as verify, patch.object(
                         mobile_runtime, 'runtime_wheels', return_value=root / 'wheels'), patch.object(
                         mobile_runtime, 'command') as command, patch.object(
-                        mobile_runtime.subprocess, 'Popen') as launch, patch(
-                        'build_manager.executor.stop_process') as stop:
-                    launch.return_value.wait.return_value = 0
+                        mobile_runtime, 'native_command') as launch:
+                    launch.return_value = 0
                     if changed:
                         with self.assertRaisesRegex(ValueError, 'source identity changed'):
                             mobile_runtime.test(root, cache, 'caller-serial', output)
@@ -87,4 +86,5 @@ class AndroidRuntimePolicyTests(unittest.TestCase):
                     self.assertEqual(command.call_args.args[0][-2:], ['markdown-it-py==4.2.0', 'mdurl==0.1.2'])
                     verify.assert_called_once_with(output.with_suffix('.log'), 'android', output,
                                                    local_manifest=root / 'runtime-payload/source.json')
-                    stop.assert_called_once_with(launch.return_value)
+                    self.assertEqual(launch.call_args.args[2], 1800)
+                    self.assertFalse(launch.call_args.kwargs['check'])

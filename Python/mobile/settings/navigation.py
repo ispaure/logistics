@@ -60,8 +60,10 @@ class SettingsNavigation(toga.Box):
         from ..control_icons import button_icons
         surface(self, radius=0, background='settings_background', outlined=False, eink_outlined=False)
         menu = toga.Box(style=Pack(direction=COLUMN, margin=16))
-        menu.add(surface(toga.Label('Settings', style=Pack(font_size=28, font_weight='bold', margin_bottom=24)),
-                         radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False))
+        from ..navigation import native_destination_titles
+        if not native_destination_titles(app):
+            menu.add(surface(toga.Label('Settings', style=Pack(font_size=22, font_weight='bold', margin_bottom=12)),
+                             radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False))
         icons = {'Features': 'preferences', 'Camera': 'preferences', 'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
                  'Markdown': 'edit', 'Text': 'edit', 'EPUB': 'books', 'Books & Comics': 'books', 'LM Chat': 'chat',
                  'Workspaces': 'folder', 'Reset': 'preferences', 'Help': 'help', 'About': 'info'}

@@ -29,7 +29,7 @@ class MobileUITests(unittest.TestCase):
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = LogisticsMobile('Logistics Mobile', 'io.github.ispaure.logisticsmobile')
             self.assertEqual(app.native_host.state.destination, 'home')
-            self.assertEqual(app.body.children[0].content.children[0].text, 'Your workspace')
+            self.assertEqual(app.body.children[0].content.children[0].text, 'Home')
             app.show_settings()
             app.settings_navigation.sections['App']
             app.settings_navigation.sections['Text']
