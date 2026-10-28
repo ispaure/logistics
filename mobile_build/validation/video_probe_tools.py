@@ -69,7 +69,7 @@ def cloud_fixtures(workspace):
 
 
 def prepare(apk, workspace, *, cloud=False):
-    fixtures = codec_matrix(workspace / 'fixtures') if not cloud else []
+    fixtures = codec_matrix(workspace / 'fixtures', duration=12) if not cloud else []
     fixture_root = cloud_fixtures(workspace) if cloud else None
     with ZipFile(apk) as archive:
         if not any(b'Lio/github/ispaure/logistics/video/VideoPlayer$Listener;' in archive.read(name)
@@ -200,7 +200,7 @@ def run_ios(source, output, *, cloud=False, model_name='iPad'):
         if cloud:
             shutil.copytree(cloud_fixtures(workspace), tests / 'video-cloud-fixtures')
         else:
-            codec_matrix(tests / 'video-fixtures')
+            codec_matrix(tests / 'video-fixtures', duration=12)
         # Video QA does not exercise app extensions. Remove only this scratch copy's
         # extensions, whose signed identities belong to the containing production app.
         for extension_directory in ('PlugIns', 'Extensions'):

@@ -47,6 +47,15 @@ VLCKit Swift package at the immutable revision in
 links the package and installs the feature-owned Objective-C controller.
 These native SDKs and their upstream notices must be retained in packaged builds.
 
+Mobile fullscreen is owned entirely by the native adapters. Controls overlay the
+video surface; Fullscreen hides them and the Android system bars or iOS status
+bar/home indicator. A surface tap reveals controls and a three-second timer hides
+them again during playback. Pause, completion and errors reveal controls. Timers
+defer during seeking, menus and screen-reader use. Android saves and restores the
+host's bar visibility and behavior across concealment/disposal; iOS uses controller
+appearance overrides and invalidates its timer on retirement/disappearance.
+This presentation state does not grant playback or bypass credential gates.
+
 ### Validation and remaining release gates
 
 Focused commands (use the documented desktop/mobile host environments):
@@ -66,6 +75,14 @@ samples. Provider regressions exercise actual rclone ciphertext with an 11 MiB
 seekable source, encrypted position creation/replacement, and credential revocation.
 Host tests cover range forms, invalid ranges, suspension, private resume decoding,
 subtitle boundaries, mobile conceal/reveal, shutdown and native project refresh.
+
+The focused non-cloud native probe uses twelve-second fixtures and checks the
+Fullscreen button, actual system-bar visibility, surface tap reveal, timed hiding,
+paused controls and fullscreen exit restoration. iOS additionally checks movie
+geometry against its full controller bounds. Run this probe against newly rebuilt
+native binaries after fullscreen changes; restaging Python into older binaries
+cannot validate the new native UI. API compilation and host tests alone do not
+establish immersive behavior, rotation or picture-in-picture transitions on devices.
 
 Both native adapters passed API compilation on October 28, 2026. Full managed
 Android debug APK and iOS simulator builds also passed using captured uncommitted

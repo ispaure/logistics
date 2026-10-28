@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 
 
-def codec_matrix(root, ffmpeg='ffmpeg'):
+def codec_matrix(root, ffmpeg='ffmpeg', *, duration=2):
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     fixtures = []
@@ -14,7 +14,7 @@ def codec_matrix(root, ffmpeg='ffmpeg'):
                 command = [ffmpeg, '-hide_banner', '-loglevel', 'error', '-y',
                     '-f', 'lavfi', '-i', 'testsrc2=size=128x72:rate=12',
                     '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
-                    '-t', '2', '-c:v', encoder, '-preset', 'ultrafast', '-threads', '1',
+                    '-t', str(duration), '-c:v', encoder, '-preset', 'ultrafast', '-threads', '1',
                     '-pix_fmt', 'yuv420p', '-c:a', audio_encoder]
                 if video == 'hevc':
                     command += ['-x265-params', 'pools=1:frame-threads=1:log-level=error', '-tag:v', 'hvc1']

@@ -22,6 +22,9 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -55,6 +58,18 @@ public final class VideoPlayer {
     private final TextView message;
     private final SeekBar seek;
     private final Button play;
+    private final Button fullscreenButton;
+    private boolean fullscreen, controlsVisible = true, wasPip;
+    private int previousSystemUi, previousBarBehavior, previousVisibleBars;
+    private final Runnable hideControls = new Runnable() {
+        @Override public void run() {
+            AccessibilityManager accessibility = (AccessibilityManager) activity.getSystemService(Context.ACCESSIBILITY_SERVICE);
+            if (fullscreen && attached && player.isPlaying() && !seek.isPressed()
+                    && (openDialog == null || !openDialog.isShowing()) && !accessibility.isTouchExplorationEnabled())
+                setControlsVisible(false);
+            else if (fullscreen && attached) scheduleControls();
+        }
+    };
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final JSONArray subtitles;
     private final ArrayList<RendererDiscoverer> discoverers = new ArrayList<>();
@@ -113,11 +128,23 @@ public final class VideoPlayer {
         root.setClickable(true);
         video = new VLCVideoLayout(activity);
         root.addView(video, new FrameLayout.LayoutParams(-1, -1));
+        View tapSurface = new View(activity);
+        tapSurface.setContentDescription("Show or hide video controls");
+        tapSurface.setOnClickListener(view -> {
+            if (!fullscreen) setFullscreen(true);
+            else setControlsVisible(!controlsVisible);
+        });
+        root.addView(tapSurface, new FrameLayout.LayoutParams(-1, -1));
         controls = new LinearLayout(activity);
         controls.setOrientation(LinearLayout.VERTICAL);
         controls.setBackgroundColor(0xcc000000);
         FrameLayout.LayoutParams bottom = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
         root.addView(controls, bottom);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            controls.setPadding(insets.getSystemWindowInsetLeft(), 0,
+                insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            return insets;
+        });
         message = new TextView(activity);
         message.setTextColor(Color.WHITE);
         message.setText("Ready. Press Play to start.");
@@ -144,6 +171,7 @@ public final class VideoPlayer {
         button(buttons, "Done", listener::closed);
         LinearLayout external = new LinearLayout(activity);
         controls.addView(external);
+        fullscreenButton = button(external, "Fullscreen", () -> setFullscreen(!fullscreen));
         if (!restricted) {
             button(external, "Picture in picture", this::pip);
             button(external, "Cast…", this::cast);
@@ -156,8 +184,9 @@ public final class VideoPlayer {
                 ended = false;
                 if (manualResumeRequired || !focusHeld || !allowed(false)) { pause(); return; }
                 if (resume > 0) { player.setTime(resume); resume = 0; }
+                scheduleControls();
             }
-            if (event.type == MediaPlayer.Event.EndReached) { ended = true; lastPosition = 0; }
+            if (event.type == MediaPlayer.Event.EndReached) { ended = true; lastPosition = 0; setControlsVisible(true); }
             if (event.type == MediaPlayer.Event.EncounteredError)
                 status("Playback failed. Close and reopen this video to retry.");
         });
@@ -192,9 +221,64 @@ public final class VideoPlayer {
     private Button button(LinearLayout row, String text, Runnable action) {
         Button button = new Button(activity);
         button.setText(text);
-        button.setOnClickListener(view -> action.run());
+        button.setOnClickListener(view -> { action.run(); scheduleControls(); });
         row.addView(button, new LinearLayout.LayoutParams(0, -2, 1));
         return button;
+    }
+
+    public void setFullscreen(boolean value) {
+        fullscreen = value;
+        fullscreenButton.setText(value ? "Exit fullscreen" : "Fullscreen");
+        setControlsVisible(!value);
+    }
+
+    private void setControlsVisible(boolean visible) {
+        controlsVisible = visible;
+        updateChrome();
+        scheduleControls();
+    }
+
+    private void scheduleControls() {
+        handler.removeCallbacks(hideControls);
+        boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
+        if (fullscreen && controlsVisible && attached && player.isPlaying() && !pip)
+            handler.postDelayed(hideControls, 3000);
+    }
+
+    private void updateChrome() {
+        if (!attached) return;
+        boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
+        controls.setVisibility(pip || !controlsVisible ? View.GONE : View.VISIBLE);
+        View decor = activity.getWindow().getDecorView();
+        boolean immersive = fullscreen && !controlsVisible && !pip;
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController controller = decor.getWindowInsetsController();
+            if (controller != null) {
+                controller.setSystemBarsBehavior(immersive ? WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE : previousBarBehavior);
+                if (immersive) controller.hide(WindowInsets.Type.systemBars());
+                else {
+                    controller.show(previousVisibleBars);
+                    controller.hide(WindowInsets.Type.systemBars() & ~previousVisibleBars);
+                }
+            }
+        } else {
+            decor.setSystemUiVisibility(immersive ? previousSystemUi | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION : previousSystemUi);
+        }
+    }
+
+    private void restoreChrome() {
+        handler.removeCallbacks(hideControls);
+        View decor = activity.getWindow().getDecorView();
+        decor.setSystemUiVisibility(previousSystemUi);
+        if (Build.VERSION.SDK_INT >= 30 && decor.getWindowInsetsController() != null) {
+            WindowInsetsController controller = decor.getWindowInsetsController();
+            controller.setSystemBarsBehavior(previousBarBehavior);
+            controller.show(previousVisibleBars);
+            controller.hide(WindowInsets.Type.systemBars() & ~previousVisibleBars);
+        }
     }
 
     private final BroadcastReceiver screenOff = new BroadcastReceiver() {
@@ -237,7 +321,7 @@ public final class VideoPlayer {
             if (!seek.isPressed() && length > 0) seek.setProgress((int)(time * 10000 / length));
             play.setText(player.isPlaying() ? "Pause" : "Play");
             boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
-            controls.setVisibility(pip ? View.GONE : View.VISIBLE);
+            if (pip != wasPip) { wasPip = pip; setControlsVisible(true); }
             if (!allowed(false)) pause();
             handler.postDelayed(this, 500);
         }
@@ -323,11 +407,22 @@ public final class VideoPlayer {
         if (done || attached) return;
         lockHidden = false;
         FrameLayout decor = (FrameLayout) activity.getWindow().getDecorView();
+        previousSystemUi = decor.getSystemUiVisibility();
+        if (Build.VERSION.SDK_INT >= 30) previousVisibleBars = WindowInsets.Type.systemBars();
+        if (Build.VERSION.SDK_INT >= 30 && decor.getRootWindowInsets() != null && decor.getWindowInsetsController() != null) {
+            previousBarBehavior = decor.getWindowInsetsController().getSystemBarsBehavior();
+            WindowInsets insets = decor.getRootWindowInsets();
+            previousVisibleBars = (insets.isVisible(WindowInsets.Type.statusBars()) ? WindowInsets.Type.statusBars() : 0)
+                | (insets.isVisible(WindowInsets.Type.navigationBars()) ? WindowInsets.Type.navigationBars() : 0)
+                | (insets.isVisible(WindowInsets.Type.captionBar()) ? WindowInsets.Type.captionBar() : 0);
+        }
         decor.addView(root, new FrameLayout.LayoutParams(-1, -1));
         attached = true;
+        root.requestApplyInsets();
         wasSecure = (activity.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0;
         if (restricted) activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         player.attachViews(video, null, true, false);
+        setControlsVisible(true);
     }
 
     public void hide() {
@@ -338,6 +433,7 @@ public final class VideoPlayer {
         resume = position();
         player.stop();  // Retire buffered private frames before the host lock.
         if (attached) {
+            restoreChrome();
             player.detachViews();
             ((ViewGroup) root.getParent()).removeView(root);
             attached = false;
@@ -354,6 +450,7 @@ public final class VideoPlayer {
     public boolean completed() { return ended; }
     public void pause() {
         if (done) return;
+        setControlsVisible(true);
         manualResumeRequired = true;
         if (!audioSuppressed) {
             int current = player.getVolume();
@@ -370,7 +467,7 @@ public final class VideoPlayer {
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
         if (restricted) hide(); else if (!pip && !casting) pause();
     }
-    public void status(String text) { message.setText(text); }
+    public void status(String text) { message.setText(text); setControlsVisible(true); }
     public void dispose() {
         if (done) return;
         hide();

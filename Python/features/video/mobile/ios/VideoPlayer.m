@@ -6,7 +6,7 @@
 
 @interface LGVideoController : UIViewController
     <VLCDrawable, VLCPictureInPictureDrawable, VLCPictureInPictureMediaControlling,
-     VLCMediaPlayerDelegate, CXCallObserverDelegate>
+     VLCMediaPlayerDelegate, CXCallObserverDelegate, UIGestureRecognizerDelegate>
 @property(nonatomic, copy) NSString *videoURL;
 @property(nonatomic, copy) NSString *subtitleJSON;
 @property(nonatomic) int64_t startMilliseconds;
@@ -20,6 +20,10 @@
 @property(nonatomic, strong) UILabel *message;
 @property(nonatomic, strong) UISlider *seek;
 @property(nonatomic, strong) UIButton *playButton;
+@property(nonatomic, strong) UIButton *fullscreenButton;
+@property(nonatomic) BOOL fullscreen;
+@property(nonatomic) BOOL controlsVisible;
+@property(nonatomic, strong) NSTimer *controlsTimer;
 @property(nonatomic, strong) NSTimer *timer;
 @property(nonatomic, strong) id<VLCPictureInPictureWindowControlling> pipController;
 @property(nonatomic, strong) NSMutableArray<VLCRendererDiscoverer *> *discoverers;
@@ -44,11 +48,18 @@
     self.lastPosition = self.startMilliseconds;
     self.movie = [[UIView alloc] init];
     self.movie.backgroundColor = UIColor.blackColor;
+    self.movie.isAccessibilityElement = YES;
+    self.movie.accessibilityLabel = @"Video";
+    self.movie.accessibilityCustomActions = @[
+        [[UIAccessibilityCustomAction alloc] initWithName:@"Show video controls" target:self selector:@selector(showControlsForAccessibility)]
+    ];
     self.movie.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.movie];
     self.controls = [[UIStackView alloc] init];
     self.controls.axis = UILayoutConstraintAxisVertical;
     self.controls.spacing = 8;
+    self.controls.backgroundColor = [UIColor colorWithWhite:0 alpha:.8];
+    self.controlsVisible = YES;
     self.controls.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.controls];
     self.message = [[UILabel alloc] init];
@@ -68,6 +79,10 @@
     [self button:@"+10s" selector:@selector(forward:) row:buttons];
     [self button:@"Tracks" selector:@selector(tracks:) row:buttons];
     [self button:@"Done" selector:@selector(done:) row:buttons];
+    UIStackView *display = [[UIStackView alloc] init];
+    display.distribution = UIStackViewDistributionFillEqually;
+    [self.controls addArrangedSubview:display];
+    self.fullscreenButton = [self button:@"Fullscreen" selector:@selector(toggleFullscreen:) row:display];
     if (!self.restricted) {
         UIStackView *external = [[UIStackView alloc] init];
         external.distribution = UIStackViewDistributionFillEqually;
@@ -77,14 +92,17 @@
     }
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
-        [self.movie.topAnchor constraintEqualToAnchor:safe.topAnchor],
-        [self.movie.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor],
-        [self.movie.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
-        [self.movie.bottomAnchor constraintEqualToAnchor:self.controls.topAnchor constant:-8],
+        [self.movie.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [self.movie.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [self.movie.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [self.movie.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
         [self.controls.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:12],
         [self.controls.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-12],
         [self.controls.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor constant:-8]
     ]];
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapVideo:)];
+    tap.delegate = self;
+    [self.view addGestureRecognizer:tap];
     self.player = [[VLCMediaPlayer alloc] initWithOptions:@[@"--quiet", @"--no-video-title-show", @"--no-stats"]];
     self.player.drawable = self;
     self.player.delegate = self;
@@ -101,10 +119,57 @@
     [self.callObserver setDelegate:self queue:dispatch_get_main_queue()];
 }
 
+- (BOOL)prefersStatusBarHidden { return self.fullscreen && !self.controlsVisible && !self.pipActive; }
+- (BOOL)prefersHomeIndicatorAutoHidden { return self.fullscreen && !self.controlsVisible && !self.pipActive; }
+- (UIRectEdge)preferredScreenEdgesDeferringSystemGestures {
+    return self.fullscreen && !self.controlsVisible && !self.pipActive ? UIRectEdgeAll : UIRectEdgeNone;
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch {
+    return ![touch.view isDescendantOfView:self.controls];
+}
+- (void)setControlsShown:(BOOL)visible {
+    self.controlsVisible = visible;
+    self.controls.hidden = !visible || self.pipActive;
+    [self setNeedsStatusBarAppearanceUpdate];
+    [self setNeedsUpdateOfHomeIndicatorAutoHidden];
+    [self setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
+    [self scheduleControls];
+}
+- (void)scheduleControls {
+    [self.controlsTimer invalidate]; self.controlsTimer = nil;
+    if (self.fullscreen && self.controlsVisible && !self.pipActive && !self.retired && self.view.window && self.player.isPlaying) {
+        self.controlsTimer = [NSTimer scheduledTimerWithTimeInterval:3 target:self selector:@selector(hideControls:) userInfo:nil repeats:NO];
+    }
+}
+- (void)hideControls:(NSTimer *)timer {
+    if (self.player.isPlaying && !self.seek.tracking && !self.presentedViewController && !UIAccessibilityIsVoiceOverRunning())
+        [self setControlsShown:NO];
+    else [self scheduleControls];
+}
+- (void)toggleFullscreen:(id)sender {
+    self.fullscreen = !self.fullscreen;
+    [self.fullscreenButton setTitle:self.fullscreen ? @"Exit fullscreen" : @"Fullscreen" forState:UIControlStateNormal];
+    [self setControlsShown:!self.fullscreen];
+}
+- (void)tapVideo:(id)sender {
+    if (!self.fullscreen) [self toggleFullscreen:sender];
+    else [self setControlsShown:!self.controlsVisible];
+}
+- (BOOL)showControlsForAccessibility { [self setControlsShown:YES]; return YES; }
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [self.controlsTimer invalidate]; self.controlsTimer = nil;
+}
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self setControlsShown:YES];
+}
+
 - (UIButton *)button:(NSString *)title selector:(SEL)selector row:(UIStackView *)row {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
     [button setTitle:title forState:UIControlStateNormal];
     [button addTarget:self action:selector forControlEvents:UIControlEventTouchUpInside];
+    [button addTarget:self action:@selector(scheduleControls) forControlEvents:UIControlEventTouchUpInside];
     [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
     [row addArrangedSubview:button];
     return button;
@@ -126,6 +191,7 @@
 - (void)seekChanged:(UISlider *)slider { if ([self canPlay:NO]) self.player.position = slider.value; }
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
+    [self setControlsShown:YES];
     // VLCKit pause is an explicit pause, but coalesce duplicate OS/lifecycle events.
     self.manualResumeRequired = YES;
     if (!self.audioSuppressed) {
@@ -207,7 +273,7 @@
     return value >= 0 ? value : self.lastPosition;
 }
 - (BOOL)completed { return self.ended; }
-- (void)showStatus:(NSString *)message { self.message.text = message; }
+- (void)showStatus:(NSString *)message { self.message.text = message; [self setControlsShown:YES]; }
 - (void)tick:(NSTimer *)timer {
     if (![self canPlay:NO]) [self pause];
     int64_t position = [self positionMilliseconds];
@@ -227,8 +293,12 @@
                 self.startMilliseconds = 0;
             }
             self.ended = NO;
+            [self scheduleControls];
         }
-        if (state == VLCMediaPlayerStateStopped && self.player.position >= .999) self.ended = YES;
+        if (state == VLCMediaPlayerStateStopped && self.player.position >= .999) {
+            self.ended = YES;
+            [self setControlsShown:YES];
+        }
         if (state == VLCMediaPlayerStateError) [self showStatus:@"Playback failed. Close and reopen this video to retry."];
         [self.pipController invalidatePlaybackState];
     });
@@ -308,7 +378,10 @@
     return ^(id<VLCPictureInPictureWindowControlling> controller) {
         if (owner.restricted) return;
         owner.pipController = controller;
-        controller.stateChangeEventHandler = ^(BOOL active) { owner.pipActive = active; };
+        controller.stateChangeEventHandler = ^(BOOL active) {
+            owner.pipActive = active;
+            [owner setControlsShown:YES];
+        };
     };
 }
 - (void)addSubview:(UIView *)view { [self.movie addSubview:view]; }
@@ -325,6 +398,8 @@
 - (void)retire {
     if (self.retired) return;
     self.retired = YES;
+    self.fullscreen = NO;
+    [self setControlsShown:YES];
     [self.timer invalidate]; self.timer = nil;
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [self.callObserver setDelegate:nil queue:NULL]; self.callObserver = nil;

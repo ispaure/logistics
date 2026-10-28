@@ -65,6 +65,62 @@ async def android_frame(owner):
     return len(colors)
 
 
+async def fullscreen_controls(owner, android):
+    """Exercise native controls and observed system chrome, not Python mocks."""
+    native = owner.native.native
+    from mobile.screen_privacy import native_value
+    if android:
+        from java import jclass
+
+        def field(name):
+            value = native.getClass().getDeclaredField(name)
+            value.setAccessible(True)
+            return value.get(native)
+
+        controls, root = field('controls'), field('root')
+        decor = owner.app._impl.native.getWindow().getDecorView()
+        # The surface tap target sits above VLC and below the controls.
+        tap = lambda: root.getChildAt(1).performClick()
+        toggle = lambda: field('fullscreenButton').performClick()
+        visible = lambda: controls.getVisibility() == 0
+        Insets = jclass('android.view.WindowInsets')
+        modern = jclass('android.os.Build$VERSION').SDK_INT >= 30
+        bars = lambda: (int(decor.getRootWindowInsets().isVisible(Insets.Type.statusBars()))
+                        | int(decor.getRootWindowInsets().isVisible(Insets.Type.navigationBars())) << 1
+                        if modern else int(decor.getSystemUiVisibility()) & 6)
+        hidden_bars = lambda: bars() == (0 if modern else 6)
+    else:
+        visible = lambda: not native_value(native.controls, 'isHidden')
+        tap = lambda: native.tapVideo(None)
+        toggle = lambda: native.toggleFullscreen(None)
+        status_manager = native.view.window.windowScene.statusBarManager
+        bars = lambda: bool(native_value(status_manager, 'isStatusBarHidden'))
+        hidden_bars = bars
+    previous = bars()
+    toggle()
+    await until(lambda: not visible() and hidden_bars())
+    if android:
+        assert root.getHeight() == decor.getHeight(), 'Fullscreen root does not fill the window'
+        assert field('video').getHeight() == root.getHeight(), 'Controls shrink the video'
+    else:
+        assert abs(native.movie.bounds.size.height - native.view.bounds.size.height) < 1
+        assert abs(native.movie.bounds.size.width - native.view.bounds.size.width) < 1
+    tap()
+    await until(visible)
+    await until(lambda: not visible() and hidden_bars(), timeout=5)
+    native.pause()
+    await until(visible)
+    await asyncio.sleep(3.2)
+    assert visible(), 'Paused controls automatically disappeared'
+    toggle()
+    await until(lambda: visible() and bars() == previous)
+    toggle()
+    await until(lambda: not visible() and hidden_bars())
+    # Caller closes while immersive, then observes restoration through saved host objects.
+    return (dict(tap_reveal=True, auto_hide=True, pause_visible=True, bars_restored=True),
+            lambda: bars() == previous)
+
+
 async def exercise(app):
     rows = []
     report = dict(success=False, cases=rows, scope='focused native video; no receiver or physical lock acceptance')
@@ -82,7 +138,9 @@ async def exercise(app):
         assert len(list(root.glob('*.mp4'))) == 4
         assert len(list(root.glob('*.mkv'))) == 4
         android = type(app._impl).__module__.startswith('toga_android.')
+        fullscreen_checked = False
         for path in sorted(root.iterdir()):
+            closed_chrome = None
             assert await open_video(app, LocalFiles(root), path.name)
             owner = app.video_player
             if android:
@@ -102,9 +160,20 @@ async def exercise(app):
                 assert native_value(player, 'hasVideoOut')
                 colors = None
                 player.pause()
+            if not fullscreen_checked:
+                # Longer focused fixtures leave time to observe the real timer.
+                owner.native.native.pause()
+                start_playback(owner)
+                await until(lambda: owner.native.position()[0] > 500)
+                result, closed_chrome = await fullscreen_controls(owner, android)
+                rows.append(dict(name='fullscreen', **result))
+                fullscreen_checked = True
             position = owner.native.position()[0]
             assert position >= 0
             await owner.close()
+            if closed_chrome is not None:
+                await until(closed_chrome)
+                rows[-1]['close_restored_bars'] = True
             rows.append(dict(name=path.name, played=True, rendered_colors=colors, position=position))
             print('VIDEO_PROBE_CASE=' + path.name, flush=True)
         # Reuse the shipped synthetic crypt fixture; never touch user remotes.

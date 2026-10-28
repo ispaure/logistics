@@ -7,7 +7,14 @@ audio/video quality and lock timing during those modes.
 
 Enable **Video Player** in Features, then open an MP4 or MKV in Local, unlocked
 LocalCrypt or the remote/crypt Cloud browser. The native player opens
-fullscreen with Play/Pause, a seek bar, ten-second skips, **Tracks** and **Done**.
+in its own screen with Play/Pause, a seek bar, ten-second skips, **Tracks** and **Done**.
+Choose **Fullscreen** to hide the controls and system bars. Tap the video to
+bring the controls back; tap again to hide them. While playing, revealed controls
+hide again after three seconds. Pausing, finishing or encountering an error shows
+the controls. Choose **Exit fullscreen** to keep them visible. The movie fills
+the player area behind the controls, preserving the video's aspect ratio.
+Automatic hiding is disabled with VoiceOver or Android touch exploration.
+On iOS, the Video accessibility element also offers **Show video controls**.
 Use device volume buttons. Tracks lists embedded audio and subtitles, a subtitles
 off action, and matching external sidecars. Put UTF-8 SRT files beside the movie,
 using the same stem, for example `Movie.mkv`, `Movie.srt` and `Movie.en.srt`.
