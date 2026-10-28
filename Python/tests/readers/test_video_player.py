@@ -152,10 +152,14 @@ class VideoContracts(unittest.TestCase):
         self.assertFalse(session_only(SimpleNamespace(private=False)))
         self.assertTrue(session_only(SimpleNamespace(private=True)))
         client = SimpleNamespace(package_records=[dict(remotes=['Video'], saved=True)])
-        provider = SimpleNamespace(private=True, client=client, remote='Video')
+        provider = SimpleNamespace(private=True, session_only=False, client=client, remote='Video')
         self.assertFalse(session_only(provider))
         client.package_records[0]['saved'] = False
+        self.assertFalse(session_only(provider))  # Consumers do not inspect credential records.
+        provider.session_only = True
         self.assertTrue(session_only(provider))
+        self.assertTrue(session_only(SimpleNamespace(private=False, session_only=False, provider=provider)))
+        self.assertFalse(session_only(SimpleNamespace(private=True, session_only=False)))
 
     def test_gate_and_revision_checked_after_open(self):
         with TemporaryDirectory() as directory:

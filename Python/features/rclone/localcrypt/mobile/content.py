@@ -38,6 +38,10 @@ class CryptContentProvider:
     document_capabilities = DocumentReadCapabilities(
         private=True, writable=True, credential_bound=True, offline=True, required_feature='rclone')
 
+    @property
+    def session_only(self):
+        return self.privacy_gate is not None
+
     def check(self):
         self._access.check()
 

@@ -3,30 +3,10 @@ from pathlib import PurePosixPath
 
 from commonUtils.runtime.resources.content import ProviderContent
 from services.documents.storage import document_remote, document_sources
+from services.access_policy import session_only
 
 VIDEO_EXTENSIONS = frozenset({'.mp4', '.mkv'})
 
-
-def session_only(provider):
-    """Unknown private credential policy fails closed for external playback."""
-    sources = tuple(document_sources(provider))
-    if any(getattr(source, 'session_only', False) for source in sources):
-        return True
-    if not any(getattr(source, 'private', False) for source in sources):
-        return False
-    for source in sources:
-        client, remote = getattr(source, 'client', None), getattr(source, 'remote', None)
-        if client is not None and remote is not None:
-            record = next((item for item in getattr(client, 'package_records', ())
-                           if remote in item.get('remotes', ())), None)
-            return record is None or not record.get('saved', False)
-        connection = getattr(source, 'connection', None)
-        if connection is not None:
-            # Desktop LocalCrypt currently unlocks its package into a .session
-            # context even when a separate saved cloud config also exists.
-            # That unrelated config must never relax this retained grant.
-            return PurePosixPath(str(connection.context)).suffix == '.session'
-    return True
 
 
 class VideoContent:

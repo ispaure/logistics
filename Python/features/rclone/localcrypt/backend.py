@@ -36,6 +36,7 @@ class LocalCryptFolder:
 class CryptResources(LocalFiles):
     """Generic reader storage backed by a RAM-only crypt-to-local configuration."""
     private = True
+    session_only = True  # Desktop LocalCrypt always owns a memory-only credential context.
     max_text = 8 * 1024 * 1024
     max_resource = 32 * 1024 * 1024
 

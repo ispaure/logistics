@@ -47,3 +47,12 @@ immediate denial in platform adapters. Do not replace them with a UI-only check.
 
 No new encrypted format, export policy, desktop Bluetooth feature or generalized
 permission framework is required. Preserve stored settings and credential IDs.
+
+## Provider declarations
+
+`services.access_policy.session_only` composes explicit provider declarations
+through document wrappers. Video no longer reads credential package dictionaries
+or guesses retention from context filenames. Desktop LocalCrypt declares its
+memory-only context; native LocalCrypt derives the declaration at its owning
+credential boundary. Unknown private providers conservatively refuse external
+playback. Document persistence and provider I/O grants remain separate.
