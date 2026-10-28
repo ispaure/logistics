@@ -28,6 +28,7 @@ python3 dev.py lint
 | Desktop navigation, document tabs or browser hosting | `Python/desktop/` | [Architecture](architecture.md), [browser ownership](browser-ownership.md) |
 | Document resource sessions and storage policy | `Python/services/documents/` | [Document storage](document-storage.md) |
 | Mobile audio consent and capture privacy | `services/audio_output.py`, `mobile/audio_output.py` | [Audio playback](audio-playback.md) |
+| Access, resume authentication and privacy scope | `Python/services/`, `Python/mobile/` | [Access and privacy](access-privacy.md) |
 | Mobile navigation, storage or document lifetime | `Python/mobile/` | [Mobile host owners](mobile-runtime.md) |
 | Settings, registration or a new feature | Owning feature's `__init__.py` and `config.ini` | [Feature conventions](features.md), [extension points](extension-points.md) |
 | A shared Logistics policy | `Python/services/` | [Service owners](services.md) |
