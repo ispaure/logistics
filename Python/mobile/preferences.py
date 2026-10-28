@@ -14,7 +14,7 @@ DEFAULTS = {'seasonal_snow': 'true', 'android_eink': 'false', 'font_size': '16',
             'workspace_local_group': 'Others', 'document_card_overview': 'false', 'show_legacy': 'false', 'disabled_features': '[]',
             'markdown_justify': 'false',
             'clear_unmodified_documents_on_restart': 'true', 'session_speech_when_locked': 'false', 'session_trusted_wifi': 'false', 'trusted_wifi_networks': '[]',
-            'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'comic_split_wide': 'true', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS, **CAMERA_DEFAULTS}
+            'approved_bluetooth_devices': '[]', 'speech_voice': '', 'magnifier_zoom': '190', 'comic_layout': 'auto', 'comic_split_wide': 'true', 'reading_margin': '16', 'reading_theme': 'system', 'remote_packages': '[]', **READING_DEFAULTS, **CAMERA_DEFAULTS}
 
 
 class Preferences:
@@ -66,6 +66,8 @@ class Preferences:
         if values.keys() != DEFAULTS.keys():
             raise ValueError('Unknown mobile preference.')
         disabled_features(values['disabled_features'])
+        from services.audio_output import approvals
+        approvals(values['approved_bluetooth_devices'])
         if not isinstance(values['speech_voice'], str) or len(values['speech_voice']) > 1024 or any(c in values['speech_voice'] for c in '\r\n\x00'):
             raise ValueError('Invalid read-aloud voice.')
         from .trusted_wifi import network_names

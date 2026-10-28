@@ -91,7 +91,7 @@ class DesktopVideoPrivacyTests(QtTestCase):
         from features.video.ui.privacy import credential_package
 
         owner = SimpleNamespace(connection=SimpleNamespace(package=Path("/owner.zip")))
-        with patch("features.video.ui.privacy.document_sources", return_value=[owner]):
+        with patch("services.documents.video_authorization.document_sources", return_value=[owner]):
             self.assertEqual(credential_package(object()), Path("/owner.zip"))
 
     def test_encrypted_owner_password_and_replaced_package_fail_closed(self):

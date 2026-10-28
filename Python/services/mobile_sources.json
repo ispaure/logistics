@@ -2,6 +2,7 @@
   "schema": 1,
   "modules": [
     "__init__.py",
+    "audio_output.py",
     "build_version.py",
     "documents/__init__.py",
     "documents/archive_access.py",

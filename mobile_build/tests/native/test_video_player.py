@@ -14,7 +14,7 @@ from mobile_build.build_support.video_build import configure_android, configure_
 class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
     def player(self, *, restricted=True):
         from features.video.mobile.player import MobileVideo
-        app = SimpleNamespace(active_host=True, private_root=Path('/unused'), loop=asyncio.get_running_loop())
+        app = SimpleNamespace(audio_output=Mock(), active_host=True, private_root=Path('/unused'), loop=asyncio.get_running_loop())
         content = SimpleNamespace(provider=SimpleNamespace(storage_id='test', private=False),
             source=SimpleNamespace(expected=(1,), check_access=Mock()), path='movie.mkv',
             restricted=restricted, check_access=Mock(), require_external=Mock(), close=Mock())

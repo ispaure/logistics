@@ -119,6 +119,12 @@ class SettingsCategories:
         return box
 
 
+    def audio(self):
+        from .audio import controls
+        box = self.category('Audio playback')
+        controls(self.app, box)
+        return box
+
     def camera(self):
         app = self.app
         from features.images.mobile.burst_camera import settings_controls
@@ -203,7 +209,7 @@ class Category:
 
 CATEGORIES = (
     Category('App', 'application'), Category('Appearance', 'appearance'), Category('Features', 'features'),
-    Category('Camera', 'camera', camera_required=True), Category('Read aloud', 'speech'),
+    Category('Audio playback', 'audio'), Category('Camera', 'camera', camera_required=True), Category('Read aloud', 'speech'),
     Category('Markdown', 'text_size', ('Markdown', 'markdown_font_size')),
     Category('Text', 'text_size', ('Text', 'text_font_size')),
     Category('EPUB', 'text_size', ('EPUB', 'epub_font_size')),

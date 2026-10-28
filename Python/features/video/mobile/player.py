@@ -18,10 +18,23 @@ class MobileVideo:
         self.hidden = False
         self.native_restricted = None
         self.task = None
+        self.audio_output = app.audio_output
+        self.audio_output.register(self, self.pause_audio)
+
+    def pause_audio(self):
+        if self.native is not None:
+            self.native.pause()
+
+    def playback_allowed(self, external=False):
+        return self.allowed(external) and self.audio_output.permitted()
+
+    def request_play(self):
+        return self.allowed() and self.audio_output.request_play()
 
     def retire(self):
         """Synchronous host shutdown/replacement cannot leave a decoder alive."""
         self.closed = True
+        self.audio_output.unregister(self)
         if self.task is not None:
             self.task.cancel()
         if self.native is not None:
@@ -104,7 +117,7 @@ class MobileVideo:
             if external and self.restricted:
                 return False
             if self.restricted and privacy is not None:
-                if privacy.inactive or privacy.saved_content is not None or any(gate.locked for gate in privacy.gates()):
+                if privacy.inactive or getattr(privacy, 'captured', False) or privacy.saved_content is not None or any(gate.locked for gate in privacy.gates()):
                     return False
             self.content.require_external() if external else self.content.check_access()
             self.transport.resume()
@@ -155,6 +168,7 @@ class MobileVideo:
         if self.closed:
             return
         self.closed = True
+        self.audio_output.unregister(self)
         if self.task is not None:
             self.task.cancel()
         try:

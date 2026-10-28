@@ -163,3 +163,41 @@ class DesktopCredentials:
 
     def restore(self, *, create=False):
         raise TypeError('Desktop credentials are opened from an explicit config or ZIP.')
+
+
+class SessionResumeProof:
+    """Bounded, memory-only resume proof tied to the exact credential package."""
+    def __init__(self, package):
+        from hashlib import sha256
+        from zipfile import ZipFile
+        from .mobile.session_privacy import ResumePassword
+        self.package = package
+        self.digest = None
+        if package is not None and package.stat().st_size <= 1024 * 1024:
+            with ZipFile(package) as archive:
+                if any(info.flag_bits & 1 for info in archive.infolist()):
+                    self.digest = sha256(package.read_bytes()).digest()
+        self.password_gate = ResumePassword() if self.digest is None else None
+
+    def verify(self, secret):
+        from hashlib import sha256
+        values = None
+        try:
+            if self.password_gate is not None:
+                return (self.password_gate.configure(secret) if self.password_gate.proof is None
+                        else self.password_gate.verify(secret))
+            if self.package.stat().st_size > 1024 * 1024 or sha256(self.package.read_bytes()).digest() != self.digest:
+                return False
+            values = session.read_package(self.package, secret)
+            return True
+        except (OSError, ValueError, RuntimeError):
+            return False
+        finally:
+            if values is not None:
+                for settings in values.values():
+                    settings.clear()
+                values.clear()
+
+
+def session_package(key):
+    return session.package_path(key)

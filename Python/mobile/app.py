@@ -321,6 +321,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         install_keyboard(self)
         from .screen_privacy import ScreenPrivacy
         self.screen_privacy = ScreenPrivacy(self)
+        from .audio_output import for_app
+        for_app(self)
         self.native_host.install(self.main_window)
         from .navigation import install_destination_icons, install_apple_selection
         install_destination_icons(self.native_host)

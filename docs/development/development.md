@@ -27,6 +27,7 @@ python3 dev.py lint
 | A feature's controls or behavior | `Python/features/<feature>/`; desktop presentation in `ui/`, mobile adapters in `mobile/` | [Code and owner map](code-map.md) |
 | Desktop navigation, document tabs or browser hosting | `Python/desktop/` | [Architecture](architecture.md), [browser ownership](browser-ownership.md) |
 | Document resource sessions and storage policy | `Python/services/documents/` | [Document storage](document-storage.md) |
+| Mobile audio consent and capture privacy | `services/audio_output.py`, `mobile/audio_output.py` | [Audio playback](audio-playback.md) |
 | Mobile navigation, storage or document lifetime | `Python/mobile/` | [Mobile host owners](mobile-runtime.md) |
 | Settings, registration or a new feature | Owning feature's `__init__.py` and `config.ini` | [Feature conventions](features.md), [extension points](extension-points.md) |
 | A shared Logistics policy | `Python/services/` | [Service owners](services.md) |

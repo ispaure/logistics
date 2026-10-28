@@ -51,7 +51,7 @@ class HostLifecycle:
         stop_media(host)
         for panel in getattr(host, '_notebook_views', {}).values():
             panel.dispose()
-        for name in ('vault_browser', 'notebook_panel', 'memory_pressure', 'screen_privacy'):
+        for name in ('vault_browser', 'notebook_panel', 'memory_pressure', 'screen_privacy', 'audio_output'):
             resource = getattr(host, name, None)
             if resource is not None:
                 resource.dispose()
@@ -149,6 +149,8 @@ class HostLifecycle:
             host.memory_pressure.dispose()
             host.scene_manager.external_comics.dispose()
             host.screen_privacy.dispose()
+            if getattr(host, 'audio_output', None) is not None:
+                host.audio_output.dispose()
             host.seasonal_snow.dispose()
         if saved:
             layout = getattr(host, '_layout_participants', None)

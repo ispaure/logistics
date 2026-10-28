@@ -156,12 +156,15 @@ class ReadAloudPanel(toga.Box):
         if self.session.state == 'speaking':
             self.session.pause()
         elif self.session.state == 'paused':
-            self.session.resume()
+            if self.playback is None or self.playback.request_start():
+                self.session.resume()
         else:
             await self.play()
 
     async def play(self, widget=None, **kwargs):
         if self.closed:
+            return
+        if self.playback is not None and not self.playback.request_start():
             return
         generation = self.session.generation
         try:
@@ -194,7 +197,8 @@ class ReadAloudPanel(toga.Box):
 
     def pause(self, widget=None, **kwargs):
         if self.session.state == 'paused':
-            self.session.resume()
+            if self.playback is None or self.playback.request_start():
+                self.session.resume()
         else:
             self.session.pause()
 

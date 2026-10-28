@@ -40,6 +40,7 @@ import java.util.ArrayList;
 public final class VideoPlayer {
     public interface Listener {
         boolean allowed(boolean external);
+        boolean requestPlay();
         void closed();
     }
 
@@ -135,7 +136,6 @@ public final class VideoPlayer {
         LinearLayout buttons = new LinearLayout(activity);
         controls.addView(buttons);
         play = button(buttons, "Play", () -> {
-            if (!allowed(false)) return;
             if (player.isPlaying()) pause(); else startByUser();
         });
         button(buttons, "−10s", () -> { if (allowed(false)) player.setTime(Math.max(0, player.getTime() - 10000)); });
@@ -220,8 +220,9 @@ public final class VideoPlayer {
     }
 
     private void startByUser() {
-        if (!allowed(false) || !requestFocus()) return;
+        if (listener == null || !listener.requestPlay() || !allowed(false) || !requestFocus()) return;
         focusHeld = true;
+        if (!allowed(false)) { pause(); return; } // Focus acquisition can change output.
         manualResumeRequired = false;
         pausePending = false;
         if (audioSuppressed) { player.setVolume(resumeVolume); audioSuppressed = false; }

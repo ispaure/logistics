@@ -12,6 +12,7 @@
 @property(nonatomic) int64_t startMilliseconds;
 @property(nonatomic) BOOL restricted;
 @property(nonatomic, copy) BOOL (^allowed)(BOOL external);
+@property(nonatomic, copy) BOOL (^requestPlay)(void);
 @property(nonatomic, copy) void (^closed)(void);
 @property(nonatomic, strong) VLCMediaPlayer *player;
 @property(nonatomic, strong) UIView *movie;
@@ -118,7 +119,6 @@
 }
 
 - (void)togglePlay:(id)sender {
-    if (![self canPlay:NO]) { [self pause]; return; }
     if (self.player.isPlaying) [self pause]; else [self startByUser];
 }
 - (void)back:(id)sender { if ([self canPlay:NO]) [self.player jumpBackward:10]; }
@@ -153,11 +153,12 @@
     return NO;
 }
 - (void)startByUser {
-    if (![self canPlay:NO]) return;
+    if (!self.requestPlay || !self.requestPlay() || ![self canPlay:NO]) return;
     NSError *error = nil;
     AVAudioSession *audio = AVAudioSession.sharedInstance;
     if (![audio setCategory:AVAudioSessionCategoryPlayback error:&error] ||
         ![audio setActive:YES error:&error]) return;
+    if (![self canPlay:NO]) return; // Activation can change the selected output.
     self.manualResumeRequired = NO;
     self.pausePending = NO;
     if (self.audioSuppressed) { self.player.audio.muted = self.resumeMuted; self.audioSuppressed = NO; }
@@ -333,6 +334,6 @@
     self.player.delegate = nil;
     [self.player stop]; self.player.drawable = nil;
     self.player = nil;
-    self.allowed = nil; self.closed = nil;
+    self.allowed = nil; self.requestPlay = nil; self.closed = nil;
 }
 @end

@@ -1,27 +1,8 @@
 """Desktop session video concealment and memory-only resume authorization."""
 
 from concurrent.futures import ThreadPoolExecutor
-from hashlib import sha256
-from pathlib import Path
-from zipfile import ZipFile
-
 from commonUtils.ui import pyside as qt
-from features.rclone import session
-from features.rclone.mobile.session_privacy import ResumePassword
-from services.documents.storage import document_sources
-
-
-def credential_package(provider):
-    for source in document_sources(provider):
-        connection = getattr(source, "connection", None)
-        if connection is not None and getattr(connection, "package", None):
-            return Path(connection.package)
-        key = getattr(source, "config_path", None) or getattr(source, "context", None)
-        if key is not None:
-            package = session.package_path(key)
-            if package is not None:
-                return Path(package)
-    return None
+from services.documents.video_authorization import credential_package, resume_authorization
 
 
 class VideoResumeGuard(qt.QObject):
@@ -36,15 +17,8 @@ class VideoResumeGuard(qt.QObject):
         self.busy = False
         self.password_gate = None
         self.package = credential_package(window.content.provider)
-        self.digest = None
-        if self.package is not None and self.package.stat().st_size <= 1024 * 1024:
-            with ZipFile(self.package) as archive:
-                if any(info.flag_bits & 1 for info in archive.infolist()):
-                    self.digest = sha256(self.package.read_bytes()).digest()
-        if self.digest is None:
-            # Unencrypted packages have no password to verify. Establish a
-            # temporary in-memory gate before the first private video frame.
-            self.password_gate = ResumePassword()
+        self.authorization = resume_authorization(self.package)
+        self.password_gate = self.authorization.password_gate
         original = window.takeCentralWidget()
         self.stack = qt.QStackedWidget()
         self.stack.addWidget(original)
@@ -128,28 +102,7 @@ class VideoResumeGuard(qt.QObject):
         revision = self.revision
 
         def verify():
-            values = None
-            try:
-                if self.password_gate is not None:
-                    return (
-                        self.password_gate.configure(secret)
-                        if setup
-                        else self.password_gate.verify(secret)
-                    )
-                if (
-                    self.package.stat().st_size > 1024 * 1024
-                    or sha256(self.package.read_bytes()).digest() != self.digest
-                ):
-                    return False
-                values = session.read_package(self.package, secret)
-                return True
-            except (OSError, ValueError, RuntimeError):
-                return False
-            finally:
-                if values is not None:
-                    for settings in values.values():
-                        settings.clear()
-                    values.clear()
+            return self.authorization.verify(secret)
 
         future = self.pool.submit(verify)
 

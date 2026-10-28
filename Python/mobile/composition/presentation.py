@@ -146,6 +146,7 @@ def library_host(app):
 def speech_presentation(app):
     from features.books.mobile.speech_host import SpeechPresentation
     from features.books.mobile.media_controls import SpeechPlayback
+    from ..audio_output import for_app
     from ..control_icons import icon_button, apply_icon
     from ..appearance import surface, accessible_name
     from ..speech_overlay import SpeechOverlay
@@ -159,7 +160,7 @@ def speech_presentation(app):
             panel, owner, app, **kwargs
         ),
         voice=lambda: app.preferences.values.get("speech_voice", ""),
-        playback=lambda panel, **kwargs: SpeechPlayback(panel, app, **kwargs),
+        playback=lambda panel, **kwargs: SpeechPlayback(panel, app, audio_output=for_app(app), **kwargs),
     )
 
 

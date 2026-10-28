@@ -17,6 +17,7 @@ class ScreenPrivacy:
         self.app = app
         self.disposed = False
         self.inactive = False
+        self.captured = False
         self.observers = []
         self.blocks = []
         self.shield = None
@@ -110,6 +111,9 @@ class ScreenPrivacy:
             self.app.loop.call_soon_threadsafe(self.retire_stale)
 
     def retire_stale(self):
+        output = getattr(self.app, 'audio_output', None)
+        if output is not None:
+            output.invalidate()
         if self.disposed or not self.app.active_host:
             return
         video = getattr(self.app, 'video_player', None)
@@ -129,6 +133,8 @@ class ScreenPrivacy:
             self.app.cloud_open_remote = None
             self.app.cloud_location.value = self.app.cloud_path = ''
         self.app.refresh_folder_actions()
+        from features.books.mobile.media_controls import enforce_privacy
+        enforce_privacy(self.app)
         self.refresh()
 
     def gates(self):
@@ -159,6 +165,9 @@ class ScreenPrivacy:
         return bool(self.gates())
 
     def conceal(self):
+        output = getattr(self.app, 'audio_output', None)
+        if output is not None:
+            output.invalidate(pause=False)  # Reject dialogs without stopping permitted background speech.
         video = getattr(self.app, 'video_player', None)
         if video is not None:
             video.conceal()
@@ -271,11 +280,19 @@ class ScreenPrivacy:
             traits = window.traitCollection
             if traits.respondsToSelector('sceneCaptureState'):
                 captured = captured or native_value(traits, 'sceneCaptureState') == 1
+            self.captured = captured
+            output = getattr(self.app, 'audio_output', None)
+            if output is not None:
+                output.capture_changed(bool(gates) and captured)
+            if video is not None and gates and captured:
+                video.conceal()
             scene = window.windowScene
             scene_inactive = scene is not None and native_value(scene, 'activationState') != 0
             # Lifecycle state alone is not private content. In particular, a
             # window can still be inactive while the app is starting up.
             hidden = bool(gates) and (self.inactive or scene_inactive or captured)
+            if not hidden and video is not None:
+                video.reveal()  # Stopping capture restores authorized controls, never playback.
             if hidden:
                 from .ios_content_background import clear
                 clear(self.app)

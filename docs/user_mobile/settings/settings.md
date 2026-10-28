@@ -395,3 +395,7 @@ and system controls while locked; the choice is remembered on this device.
 Credentials still lock normally, and this setting does not permit new file reads
 or restore speech after an app restart. Clearing/replacing credentials or closing
 the document stops playback even with the setting enabled.
+
+## Audio playback
+
+Manage approved Bluetooth outputs in **Audio playback**. See [audio playback](audio-playback.md) for approval, removal and pause behavior across video and read-aloud.

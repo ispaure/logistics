@@ -38,8 +38,10 @@ def android(workspace):
     with ZipFile(aar) as archive:
         (workspace / 'classes.jar').write_bytes(archive.read('classes.jar'))
     source = ROOT / 'Python/features/video/mobile/android/io/github/ispaure/logistics/video/VideoPlayer.java'
+    extra = [ROOT / 'Python/mobile/android/io/github/ispaure/logistics/audio/AudioOutputs.java',
+             ROOT / 'Python/features/books/mobile/android/io/github/ispaure/logistics/books/SpeechMediaService.java']
     subprocess.run(['javac', '-cp', str(platforms[-1]) + os.pathsep + str(workspace / 'classes.jar'),
-                    '-d', str(workspace / 'compiled'), str(source)], check=True)
+                    '-d', str(workspace / 'compiled'), str(source), *map(str, extra)], check=True)
 
 
 def ios(workspace):

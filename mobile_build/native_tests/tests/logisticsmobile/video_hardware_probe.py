@@ -144,6 +144,8 @@ async def exercise(app):
             "hardware.mp4",
             "QA 1/3: Press Play. Test calls, headphone unplug and Bluetooth loss. Playback must stay paused afterward. Done advances.",
         )
+        from .audio_hardware_probe import phase as audio_phase
+        await audio_phase(app, 'ordinary')
         fixture = json.loads(
             Path(__file__).with_name("localcrypt_fixture.json").read_text()
         )
@@ -174,6 +176,7 @@ async def exercise(app):
             "hardware.mp4",
             "QA 2/3: Test app switching, lock, calls and headset loss. Resume password: Video-QA-2026. No autoplay. Done advances.",
         )
+        await audio_phase(app, 'session-only loaded')
         report["phase"] = "requesting Wi-Fi permission"
         save()
         from mobile.trusted_wifi import request_access, read_ssid
@@ -197,6 +200,13 @@ async def exercise(app):
         else:
             report["trusted_wifi_limitation"] = (
                 "Current Wi-Fi identity unavailable; password remains required."
+            )
+            app.preferences.save(session_trusted_wifi="true")
+            await observe(
+                "session-only Wi-Fi unavailable",
+                provider,
+                "hardware.mp4",
+                "QA: Wi-Fi exception enabled but identity unavailable. Switching apps must still require the password. No autoplay. Done finishes.",
             )
         provider.close()
         report["phase"] = "complete"

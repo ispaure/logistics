@@ -96,3 +96,37 @@ After evidence collection, uninstall only the temporary QA bundle and verify it 
 gone. Remove the task's temporary native apps, APKs and build copies; retain the
 reusable probe, this guide and concise validation evidence. Do not keep a build
 for the next test session: prepare a new one from the then-current code.
+
+## All-audio Bluetooth and mirroring extension
+
+The video launcher now opens the real Settings → Audio playback category between
+ordinary and session-only video phases. It includes native synthetic read-aloud,
+real selected-output monitoring and a Continue QA button. Test both video and
+speech with a Bluetooth device connected before Play; add/decline/cancel approval,
+switch approved/unapproved devices, remove approval while playing, reconnect and
+restart the QA app to verify persistence. Every change pauses; approval never
+resumes. Use a fresh QA build on both iOS and Android. The separate entry point
+`tests.logisticsmobile.audio_hardware_probe:main` runs the all-audio Settings phase
+without the iOS-only physical video/call launcher.
+
+For iPhone Mirroring, test ordinary documents before loading credentials, then
+load a session while mirroring is active. Stop mirroring from the Mac if the app
+is shielded. Also start mirroring with a session already loaded, repeat with an
+ordinary document while another session remains loaded, and clear the last
+session before checking ordinary browsing again. Repeat for multiple app windows,
+recording/AirPlay and pending Wi-Fi/password decisions. The expected restriction
+is app-wide whenever any session-only credentials remain loaded. A supported
+scene-capture signal must conceal native video as well as documents and pause
+all app audio. Do not mark actual iPhone Mirroring as passed from an injected
+capture trait or screenshot.
+
+When Wi-Fi identity is unavailable the launcher now runs an explicit enabled-but-
+unavailable password phase instead of skipping that case. Add the existing
+remote/crypt companion driver contexts to physical acceptance when authorized.
+Combine calls, route transitions and approval prompts; stale decisions must not
+approve a replacement output or start audio. Observe real sound as well as logged
+player state; a state log cannot prove absence of a brief acoustic leak.
+
+Read [audio policy ownership and OS limits](../../../development/audio-playback.md)
+when updating the probes. These new physical phases remain pending until the user
+is ready; no earlier video-only counts certify them.

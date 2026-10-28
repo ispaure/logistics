@@ -19,7 +19,9 @@ class IOSVideo:
         self.native.startMilliseconds = position
         self.native.restricted = owner.restricted
         self.native.subtitleJSON = json.dumps(subtitles)
-        self.allowed = Block(lambda external: owner.allowed(bool(external)), c_bool, c_bool)
+        self.allowed = Block(lambda external: owner.playback_allowed(bool(external)), c_bool, c_bool)
+        self.request_play = Block(lambda: owner.request_play(), c_bool)
+        self.native.requestPlay = self.request_play
         self.closed = Block(lambda: owner.app.loop.create_task(owner.close()), None)
         self.native.allowed = self.allowed
         self.native.closed = self.closed

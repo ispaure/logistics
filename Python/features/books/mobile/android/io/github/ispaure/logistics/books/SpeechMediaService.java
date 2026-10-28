@@ -69,7 +69,7 @@ public final class SpeechMediaService extends Service {
                 .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
                 .setOnAudioFocusChangeListener(change -> {
-                    if (change < 0) { focused = false; dispatch("pause"); }
+                    if (change < 0) { focused = false; dispatch("interrupt"); }
                 }).build();
         }
         session = new MediaSession(this, "LogisticsReadAloud");

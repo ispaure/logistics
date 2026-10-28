@@ -250,7 +250,8 @@
     "services.folders.safety",
     "services.identifiers",
     "services.mobile_presentation",
-    "services.workflow_host"
+    "services.workflow_host",
+    "services.audio_output"
   ],
   "portable_packages": [
     "commonUtils.persistence",

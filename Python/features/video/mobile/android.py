@@ -10,7 +10,10 @@ class AndroidVideo:
 
         class Callbacks(dynamic_proxy(Listener)):
             def allowed(self, external):
-                return owner.allowed(bool(external))
+                return owner.playback_allowed(bool(external))
+
+            def requestPlay(self):
+                return owner.request_play()
 
             def closed(self):
                 owner.app.loop.call_soon_threadsafe(lambda: owner.app.loop.create_task(owner.close()))

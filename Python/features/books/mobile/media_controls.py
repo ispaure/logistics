@@ -6,13 +6,26 @@ _active = None
 
 
 class SpeechPlayback:
-    def __init__(self, panel, app, *, gate=lambda: None, valid=lambda: True, factory=None):
+    def __init__(self, panel, app, *, gate=lambda: None, valid=lambda: True, factory=None, audio_output=None):
         self.panel, self.app, self.gate, self.valid = panel, app, gate, valid
         self.factory = factory or native_media
         self.media, self.closed = None, False
         self.media_error = ""
         self.timer_text = ''
         _owners.add(self)
+        self.audio_output = audio_output
+        if audio_output is not None:
+            audio_output.register(self, self.pause_audio)
+
+    def pause_audio(self):
+        if self.panel.session.state == 'speaking':
+            self.panel.session.pause()
+
+    def request_start(self):
+        return self.credential_start() and (self.audio_output is None or self.audio_output.request_play())
+
+    def can_start(self):
+        return self.credential_start() and (self.audio_output is None or self.audio_output.permitted())
 
     def allowed(self):
         return (not self.closed and getattr(self.app, 'active_host', True) and self.valid() and (self.gate() is None
@@ -21,7 +34,15 @@ class SpeechPlayback:
     def active(self):
         return self.allowed() and self.panel.session.state in {'speaking', 'paused'}
 
-    def can_start(self):
+    def credential_start(self):
+        privacy = getattr(self.app, 'screen_privacy', None)
+        if privacy is not None and getattr(privacy, 'sensitive', lambda: False)():
+            if getattr(privacy, 'captured', False):
+                return False
+            pending = (privacy.inactive or getattr(privacy, 'saved_content', None) is not None
+                       or any(gate.locked for gate in privacy.gates()))
+            if pending and self.app.preferences.values.get('session_speech_when_locked') != 'true':
+                return False
         gate = self.gate()
         inactive = getattr(getattr(self.app, 'screen_privacy', None), 'inactive', False)
         return (not self.closed and getattr(self.app, 'active_host', True) and self.valid()
@@ -54,7 +75,9 @@ class SpeechPlayback:
     def content(self):
         # Hosts opt ordinary readers in with a title provider. Private hosts leave
         # it empty; credential-session readers remain generic even with opt-in audio.
-        title = getattr(self.panel, 'document_title', lambda: '')() if self.gate() is None else ''
+        privacy = getattr(self.app, 'screen_privacy', None)
+        private = self.gate() is not None or bool(privacy is not None and getattr(privacy, 'sensitive', lambda: False)())
+        title = getattr(self.panel, 'document_title', lambda: '')() if not private else ''
         if not title:
             return 'Read aloud'
         title = ' '.join(str(title).replace('\\', '/').rsplit('/', 1)[-1].split())[:120]
@@ -77,11 +100,19 @@ class SpeechPlayback:
             self.enforce()
             return False
         session = self.panel.session
-        if action == 'play':
+        if action == 'interrupt':
+            if self.audio_output is not None:
+                self.audio_output.invalidate()
+            session.pause()
+        elif action == 'play':
+            if not self.can_start():
+                return False
             session.resume()
         elif action == 'pause':
             session.pause()
         elif action == 'toggle':
+            if session.state == 'paused' and not self.can_start():
+                return False
             session.resume() if session.state == 'paused' else session.pause()
         elif action == 'back':
             session.skip(-15)
@@ -94,6 +125,10 @@ class SpeechPlayback:
         return True
 
     def enforce(self):
+        if not self.credential_start():
+            self.pause_audio()
+        if self.media is not None:
+            self.media.update_content(self.content())
         if not self.allowed():
             self.clear()
             gate = self.gate()
@@ -112,6 +147,8 @@ class SpeechPlayback:
         if _active is self:
             _active = None
         self.closed = True
+        if self.audio_output is not None:
+            self.audio_output.unregister(self)
         _owners.discard(self)
         self.gate = self.valid = lambda: None
 

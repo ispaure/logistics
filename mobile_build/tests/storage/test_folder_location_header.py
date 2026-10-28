@@ -110,9 +110,11 @@ class FolderLocationTests(unittest.TestCase):
                         patch('mobile.hub_icons.icon'):
                     mount(header, controller, 'Secret')
                 scroll = instances['UIScrollView'][0]
-                self.assertEqual(scroll.contentSize[1], 15)
-                self.assertGreaterEqual(scroll.contentSize[0], measured_width)
-                self.assertEqual(scroll.contentSize[0] > 174, measured_width > 174)
+                row = instances['UIStackView'][0]
+                row.widthAnchor.constraintGreaterThanOrEqualToAnchor.assert_called_once_with(
+                    scroll.frameLayoutGuide.widthAnchor)
+                row.heightAnchor.constraintEqualToConstant.assert_called_once_with(15)
+                instances['UILabel'][-1].setContentCompressionResistancePriority.assert_called_once_with(1000, forAxis=0)
                 scroll.addSubview.assert_called_once_with(instances['UIStackView'][0])
                 self.assertEqual(instances['UILabel'][-1].text,
                                  'On-device · Unlocked (Session Only) · LocalCrypt')

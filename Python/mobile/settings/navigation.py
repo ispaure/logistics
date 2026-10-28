@@ -64,7 +64,7 @@ class SettingsNavigation(toga.Box):
         if not native_destination_titles(app):
             menu.add(surface(toga.Label('Settings', style=Pack(font_size=22, font_weight='bold', margin_bottom=12)),
                              radius=0, background='transparent', foreground='text', outlined=False, eink_outlined=False))
-        icons = {'Features': 'preferences', 'Camera': 'preferences', 'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
+        icons = {'Audio playback': 'speaker', 'Features': 'preferences', 'Camera': 'preferences', 'App': 'preferences', 'Appearance': 'appearance', 'Read aloud': 'speaker',
                  'Markdown': 'edit', 'Text': 'edit', 'EPUB': 'books', 'Books & Comics': 'books', 'LM Chat': 'chat',
                  'Workspaces': 'folder', 'Reset': 'preferences', 'Help': 'help', 'About': 'info'}
         rows = []
