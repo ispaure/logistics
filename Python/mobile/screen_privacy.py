@@ -53,7 +53,13 @@ class ScreenPrivacy:
                     [ObjCClass('UITraitSceneCaptureState')], withHandler=self.trait_block)
         elif self.backend.startswith('toga_android.'):
             self.install_android_lifecycle()
+        from .protection import for_app
+        for_app(app).process.listeners.add(self)
         self.refresh()
+
+    def protection_changed(self, active):
+        if not self.disposed and not self.app.loop.is_closed():
+            self.app.loop.call_soon_threadsafe(self.refresh)
 
     def artwork_accessibility_changed(self):
         # No size change is required when accessibility changes. Force the
@@ -146,7 +152,8 @@ class ScreenPrivacy:
         return for_app(self.app).process.credentials()
 
     def sensitive(self):
-        return bool(self.gates())
+        from .protection import for_app
+        return for_app(self.app).process.protected()
 
     def conceal(self):
         output = getattr(self.app, 'audio_output', None)
@@ -233,7 +240,7 @@ class ScreenPrivacy:
 
     def resume_reader(self):
         """Memory pressure can retire the visible page while the lock is up."""
-        if self.inactive or self.saved_content is not None or any(gate.locked for gate in self.gates()):
+        if self.inactive or any(gate.locked for gate in self.gates()):
             return
         video = getattr(self.app, 'video_player', None)
         if video is not None:
@@ -246,7 +253,10 @@ class ScreenPrivacy:
                 owner.resume_suspended_page()
 
     def refresh(self):
+        from .protection import for_app
+        for_app(self.app).changed()
         gates = self.gates()
+        protected = self.sensitive()
         video = getattr(self.app, 'video_player', None)
         if video is not None and gates and (self.inactive or any(gate.locked for gate in gates)):
             video.conceal()
@@ -272,14 +282,14 @@ class ScreenPrivacy:
             self.captured = captured
             output = getattr(self.app, 'audio_output', None)
             if output is not None:
-                output.capture_changed(bool(gates) and captured)
-            if video is not None and gates and captured:
+                output.capture_changed(protected and captured)
+            if video is not None and protected and captured:
                 video.conceal()
             scene = window.windowScene
             scene_inactive = scene is not None and native_value(scene, 'activationState') != 0
             # Lifecycle state alone is not private content. In particular, a
             # window can still be inactive while the app is starting up.
-            hidden = bool(gates) and (self.inactive or scene_inactive or captured)
+            hidden = protected and (self.inactive or scene_inactive or captured)
             if not hidden and video is not None:
                 video.reveal()  # Stopping capture restores authorized controls, never playback.
             if hidden:
@@ -454,6 +464,7 @@ class ScreenPrivacy:
     def dispose(self):
         self.disposed = True
         from .protection import for_app
+        for_app(self.app).process.listeners.discard(self)
         for_app(self.app).dispose()
         self.restore_lock_layout()
         from features.rclone.mobile.cloud import CloudClient

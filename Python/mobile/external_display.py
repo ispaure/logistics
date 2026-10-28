@@ -77,14 +77,14 @@ class ExternalComicDisplay:
         if app is None or not getattr(app, 'active_host', False):
             return False
         privacy = getattr(app, 'screen_privacy', None)
-        if privacy is None or privacy.inactive or privacy.saved_content is not None:
+        if privacy is None or privacy.inactive or any(gate.locked for gate in privacy.gates()):
             return False
         # Gates cover the process and retained protected views, even when the
         # displayed comic itself is an ordinary local file. Unlocking a gate
         # does not grant permission to transmit its content to another screen.
-        from features.rclone.mobile.cloud import CloudClient
-        observers = tuple(CloudClient.credential_state.observers)
-        if privacy.gates() or any(not owner.disposed and owner.gates() for owner in observers):
+        from .protection import for_app
+        from services.access_policy import external_allowed
+        if not external_allowed(protected=for_app(app).process.protected()):
             return False
         if getattr(privacy, 'shield', None) is not None:
             return False

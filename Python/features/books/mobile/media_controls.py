@@ -1,5 +1,6 @@
 """One Now Playing owner; private readers never publish titles or passage text."""
 from weakref import WeakSet
+from services.access_policy import speech_allowed
 
 _owners = WeakSet()
 _active = None
@@ -14,6 +15,8 @@ class SpeechPlayback:
         self.timer_text = ''
         _owners.add(self)
         self.audio_output = audio_output
+        from mobile.protection import for_app
+        self.scope = for_app(app).process
         if audio_output is not None:
             audio_output.register(self, self.pause_audio)
 
@@ -36,13 +39,12 @@ class SpeechPlayback:
 
     def credential_start(self):
         privacy = getattr(self.app, 'screen_privacy', None)
-        if privacy is not None and getattr(privacy, 'sensitive', lambda: False)():
-            if getattr(privacy, 'captured', False):
-                return False
-            pending = (privacy.inactive or getattr(privacy, 'saved_content', None) is not None
-                       or any(gate.locked for gate in privacy.gates()))
-            if pending and self.app.preferences.values.get('session_speech_when_locked') != 'true':
-                return False
+        if privacy is not None and getattr(privacy, 'sensitive', lambda: False)() and not speech_allowed(
+                protected=getattr(privacy, 'sensitive', lambda: False)(),
+                inactive=privacy.inactive, captured=getattr(privacy, 'captured', False),
+                locked=any(gate.locked for gate in privacy.gates()),
+                continue_locked=self.app.preferences.values.get('session_speech_when_locked') == 'true'):
+            return False
         gate = self.gate()
         inactive = getattr(getattr(self.app, 'screen_privacy', None), 'inactive', False)
         return (not self.closed and getattr(self.app, 'active_host', True) and self.valid()
@@ -164,8 +166,10 @@ def current_panel(app):
 
 
 def settings_changed(app):
+    from mobile.protection import for_app
+    scope = for_app(app).process
     for owner in tuple(_owners):
-        if owner.app.preferences.path == app.preferences.path:
+        if owner.scope is scope:
             if owner.app is not app:
                 owner.app.preferences.reload()
             owner.enforce()

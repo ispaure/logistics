@@ -23,10 +23,11 @@ class VideoContent:
         self.source = ProviderContent(provider, path)
         self.provider, self.path = self.source.provider, self.source.path
         self.remote = document_remote(self.provider)
-        self.gate = next((source.privacy_gate for source in document_sources(self.provider)
-                          if getattr(source, 'privacy_gate', None) is not None), None)
         self.closed = False
         try:
+            self._restricted = session_only(self.provider)
+            self.gate = next((source.privacy_gate for source in document_sources(self.provider)
+                              if getattr(source, 'privacy_gate', None) is not None), None)
             self.check()
             with self.source.open(self.path) as stream:
                 if not stream.seekable():
@@ -41,7 +42,7 @@ class VideoContent:
 
     @property
     def restricted(self):
-        return session_only(self.provider)
+        return self._restricted
 
     def require_external(self):
         self.check_access()

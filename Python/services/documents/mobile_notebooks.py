@@ -117,6 +117,8 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         panel.open_resource(document, mount=False)
         if resource is not None and not resource.policy.persistent:
             panel.privacy_gate = getattr(resource.provider, 'privacy_gate', None)
+            from mobile.protection import for_app
+            for_app(app).changed()
         if imports is not None:
             imports.remember(source_path, 'notebook', document.key)
     except Exception as error:
@@ -208,6 +210,8 @@ def adopt_notebook_document(app, panel, document):
     session.history_source = None
     if not resource.policy.persistent:
         panel.privacy_gate = panel.privacy_gate or getattr(resource.provider, 'privacy_gate', None)
+        from mobile.protection import for_app
+        for_app(app).changed()
     app.workspace.invalidate(session.id)
     if not resource.policy.persistent and (old is None or old.resource is None or old.resource.policy.persistent):
         panel.mount_canvas()

@@ -19,11 +19,15 @@ class AudioOutput:
         self.policy = OutputPolicy()
         self.players = {}
         self.closed = False
+        self.pausing = False
         self.prompt = None
         self.prompted_revision = None
         self.native = native
         self.interrupted = False
         self.captured = False
+        from .protection import for_app
+        self.scope = for_app(app).process
+        self.scope.listeners.add(self)
         _owners.add(self)
         if native is None:
             from .audio_output_native import monitor
@@ -33,7 +37,10 @@ class AudioOutput:
         self.capture_changed(bool(privacy is not None and privacy.sensitive() and getattr(privacy, 'captured', False)))
 
     def approved(self):
-        return approvals(self.app.preferences.values.get('approved_bluetooth_devices', '[]'))
+        try:
+            return approvals(self.app.preferences.values.get('approved_bluetooth_devices', '[]'))
+        except ValueError:
+            return {}  # Invalid consent data grants no Bluetooth approval.
 
     def register(self, player, pause):
         self.players[player] = pause
@@ -42,24 +49,25 @@ class AudioOutput:
         self.players.pop(player, None)
 
     def protected(self):
-        # Match casting's process/retained-protection scope, not the current file.
-        from features.rclone.mobile.cloud import CloudClient
-        privacy = getattr(self.app, 'screen_privacy', None)
-        observers = (privacy, *tuple(CloudClient.credential_state.observers))
-        if any(owner is not None and not getattr(owner, 'disposed', False) and owner.gates()
-               for owner in observers):
-            return True
-        for owner in tuple(_owners):
-            if not owner.closed:
-                for player in owner.players:
-                    gate = getattr(player, 'gate', None)
-                    if getattr(player, 'restricted', False) or (callable(gate) and gate() is not None):
-                        return True
-        return False
+        return self.scope.protected()
+
+    def protection_changed(self, active):
+        self.policy.revision += 1
+        self.policy.pause()  # Close permission before scheduling native/UI work.
+        import asyncio
+        try:
+            on_ui_loop = asyncio.get_running_loop() is self.app.loop
+        except RuntimeError:
+            on_ui_loop = False
+        if on_ui_loop:
+            self.pause()
+        elif not self.app.loop.is_closed():
+            self.app.loop.call_soon_threadsafe(self.pause)
 
     def refresh(self, *, lost=False):
         if self.closed:
             return
+        self.scope.changed()
         try:
             route = self.native.outputs()
         except Exception:
@@ -75,8 +83,14 @@ class AudioOutput:
 
     def pause(self):
         self.policy.pause()
-        for pause in tuple(self.players.values()):
-            pause()  # Explicit, idempotent pause; never toggle, seek or resume.
+        if self.pausing:
+            return
+        self.pausing = True
+        try:
+            for pause in tuple(self.players.values()):
+                pause()  # Explicit pause, never toggle or resume.
+        finally:
+            self.pausing = False
 
     def interrupt(self, active):
         self.interrupted = bool(active)
@@ -87,20 +101,19 @@ class AudioOutput:
         self.captured = bool(blocked)  # Close permission before reentrant pause callbacks.
         if changed:
             for owner in tuple(_owners):
-                if owner.app.preferences.path == self.app.preferences.path:
+                if owner.scope is self.scope:
                     owner.pause()
 
     def available(self):
         captured = any(owner.captured for owner in tuple(_owners)
-                       if owner.app.preferences.path == self.app.preferences.path)
+                       if owner.scope is self.scope)
         try:
-            return (not self.closed and not self.interrupted and not captured
+            return (not self.closed and not self.pausing and not self.interrupted and not captured
                     and getattr(self.app, 'active_host', True) and not self.native.in_call())
         except Exception:
             return False
 
     def permitted(self):
-        self.refresh()
         return self.available() and (self.policy.permitted(self.approved()) if self.protected()
                                      else self.policy.manual_play)
 
@@ -135,8 +148,7 @@ class AudioOutput:
     def interactive(self):
         privacy = getattr(self.app, 'screen_privacy', None)
         return self.available() and (privacy is None or (
-            not privacy.inactive and getattr(privacy, 'saved_content', None) is None
-            and not any(gate.locked for gate in privacy.gates())))
+            not privacy.inactive and not any(gate.locked for gate in privacy.gates())))
 
     def offer(self, *, explicit=False):
         if self.closed or self.prompt is not None or not self.protected() or not self.interactive():
@@ -185,7 +197,7 @@ class AudioOutput:
             [dict(id=key, name=name) for key, name in sorted(values.items())]))
         # The list affects protected playback only; ordinary playback ignores it.
         for owner in tuple(_owners):
-            if owner.app.preferences.path == self.app.preferences.path:
+            if owner.scope is self.scope:
                 if owner is not self:
                     owner.app.preferences.reload()
                 owner.policy.revision += 1
@@ -206,4 +218,5 @@ class AudioOutput:
         if self.prompt is not None:
             self.prompt.cancel()
         self.native.dispose()
+        self.scope.listeners.discard(self)
         _owners.discard(self)

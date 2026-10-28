@@ -85,3 +85,26 @@ them after releasing it. UI callbacks return to their scene loop. Native screen
 shielding stays synchronous; asynchronous verification cannot reveal content
 after rebackgrounding or credential replacement. These callbacks never revive a
 revoked I/O grant.
+
+## Shared presentation and playback questions
+
+`services.access_policy` supplies small pure functions for display, external
+presentation and speech continuation. The process scope notifies explicit
+listeners when protection enters or leaves. Audio invalidates its Play permission
+before scheduling native pause work; new credentials therefore cannot inherit an
+ordinary player's authorization even if the output did not change. Source owners
+notify after publishing retained gates. No UI observer or preference-path scan
+establishes scope. Video contributes its retained content policy until disposal.
+
+Video captures its provider policy with its retained grant. Removing credentials
+cannot relax that policy while content is still retained. Permission queries do
+not resume transport; explicit Play, authorized reveal and the player's watch
+command own that effect. Audio's passive permission query does not poll native
+routes or pause players. Native monitors and explicit Play observe routes.
+Malformed approval data grants no Bluetooth permission under protection; ordinary
+playback bypasses the list entirely. Protective pauses reject reentrant Play.
+
+Lock-form `saved_content` now belongs only to presentation. Consumers use resume
+challenge state rather than checking whether a widget root was replaced. Device
+sleep/capture/call safeguards remain in the native adapters; the listening timer
+remains in commonUtils. No native adapter interfaces or OS guarantees change.

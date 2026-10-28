@@ -137,6 +137,8 @@ class EditorPicker:
         self._epoch += 1
         self.cancel()
         self.operation = PickerOperation()
+        from .protection import for_app
+        for_app(self.app).changed()
         self.panel = self._restore_when_idle = None
         pending = getattr(self, '_storage_refresh', None)
         if pending is not None and not pending.done():
@@ -291,6 +293,8 @@ class EditorPicker:
         if not self.active_host or epoch != self._epoch:
             return
         self.operation = operation
+        from .protection import for_app
+        for_app(self.app).changed()
         ordinary = self.app.ordinary_file_roots()
         self.editor_storage_roots = ({'All files': ordinary['Shared files'], 'Local': None,
             'Received Files': ordinary['Received Files']} if creation is not None else {'Local files': None})

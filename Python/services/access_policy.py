@@ -14,3 +14,16 @@ def session_only(provider):
             return True
     return False
 
+
+def display_allowed(*, inactive, captured, locked):
+    return not (inactive or captured or locked)
+
+
+def external_allowed(*, protected, inactive=False, captured=False):
+    return not (protected or inactive or captured)
+
+
+def speech_allowed(*, protected, inactive, captured, locked, continue_locked):
+    if not protected:
+        return True
+    return not captured and (continue_locked or not (inactive or locked))

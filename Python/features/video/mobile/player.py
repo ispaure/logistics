@@ -5,6 +5,7 @@ from pathlib import Path
 from features.video.playback import VideoContent, SubtitleContent
 from services.documents.video_progress import VideoProgress
 from features.video.transport import VideoTransport
+from services.access_policy import display_allowed
 
 
 class MobileVideo:
@@ -20,6 +21,11 @@ class MobileVideo:
         self.task = None
         self.audio_output = app.audio_output
         self.audio_output.register(self, self.pause_audio)
+        from mobile.protection import for_app
+        self.protection = for_app(app)
+        self._release_protection = self.protection.register(self,
+            lambda: (getattr(self.content, 'gate', None),) if not self.closed else (),
+            protected=lambda: not self.closed and self.content.restricted)
 
     def pause_audio(self):
         if self.native is not None:
@@ -29,7 +35,10 @@ class MobileVideo:
         return self.allowed(external) and self.audio_output.permitted()
 
     def request_play(self):
-        return self.allowed() and self.audio_output.request_play()
+        if not self.allowed() or not self.audio_output.request_play():
+            return False
+        self.transport.resume()
+        return True
 
     def retire(self):
         """Synchronous host shutdown/replacement cannot leave a decoder alive."""
@@ -44,6 +53,7 @@ class MobileVideo:
         for subtitle in self.subtitles:
             subtitle.close()
         self.content.close()
+        self._release_protection()
         if getattr(self.app, 'video_player', None) is self:
             self.app.video_player = None
         routes = getattr(self.app, 'routes', None)
@@ -52,8 +62,7 @@ class MobileVideo:
 
     @property
     def restricted(self):
-        privacy = getattr(self.app, 'screen_privacy', None)
-        return self.content.restricted or bool(privacy is not None and privacy.gates())
+        return self.content.restricted or self.protection.process.protected()
 
     def retire_stale(self):
         if self.native_restricted is False and self.restricted:
@@ -117,10 +126,10 @@ class MobileVideo:
             if external and self.restricted:
                 return False
             if self.restricted and privacy is not None:
-                if privacy.inactive or getattr(privacy, 'captured', False) or privacy.saved_content is not None or any(gate.locked for gate in privacy.gates()):
+                if not display_allowed(inactive=privacy.inactive, captured=getattr(privacy, 'captured', False),
+                        locked=any(gate.locked for gate in privacy.gates())):
                     return False
             self.content.require_external() if external else self.content.check_access()
-            self.transport.resume()
             return True
         except (OSError, ValueError, PermissionError):
             return False
@@ -134,6 +143,7 @@ class MobileVideo:
                         self.native.pause()
                         self.transport.suspend()
                     else:
+                        self.transport.resume()
                         position, completed = self.native.position()
                         try:
                             await asyncio.to_thread(self.progress.save, position, completed=completed)
@@ -161,6 +171,7 @@ class MobileVideo:
 
     def reveal(self):
         if self.hidden and self.allowed():
+            self.transport.resume()
             self.hidden = False
             self.native.show()  # Authentication restores controls, never autoplay.
 

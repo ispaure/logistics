@@ -371,6 +371,8 @@ class PrivateSessions:
             if password:
                 from services.session_auth import ResumePassword
                 owner.privacy_gate = ResumePassword(password)
+                from .protection import for_app
+                for_app(self.app).changed()
             opened = await owner.provider_document().opening.open(
                 copies=copies, key=key, password=password, prepared=prepared, edit=edit)
             if not opened or not self.app.active_host or not self.app.workspace.accepts(token):
@@ -410,6 +412,8 @@ class PrivateSessions:
         owner.presentation_destination = destination
         owner._independent_operation = independent
         self.controllers[session.id] = owner
+        from .protection import for_app
+        for_app(self.app).changed()
         return owner
 
     async def _publish_opened_session(self, owner, session, reader, copies, key, *, identity, privacy_gate):

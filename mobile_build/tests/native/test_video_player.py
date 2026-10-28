@@ -20,6 +20,9 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
             restricted=restricted, check_access=Mock(), require_external=Mock(), close=Mock())
         with patch('features.video.mobile.player.VideoTransport'):
             owner = MobileVideo(app, content)
+        owner.protection.register(app, lambda: getattr(getattr(app, 'screen_privacy', None), 'gates', lambda: ())())
+        self.addCleanup(owner.protection.dispose)
+        self.addCleanup(owner.retire)
         owner.native = Mock()
         owner.native.position.return_value = (12000, False)
         owner.progress = Mock()
@@ -51,14 +54,15 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(owner.allowed())
         owner.transport.resume.assert_not_called()
         privacy.inactive = False
-        privacy.saved_content = object()
-        self.assertFalse(owner.allowed())
+        privacy.saved_content = object()  # A presentation widget is not authorization state.
+        self.assertTrue(owner.allowed())
+        owner.transport.resume.assert_not_called()
         privacy.saved_content = None
         privacy.gates = lambda: (SimpleNamespace(locked=True),)
         self.assertFalse(owner.allowed())
         privacy.gates = lambda: ()
         self.assertTrue(owner.allowed())
-        owner.content.check_access.assert_called_once()
+        self.assertEqual(owner.content.check_access.call_count, 2)
         owner.retire()
 
     async def test_new_session_retires_an_existing_unrestricted_native_surface(self):

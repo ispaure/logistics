@@ -58,6 +58,10 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
                           sensitive=lambda: self.protected)
         self.app = NS(preferences=Preferences(Path(self.temp.name)), active_host=True,
             screen_privacy=self.privacy, main_window=NS(dialog=self.dialog), loop=asyncio.get_running_loop())
+        from mobile.protection import for_app
+        scope = for_app(self.app)
+        scope.register(self, lambda: self.privacy.gates())
+        self.addCleanup(scope.dispose)
         self.native = NS(outputs=lambda: self.route, in_call=lambda: False, dispose=Mock())
         self.owner = AudioOutput(self.app, self.native)
         self.app.audio_output = self.owner
@@ -259,11 +263,14 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         retained = Mock(spec=['restricted'])
         retained.restricted = True
         self.owner.register(retained, Mock())
+        from mobile.protection import for_app
+        release = for_app(self.app).register(retained, lambda: (), protected=lambda: retained.restricted)
         self.route = (CAR,)
         self.assertTrue(self.owner.protected())
         self.assertFalse(self.owner.request_play())
         await self.prompt_done()
         self.owner.unregister(retained)
+        release()
         self.assertFalse(self.owner.protected())
         self.assertTrue(self.owner.request_play())
 
@@ -282,6 +289,40 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.owner.approved(), {})
         self.assertFalse(self.owner.permitted())
         self.assertTrue(self.owner.request_play())
+
+    async def test_protection_entry_invalidates_ordinary_play_without_route_change(self):
+        self.protected = False
+        self.assertTrue(self.owner.request_play())
+        attempts = []
+        self.owner.register('reentrant', lambda: attempts.append(self.owner.request_play()))
+        self.protected = True
+        self.owner.scope.changed()
+        self.assertFalse(self.owner.permitted())
+        self.assertEqual(attempts, [False])
+        self.pause_video.assert_called()
+        self.protected = False
+        self.owner.scope.changed()
+        self.assertFalse(self.owner.permitted())
+        self.assertTrue(self.owner.request_play())
+
+    async def test_permission_query_has_no_native_refresh_or_pause_effects(self):
+        self.protected = False
+        self.assertTrue(self.owner.request_play())
+        self.owner.native.outputs = Mock(side_effect=AssertionError('Permission query refreshed routes'))
+        self.pause_video.reset_mock()
+        self.assertTrue(self.owner.permitted())
+        self.pause_video.assert_not_called()
+
+    async def test_malformed_approvals_do_not_block_ordinary_or_crash_protected_play(self):
+        self.app.preferences.values['approved_bluetooth_devices'] = '{broken'
+        self.protected = False
+        self.route = (CAR,)
+        self.assertTrue(self.owner.request_play())
+        self.protected = True
+        self.owner.scope.changed()
+        self.assertFalse(self.owner.request_play())
+        await self.prompt_done()
+        self.assertFalse(self.owner.permitted())
 
 
 class SpeechResumeGateTests(unittest.TestCase):

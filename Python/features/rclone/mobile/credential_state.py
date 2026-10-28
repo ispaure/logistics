@@ -85,6 +85,8 @@ class NativeCredentialState:
             self.session_privacy = next(iter(self.package_privacy.values()), None)
             self.generation += 1
             observers = (*tuple(self.observers), *tuple(self.document_observers))
+        if self._protection is not None:
+            self._protection.changed()
         failure = None
         for observer in observers:
             try:

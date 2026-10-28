@@ -28,6 +28,10 @@ class ExternalDisplayTests(unittest.TestCase):
         self.privacy = NS(inactive=False, saved_content=None, shield=None,
                           gates=lambda: (), disposed=False)
         self.host.screen_privacy = self.privacy
+        from mobile.protection import for_app
+        scope = for_app(self.host)
+        scope.register(self, lambda: self.privacy.gates())
+        self.addCleanup(scope.dispose)
         self.canvas = page('page one')
         self.host.body = NS(children=[NS(children=[self.canvas])])
         self.output = ExternalComicDisplay(NS())
@@ -68,7 +72,10 @@ class ExternalDisplayTests(unittest.TestCase):
         sync(self.host, select=True)
         observer = Mock(disposed=False)
         observer.gates.return_value = (NS(locked=False),)
-        CloudClient.credential_state.observers.add(observer)
+        from mobile.protection import for_app
+        scope = for_app(self.host).process.window()
+        scope.register(observer, lambda: observer.gates())
+        self.addCleanup(scope.dispose)
         self.output.refresh()
         self.assertIsNone(self.picture.image)
         observer.gates.return_value = ()
@@ -76,7 +83,7 @@ class ExternalDisplayTests(unittest.TestCase):
         self.assertEqual(self.picture.image, 'page one')
 
     def test_inactivity_lock_shield_and_shutdown_clear_output(self):
-        for field, value in [('inactive', True), ('saved_content', object()), ('shield', object())]:
+        for field, value in [('inactive', True), ('shield', object())]:
             with self.subTest(field=field):
                 old = getattr(self.privacy, field)
                 sync(self.host, select=True)
@@ -94,7 +101,7 @@ class ExternalDisplayTests(unittest.TestCase):
         android = self.output.android = Mock()
         sync(self.host, select=True)
         android.setImage.assert_called_with('page one')
-        self.privacy.gates = lambda: (object(),)
+        self.privacy.gates = lambda: (NS(locked=False),)
         sync(self.host)
         android.setImage.assert_called_with(None)
         self.output.dispose()
@@ -110,7 +117,7 @@ class ExternalDisplayTests(unittest.TestCase):
         self.canvas._external_document_page = True
         sync(self.host, select=True)
         self.assertEqual(self.picture.image, 'page one')
-        self.privacy.gates = lambda: (object(),)
+        self.privacy.gates = lambda: (NS(locked=False),)
         sync(self.host)
         self.assertIsNone(self.picture.image)
 
@@ -186,7 +193,7 @@ class ExternalDisplayTests(unittest.TestCase):
             phone.addSubview.assert_called_once_with(first)
             self.output.refresh()
             self.assertIs(self.output.ios_status[1], first)
-            self.privacy.gates = lambda: (object(),)
+            self.privacy.gates = lambda: (NS(locked=False),)
             self.output.refresh()
             first.removeFromSuperview.assert_called_once()
             self.assertIsNone(self.output.ios_status)
@@ -208,7 +215,7 @@ class ExternalDisplayTests(unittest.TestCase):
         callback = factory.call_args.args[1]
         self.output.select(self.host)
         android.setImage.assert_called_with('page one')
-        self.privacy.gates = lambda: (object(),)
+        self.privacy.gates = lambda: (NS(locked=False),)
         callback.run()
         android.setImage.assert_called_with(None)
         self.privacy.gates = lambda: ()
