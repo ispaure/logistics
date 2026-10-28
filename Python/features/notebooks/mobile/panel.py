@@ -33,11 +33,16 @@ class NotebookPanel:
         self.view = toga.Box(style=Pack(direction=COLUMN, flex=1))
         from services.documents.mobile_notebooks import install_notebook_controls
         install_notebook_controls(self)
+        from mobile.protection import for_app
+        self._release_protection = for_app(app).register(self, self.privacy_gates)
         if library:
             self.library()
         else:
             self.status = toga.Label('')
             self.view.add(self.status)
+
+    def privacy_gates(self):
+        return (self.privacy_gate,) if not self.closed else ()
 
     @property
     def repository(self):
@@ -373,6 +378,7 @@ class NotebookPanel:
 
     def dispose(self):
         self.closed = True
+        self._release_protection()
         self.retire_canvas()
         if self.document is not None:
             self.document.close()

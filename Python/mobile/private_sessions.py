@@ -133,6 +133,11 @@ class PrivateSessions:
         self.controllers = {}
         self.active = None
         self.positions = {}
+        from .protection import for_app
+        for_app(app).register(self, self.privacy_gates)
+
+    def privacy_gates(self):
+        return tuple(owner.privacy_gate for owner in self.controllers.values())
 
     async def opening_rejected(self, message):
         """Admission failures must be visible from every folder entry point."""

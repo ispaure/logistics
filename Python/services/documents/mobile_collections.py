@@ -19,6 +19,11 @@ class ComicBatchController:
         self.local_comic_batch = None
         self.local_comic_batch_view = None
         self.private_comic_batch = None
+        from mobile.protection import for_app
+        for_app(app).register(self, self.privacy_gates)
+
+    def privacy_gates(self):
+        return (getattr(self.private_comic_batch, 'privacy_gate', None),)
 
     active_host = HostAttribute("active_host")
     cloud_busy = HostAttribute("cloud_busy")

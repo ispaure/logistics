@@ -2,6 +2,7 @@
   "schema": 1,
   "modules": [
     "__init__.py",
+    "protection.py",
     "__main__.py",
     "action_menu.py",
     "adaptive_workspace.py",

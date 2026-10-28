@@ -138,28 +138,12 @@ class ScreenPrivacy:
         self.refresh()
 
     def gates(self):
-        from features.rclone.mobile.cloud import CloudClient
-        owners = getattr(getattr(self.app, 'private_sessions', None), 'controllers', {})
-        client = getattr(self.app, 'cloud_client', None)
-        batch = getattr(self.app, 'private_comic_batch', None)
-        # Even a scene which has never opened Connections shares the native
-        # process credential store and must protect itself immediately.
-        candidates = [CloudClient.credential_state.session_privacy, getattr(client, 'session_privacy', None),
-                      getattr(batch, 'privacy_gate', None)]
-        if getattr(self.app, 'save_as_data', None) is not None:
-            candidates.append(getattr(self.app, 'save_as_privacy_gate', None))
-        candidates.extend(CloudClient.credential_state.package_privacy.values())
-        candidates.extend(getattr(owner, 'privacy_gate', None) for owner in owners.values())
-        candidates.extend(getattr(panel, 'privacy_gate', None)
-                          for panel in getattr(self.app, '_notebook_views', {}).values())
-        return tuple(dict.fromkeys(gate for gate in candidates if gate is not None))
+        from .protection import for_app
+        return for_app(self.app).gates()
 
     def credential_gates(self):
-        from features.rclone.mobile.cloud import CloudClient
-        state = CloudClient.credential_state
-        client = getattr(self.app, 'cloud_client', None)
-        return tuple(gate for gate in (*state.package_privacy.values(), state.session_privacy,
-                     getattr(client, 'session_privacy', None)) if gate is not None)
+        from .protection import for_app
+        return for_app(self.app).process.credentials()
 
     def sensitive(self):
         return bool(self.gates())
@@ -464,6 +448,8 @@ class ScreenPrivacy:
 
     def dispose(self):
         self.disposed = True
+        from .protection import for_app
+        for_app(self.app).dispose()
         self.restore_lock_layout()
         from features.rclone.mobile.cloud import CloudClient
         CloudClient.credential_state.observers.discard(self)

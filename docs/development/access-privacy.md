@@ -56,3 +56,15 @@ or guesses retention from context filenames. Desktop LocalCrypt declares its
 memory-only context; native LocalCrypt derives the declaration at its owning
 credential boundary. Unknown private providers conservatively refuse external
 playback. Document persistence and provider I/O grants remain separate.
+
+## Explicit retained protection sources
+
+The native credential store owns a lazy process `ProtectionScope`. Loaded
+credential gates contribute directly, before any scene or player exists.
+`mobile.protection.for_app` gives composition one window scope. Private-session
+managers, EditorPicker, NotebookPanel and ComicBatchController register their
+own gate suppliers; ScreenPrivacy asks the scope instead of inspecting feature
+attributes. Suppliers are synchronous snapshots with no I/O. Notebook disposal
+releases its registration; host disposal clears all window sources. A retained
+draft keeps its gate after credential removal; duplicate contributions share one
+challenge. Providers still validate the original grant independently.

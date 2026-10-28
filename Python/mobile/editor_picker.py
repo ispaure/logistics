@@ -121,6 +121,11 @@ class EditorPicker:
         self.creation_type = None
         self._listed_provider = None
         self._listed_credentials = None
+        from .protection import for_app
+        for_app(app).register(self, self.privacy_gates)
+
+    def privacy_gates(self):
+        return (self.operation.privacy_gate,) if self.operation.data is not None else ()
 
     def cancel(self):
         if self._work is not None:

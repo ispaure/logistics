@@ -18,6 +18,21 @@ class NativeCredentialState:
         self.package_privacy = {}
         self.epoch = -1
         self.lock = RLock()
+        self._protection = None
+
+    @property
+    def protection(self):
+        # The feature-only Qt proof does not compose application services.
+        with self.lock:
+            if self._protection is None:
+                from services.protection import ProtectionScope
+                self._protection = ProtectionScope(self.privacy_gates)
+            return self._protection
+
+    def privacy_gates(self):
+        with self.lock:
+            return tuple(dict.fromkeys(gate for gate in
+                (*self.package_privacy.values(), self.session_privacy) if gate is not None))
 
     def package_remotes(self, label, fallback=()):
         return next((list(item['remotes']) for item in self.package_records

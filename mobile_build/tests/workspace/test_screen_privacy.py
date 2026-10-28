@@ -20,6 +20,11 @@ class ScreenPrivacyTests(unittest.TestCase):
         privacy.inactive, privacy.disposed, privacy.shield = False, False, None
         privacy.lock_view = privacy.saved_content = None
         privacy.sync_lock_view = Mock()
+        from mobile.protection import for_app
+        scope = for_app(app)
+        self.addCleanup(scope.dispose)
+        scope.register(app, lambda: tuple(getattr(owner, 'privacy_gate', None)
+            for owner in getattr(getattr(app, 'private_sessions', None), 'controllers', {}).values()))
         return privacy
 
     def test_android_configuration_callback_refreshes_only_its_activity(self):
@@ -183,6 +188,15 @@ class ResumeLockTests(unittest.TestCase):
         self.app.on_exit = lambda app, **kw: True
         self.gate = ResumePassword('session-password')
         self.app.cloud_client = SimpleNamespace(session_privacy=self.gate)
+        from mobile.protection import for_app
+        scope = for_app(self.app)
+        previous = scope.process.credentials
+        self.addCleanup(setattr, scope.process, 'credentials', previous)
+        scope.process.credentials = lambda: tuple(dict.fromkeys(gate for gate in
+            (*previous(), getattr(self.app.cloud_client, 'session_privacy', None)) if gate is not None))
+        # These tests replace real managers with small retained-draft fixtures.
+        scope.register(self, lambda: tuple(getattr(owner, 'privacy_gate', None)
+            for owner in getattr(getattr(self.app, 'private_sessions', None), 'controllers', {}).values()))
         self.original = self.app.main_window.content
 
     def unlock(self, password):
