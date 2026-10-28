@@ -410,12 +410,18 @@ def run(platform, binary, output, *, context="all", rclone=None):
                     recording.wait(timeout=10)
             if emulator is not None:
                 try:
+                    startup_log = emulator.workspace / "emulator.log"
+                    if startup_log.is_file():
+                        shutil.copy2(startup_log, output / "emulator.log")
                     if device is not None:
                         (output / "logcat.txt").write_text(
                             emulator.invoke("-s", device, "logcat", "-d", timeout=30)
                         )
                 finally:
                     emulator.cleanup()
+                    (output / "cleanup.json").write_text(
+                        json.dumps(dict(device=device, emulator_removed=True))
+                    )
             if client is not None and device is not None:
                 try:
                     (output / "springboard.log").write_text(

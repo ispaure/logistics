@@ -101,6 +101,13 @@ lease protects it. Deletion checks ownership, links, pins and locks again after
 confirmation, reports skipped entries and refreshes the list. Listing and deleting
 run off the UI thread; cleanup is unavailable while this manager runs an operation.
 
+The CLI uses the same guarded cleanup. Run `build-manager storage --project
+/absolute/path/to/logistics` to review owned entries, then select exact entries
+with repeated `--delete 'Source snapshots=SNAPSHOT_NAME' --confirm`. It preserves
+active and pinned outputs and reports anything skipped. Manual selection can
+remove recent artifacts; automatic retention rules remain unchanged. System
+backups and unrelated personal files are outside this cleanup.
+
 The generic UI consumes optional `storage_inventory()` and
 `delete_storage(selections)` adapter methods. Logistics defines owned roots in
 `logistics_build.build_retention`; reusable manual deletion and lease protection remain

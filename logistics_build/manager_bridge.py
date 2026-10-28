@@ -43,6 +43,10 @@ def main():
             result = project.save_settings(values['changes'])
         elif action == 'verification':
             result = project.verification_plan().data()
+        elif action == 'storage_inventory':
+            result = project.storage_inventory()
+        elif action == 'delete_storage':
+            result = project.delete_storage(values['selections'])
         else:
             raise ValueError('Unsupported bridge action.')
     print(json.dumps(dict(schema=1, result=result)))
