@@ -45,7 +45,11 @@ class AppleOutputs:
             number = kind if isinstance(kind, int) else (value(kind, 'unsignedIntegerValue') if kind is not None else 1)
             self.active_interruption = number == 1
             interrupted(self.active_interruption)
-        for name, callback in [('AVAudioSessionRouteChangeNotification', lambda note: changed()),
+        def route_changed(note):
+            reason = note.userInfo.objectForKey('AVAudioSessionRouteChangeReasonKey')
+            number = reason if isinstance(reason, int) else (value(reason, 'unsignedIntegerValue') if reason is not None else 0)
+            changed(lost=number in (2, 7))  # Old output unavailable / no suitable route.
+        for name, callback in [('AVAudioSessionRouteChangeNotification', route_changed),
                                ('AVAudioSessionInterruptionNotification', interruption)]:
             block = Block(callback, None, objc_id)
             self.blocks.append(block)
@@ -82,6 +86,9 @@ class AndroidOutputs:
         class Listener(dynamic_proxy(kind.Listener)):
             def changed(self):
                 changed()
+
+            def lost(self):
+                changed(lost=True)
         self.listener = Listener()
         self.native = kind(app._impl.native, self.listener)
 

@@ -35,11 +35,11 @@ def approvals(raw):
 
 class OutputPolicy:
     def __init__(self):
-        self.route = None  # None means unknown, never permission to play.
+        self.route = None  # Unknown identity cannot authorize protected playback.
         self.revision = 0
         self.manual_play = False
 
-    def observe(self, route):
+    def observe(self, route, *, require_consent=True):
         route = tuple(sorted(route, key=lambda item: item.identity)) if route else None
         # Names can change without changing output identity or authorization.
         changed = (None if self.route is None else tuple((x.identity, x.bluetooth) for x in self.route)) != (
@@ -47,7 +47,8 @@ class OutputPolicy:
         self.route = route
         if changed:
             self.revision += 1
-            self.manual_play = False
+            if require_consent:
+                self.manual_play = False
         return changed
 
     def pending(self, approved):

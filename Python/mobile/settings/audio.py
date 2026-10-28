@@ -8,8 +8,8 @@ from ..audio_output import for_app
 
 def controls(app, box):
     owner = for_app(app)
-    box.add(SettingsLabel('Bluetooth approval applies to video and all read-aloud. '
-        'Changing audio outputs pauses playback. Adding a device never starts playback. '
+    box.add(SettingsLabel('Bluetooth approval applies to video and all read-aloud only while session-only protection is active. '
+        'During protection, changing audio outputs pauses playback. Adding a device never starts playback. '
         'These approvals are saved only on this device.'))
     current = SettingsLabel('')
     status = SettingsLabel('')
@@ -25,7 +25,7 @@ def controls(app, box):
                 values.pop(identity, None)
                 try:
                     owner.save(values)
-                    status.text = 'Approval removed. Playback stays paused.'
+                    status.text = 'Approval removed. Protected playback stays paused; ordinary playback is unaffected.'
                     render()
                 except (OSError, ValueError) as error:
                     status.text = str(error)
@@ -33,8 +33,11 @@ def controls(app, box):
                 toga.Button('Remove', on_press=remove, style=Pack(height=48))], style=Pack(direction=ROW)))
         if not rows.children:
             rows.add(SettingsLabel('No approved Bluetooth devices. Select a Bluetooth output in system '
-                'controls, then press Play or Approve current output.'))
+                'controls during session-only protection, then press Play or Approve current output.'))
     async def approve(widget=None, **kwargs):
+        if not owner.protected():
+            status.text = 'Session-only protection is inactive. Ordinary playback does not need Bluetooth approval.'
+            return
         owner.pause()
         if owner.prepare():
             owner.refresh()

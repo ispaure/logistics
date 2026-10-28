@@ -104,8 +104,12 @@ ordinary and session-only video phases. It includes native synthetic read-aloud,
 real selected-output monitoring and a Continue QA button. Test both video and
 speech with a Bluetooth device connected before Play; add/decline/cancel approval,
 switch approved/unapproved devices, remove approval while playing, reconnect and
-restart the QA app to verify persistence. Every change pauses; approval never
-resumes. Use a fresh QA build on both iOS and Android. The separate entry point
+restart the QA app to verify persistence. Under session-only or retained
+protection, every selected-output change pauses and approval never resumes.
+With no protection, verify that unapproved or unidentified Bluetooth outputs
+play without approval prompts, output selection changes do not require an extra
+Play, and removing approval does not affect ordinary audio. In both modes,
+actual output loss and calls must still pause without automatic resume. Use a fresh QA build on both iOS and Android. The separate entry point
 `tests.logisticsmobile.audio_hardware_probe:main` runs the all-audio Settings phase
 without the iOS-only physical video/call launcher.
 

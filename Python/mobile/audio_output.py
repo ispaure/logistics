@@ -41,17 +41,37 @@ class AudioOutput:
     def unregister(self, player):
         self.players.pop(player, None)
 
-    def refresh(self):
+    def protected(self):
+        # Match casting's process/retained-protection scope, not the current file.
+        from features.rclone.mobile.cloud import CloudClient
+        privacy = getattr(self.app, 'screen_privacy', None)
+        observers = (privacy, *tuple(CloudClient.credential_state.observers))
+        if any(owner is not None and not getattr(owner, 'disposed', False) and owner.gates()
+               for owner in observers):
+            return True
+        for owner in tuple(_owners):
+            if not owner.closed:
+                for player in owner.players:
+                    gate = getattr(player, 'gate', None)
+                    if getattr(player, 'restricted', False) or (callable(gate) and gate() is not None):
+                        return True
+        return False
+
+    def refresh(self, *, lost=False):
         if self.closed:
             return
         try:
             route = self.native.outputs()
         except Exception:
             route = None
-        if self.policy.observe(route):
-            self.pause()
-            if self.players:
-                self.offer()
+        protected = self.protected()
+        if lost:
+            self.pause()  # Ordinary route-loss safety is independent of Bluetooth consent.
+        if self.policy.observe(route, require_consent=protected):
+            if protected:
+                self.pause()
+                if self.players:
+                    self.offer()
 
     def pause(self):
         self.policy.pause()
@@ -81,7 +101,8 @@ class AudioOutput:
 
     def permitted(self):
         self.refresh()
-        return self.available() and self.policy.permitted(self.approved())
+        return self.available() and (self.policy.permitted(self.approved()) if self.protected()
+                                     else self.policy.manual_play)
 
     def prepare(self):
         try:
@@ -103,6 +124,9 @@ class AudioOutput:
         self.refresh()
         if not self.available():
             return False
+        if not self.protected():
+            self.policy.manual_play = True
+            return True
         if self.policy.request_play(self.approved()):
             return True
         self.offer(explicit=True)
@@ -115,7 +139,7 @@ class AudioOutput:
             and not any(gate.locked for gate in privacy.gates())))
 
     def offer(self, *, explicit=False):
-        if self.closed or self.prompt is not None or not self.interactive():
+        if self.closed or self.prompt is not None or not self.protected() or not self.interactive():
             return
         if explicit:
             self.prompted_revision = None
@@ -128,7 +152,7 @@ class AudioOutput:
     async def ask(self, revision):
         import toga
         try:
-            if revision != self.policy.revision or not self.interactive():
+            if revision != self.policy.revision or not self.protected() or not self.interactive():
                 return
             pending = self.policy.pending(self.approved())
             if not self.policy.identified():
@@ -141,12 +165,12 @@ class AudioOutput:
                 return
             names = ', '.join(item.label for item in pending)
             accepted = await self.app.main_window.dialog(toga.ConfirmDialog('Approve Bluetooth audio?',
-                f'Allow audio playback through {names}? This applies to video and read-aloud. '
+                f'Allow session-only audio playback through {names}? This applies to video and read-aloud while session-only protection is active. '
                 'Adding approval leaves playback paused. Press Play separately when ready. '
                 'You can remove approval in Settings → Audio playback.'))
             self.refresh()
             # A route/credential/lifecycle transition invalidates an old decision.
-            if (accepted and self.available() and self.policy.revision == revision
+            if (accepted and self.protected() and self.available() and self.policy.revision == revision
                     and self.policy.pending(self.approved()) == pending):
                 self.save({**self.approved(), **{item.identity: item.label for item in pending}})
         except (OSError, ValueError):
@@ -159,13 +183,14 @@ class AudioOutput:
     def save(self, values):
         self.app.preferences.save(approved_bluetooth_devices=json.dumps(
             [dict(id=key, name=name) for key, name in sorted(values.items())]))
-        # One preference file is shared by scenes; approval changes always pause.
+        # The list affects protected playback only; ordinary playback ignores it.
         for owner in tuple(_owners):
             if owner.app.preferences.path == self.app.preferences.path:
                 if owner is not self:
                     owner.app.preferences.reload()
                 owner.policy.revision += 1
-                owner.pause()
+                if owner.protected():
+                    owner.pause()
 
     def invalidate(self, *, pause=True):
         self.policy.revision += 1

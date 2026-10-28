@@ -8,14 +8,23 @@ standalone music player in the current app. This policy does not add one.
 
 | Event | Ordinary content | Any session-only credentials loaded |
 | --- | --- | --- |
-| Start audio on an identifiable built-in/wired output | Explicit Play | Explicit Play plus the existing credential authorization |
-| Start audio on unapproved Bluetooth | Block; offer device approval | Same, plus credential authorization |
-| Approve Bluetooth | Save approval; remain paused until a separate Play | Same |
-| Selected audio output changes, including to an approved device | Pause; separate Play required | Same |
-| Decline/cancel, unknown identity, or remove approval | Remain paused; no fallback to speakers | Same |
+| Start audio on an identifiable built-in/wired output | Ordinary player controls | Explicit Play plus the existing credential authorization |
+| Start audio on unapproved Bluetooth | Bypass approval list; ordinary playback | Block; offer approval plus credential authorization |
+| Approve Bluetooth | Not required; no playback dependency on the list | Save approval; remain paused until a separate Play |
+| Selected audio output changes, including to an approved device | No consent-related pause or extra Play | Pause; separate Play required |
+| Decline/cancel, unknown identity, or remove approval | No approval-list restriction | Remain paused; no fallback to speakers |
 | OS-reported iOS capture/mirroring/remote control | Ordinary document browsing remains available | Black app shield; pause app audio; conceal video |
 | Android capture or nonsecure display | Ordinary document browsing remains available | Secure-window protection; video external modes refused |
 | Call/interruption or headphone/Bluetooth output loss | Pause; never automatically resume | Same; resume authorization still applies |
+
+Bluetooth consent and the separate Play requirement on output changes apply only
+while session-only protection is in effect: at least one loaded session-only
+credential, or retained protection that would also forbid screencasting. The
+scope covers the process and retained protected readers/players, not just the
+currently displayed file. Ordinary playback never reads the approval list or
+requires an identifiable Bluetooth output. Native output-removal/loss and call/interruption
+safeguards remain independent and still pause ordinary playback; reconnection or
+interruption end does not automatically resume it.
 
 A Bluetooth approval grants an output, not access to a credential session. Existing
 trusted-Wi-Fi behavior only waives eligible repeat password prompts. It does not
@@ -63,11 +72,11 @@ speech metadata becomes generic whenever any session protects the app.
   Android 13+ queries anticipated media outputs with
   [getAudioDevicesForAttributes](https://developer.android.com/reference/android/media/AudioManager#getAudioDevicesForAttributes(android.media.AudioAttributes)).
   Older Android cannot reliably distinguish selected from connected outputs when
-  several exist; playback then fails closed. Unreadable/redacted Bluetooth
-  identities also fail closed. The app does not silently trust a display name.
+  several exist; protected playback then fails closed. Unreadable/redacted Bluetooth
+  identities also fail closed only for protected playback. Ordinary playback bypasses these consent checks. The app does not silently trust a display name.
 - Android device callbacks plus a 100 ms route recheck catch selection changes
   without connection events. OS routing can precede notification or polling;
-  this is not a guarantee of zero audio at a new physical output. Real car,
+  this is not a guarantee of zero audio at a new physical output. Android output-removal callbacks retain the existing conservative pause, even if the removed output was not selected. Real car,
   multipoint/BLE/headset, speaker leakage and receiver-buffer behavior need hardware
   checks. An external receiver may retain audio already sent to it.
 - Saved progress, subtitles, thumbnails, stream tokens, native decoder buffers and
@@ -79,7 +88,7 @@ speech metadata becomes generic whenever any session protects the app.
 
 ## Validation and deferred acceptance
 
-The portable output tests cover before-start approval, all-output transitions,
+The portable output tests cover ordinary playback bypass, ordinary route-loss/interruption safety, retained protection, protection removal during approval, before-start protected approval, protected output transitions,
 unknown/same-name identities, separate Play, decline/cancel, Settings removal and
 persistence, cross-scene revocation, stale decisions and interruption/capture
 latches. Existing video, speech, Settings and privacy regressions accompany them.

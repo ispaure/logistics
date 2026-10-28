@@ -15,14 +15,23 @@ import java.util.List;
 
 /** Query anticipated media outputs, never the list of paired/nearby devices. */
 public final class AudioOutputs {
-    public interface Listener { void changed(); }
+    public interface Listener { void changed(); void lost(); }
     private final AudioManager audio;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Listener listener;
     private String previous;
     private final AudioDeviceCallback devices = new AudioDeviceCallback() {
         @Override public void onAudioDevicesAdded(AudioDeviceInfo[] values) { notifyChange(); }
-        @Override public void onAudioDevicesRemoved(AudioDeviceInfo[] values) { notifyChange(); }
+        @Override public void onAudioDevicesRemoved(AudioDeviceInfo[] values) {
+            for (AudioDeviceInfo device : values) {
+                if (device.isSink()) {
+                    Listener value = listener;
+                    if (value != null) value.lost();
+                    break;
+                }
+            }
+            notifyChange();
+        }
     };
     private final Runnable poll = new Runnable() {
         @Override public void run() {

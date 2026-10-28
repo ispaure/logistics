@@ -52,8 +52,12 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.temp.cleanup)
         self.route = (SPEAKER,)
         self.dialog = AsyncMock(return_value=False)
+        self.protected = True
+        self.privacy = NS(inactive=False, saved_content=None, disposed=False, captured=False,
+                          gates=lambda: (NS(locked=False),) if self.protected else (),
+                          sensitive=lambda: self.protected)
         self.app = NS(preferences=Preferences(Path(self.temp.name)), active_host=True,
-            main_window=NS(dialog=self.dialog), loop=asyncio.get_running_loop())
+            screen_privacy=self.privacy, main_window=NS(dialog=self.dialog), loop=asyncio.get_running_loop())
         self.native = NS(outputs=lambda: self.route, in_call=lambda: False, dispose=Mock())
         self.owner = AudioOutput(self.app, self.native)
         self.app.audio_output = self.owner
@@ -96,7 +100,7 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_revoke_while_playing_affects_all_scenes_and_players(self):
         other_app = NS(preferences=Preferences(Path(self.temp.name)), active_host=True,
-            main_window=NS(dialog=self.dialog), loop=asyncio.get_running_loop())
+            screen_privacy=self.privacy, main_window=NS(dialog=self.dialog), loop=asyncio.get_running_loop())
         other = AudioOutput(other_app, self.native)
         self.addCleanup(other.dispose)
         pause_other = Mock()
@@ -182,7 +186,7 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.route = (CAR,)
         self.owner.refresh()
         task = self.owner.prompt
-        self.app.screen_privacy = NS(inactive=True, saved_content=None, gates=lambda: ())
+        self.privacy.inactive = True
         self.owner.invalidate(pause=False)
         if task is not None:
             await task
@@ -198,6 +202,86 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(attempts, [False])
         self.owner.capture_changed(False)
         self.assertFalse(self.owner.permitted())
+
+    async def test_ordinary_playback_never_reads_approvals_even_with_unknown_output(self):
+        self.protected = False
+        self.owner.approved = Mock(side_effect=AssertionError('Ordinary playback read the list'))
+        for route in [(CAR,), (output('test', '', 'Unreadable Bluetooth', bluetooth=True),), None]:
+            self.route = route
+            self.assertTrue(self.owner.request_play())
+            self.assertTrue(self.owner.permitted())
+        self.dialog.assert_not_awaited()
+        self.owner.approved.assert_not_called()
+
+    async def test_ordinary_output_switch_does_not_force_separate_play(self):
+        self.protected = False
+        self.assertTrue(self.owner.request_play())
+        self.pause_video.reset_mock()
+        self.pause_speech.reset_mock()
+        for route in [(CAR,), (HEADSET,), (SPEAKER,)]:
+            self.route = route
+            self.owner.refresh()
+            self.assertTrue(self.owner.permitted())
+        self.pause_video.assert_not_called()
+        self.pause_speech.assert_not_called()
+        self.assertIsNone(self.owner.prompt)
+
+    async def test_ordinary_loss_and_interruptions_still_pause_until_user_play(self):
+        self.protected = False
+        self.route = (CAR,)
+        self.assertTrue(self.owner.request_play())
+        self.route = (SPEAKER,)
+        self.owner.refresh(lost=True)
+        self.assertFalse(self.owner.permitted())
+        self.pause_video.assert_called()
+        self.pause_speech.assert_called()
+        self.route = (CAR,)
+        self.owner.refresh()
+        self.assertFalse(self.owner.permitted())
+        self.assertTrue(self.owner.request_play())
+        self.owner.interrupt(True)
+        self.owner.interrupt(False)
+        self.assertFalse(self.owner.permitted())
+        self.dialog.assert_not_awaited()
+
+    async def test_ordinary_playback_ignores_settings_list_removal(self):
+        self.protected = False
+        self.route = (CAR,)
+        self.owner.save({CAR.identity: CAR.label})
+        self.assertTrue(self.owner.request_play())
+        self.pause_video.reset_mock()
+        self.owner.save({})
+        self.assertTrue(self.owner.permitted())
+        self.pause_video.assert_not_called()
+
+    async def test_retained_protection_still_requires_consent_after_credentials_clear(self):
+        self.protected = False
+        retained = Mock(spec=['restricted'])
+        retained.restricted = True
+        self.owner.register(retained, Mock())
+        self.route = (CAR,)
+        self.assertTrue(self.owner.protected())
+        self.assertFalse(self.owner.request_play())
+        await self.prompt_done()
+        self.owner.unregister(retained)
+        self.assertFalse(self.owner.protected())
+        self.assertTrue(self.owner.request_play())
+
+    async def test_pending_approval_cannot_apply_after_protection_ends(self):
+        future = asyncio.get_running_loop().create_future()
+        async def dialog(*args):
+            return await future
+        self.app.main_window.dialog = dialog
+        self.route = (CAR,)
+        self.owner.refresh()
+        task = self.owner.prompt
+        await asyncio.sleep(0)
+        self.protected = False
+        future.set_result(True)
+        await task
+        self.assertEqual(self.owner.approved(), {})
+        self.assertFalse(self.owner.permitted())
+        self.assertTrue(self.owner.request_play())
 
 
 class SpeechResumeGateTests(unittest.TestCase):
@@ -228,3 +312,31 @@ class SpeechResumeGateTests(unittest.TestCase):
             self.assertFalse(playback.credential_start())
         finally:
             playback.dispose()
+
+
+class AppleRouteEventTests(unittest.TestCase):
+    def test_loss_reasons_are_distinct_from_ordinary_selection_changes(self):
+        import sys
+        from unittest.mock import patch
+        from mobile.audio_output_native import AppleOutputs
+        callbacks = {}
+        def observe(name, **kwargs):
+            callbacks[name] = kwargs['usingBlock']
+            return object()
+        center = NS(addObserverForName=Mock(side_effect=observe), removeObserver=Mock())
+        classes = {'AVAudioSession': NS(sharedInstance=object()),
+                   'NSNotificationCenter': NS(defaultCenter=center),
+                   'NSOperationQueue': NS(mainQueue=object())}
+        objc = NS(ObjCClass=lambda name: classes[name],
+                  Block=lambda callback, *signature: callback, objc_id=object())
+        changed = Mock()
+        with patch.dict(sys.modules, {'rubicon.objc': objc}), patch('ctypes.CDLL'):
+            monitor = AppleOutputs(changed, Mock())
+        try:
+            callback = callbacks['AVAudioSessionRouteChangeNotification']
+            for reason, lost in [(1, False), (2, True), (7, True), (8, False)]:
+                for number in [reason, NS(unsignedIntegerValue=lambda: reason)]:
+                    callback(NS(userInfo=NS(objectForKey=lambda key: number)))
+                    changed.assert_called_with(lost=lost)
+        finally:
+            monitor.dispose()

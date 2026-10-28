@@ -21,9 +21,10 @@ async def phase(app, label='ordinary'):
     app.settings_navigation.choose('Audio playback')
     section = app.settings_navigation.sections['Audio playback']
     section.add(toga.Label('QA: ' + label, style=Pack(font_size=20)))
-    section.add(toga.Label('Connect and switch real Bluetooth outputs. Add/decline approval, '
-        'remove it while speaking, reconnect, and try headset Play. '
-        'Approval must never start audio. Use Play below separately.'))
+    section.add(toga.Label('Ordinary playback: connect/switch Bluetooth without an approval prompt or list dependency. '
+        'With session-only or retained protection: add/decline approval, remove it while speaking, '
+        'and switch approved/unapproved outputs; each change stays paused until a separate Play. '
+        'In both modes, calls and actual headphone/output loss must still pause without auto-resume.'))
     async def source():
         return SimpleNamespace(text=('This is a synthetic audio privacy test. ' * 100),
                                language='en', breaks=()), 0, None
@@ -44,7 +45,7 @@ async def phase(app, label='ordinary'):
         while not done.done():
             owner.refresh()
             state = dict(output=[dict(id=item.identity[:8], bluetooth=item.bluetooth) for item in owner.policy.route or ()],
-                         identified=owner.policy.identified(), approved_count=len(owner.approved()),
+                         identified=owner.policy.identified(), protected=owner.protected(), approved_count=len(owner.approved()),
                          explicit_play=owner.policy.manual_play, speech_state=panel.session.state,
                          private=app.screen_privacy.sensitive(), captured=app.screen_privacy.captured)
             if state != previous:
