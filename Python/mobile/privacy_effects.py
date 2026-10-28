@@ -5,7 +5,10 @@ def retire_stale_content(app):
     """Retire revoked sources; dirty drafts retain their own protected lifetime."""
     output = getattr(app, 'audio_output', None)
     if output is not None:
-        output.invalidate()
+        # A credential publication can also be startup/persistent metadata. It
+        # invalidates stale consent, but ordinary audio does not acquire the
+        # session-only pause/Play gate. Revoked players retire below individually.
+        output.invalidate(pause=output.protected())
     video = getattr(app, 'video_player', None)
     if video is not None:
         video.retire_stale()

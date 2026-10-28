@@ -45,6 +45,18 @@ async def exercise(app):
         report["context_selection"] = selection
         android = type(app._impl).__module__.startswith("toga_android.")
         report["platform"] = "android" if android else "ios"
+        # Keep a bounded, path-free trace of real permission invalidation. Native
+        # callbacks and policy behavior are unchanged; this is failure evidence.
+        policy = app.audio_output.policy
+        original_pause = policy.pause
+        pause_events = report['pause_events'] = []
+        def traced_pause():
+            pause_events.append(dict(stack=[dict(module=Path(row.filename).stem,
+                                                 function=row.name, line=row.lineno)
+                                            for row in traceback.extract_stack(limit=8)[:-1]]))
+            del pause_events[:-20]
+            original_pause()
+        policy.pause = traced_pause
         server = VideoWebDAV(Path(__file__).with_name("video-cloud-fixtures"))
         from commonUtils.runtime.resources.local import LocalFiles
         from services.documents.mobile_storage import open_provider_document
@@ -477,6 +489,8 @@ async def exercise(app):
             await owner.close()
         if server is not None:
             await asyncio.to_thread(server.close)
+        if 'original_pause' in locals():
+            policy.pause = original_pause
         (root / "video-probe-result.json").write_text(json.dumps(report, indent=2))
         print("VIDEO_PRIVACY_RESULT=" + json.dumps(report), flush=True)
 

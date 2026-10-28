@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace as NS
 import unittest
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 from services.audio_output import OutputPolicy, approvals, output
 from mobile.audio_output import AudioOutput
@@ -229,6 +229,26 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.pause_video.assert_not_called()
         self.pause_speech.assert_not_called()
         self.assertIsNone(self.owner.prompt)
+
+    async def test_credential_refresh_preserves_ordinary_play_but_pauses_protected_audio(self):
+        from mobile.privacy_effects import retire_stale_content
+        self.app.video_player = NS(retire_stale=Mock())
+        self.app.credential_document_lists = NS(refresh=Mock())
+        self.app.retire_private_comic_batch = Mock()
+        self.app.refresh_folder_actions = Mock()
+        for protected in (False, True):
+            self.protected = protected
+            self.assertTrue(self.owner.request_play())
+            revision = self.owner.policy.revision
+            self.pause_video.reset_mock()
+            with patch('features.notebooks.mobile.documents.retire_stale_notebooks'), patch(
+                    'features.books.mobile.media_controls.enforce_privacy'):
+                retire_stale_content(self.app)
+            self.assertGreater(self.owner.policy.revision, revision)
+            self.assertEqual(self.owner.permitted(), not protected)
+            self.assertEqual(self.pause_video.called, protected)
+        # Source validity is checked even when ordinary audio is not paused.
+        self.assertEqual(self.app.video_player.retire_stale.call_count, 2)
 
     async def test_ordinary_loss_and_interruptions_still_pause_until_user_play(self):
         self.protected = False
