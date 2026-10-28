@@ -9,6 +9,52 @@ from commonUtils.ui.native.routes import Routes
 
 
 class NavigationTests(unittest.TestCase):
+    def test_apple_destination_items_follow_late_bar_traits_without_navigation(self):
+        import asyncio
+        from mobile.navigation import install_apple_destination_layout
+        loop = asyncio.new_event_loop()
+        self.addCleanup(loop.close)
+        native = SimpleNamespace(window=None,
+            bounds=SimpleNamespace(size=SimpleNamespace(width=1000, height=700)))
+        container = SimpleNamespace(on_native_layout=Mock())
+        host = SimpleNamespace(changing=False, adapter=SimpleNamespace(
+            controller=SimpleNamespace(view=native)), window=SimpleNamespace(
+            _impl=SimpleNamespace(container=container), app=SimpleNamespace(loop=loop)))
+        original = container.on_native_layout
+        edge = [0]
+        async def exercise():
+            with patch('mobile.ios_toolbar.vertical_edge', side_effect=lambda controller: edge[0]), \
+                    patch('mobile.navigation.refresh_apple_tab_items') as refresh:
+                install_apple_destination_layout(host)
+                await asyncio.sleep(0)
+                refresh.assert_not_called()
+                # Rubicon exposes UIView.window as a callable on this backend.
+                native.window = lambda: SimpleNamespace(ptr=SimpleNamespace(value=1))
+                def native_relayout(value):
+                    self.assertTrue(host.changing)
+                    container.on_native_layout(container)
+                refresh.side_effect = native_relayout
+                container.on_native_layout(container)
+                container.on_native_layout(container)
+                await asyncio.sleep(0)
+                self.assertEqual(refresh.call_count, 1)
+                # Inner landscape traits can settle without changing dimensions.
+                edge[0] = 2
+                container.on_native_layout(container)
+                await asyncio.sleep(0)
+                self.assertEqual(refresh.call_count, 2)
+                container.on_native_layout(container)
+                await asyncio.sleep(0)
+                self.assertEqual(refresh.call_count, 2)
+                edge[0] = 0
+                container.on_native_layout(container)
+                host.adapter = None  # Queued layout must not resurrect a closed host.
+                await asyncio.sleep(0)
+                self.assertEqual(refresh.call_count, 2)
+                self.assertFalse(host.changing)
+        loop.run_until_complete(exercise())
+        self.assertGreater(original.call_count, 1)
+
     def test_android_rotation_rebinds_tab_without_selecting_or_retiring_its_reader(self):
         from commonUtils.ui.native.navigation import AndroidNavigation
         selected = Mock()

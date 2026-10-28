@@ -57,6 +57,16 @@ the **Your workspace** heading. Home child routes restore the bar for Back;
 returning to the root hides it again. The native safe area still reserves the
 status bar.
 
+Destination artwork is projected again after the tab controller attaches to its
+window and whenever UIKit changes its vertical-bar edge. This deferred,
+coalesced layout callback handles launch directly on the Duo inner display;
+it does not require a portrait rotation or change the active destination.
+`test_navigation.py` covers late attachment/traits and disposal before a queued
+refresh. Native pose acceptance remains separate from these host contracts.
+An isolated native navigation fixture also checks cold launch and a portrait /
+landscape round trip on the Duo outer display. This does not establish the
+intermittent inner-display launch case or full-application startup acceptance.
+
 ## Persistent local filename search
 
 `mobile.local_search.LocalSearch` adapts the desktop SQLite directory cache for

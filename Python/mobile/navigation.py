@@ -170,6 +170,56 @@ def install_apple_destination_icons(host):
         icon._impl.native = icon._impl.native.imageWithRenderingMode(2)
         item.icon = icon
     refresh_apple_tab_items(host)
+    install_apple_destination_layout(host)
+
+
+def install_apple_destination_layout(host):
+    """Reproject destination items after UIKit settles its bar axis on launch.
+
+    The initial icon installation can run before the tab controller is attached
+    and has inherited the inner display's vertical-bar trait. Rebuilding items
+    only then leaves that presentation with stale geometry until a rotation.
+    """
+    from .ios_toolbar import vertical_edge
+    adapter = host.adapter
+    container = host.window._impl.container
+    original = container.on_native_layout
+    pending = False
+    projected = None
+
+    def signature():
+        from commonUtils.ui.native.keyboard import native_value
+        view = adapter.controller.view
+        window = native_value(view.window)
+        if window is None or min(view.bounds.size.width, view.bounds.size.height) <= 0:
+            return None
+        return (window.ptr.value, vertical_edge(adapter.controller))
+
+    def refresh():
+        nonlocal pending, projected
+        pending = False
+        if host.adapter is not adapter:
+            return
+        current = signature()
+        if current is None or current == projected:
+            return
+        # Commit before rebuilding: refresh_tabs can synchronously lay out again.
+        projected = current
+        changing, host.changing = host.changing, True
+        try:
+            refresh_apple_tab_items(host)
+        finally:
+            host.changing = changing
+
+    def layout(value):
+        nonlocal pending
+        original(value)
+        if host.adapter is adapter and not pending and signature() != projected:
+            pending = True
+            host.window.app.loop.call_soon(refresh)
+
+    container.on_native_layout = layout
+    layout(container)
 
 
 def refresh_apple_tab_items(host):
