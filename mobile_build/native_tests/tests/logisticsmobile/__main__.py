@@ -36,7 +36,8 @@ async def exercise(app):
         # Scene activation may restore a destination after startup. Exercise
         # Home explicitly once the native app is running.
         app.show_home()
-        assert app.body.children[0].content.children[0].text == 'Your workspace'
+        assert any(getattr(child, 'text', None) == 'Open a file or start a new document.'
+                   for child in app.home_content.children), 'Home introduction is missing'
         assert app.native_host.state.destination == 'home'
         assert [tab.text for tab in app.navigation.content] == ['Home', 'Workspaces', 'Documents', 'Chat', 'Settings']
         passed.append('native_hub')
