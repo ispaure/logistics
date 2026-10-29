@@ -324,6 +324,14 @@ async def _exercise_library(app, fixtures, epub, comic, passed):
             bridge.ready, bridge.at_end)
         await asyncio.sleep(.05)
     print('LOGISTICS_EPUB_READY=' + json.dumps(pagination), flush=True)
+    # Repeated native completion must not rebuild the live speech document.
+    await original_reader.evaluate_javascript(
+        'reader.highlight(5,11);window.readerBeforeRepeatedLoad=reader')
+    bridge.loaded(original_reader)
+    retained = json.loads(await original_reader.evaluate_javascript(
+        'JSON.stringify({same:reader===window.readerBeforeRepeatedLoad,anchor:reader.pagination().anchor})'))
+    assert retained == {'same': True, 'anchor': 5}, retained
+    await original_reader.evaluate_javascript('reader.highlight(-1,-1);reader.seek(0)')
     owner = app.reader_manager().active
     events = []
     original_event = owner.epub_event

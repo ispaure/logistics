@@ -13,6 +13,9 @@ SCRIPT = r'''
  const options = OPTIONS;
  const marker = document.querySelector('meta[name="logistics-reader-root"]');
  if (!marker || marker.content !== options.root) return;
+ // Native load-completion callbacks can repeat for the retained document.
+ // Its live passage/selection may be newer than the host's last checkpoint.
+ if (window.reader && window.reader.root === options.root && !window.reader.disposed) return;
  if (window.reader && window.reader.dispose) window.reader.dispose();
  const pages = document.createElement('div');
  while(document.body.firstChild) pages.appendChild(document.body.firstChild);
@@ -169,6 +172,8 @@ SCRIPT = r'''
  document.addEventListener('touchend',touchEnd);
  document.addEventListener('wheel',wheel,{passive:false});document.addEventListener('keydown',key);
  window.reader = {
+   root: options.root,
+   get disposed() {return disposed;},
    speechSource: () => ({selection:selectedRange() || selectedCache, offset:visible()}),
    selection: () => selectedRange() || selectedCache,
    highlight: (start, end) => {

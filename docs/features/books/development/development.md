@@ -271,6 +271,12 @@ nonpersistent provider WebViews. `mobile/navigation.py` owns nested chapter rows
 the hosts mount them through the shared adaptive sidebar. Search remains an
 explicit action outside the chapter list.
 
+Bridge setup is idempotent for the same live chapter root. Repeated native
+load-completion callbacks retain the current passage, selection and speech word
+instead of restoring the older initial checkpoint. A disposed reader or a new
+chapter root still initializes normally. The browser regression repeats setup
+during a speech highlight and a selected passage, then verifies both survive.
+
 `epub_rotation_probe.py` exercises deep-chapter glyph visibility and retained
 speech highlights through repeated native rotations. The iOS 27 simulator check
 passed 16 iPhone rotations and 20 iPad rotations, including upside-down portrait

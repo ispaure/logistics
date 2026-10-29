@@ -130,6 +130,14 @@ const {chromium} = require('playwright');
   }
   // A live (or paused) word highlight outranks a separately selected passage.
   await page.evaluate(()=>reader.highlight(27000,27007));
+  // A repeated native load completion must retain the same live reader,
+  // including speech/selection state, rather than seek the initial title page.
+  await page.evaluate(()=>{window.retainedReader=reader;});
+  await page.evaluate(fixture.script);
+  assert.equal(await page.evaluate(()=>reader===window.retainedReader),true);
+  assert.equal(await page.evaluate(()=>reader.pagination().anchor),27000);
+  await assertVisible(27000);
+  assert.equal(await page.evaluate(()=>CSS.highlights.get('logistics-speech').size),1);
   for(const viewport of [{width:1200,height:800},{width:844,height:390},{width:390,height:844}]){
    await page.evaluate(()=>{
     const node=document.querySelector('p').firstChild,r=document.createRange();
@@ -143,6 +151,11 @@ const {chromium} = require('playwright');
    assert.equal(await page.evaluate(()=>CSS.highlights.get('logistics-speech').size),1);
   }
   await page.evaluate(()=>reader.highlight(-1,-1));
+  await page.evaluate(()=>{reader.seek(26000,26007);window.retainedReader=reader;});
+  const selectedBeforeReload=await page.evaluate(()=>reader.speechSource().selection);
+  await page.evaluate(fixture.script);
+  assert.deepEqual(await page.evaluate(()=>reader.speechSource().selection),selectedBeforeReload);
+  assert.equal(await page.evaluate(()=>reader.pagination().anchor),26000);
   // Older WebViews use a native selection as the speech highlight.
   await page.evaluate(()=>{
    Object.defineProperty(CSS,'highlights',{value:undefined,configurable:true});
