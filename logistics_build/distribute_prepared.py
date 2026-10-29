@@ -52,8 +52,19 @@ def distribute(report,receipt):
         remote=transport.distribute(apk,app_id=config['app_id'],group=group,
             release_notes=apk.parent/'release-notes.txt',capture_result=True)
     else:
-        subprocess.run(command,env=env,text=True,capture_output=True,check=True)
+        # Let the manager retain live upload and Apple-processing progress.
+        subprocess.run(command,env=env,check=True)
         remote=json.loads((workspace/'upload-result.json').read_text())
+        distribution=json.loads((workspace/'external-distribution.json').read_text())
+        build=data['release']['build']
+        expected=dict(app_id=data['destination']['app_id'],
+                      group_name=data['destination']['external_group'],
+                      version=build['version'],build_number=build['build_number'])
+        if (remote.get('status')!='uploaded' or distribution.get('status')!='assigned'
+                or any(distribution.get(key)!=value for key,value in expected.items())
+                or not distribution.get('build_id') or not distribution.get('group_id')):
+            raise ValueError('TestFlight group assignment is unverified; reconcile the recorded upload before retry.')
+        remote['external_distribution']=distribution
     value=dict(schema=1,provider=provider,status='completed',operation=json.loads(attempt.read_text())['operation_id'],
                destination=data['destination'],remote=remote)
     receipt.write_text(json.dumps(value,indent=2)+'\n');return value

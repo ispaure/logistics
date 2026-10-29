@@ -73,6 +73,35 @@ class PreparedDistributionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'review'):distribute(path,Path(directory)/'receipt.json')
             run.assert_not_called()
 
+    def test_testflight_keeps_verified_group_receipt_and_streams_progress(self):
+        for group in ('Friends', 'unexpected'):
+            with self.subTest(group=group), TemporaryDirectory() as directory:
+                root=Path(directory);report=root/'prepared.json';receipt=root/'receipt.json'
+                build=dict(version='0.1.16',build_number='7')
+                data=dict(provider='TestFlight',workspace=str(root),release=dict(build=build),
+                          destination=dict(app_id='app-1',external_group='Friends'))
+                report.write_text(json.dumps(data))
+                approval=[dict(original_path=str(report.resolve()),sha256=hashlib.sha256(report.read_bytes()).hexdigest())]
+                env=dict(BUILD_MANAGER_APPROVED_PLAN='reviewed-plan',BUILD_MANAGER_APPROVED_ARTIFACTS=json.dumps(approval))
+                def upload(command, **kwargs):
+                    self.assertTrue(kwargs['check'])
+                    self.assertNotIn('capture_output',kwargs)
+                    (root/'upload-result.json').write_text(json.dumps(dict(status='uploaded',build=build)))
+                    (root/'external-distribution.json').write_text(json.dumps(dict(
+                        app_id='app-1',group_name=group,group_id='group-1',build_id='build-7',
+                        version='0.1.16',build_number='7',status='assigned',external_state='WAITING_FOR_BETA_REVIEW')))
+                with patch.dict(os.environ,env),patch('logistics_build.distribute_prepared.subprocess.run',side_effect=upload) as run:
+                    if group=='Friends':
+                        result=distribute(report,receipt)
+                        self.assertEqual(result['remote']['external_distribution']['build_id'],'build-7')
+                        self.assertEqual(result['remote']['external_distribution']['external_state'],'WAITING_FOR_BETA_REVIEW')
+                        self.assertEqual(json.loads(receipt.read_text())['status'],'completed')
+                    else:
+                        with self.assertRaisesRegex(ValueError,'assignment is unverified'):distribute(report,receipt)
+                        self.assertFalse(receipt.exists())
+                    with self.assertRaisesRegex(ValueError,'Reconcile'):distribute(report,receipt)
+                    self.assertEqual(run.call_count,1)
+
     def test_interrupted_attempt_is_not_blindly_repeated(self):
         with TemporaryDirectory() as directory:
             root=Path(directory);report=root/'prepared.json';receipt=root/'receipt.json'

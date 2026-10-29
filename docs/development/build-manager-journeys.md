@@ -143,3 +143,10 @@ Application-input comparisons also enumerate changed desktop fixtures. Such
 changes require fresh validation of those fixtures before retained desktop
 coverage can be accepted; they do not automatically invalidate unchanged native
 application inputs. The source comparison alone still authorizes no reuse.
+
+TestFlight delivery streams upload and Apple-processing progress into the manager
+phase log. A completed distribution receipt includes the provider-confirmed build
+and external-group assignment, including any pending Apple beta-review state.
+Upload completion alone cannot satisfy the external tester destination; a missing
+or mismatched assignment remains an uncertain recorded attempt requiring
+reconciliation before another upload.
