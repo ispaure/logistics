@@ -18,6 +18,9 @@ keyed opaque filenames. Random lookup keys are kept in ZIP-password-encrypted
 cannot be tested by hashing guessed document paths. Password migration re-encrypts
 these keys without changing checkpoint names. The stores also use source/document
 bindings validated inside the ciphertext.
+Offline-copy revision records may contain binary digests; the state envelope
+binds those fields through SHA-256 so changed copy revisions reject old positions
+without retaining the original binary fields in the envelope.
 
 `ReaderPositions` and `ReaderBookmarks` are separate app-owned directories. Source
 identity remains stable across ZIP repacking/password changes; encryption keys do

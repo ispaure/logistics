@@ -313,7 +313,7 @@ class ReaderSessionTests(unittest.TestCase):
                 owner.reader_font.value, owner.reader_margin.value, owner.reader_theme.value = '20', '24', 'dark'
                 with patch.object(owner.epub_view, 'set_content', wraps=owner.epub_view.set_content) as content:
                     app.loop.run_until_complete(owner.apply_reader_appearance())
-                self.assertIn('padding:24px', content.call_args.args[1])
+                self.assertIn('padding:8px 24px', content.call_args.args[1])
                 self.assertEqual(owner.book_record['position'], 1)
                 self.assertEqual(app.preferences.values['reading_theme'], 'dark')
             finally:

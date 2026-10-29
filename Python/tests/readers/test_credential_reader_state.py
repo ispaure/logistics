@@ -71,6 +71,27 @@ class CredentialReaderStateTests(unittest.TestCase):
         for path in (self.root / "ReaderPositions").glob("*.zip"):
             self.assertTrue(path.exists())
 
+    def test_offline_record_bytes_bind_state_to_the_original_revision(self):
+        def state(record):
+            return CredentialState(self.provider, "book.epub", self.root,
+                                   kind="epub", revision=((1, 2), record))
+        original = state(b"private-offline-record")
+        original.save(dict(page=7))
+        self.assertNotIn("private-offline-record", original.revision)
+        self.assertEqual(state(b"private-offline-record").load(), dict(page=7))
+        self.assertEqual(state(b"replacement-offline-record").load(), {})
+
+    def test_mobile_client_without_zip_metadata_keeps_state_in_memory(self):
+        client = SimpleNamespace(connection_identity=lambda remote: 'mobile-source')
+        provider = SimpleNamespace(client=client, remote='Remote')
+        store = CredentialState(provider, 'book.epub', self.root, kind='epub',
+                                app=SimpleNamespace(cloud_client=client))
+        self.assertEqual(store.load(), {})
+        store.save(dict(page=4))
+        self.assertEqual(store.load(), dict(page=4))
+        self.assertFalse(store.root.exists())
+        self.assertFalse((self.root / 'ReaderKeys').exists())
+
     def test_password_change_preserves_old_state_until_explicit_verified_migration(
         self,
     ):

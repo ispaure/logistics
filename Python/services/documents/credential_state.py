@@ -24,6 +24,14 @@ LIMIT = 128 * 1024
 _io_lock = RLock()
 
 
+def _revision_value(value):
+    if isinstance(value, bytes):
+        # Offline copy revisions include the original record bytes. Bind to
+        # their content without retaining those bytes in the state envelope.
+        return {"bytes_sha256": sha256(value).hexdigest()}
+    raise TypeError(f"Unsupported reader revision value: {type(value).__name__}")
+
+
 def sources(provider):
     seen = set()
     pending = [provider]
@@ -118,7 +126,7 @@ class MobileCredentialCipher:
                 identity = client.connection_identity(remote)
             if client is not getattr(self.app, "cloud_client", None):
                 continue
-            for record in client.package_records:
+            for record in getattr(client, "package_records", ()):
                 if (
                     not record.get("saved")
                     and record.get("document_cache_id")
@@ -182,7 +190,7 @@ class CredentialState:
             if section == "positions"
             else None
         )
-        self.kind, self.revision = kind, json.dumps(revision, sort_keys=True)
+        self.kind, self.revision = kind, json.dumps(revision, sort_keys=True, default=_revision_value)
         self.check = check or (lambda: self._check())
         self.cipher = (
             MobileCredentialCipher(provider, app)

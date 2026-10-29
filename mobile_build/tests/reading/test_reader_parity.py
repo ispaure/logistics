@@ -50,8 +50,9 @@ class ReaderParityUITests(unittest.TestCase):
                         owner.set_reading_mode(False)
                         self.assertFalse(owner.book_content.children[0].magnifier_enabled)
                         footer = owner.page_footer
-                        self.assertEqual(list(footer.widget.children),
-                            [owner.next_page if rtl else owner.previous_page, footer.slider, footer.badge,
+                        self.assertEqual(list(footer.widget.children), [footer.row, footer.badge])
+                        self.assertEqual(list(footer.row.children),
+                            [owner.next_page if rtl else owner.previous_page, footer.slider,
                              owner.previous_page if rtl else owner.next_page])
                         self.assertEqual(owner.next_page.control_icon, 'back' if rtl else 'forward')
                         self.assertEqual(owner.previous_page.control_icon, 'forward' if rtl else 'back')
@@ -84,7 +85,7 @@ class ReaderParityUITests(unittest.TestCase):
                         self.assertEqual(provider.crypt_view.style.margin, (0, 0, 0, 0))
                         self.assertIs(footer.badge.parent, footer.widget)
                         self.assertEqual(provider.next_page.control_icon, 'back' if rtl else 'forward')
-                        self.assertIs(footer.widget.children[0], provider.next_page if rtl else provider.previous_page)
+                        self.assertIs(footer.row.children[0], provider.next_page if rtl else provider.previous_page)
                         footer.slider.value = 0 if rtl else 3
                         await footer.release(footer.slider)
                         self.assertEqual(provider.crypt_page.value, private.labels[3])
