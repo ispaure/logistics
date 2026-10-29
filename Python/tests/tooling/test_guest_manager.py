@@ -100,6 +100,10 @@ class GuestManagerTests(unittest.TestCase):
         # Relocatable Linux Python keeps its shared library beside the original
         # executable; copying only that binary breaks the interpreter itself.
         venv.EnvBuilder(with_pip=False, symlinks=os.name != 'nt').create(environment)
+        from build_manager.retention import remove_tree
+        # This interpreter is owned by the fixture; retire it before the outer
+        # TemporaryDirectory, including bounded Windows executable-release waits.
+        self.addCleanup(remove_tree, environment)
         python = environment / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
         repository = Path(__file__).resolve().parents[3]
         command = [str(python), '-c',
