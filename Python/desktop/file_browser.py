@@ -1,5 +1,6 @@
 """General browser host enriched by available Logistics feature contributions."""
 
+from commonUtils.filesystem.native_paths import native_path
 from commonUtils.ui.appearance.typography import point_size, setting_size
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -49,8 +50,10 @@ def _crypt_location(path, *, root=None):
     from features.rclone.localcrypt.mapping import storage_root
     path = Path(path).absolute()
     configured_root = Path(root if root is not None else storage_root()).absolute()
-    root = configured_root.resolve()
-    resolved = path.resolve()
+    # Compare one physical namespace: Windows long-path prefixes must not let
+    # a ciphertext file escape routing through its private browser.
+    root = native_path(configured_root).resolve()
+    resolved = native_path(path).resolve()
     if resolved == root:
         return None, False
     try:
@@ -59,13 +62,13 @@ def _crypt_location(path, *, root=None):
         revision = None
     copies = _crypt_copies(configured_root, revision, int(time.monotonic()))
     for item in copies:
-        target = item.data.resolve()
+        target = native_path(item.data).resolve()
         if resolved == target or target in resolved.parents:
             return item, True
-    if root not in resolved.parents and configured_root not in path.parents:
+    if root not in resolved.parents and native_path(configured_root) not in native_path(path).parents:
         return None, False
     # Schema-1 package containers are navigable to their mapped copy roots.
-    if any(resolved in item.data.resolve().parents for item in copies):
+    if any(resolved in native_path(item.data).resolve().parents for item in copies):
         return None, False
     return None, True
 

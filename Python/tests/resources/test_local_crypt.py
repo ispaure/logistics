@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 import time
 import unittest
 from unittest.mock import patch
+from commonUtils.filesystem.native_paths import native_path
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.rclone import executable
@@ -492,7 +493,7 @@ class LocalCryptTests(QtTestCase):
             self.assertEqual(copy_mapping.unlock(f.item, 'synthetic-package-password')['Secret']['type'], 'crypt')
 
     def test_regular_browser_routes_navigation_and_reuses_private_tab(self):
-        from desktop.file_browser import FileBrowserPage, _browser_view, _new_browser_tab
+        from desktop.file_browser import FileBrowserPage, _browser_view, _new_browser_tab, _crypt_location
         from features.rclone.localcrypt.ui.views import CryptBrowserView
         with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary) as f, \
              patch('features.application.registry.get_browser_extensions', return_value=[]), \
@@ -516,6 +517,10 @@ class LocalCryptTests(QtTestCase):
                         self.assertTrue(original._directory_boundary(f.item.data))
                     resolve.assert_called_once()
                     root_lookup.assert_called_once()
+                # Ciphertext I/O paths may carry Windows' extended prefix.
+                # Both spellings must route privately before any OS activation.
+                for raw in (f.item.data, native_path(f.item.data), f.provider.encrypted_path('note.md')):
+                    self.assertEqual(_crypt_location(raw), (f.item, True))
                 index = browser.model.index(str(f.item.data))
                 self.assertTrue(index.isValid())
                 self.assertEqual(browser.model.rowCount(index), 0)
