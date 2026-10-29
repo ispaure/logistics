@@ -17,6 +17,25 @@ through `PIP_FIND_LINKS`, but the manager does not select that older name.
 
 Use the standalone [Build Deployment Manager](../user/build-manager.md) for device delivery: choose Delivery → Dev devices, select iPhone / iPad and the saved recipients, then inspect and run the plan. The adapter uses `mobile_build/deployment/device_tools.py` for physical-device operations. The low-level setup commands below are developer diagnostics; normal builds and installs go through the manager.
 
+## Recover a retained device app after a failed build process
+
+A standalone Duo/iPhone development build can leave a complete signed app even
+when Xcode fails to exit. Preserve the failed run and prepare a separate recovery
+plan with `python -m logistics_build.device_recovery plan --run FAILED_RUN
+--output RECOVERY_PLAN.json`, then inspect and execute that plan through the
+manager CLI in a fresh output directory. This supports one selected iOS device
+only, with no admitted installation from the failed run.
+
+Recovery restages the captured source to compare its complete payload manifest,
+checks the original recipe and signing configuration, and verifies provisioning
+membership and recursive signatures using the existing identity. It packages the
+retained app without compiling or re-signing it, then uses normal device readiness
+and installation checks. Changed or unverifiable output stops recovery. The new
+report retains the original failed plan/result identity; it establishes artifact
+verification and installation, not a successful compilation or release acceptance.
+
+## Physical development configuration
+
 Routine validation uses the iOS simulator and Android emulator on the computer,
 including tablet checks when navigation/layout changes. A paired iPhone can
 receive an installation while locked when its development services are available.
